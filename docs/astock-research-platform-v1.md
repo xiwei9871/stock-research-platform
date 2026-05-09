@@ -146,6 +146,7 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `factor_eval.quantile_return`，支持按交易日分位数组收益和 Top-Bottom 收益差。
 - 已落地 `factor_eval.turnover`，支持 TopN 成分换手率。
 - 已落地 `factor_eval.report`，提供轻量因子评价汇总入口。
+- 已落地因子评价门禁：支持多周期评价、分年份诊断、分组表现、行业/市值暴露诊断，以及 `factor.factor_approval` 审批状态记录。
 
 ### 阶段 5：多因子打分与 TopN 股票池
 
