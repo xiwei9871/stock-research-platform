@@ -21,6 +21,16 @@ def manual_v1_config() -> dict:
         "sector_ret_20": "sector",
         "stock_excess_ret_20": "sector",
         "sector_up_ratio": "sector",
+        "alpha101_delta_close_1_rank": "alpha101",
+        "alpha101_corr_open_volume_10": "alpha101",
+        "alpha101_decay_delta_close_5": "alpha101",
+        "gtja191_vp_corr_10": "gtja191",
+        "gtja191_amount_momentum_5_10": "gtja191",
+        "gtja191_intraday_strength_6": "gtja191",
+        "qlib_klen": "qlib",
+        "qlib_kupper": "qlib",
+        "qlib_klower": "qlib",
+        "qlib_ret_5": "qlib",
     }
     factor_directions = {
         "ret_5": "higher",
@@ -44,6 +54,16 @@ def manual_v1_config() -> dict:
         "sector_ret_20": "higher",
         "stock_excess_ret_20": "higher",
         "sector_up_ratio": "higher",
+        "alpha101_delta_close_1_rank": "higher",
+        "alpha101_corr_open_volume_10": "higher",
+        "alpha101_decay_delta_close_5": "higher",
+        "gtja191_vp_corr_10": "higher",
+        "gtja191_amount_momentum_5_10": "higher",
+        "gtja191_intraday_strength_6": "higher",
+        "qlib_klen": "lower",
+        "qlib_kupper": "higher",
+        "qlib_klower": "higher",
+        "qlib_ret_5": "higher",
     }
     weights = {
         "ret_20_score": 0.15,

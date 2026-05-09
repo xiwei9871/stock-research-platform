@@ -6,7 +6,16 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
 from stock_research.factor_store import upsert_factor_daily
-from stock_research.factors import momentum, risk, sector, trend, volume_price
+from stock_research.factors import (
+    alpha101,
+    gtja191,
+    momentum,
+    qlib_alpha,
+    risk,
+    sector,
+    trend,
+    volume_price,
+)
 
 
 FACTOR_DAILY_COLUMNS = [
@@ -248,6 +257,63 @@ def compute_sector_factor_rows(
     return pd.DataFrame(rows, columns=FACTOR_DAILY_COLUMNS)
 
 
+def compute_external_factor_rows(
+    bars: pd.DataFrame,
+    trade_date: str,
+    factor_groups: dict[str, str],
+    calc_version: str,
+    source_data_version: str,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    if bars.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    normalized_trade_date = str(trade_date)[:10]
+    external_groups = {
+        source: {
+            name: group
+            for name, group in factor_groups.items()
+            if group == source
+        }
+        for source in _external_factor_sources()
+    }
+
+    for group_name, (calculator, source) in _external_factor_sources().items():
+        names = external_groups[group_name]
+        if not names:
+            continue
+        computed = calculator(bars)
+        latest = computed[computed["trade_date"].astype(str).str[:10] == normalized_trade_date]
+        for _, record in latest.iterrows():
+            for factor_name, factor_group in names.items():
+                if factor_name not in computed.columns:
+                    continue
+                value = record.get(factor_name)
+                if pd.isna(value):
+                    continue
+                rows.append(
+                    {
+                        "trade_date": normalized_trade_date,
+                        "asset_id": str(record["asset_id"]),
+                        "factor_name": factor_name,
+                        "factor_group": factor_group,
+                        "factor_value": float(value),
+                        "calc_version": calc_version,
+                        "source": source,
+                        "source_data_version": source_data_version,
+                    }
+                )
+    return pd.DataFrame(rows, columns=FACTOR_DAILY_COLUMNS)
+
+
+def _external_factor_sources() -> dict[str, tuple[Any, str]]:
+    return {
+        "alpha101": (alpha101.compute_alpha101_factors, "alpha101"),
+        "gtja191": (gtja191.compute_gtja191_factors, "gtja191"),
+        "qlib": (qlib_alpha.compute_qlib_alpha_factors, "qlib"),
+    }
+
+
 def build_and_store_factor_daily(
     trade_date: str,
     lookback_bars: int = 130,
@@ -281,5 +347,15 @@ def build_and_store_factor_daily(
         calc_version=config["calc_version"],
         source_data_version=config["source_data_version"],
     )
-    factors = pd.concat([technical_factors, sector_factors], ignore_index=True)
+    external_factors = compute_external_factor_rows(
+        bars,
+        trade_date=trade_date,
+        factor_groups=config["factor_groups"],
+        calc_version=config["calc_version"],
+        source_data_version=config["source_data_version"],
+    )
+    factors = pd.concat(
+        [technical_factors, sector_factors, external_factors],
+        ignore_index=True,
+    )
     return upsert_factor_daily(factors)

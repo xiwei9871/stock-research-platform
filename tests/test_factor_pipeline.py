@@ -257,6 +257,63 @@ def test_compute_sector_factor_rows_returns_sector_factor_daily_rows():
     assert set(result["asset_id"]) == {"A", "B"}
 
 
+def test_compute_external_factor_rows_preserves_source_labels(monkeypatch):
+    bars = pd.DataFrame(
+        {
+            "trade_date": ["2026-05-08"],
+            "asset_id": ["A"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "preclose": [10.0],
+            "volume": [1000.0],
+            "amount": [100000.0],
+        }
+    )
+
+    monkeypatch.setattr(
+        factor_pipeline.alpha101,
+        "compute_alpha101_factors",
+        lambda frame: pd.DataFrame(
+            {"trade_date": ["2026-05-08"], "asset_id": ["A"], "alpha101_delta_close_1_rank": [0.8]}
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline.gtja191,
+        "compute_gtja191_factors",
+        lambda frame: pd.DataFrame(
+            {"trade_date": ["2026-05-08"], "asset_id": ["A"], "gtja191_vp_corr_10": [0.5]}
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline.qlib_alpha,
+        "compute_qlib_alpha_factors",
+        lambda frame: pd.DataFrame(
+            {"trade_date": ["2026-05-08"], "asset_id": ["A"], "qlib_klen": [0.05]}
+        ),
+    )
+
+    rows = factor_pipeline.compute_external_factor_rows(
+        bars,
+        trade_date="2026-05-08",
+        factor_groups={
+            "alpha101_delta_close_1_rank": "alpha101",
+            "gtja191_vp_corr_10": "gtja191",
+            "qlib_klen": "qlib",
+        },
+        calc_version="v1",
+        source_data_version="market_daily_bar:hfq",
+    )
+
+    assert set(rows["source"]) == {"alpha101", "gtja191", "qlib"}
+    assert set(rows["factor_name"]) == {
+        "alpha101_delta_close_1_rank",
+        "gtja191_vp_corr_10",
+        "qlib_klen",
+    }
+
+
 class _context:
     def __init__(self, value):
         self.value = value
