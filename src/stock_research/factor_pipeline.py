@@ -73,6 +73,8 @@ def compute_technical_factor_rows(
     factor_groups: dict[str, str],
     calc_version: str,
     source_data_version: str,
+    *,
+    strict: bool = True,
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     if bars.empty:
@@ -93,6 +95,17 @@ def compute_technical_factor_rows(
             factor_frame = calculator(frame)
             for column in factor_frame.columns:
                 computed[column] = factor_frame[column]
+
+        missing_factor_names = [
+            factor_name
+            for factor_name in factor_groups
+            if factor_name not in computed.columns
+        ]
+        if strict and missing_factor_names:
+            missing = ", ".join(sorted(missing_factor_names))
+            raise ValueError(
+                f"Missing configured technical factor outputs for {asset_id}: {missing}"
+            )
 
         matching = computed[
             computed["trade_date"].astype(str).str[:10] == normalized_trade_date

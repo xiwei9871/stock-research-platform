@@ -79,11 +79,52 @@ def test_compute_technical_factor_rows_returns_long_factor_daily_rows():
         source_data_version="market_daily_bar:hfq",
     )
 
-    assert set(rows["factor_name"]) == {"ret_20", "volatility_20"}
-    assert set(rows["asset_id"]) == {"A", "B"}
+    assert len(rows) == 4
+    assert set(zip(rows["asset_id"], rows["factor_name"], strict=True)) == {
+        ("A", "ret_20"),
+        ("A", "volatility_20"),
+        ("B", "ret_20"),
+        ("B", "volatility_20"),
+    }
+    assert set(rows["trade_date"]) == {"2026-03-11"}
     assert set(rows["factor_group"]) == {"momentum", "risk"}
     assert set(rows["calc_version"]) == {"v1"}
     assert set(rows["source"]) == {"custom"}
+    assert set(rows["source_data_version"]) == {"market_daily_bar:hfq"}
+    assert not rows["factor_value"].isna().any()
+
+
+def test_compute_technical_factor_rows_strict_mode_raises_for_missing_factor():
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+
+    try:
+        factor_pipeline.compute_technical_factor_rows(
+            bars,
+            trade_date="2026-03-11",
+            factor_groups={"sector_ret_20": "sector"},
+            calc_version="v1",
+            source_data_version="market_daily_bar:hfq",
+        )
+    except ValueError as exc:
+        assert "sector_ret_20" in str(exc)
+    else:
+        raise AssertionError("Expected missing configured technical factor to raise")
 
 
 class _context:
