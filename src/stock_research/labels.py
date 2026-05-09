@@ -98,8 +98,53 @@ def upsert_label_snapshot(labels: pd.DataFrame) -> int:
     return len(rows)
 
 
+def upsert_label_snapshot_for_horizon(end_date: str, horizon: int) -> int:
+    sql = f"""
+    INSERT INTO label_snapshot (
+        asset_id, trade_date, label_set, label_version, horizon, label_name,
+        label_value
+    )
+    SELECT
+        asset_id,
+        trade_date,
+        %(label_set)s,
+        %(label_version)s,
+        %(horizon)s,
+        %(label_name)s,
+        future_close / close - 1.0
+    FROM (
+        SELECT
+            asset_id,
+            trade_date,
+            close,
+            LEAD(close, {int(horizon)}) OVER (
+                PARTITION BY asset_id
+                ORDER BY trade_date
+            ) AS future_close
+        FROM market_daily_bar
+        WHERE adjust_type = 'hfq'
+          AND trade_date <= %(end_date)s
+    ) priced
+    WHERE close IS NOT NULL
+      AND close <> 0
+      AND future_close IS NOT NULL
+    ON CONFLICT (asset_id, trade_date, label_set, label_version, horizon, label_name)
+    DO UPDATE SET
+        label_value = EXCLUDED.label_value,
+        computed_at = now()
+    """
+    params = {
+        "end_date": end_date,
+        "label_set": LABEL_SET,
+        "label_version": LABEL_VERSION,
+        "horizon": horizon,
+        "label_name": "future_return",
+    }
+    with connect(SETTINGS.research_service) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return int(cur.rowcount)
+
+
 def compute_and_store_labels(end_date: str) -> int:
-    total = 0
-    for asset_id, bars in load_bars_for_labels(end_date).items():
-        total += upsert_label_snapshot(compute_labels_for_asset(asset_id, bars))
-    return total
+    return sum(upsert_label_snapshot_for_horizon(end_date, horizon) for horizon in HORIZONS)

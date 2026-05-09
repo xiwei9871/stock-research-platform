@@ -1,6 +1,7 @@
 import pandas as pd
 
-from stock_research.labels import compute_labels_for_asset
+from stock_research import labels as labels_module
+from stock_research.labels import compute_and_store_labels, compute_labels_for_asset
 
 
 def test_compute_labels_for_asset_future_return():
@@ -74,3 +75,44 @@ def test_compute_labels_for_asset_empty_input_returns_empty_frame():
     )
 
     assert labels.empty
+
+
+def test_compute_and_store_labels_uses_sql_window_upsert(monkeypatch):
+    calls = []
+
+    class Cursor:
+        rowcount = 7
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            calls.append((sql, params))
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(labels_module, "connect", lambda service: _context(Conn()))
+
+    count = compute_and_store_labels("2026-05-08")
+
+    assert count == 28
+    assert len(calls) == 4
+    assert "LEAD(close, 10)" in calls[1][0]
+    assert calls[0][1]["end_date"] == "2026-05-08"
+    assert calls[0][1]["label_name"] == "future_return"
+
+
+class _context:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        return self.value
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
