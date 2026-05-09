@@ -211,6 +211,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
     )
 
+    build_factor_daily = subparsers.add_parser("build-factor-daily")
+    build_factor_daily.add_argument("--trade-date", required=True)
+    build_factor_daily.add_argument("--lookback-bars", type=int, default=130)
+    build_factor_daily.add_argument("--industry-system", default="csrc")
+
+    score_factor_daily = subparsers.add_parser("score-factor-daily")
+    score_factor_daily.add_argument("--trade-date", required=True)
+    score_factor_daily.add_argument("--score-version", default="manual_v1")
+
+    show_top_scores = subparsers.add_parser("show-top-scores")
+    show_top_scores.add_argument("--trade-date", required=True)
+    show_top_scores.add_argument("--score-version", default="manual_v1")
+    show_top_scores.add_argument("--top-n", type=int, default=30)
+
     return parser
 
 
