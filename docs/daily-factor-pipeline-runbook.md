@@ -48,3 +48,4 @@ Run full daily pipeline:
 - Do not use finance factors unless `announcement_date <= trade_date`.
 - Do not treat TopN as a buy signal.
 - Do not change V3 strategy thresholds in this pipeline.
+- Alpha101 / GTJA191 / Qlib-style factors are research candidates until factor evaluation approves them for scoring.

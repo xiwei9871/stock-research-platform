@@ -121,6 +121,8 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `factors.trend`、`factors.momentum`、`factors.volume_price`、`factors.sector`、`factors.risk` 的基础 pandas 实现。
 - 已为 `factors.value`、`factors.growth`、`factors.quality`、`factors.alpha101`、`factors.gtja191`、`factors.qlib_alpha` 预留清晰边界。
 - Alpha101、GTJA191、Qlib 当前只作为参考来源，不作为项目主框架或强依赖。
+- 已落地第一批外部参考因子：Alpha101-style、GTJA191-style、Qlib-style 代表性 pandas 实现。
+- 外部参考因子已进入 `factor.factor_daily`，但进入 `factor.stock_score_daily` 前仍需通过 `factor_eval` 评价门禁。
 
 ### 阶段 4：因子评价系统
 
