@@ -10,6 +10,10 @@ from stock_research.core_data import (
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_pipeline import build_and_store_factor_daily
+from stock_research.factor_eval.report import generate_factor_eval_report
+from stock_research.factor_eval_store import load_factor_eval_inputs
+from stock_research.factor_store import load_top_scores, score_stored_factor_daily
+from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -239,6 +243,24 @@ def build_parser() -> argparse.ArgumentParser:
     show_top_scores.add_argument("--score-version", default="manual_v1")
     show_top_scores.add_argument("--top-n", type=int, default=30)
 
+    eval_factor = subparsers.add_parser("eval-factor")
+    eval_factor.add_argument("--factor-name", required=True)
+    eval_factor.add_argument("--start-date", required=True)
+    eval_factor.add_argument("--end-date", required=True)
+    eval_factor.add_argument("--horizon", type=int, default=5)
+    eval_factor.add_argument("--quantiles", type=int, default=5)
+    eval_factor.add_argument("--top-n", type=int, default=30)
+
+    daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
+    daily_factor_pipeline.add_argument("--trade-date", required=True)
+    daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
+    daily_factor_pipeline.add_argument("--top-n", type=int, default=30)
+    daily_factor_pipeline.add_argument("--lookback-bars", type=int, default=130)
+    daily_factor_pipeline.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
     return parser
 
 
@@ -278,6 +300,54 @@ def main() -> None:
             industry_system=args.industry_system,
         )
         print(f"factor_daily_stored|{count}")
+    elif args.command == "score-factor-daily":
+        count = score_stored_factor_daily(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+        )
+        print(f"stock_score_daily_stored|{count}")
+    elif args.command == "show-top-scores":
+        for row in load_top_scores(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+        ):
+            print(
+                f"top_score|{row['trade_date']}|{row['rank']}|"
+                f"{row['asset_id']}|{row['score_total']}|{row['score_version']}"
+            )
+    elif args.command == "eval-factor":
+        factors, returns = load_factor_eval_inputs(
+            factor_name=args.factor_name,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizon=args.horizon,
+        )
+        result = generate_factor_eval_report(
+            factors,
+            returns,
+            factor_name=args.factor_name,
+            return_col=f"forward_return_{args.horizon}d",
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        print(f"factor_eval|{args.factor_name}|mean_ic|{result['ic_summary']['mean_ic']}")
+        print(f"factor_eval|{args.factor_name}|ic_count|{result['ic_summary']['ic_count']}")
+        print(
+            f"factor_eval|{args.factor_name}|mean_rank_ic|"
+            f"{result['rank_ic_summary']['mean_ic']}"
+        )
+    elif args.command == "run-daily-factor-pipeline":
+        result = run_daily_factor_pipeline(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            lookback_bars=args.lookback_bars,
+            reports_dir=args.reports_dir,
+        )
+        print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
+        print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
+        print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")

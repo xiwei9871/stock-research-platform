@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pandas as pd
 import pytest
 
@@ -107,3 +109,29 @@ def test_sector_factors_join_sector_strength_and_rank_stock():
     assert latest["sector_ret_2"] == pytest.approx(121 / 100 - 1.0)
     assert latest["stock_excess_ret_2"] == pytest.approx((15 / 10 - 1.0) - (121 / 100 - 1.0))
     assert latest["sector_up_ratio"] == pytest.approx(1.0)
+
+
+def test_sector_factors_accept_decimal_amounts_from_postgres():
+    stock = pd.DataFrame(
+        {
+            "trade_date": ["2026-01-01", "2026-01-02", "2026-01-03"],
+            "asset_id": ["A", "A", "A"],
+            "industry_code": ["T", "T", "T"],
+            "close": [Decimal("10"), Decimal("12"), Decimal("15")],
+            "preclose": [Decimal("9"), Decimal("10"), Decimal("12")],
+            "amount": [Decimal("100"), Decimal("140"), Decimal("220")],
+        }
+    )
+    sector_bars = pd.DataFrame(
+        {
+            "trade_date": ["2026-01-01", "2026-01-02", "2026-01-03"],
+            "industry_code": ["T", "T", "T"],
+            "close": [Decimal("100"), Decimal("110"), Decimal("121")],
+            "preclose": [Decimal("99"), Decimal("100"), Decimal("110")],
+            "amount": [Decimal("1000"), Decimal("1200"), Decimal("1800")],
+        }
+    )
+
+    factors = sector.compute_sector_factors(stock, sector_bars, ret_window=2)
+
+    assert factors.iloc[-1]["sector_amount_ratio_2"] == pytest.approx(1800 / 1500)

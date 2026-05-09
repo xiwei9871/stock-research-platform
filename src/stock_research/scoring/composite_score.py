@@ -18,6 +18,8 @@ def build_composite_scores(
     normalized_weights = _normalize_weights(weights)
     result[output_col] = 0.0
     for column, weight in normalized_weights.items():
+        if column not in result.columns:
+            result[column] = 0.0
         result[column] = pd.to_numeric(result[column], errors="coerce").fillna(0.0)
         result[output_col] += result[column] * weight
 

@@ -18,7 +18,9 @@ def numeric_series(frame: pd.DataFrame, column: str) -> pd.Series:
 
 
 def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
-    result = numerator / denominator.replace(0, np.nan)
+    clean_numerator = pd.to_numeric(numerator, errors="coerce")
+    clean_denominator = pd.to_numeric(denominator, errors="coerce").replace(0, np.nan)
+    result = clean_numerator / clean_denominator
     return result.replace([np.inf, -np.inf], np.nan)
 
 

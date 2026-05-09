@@ -6,6 +6,7 @@ import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_config import manual_v1_config
 from stock_research.scoring.pipeline import score_factor_daily
 
 
@@ -125,6 +126,31 @@ def load_top_scores(
         return fetch_all(conn, sql, [_date_string(trade_date), score_version, top_n])
 
 
+def load_factor_daily(
+    trade_date: object,
+    calc_version: str = "v1",
+    service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    SELECT
+        trade_date,
+        asset_id,
+        factor_name,
+        factor_group,
+        factor_value,
+        calc_version,
+        source,
+        source_data_version
+    FROM factor.factor_daily
+    WHERE trade_date = %s
+      AND calc_version = %s
+    ORDER BY asset_id, factor_name
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [_date_string(trade_date), calc_version])
+    return pd.DataFrame(rows)
+
+
 def score_and_store_factor_daily(
     factor_daily: pd.DataFrame,
     factor_directions: dict[str, str],
@@ -146,6 +172,28 @@ def score_and_store_factor_daily(
         scores,
         calc_version=calc_version,
         source_data_version=f"factor_daily:{score_version}",
+        service=service,
+    )
+
+
+def score_stored_factor_daily(
+    trade_date: object,
+    score_version: str = "manual_v1",
+    calc_version: str = "v1",
+    service: str = SETTINGS.research_service,
+) -> int:
+    config = manual_v1_config()
+    factors = load_factor_daily(
+        trade_date=trade_date,
+        calc_version=calc_version,
+        service=service,
+    )
+    return score_and_store_factor_daily(
+        factors,
+        factor_directions=config["factor_directions"],
+        weights=config["weights"],
+        score_version=score_version,
+        calc_version=calc_version,
         service=service,
     )
 

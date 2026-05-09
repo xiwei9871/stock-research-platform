@@ -12,6 +12,12 @@ Daily research command:
 /Users/xiwei/stock_research/scripts/run_daily_research.sh
 ```
 
+## Daily Factor Pipeline
+
+See `docs/daily-factor-pipeline-runbook.md` for the current operator workflow.
+The pipeline writes factors to `factor.factor_daily`, scores to
+`factor.stock_score_daily`, and reports to ignored local `reports/` files.
+
 ## Research Database Principles
 
 The database is being extended from a daily price store into a point-in-time

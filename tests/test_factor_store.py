@@ -115,6 +115,34 @@ def test_load_top_scores_queries_factor_scores(monkeypatch):
     assert calls[0][1] == ["2026-01-01", "manual_v1", 10]
 
 
+def test_load_factor_daily_queries_trade_date_and_calc_version(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        return [
+            {
+                "trade_date": "2026-05-08",
+                "asset_id": "A",
+                "factor_name": "ret_20",
+                "factor_group": "momentum",
+                "factor_value": 0.1,
+                "calc_version": "v1",
+                "source": "custom",
+                "source_data_version": "market_daily_bar:hfq",
+            }
+        ]
+
+    monkeypatch.setattr(factor_store, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(factor_store, "fetch_all", fake_fetch_all)
+
+    frame = factor_store.load_factor_daily("2026-05-08", calc_version="v1")
+
+    assert frame.iloc[0]["factor_name"] == "ret_20"
+    assert "FROM factor.factor_daily" in calls[0][0]
+    assert calls[0][1] == ["2026-05-08", "v1"]
+
+
 def test_score_and_store_factor_daily_upserts_scores(monkeypatch):
     stored = []
 
@@ -142,6 +170,30 @@ def test_score_and_store_factor_daily_upserts_scores(monkeypatch):
     assert scores.iloc[0]["asset_id"] == "B"
     assert scores.iloc[0]["rank"] == 1
     assert kwargs["source_data_version"] == "factor_daily:manual_v1"
+
+
+def test_score_stored_factor_daily_loads_config_and_scores(monkeypatch):
+    calls = []
+    factors = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-08", "asset_id": "A", "factor_name": "ret_20", "factor_value": 1.0},
+            {"trade_date": "2026-05-08", "asset_id": "B", "factor_name": "ret_20", "factor_value": 2.0},
+        ]
+    )
+
+    monkeypatch.setattr(factor_store, "load_factor_daily", lambda **kwargs: factors)
+    monkeypatch.setattr(
+        factor_store,
+        "score_and_store_factor_daily",
+        lambda factor_daily, **kwargs: calls.append((factor_daily, kwargs)) or len(factor_daily),
+    )
+
+    count = factor_store.score_stored_factor_daily("2026-05-08", score_version="manual_v1")
+
+    assert count == 2
+    assert calls[0][0] is factors
+    assert calls[0][1]["score_version"] == "manual_v1"
+    assert calls[0][1]["calc_version"] == "v1"
 
 
 class _context:

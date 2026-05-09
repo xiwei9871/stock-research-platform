@@ -17,11 +17,11 @@ venv/
 env/
 
 # Local generated artifacts
-build/
-dist/
-cache/
-logs/
-reports/
+/build/
+/dist/
+/cache/
+/logs/
+/reports/
 
 # Local environment and secrets
 .env

@@ -52,6 +52,49 @@ def test_load_market_bars_for_factor_date_queries_lookback_window(monkeypatch):
     assert calls[0][1] == ["2026-05-08", "hfq", 130]
 
 
+def test_enrich_bars_with_industry_uses_point_in_time_membership(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        return [{"asset_id": "A", "industry_code": "T", "industry_name": "Tech"}]
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(factor_pipeline, "fetch_all", fake_fetch_all)
+
+    bars = pd.DataFrame({"trade_date": ["2026-05-08"], "asset_id": ["A"], "close": [10.0]})
+    result = factor_pipeline.enrich_bars_with_industry(
+        bars,
+        trade_date="2026-05-08",
+        industry_system="csrc",
+    )
+
+    assert result.iloc[0]["industry_code"] == "T"
+    assert "core.industry_membership" in calls[0][0]
+    assert calls[0][1] == ["csrc", "2026-05-08", "2026-05-08"]
+
+
+def test_load_industry_bars_for_factor_date_queries_window(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        return [{"trade_date": "2026-05-08", "industry_code": "T", "close": 100.0}]
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(factor_pipeline, "fetch_all", fake_fetch_all)
+
+    result = factor_pipeline.load_industry_bars_for_factor_date(
+        "2026-05-08",
+        lookback_bars=130,
+        industry_system="csrc",
+    )
+
+    assert len(result) == 1
+    assert "market.industry_daily_bar" in calls[0][0]
+    assert calls[0][1] == ["2026-05-08", "csrc", 130]
+
+
 def test_compute_technical_factor_rows_returns_long_factor_daily_rows():
     dates = pd.date_range("2026-01-01", periods=70, freq="D")
     bars = pd.DataFrame(
@@ -154,6 +197,16 @@ def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
     )
     monkeypatch.setattr(
         factor_pipeline,
+        "enrich_bars_with_industry",
+        lambda bars, **kwargs: bars.assign(industry_code="T", industry_name="Tech"),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_industry_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
         "upsert_factor_daily",
         lambda rows: calls.append(rows) or len(rows),
         raising=False,
@@ -166,6 +219,42 @@ def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
 
     assert count > 0
     assert calls[0]["trade_date"].nunique() == 1
+
+
+def test_compute_sector_factor_rows_returns_sector_factor_daily_rows():
+    dates = pd.date_range("2026-01-01", periods=25, freq="D")
+    stock_bars = pd.DataFrame(
+        {
+            "trade_date": list(dates) * 2,
+            "asset_id": ["A"] * 25 + ["B"] * 25,
+            "industry_code": ["T"] * 50,
+            "close": list(range(10, 35)) + list(range(20, 45)),
+            "preclose": [9] + list(range(10, 34)) + [19] + list(range(20, 44)),
+            "amount": [100.0] * 50,
+        }
+    )
+    industry_bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "industry_code": ["T"] * 25,
+            "industry_name": ["Tech"] * 25,
+            "close": range(100, 125),
+            "preclose": [99] + list(range(100, 124)),
+            "amount": [1000.0] * 25,
+        }
+    )
+
+    result = factor_pipeline.compute_sector_factor_rows(
+        stock_bars,
+        industry_bars,
+        trade_date="2026-01-25",
+        factor_groups={"sector_ret_20": "sector", "stock_excess_ret_20": "sector"},
+        calc_version="v1",
+        source_data_version="market_daily_bar:hfq",
+    )
+
+    assert set(result["factor_name"]) == {"sector_ret_20", "stock_excess_ret_20"}
+    assert set(result["asset_id"]) == {"A", "B"}
 
 
 class _context:

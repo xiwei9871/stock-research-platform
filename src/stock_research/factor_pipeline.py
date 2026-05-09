@@ -6,7 +6,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
 from stock_research.factor_store import upsert_factor_daily
-from stock_research.factors import momentum, risk, trend, volume_price
+from stock_research.factors import momentum, risk, sector, trend, volume_price
 
 
 FACTOR_DAILY_COLUMNS = [
@@ -66,6 +66,74 @@ def load_market_bars_for_factor_date(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [trade_date, adjust_type, lookback_bars])
+    return pd.DataFrame(rows)
+
+
+def enrich_bars_with_industry(
+    bars: pd.DataFrame,
+    trade_date: str,
+    industry_system: str = "csrc",
+    service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    SELECT asset_id, industry_code, industry_name
+    FROM core.industry_membership
+    WHERE industry_system = %s
+      AND start_date <= %s
+      AND (end_date IS NULL OR end_date > %s)
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [industry_system, trade_date, trade_date])
+    memberships = pd.DataFrame(rows)
+    result = bars.copy()
+    if memberships.empty:
+        result["industry_code"] = None
+        result["industry_name"] = None
+        return result
+    return result.merge(memberships, on="asset_id", how="left")
+
+
+def load_industry_bars_for_factor_date(
+    trade_date: str,
+    lookback_bars: int = 130,
+    industry_system: str = "csrc",
+    service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    WITH ranked AS (
+        SELECT
+            trade_date,
+            industry_code,
+            industry_name,
+            open,
+            high,
+            low,
+            close,
+            preclose,
+            volume,
+            amount,
+            row_number() over (partition by industry_code order by trade_date desc) AS row_num
+        FROM market.industry_daily_bar
+        WHERE trade_date <= %s
+          AND industry_system = %s
+    )
+    SELECT
+        trade_date,
+        industry_code,
+        industry_name,
+        open,
+        high,
+        low,
+        close,
+        preclose,
+        volume,
+        amount
+    FROM ranked
+    WHERE row_num <= %s
+    ORDER BY industry_code, trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date, industry_system, lookback_bars])
     return pd.DataFrame(rows)
 
 
@@ -140,6 +208,46 @@ def compute_technical_factor_rows(
     return pd.DataFrame(rows, columns=FACTOR_DAILY_COLUMNS)
 
 
+def compute_sector_factor_rows(
+    stock_bars: pd.DataFrame,
+    industry_bars: pd.DataFrame,
+    trade_date: str,
+    factor_groups: dict[str, str],
+    calc_version: str,
+    source_data_version: str,
+) -> pd.DataFrame:
+    sector_factors = {
+        name: group for name, group in factor_groups.items() if group == "sector"
+    }
+    if not sector_factors or stock_bars.empty or industry_bars.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    normalized_trade_date = str(trade_date)[:10]
+    computed = sector.compute_sector_factors(stock_bars, industry_bars, ret_window=20)
+    latest = computed[computed["trade_date"].astype(str).str[:10] == normalized_trade_date]
+    rows: list[dict[str, Any]] = []
+    for _, record in latest.iterrows():
+        for factor_name, factor_group in sector_factors.items():
+            if factor_name not in computed.columns:
+                continue
+            value = record.get(factor_name)
+            if pd.isna(value):
+                continue
+            rows.append(
+                {
+                    "trade_date": normalized_trade_date,
+                    "asset_id": str(record["asset_id"]),
+                    "factor_name": factor_name,
+                    "factor_group": factor_group,
+                    "factor_value": float(value),
+                    "calc_version": calc_version,
+                    "source": "custom",
+                    "source_data_version": source_data_version,
+                }
+            )
+    return pd.DataFrame(rows, columns=FACTOR_DAILY_COLUMNS)
+
+
 def build_and_store_factor_daily(
     trade_date: str,
     lookback_bars: int = 130,
@@ -147,13 +255,31 @@ def build_and_store_factor_daily(
 ) -> int:
     config = manual_v1_config()
     bars = load_market_bars_for_factor_date(trade_date, lookback_bars=lookback_bars)
-    factors = compute_technical_factor_rows(
+    enriched_bars = enrich_bars_with_industry(
+        bars,
+        trade_date=trade_date,
+        industry_system=industry_system,
+    )
+    industry_bars = load_industry_bars_for_factor_date(
+        trade_date,
+        lookback_bars=lookback_bars,
+        industry_system=industry_system,
+    )
+    technical_factors = compute_technical_factor_rows(
         bars,
         trade_date=trade_date,
         factor_groups=config["factor_groups"],
         calc_version=config["calc_version"],
         source_data_version=config["source_data_version"],
-        # Sector factors are configured now but added to the pipeline in a later task.
         strict=False,
     )
+    sector_factors = compute_sector_factor_rows(
+        enriched_bars,
+        industry_bars,
+        trade_date=trade_date,
+        factor_groups=config["factor_groups"],
+        calc_version=config["calc_version"],
+        source_data_version=config["source_data_version"],
+    )
+    factors = pd.concat([technical_factors, sector_factors], ignore_index=True)
     return upsert_factor_daily(factors)
