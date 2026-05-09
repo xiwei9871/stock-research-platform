@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -313,6 +314,136 @@ def run_ingest_jobs(
     return result
 
 
+def status_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return {str(row["status"]): int(row["count"]) for row in rows}
+
+
+def recent_ingest_jobs(
+    conn,
+    dataset: str,
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT job_id, status, rows_read, rows_written, error_message
+    FROM ingest.batch_job
+    WHERE dataset = %s
+    ORDER BY updated_at DESC
+    LIMIT %s
+    """
+    return fetch_all(conn, sql, [dataset, limit])
+
+
+def format_ingest_loop_report(summary: dict[str, Any]) -> str:
+    counts = summary.get("status_counts", {})
+    recent_jobs = summary.get("recent_jobs", [])
+    if summary.get("done"):
+        conclusion = "结论: 全部任务已完成，pending=0"
+    elif int(summary.get("failed", 0)) > 0 or int(counts.get("failed", 0)) > 0:
+        conclusion = "结论: 本轮完成，但存在失败批次，可继续重试"
+    else:
+        conclusion = "结论: 本轮完成，无遗漏，可继续下一轮"
+
+    lines = [
+        "A股财务数据补齐进度",
+        "",
+        f"数据集: {summary['dataset']}",
+        f"第 {summary['round']} 轮",
+        f"本轮尝试: {summary['attempted']}",
+        f"本轮成功: {summary['success']}",
+        f"本轮失败: {summary['failed']}",
+        f"本轮读取资产: {summary['rows_read']}",
+        f"本轮写入行数: {summary['rows_written']}",
+        "",
+        "总状态:",
+        f"success: {int(counts.get('success', 0))}",
+        f"pending: {int(counts.get('pending', 0))}",
+        f"failed: {int(counts.get('failed', 0))}",
+        f"running: {int(counts.get('running', 0))}",
+        "",
+        "最近批次:",
+    ]
+    for job in recent_jobs[:5]:
+        error = job.get("error_message") or ""
+        suffix = f" error={error}" if error else ""
+        lines.append(
+            f"- {job['job_id']} | {job['status']} | "
+            f"read={int(job.get('rows_read') or 0)} "
+            f"written={int(job.get('rows_written') or 0)}{suffix}"
+        )
+    if not recent_jobs:
+        lines.append("- 无")
+    lines.extend(["", conclusion])
+    return "\n".join(lines)
+
+
+def run_ingest_loop(
+    conn,
+    dataset: str,
+    *,
+    jobs_per_round: int,
+    report: Callable[[dict[str, Any]], None] | None = None,
+    progress: ProgressCallback | None = None,
+    sleep_seconds: int = 10,
+    max_rounds: int | None = None,
+    sleep: Callable[[int], None] = time.sleep,
+) -> dict[str, int | bool]:
+    totals: dict[str, int | bool] = {
+        "rounds": 0,
+        "attempted": 0,
+        "success": 0,
+        "failed": 0,
+        "rows_read": 0,
+        "rows_written": 0,
+        "done": False,
+    }
+    while True:
+        if max_rounds is not None and int(totals["rounds"]) >= max_rounds:
+            break
+
+        result = run_ingest_jobs(
+            conn,
+            dataset,
+            jobs_per_round,
+            progress=progress,
+        )
+        if int(result.get("attempted", 0)) == 0:
+            totals["done"] = True
+            break
+
+        totals["rounds"] = int(totals["rounds"]) + 1
+        totals["attempted"] = int(totals["attempted"]) + int(result.get("attempted", 0))
+        totals["success"] = int(totals["success"]) + int(result.get("success", 0))
+        totals["failed"] = int(totals["failed"]) + int(result.get("failed", 0))
+        totals["rows_read"] = int(totals["rows_read"]) + int(result.get("rows_read", 0))
+        totals["rows_written"] = int(totals["rows_written"]) + int(
+            result.get("rows_written", 0)
+        )
+
+        counts = status_counts(ingest_status(conn, dataset))
+        done = int(counts.get("pending", 0)) == 0 and int(counts.get("running", 0)) == 0
+        totals["done"] = done
+        summary = {
+            "dataset": dataset,
+            "round": int(totals["rounds"]),
+            "attempted": int(result.get("attempted", 0)),
+            "success": int(result.get("success", 0)),
+            "failed": int(result.get("failed", 0)),
+            "rows_read": int(result.get("rows_read", 0)),
+            "rows_written": int(result.get("rows_written", 0)),
+            "status_counts": counts,
+            "recent_jobs": recent_ingest_jobs(conn, dataset),
+            "done": done,
+        }
+        if report:
+            report(summary)
+        if done:
+            break
+        if sleep_seconds > 0:
+            sleep(sleep_seconds)
+
+    return totals
+
+
 def run_ingest_jobs_for_service(
     dataset: str,
     *,
@@ -322,6 +453,28 @@ def run_ingest_jobs_for_service(
 ) -> dict[str, int]:
     with connect(service) as conn:
         return run_ingest_jobs(conn, dataset, limit_jobs, progress=progress)
+
+
+def run_ingest_loop_for_service(
+    dataset: str,
+    *,
+    jobs_per_round: int,
+    report: Callable[[dict[str, Any]], None] | None = None,
+    progress: ProgressCallback | None = None,
+    sleep_seconds: int = 10,
+    max_rounds: int | None = None,
+    service: str = SETTINGS.research_service,
+) -> dict[str, int | bool]:
+    with connect(service) as conn:
+        return run_ingest_loop(
+            conn,
+            dataset,
+            jobs_per_round=jobs_per_round,
+            report=report,
+            progress=progress,
+            sleep_seconds=sleep_seconds,
+            max_rounds=max_rounds,
+        )
 
 
 def ingest_status(conn, dataset: str | None = None) -> list[dict[str, Any]]:

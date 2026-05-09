@@ -180,8 +180,104 @@ def test_cli_accepts_ingest_batch_commands():
     assert status_args.command == "ingest-status"
     assert status_args.dataset == "baostock-finance"
 
+    loop_args = build_parser().parse_args(
+        [
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "50",
+            "--report-target",
+            "oc_group",
+            "--report-account",
+            "jarvis",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--report-dry-run",
+        ]
+    )
+    assert loop_args.command == "run-ingest-loop"
+    assert loop_args.dataset == "baostock-finance"
+    assert loop_args.jobs_per_round == 50
+    assert loop_args.report_target == "oc_group"
+    assert loop_args.report_account == "jarvis"
+    assert loop_args.sleep_seconds == 0
+    assert loop_args.max_rounds == 1
+    assert loop_args.report_dry_run is True
+
 
 def test_format_progress_bar():
     assert format_progress_bar(0, 10, width=10) == "[----------]"
     assert format_progress_bar(5, 10, width=10) == "[#####-----]"
     assert format_progress_bar(10, 10, width=10) == "[##########]"
+
+
+def test_cli_main_runs_ingest_loop_and_prints_outputs(monkeypatch, capsys):
+    from stock_research import cli
+
+    calls = []
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "2",
+            "--report-target",
+            "oc_group",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--report-dry-run",
+        ],
+    )
+
+    def fake_run_loop(dataset, **kwargs):
+        kwargs["report"](
+            {
+                "dataset": "baostock-finance",
+                "round": 1,
+                "attempted": 2,
+                "success": 2,
+                "failed": 0,
+                "rows_read": 100,
+                "rows_written": 0,
+                "status_counts": {"success": 2, "pending": 0},
+                "recent_jobs": [],
+                "done": True,
+            }
+        )
+        calls.append(("run_loop", dataset, kwargs))
+        return {
+            "rounds": 1,
+            "attempted": 2,
+            "success": 2,
+            "failed": 0,
+            "done": True,
+        }
+
+    monkeypatch.setattr(cli, "run_ingest_loop_for_service", fake_run_loop)
+    monkeypatch.setattr(
+        cli,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: calls.append(("send", kwargs)),
+    )
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert "A股财务数据补齐进度" in captured.out
+    assert "ingest_loop_rounds|1" in captured.out
+    assert "ingest_loop_done|True" in captured.out
+    assert calls[0][0] == "send"
+    assert calls[0][1]["target"] == "oc_group"
+    assert calls[0][1]["account"] == "jarvis"
+    assert calls[0][1]["dry_run"] is True
+    assert calls[1][0] == "run_loop"
+    assert calls[1][1] == "baostock-finance"
+    assert calls[1][2]["jobs_per_round"] == 2

@@ -8,9 +8,12 @@ from stock_research.core_data import (
     sync_core_asset_master_for_service,
 )
 from stock_research.features import compute_and_store_p0_features
+from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
+    format_ingest_loop_report,
     ingest_status_for_service,
+    run_ingest_loop_for_service,
     run_ingest_jobs_for_service,
 )
 from stock_research.labels import compute_and_store_labels
@@ -120,6 +123,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_ingest = subparsers.add_parser("run-ingest-jobs")
     run_ingest.add_argument("--dataset", required=True)
     run_ingest.add_argument("--limit-jobs", required=True, type=int)
+
+    run_ingest_loop = subparsers.add_parser("run-ingest-loop")
+    run_ingest_loop.add_argument("--dataset", required=True)
+    run_ingest_loop.add_argument("--jobs-per-round", type=int, default=50)
+    run_ingest_loop.add_argument("--sleep-seconds", type=int, default=10)
+    run_ingest_loop.add_argument("--max-rounds", type=int)
+    run_ingest_loop.add_argument("--report-target", required=True)
+    run_ingest_loop.add_argument("--report-account", default="jarvis")
+    run_ingest_loop.add_argument("--openclaw-bin", default="openclaw")
+    run_ingest_loop.add_argument("--report-dry-run", action="store_true")
 
     ingest_status = subparsers.add_parser("ingest-status")
     ingest_status.add_argument("--dataset")
@@ -291,6 +304,31 @@ def main() -> None:
         print(f"ingest_jobs_attempted|{result['attempted']}")
         print(f"ingest_jobs_success|{result['success']}")
         print(f"ingest_jobs_failed|{result['failed']}")
+    elif args.command == "run-ingest-loop":
+        def report(summary: dict) -> None:
+            message = format_ingest_loop_report(summary)
+            print(message, flush=True)
+            send_openclaw_feishu_message(
+                message=message,
+                target=args.report_target,
+                account=args.report_account,
+                openclaw_bin=args.openclaw_bin,
+                dry_run=args.report_dry_run,
+            )
+
+        result = run_ingest_loop_for_service(
+            args.dataset,
+            jobs_per_round=args.jobs_per_round,
+            report=report,
+            progress=print_ingest_progress,
+            sleep_seconds=args.sleep_seconds,
+            max_rounds=args.max_rounds,
+        )
+        print(f"ingest_loop_rounds|{result['rounds']}")
+        print(f"ingest_loop_attempted|{result['attempted']}")
+        print(f"ingest_loop_success|{result['success']}")
+        print(f"ingest_loop_failed|{result['failed']}")
+        print(f"ingest_loop_done|{result['done']}")
     elif args.command == "ingest-status":
         for row in ingest_status_for_service(args.dataset):
             print(f"ingest_status|{row['dataset']}|{row['status']}|{row['count']}")

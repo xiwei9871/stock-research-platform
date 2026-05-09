@@ -260,3 +260,94 @@ def test_run_ingest_jobs_commits_each_completed_job_before_interrupt(monkeypatch
         ("failed", "job-2", "interrupted"),
     ]
     assert conn.commits == 4
+
+
+def test_format_ingest_loop_report_includes_round_and_status():
+    message = ingest_jobs.format_ingest_loop_report(
+        {
+            "dataset": "baostock-finance",
+            "round": 2,
+            "attempted": 50,
+            "success": 49,
+            "failed": 1,
+            "rows_read": 2500,
+            "rows_written": 12,
+            "status_counts": {"success": 169, "pending": 14807, "failed": 1},
+            "recent_jobs": [
+                {
+                    "job_id": "baostock-finance:1990Q2:offset3200:limit50",
+                    "status": "success",
+                    "rows_read": 50,
+                    "rows_written": 0,
+                    "error_message": None,
+                }
+            ],
+            "done": False,
+        }
+    )
+
+    assert "A股财务数据补齐进度" in message
+    assert "第 2 轮" in message
+    assert "本轮尝试: 50" in message
+    assert "本轮失败: 1" in message
+    assert "pending: 14807" in message
+    assert "offset3200" in message
+    assert "结论: 本轮完成，但存在失败批次，可继续重试" in message
+
+
+def test_run_ingest_loop_runs_until_no_pending_and_reports_each_round(monkeypatch):
+    conn = FakeConnection()
+    run_results = [
+        {"attempted": 2, "success": 2, "failed": 0, "rows_read": 100, "rows_written": 0},
+        {"attempted": 1, "success": 1, "failed": 0, "rows_read": 50, "rows_written": 3},
+    ]
+    status_results = [
+        [{"dataset": "baostock-finance", "status": "pending", "count": 1}],
+        [{"dataset": "baostock-finance", "status": "success", "count": 3}],
+    ]
+    recent_results = [
+        [{"job_id": "job-2", "status": "success", "rows_read": 50, "rows_written": 0}],
+        [{"job_id": "job-3", "status": "success", "rows_read": 50, "rows_written": 3}],
+    ]
+    reports = []
+    sleep_calls = []
+    monkeypatch.setattr(
+        ingest_jobs,
+        "run_ingest_jobs",
+        lambda conn, dataset, limit_jobs, progress=None: run_results.pop(0),
+    )
+    monkeypatch.setattr(
+        ingest_jobs,
+        "ingest_status",
+        lambda conn, dataset: status_results.pop(0),
+    )
+    monkeypatch.setattr(
+        ingest_jobs,
+        "recent_ingest_jobs",
+        lambda conn, dataset, limit=12: recent_results.pop(0),
+    )
+
+    result = ingest_jobs.run_ingest_loop(
+        conn,
+        "baostock-finance",
+        jobs_per_round=2,
+        report=reports.append,
+        sleep_seconds=5,
+        sleep=sleep_calls.append,
+    )
+
+    assert result == {
+        "rounds": 2,
+        "attempted": 3,
+        "success": 3,
+        "failed": 0,
+        "rows_read": 150,
+        "rows_written": 3,
+        "done": True,
+    }
+    assert len(reports) == 2
+    assert reports[0]["round"] == 1
+    assert reports[0]["done"] is False
+    assert reports[1]["round"] == 2
+    assert reports[1]["done"] is True
+    assert sleep_calls == [5]
