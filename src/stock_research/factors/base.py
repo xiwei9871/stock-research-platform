@@ -24,6 +24,60 @@ def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     return result.replace([np.inf, -np.inf], np.nan)
 
 
+def cross_sectional_rank(frame: pd.DataFrame, column: str) -> pd.Series:
+    values = numeric_series(frame, column)
+    return values.groupby(frame["trade_date"]).rank(pct=True)
+
+
+def ts_rank(values: pd.Series, window: int) -> pd.Series:
+    clean = pd.to_numeric(values, errors="coerce")
+
+    def rank_latest(window_values: pd.Series) -> float:
+        if window_values.isna().any():
+            return np.nan
+        return float(window_values.rank(pct=True).iloc[-1])
+
+    return clean.rolling(window).apply(rank_latest, raw=False)
+
+
+def decay_linear(values: pd.Series, window: int) -> pd.Series:
+    clean = pd.to_numeric(values, errors="coerce")
+    weights = np.arange(1, window + 1, dtype="float64")
+    denominator = float(weights.sum())
+
+    def weighted(window_values: np.ndarray) -> float:
+        if np.isnan(window_values).any():
+            return np.nan
+        return float(np.dot(window_values, weights) / denominator)
+
+    return clean.rolling(window).apply(weighted, raw=True)
+
+
+def delta(values: pd.Series, period: int = 1) -> pd.Series:
+    return pd.to_numeric(values, errors="coerce").diff(period)
+
+
+def delay(values: pd.Series, period: int = 1) -> pd.Series:
+    return pd.to_numeric(values, errors="coerce").shift(period)
+
+
+def signed_power(values: pd.Series, power: float) -> pd.Series:
+    clean = pd.to_numeric(values, errors="coerce")
+    return clean.abs().pow(power) * np.sign(clean)
+
+
+def rolling_corr(left: pd.Series, right: pd.Series, window: int) -> pd.Series:
+    return pd.to_numeric(left, errors="coerce").rolling(window).corr(
+        pd.to_numeric(right, errors="coerce")
+    )
+
+
+def rolling_cov(left: pd.Series, right: pd.Series, window: int) -> pd.Series:
+    return pd.to_numeric(left, errors="coerce").rolling(window).cov(
+        pd.to_numeric(right, errors="coerce")
+    )
+
+
 def max_drawdown(values: pd.Series) -> float:
     clean = pd.to_numeric(values, errors="coerce").dropna()
     if clean.empty:
