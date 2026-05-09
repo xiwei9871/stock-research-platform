@@ -116,6 +116,12 @@ backtest         回测结果、持仓、交易日志
 
 第一批先落地可复用基础函数，不全量复刻 Alpha101 / GTJA191。
 
+当前进展：
+
+- 已落地 `factors.trend`、`factors.momentum`、`factors.volume_price`、`factors.sector`、`factors.risk` 的基础 pandas 实现。
+- 已为 `factors.value`、`factors.growth`、`factors.quality`、`factors.alpha101`、`factors.gtja191`、`factors.qlib_alpha` 预留清晰边界。
+- Alpha101、GTJA191、Qlib 当前只作为参考来源，不作为项目主框架或强依赖。
+
 ### 阶段 4：因子评价系统
 
 目标：判断因子是否真的有效。
@@ -131,6 +137,13 @@ backtest         回测结果、持仓、交易日志
 - 分年份表现
 - 分市场状态表现
 - 行业暴露和市值暴露
+
+当前进展：
+
+- 已落地 `factor_eval.ic`，支持按交易日横截面计算 IC 和 RankIC。
+- 已落地 `factor_eval.quantile_return`，支持按交易日分位数组收益和 Top-Bottom 收益差。
+- 已落地 `factor_eval.turnover`，支持 TopN 成分换手率。
+- 已落地 `factor_eval.report`，提供轻量因子评价汇总入口。
 
 ### 阶段 5：多因子打分与 TopN 股票池
 
