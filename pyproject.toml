@@ -1,0 +1,23 @@
+[project]
+name = "stock-research"
+version = "0.1.0"
+description = "AI monitoring and stock-selection research pipeline"
+requires-python = ">=3.11"
+dependencies = [
+  "akshare",
+  "baostock",
+  "pandas",
+  "psycopg[binary]",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[project.scripts]
+stock-research = "stock_research.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
