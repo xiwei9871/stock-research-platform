@@ -53,6 +53,8 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS raw_baostock.finance_payload" in sql
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_job" in sql
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_event" in sql
+    assert "CREATE TABLE IF NOT EXISTS factor.factor_daily" in sql
+    assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
 
 
 def test_research_extension_enforces_point_in_time_columns():
@@ -63,6 +65,8 @@ def test_research_extension_enforces_point_in_time_columns():
     assert "idx_finance_income_statement_pit" in sql
     assert "idx_core_industry_membership_window" in sql
     assert "idx_ingest_batch_job_status" in sql
+    assert "idx_factor_daily_lookup" in sql
+    assert "idx_stock_score_daily_rank" in sql
 
 
 def test_cli_accepts_apply_research_schema_command():

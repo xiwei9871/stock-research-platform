@@ -1,0 +1,213 @@
+import json
+from datetime import date, datetime
+from typing import Any
+
+import pandas as pd
+
+from stock_research.config import SETTINGS
+from stock_research.db import connect, fetch_all
+from stock_research.scoring.pipeline import score_factor_daily
+
+
+FACTOR_COLUMNS = [
+    "trade_date",
+    "asset_id",
+    "factor_name",
+    "factor_group",
+    "factor_value",
+    "calc_version",
+    "source",
+    "source_data_version",
+]
+
+SCORE_COLUMNS = [
+    "trade_date",
+    "asset_id",
+    "rank",
+    "score_total",
+    "score_version",
+    "score_components",
+    "calc_version",
+    "source_data_version",
+]
+
+
+def upsert_factor_daily(
+    factors: pd.DataFrame,
+    service: str = SETTINGS.research_service,
+) -> int:
+    if factors.empty:
+        return 0
+
+    rows = [_factor_row(row) for row in factors.to_dict("records")]
+    sql = """
+    INSERT INTO factor.factor_daily (
+        trade_date, asset_id, factor_name, factor_group, factor_value,
+        calc_version, source, source_data_version
+    )
+    VALUES (
+        %(trade_date)s, %(asset_id)s, %(factor_name)s, %(factor_group)s,
+        %(factor_value)s, %(calc_version)s, %(source)s, %(source_data_version)s
+    )
+    ON CONFLICT (trade_date, asset_id, factor_name, calc_version)
+    DO UPDATE SET
+        factor_group = EXCLUDED.factor_group,
+        factor_value = EXCLUDED.factor_value,
+        source = EXCLUDED.source,
+        source_data_version = EXCLUDED.source_data_version,
+        computed_at = now()
+    """
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            cur.executemany(sql, rows)
+    return len(rows)
+
+
+def upsert_stock_score_daily(
+    scores: pd.DataFrame,
+    calc_version: str = "v1",
+    source_data_version: str = "factor_daily",
+    service: str = SETTINGS.research_service,
+) -> int:
+    if scores.empty:
+        return 0
+
+    rows = [
+        _score_row(row, calc_version=calc_version, source_data_version=source_data_version)
+        for row in scores.to_dict("records")
+    ]
+    sql = """
+    INSERT INTO factor.stock_score_daily (
+        trade_date, asset_id, rank, score_total, score_version,
+        score_components, calc_version, source_data_version
+    )
+    VALUES (
+        %(trade_date)s, %(asset_id)s, %(rank)s, %(score_total)s,
+        %(score_version)s, %(score_components)s::jsonb,
+        %(calc_version)s, %(source_data_version)s
+    )
+    ON CONFLICT (trade_date, asset_id, score_version)
+    DO UPDATE SET
+        rank = EXCLUDED.rank,
+        score_total = EXCLUDED.score_total,
+        score_components = EXCLUDED.score_components,
+        calc_version = EXCLUDED.calc_version,
+        source_data_version = EXCLUDED.source_data_version,
+        computed_at = now()
+    """
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            cur.executemany(sql, rows)
+    return len(rows)
+
+
+def load_top_scores(
+    trade_date: object,
+    score_version: str,
+    top_n: int,
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT
+        trade_date,
+        asset_id,
+        rank,
+        score_total,
+        score_version,
+        score_components
+    FROM factor.stock_score_daily
+    WHERE trade_date = %s
+      AND score_version = %s
+    ORDER BY rank, asset_id
+    LIMIT %s
+    """
+    with connect(service) as conn:
+        return fetch_all(conn, sql, [_date_string(trade_date), score_version, top_n])
+
+
+def score_and_store_factor_daily(
+    factor_daily: pd.DataFrame,
+    factor_directions: dict[str, str],
+    weights: dict[str, float],
+    score_version: str,
+    calc_version: str = "v1",
+    service: str = SETTINGS.research_service,
+) -> int:
+    scores = score_factor_daily(
+        factor_daily,
+        factor_directions=factor_directions,
+        weights=weights,
+        score_version=score_version,
+    )
+    score_columns = [column for column in weights if column in scores.columns]
+    scores = scores.copy()
+    scores["score_components"] = scores[score_columns].to_dict("records")
+    return upsert_stock_score_daily(
+        scores,
+        calc_version=calc_version,
+        source_data_version=f"factor_daily:{score_version}",
+        service=service,
+    )
+
+
+def _factor_row(row: dict[str, Any]) -> dict[str, Any]:
+    result = {column: row.get(column) for column in FACTOR_COLUMNS}
+    result["trade_date"] = _date_string(result["trade_date"])
+    result["asset_id"] = str(result["asset_id"])
+    result["factor_name"] = str(result["factor_name"])
+    result["factor_group"] = str(result["factor_group"])
+    result["factor_value"] = _optional_float(result["factor_value"])
+    result["calc_version"] = str(result["calc_version"])
+    result["source"] = str(result["source"])
+    result["source_data_version"] = str(result["source_data_version"])
+    return result
+
+
+def _score_row(
+    row: dict[str, Any],
+    calc_version: str,
+    source_data_version: str,
+) -> dict[str, Any]:
+    result = {column: row.get(column) for column in SCORE_COLUMNS}
+    result["trade_date"] = _date_string(result["trade_date"])
+    result["asset_id"] = str(result["asset_id"])
+    result["rank"] = int(result["rank"])
+    result["score_total"] = float(result["score_total"])
+    result["score_version"] = str(result["score_version"])
+    result["score_components"] = json.dumps(
+        _jsonable(result.get("score_components") or {}),
+        ensure_ascii=False,
+    )
+    result["calc_version"] = str(row.get("calc_version") or calc_version)
+    result["source_data_version"] = str(row.get("source_data_version") or source_data_version)
+    return result
+
+
+def _date_string(value: object) -> str:
+    if isinstance(value, pd.Timestamp):
+        return value.date().isoformat()
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)[:10]
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_jsonable(item) for item in value]
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, (int, float, str, bool)):
+        return value
+    return str(value)

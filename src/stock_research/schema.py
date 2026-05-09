@@ -404,6 +404,32 @@ CREATE TABLE IF NOT EXISTS ingest.batch_event (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS factor.factor_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    factor_name text NOT NULL,
+    factor_group text NOT NULL,
+    factor_value numeric,
+    calc_version text NOT NULL,
+    source text NOT NULL,
+    source_data_version text NOT NULL,
+    computed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, factor_name, calc_version)
+);
+
+CREATE TABLE IF NOT EXISTS factor.stock_score_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    rank integer NOT NULL,
+    score_total numeric NOT NULL,
+    score_version text NOT NULL,
+    score_components jsonb NOT NULL DEFAULT '{}'::jsonb,
+    calc_version text NOT NULL,
+    source_data_version text NOT NULL,
+    computed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, score_version)
+);
+
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_quarter_pit
     ON finance.indicator_quarter (asset_id, announcement_date DESC, report_period DESC);
 
@@ -430,6 +456,12 @@ CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);
+
+CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
+    ON factor.factor_daily (trade_date, factor_name, calc_version);
+
+CREATE INDEX IF NOT EXISTS idx_stock_score_daily_rank
+    ON factor.stock_score_daily (trade_date, score_version, rank);
 """
 
 

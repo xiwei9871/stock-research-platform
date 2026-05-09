@@ -166,7 +166,9 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `scoring.rank_score`，支持按交易日把因子转成 0-100 排名分，并支持高值更好 / 低值更好两种方向。
 - 已落地 `scoring.composite_score`，支持人工权重合成总分、排序和版本标记。
 - 已落地 `scoring.pipeline`，支持从长表因子数据生成综合股票得分。
-- 下一步需要补 `factor.factor_daily`、`factor.stock_score_daily` 表结构和持久化服务。
+- 已落地 `factor.factor_daily`、`factor.stock_score_daily` 表结构和索引。
+- 已落地 `factor_store`，支持因子长表 upsert、综合得分 upsert、TopN 读取，以及从长表因子计算并写入综合得分。
+- 下一步需要补 CLI 命令和每日流水线，把基础因子计算、因子存储、综合打分串起来。
 
 ### 阶段 6：V3 策略回测
 
