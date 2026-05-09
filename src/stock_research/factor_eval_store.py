@@ -52,6 +52,69 @@ def load_factor_eval_inputs(
     return pd.DataFrame(factor_rows), returns
 
 
+def load_multi_horizon_factor_eval_inputs(
+    factor_name: str,
+    start_date: str,
+    end_date: str,
+    horizons: list[int],
+    calc_version: str = "v1",
+    label_set: str = "forward_return",
+    label_version: str = "v1",
+    service: str = SETTINGS.research_service,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if not horizons:
+        raise ValueError("horizons must not be empty")
+
+    factor_sql = """
+    SELECT trade_date, asset_id, factor_value
+    FROM factor.factor_daily
+    WHERE factor_name = %s
+      AND calc_version = %s
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date, asset_id
+    """
+    return_sql = """
+    SELECT
+        trade_date,
+        asset_id,
+        horizon,
+        label_value AS forward_return
+    FROM label_snapshot
+    WHERE label_set = %s
+      AND label_version = %s
+      AND horizon = ANY(%s)
+      AND label_name IN ('forward_return', 'future_return')
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date, asset_id, horizon
+    """
+    with connect(service) as conn:
+        factor_rows = fetch_all(conn, factor_sql, [factor_name, calc_version, start_date, end_date])
+        return_rows = fetch_all(
+            conn,
+            return_sql,
+            [label_set, label_version, horizons, start_date, end_date],
+        )
+
+    returns_long = pd.DataFrame(return_rows)
+    if returns_long.empty:
+        columns = ["trade_date", "asset_id", *[f"forward_return_{horizon}d" for horizon in horizons]]
+        return pd.DataFrame(factor_rows), pd.DataFrame(columns=columns)
+
+    returns = (
+        returns_long.pivot_table(
+            index=["trade_date", "asset_id"],
+            columns="horizon",
+            values="forward_return",
+            aggfunc="last",
+        )
+        .reset_index()
+        .rename(columns={horizon: f"forward_return_{int(horizon)}d" for horizon in horizons})
+        .sort_values(["trade_date", "asset_id"])
+        .reset_index(drop=True)
+    )
+    return pd.DataFrame(factor_rows), returns
+
+
 def store_factor_eval_run(
     run_id: str,
     factor_name: str,

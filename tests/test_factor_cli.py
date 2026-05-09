@@ -103,6 +103,31 @@ def test_cli_accepts_daily_factor_pipeline_command():
     assert args.lookback_bars == 130
 
 
+def test_cli_accepts_evaluate_factor_gate_command():
+    args = build_parser().parse_args(
+        [
+            "evaluate-factor-gate",
+            "--factor-name",
+            "alpha101_delta_close_1_rank",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+            "--horizons",
+            "5,10,20,60",
+            "--primary-horizon",
+            "5",
+            "--score-version",
+            "manual_v1",
+        ]
+    )
+
+    assert args.command == "evaluate-factor-gate"
+    assert args.factor_name == "alpha101_delta_close_1_rank"
+    assert args.horizons == "5,10,20,60"
+    assert args.primary_horizon == 5
+
+
 def test_build_factor_daily_cli_prints_count(monkeypatch, capsys):
     import sys
 
@@ -257,3 +282,52 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
         "daily_factor_pipeline|score_rows|20",
         "daily_factor_pipeline|top_scores|3",
     ]
+
+
+def test_evaluate_factor_gate_cli_prints_and_stores_status(monkeypatch, capsys):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "load_multi_horizon_factor_eval_inputs",
+        lambda **kwargs: (
+            pd.DataFrame({"trade_date": ["2026-01-01"], "asset_id": ["A"], "factor_value": [1.0]}),
+            pd.DataFrame({"trade_date": ["2026-01-01"], "asset_id": ["A"], "forward_return_5d": [0.01]}),
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "generate_multi_horizon_report",
+        lambda **kwargs: {"factor_name": "ret_20", "horizons": [5], "reports": {5: {"ic_summary": {"mean_ic": 0.04, "icir": 0.6, "ic_count": 30}}}},
+    )
+    monkeypatch.setattr(
+        cli,
+        "decide_factor_gate",
+        lambda **kwargs: {"factor_name": kwargs["factor_name"], "status": "approved", "reason": "passed_thresholds", "primary_horizon": 5},
+    )
+    monkeypatch.setattr(cli, "store_factor_eval_run", lambda **kwargs: calls.append(("run", kwargs)))
+    monkeypatch.setattr(cli, "store_factor_approval", lambda **kwargs: calls.append(("approval", kwargs)))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "evaluate-factor-gate",
+            "--factor-name",
+            "ret_20",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-02-01",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "factor_gate|ret_20|approved|passed_thresholds|5"
+    assert [kind for kind, _ in calls] == ["run", "approval"]

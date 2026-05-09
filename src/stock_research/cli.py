@@ -1,4 +1,5 @@
 import argparse
+from uuid import uuid4
 
 from stock_research.assets import sync_asset_master
 from stock_research.backtest import run_top20_backtest
@@ -10,8 +11,15 @@ from stock_research.core_data import (
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_pipeline import build_and_store_factor_daily
+from stock_research.factor_eval.gate import decide_factor_gate
+from stock_research.factor_eval.multi_horizon import generate_multi_horizon_report
 from stock_research.factor_eval.report import generate_factor_eval_report
-from stock_research.factor_eval_store import load_factor_eval_inputs
+from stock_research.factor_eval_store import (
+    load_factor_eval_inputs,
+    load_multi_horizon_factor_eval_inputs,
+    store_factor_approval,
+    store_factor_eval_run,
+)
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
 from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.ingest_jobs import (
@@ -84,6 +92,20 @@ def print_ingest_progress(event: dict) -> None:
         )
     elif event["event"] == "failed":
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
+
+
+def summarize_multi_horizon_report(report: dict) -> dict:
+    summaries = {}
+    for horizon, horizon_report in report.get("reports", {}).items():
+        summaries[str(horizon)] = {
+            "ic_summary": horizon_report.get("ic_summary", {}),
+            "rank_ic_summary": horizon_report.get("rank_ic_summary", {}),
+        }
+    return {
+        "factor_name": report.get("factor_name"),
+        "horizons": report.get("horizons", []),
+        "reports": summaries,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -251,6 +273,17 @@ def build_parser() -> argparse.ArgumentParser:
     eval_factor.add_argument("--quantiles", type=int, default=5)
     eval_factor.add_argument("--top-n", type=int, default=30)
 
+    evaluate_factor_gate = subparsers.add_parser("evaluate-factor-gate")
+    evaluate_factor_gate.add_argument("--factor-name", required=True)
+    evaluate_factor_gate.add_argument("--start-date", required=True)
+    evaluate_factor_gate.add_argument("--end-date", required=True)
+    evaluate_factor_gate.add_argument("--horizons", default="5,10,20,60")
+    evaluate_factor_gate.add_argument("--primary-horizon", type=int, default=5)
+    evaluate_factor_gate.add_argument("--calc-version", default="v1")
+    evaluate_factor_gate.add_argument("--score-version", default="manual_v1")
+    evaluate_factor_gate.add_argument("--quantiles", type=int, default=5)
+    evaluate_factor_gate.add_argument("--top-n", type=int, default=30)
+
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
     daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
@@ -336,6 +369,56 @@ def main() -> None:
         print(
             f"factor_eval|{args.factor_name}|mean_rank_ic|"
             f"{result['rank_ic_summary']['mean_ic']}"
+        )
+    elif args.command == "evaluate-factor-gate":
+        horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
+        factors, returns = load_multi_horizon_factor_eval_inputs(
+            factor_name=args.factor_name,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=horizons,
+            calc_version=args.calc_version,
+        )
+        multi_horizon_report = generate_multi_horizon_report(
+            factors=factors,
+            returns=returns,
+            factor_name=args.factor_name,
+            horizons=horizons,
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        decision = decide_factor_gate(
+            factor_name=args.factor_name,
+            multi_horizon_report=multi_horizon_report,
+            primary_horizon=args.primary_horizon,
+        )
+        run_id = f"factor-eval-{uuid4().hex}"
+        store_factor_eval_run(
+            run_id=run_id,
+            factor_name=args.factor_name,
+            calc_version=args.calc_version,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=horizons,
+            primary_horizon=args.primary_horizon,
+            status=decision["status"],
+            reason=decision["reason"],
+            metrics={
+                "decision": decision,
+                "multi_horizon": summarize_multi_horizon_report(multi_horizon_report),
+            },
+        )
+        store_factor_approval(
+            factor_name=args.factor_name,
+            calc_version=args.calc_version,
+            score_version=args.score_version,
+            status=decision["status"],
+            reason=decision["reason"],
+            eval_run_id=run_id,
+        )
+        print(
+            f"factor_gate|{args.factor_name}|{decision['status']}|"
+            f"{decision['reason']}|{decision['primary_horizon']}"
         )
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
