@@ -159,6 +159,15 @@ backtest         回测结果、持仓、交易日志
 - 板块状态
 - 个股过热状态
 
+当前进展：
+
+- 已落地 `scoring.winsorize`，支持按交易日横截面去极值。
+- 已落地 `scoring.standardize`，支持按交易日 z-score 标准化。
+- 已落地 `scoring.rank_score`，支持按交易日把因子转成 0-100 排名分，并支持高值更好 / 低值更好两种方向。
+- 已落地 `scoring.composite_score`，支持人工权重合成总分、排序和版本标记。
+- 已落地 `scoring.pipeline`，支持从长表因子数据生成综合股票得分。
+- 下一步需要补 `factor.factor_daily`、`factor.stock_score_daily` 表结构和持久化服务。
+
 ### 阶段 6：V3 策略回测
 
 目标：验证 V3 是否有效。
