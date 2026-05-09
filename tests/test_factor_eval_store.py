@@ -26,6 +26,74 @@ def test_load_factor_eval_inputs_queries_factor_and_label_tables(monkeypatch):
     assert calls[0][1] == ["ret_20", "v1", "2026-01-01", "2026-02-01"]
 
 
+def test_store_factor_eval_run_writes_metrics_json(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            calls.append((sql, params))
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(factor_eval_store, "connect", lambda service: _context(Conn()))
+
+    factor_eval_store.store_factor_eval_run(
+        run_id="run-1",
+        factor_name="ret_20",
+        calc_version="v1",
+        start_date="2026-01-01",
+        end_date="2026-02-01",
+        horizons=[5, 10],
+        primary_horizon=5,
+        status="approved",
+        reason="passed_thresholds",
+        metrics={"mean_ic": 0.03},
+    )
+
+    assert "INSERT INTO factor.factor_eval_run" in calls[0][0]
+    assert calls[0][1]["metrics"] == '{"mean_ic": 0.03}'
+
+
+def test_store_factor_approval_upserts_status(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            calls.append((sql, params))
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(factor_eval_store, "connect", lambda service: _context(Conn()))
+
+    factor_eval_store.store_factor_approval(
+        factor_name="ret_20",
+        calc_version="v1",
+        score_version="manual_v1",
+        status="approved",
+        reason="passed_thresholds",
+        eval_run_id="run-1",
+    )
+
+    assert "INSERT INTO factor.factor_approval" in calls[0][0]
+    assert calls[0][1]["score_version"] == "manual_v1"
+
+
 class _context:
     def __init__(self, value):
         self.value = value

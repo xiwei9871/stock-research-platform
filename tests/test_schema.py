@@ -69,6 +69,12 @@ def test_research_extension_enforces_point_in_time_columns():
     assert "idx_stock_score_daily_rank" in sql
 
 
+def test_research_extension_includes_factor_eval_gate_tables():
+    assert "CREATE TABLE IF NOT EXISTS factor.factor_eval_run" in CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS factor.factor_approval" in CREATE_RESEARCH_EXTENSION_SQL
+    assert "idx_factor_eval_run_factor" in CREATE_RESEARCH_EXTENSION_SQL
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

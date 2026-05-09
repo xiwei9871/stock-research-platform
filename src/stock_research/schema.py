@@ -430,6 +430,31 @@ CREATE TABLE IF NOT EXISTS factor.stock_score_daily (
     PRIMARY KEY (trade_date, asset_id, score_version)
 );
 
+CREATE TABLE IF NOT EXISTS factor.factor_eval_run (
+    run_id text PRIMARY KEY,
+    factor_name text NOT NULL,
+    calc_version text NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    horizons integer[] NOT NULL,
+    primary_horizon integer NOT NULL,
+    status text NOT NULL,
+    reason text NOT NULL,
+    metrics jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS factor.factor_approval (
+    factor_name text NOT NULL,
+    calc_version text NOT NULL,
+    score_version text NOT NULL,
+    status text NOT NULL,
+    reason text NOT NULL,
+    eval_run_id text NOT NULL REFERENCES factor.factor_eval_run(run_id),
+    approved_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (factor_name, calc_version, score_version)
+);
+
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_quarter_pit
     ON finance.indicator_quarter (asset_id, announcement_date DESC, report_period DESC);
 
@@ -462,6 +487,9 @@ CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
 
 CREATE INDEX IF NOT EXISTS idx_stock_score_daily_rank
     ON factor.stock_score_daily (trade_date, score_version, rank);
+
+CREATE INDEX IF NOT EXISTS idx_factor_eval_run_factor
+    ON factor.factor_eval_run (factor_name, calc_version, created_at DESC);
 """
 
 
