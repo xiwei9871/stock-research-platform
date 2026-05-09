@@ -9,7 +9,7 @@ from stock_research.db import connect, fetch_all
 
 LABEL_SET = "forward_return"
 LABEL_VERSION = "v1"
-HORIZONS = [5, 20, 60]
+HORIZONS = [5, 10, 20, 60]
 
 
 def _trade_date_string(value: Any) -> str:
