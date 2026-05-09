@@ -9,6 +9,7 @@ from stock_research.core_data import (
 )
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
+from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -270,6 +271,13 @@ def main() -> None:
             adjust_type=args.adjust_type,
         )
         print("market_industry_daily_bars_built")
+    elif args.command == "build-factor-daily":
+        count = build_and_store_factor_daily(
+            trade_date=args.trade_date,
+            lookback_bars=args.lookback_bars,
+            industry_system=args.industry_system,
+        )
+        print(f"factor_daily_stored|{count}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")

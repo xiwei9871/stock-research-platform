@@ -53,3 +53,27 @@ def test_cli_accepts_show_top_scores_command():
     assert args.trade_date == "2026-05-08"
     assert args.score_version == "manual_v1"
     assert args.top_n == 30
+
+
+def test_build_factor_daily_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "build_and_store_factor_daily", lambda **kwargs: 42)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "build-factor-daily",
+            "--trade-date",
+            "2026-05-08",
+            "--lookback-bars",
+            "130",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "factor_daily_stored|42"

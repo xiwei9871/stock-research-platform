@@ -127,6 +127,47 @@ def test_compute_technical_factor_rows_strict_mode_raises_for_missing_factor():
         raise AssertionError("Expected missing configured technical factor to raise")
 
 
+def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
+    calls = []
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_market_bars_for_factor_date",
+        lambda *args, **kwargs: bars,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "upsert_factor_daily",
+        lambda rows: calls.append(rows) or len(rows),
+        raising=False,
+    )
+
+    count = factor_pipeline.build_and_store_factor_daily(
+        "2026-03-11",
+        lookback_bars=130,
+    )
+
+    assert count > 0
+    assert calls[0]["trade_date"].nunique() == 1
+
+
 class _context:
     def __init__(self, value):
         self.value = value

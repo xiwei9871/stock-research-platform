@@ -4,6 +4,8 @@ import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_config import manual_v1_config
+from stock_research.factor_store import upsert_factor_daily
 from stock_research.factors import momentum, risk, trend, volume_price
 
 
@@ -136,3 +138,22 @@ def compute_technical_factor_rows(
             )
 
     return pd.DataFrame(rows, columns=FACTOR_DAILY_COLUMNS)
+
+
+def build_and_store_factor_daily(
+    trade_date: str,
+    lookback_bars: int = 130,
+    industry_system: str = "csrc",
+) -> int:
+    config = manual_v1_config()
+    bars = load_market_bars_for_factor_date(trade_date, lookback_bars=lookback_bars)
+    factors = compute_technical_factor_rows(
+        bars,
+        trade_date=trade_date,
+        factor_groups=config["factor_groups"],
+        calc_version=config["calc_version"],
+        source_data_version=config["source_data_version"],
+        # Sector factors are configured now but added to the pipeline in a later task.
+        strict=False,
+    )
+    return upsert_factor_daily(factors)
