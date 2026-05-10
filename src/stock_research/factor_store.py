@@ -188,6 +188,9 @@ def score_and_store_factor_daily(
     calc_version: str = "v1",
     service: str = SETTINGS.research_service,
 ) -> int:
+    if factor_daily.empty:
+        return 0
+
     scores = score_factor_daily(
         factor_daily,
         factor_directions=factor_directions,

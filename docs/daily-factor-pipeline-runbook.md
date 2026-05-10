@@ -45,7 +45,7 @@ Evaluate a candidate factor before scoring promotion:
 Evaluate multiple candidate factors before scoring promotion:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_alpha158_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
 ```
 
 Run full daily pipeline:
@@ -163,7 +163,7 @@ print(build_daily_research_cron_entry())
 3. Batch evaluate candidate factors:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_alpha158_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
 ```
 
 4. Score with approved factors only after approvals exist.

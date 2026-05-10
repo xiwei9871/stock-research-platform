@@ -206,6 +206,23 @@ def test_score_and_store_factor_daily_upserts_scores(monkeypatch):
     assert kwargs["source_data_version"] == "factor_daily:manual_v1"
 
 
+def test_score_and_store_factor_daily_returns_zero_for_empty_factors(monkeypatch):
+    monkeypatch.setattr(
+        factor_store,
+        "upsert_stock_score_daily",
+        lambda scores, **kwargs: (_ for _ in ()).throw(AssertionError("should not upsert")),
+    )
+
+    count = factor_store.score_and_store_factor_daily(
+        pd.DataFrame(),
+        factor_directions={"ret_20": "higher"},
+        weights={"ret_20_score": 1.0},
+        score_version="manual_v1",
+    )
+
+    assert count == 0
+
+
 def test_score_stored_factor_daily_loads_config_and_scores(monkeypatch):
     calls = []
     factors = pd.DataFrame(
