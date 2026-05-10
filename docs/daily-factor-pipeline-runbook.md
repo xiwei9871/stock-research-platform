@@ -120,6 +120,15 @@ result = write_daily_research_reports(
 print(result["report_paths"]["bundle"]["markdown_path"])
 ```
 
+Run the daily research report module CLI:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -m stock_research.reports.daily_research_report_cli --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --index-id CSI300 --industry-system csrc --reports-dir reports
+```
+
+This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -135,6 +144,7 @@ print(result["report_paths"]["bundle"]["markdown_path"])
 - Position review report writes markdown and CSV files under `reports/position_review/`.
 - Daily report bundle writes an index markdown file under `reports/daily/`.
 - Daily research report workflow writes TopN, market state, sector strength, risk alerts, position review, and bundle reports in one call.
+- Daily research report module CLI prints stable `daily_research_report|...` report paths.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
