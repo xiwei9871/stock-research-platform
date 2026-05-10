@@ -128,6 +128,7 @@ cd /Users/xiwei/stock_research
 ```
 
 This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
+The module enriches TopN candidates from `core.industry_membership` before risk alert generation, so sector weakness checks use point-in-time industry context.
 
 ## Expected Outputs
 

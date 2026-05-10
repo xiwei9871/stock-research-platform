@@ -46,6 +46,15 @@ def run_daily_research_report(
         score_version=score_version,
         top_n=top_n,
     )
+    asset_ids = [str(row.get("asset_id")) for row in top_scores if row.get("asset_id")]
+    top_scores = enrich_top_scores_with_industry(
+        top_scores,
+        load_industry_memberships(
+            trade_date=trade_date,
+            asset_ids=asset_ids,
+            industry_system=industry_system,
+        ),
+    )
     market_start = _lookback_start(trade_date, market_lookback_days)
     market_bars = load_market_state_bars(
         start_date=market_start,
@@ -62,7 +71,6 @@ def run_daily_research_report(
     )
     sector_strength = calc_sector_strength(sector_bars, trade_date=trade_date, top_n=top_n)
     positions = _load_positions_csv(positions_csv)
-    asset_ids = [str(row.get("asset_id")) for row in top_scores if row.get("asset_id")]
     feature_snapshot = load_feature_snapshot(trade_date=trade_date, asset_ids=asset_ids)
     return write_daily_research_reports(
         trade_date=trade_date,
@@ -76,6 +84,59 @@ def run_daily_research_report(
         industry_system=industry_system,
         top_n=top_n,
     )
+
+
+def load_industry_memberships(
+    trade_date: str,
+    asset_ids: list[str],
+    industry_system: str,
+    service: str = SETTINGS.research_service,
+) -> dict[str, dict[str, Any]]:
+    if not asset_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(asset_ids))
+    sql = f"""
+        SELECT
+            asset_id,
+            industry_code,
+            industry_name,
+            level
+        FROM core.industry_membership
+        WHERE industry_system = %s
+          AND start_date <= %s
+          AND (end_date IS NULL OR end_date >= %s)
+          AND asset_id IN ({placeholders})
+        ORDER BY asset_id, level, start_date DESC
+    """
+    params = [industry_system, trade_date, trade_date, *asset_ids]
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, params)
+
+    memberships: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        asset_id = str(row["asset_id"])
+        if asset_id in memberships:
+            continue
+        memberships[asset_id] = {
+            "industry_code": row.get("industry_code"),
+            "industry_name": row.get("industry_name"),
+            "industry_level": row.get("level"),
+        }
+    return memberships
+
+
+def enrich_top_scores_with_industry(
+    top_scores: list[dict[str, Any]],
+    memberships: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    enriched = []
+    for row in top_scores:
+        asset_id = str(row.get("asset_id", ""))
+        merged = dict(row)
+        if asset_id in memberships:
+            merged.update(memberships[asset_id])
+        enriched.append(merged)
+    return enriched
 
 
 def load_feature_snapshot(

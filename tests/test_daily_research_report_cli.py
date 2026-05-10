@@ -5,7 +5,9 @@ import pandas as pd
 import stock_research.reports.daily_research_report_cli as daily_research_report_cli
 from stock_research.reports.daily_research_report_cli import (
     build_parser,
+    enrich_top_scores_with_industry,
     load_feature_snapshot,
+    load_industry_memberships,
     main,
 )
 
@@ -97,9 +99,14 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
     monkeypatch.setattr(
         daily_research_report_cli,
         "load_top_scores",
-        lambda trade_date, score_version, top_n: [
-            {"asset_id": "A", "rank": 1, "score_total": 88.0, "industry_code": "TECH"}
-        ],
+        lambda trade_date, score_version, top_n: [{"asset_id": "A", "rank": 1, "score_total": 88.0}],
+    )
+    monkeypatch.setattr(
+        daily_research_report_cli,
+        "load_industry_memberships",
+        lambda trade_date, asset_ids, industry_system: {
+            "A": {"industry_code": "TECH", "industry_name": "Technology"}
+        },
     )
     monkeypatch.setattr(
         daily_research_report_cli,
@@ -175,6 +182,7 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
     assert calls["trade_date"] == "2026-05-08"
     assert calls["score_version"] == "manual_v1"
     assert calls["top_scores"][0]["asset_id"] == "A"
+    assert calls["top_scores"][0]["industry_code"] == "TECH"
     assert calls["market_state"]["market_state"] == "bullish"
     assert calls["sector_strength"].iloc[0]["industry_code"] == "TECH"
     assert calls["positions"] == []
@@ -214,3 +222,61 @@ def test_load_feature_snapshot_queries_requested_assets(monkeypatch):
     assert "asset_id IN (%s, %s)" in calls["sql"]
     assert calls["params"] == ["2026-05-08", "A", "B"]
     assert result.iloc[0]["feature_name"] == "ret_5d"
+
+
+def test_load_industry_memberships_queries_point_in_time_memberships(monkeypatch):
+    calls = {}
+
+    class _Connection:
+        pass
+
+    class _Context:
+        def __enter__(self):
+            return _Connection()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect(service):
+        calls["service"] = service
+        return _Context()
+
+    def fake_fetch_all(conn, sql, params):
+        calls["sql"] = sql
+        calls["params"] = list(params)
+        return [
+            {
+                "asset_id": "A",
+                "industry_code": "TECH",
+                "industry_name": "Technology",
+                "level": 1,
+            }
+        ]
+
+    monkeypatch.setattr(daily_research_report_cli, "connect", fake_connect)
+    monkeypatch.setattr(daily_research_report_cli, "fetch_all", fake_fetch_all)
+
+    result = load_industry_memberships(
+        trade_date="2026-05-08",
+        asset_ids=["A", "B"],
+        industry_system="csrc",
+    )
+
+    assert calls["service"] == "stock_research"
+    assert "FROM core.industry_membership" in calls["sql"]
+    assert "asset_id IN (%s, %s)" in calls["sql"]
+    assert calls["params"] == ["csrc", "2026-05-08", "2026-05-08", "A", "B"]
+    assert result["A"]["industry_code"] == "TECH"
+
+
+def test_enrich_top_scores_with_industry_preserves_rows_without_membership():
+    result = enrich_top_scores_with_industry(
+        top_scores=[
+            {"asset_id": "A", "rank": 1},
+            {"asset_id": "B", "rank": 2},
+        ],
+        memberships={"A": {"industry_code": "TECH", "industry_name": "Technology"}},
+    )
+
+    assert result[0]["industry_code"] == "TECH"
+    assert "industry_code" not in result[1]
