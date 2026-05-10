@@ -73,3 +73,4 @@ This module entrypoint is intentionally separate from the main `stock-research` 
 - Do not treat TopN as a buy signal.
 - Do not change V3 strategy thresholds in this pipeline.
 - Alpha101 / GTJA191 / Qlib-style factors are research candidates until factor evaluation approves them for scoring.
+- Code-level scoring can enforce the factor gate with `score_stored_factor_daily(..., approved_only=True)`, which loads only factors marked `approved` in `factor.factor_approval` for the requested `score_version`. The main CLI keeps its current compatible default until unrelated `cli.py` changes are resolved.
