@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -26,6 +26,17 @@ POSITION_COLUMNS = [
     "weight",
 ]
 
+TRADE_COLUMNS = [
+    "rebalance_date",
+    "asset_id",
+    "side",
+    "previous_weight",
+    "target_weight",
+    "delta_weight",
+    "turnover_contribution",
+    "transaction_cost",
+]
+
 
 @dataclass(frozen=True)
 class VectorizedTopNConfig:
@@ -42,7 +53,8 @@ class VectorizedTopNResult:
     config: VectorizedTopNConfig
     equity_curve: pd.DataFrame
     positions: pd.DataFrame
-    summary: dict[str, Any]
+    trades: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=TRADE_COLUMNS))
+    summary: dict[str, Any] = field(default_factory=dict)
 
 
 def load_vectorized_topn_inputs(
@@ -98,6 +110,7 @@ def run_vectorized_topn_backtest(
     current_weights: dict[str, float] = {}
     equity_rows: list[dict[str, Any]] = []
     position_rows: list[dict[str, Any]] = []
+    trade_rows: list[dict[str, Any]] = []
     cost_rate = float(config.transaction_cost_bps) / 10000.0
 
     for index, trade_date in enumerate(trading_dates[:-1]):
@@ -110,6 +123,14 @@ def run_vectorized_topn_backtest(
                 config,
             )
             turnover = _weight_turnover(previous_weights, target_weights)
+            trade_rows.extend(
+                _trade_rows_for_rebalance(
+                    trade_date,
+                    previous_weights,
+                    target_weights,
+                    cost_rate,
+                )
+            )
             previous_weights = target_weights
             current_weights = target_weights
             position_rows.extend(selected_rows)
@@ -135,10 +156,12 @@ def run_vectorized_topn_backtest(
 
     equity_curve = pd.DataFrame(equity_rows, columns=EQUITY_COLUMNS)
     positions = pd.DataFrame(position_rows, columns=POSITION_COLUMNS)
+    trades = pd.DataFrame(trade_rows, columns=TRADE_COLUMNS)
     return VectorizedTopNResult(
         config=config,
         equity_curve=equity_curve,
         positions=positions,
+        trades=trades,
         summary=_summarize(equity_curve),
     )
 
@@ -258,6 +281,35 @@ def _weight_turnover(
     return float(
         sum(abs(target_weights.get(asset, 0.0) - previous_weights.get(asset, 0.0)) for asset in assets)
     )
+
+
+def _trade_rows_for_rebalance(
+    rebalance_date: str,
+    previous_weights: dict[str, float],
+    target_weights: dict[str, float],
+    cost_rate: float,
+) -> list[dict[str, Any]]:
+    rows = []
+    for asset_id in sorted(set(previous_weights) | set(target_weights)):
+        previous_weight = float(previous_weights.get(asset_id, 0.0))
+        target_weight = float(target_weights.get(asset_id, 0.0))
+        delta_weight = target_weight - previous_weight
+        if delta_weight == 0:
+            continue
+        turnover_contribution = abs(delta_weight)
+        rows.append(
+            {
+                "rebalance_date": rebalance_date,
+                "asset_id": asset_id,
+                "side": "buy" if delta_weight > 0 else "sell",
+                "previous_weight": previous_weight,
+                "target_weight": target_weight,
+                "delta_weight": delta_weight,
+                "turnover_contribution": turnover_contribution,
+                "transaction_cost": turnover_contribution * cost_rate,
+            }
+        )
+    return rows
 
 
 def _portfolio_return(

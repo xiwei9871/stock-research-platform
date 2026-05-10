@@ -155,6 +155,53 @@ def test_run_vectorized_topn_backtest_caps_holdings_with_max_positions():
     assert result.equity_curve.iloc[0]["holdings_count"] == 2
 
 
+def test_run_vectorized_topn_backtest_outputs_rebalance_trade_details():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 90.0),
+            ("2026-01-01", "B", 2, 80.0),
+            ("2026-01-02", "B", 1, 95.0),
+            ("2026-01-02", "C", 2, 85.0),
+        ]
+    )
+    prices = _prices(
+        [
+            ("2026-01-01", "A", 10.0),
+            ("2026-01-01", "B", 20.0),
+            ("2026-01-01", "C", 30.0),
+            ("2026-01-02", "A", 11.0),
+            ("2026-01-02", "B", 18.0),
+            ("2026-01-02", "C", 30.0),
+            ("2026-01-03", "A", 11.0),
+            ("2026-01-03", "B", 19.8),
+            ("2026-01-03", "C", 30.0),
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-03",
+        top_n=2,
+        transaction_cost_bps=10.0,
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+
+    trades = result.trades.sort_values(["rebalance_date", "asset_id"]).reset_index(drop=True)
+    assert list(trades["rebalance_date"]) == [
+        "2026-01-01",
+        "2026-01-01",
+        "2026-01-02",
+        "2026-01-02",
+    ]
+    assert list(trades["asset_id"]) == ["A", "B", "A", "C"]
+    assert list(trades["side"]) == ["buy", "buy", "sell", "buy"]
+    assert list(trades["previous_weight"]) == pytest.approx([0.0, 0.0, 0.5, 0.0])
+    assert list(trades["target_weight"]) == pytest.approx([0.5, 0.5, 0.0, 0.5])
+    assert list(trades["delta_weight"]) == pytest.approx([0.5, 0.5, -0.5, 0.5])
+    assert list(trades["turnover_contribution"]) == pytest.approx([0.5, 0.5, 0.5, 0.5])
+    assert list(trades["transaction_cost"]) == pytest.approx([0.0005, 0.0005, 0.0005, 0.0005])
+
+
 def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
     calls = []
 
