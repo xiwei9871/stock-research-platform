@@ -11,6 +11,7 @@ from stock_research.core_data import (
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_pipeline import build_and_store_factor_daily
+from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.factor_eval.gate import decide_factor_gate
 from stock_research.factor_eval.multi_horizon import generate_multi_horizon_report
 from stock_research.factor_eval.report import generate_factor_eval_report
@@ -285,6 +286,17 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_factor_gate.add_argument("--quantiles", type=int, default=5)
     evaluate_factor_gate.add_argument("--top-n", type=int, default=30)
 
+    evaluate_factor_gate_batch = subparsers.add_parser("evaluate-factor-gate-batch")
+    evaluate_factor_gate_batch.add_argument("--factor-names", required=True)
+    evaluate_factor_gate_batch.add_argument("--start-date", required=True)
+    evaluate_factor_gate_batch.add_argument("--end-date", required=True)
+    evaluate_factor_gate_batch.add_argument("--horizons", default="5,10,20,60")
+    evaluate_factor_gate_batch.add_argument("--primary-horizon", type=int, default=5)
+    evaluate_factor_gate_batch.add_argument("--calc-version", default="v1")
+    evaluate_factor_gate_batch.add_argument("--score-version", default="manual_v1")
+    evaluate_factor_gate_batch.add_argument("--quantiles", type=int, default=5)
+    evaluate_factor_gate_batch.add_argument("--top-n", type=int, default=30)
+
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
     daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
@@ -437,6 +449,24 @@ def main() -> None:
             f"factor_gate|{args.factor_name}|{decision['status']}|"
             f"{decision['reason']}|{decision['primary_horizon']}"
         )
+    elif args.command == "evaluate-factor-gate-batch":
+        result = run_factor_gate_batch(
+            factor_names=[value.strip() for value in args.factor_names.split(",") if value.strip()],
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=[int(value.strip()) for value in args.horizons.split(",") if value.strip()],
+            primary_horizon=args.primary_horizon,
+            calc_version=args.calc_version,
+            score_version=args.score_version,
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        for row in result.to_dict("records"):
+            print(
+                "factor_gate_batch|"
+                f"{row['factor_name']}|{row['status']}|{row['reason']}|"
+                f"{row['primary_horizon']}|{row['eval_run_id']}"
+            )
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,

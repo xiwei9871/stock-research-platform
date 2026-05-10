@@ -160,6 +160,24 @@ def test_cli_accepts_evaluate_factor_gate_command():
     assert args.primary_horizon == 5
 
 
+def test_cli_accepts_evaluate_factor_gate_batch_command():
+    args = build_parser().parse_args(
+        [
+            "evaluate-factor-gate-batch",
+            "--factor-names",
+            "alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+        ]
+    )
+
+    assert args.command == "evaluate-factor-gate-batch"
+    assert args.factor_names == "alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10"
+    assert args.horizons == "5,10,20,60"
+
+
 def test_build_factor_daily_cli_prints_count(monkeypatch, capsys):
     import sys
 
@@ -413,3 +431,47 @@ def test_evaluate_factor_gate_cli_prints_and_stores_status(monkeypatch, capsys):
 
     assert capsys.readouterr().out.strip() == "factor_gate|ret_20|approved|passed_thresholds|5"
     assert [kind for kind, _ in calls] == ["run", "approval"]
+
+
+def test_evaluate_factor_gate_batch_cli_prints_rows(monkeypatch, capsys):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "run_factor_gate_batch",
+        lambda **kwargs: pd.DataFrame(
+            [
+                {
+                    "factor_name": "alpha101_delta_close_1_rank",
+                    "status": "approved",
+                    "reason": "passed_thresholds",
+                    "primary_horizon": 5,
+                    "eval_run_id": "run-1",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "evaluate-factor-gate-batch",
+            "--factor-names",
+            "alpha101_delta_close_1_rank",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == (
+        "factor_gate_batch|alpha101_delta_close_1_rank|approved|passed_thresholds|5|run-1"
+    )
