@@ -295,6 +295,10 @@ pyfolio / pyfolio-reloaded：
 - 重点参考组合风险分析、tear sheet 报告、回撤分析、收益分布分析。
 - 使用边界：不强制直接依赖；可以学习报告组织方式；本项目自己生成 `backtest_report.xlsx`、`backtest_report.md`、净值曲线、回撤曲线。
 
+当前进展：
+
+- 已落地第一版绩效指标和 tear sheet：支持累计收益、年化收益、年化波动率、最大回撤、Sharpe、Sortino、Calmar、胜率、平均持仓天数、年化换手率，并可输出 markdown、metrics CSV、equity CSV、positions CSV。
+
 ### 技术指标库参考
 
 TA-Lib：
