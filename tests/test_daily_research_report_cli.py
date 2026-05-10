@@ -33,6 +33,8 @@ def test_daily_research_report_cli_parser_accepts_arguments():
             "/tmp/positions.csv",
             "--reports-dir",
             "/tmp/reports",
+            "--apply-report-run-schema",
+            "--record-run",
         ]
     )
 
@@ -45,6 +47,8 @@ def test_daily_research_report_cli_parser_accepts_arguments():
     assert args.sector_lookback_days == 60
     assert args.positions_csv == "/tmp/positions.csv"
     assert args.reports_dir == "/tmp/reports"
+    assert args.apply_report_run_schema is True
+    assert args.record_run is True
 
 
 def test_daily_research_report_cli_main_prints_stable_output(monkeypatch, capsys, tmp_path):
@@ -83,6 +87,8 @@ def test_daily_research_report_cli_main_prints_stable_output(monkeypatch, capsys
     assert calls[0]["trade_date"] == "2026-05-08"
     assert calls[0]["top_n"] == 20
     assert calls[0]["reports_dir"] == Path(tmp_path)
+    assert calls[0]["apply_report_run_schema_first"] is False
+    assert calls[0]["record_run"] is False
     assert capsys.readouterr().out.splitlines() == [
         f"daily_research_report|bundle|{tmp_path / 'bundle.md'}",
         f"daily_research_report|topn|{tmp_path / 'topn.md'}",
@@ -165,6 +171,13 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
         return {"report_paths": {"bundle": {"markdown_path": tmp_path / "bundle.md"}}}
 
     monkeypatch.setattr(daily_research_report_cli, "write_daily_research_reports", fake_writer)
+    record_calls = []
+    monkeypatch.setattr(daily_research_report_cli, "apply_report_run_schema", lambda: record_calls.append("schema"))
+    monkeypatch.setattr(
+        daily_research_report_cli,
+        "record_report_run",
+        lambda **kwargs: record_calls.append(kwargs) or "run-1",
+    )
 
     result = daily_research_report_cli.run_daily_research_report(
         trade_date="2026-05-08",
@@ -176,6 +189,8 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
         sector_lookback_days=60,
         positions_csv=None,
         reports_dir=tmp_path,
+        apply_report_run_schema_first=True,
+        record_run=True,
     )
 
     assert result["report_paths"]["bundle"]["markdown_path"] == tmp_path / "bundle.md"
@@ -188,6 +203,10 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
     assert calls["positions"] == []
     assert calls["feature_snapshot"].iloc[0]["feature_name"] == "ret_5d"
     assert calls["output_dir"] == tmp_path
+    assert result["report_run_id"] == "run-1"
+    assert record_calls[0] == "schema"
+    assert record_calls[1]["trade_date"] == "2026-05-08"
+    assert record_calls[1]["report_type"] == "daily_research"
 
 
 def test_load_feature_snapshot_queries_requested_assets(monkeypatch):

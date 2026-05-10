@@ -129,6 +129,7 @@ cd /Users/xiwei/stock_research
 
 This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
 The module enriches TopN candidates from `core.industry_membership` before risk alert generation, so sector weakness checks use point-in-time industry context.
+Use `--apply-report-run-schema --record-run` to initialize `report.report_run` and persist the generated report paths.
 
 ## Expected Outputs
 
@@ -146,6 +147,7 @@ The module enriches TopN candidates from `core.industry_membership` before risk 
 - Daily report bundle writes an index markdown file under `reports/daily/`.
 - Daily research report workflow writes TopN, market state, sector strength, risk alerts, position review, and bundle reports in one call.
 - Daily research report module CLI prints stable `daily_research_report|...` report paths.
+- Optional report run recording writes generated report paths to `report.report_run`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails

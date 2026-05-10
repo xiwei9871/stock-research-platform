@@ -215,12 +215,12 @@ backtest         回测结果、持仓、交易日志
 - 已落地日报编排层：从内存中的研究结果一次性写出 TopN、市场状态、板块强度、风险提示、持仓复核和日报索引，后续可接 CLI 或定时任务。
 - 已落地独立日报模块 CLI：通过 `python -m stock_research.reports.daily_research_report_cli` 生成阶段 7 日报，不依赖当前仍有未合并改动的主 `stock-research` CLI。
 - 已补齐日报 CLI 的候选行业上下文：TopN 候选会按 `core.industry_membership` 的 point-in-time 记录补充行业代码和名称，用于弱板块风险判断。
+- 已落地报告运行记录：提供独立 `report.report_run` schema 初始化和写入函数，日报 CLI 可通过 `--apply-report-run-schema --record-run` 持久化生成的报告路径。
 
 剩余缺口：
 
 - 主 `stock-research` CLI 仍未合并阶段 7 日报入口，因为当前 `src/stock_research/cli.py` 存在未合并本地改动。
 - 日报定时任务 / cron 入口尚未落地。
-- 报告层还没有写入数据库的 report run 记录，目前只输出文件。
 - 持仓复核目前是人工检查清单，不做组合级风险预算、行业集中度或仓位上限建议。
 - 因子评价门禁已实现，但外部参考因子的批量评价和审批运行还需要实际数据执行。
 

@@ -8,6 +8,7 @@ import pandas as pd
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_store import load_top_scores
+from stock_research.report_run_store import apply_report_run_schema, record_report_run
 from stock_research.reports.daily_research_report_workflow import write_daily_research_reports
 from stock_research.reports.market_state_report import calc_market_state, load_market_state_bars
 from stock_research.reports.sector_strength_report import (
@@ -27,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sector-lookback-days", type=int, default=60)
     parser.add_argument("--positions-csv")
     parser.add_argument("--reports-dir", default="/Users/xiwei/stock_research/reports")
+    parser.add_argument("--apply-report-run-schema", action="store_true")
+    parser.add_argument("--record-run", action="store_true")
     return parser
 
 
@@ -40,7 +43,12 @@ def run_daily_research_report(
     sector_lookback_days: int,
     positions_csv: str | None,
     reports_dir: str | Path,
+    apply_report_run_schema_first: bool = False,
+    record_run: bool = False,
 ) -> dict[str, Any]:
+    if apply_report_run_schema_first:
+        apply_report_run_schema()
+
     top_scores = load_top_scores(
         trade_date=trade_date,
         score_version=score_version,
@@ -72,7 +80,7 @@ def run_daily_research_report(
     sector_strength = calc_sector_strength(sector_bars, trade_date=trade_date, top_n=top_n)
     positions = _load_positions_csv(positions_csv)
     feature_snapshot = load_feature_snapshot(trade_date=trade_date, asset_ids=asset_ids)
-    return write_daily_research_reports(
+    result = write_daily_research_reports(
         trade_date=trade_date,
         score_version=score_version,
         top_scores=top_scores,
@@ -84,6 +92,19 @@ def run_daily_research_report(
         industry_system=industry_system,
         top_n=top_n,
     )
+    if record_run:
+        result["report_run_id"] = record_report_run(
+            trade_date=trade_date,
+            report_type="daily_research",
+            report_paths=result["report_paths"],
+            metadata={
+                "score_version": score_version,
+                "top_n": top_n,
+                "index_id": index_id,
+                "industry_system": industry_system,
+            },
+        )
+    return result
 
 
 def load_industry_memberships(
@@ -173,6 +194,8 @@ def main(runner=run_daily_research_report) -> None:
         sector_lookback_days=args.sector_lookback_days,
         positions_csv=args.positions_csv,
         reports_dir=Path(args.reports_dir),
+        apply_report_run_schema_first=args.apply_report_run_schema,
+        record_run=args.record_run,
     )
     report_paths = result["report_paths"]
     for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
