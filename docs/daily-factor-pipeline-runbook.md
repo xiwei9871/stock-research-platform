@@ -71,6 +71,21 @@ cd /Users/xiwei/stock_research
 .venv/bin/python -c "from stock_research.reports.market_state_report import load_market_state_bars, calc_market_state, write_market_state_report; bars = load_market_state_bars('YYYY-MM-DD', 'YYYY-MM-DD', index_id='CSI300'); state = calc_market_state(bars, trade_date='YYYY-MM-DD', index_id='CSI300'); print(write_market_state_report(state))"
 ```
 
+Build risk alert report from in-memory research outputs:
+
+```python
+from stock_research.reports.risk_alert_report import generate_risk_alerts, write_risk_alert_report
+
+alerts = generate_risk_alerts(
+    trade_date="YYYY-MM-DD",
+    top_scores=top_scores,
+    market_state=market_state,
+    sector_strength=sector_strength,
+    feature_snapshot=feature_snapshot,
+)
+print(write_risk_alert_report(alerts, trade_date="YYYY-MM-DD"))
+```
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -82,6 +97,7 @@ cd /Users/xiwei/stock_research
 - TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Market state report writes markdown and CSV files under `reports/market_state/`.
+- Risk alert report writes markdown and CSV files under `reports/risk_alerts/`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
