@@ -71,6 +71,7 @@ cd /Users/xiwei/stock_research
 - `factor.factor_approval` records candidate factor gate status before scoring promotion.
 - `factor.stock_score_daily` has ranked rows for the trade date.
 - TopN command prints ranked candidates.
+- Daily TopN report writes markdown and CSV files with rank, asset, total score, score version, score components, and a candidate-pool guardrail.
 - TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Reports are written under `reports/`, which is ignored by Git.
