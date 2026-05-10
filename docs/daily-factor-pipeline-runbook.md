@@ -98,6 +98,7 @@ print(write_daily_report_bundle(
         "market_state": "reports/market_state/market_state_YYYY-MM-DD_CSI300.md",
         "sector_strength": "reports/sector_strength/sector_strength_YYYY-MM-DD_csrc.md",
         "risk_alerts": "reports/risk_alerts/risk_alerts_YYYY-MM-DD.md",
+        "position_review": "reports/position_review/position_review_YYYY-MM-DD.md",
     },
 ))
 ```
@@ -114,6 +115,7 @@ print(write_daily_report_bundle(
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Market state report writes markdown and CSV files under `reports/market_state/`.
 - Risk alert report writes markdown and CSV files under `reports/risk_alerts/`.
+- Position review report writes markdown and CSV files under `reports/position_review/`.
 - Daily report bundle writes an index markdown file under `reports/daily/`.
 - Reports are written under `reports/`, which is ignored by Git.
 

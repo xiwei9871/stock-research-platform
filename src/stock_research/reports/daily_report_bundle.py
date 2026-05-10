@@ -6,6 +6,7 @@ REPORT_LABELS = {
     "market_state": "Market State",
     "sector_strength": "Sector Strength",
     "risk_alerts": "Risk Alerts",
+    "position_review": "Position Review",
     "backtest_tearsheet": "Backtest Tear Sheet",
     "performance": "Performance",
 }
