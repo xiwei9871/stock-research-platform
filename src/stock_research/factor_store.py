@@ -209,12 +209,15 @@ def score_stored_factor_daily(
     trade_date: object,
     score_version: str = "manual_v1",
     calc_version: str = "v1",
+    approved_only: bool = False,
     service: str = SETTINGS.research_service,
 ) -> int:
     config = manual_v1_config()
     factors = load_factor_daily(
         trade_date=trade_date,
         calc_version=calc_version,
+        approved_only=approved_only,
+        score_version=score_version,
         service=service,
     )
     return score_and_store_factor_daily(
