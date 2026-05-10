@@ -86,6 +86,22 @@ alerts = generate_risk_alerts(
 print(write_risk_alert_report(alerts, trade_date="YYYY-MM-DD"))
 ```
 
+Build daily report bundle from generated report paths:
+
+```python
+from stock_research.reports.daily_report_bundle import write_daily_report_bundle
+
+print(write_daily_report_bundle(
+    trade_date="YYYY-MM-DD",
+    report_paths={
+        "topn": "reports/daily_topn_YYYY-MM-DD_manual_v1.md",
+        "market_state": "reports/market_state/market_state_YYYY-MM-DD_CSI300.md",
+        "sector_strength": "reports/sector_strength/sector_strength_YYYY-MM-DD_csrc.md",
+        "risk_alerts": "reports/risk_alerts/risk_alerts_YYYY-MM-DD.md",
+    },
+))
+```
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -98,6 +114,7 @@ print(write_risk_alert_report(alerts, trade_date="YYYY-MM-DD"))
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Market state report writes markdown and CSV files under `reports/market_state/`.
 - Risk alert report writes markdown and CSV files under `reports/risk_alerts/`.
+- Daily report bundle writes an index markdown file under `reports/daily/`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
