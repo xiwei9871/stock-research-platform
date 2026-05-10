@@ -97,6 +97,21 @@ def print_ingest_progress(event: dict) -> None:
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
 
 
+def print_factor_backfill_progress(event: dict) -> None:
+    if event["event"] == "start":
+        print(
+            "factor_daily_backfill|start|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}",
+            flush=True,
+        )
+    elif event["event"] == "done":
+        print(
+            "factor_daily_backfill|done|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}|{event['factor_rows']}",
+            flush=True,
+        )
+
+
 def summarize_multi_horizon_report(report: dict) -> dict:
     summaries = {}
     for horizon, horizon_report in report.get("reports", {}).items():
@@ -375,6 +390,7 @@ def main() -> None:
             end_date=args.end_date,
             lookback_bars=args.lookback_bars,
             industry_system=args.industry_system,
+            progress=print_factor_backfill_progress,
         )
         total = int(result["factor_rows"].sum()) if not result.empty else 0
         print(f"factor_daily_backfill|dates|{len(result)}")

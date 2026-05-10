@@ -6,6 +6,8 @@ from stock_research import factor_store
 class FakeCursor:
     def __init__(self):
         self.calls = []
+        self.executes = []
+        self.copy_calls = []
 
     def __enter__(self):
         return self
@@ -13,8 +15,31 @@ class FakeCursor:
     def __exit__(self, exc_type, exc, tb):
         return False
 
+    def execute(self, sql, params=None):
+        self.executes.append((sql, params))
+
     def executemany(self, sql, rows):
         self.calls.append((sql, list(rows)))
+
+    def copy(self, sql):
+        copy = FakeCopy(sql)
+        self.copy_calls.append(copy)
+        return copy
+
+
+class FakeCopy:
+    def __init__(self, sql):
+        self.sql = sql
+        self.rows = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def write_row(self, row):
+        self.rows.append(tuple(row))
 
 
 class FakeConnection:
@@ -46,22 +71,24 @@ def test_upsert_factor_daily_writes_factor_rows(monkeypatch):
 
     count = factor_store.upsert_factor_daily(frame)
 
-    sql, rows = conn.cursor_obj.calls[0]
     assert count == 1
-    assert "INSERT INTO factor.factor_daily" in sql
-    assert "ON CONFLICT" in sql
-    assert rows == [
-        {
-            "trade_date": "2026-01-01",
-            "asset_id": "A",
-            "factor_name": "ret_20",
-            "factor_group": "momentum",
-            "factor_value": 0.12,
-            "calc_version": "v1",
-            "source": "custom",
-            "source_data_version": "market_daily_bar:hfq",
-        }
+    assert "CREATE TEMP TABLE tmp_factor_daily" in conn.cursor_obj.executes[0][0]
+    assert "COPY tmp_factor_daily" in conn.cursor_obj.copy_calls[0].sql
+    assert conn.cursor_obj.copy_calls[0].rows == [
+        (
+            "2026-01-01",
+            "A",
+            "ret_20",
+            "momentum",
+            0.12,
+            "v1",
+            "custom",
+            "market_daily_bar:hfq",
+        )
     ]
+    upsert_sql, _ = conn.cursor_obj.executes[1]
+    assert "INSERT INTO factor.factor_daily" in upsert_sql
+    assert "ON CONFLICT" in upsert_sql
 
 
 def test_upsert_stock_score_daily_writes_score_rows(monkeypatch):

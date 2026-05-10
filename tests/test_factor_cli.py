@@ -231,16 +231,37 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
 
     import stock_research.cli as cli
 
-    monkeypatch.setattr(
-        cli,
-        "backfill_factor_daily_range",
-        lambda **kwargs: pd.DataFrame(
+    def fake_backfill_factor_daily_range(**kwargs):
+        kwargs["progress"]({"event": "start", "trade_date": "2026-05-01", "index": 1, "total": 2})
+        kwargs["progress"](
+            {
+                "event": "done",
+                "trade_date": "2026-05-01",
+                "index": 1,
+                "total": 2,
+                "factor_rows": 10,
+                "elapsed_seconds": 1.5,
+            }
+        )
+        kwargs["progress"]({"event": "start", "trade_date": "2026-05-02", "index": 2, "total": 2})
+        kwargs["progress"](
+            {
+                "event": "done",
+                "trade_date": "2026-05-02",
+                "index": 2,
+                "total": 2,
+                "factor_rows": 20,
+                "elapsed_seconds": 2.0,
+            }
+        )
+        return pd.DataFrame(
             [
                 {"trade_date": "2026-05-01", "factor_rows": 10},
                 {"trade_date": "2026-05-02", "factor_rows": 20},
             ]
-        ),
-    )
+        )
+
+    monkeypatch.setattr(cli, "backfill_factor_daily_range", fake_backfill_factor_daily_range)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -257,6 +278,10 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
     cli.main()
 
     assert capsys.readouterr().out.splitlines() == [
+        "factor_daily_backfill|start|2026-05-01|1|2",
+        "factor_daily_backfill|done|2026-05-01|1|2|10",
+        "factor_daily_backfill|start|2026-05-02|2|2",
+        "factor_daily_backfill|done|2026-05-02|2|2|20",
         "factor_daily_backfill|dates|2",
         "factor_daily_backfill|rows|30",
     ]

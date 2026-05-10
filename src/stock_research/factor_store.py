@@ -41,15 +41,33 @@ def upsert_factor_daily(
         return 0
 
     rows = [_factor_row(row) for row in factors.to_dict("records")]
-    sql = """
+    create_temp_sql = """
+    CREATE TEMP TABLE tmp_factor_daily (
+        trade_date date,
+        asset_id text,
+        factor_name text,
+        factor_group text,
+        factor_value double precision,
+        calc_version text,
+        source text,
+        source_data_version text
+    ) ON COMMIT DROP
+    """
+    copy_sql = """
+    COPY tmp_factor_daily (
+        trade_date, asset_id, factor_name, factor_group, factor_value,
+        calc_version, source, source_data_version
+    ) FROM STDIN
+    """
+    upsert_sql = """
     INSERT INTO factor.factor_daily (
         trade_date, asset_id, factor_name, factor_group, factor_value,
         calc_version, source, source_data_version
     )
-    VALUES (
-        %(trade_date)s, %(asset_id)s, %(factor_name)s, %(factor_group)s,
-        %(factor_value)s, %(calc_version)s, %(source)s, %(source_data_version)s
-    )
+    SELECT
+        trade_date, asset_id, factor_name, factor_group, factor_value,
+        calc_version, source, source_data_version
+    FROM tmp_factor_daily
     ON CONFLICT (trade_date, asset_id, factor_name, calc_version)
     DO UPDATE SET
         factor_group = EXCLUDED.factor_group,
@@ -60,7 +78,11 @@ def upsert_factor_daily(
     """
     with connect(service) as conn:
         with conn.cursor() as cur:
-            cur.executemany(sql, rows)
+            cur.execute(create_temp_sql)
+            with cur.copy(copy_sql) as copy:
+                for row in rows:
+                    copy.write_row([row[column] for column in FACTOR_COLUMNS])
+            cur.execute(upsert_sql)
     return len(rows)
 
 

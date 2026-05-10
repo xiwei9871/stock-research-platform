@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from stock_research import factor_config, factor_pipeline
 
@@ -135,6 +136,62 @@ def test_compute_technical_factor_rows_returns_long_factor_daily_rows():
     assert set(rows["source"]) == {"custom"}
     assert set(rows["source_data_version"]) == {"market_daily_bar:hfq"}
     assert not rows["factor_value"].isna().any()
+
+
+def test_compute_technical_factor_rows_matches_reference_latest_values():
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+    factor_groups = {
+        "ret_20": "momentum",
+        "ret_60": "momentum",
+        "momentum_20_5": "momentum",
+        "close_above_ma20": "trend",
+        "ma20_slope": "trend",
+        "trend_r2_20": "trend",
+        "amount_ratio_5_20": "volume_price",
+        "price_volume_corr_10": "volume_price",
+        "volatility_20": "risk",
+        "max_drawdown_20": "risk",
+        "atr_pct": "risk",
+        "distance_ma60": "risk",
+    }
+
+    rows = factor_pipeline.compute_technical_factor_rows(
+        bars,
+        trade_date="2026-03-11",
+        factor_groups=factor_groups,
+        calc_version="v1",
+        source_data_version="market_daily_bar:hfq",
+    )
+
+    values = rows.set_index("factor_name")["factor_value"].to_dict()
+    assert values["ret_20"] == pytest.approx(70 / 50 - 1.0)
+    assert values["ret_60"] == pytest.approx(70 / 10 - 1.0)
+    assert values["momentum_20_5"] == pytest.approx((70 / 50 - 1.0) - (70 / 65 - 1.0))
+    assert values["close_above_ma20"] == 1.0
+    assert values["ma20_slope"] == pytest.approx(5.0)
+    assert values["trend_r2_20"] == pytest.approx(1.0)
+    assert values["amount_ratio_5_20"] > 1.0
+    assert values["price_volume_corr_10"] == pytest.approx(1.0)
+    assert values["volatility_20"] >= 0.0
+    assert values["max_drawdown_20"] == pytest.approx(0.0)
+    assert values["atr_pct"] > 0.0
+    assert values["distance_ma60"] > 0.0
 
 
 def test_compute_technical_factor_rows_strict_mode_raises_for_missing_factor():
