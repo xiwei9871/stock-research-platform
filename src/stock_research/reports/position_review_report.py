@@ -7,6 +7,8 @@ import pandas as pd
 POSITION_REVIEW_COLUMNS = [
     "trade_date",
     "asset_id",
+    "industry_code",
+    "industry_name",
     "weight",
     "holding_days",
     "rank",
@@ -52,6 +54,8 @@ def generate_position_review(
             {
                 "trade_date": date_text,
                 "asset_id": asset_id,
+                "industry_code": position.get("industry_code") or score.get("industry_code"),
+                "industry_name": position.get("industry_name") or score.get("industry_name"),
                 "weight": _float_or_none(position.get("weight")),
                 "holding_days": _int_or_none(position.get("holding_days")),
                 "rank": rank,
@@ -62,6 +66,48 @@ def generate_position_review(
             }
         )
     return pd.DataFrame(rows, columns=POSITION_REVIEW_COLUMNS)
+
+
+def calc_position_risk_summary(
+    review: pd.DataFrame,
+    max_total_weight: float = 1.0,
+    max_industry_weight: float = 0.4,
+) -> dict[str, Any]:
+    max_industry_weight_limit = max_industry_weight
+    if review.empty:
+        return {
+            "total_weight": 0.0,
+            "max_industry_code": None,
+            "max_industry_weight": 0.0,
+            "total_weight_status": "ok",
+            "industry_concentration_status": "ok",
+        }
+    frame = review.copy()
+    frame["weight"] = pd.to_numeric(frame["weight"], errors="coerce").fillna(0.0)
+    total_weight = round(float(frame["weight"].sum()), 10)
+    industry = (
+        frame.dropna(subset=["industry_code"])
+        .groupby("industry_code", as_index=False)["weight"]
+        .sum()
+        .sort_values(["weight", "industry_code"], ascending=[False, True])
+    )
+    if industry.empty:
+        max_industry_code = None
+        max_observed_industry_weight = 0.0
+    else:
+        max_row = industry.iloc[0]
+        max_industry_code = str(max_row["industry_code"])
+        max_observed_industry_weight = round(float(max_row["weight"]), 10)
+
+    return {
+        "total_weight": total_weight,
+        "max_industry_code": max_industry_code,
+        "max_industry_weight": max_observed_industry_weight,
+        "total_weight_status": "over_limit" if total_weight > max_total_weight else "ok",
+        "industry_concentration_status": (
+            "over_limit" if max_observed_industry_weight > max_industry_weight_limit else "ok"
+        ),
+    }
 
 
 def write_position_review_report(
@@ -119,10 +165,17 @@ def _normalize_review(review: pd.DataFrame) -> pd.DataFrame:
 
 
 def _render_markdown(review: pd.DataFrame, trade_date: str) -> str:
+    summary = calc_position_risk_summary(review)
     lines = [
         f"# {trade_date} Position Review",
         "",
         "- 持仓复核只作为人工检查清单，不构成交易指令。",
+        f"- Total weight: `{_format_pct(summary['total_weight'])}` ({summary['total_weight_status']})",
+        (
+            f"- Max industry: `{summary['max_industry_code'] or ''}` "
+            f"`{_format_pct(summary['max_industry_weight'])}` "
+            f"({summary['industry_concentration_status']})"
+        ),
         "",
     ]
     if review.empty:
