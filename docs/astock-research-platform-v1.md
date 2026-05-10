@@ -189,6 +189,7 @@ backtest         回测结果、持仓、交易日志
 当前进展：
 
 - 已落地第一版 vectorbt 风格 TopN 回测核心：支持 `factor.stock_score_daily` 输入加载、daily / weekly rebalance、等权持仓、最大持仓数量、交易成本、换手率、资金曲线和基础 summary。
+- 已落地第一版 RQAlpha 风格策略生命周期层：提供 `prepare_data`、`before_market`、`generate_signals`、`rebalance`、`after_market`、`generate_report`，用于研究流程编排，不接自动交易、不改 V3 阈值。
 
 ### 阶段 7：每日选股与盯盘报告
 
