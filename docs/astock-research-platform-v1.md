@@ -186,6 +186,10 @@ backtest         回测结果、持仓、交易日志
 - 绩效指标
 - 回测报告
 
+当前进展：
+
+- 已落地第一版 vectorbt 风格 TopN 回测核心：支持 `factor.stock_score_daily` 输入加载、daily / weekly rebalance、等权持仓、最大持仓数量、交易成本、换手率、资金曲线和基础 summary。
+
 ### 阶段 7：每日选股与盯盘报告
 
 目标：形成日常可用工具。
