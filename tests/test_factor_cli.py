@@ -103,6 +103,38 @@ def test_cli_accepts_daily_factor_pipeline_command():
     assert args.lookback_bars == 130
 
 
+def test_cli_accepts_daily_research_report_command():
+    args = build_parser().parse_args(
+        [
+            "run-daily-research-report",
+            "--trade-date",
+            "2026-05-08",
+            "--score-version",
+            "manual_v1",
+            "--top-n",
+            "30",
+            "--index-id",
+            "CSI300",
+            "--industry-system",
+            "csrc",
+            "--reports-dir",
+            "/tmp/reports",
+            "--apply-report-run-schema",
+            "--record-run",
+        ]
+    )
+
+    assert args.command == "run-daily-research-report"
+    assert args.trade_date == "2026-05-08"
+    assert args.score_version == "manual_v1"
+    assert args.top_n == 30
+    assert args.index_id == "CSI300"
+    assert args.industry_system == "csrc"
+    assert args.reports_dir == "/tmp/reports"
+    assert args.apply_report_run_schema is True
+    assert args.record_run is True
+
+
 def test_cli_accepts_evaluate_factor_gate_command():
     args = build_parser().parse_args(
         [
@@ -281,6 +313,56 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
         "daily_factor_pipeline|factor_rows|100",
         "daily_factor_pipeline|score_rows|20",
         "daily_factor_pipeline|top_scores|3",
+    ]
+
+
+def test_daily_research_report_cli_prints_report_paths(monkeypatch, capsys, tmp_path):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "run_daily_research_report",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "report_paths": {
+                "bundle": {"markdown_path": tmp_path / "bundle.md"},
+                "topn": {"markdown_path": tmp_path / "topn.md"},
+                "market_state": {"markdown_path": tmp_path / "market.md"},
+                "sector_strength": {"markdown_path": tmp_path / "sector.md"},
+                "risk_alerts": {"markdown_path": tmp_path / "risk.md"},
+                "position_review": {"markdown_path": tmp_path / "positions.md"},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "run-daily-research-report",
+            "--trade-date",
+            "2026-05-08",
+            "--top-n",
+            "20",
+            "--reports-dir",
+            str(tmp_path),
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["trade_date"] == "2026-05-08"
+    assert calls[0]["top_n"] == 20
+    assert capsys.readouterr().out.splitlines() == [
+        f"daily_research_report|bundle|{tmp_path / 'bundle.md'}",
+        f"daily_research_report|topn|{tmp_path / 'topn.md'}",
+        f"daily_research_report|market_state|{tmp_path / 'market.md'}",
+        f"daily_research_report|sector_strength|{tmp_path / 'sector.md'}",
+        f"daily_research_report|risk_alerts|{tmp_path / 'risk.md'}",
+        f"daily_research_report|position_review|{tmp_path / 'positions.md'}",
     ]
 
 

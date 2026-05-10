@@ -127,9 +127,22 @@ cd /Users/xiwei/stock_research
 .venv/bin/python -m stock_research.reports.daily_research_report_cli --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --index-id CSI300 --industry-system csrc --reports-dir reports
 ```
 
-This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
+Run the same report through the main `stock-research` CLI:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research run-daily-research-report --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --index-id CSI300 --industry-system csrc --reports-dir reports
+```
+
 The module enriches TopN candidates from `core.industry_membership` before risk alert generation, so sector weakness checks use point-in-time industry context.
 Use `--apply-report-run-schema --record-run` to initialize `report.report_run` and persist the generated report paths.
+
+Generate a cron entry for review:
+
+```python
+from stock_research.reports.daily_research_cron import build_daily_research_cron_entry
+
+print(build_daily_research_cron_entry())
+```
 
 ## Expected Outputs
 
@@ -147,6 +160,8 @@ Use `--apply-report-run-schema --record-run` to initialize `report.report_run` a
 - Daily report bundle writes an index markdown file under `reports/daily/`.
 - Daily research report workflow writes TopN, market state, sector strength, risk alerts, position review, and bundle reports in one call.
 - Daily research report module CLI prints stable `daily_research_report|...` report paths.
+- Main `stock-research run-daily-research-report` prints the same stable report paths.
+- Cron helper can generate a weekday report command for manual installation.
 - Optional report run recording writes generated report paths to `report.report_run`.
 - Reports are written under `reports/`, which is ignored by Git.
 

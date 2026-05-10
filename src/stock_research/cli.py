@@ -39,6 +39,7 @@ from stock_research.market_data import load_market_daily_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
+from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.schema import apply_schema
 from stock_research.selection import generate_selection, store_selection
@@ -294,6 +295,22 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    daily_research_report = subparsers.add_parser("run-daily-research-report")
+    daily_research_report.add_argument("--trade-date", required=True)
+    daily_research_report.add_argument("--score-version", default="manual_v1")
+    daily_research_report.add_argument("--top-n", type=int, default=30)
+    daily_research_report.add_argument("--index-id", default="CSI300")
+    daily_research_report.add_argument("--market-lookback-days", type=int, default=90)
+    daily_research_report.add_argument("--industry-system", default="csrc")
+    daily_research_report.add_argument("--sector-lookback-days", type=int, default=60)
+    daily_research_report.add_argument("--positions-csv")
+    daily_research_report.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    daily_research_report.add_argument("--apply-report-run-schema", action="store_true")
+    daily_research_report.add_argument("--record-run", action="store_true")
+
     return parser
 
 
@@ -431,6 +448,23 @@ def main() -> None:
         print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "run-daily-research-report":
+        result = run_daily_research_report(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            index_id=args.index_id,
+            market_lookback_days=args.market_lookback_days,
+            industry_system=args.industry_system,
+            sector_lookback_days=args.sector_lookback_days,
+            positions_csv=args.positions_csv,
+            reports_dir=args.reports_dir,
+            apply_report_run_schema_first=args.apply_report_run_schema,
+            record_run=args.record_run,
+        )
+        report_paths = result["report_paths"]
+        for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
+            print(f"daily_research_report|{key}|{report_paths[key]['markdown_path']}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")
