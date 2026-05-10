@@ -172,7 +172,9 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `scoring.pipeline`，支持从长表因子数据生成综合股票得分。
 - 已落地 `factor.factor_daily`、`factor.stock_score_daily` 表结构和索引。
 - 已落地 `factor_store`，支持因子长表 upsert、综合得分 upsert、TopN 读取，以及从长表因子计算并写入综合得分。
-- 下一步需要补 CLI 命令和每日流水线，把基础因子计算、因子存储、综合打分串起来。
+- 已落地历史因子批量回算入口。
+- 已落地 approved-only 评分区间 workflow。
+- 已落地基础因子计算、因子存储、综合打分、每日流水线和历史回填 CLI。
 
 ### 阶段 6：V3 策略回测
 

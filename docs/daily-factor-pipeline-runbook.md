@@ -150,6 +150,26 @@ from stock_research.reports.daily_research_cron import build_daily_research_cron
 print(build_daily_research_cron_entry())
 ```
 
+## Historical Research Loop
+
+1. Backfill historical factor rows:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --start-date YYYY-MM-DD --end-date YYYY-MM-DD --lookback-bars 130 --industry-system csrc
+```
+
+2. Confirm label coverage for the same range before gate evaluation.
+
+3. Batch evaluate candidate factors:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_alpha158_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+```
+
+4. Score with approved factors only after approvals exist.
+
+5. Run TopN research workflow and compare the tear sheet before changing daily report usage.
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
