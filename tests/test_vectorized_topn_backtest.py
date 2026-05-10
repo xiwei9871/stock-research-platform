@@ -1,8 +1,10 @@
 import pandas as pd
 import pytest
 
+import stock_research.vectorized_topn_backtest as vectorized_topn_backtest
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
+    load_vectorized_topn_inputs,
     run_vectorized_topn_backtest,
 )
 
@@ -151,3 +153,52 @@ def test_run_vectorized_topn_backtest_caps_holdings_with_max_positions():
     assert list(result.positions["asset_id"]) == ["A", "B"]
     assert list(result.positions["weight"]) == pytest.approx([0.5, 0.5])
     assert result.equity_curve.iloc[0]["holdings_count"] == 2
+
+
+def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        if "factor.stock_score_daily" in sql:
+            return [
+                {
+                    "trade_date": "2026-01-01",
+                    "asset_id": "A",
+                    "rank": 1,
+                    "score_total": 90.0,
+                }
+            ]
+        return [{"trade_date": "2026-01-01", "asset_id": "A", "close": 10.0}]
+
+    monkeypatch.setattr(
+        vectorized_topn_backtest,
+        "connect",
+        lambda service: _context(object()),
+    )
+    monkeypatch.setattr(vectorized_topn_backtest, "fetch_all", fake_fetch_all)
+
+    scores, prices = load_vectorized_topn_inputs(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        score_version="manual_v1",
+        adjust_type="hfq",
+    )
+
+    assert scores.iloc[0]["score_total"] == 90.0
+    assert prices.iloc[0]["close"] == 10.0
+    assert "FROM factor.stock_score_daily" in calls[0][0]
+    assert calls[0][1] == ["manual_v1", "2026-01-01", "2026-01-31"]
+    assert "FROM market_daily_bar" in calls[1][0]
+    assert calls[1][1] == ["hfq", "2026-01-01", "2026-01-31"]
+
+
+class _context:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        return self.value
+
+    def __exit__(self, exc_type, exc, tb):
+        return False

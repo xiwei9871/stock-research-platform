@@ -3,6 +3,9 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.config import SETTINGS
+from stock_research.db import connect, fetch_all
+
 
 EQUITY_COLUMNS = [
     "date",
@@ -40,6 +43,33 @@ class VectorizedTopNResult:
     equity_curve: pd.DataFrame
     positions: pd.DataFrame
     summary: dict[str, Any]
+
+
+def load_vectorized_topn_inputs(
+    start_date: str,
+    end_date: str,
+    score_version: str = "manual_v1",
+    adjust_type: str = "hfq",
+    service: str = SETTINGS.research_service,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    score_sql = """
+    SELECT trade_date, asset_id, rank, score_total
+    FROM factor.stock_score_daily
+    WHERE score_version = %s
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date, rank, asset_id
+    """
+    price_sql = """
+    SELECT trade_date, asset_id, close
+    FROM market_daily_bar
+    WHERE adjust_type = %s
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date, asset_id
+    """
+    with connect(service) as conn:
+        score_rows = fetch_all(conn, score_sql, [score_version, start_date, end_date])
+        price_rows = fetch_all(conn, price_sql, [adjust_type, start_date, end_date])
+    return pd.DataFrame(score_rows), pd.DataFrame(price_rows)
 
 
 def run_vectorized_topn_backtest(
