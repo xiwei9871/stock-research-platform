@@ -103,6 +103,23 @@ print(write_daily_report_bundle(
 ))
 ```
 
+Write the full daily research report set from in-memory research outputs:
+
+```python
+from stock_research.reports.daily_research_report_workflow import write_daily_research_reports
+
+result = write_daily_research_reports(
+    trade_date="YYYY-MM-DD",
+    score_version="manual_v1",
+    top_scores=top_scores,
+    market_state=market_state,
+    sector_strength=sector_strength,
+    positions=positions,
+    feature_snapshot=feature_snapshot,
+)
+print(result["report_paths"]["bundle"]["markdown_path"])
+```
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -117,6 +134,7 @@ print(write_daily_report_bundle(
 - Risk alert report writes markdown and CSV files under `reports/risk_alerts/`.
 - Position review report writes markdown and CSV files under `reports/position_review/`.
 - Daily report bundle writes an index markdown file under `reports/daily/`.
+- Daily research report workflow writes TopN, market state, sector strength, risk alerts, position review, and bundle reports in one call.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
