@@ -37,6 +37,20 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
             }
         ]
     )
+    trades = pd.DataFrame(
+        [
+            {
+                "rebalance_date": "2026-01-01",
+                "asset_id": "A",
+                "side": "buy",
+                "previous_weight": 0.0,
+                "target_weight": 0.5,
+                "delta_weight": 0.5,
+                "turnover_contribution": 0.5,
+                "transaction_cost": 0.0005,
+            }
+        ]
+    )
     result = VectorizedTopNResult(
         config=VectorizedTopNConfig(
             start_date="2026-01-01",
@@ -46,6 +60,7 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
         ),
         equity_curve=equity_curve,
         positions=positions,
+        trades=trades,
         summary={"total_return": 0.045, "periods": 2},
     )
 
@@ -60,6 +75,7 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
         "metrics_path",
         "equity_curve_path",
         "positions_path",
+        "trades_path",
     }
     report_text = (tmp_path / "topn-test_2026-01-01_2026-01-03_tearsheet.md").read_text(
         encoding="utf-8"
@@ -74,3 +90,4 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
     assert "sharpe_ratio" in set(metrics["metric"])
     assert pd.read_csv(paths["equity_curve_path"]).shape[0] == 2
     assert pd.read_csv(paths["positions_path"]).shape[0] == 1
+    assert pd.read_csv(paths["trades_path"]).shape[0] == 1

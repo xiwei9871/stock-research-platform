@@ -25,6 +25,7 @@ def write_performance_tearsheet(
     metrics_path = reports_path / f"{stem}_metrics.csv"
     equity_curve_path = reports_path / f"{stem}_equity.csv"
     positions_path = reports_path / f"{stem}_positions.csv"
+    trades_path = reports_path / f"{stem}_trades.csv"
 
     metrics = calc_performance_metrics(
         result.equity_curve,
@@ -37,6 +38,8 @@ def write_performance_tearsheet(
     metrics_frame.to_csv(metrics_path, index=False)
     result.equity_curve.to_csv(equity_curve_path, index=False)
     result.positions.to_csv(positions_path, index=False)
+    trades = getattr(result, "trades", pd.DataFrame())
+    trades.to_csv(trades_path, index=False)
     report_path.write_text(
         _render_markdown(
             strategy_id=strategy_id,
@@ -47,6 +50,7 @@ def write_performance_tearsheet(
             metrics_path=metrics_path,
             equity_curve_path=equity_curve_path,
             positions_path=positions_path,
+            trades_path=trades_path,
         ),
         encoding="utf-8",
     )
@@ -56,6 +60,7 @@ def write_performance_tearsheet(
         "metrics_path": str(metrics_path),
         "equity_curve_path": str(equity_curve_path),
         "positions_path": str(positions_path),
+        "trades_path": str(trades_path),
     }
 
 
@@ -68,6 +73,7 @@ def _render_markdown(
     metrics_path: Path,
     equity_curve_path: Path,
     positions_path: Path,
+    trades_path: Path,
 ) -> str:
     lines = [
         "# Performance Tear Sheet",
@@ -97,6 +103,7 @@ def _render_markdown(
             f"- Metrics CSV: `{metrics_path}`",
             f"- Equity CSV: `{equity_curve_path}`",
             f"- Positions CSV: `{positions_path}`",
+            f"- Trades CSV: `{trades_path}`",
             "",
         ]
     )
