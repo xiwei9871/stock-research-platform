@@ -10,6 +10,7 @@ from stock_research.core_data import (
 )
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
+from stock_research.factor_backfill import backfill_factor_daily_range
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.factor_eval.gate import decide_factor_gate
@@ -258,6 +259,12 @@ def build_parser() -> argparse.ArgumentParser:
     build_factor_daily.add_argument("--lookback-bars", type=int, default=130)
     build_factor_daily.add_argument("--industry-system", default="csrc")
 
+    backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
+    backfill_factor_daily.add_argument("--start-date", required=True)
+    backfill_factor_daily.add_argument("--end-date", required=True)
+    backfill_factor_daily.add_argument("--lookback-bars", type=int, default=130)
+    backfill_factor_daily.add_argument("--industry-system", default="csrc")
+
     score_factor_daily = subparsers.add_parser("score-factor-daily")
     score_factor_daily.add_argument("--trade-date", required=True)
     score_factor_daily.add_argument("--score-version", default="manual_v1")
@@ -362,6 +369,16 @@ def main() -> None:
             industry_system=args.industry_system,
         )
         print(f"factor_daily_stored|{count}")
+    elif args.command == "backfill-factor-daily":
+        result = backfill_factor_daily_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            industry_system=args.industry_system,
+        )
+        total = int(result["factor_rows"].sum()) if not result.empty else 0
+        print(f"factor_daily_backfill|dates|{len(result)}")
+        print(f"factor_daily_backfill|rows|{total}")
     elif args.command == "score-factor-daily":
         count = score_stored_factor_daily(
             trade_date=args.trade_date,

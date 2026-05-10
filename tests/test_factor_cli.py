@@ -20,6 +20,28 @@ def test_cli_accepts_build_factor_daily_command():
     assert args.industry_system == "csrc"
 
 
+def test_cli_accepts_backfill_factor_daily_command():
+    args = build_parser().parse_args(
+        [
+            "backfill-factor-daily",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-10",
+            "--lookback-bars",
+            "130",
+            "--industry-system",
+            "csrc",
+        ]
+    )
+
+    assert args.command == "backfill-factor-daily"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-10"
+    assert args.lookback_bars == 130
+    assert args.industry_system == "csrc"
+
+
 def test_cli_accepts_score_factor_daily_command():
     args = build_parser().parse_args(
         [
@@ -200,6 +222,44 @@ def test_build_factor_daily_cli_prints_count(monkeypatch, capsys):
     cli.main()
 
     assert capsys.readouterr().out.strip() == "factor_daily_stored|42"
+
+
+def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "backfill_factor_daily_range",
+        lambda **kwargs: pd.DataFrame(
+            [
+                {"trade_date": "2026-05-01", "factor_rows": 10},
+                {"trade_date": "2026-05-02", "factor_rows": 20},
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-factor-daily",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-02",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "factor_daily_backfill|dates|2",
+        "factor_daily_backfill|rows|30",
+    ]
 
 
 def test_score_factor_daily_cli_prints_count(monkeypatch, capsys):
