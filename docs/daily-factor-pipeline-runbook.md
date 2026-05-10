@@ -48,6 +48,15 @@ Run full daily pipeline:
 /Users/xiwei/stock_research/.venv/bin/stock-research run-daily-factor-pipeline --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --lookback-bars 130
 ```
 
+Run TopN research workflow and write performance tear sheet:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -m stock_research.research_workflow_cli --start-date YYYY-MM-DD --end-date YYYY-MM-DD --score-version manual_v1 --top-n 20 --rebalance-frequency weekly --transaction-cost-bps 10 --max-positions 20 --strategy-id topn_weekly_v1
+```
+
+This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -55,6 +64,7 @@ Run full daily pipeline:
 - `factor.factor_approval` records candidate factor gate status before scoring promotion.
 - `factor.stock_score_daily` has ranked rows for the trade date.
 - TopN command prints ranked candidates.
+- TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
