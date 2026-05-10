@@ -64,6 +64,13 @@ cd /Users/xiwei/stock_research
 .venv/bin/python -c "from stock_research.reports.sector_strength_report import load_sector_strength_bars, calc_sector_strength, write_sector_strength_report; bars = load_sector_strength_bars('YYYY-MM-DD', 'YYYY-MM-DD', industry_system='csrc'); strength = calc_sector_strength(bars, trade_date='YYYY-MM-DD', top_n=20); print(write_sector_strength_report(strength, trade_date='YYYY-MM-DD', industry_system='csrc'))"
 ```
 
+Build market state report:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -c "from stock_research.reports.market_state_report import load_market_state_bars, calc_market_state, write_market_state_report; bars = load_market_state_bars('YYYY-MM-DD', 'YYYY-MM-DD', index_id='CSI300'); state = calc_market_state(bars, trade_date='YYYY-MM-DD', index_id='CSI300'); print(write_market_state_report(state))"
+```
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -74,6 +81,7 @@ cd /Users/xiwei/stock_research
 - Daily TopN report writes markdown and CSV files with rank, asset, total score, score version, score components, and a candidate-pool guardrail.
 - TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
+- Market state report writes markdown and CSV files under `reports/market_state/`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
