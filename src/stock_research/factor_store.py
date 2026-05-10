@@ -129,25 +129,54 @@ def load_top_scores(
 def load_factor_daily(
     trade_date: object,
     calc_version: str = "v1",
+    approved_only: bool = False,
+    score_version: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> pd.DataFrame:
-    sql = """
-    SELECT
-        trade_date,
-        asset_id,
-        factor_name,
-        factor_group,
-        factor_value,
-        calc_version,
-        source,
-        source_data_version
-    FROM factor.factor_daily
-    WHERE trade_date = %s
-      AND calc_version = %s
-    ORDER BY asset_id, factor_name
-    """
+    if approved_only and not score_version:
+        raise ValueError("score_version is required when approved_only=True")
+
+    if approved_only:
+        sql = """
+        SELECT
+            daily.trade_date,
+            daily.asset_id,
+            daily.factor_name,
+            daily.factor_group,
+            daily.factor_value,
+            daily.calc_version,
+            daily.source,
+            daily.source_data_version
+        FROM factor.factor_daily daily
+        JOIN factor.factor_approval approval
+          ON approval.factor_name = daily.factor_name
+         AND approval.calc_version = daily.calc_version
+        WHERE daily.trade_date = %s
+          AND daily.calc_version = %s
+          AND approval.score_version = %s
+          AND approval.status = 'approved'
+        ORDER BY daily.asset_id, daily.factor_name
+        """
+        params = [_date_string(trade_date), calc_version, score_version]
+    else:
+        sql = """
+        SELECT
+            trade_date,
+            asset_id,
+            factor_name,
+            factor_group,
+            factor_value,
+            calc_version,
+            source,
+            source_data_version
+        FROM factor.factor_daily
+        WHERE trade_date = %s
+          AND calc_version = %s
+        ORDER BY asset_id, factor_name
+        """
+        params = [_date_string(trade_date), calc_version]
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [_date_string(trade_date), calc_version])
+        rows = fetch_all(conn, sql, params)
     return pd.DataFrame(rows)
 
 
