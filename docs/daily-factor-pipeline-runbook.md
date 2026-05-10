@@ -57,6 +57,13 @@ cd /Users/xiwei/stock_research
 
 This module entrypoint is intentionally separate from the main `stock-research` CLI until the current unrelated `cli.py` work is merged or cleaned up.
 
+Build sector strength report:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -c "from stock_research.reports.sector_strength_report import load_sector_strength_bars, calc_sector_strength, write_sector_strength_report; bars = load_sector_strength_bars('YYYY-MM-DD', 'YYYY-MM-DD', industry_system='csrc'); strength = calc_sector_strength(bars, trade_date='YYYY-MM-DD', top_n=20); print(write_sector_strength_report(strength, trade_date='YYYY-MM-DD', industry_system='csrc'))"
+```
+
 ## Expected Outputs
 
 - `factor.factor_daily` has rows for the trade date.
@@ -65,6 +72,7 @@ This module entrypoint is intentionally separate from the main `stock-research` 
 - `factor.stock_score_daily` has ranked rows for the trade date.
 - TopN command prints ranked candidates.
 - TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
+- Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
