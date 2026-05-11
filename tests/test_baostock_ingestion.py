@@ -158,6 +158,90 @@ def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
     assert calls[0][1][0]["start_date"] == "2024-05-31"
 
 
+def test_sync_industry_memberships_retries_transient_not_logged_in(monkeypatch):
+    conn = FakeConnection()
+    query_calls = []
+    login_calls = []
+    logout_calls = []
+    upserted = []
+
+    class Result:
+        fields = ["updateDate", "code", "industry", "industryClassification"]
+
+        def __init__(self, error_code, error_msg="", rows=None):
+            self.error_code = error_code
+            self.error_msg = error_msg
+            self.rows = rows or []
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = ""
+
+    results = [
+        Result("10001001", "用户未登录"),
+        Result(
+            "0",
+            rows=[
+                [
+                    "2024-05-31",
+                    "sh.600000",
+                    "J66货币金融服务",
+                    "证监会行业分类",
+                ]
+            ],
+        ),
+    ]
+
+    monkeypatch.setattr(baostock_ingestion, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "load_cached_industry_snapshot_payload",
+        lambda opened, trade_date: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: login_calls.append(True) or Login(),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "logout",
+        lambda: logout_calls.append(True),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "query_stock_industry",
+        lambda date: query_calls.append(date) or results.pop(0),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "store_industry_snapshot_payload",
+        lambda opened, trade_date, rows: "digest",
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_industry_memberships",
+        lambda opened, rows: upserted.append(rows) or len(rows),
+    )
+
+    count = baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True)
+
+    assert count == 1
+    assert query_calls == ["2024-05-31", "2024-05-31"]
+    assert len(login_calls) == 2
+    assert len(logout_calls) == 2
+    assert upserted[0][0]["asset_id"] == "CN:SH:600000"
+
+
 def test_normalize_index_row_maps_market_bar():
     row = {
         "date": "2026-05-08",

@@ -26,6 +26,8 @@ INDEX_CONSTITUENT_TARGETS = {
 }
 
 INDUSTRY_SNAPSHOT_ENDPOINT = "query_stock_industry"
+INDUSTRY_QUERY_MAX_ATTEMPTS = 3
+INDUSTRY_QUERY_RETRY_ERROR_CODES = {"10001001"}
 
 
 def parse_float(value: Any) -> float | None:
@@ -307,6 +309,27 @@ def _rows_from_result(rs) -> list[dict[str, str]]:
     return rows
 
 
+def _query_industry_snapshot_rows(trade_date: str) -> list[dict[str, str]]:
+    for attempt in range(1, INDUSTRY_QUERY_MAX_ATTEMPTS + 1):
+        login = bs.login()
+        if login.error_code != "0":
+            raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+        try:
+            rs = bs.query_stock_industry(date=trade_date)
+            if rs.error_code == "0":
+                return _rows_from_result(rs)
+            if (
+                rs.error_code not in INDUSTRY_QUERY_RETRY_ERROR_CODES
+                or attempt == INDUSTRY_QUERY_MAX_ATTEMPTS
+            ):
+                raise RuntimeError(
+                    f"baostock industry query failed: {rs.error_code} {rs.error_msg}"
+                )
+        finally:
+            bs.logout()
+    raise RuntimeError("baostock industry query failed after retries")
+
+
 def sync_industry_memberships(
     trade_date: str,
     service: str = SETTINGS.research_service,
@@ -323,26 +346,15 @@ def sync_industry_memberships(
                 ]
                 return upsert_industry_memberships(conn, rows)
 
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
-    try:
-        rs = bs.query_stock_industry(date=trade_date)
-        if rs.error_code != "0":
-            raise RuntimeError(
-                f"baostock industry query failed: {rs.error_code} {rs.error_msg}"
-            )
-        raw_rows = _rows_from_result(rs)
-        rows = [
-            normalize_industry_row(row, effective_date=trade_date)
-            for row in raw_rows
-            if str(row.get("industry", "")).strip()
-        ]
-        with connect(service) as conn:
-            store_industry_snapshot_payload(conn, trade_date, raw_rows)
-            return upsert_industry_memberships(conn, rows)
-    finally:
-        bs.logout()
+    raw_rows = _query_industry_snapshot_rows(trade_date)
+    rows = [
+        normalize_industry_row(row, effective_date=trade_date)
+        for row in raw_rows
+        if str(row.get("industry", "")).strip()
+    ]
+    with connect(service) as conn:
+        store_industry_snapshot_payload(conn, trade_date, raw_rows)
+        return upsert_industry_memberships(conn, rows)
 
 
 def sync_index_daily_bars(
