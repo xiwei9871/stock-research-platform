@@ -168,6 +168,22 @@ def print_factor_backfill_progress(event: dict) -> None:
         )
 
 
+def factor_backfill_progress_printer(interval: int):
+    progress_interval = max(1, int(interval))
+
+    def print_progress(event: dict) -> None:
+        if event["event"] == "done" and progress_interval > 1:
+            index = int(event["index"])
+            total = int(event["total"])
+            if index % progress_interval != 0 and index != total:
+                return
+        if event["event"] == "start" and progress_interval > 1:
+            return
+        print_factor_backfill_progress(event)
+
+    return print_progress
+
+
 def summarize_multi_horizon_report(report: dict) -> dict:
     summaries = {}
     for horizon, horizon_report in report.get("reports", {}).items():
@@ -408,19 +424,39 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_industry_day.add_argument("--trade-date", required=True)
     benchmark_industry_day.add_argument("--industry-system", default="csrc")
     benchmark_industry_day.add_argument("--adjust-type", default="hfq")
+    benchmark_industry_day.add_argument(
+        "--no-cache",
+        dest="use_cache",
+        action="store_false",
+        default=True,
+    )
 
     backfill_industry_history = subparsers.add_parser("backfill-industry-history")
     backfill_industry_history.add_argument("--start-date", required=True)
     backfill_industry_history.add_argument("--end-date", required=True)
     backfill_industry_history.add_argument("--max-dates", required=True, type=int)
+    backfill_industry_history.add_argument(
+        "--frequency",
+        choices=["daily", "monthly", "quarterly"],
+        default="daily",
+    )
     backfill_industry_history.add_argument("--industry-system", default="csrc")
     backfill_industry_history.add_argument("--adjust-type", default="hfq")
+    backfill_industry_history.add_argument(
+        "--no-cache",
+        dest="use_cache",
+        action="store_false",
+        default=True,
+    )
 
     backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
     backfill_factor_daily.add_argument("--start-date", required=True)
     backfill_factor_daily.add_argument("--end-date", required=True)
     backfill_factor_daily.add_argument("--lookback-bars", type=int, default=130)
     backfill_factor_daily.add_argument("--industry-system", default="csrc")
+    backfill_factor_daily.add_argument("--workers", type=int, default=1)
+    backfill_factor_daily.add_argument("--skip-complete", action="store_true")
+    backfill_factor_daily.add_argument("--progress-interval", type=int, default=1)
 
     score_factor_daily = subparsers.add_parser("score-factor-daily")
     score_factor_daily.add_argument("--trade-date", required=True)
@@ -662,7 +698,9 @@ def main() -> None:
             end_date=args.end_date,
             lookback_bars=args.lookback_bars,
             industry_system=args.industry_system,
-            progress=print_factor_backfill_progress,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+            progress=factor_backfill_progress_printer(args.progress_interval),
         )
         total = int(result["factor_rows"].sum()) if not result.empty else 0
         print(f"factor_daily_backfill|dates|{len(result)}")
@@ -818,6 +856,7 @@ def main() -> None:
             trade_date=args.trade_date,
             industry_system=args.industry_system,
             adjust_type=args.adjust_type,
+            use_cache=args.use_cache,
         )
         print(
             "industry_day_benchmark|sync_memberships|"
@@ -836,8 +875,10 @@ def main() -> None:
             start_date=args.start_date,
             end_date=args.end_date,
             max_dates=args.max_dates,
+            frequency=args.frequency,
             industry_system=args.industry_system,
             adjust_type=args.adjust_type,
+            use_cache=args.use_cache,
             progress=lambda event: print(
                 "industry_history_progress|"
                 f"{event['trade_date']}|{event['index']}|{event['total']}|"

@@ -34,6 +34,11 @@ def test_cli_accepts_backfill_factor_daily_command():
             "130",
             "--industry-system",
             "csrc",
+            "--workers",
+            "4",
+            "--skip-complete",
+            "--progress-interval",
+            "10",
         ]
     )
 
@@ -42,6 +47,9 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.end_date == "2026-05-10"
     assert args.lookback_bars == 130
     assert args.industry_system == "csrc"
+    assert args.workers == 4
+    assert args.skip_complete is True
+    assert args.progress_interval == 10
 
 
 def test_cli_accepts_load_bars_archive_raw_flag():
@@ -111,6 +119,8 @@ def test_cli_accepts_phase6_industry_history_commands():
             "2024-05-31",
             "--max-dates",
             "2",
+            "--frequency",
+            "monthly",
             "--industry-system",
             "csrc",
             "--adjust-type",
@@ -122,8 +132,14 @@ def test_cli_accepts_phase6_industry_history_commands():
     assert backfill_args.start_date == "2024-05-27"
     assert backfill_args.end_date == "2024-05-31"
     assert backfill_args.max_dates == 2
+    assert backfill_args.frequency == "monthly"
     assert backfill_args.industry_system == "csrc"
     assert backfill_args.adjust_type == "hfq"
+
+    no_cache_args = build_parser().parse_args(
+        ["benchmark-industry-day", "--trade-date", "2024-05-31", "--no-cache"]
+    )
+    assert no_cache_args.use_cache is False
 
 
 def test_cli_accepts_phase4_action_commands():
@@ -385,6 +401,8 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
     import stock_research.cli as cli
 
     def fake_backfill_factor_daily_range(**kwargs):
+        assert kwargs["workers"] == 4
+        assert kwargs["skip_complete"] is True
         kwargs["progress"]({"event": "start", "trade_date": "2026-05-01", "index": 1, "total": 2})
         kwargs["progress"](
             {
@@ -425,6 +443,9 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
             "2026-05-01",
             "--end-date",
             "2026-05-02",
+            "--workers",
+            "4",
+            "--skip-complete",
         ],
     )
 

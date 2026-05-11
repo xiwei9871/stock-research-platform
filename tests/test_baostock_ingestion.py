@@ -4,6 +4,7 @@ from stock_research.loaders import baostock_ingestion
 class FakeConnection:
     def __init__(self):
         self.many_calls = []
+        self.execute_calls = []
 
 
 class _ConnectionContext:
@@ -19,6 +20,10 @@ class _ConnectionContext:
 
 def fake_execute_many(conn, sql, rows):
     conn.many_calls.append((sql, list(rows)))
+
+
+def fake_execute(conn, sql, params=None):
+    conn.execute_calls.append((sql, params))
 
 
 def test_normalize_industry_row_maps_baostock_code():
@@ -83,6 +88,74 @@ def test_upsert_industry_memberships(monkeypatch):
     assert "INSERT INTO core.industry_membership" in sql
     assert "ON CONFLICT" in sql
     assert rows[0][0] == "CN:SH:600000"
+
+
+def test_store_industry_snapshot_payload_writes_raw_cache(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(baostock_ingestion, "execute", fake_execute, raising=False)
+
+    digest = baostock_ingestion.store_industry_snapshot_payload(
+        conn,
+        "2024-05-31",
+        [{"code": "sh.600000", "industry": "J66货币金融服务"}],
+    )
+
+    sql, params = conn.execute_calls[0]
+    assert "INSERT INTO raw_baostock.industry_snapshot_payload" in sql
+    assert params["snapshot_date"] == "2024-05-31"
+    assert params["source_endpoint"] == "query_stock_industry"
+    assert params["row_count"] == 1
+    assert params["payload_hash"] == digest
+
+
+def test_load_cached_industry_snapshot_payload_returns_rows(monkeypatch):
+    conn = FakeConnection()
+
+    def fake_fetch_all(conn, sql, params=None):
+        assert "FROM raw_baostock.industry_snapshot_payload" in sql
+        assert params == ["2024-05-31", "query_stock_industry"]
+        return [{"payload": '[{"code":"sh.600000","industry":"J66货币金融服务"}]'}]
+
+    monkeypatch.setattr(baostock_ingestion, "fetch_all", fake_fetch_all, raising=False)
+
+    rows = baostock_ingestion.load_cached_industry_snapshot_payload(conn, "2024-05-31")
+
+    assert rows == [{"code": "sh.600000", "industry": "J66货币金融服务"}]
+
+
+def test_sync_industry_memberships_uses_cached_snapshot(monkeypatch):
+    conn = FakeConnection()
+    calls = []
+
+    monkeypatch.setattr(baostock_ingestion, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "load_cached_industry_snapshot_payload",
+        lambda opened, trade_date: [
+            {
+                "updateDate": "2026-05-04",
+                "code": "sh.600000",
+                "industry": "J66货币金融服务",
+                "industryClassification": "证监会行业分类",
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_industry_memberships",
+        lambda opened, rows: calls.append((opened, rows)) or len(rows),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: (_ for _ in ()).throw(AssertionError("should not call baostock")),
+    )
+
+    count = baostock_ingestion.sync_industry_memberships("2024-05-31", use_cache=True)
+
+    assert count == 1
+    assert calls[0][1][0]["start_date"] == "2024-05-31"
 
 
 def test_normalize_index_row_maps_market_bar():

@@ -449,6 +449,20 @@ CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload (
 CREATE INDEX IF NOT EXISTS idx_raw_baostock_daily_bar_payload_lookup
     ON raw_baostock.daily_bar_payload (adjust_type, trade_date, asset_id);
 
+CREATE TABLE IF NOT EXISTS raw_baostock.industry_snapshot_payload (
+    snapshot_date date NOT NULL,
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    row_count integer NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (snapshot_date, source_endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_baostock_industry_snapshot_date
+    ON raw_baostock.industry_snapshot_payload (snapshot_date, source_endpoint);
+
 CREATE TABLE IF NOT EXISTS ingest.batch_job (
     job_id text PRIMARY KEY,
     dataset text NOT NULL,

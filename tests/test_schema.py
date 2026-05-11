@@ -98,6 +98,13 @@ def test_research_extension_includes_raw_daily_bar_payload_table():
     assert "idx_raw_baostock_daily_bar_payload_lookup" in sql
 
 
+def test_research_extension_includes_raw_industry_snapshot_payload_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS raw_baostock.industry_snapshot_payload" in sql
+    assert "row_count integer NOT NULL" in sql
+    assert "idx_raw_baostock_industry_snapshot_date" in sql
+
+
 def test_research_extension_includes_phase4_action_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS market.adjustment_factor" in sql

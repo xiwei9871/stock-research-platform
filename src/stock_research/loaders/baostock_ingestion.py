@@ -1,11 +1,13 @@
 import re
+import json
 from typing import Any
 
 import baostock as bs
 
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many
+from stock_research.db import connect, execute, execute_many, fetch_all
+from stock_research.loaders.raw_payloads import canonical_json, payload_hash
 
 
 INDEX_TARGETS = {
@@ -22,6 +24,8 @@ INDEX_CONSTITUENT_TARGETS = {
     "CSI_300": bs.query_hs300_stocks,
     "CSI_500": bs.query_zz500_stocks,
 }
+
+INDUSTRY_SNAPSHOT_ENDPOINT = "query_stock_industry"
 
 
 def parse_float(value: Any) -> float | None:
@@ -108,6 +112,71 @@ def upsert_industry_memberships(conn, rows: list[dict[str, Any]]) -> int:
         ],
     )
     return len(rows)
+
+
+def store_industry_snapshot_payload(
+    conn,
+    snapshot_date: str,
+    rows: list[dict[str, Any]],
+) -> str:
+    payload = rows
+    digest = payload_hash(payload)
+    sql = """
+    INSERT INTO raw_baostock.industry_snapshot_payload (
+        snapshot_date,
+        source_endpoint,
+        request_params,
+        payload,
+        payload_hash,
+        row_count
+    )
+    VALUES (
+        %(snapshot_date)s,
+        %(source_endpoint)s,
+        %(request_params)s::jsonb,
+        %(payload)s::jsonb,
+        %(payload_hash)s,
+        %(row_count)s
+    )
+    ON CONFLICT (snapshot_date, source_endpoint) DO UPDATE SET
+        request_params = EXCLUDED.request_params,
+        payload = EXCLUDED.payload,
+        payload_hash = EXCLUDED.payload_hash,
+        row_count = EXCLUDED.row_count,
+        fetched_at = now()
+    """
+    execute(
+        conn,
+        sql,
+        {
+            "snapshot_date": snapshot_date,
+            "source_endpoint": INDUSTRY_SNAPSHOT_ENDPOINT,
+            "request_params": canonical_json({"date": snapshot_date}),
+            "payload": canonical_json(payload),
+            "payload_hash": digest,
+            "row_count": len(rows),
+        },
+    )
+    return digest
+
+
+def load_cached_industry_snapshot_payload(
+    conn,
+    snapshot_date: str,
+) -> list[dict[str, Any]] | None:
+    sql = """
+    SELECT payload
+    FROM raw_baostock.industry_snapshot_payload
+    WHERE snapshot_date = %s
+      AND source_endpoint = %s
+    """
+    rows = fetch_all(conn, sql, [snapshot_date, INDUSTRY_SNAPSHOT_ENDPOINT])
+    if not rows:
+        return None
+    payload = rows[0]["payload"]
+    if isinstance(payload, str):
+        return json.loads(payload)
+    return list(payload)
 
 
 def normalize_index_row(index_id: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -241,7 +310,19 @@ def _rows_from_result(rs) -> list[dict[str, str]]:
 def sync_industry_memberships(
     trade_date: str,
     service: str = SETTINGS.research_service,
+    use_cache: bool = True,
 ) -> int:
+    if use_cache:
+        with connect(service) as conn:
+            cached_rows = load_cached_industry_snapshot_payload(conn, trade_date)
+            if cached_rows is not None:
+                rows = [
+                    normalize_industry_row(row, effective_date=trade_date)
+                    for row in cached_rows
+                    if str(row.get("industry", "")).strip()
+                ]
+                return upsert_industry_memberships(conn, rows)
+
     login = bs.login()
     if login.error_code != "0":
         raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
@@ -251,12 +332,14 @@ def sync_industry_memberships(
             raise RuntimeError(
                 f"baostock industry query failed: {rs.error_code} {rs.error_msg}"
             )
+        raw_rows = _rows_from_result(rs)
         rows = [
             normalize_industry_row(row, effective_date=trade_date)
-            for row in _rows_from_result(rs)
+            for row in raw_rows
             if str(row.get("industry", "")).strip()
         ]
         with connect(service) as conn:
+            store_industry_snapshot_payload(conn, trade_date, raw_rows)
             return upsert_industry_memberships(conn, rows)
     finally:
         bs.logout()

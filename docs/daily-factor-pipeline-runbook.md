@@ -209,10 +209,13 @@ Build Phase 5 benchmark bars and point-in-time index constituent snapshots:
 Run a Phase 6 single-day benchmark before any industry-history range job:
 
 ```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research benchmark-industry-day --trade-date YYYY-MM-DD --industry-system csrc --adjust-type hfq --no-cache
 /Users/xiwei/stock_research/.venv/bin/stock-research benchmark-industry-day --trade-date YYYY-MM-DD --industry-system csrc --adjust-type hfq
-/Users/xiwei/stock_research/.venv/bin/stock-research backfill-industry-history --start-date YYYY-MM-DD --end-date YYYY-MM-DD --max-dates N --industry-system csrc --adjust-type hfq
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-industry-history --start-date YYYY-MM-DD --end-date YYYY-MM-DD --max-dates N --frequency monthly --industry-system csrc --adjust-type hfq
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date YYYY-MM-DD --end-date YYYY-MM-DD --require-industry-membership
 ```
+
+For a quick optimization comparison, run the same date twice: the first pass warms the raw industry snapshot cache, the second pass should be much faster. Use `--frequency monthly` to probe a longer window with far fewer remote calls before choosing a daily range.
 
 1. Refresh forward-return labels:
 
