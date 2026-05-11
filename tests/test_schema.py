@@ -83,6 +83,14 @@ def test_research_extension_includes_backfill_run_task_tables():
     assert "idx_ingest_backfill_task_run_status" in sql
 
 
+def test_research_extension_includes_calendar_and_lifecycle_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.trading_calendar" in sql
+    assert "CREATE TABLE IF NOT EXISTS core.asset_lifecycle_event" in sql
+    assert "idx_market_trading_calendar_open_date" in sql
+    assert "idx_core_asset_lifecycle_event_asset_date" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

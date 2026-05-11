@@ -934,3 +934,71 @@ def test_backfill_task_state_cli_prints_results(monkeypatch, capsys):
     )
     cli.main()
     assert capsys.readouterr().out.strip() == "backfill_task_stale_reset|daily-bars|2"
+
+
+def test_calendar_lifecycle_cli_accepts_commands():
+    calendar_args = build_parser().parse_args(
+        [
+            "seed-trading-calendar",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-01-31",
+            "--exchanges",
+            "SH,SZ",
+            "--source-version",
+            "derived_v1",
+        ]
+    )
+    assert calendar_args.command == "seed-trading-calendar"
+    assert calendar_args.exchanges == ["SH", "SZ"]
+
+    lifecycle_args = build_parser().parse_args(
+        ["sync-asset-lifecycle", "--source-version", "core_asset_master_v1"]
+    )
+    assert lifecycle_args.command == "sync-asset-lifecycle"
+
+
+def test_seed_trading_calendar_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "seed_trading_calendar_from_bars", lambda **kwargs: 44)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "seed-trading-calendar",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-01-31",
+            "--exchanges",
+            "SH,SZ",
+            "--source-version",
+            "derived_v1",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "trading_calendar_seeded|rows|44"
+
+
+def test_sync_asset_lifecycle_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "sync_asset_lifecycle_from_master", lambda **kwargs: 100)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "sync-asset-lifecycle", "--source-version", "core_asset_master_v1"],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "asset_lifecycle_synced|rows|100"

@@ -18,6 +18,10 @@ from stock_research.core_data import (
     sync_core_asset_master_for_service,
 )
 from stock_research.data_audit import format_audit_line, run_data_audit
+from stock_research.dimensions import (
+    seed_trading_calendar_from_bars,
+    sync_asset_lifecycle_from_master,
+)
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_backfill import backfill_factor_daily_range
@@ -99,6 +103,17 @@ def parse_factor_names(value: str) -> list[str]:
     return parts
 
 
+def parse_str_list(value: str, option_name: str) -> list[str]:
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(part == "" for part in parts):
+        raise argparse.ArgumentTypeError(f"{option_name} must not contain empty values")
+    return parts
+
+
+def parse_exchanges(value: str) -> list[str]:
+    return parse_str_list(value, "--exchanges")
+
+
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
     if total <= 0:
         return "[" + "-" * width + "]"
@@ -164,6 +179,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
+
+    seed_trading_calendar = subparsers.add_parser("seed-trading-calendar")
+    seed_trading_calendar.add_argument("--start-date", required=True)
+    seed_trading_calendar.add_argument("--end-date", required=True)
+    seed_trading_calendar.add_argument("--exchanges", type=parse_exchanges, required=True)
+    seed_trading_calendar.add_argument("--source-version", required=True)
+
+    sync_asset_lifecycle = subparsers.add_parser("sync-asset-lifecycle")
+    sync_asset_lifecycle.add_argument("--source-version", required=True)
 
     create_backfill = subparsers.add_parser("create-backfill-run")
     create_backfill.add_argument("--run-id", required=True)
@@ -440,6 +464,17 @@ def main() -> None:
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
+    elif args.command == "seed-trading-calendar":
+        count = seed_trading_calendar_from_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            exchanges=args.exchanges,
+            source_version=args.source_version,
+        )
+        print(f"trading_calendar_seeded|rows|{count}")
+    elif args.command == "sync-asset-lifecycle":
+        count = sync_asset_lifecycle_from_master(source_version=args.source_version)
+        print(f"asset_lifecycle_synced|rows|{count}")
     elif args.command == "create-backfill-run":
         result = create_backfill_run_for_service(
             run_id=args.run_id,

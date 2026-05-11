@@ -13,8 +13,10 @@ class AuditDataset:
 
 AUDIT_DATASETS: list[AuditDataset] = [
     AuditDataset("market_daily_bar", "market_daily_bar", "trade_date"),
+    AuditDataset("market.trading_calendar", "market.trading_calendar", "trade_date"),
     AuditDataset("label_snapshot", "label_snapshot", "trade_date"),
     AuditDataset("factor.factor_daily", "factor.factor_daily", "trade_date"),
+    AuditDataset("core.asset_lifecycle_event", "core.asset_lifecycle_event", "event_date"),
     AuditDataset("core.industry_membership", "core.industry_membership", "start_date"),
     AuditDataset("market.industry_daily_bar", "market.industry_daily_bar", "trade_date"),
     AuditDataset("finance.income_statement", "finance.income_statement", "report_period"),

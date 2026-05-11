@@ -226,6 +226,17 @@ CREATE TABLE IF NOT EXISTS core.asset_status_daily (
     PRIMARY KEY (trade_date, asset_id)
 );
 
+CREATE TABLE IF NOT EXISTS core.asset_lifecycle_event (
+    asset_id text NOT NULL,
+    event_date date NOT NULL,
+    event_type text NOT NULL,
+    event_value text,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, event_date, event_type, source_version)
+);
+
 CREATE TABLE IF NOT EXISTS core.industry_membership (
     asset_id text NOT NULL,
     industry_system text NOT NULL,
@@ -252,6 +263,16 @@ CREATE TABLE IF NOT EXISTS market.index_daily_bar (
     source text NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (index_id, trade_date)
+);
+
+CREATE TABLE IF NOT EXISTS market.trading_calendar (
+    exchange text NOT NULL,
+    trade_date date NOT NULL,
+    is_open boolean NOT NULL,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (exchange, trade_date, source_version)
 );
 
 CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
@@ -506,11 +527,17 @@ CREATE INDEX IF NOT EXISTS idx_finance_cash_flow_pit
 CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
     ON core.industry_membership (asset_id, industry_system, start_date, end_date);
 
+CREATE INDEX IF NOT EXISTS idx_core_asset_lifecycle_event_asset_date
+    ON core.asset_lifecycle_event (asset_id, event_date, event_type);
+
 CREATE INDEX IF NOT EXISTS idx_core_asset_status_daily_lookup
     ON core.asset_status_daily (trade_date, asset_id);
 
 CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
     ON market.index_daily_bar (trade_date, index_id);
+
+CREATE INDEX IF NOT EXISTS idx_market_trading_calendar_open_date
+    ON market.trading_calendar (exchange, is_open, trade_date);
 
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
     ON market.industry_daily_bar (trade_date, industry_system, industry_code);

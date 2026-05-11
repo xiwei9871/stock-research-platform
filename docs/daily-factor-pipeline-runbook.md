@@ -174,6 +174,14 @@ Use the Phase 1 backfill control plane to create and supervise long historical j
 /Users/xiwei/stock_research/.venv/bin/stock-research reset-stale-backfill-tasks --dataset daily-bars --older-than-minutes 60
 ```
 
+Seed Phase 2 dimensions before full-history dataset loaders depend on them:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research seed-trading-calendar --start-date 1990-12-01 --end-date YYYY-MM-DD --exchanges SH,SZ --source-version derived_market_daily_bar_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research sync-asset-lifecycle --source-version core_asset_master_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
+```
+
 1. Refresh forward-return labels:
 
 ```bash
