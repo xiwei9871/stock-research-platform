@@ -88,3 +88,15 @@ def manual_v1_config() -> dict:
         "factor_directions": factor_directions,
         "weights": weights,
     }
+
+
+def historical_research_start_date() -> str:
+    return "2024-01-01"
+
+
+def default_research_horizons() -> list[int]:
+    return [5, 10, 20, 60]
+
+
+def candidate_factor_names() -> list[str]:
+    return sorted(manual_v1_config()["factor_groups"].keys())
