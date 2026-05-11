@@ -287,3 +287,65 @@ def test_cli_main_runs_ingest_loop_and_prints_outputs(monkeypatch, capsys):
     assert calls[1][0] == "run_loop"
     assert calls[1][1] == "baostock-finance"
     assert calls[1][2]["jobs_per_round"] == 2
+
+
+def test_run_ingest_loop_notification_failure_does_not_abort(monkeypatch, capsys):
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "2",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--report-target",
+            "oc_group",
+        ],
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "run_ingest_loop_for_service",
+        lambda dataset, **kwargs: (
+            kwargs["report"](
+                {
+                    "dataset": "baostock-finance",
+                    "round": 1,
+                    "attempted": 2,
+                    "success": 2,
+                    "failed": 0,
+                    "rows_read": 100,
+                    "rows_written": 0,
+                    "status_counts": {"success": 2, "pending": 0},
+                    "recent_jobs": [],
+                    "done": True,
+                }
+            )
+            or {
+                "rounds": 1,
+                "attempted": 2,
+                "success": 2,
+                "failed": 0,
+                "done": True,
+            }
+        ),
+    )
+
+    def boom(**kwargs):
+        raise RuntimeError("feishu down")
+
+    monkeypatch.setattr(cli, "send_openclaw_feishu_message", boom)
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert "ingest_loop_rounds|1" in captured.out
+    assert "ingest_loop_done|True" in captured.out
+    assert "ingest_loop_report_failed|RuntimeError|feishu down" in captured.err

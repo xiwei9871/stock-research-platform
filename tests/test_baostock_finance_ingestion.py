@@ -133,6 +133,11 @@ def test_upsert_finance_rows(monkeypatch):
     assert rows[0][0] == "CN:SH:600000"
 
 
+def test_quarter_end_date_maps_standard_quarters():
+    assert baostock_finance_ingestion.quarter_end_date(1993, 1) == "1993-03-31"
+    assert baostock_finance_ingestion.quarter_end_date(1993, 4) == "1993-12-31"
+
+
 def test_slice_baostock_codes_supports_offset_and_limit(monkeypatch):
     class FakeConn:
         pass
@@ -140,7 +145,7 @@ def test_slice_baostock_codes_supports_offset_and_limit(monkeypatch):
     monkeypatch.setattr(
         baostock_finance_ingestion,
         "fetch_all",
-        lambda conn, sql: [
+        lambda conn, sql, params=None: [
             {"baostock_code": "sh.600000"},
             {"baostock_code": "sh.600004"},
             {"baostock_code": "sh.600006"},
@@ -154,3 +159,64 @@ def test_slice_baostock_codes_supports_offset_and_limit(monkeypatch):
     )
 
     assert codes == ["sh.600004"]
+
+
+def test_baostock_codes_can_filter_by_historical_universe(monkeypatch):
+    class FakeConn:
+        pass
+
+    captured = {}
+
+    def fake_fetch_all(conn, sql, params=None):
+        captured['sql'] = sql
+        captured['params'] = params
+        return [
+            {"baostock_code": "sh.600000"},
+            {"baostock_code": "sz.000001"},
+        ]
+
+    monkeypatch.setattr(
+        baostock_finance_ingestion,
+        "fetch_all",
+        fake_fetch_all,
+    )
+
+    codes = baostock_finance_ingestion._baostock_codes(
+        FakeConn(),
+        year=1993,
+        quarter=4,
+    )
+
+    assert codes == ["sh.600000", "sz.000001"]
+    assert captured['params'] == ['1993-12-31', '1993-12-31']
+    assert 'list_date IS NULL OR list_date <= %s' in captured['sql']
+    assert 'delist_date IS NULL OR delist_date >= %s' in captured['sql']
+
+
+def test_sync_finance_for_period_short_circuits_when_no_codes(monkeypatch):
+    monkeypatch.setattr(baostock_finance_ingestion, "connect", lambda service: (_ for _ in ()).throw(AssertionError("connect should not be called again")))
+    monkeypatch.setattr(
+        baostock_finance_ingestion,
+        "_baostock_codes",
+        lambda conn, limit, offset, year=None, quarter=None: [],
+    )
+
+    class DummyContext:
+        def __enter__(self):
+            return object()
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    calls = []
+    monkeypatch.setattr(baostock_finance_ingestion, "connect", lambda service: DummyContext())
+    monkeypatch.setattr(baostock_finance_ingestion.bs, "login", lambda: calls.append("login") or None)
+
+    result = baostock_finance_ingestion.sync_finance_for_period(1993, 4, limit=50, offset=2050)
+
+    assert result == {
+        "indicator_quarter": 0,
+        "income_statement": 0,
+        "share_capital_event": 0,
+        "queried_assets": 0,
+    }
+    assert calls == []

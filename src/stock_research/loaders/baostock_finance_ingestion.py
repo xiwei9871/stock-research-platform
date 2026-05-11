@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Any
 
 import baostock as bs
@@ -275,19 +276,65 @@ def _query_rows(func, code: str, year: int, quarter: int) -> list[dict[str, str]
     return _rows_from_result(rs)
 
 
+def quarter_end_date(year: int, quarter: int) -> str:
+    mapping = {
+        1: f"{year}-03-31",
+        2: f"{year}-06-30",
+        3: f"{year}-09-30",
+        4: f"{year}-12-31",
+    }
+    if quarter not in mapping:
+        raise ValueError(f"Unsupported quarter: {quarter}")
+    return mapping[quarter]
+
+
+@lru_cache(maxsize=256)
+def available_baostock_codes_on(date_str: str) -> set[str]:
+    login = bs.login()
+    if login.error_code != "0":
+        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+    try:
+        rs = bs.query_all_stock(date_str)
+        if rs.error_code != "0":
+            raise RuntimeError(
+                f"baostock all stock query failed for {date_str}: "
+                f"{rs.error_code} {rs.error_msg}"
+            )
+        codes = set()
+        while rs.next():
+            code = str(rs.get_row_data()[0])
+            if code.startswith(("sh.", "sz.")) and code[3:6] not in {"000", "399"}:
+                codes.add(code)
+        return codes
+    finally:
+        bs.logout()
+
+
 def _baostock_codes(
     conn,
     limit: int | None = None,
     offset: int = 0,
+    *,
+    year: int | None = None,
+    quarter: int | None = None,
 ) -> list[str]:
-    sql = """
+    filters = [
+        "baostock_code IS NOT NULL",
+        "exchange IN ('SH', 'SZ')",
+    ]
+    params: list[Any] = []
+    if year is not None and quarter is not None:
+        filters.append("(list_date IS NULL OR list_date <= %s)")
+        params.append(quarter_end_date(year, quarter))
+        filters.append("(delist_date IS NULL OR delist_date >= %s)")
+        params.append(quarter_end_date(year, quarter))
+    sql = f"""
     SELECT baostock_code
     FROM core.asset_master
-    WHERE baostock_code IS NOT NULL
-      AND exchange IN ('SH', 'SZ')
+    WHERE {' AND '.join(filters)}
     ORDER BY asset_id
     """
-    rows = fetch_all(conn, sql)
+    rows = fetch_all(conn, sql, params)
     codes = [row["baostock_code"] for row in rows]
     sliced = codes[offset:]
     return sliced[:limit] if limit is not None else sliced
@@ -302,7 +349,15 @@ def sync_finance_for_period(
     service: str = SETTINGS.research_service,
 ) -> dict[str, int]:
     with connect(service) as conn:
-        codes = _baostock_codes(conn, limit, offset)
+        codes = _baostock_codes(conn, limit, offset, year=year, quarter=quarter)
+
+    if not codes:
+        return {
+            "indicator_quarter": 0,
+            "income_statement": 0,
+            "share_capital_event": 0,
+            "queried_assets": 0,
+        }
 
     login = bs.login()
     if login.error_code != "0":

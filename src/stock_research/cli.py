@@ -1,4 +1,5 @@
 import argparse
+import sys
 from uuid import uuid4
 
 from stock_research.assets import sync_asset_master
@@ -566,13 +567,20 @@ def main() -> None:
         def report(summary: dict) -> None:
             message = format_ingest_loop_report(summary)
             print(message, flush=True)
-            send_openclaw_feishu_message(
-                message=message,
-                target=args.report_target,
-                account=args.report_account,
-                openclaw_bin=args.openclaw_bin,
-                dry_run=args.report_dry_run,
-            )
+            try:
+                send_openclaw_feishu_message(
+                    message=message,
+                    target=args.report_target,
+                    account=args.report_account,
+                    openclaw_bin=args.openclaw_bin,
+                    dry_run=args.report_dry_run,
+                )
+            except Exception as exc:
+                print(
+                    f"ingest_loop_report_failed|{exc.__class__.__name__}|{exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
         result = run_ingest_loop_for_service(
             args.dataset,

@@ -272,7 +272,7 @@ def test_format_ingest_loop_report_includes_round_and_status():
             "failed": 1,
             "rows_read": 2500,
             "rows_written": 12,
-            "status_counts": {"success": 169, "pending": 14807, "failed": 1},
+            "status_counts": {"success": 169, "pending": 14807, "failed": 1, "skipped": 12},
             "recent_jobs": [
                 {
                     "job_id": "baostock-finance:1990Q2:offset3200:limit50",
@@ -291,6 +291,7 @@ def test_format_ingest_loop_report_includes_round_and_status():
     assert "本轮尝试: 50" in message
     assert "本轮失败: 1" in message
     assert "pending: 14807" in message
+    assert "skipped: 12" in message
     assert "offset3200" in message
     assert "结论: 本轮完成，但存在失败批次，可继续重试" in message
 

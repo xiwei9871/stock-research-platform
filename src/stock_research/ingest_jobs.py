@@ -359,6 +359,7 @@ def format_ingest_loop_report(summary: dict[str, Any]) -> str:
         f"pending: {int(counts.get('pending', 0))}",
         f"failed: {int(counts.get('failed', 0))}",
         f"running: {int(counts.get('running', 0))}",
+        f"skipped: {int(counts.get('skipped', 0))}",
         "",
         "最近批次:",
     ]
