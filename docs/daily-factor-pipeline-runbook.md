@@ -150,25 +150,55 @@ from stock_research.reports.daily_research_cron import build_daily_research_cron
 print(build_daily_research_cron_entry())
 ```
 
-## Historical Research Loop
+## Historical Approved-Factor Research Loop
 
-1. Backfill historical factor rows:
+Use this flow when testing factor effectiveness. `factor.factor_daily` stores candidate factors. A stored factor is not effective until `factor.factor_approval` records `status='approved'` for the target score version.
 
-```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --start-date YYYY-MM-DD --end-date YYYY-MM-DD --lookback-bars 130 --industry-system csrc
-```
-
-2. Confirm label coverage for the same range before gate evaluation.
-
-3. Batch evaluate candidate factors:
+1. Refresh forward-return labels:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+MARKET_END_DATE=$(date +%F)
+/Users/xiwei/stock_research/.venv/bin/stock-research labels --end-date "$MARKET_END_DATE"
 ```
 
-4. Score with approved factors only after approvals exist.
+2. Find the latest label-covered end date and check coverage:
 
-5. Run TopN research workflow and compare the tear sheet before changing daily report usage.
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --horizons 5,10,20,60 --min-label-dates 20
+```
+
+3. Capture the label-covered end date and backfill all current candidate factors:
+
+```bash
+END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --horizons 5,10,20,60 --min-label-dates 20 | awk -F'|' '/latest_common_label_date/ {print $3}')
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --start-date 2024-01-01 --end-date "$END_DATE" --lookback-bars 130 --industry-system csrc
+```
+
+4. Re-run preflight with the same end date:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --end-date "$END_DATE" --horizons 5,10,20,60 --min-label-dates 20
+```
+
+5. Batch evaluate default candidate factors:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 2024-01-01 --end-date "$END_DATE" --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+```
+
+6. Score the historical range with approved factors only from Python until a dedicated CLI command is added:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -c "from stock_research.approved_scoring_workflow import score_approved_factors_range; result = score_approved_factors_range('2024-01-01', '$END_DATE', score_version='manual_v1'); print(result.to_string(index=False)); print('approved_score_rows|' + str(int(result['score_rows'].sum()) if not result.empty else 0))"
+```
+
+7. Run TopN research workflow on approved-only scores:
+
+```bash
+cd /Users/xiwei/stock_research
+.venv/bin/python -m stock_research.research_workflow_cli --start-date 2024-01-01 --end-date "$END_DATE" --score-version manual_v1 --top-n 20 --rebalance-frequency weekly --transaction-cost-bps 10 --max-positions 20 --strategy-id approved_topn_weekly_v1
+```
 
 ## Expected Outputs
 
