@@ -31,7 +31,11 @@ from stock_research.industry_history import (
     benchmark_industry_day,
     run_industry_history_range,
 )
-from stock_research.features import compute_and_store_p0_features
+from stock_research.features import (
+    compute_and_store_p0_features,
+    compute_and_store_p0_features_range,
+    derive_feature_backfill_window,
+)
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_backfill import (
     backfill_factor_daily_range,
@@ -333,6 +337,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     features = subparsers.add_parser("features")
     features.add_argument("--trade-date", required=True)
+
+    backfill_features = subparsers.add_parser("backfill-features")
+    backfill_features.add_argument("--start-date")
+    backfill_features.add_argument("--end-date")
+    backfill_features.add_argument("--lookback-bars", type=int, default=120)
+    backfill_features.add_argument("--adjust-type", default="hfq")
+    backfill_features.add_argument("--workers", type=int, default=1)
+    backfill_features.add_argument("--skip-complete", action="store_true")
 
     labels = subparsers.add_parser("labels")
     labels.add_argument("--end-date", required=True)
@@ -1031,6 +1043,28 @@ def main() -> None:
             )
     elif args.command == "features":
         print(f"features_stored|{compute_and_store_p0_features(args.trade_date)}")
+    elif args.command == "backfill-features":
+        window = derive_feature_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+        )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("feature_backfill|dates|0")
+            print("feature_backfill|rows|0")
+            return
+        result = compute_and_store_p0_features_range(
+            start_date=str(window["start_date"]),
+            end_date=str(window["end_date"]),
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+        )
+        total = int(result["feature_rows"].sum()) if not result.empty else 0
+        print(f"feature_backfill|dates|{len(result)}")
+        print(f"feature_backfill|rows|{total}")
     elif args.command == "labels":
         print(f"labels_stored|{compute_and_store_labels(args.end_date)}")
     elif args.command == "backfill-labels":

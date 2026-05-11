@@ -242,7 +242,13 @@ Phase 7 finance factors must use only rows with `announcement_date <= trade_date
 /Users/xiwei/stock_research/.venv/bin/stock-research backfill-labels --horizons 5,10,20,60
 ```
 
-2. Find the latest label-covered end date. When `--start-date` is omitted, preflight derives the start from `market_daily_bar` coverage rather than the old 2024 smoke-test slice:
+2. Refresh full-history P0 feature snapshots from the derived market window:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-features --lookback-bars 120 --skip-complete --workers 4
+```
+
+3. Find the latest label-covered end date. When `--start-date` is omitted, preflight derives the start from `market_daily_bar` coverage rather than the old 2024 smoke-test slice:
 
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --horizons 5,10,20,60 --min-label-dates 20
@@ -251,14 +257,14 @@ Phase 7 finance factors must use only rows with `announcement_date <= trade_date
 Before candidate factors are backfilled, this command may print `research_preflight|coverage|blocked|factor_dates|0`.
 That is expected for a fresh historical range. In this step, use only `research_preflight|latest_common_label_date|...` to choose `END_DATE`.
 
-3. Capture the label-covered end date and backfill all current candidate factors:
+4. Capture the label-covered end date and backfill all current candidate factors:
 
 ```bash
 END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --horizons 5,10,20,60 --min-label-dates 20 | awk -F'|' '/latest_common_label_date/ {print $3}')
 /Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --end-date "$END_DATE" --lookback-bars 130 --industry-system csrc --skip-complete --workers 4
 ```
 
-4. Re-run preflight with the same end date and require candidate-factor coverage:
+5. Re-run preflight with the same end date and require candidate-factor coverage:
 
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --end-date "$END_DATE" --horizons 5,10,20,60 --min-label-dates 20
@@ -267,7 +273,7 @@ END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflig
 
 At this point, `research_preflight|coverage|ok|...` is required before factor-gate evaluation.
 
-5. Batch evaluate default candidate factors:
+6. Batch evaluate default candidate factors:
 
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 1990-12-01 --end-date "$END_DATE" --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1

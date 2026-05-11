@@ -22,6 +22,26 @@ def test_cli_accepts_build_factor_daily_command():
     assert args.industry_system == "csrc"
 
 
+def test_cli_accepts_backfill_feature_daily_command():
+    args = build_parser().parse_args(
+        [
+            "backfill-features",
+            "--lookback-bars",
+            "130",
+            "--workers",
+            "4",
+            "--skip-complete",
+        ]
+    )
+
+    assert args.command == "backfill-features"
+    assert args.start_date is None
+    assert args.end_date is None
+    assert args.lookback_bars == 130
+    assert args.workers == 4
+    assert args.skip_complete is True
+
+
 def test_cli_accepts_backfill_factor_daily_command():
     args = build_parser().parse_args(
         [
@@ -1014,6 +1034,62 @@ def test_backfill_factor_daily_cli_uses_derived_window(monkeypatch, capsys):
     assert capsys.readouterr().out.splitlines()[-2:] == [
         "factor_daily_backfill|dates|1",
         "factor_daily_backfill|rows|1",
+    ]
+
+
+def test_backfill_features_cli_uses_derived_window(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "derive_feature_backfill_window",
+        lambda **kwargs: calls.append(("window", kwargs))
+        or {
+            "start_date": "1991-06-20",
+            "end_date": "2026-05-08",
+            "date_count": 8071,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "compute_and_store_p0_features_range",
+        lambda **kwargs: calls.append(("backfill", kwargs))
+        or __import__("pandas").DataFrame(
+            [{"trade_date": "1991-06-20", "feature_rows": 8}]
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-features",
+            "--workers",
+            "4",
+            "--skip-complete",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0] == (
+        "window",
+        {
+            "start_date": None,
+            "end_date": None,
+            "lookback_bars": 120,
+            "adjust_type": "hfq",
+        },
+    )
+    assert calls[1][0] == "backfill"
+    assert calls[1][1]["start_date"] == "1991-06-20"
+    assert calls[1][1]["end_date"] == "2026-05-08"
+    assert capsys.readouterr().out.splitlines() == [
+        "feature_backfill|dates|1",
+        "feature_backfill|rows|8",
     ]
 
 
