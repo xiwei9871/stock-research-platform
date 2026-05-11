@@ -15,3 +15,10 @@ def test_candidate_factor_names_include_current_pipeline_outputs():
     assert "gtja191_amount_momentum_5_10" in names
     assert "qlib_ret_5" in names
     assert len(names) == len(set(names))
+
+
+def test_factor_availability_metadata_covers_candidate_factors():
+    metadata = factor_config.factor_availability_metadata()
+
+    assert set(metadata) == set(factor_config.candidate_factor_names())
+    assert metadata["ret_20"] == {"start_date": None, "reason": "available_full_window"}

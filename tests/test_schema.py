@@ -287,6 +287,22 @@ def test_cli_accepts_ingest_batch_commands():
     assert loop_args.workers == 2
     assert loop_args.report_dry_run is True
 
+    label_args = build_parser().parse_args(
+        [
+            "backfill-labels",
+            "--horizons",
+            "5,20,60",
+            "--start-date",
+            "1990-12-19",
+            "--end-date",
+            "2026-05-08",
+        ]
+    )
+    assert label_args.command == "backfill-labels"
+    assert label_args.horizons == [5, 20, 60]
+    assert label_args.start_date == "1990-12-19"
+    assert label_args.end_date == "2026-05-08"
+
 
 def test_format_progress_bar():
     assert format_progress_bar(0, 10, width=10) == "[----------]"

@@ -183,6 +183,47 @@ def test_check_factor_label_coverage_blocks_small_label_samples(monkeypatch):
     assert "insufficient_label_dates" in result["reasons"]
 
 
+def test_check_factor_label_coverage_skips_late_start_factors(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append((sql, params))
+        if "factor.factor_daily" in sql:
+            return [
+                {
+                    "min_date": "2026-01-02",
+                    "max_date": "2026-01-30",
+                    "date_count": 3,
+                    "complete_date_count": 3,
+                }
+            ]
+        return [
+            {"horizon": 5, "min_date": "2026-01-02", "max_date": "2026-01-30", "date_count": 20},
+            {"horizon": 10, "min_date": "2026-01-02", "max_date": "2026-01-30", "date_count": 20},
+        ]
+
+    monkeypatch.setattr(research_preflight, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(research_preflight, "fetch_all", fake_fetch_all)
+
+    result = research_preflight.check_factor_label_coverage(
+        factor_names=["ret_20", "late_factor"],
+        start_date="2026-01-01",
+        end_date="2026-01-30",
+        horizons=[5, 10],
+        min_label_dates=2,
+        factor_availability={
+            "ret_20": {"start_date": None, "reason": "available_full_window"},
+            "late_factor": {"start_date": "2026-01-15", "reason": "late_source"},
+        },
+    )
+
+    assert result["status"] == "ok"
+    assert result["factor_date_count"] == 3
+    assert result["factor_complete_date_count"] == 3
+    assert result["unavailable_factor_names"] == ["late_factor"]
+    assert calls[0][1][1] == ["ret_20"]
+
+
 def test_check_industry_membership_coverage_blocks_missing_memberships(monkeypatch):
     calls = []
 

@@ -1,5 +1,24 @@
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_config import factor_availability_metadata
+
+
+def _available_factor_names_for_window(
+    factor_names: list[str],
+    start_date: str,
+    end_date: str,
+    metadata: dict[str, dict[str, str | None]],
+) -> tuple[list[str], list[str]]:
+    available = []
+    unavailable = []
+    for name in factor_names:
+        item = metadata.get(name, {"start_date": None})
+        factor_start = item.get("start_date")
+        if factor_start is not None and str(factor_start)[:10] > start_date:
+            unavailable.append(name)
+        else:
+            available.append(name)
+    return available, unavailable
 
 
 def find_latest_common_label_date(
@@ -46,11 +65,21 @@ def check_factor_label_coverage(
     calc_version: str = "v1",
     min_label_dates: int = 20,
     service: str = SETTINGS.research_service,
+    factor_availability: dict[str, dict[str, str | None]] | None = None,
 ) -> dict:
     if not factor_names:
         raise ValueError("factor_names must not be empty")
     if not horizons:
         raise ValueError("horizons must not be empty")
+    metadata = factor_availability or factor_availability_metadata()
+    required_factor_names, unavailable_factor_names = _available_factor_names_for_window(
+        factor_names,
+        start_date,
+        end_date,
+        metadata,
+    )
+    if not required_factor_names:
+        raise ValueError("no factor_names are available for the requested window")
 
     factor_sql = """
         SELECT min_date, max_date, date_count, complete_date_count
@@ -86,7 +115,13 @@ def check_factor_label_coverage(
         factor_rows = fetch_all(
             conn,
             factor_sql,
-            [len(factor_names), factor_names, calc_version, start_date, end_date],
+            [
+                len(required_factor_names),
+                required_factor_names,
+                calc_version,
+                start_date,
+                end_date,
+            ],
         )
         label_rows = fetch_all(conn, label_sql, [horizons, start_date, end_date])
 
@@ -121,6 +156,8 @@ def check_factor_label_coverage(
         "label_horizons": label_horizons,
         "missing_horizons": missing_horizons,
         "short_label_horizons": short_label_horizons,
+        "unavailable_factor_names": unavailable_factor_names,
+        "required_factor_names": required_factor_names,
         "min_label_dates": min_label_dates,
     }
 

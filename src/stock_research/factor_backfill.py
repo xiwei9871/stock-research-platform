@@ -8,6 +8,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
 from stock_research.factor_pipeline import build_and_store_factor_daily
+from stock_research.research_windows import derive_feature_window, load_market_date_bounds
 
 
 def build_trade_date_range(start_date: str, end_date: str) -> list[str]:
@@ -58,6 +59,27 @@ def load_complete_factor_dates(
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [start_date, end_date, version, expected])
     return {str(row["trade_date"])[:10] for row in rows}
+
+
+def derive_factor_backfill_window(
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lookback_bars: int = 130,
+    industry_system: str = "csrc",
+    adjust_type: str = "hfq",
+) -> dict[str, str | int | None]:
+    bounds = load_market_date_bounds(adjust_type=adjust_type)
+    window_start = start_date or bounds["start_date"]
+    window_end = end_date or bounds["end_date"]
+    if window_start is None or window_end is None:
+        return {"start_date": None, "end_date": None, "date_count": 0}
+    return derive_feature_window(
+        start_date=str(window_start),
+        end_date=str(window_end),
+        lookback_bars=lookback_bars,
+        adjust_type=adjust_type,
+    )
 
 
 def _build_factor_daily_for_task(

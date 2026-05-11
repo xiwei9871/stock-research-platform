@@ -100,3 +100,10 @@ def default_research_horizons() -> list[int]:
 
 def candidate_factor_names() -> list[str]:
     return sorted(manual_v1_config()["factor_groups"].keys())
+
+
+def factor_availability_metadata() -> dict[str, dict[str, str | None]]:
+    return {
+        name: {"start_date": None, "reason": "available_full_window"}
+        for name in candidate_factor_names()
+    }

@@ -33,7 +33,10 @@ from stock_research.industry_history import (
 )
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
-from stock_research.factor_backfill import backfill_factor_daily_range
+from stock_research.factor_backfill import (
+    backfill_factor_daily_range,
+    derive_factor_backfill_window,
+)
 from stock_research.factor_config import candidate_factor_names
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
@@ -56,7 +59,7 @@ from stock_research.ingest_jobs import (
     run_ingest_loop_for_service,
     run_ingest_jobs_for_service,
 )
-from stock_research.labels import compute_and_store_labels
+from stock_research.labels import compute_and_store_labels, derive_label_backfill_window
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
     sync_index_constituents,
@@ -334,6 +337,16 @@ def build_parser() -> argparse.ArgumentParser:
     labels = subparsers.add_parser("labels")
     labels.add_argument("--end-date", required=True)
 
+    backfill_labels = subparsers.add_parser("backfill-labels")
+    backfill_labels.add_argument("--start-date")
+    backfill_labels.add_argument("--end-date")
+    backfill_labels.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    backfill_labels.add_argument("--adjust-type", default="hfq")
+
     select = subparsers.add_parser("select")
     select.add_argument("--trade-date", required=True)
     select.add_argument("--top-n", type=int, default=20)
@@ -455,8 +468,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
-    backfill_factor_daily.add_argument("--start-date", required=True)
-    backfill_factor_daily.add_argument("--end-date", required=True)
+    backfill_factor_daily.add_argument("--start-date")
+    backfill_factor_daily.add_argument("--end-date")
     backfill_factor_daily.add_argument("--lookback-bars", type=int, default=130)
     backfill_factor_daily.add_argument("--industry-system", default="csrc")
     backfill_factor_daily.add_argument("--workers", type=int, default=1)
@@ -714,9 +727,19 @@ def main() -> None:
                     f"covered_rows|{industry['covered_rows']}|missing_rows|{industry['missing_rows']}"
                 )
     elif args.command == "backfill-factor-daily":
-        result = backfill_factor_daily_range(
+        window = derive_factor_backfill_window(
             start_date=args.start_date,
             end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            industry_system=args.industry_system,
+        )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("factor_daily_backfill|dates|0")
+            print("factor_daily_backfill|rows|0")
+            return
+        result = backfill_factor_daily_range(
+            start_date=str(window["start_date"]),
+            end_date=str(window["end_date"]),
             lookback_bars=args.lookback_bars,
             industry_system=args.industry_system,
             workers=args.workers,
@@ -1010,6 +1033,26 @@ def main() -> None:
         print(f"features_stored|{compute_and_store_p0_features(args.trade_date)}")
     elif args.command == "labels":
         print(f"labels_stored|{compute_and_store_labels(args.end_date)}")
+    elif args.command == "backfill-labels":
+        window = derive_label_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=args.horizons,
+            adjust_type=args.adjust_type,
+        )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("labels_backfill|dates|0")
+            print("labels_backfill|rows|0")
+            return
+        count = compute_and_store_labels(
+            str(window["end_date"]),
+            start_date=str(window["start_date"]),
+            horizons=args.horizons,
+        )
+        print(f"labels_backfill|start_date|{window['start_date']}")
+        print(f"labels_backfill|end_date|{window['end_date']}")
+        print(f"labels_backfill|dates|{window['date_count']}")
+        print(f"labels_backfill|rows|{count}")
     elif args.command == "select":
         selections = generate_selection(args.trade_date, args.top_n)
         print(f"selection_stored|{store_selection(selections)}")

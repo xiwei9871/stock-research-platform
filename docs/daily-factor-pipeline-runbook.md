@@ -236,17 +236,16 @@ After the smoke job writes balance-sheet and cash-flow rows without source error
 
 Phase 7 finance factors must use only rows with `announcement_date <= trade_date`; use the TTM helpers in `stock_research.services.finance_ttm` for cumulative income-statement fields.
 
-1. Refresh forward-return labels:
+1. Refresh full-history forward-return labels from the derived market window:
 
 ```bash
-MARKET_END_DATE=$(date +%F)
-/Users/xiwei/stock_research/.venv/bin/stock-research labels --end-date "$MARKET_END_DATE"
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-labels --horizons 5,10,20,60
 ```
 
-2. Find the latest label-covered end date:
+2. Find the latest label-covered end date. When `--start-date` is omitted, preflight derives the start from `market_daily_bar` coverage rather than the old 2024 smoke-test slice:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --horizons 5,10,20,60 --min-label-dates 20
+/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --horizons 5,10,20,60 --min-label-dates 20
 ```
 
 Before candidate factors are backfilled, this command may print `research_preflight|coverage|blocked|factor_dates|0`.
@@ -255,14 +254,15 @@ That is expected for a fresh historical range. In this step, use only `research_
 3. Capture the label-covered end date and backfill all current candidate factors:
 
 ```bash
-END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --horizons 5,10,20,60 --min-label-dates 20 | awk -F'|' '/latest_common_label_date/ {print $3}')
-/Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --start-date 2024-01-01 --end-date "$END_DATE" --lookback-bars 130 --industry-system csrc
+END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --horizons 5,10,20,60 --min-label-dates 20 | awk -F'|' '/latest_common_label_date/ {print $3}')
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --end-date "$END_DATE" --lookback-bars 130 --industry-system csrc --skip-complete --workers 4
 ```
 
 4. Re-run preflight with the same end date and require candidate-factor coverage:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --end-date "$END_DATE" --horizons 5,10,20,60 --min-label-dates 20
+/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --end-date "$END_DATE" --horizons 5,10,20,60 --min-label-dates 20
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
 ```
 
 At this point, `research_preflight|coverage|ok|...` is required before factor-gate evaluation.
@@ -270,14 +270,14 @@ At this point, `research_preflight|coverage|ok|...` is required before factor-ga
 5. Batch evaluate default candidate factors:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 2024-01-01 --end-date "$END_DATE" --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 1990-12-01 --end-date "$END_DATE" --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
 ```
 
 6. Score the historical range with approved factors only from Python until a dedicated CLI command is added:
 
 ```bash
 cd /Users/xiwei/stock_research
-.venv/bin/python -c "from stock_research.approved_scoring_workflow import score_approved_factors_range; result = score_approved_factors_range('2024-01-01', '$END_DATE', score_version='manual_v1'); print(result.to_string(index=False)); print('approved_score_rows|' + str(int(result['score_rows'].sum()) if not result.empty else 0))"
+.venv/bin/python -c "from stock_research.approved_scoring_workflow import score_approved_factors_range; result = score_approved_factors_range('1990-12-01', '$END_DATE', score_version='manual_v1'); print(result.to_string(index=False)); print('approved_score_rows|' + str(int(result['score_rows'].sum()) if not result.empty else 0))"
 ```
 
 7. Run TopN research workflow on approved-only scores:

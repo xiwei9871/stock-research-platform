@@ -26,10 +26,6 @@ def test_cli_accepts_backfill_factor_daily_command():
     args = build_parser().parse_args(
         [
             "backfill-factor-daily",
-            "--start-date",
-            "2026-05-01",
-            "--end-date",
-            "2026-05-10",
             "--lookback-bars",
             "130",
             "--industry-system",
@@ -43,8 +39,8 @@ def test_cli_accepts_backfill_factor_daily_command():
     )
 
     assert args.command == "backfill-factor-daily"
-    assert args.start_date == "2026-05-01"
-    assert args.end_date == "2026-05-10"
+    assert args.start_date is None
+    assert args.end_date is None
     assert args.lookback_bars == 130
     assert args.industry_system == "csrc"
     assert args.workers == 4
@@ -433,6 +429,15 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
         )
 
     monkeypatch.setattr(cli, "backfill_factor_daily_range", fake_backfill_factor_daily_range)
+    monkeypatch.setattr(
+        cli,
+        "derive_factor_backfill_window",
+        lambda **kwargs: {
+            "start_date": kwargs["start_date"],
+            "end_date": kwargs["end_date"],
+            "date_count": 2,
+        },
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -897,6 +902,119 @@ def test_research_preflight_cli_rejects_invalid_factor_names():
     for value in ("", ",", "ret_20,,qlib_ret_5"):
         with pytest.raises(SystemExit):
             build_parser().parse_args(["research-preflight", "--factor-names", value])
+
+
+def test_backfill_labels_cli_uses_derived_window(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "derive_label_backfill_window",
+        lambda **kwargs: calls.append(("window", kwargs))
+        or {
+            "start_date": "1990-12-19",
+            "end_date": "2026-02-01",
+            "date_count": 8140,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "compute_and_store_labels",
+        lambda end_date, start_date=None, horizons=None: calls.append(
+            ("labels", end_date, start_date, horizons)
+        )
+        or 123,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-labels",
+            "--horizons",
+            "5,20,60",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        (
+            "window",
+            {
+                "start_date": None,
+                "end_date": None,
+                "horizons": [5, 20, 60],
+                "adjust_type": "hfq",
+            },
+        ),
+        ("labels", "2026-02-01", "1990-12-19", [5, 20, 60]),
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "labels_backfill|start_date|1990-12-19",
+        "labels_backfill|end_date|2026-02-01",
+        "labels_backfill|dates|8140",
+        "labels_backfill|rows|123",
+    ]
+
+
+def test_backfill_factor_daily_cli_uses_derived_window(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "derive_factor_backfill_window",
+        lambda **kwargs: calls.append(("window", kwargs))
+        or {
+            "start_date": "1991-06-20",
+            "end_date": "2026-05-08",
+            "date_count": 8071,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "backfill_factor_daily_range",
+        lambda **kwargs: calls.append(("backfill", kwargs))
+        or __import__("pandas").DataFrame(
+            [{"trade_date": "1991-06-20", "factor_rows": 1}]
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-factor-daily",
+            "--workers",
+            "4",
+            "--skip-complete",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0] == (
+        "window",
+        {
+            "start_date": None,
+            "end_date": None,
+            "lookback_bars": 130,
+            "industry_system": "csrc",
+        },
+    )
+    assert calls[1][0] == "backfill"
+    assert calls[1][1]["start_date"] == "1991-06-20"
+    assert calls[1][1]["end_date"] == "2026-05-08"
+    assert capsys.readouterr().out.splitlines()[-2:] == [
+        "factor_daily_backfill|dates|1",
+        "factor_daily_backfill|rows|1",
+    ]
 
 
 def test_reset_stale_ingest_jobs_cli_prints_count(monkeypatch, capsys):

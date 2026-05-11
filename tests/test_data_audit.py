@@ -77,3 +77,6 @@ def test_audit_includes_phase_dimension_and_raw_datasets():
     assert "market.corporate_action" in dataset_names
     assert "market.index_daily_bar" in dataset_names
     assert "market.index_constituent" in dataset_names
+    assert "feature_snapshot" in dataset_names
+    assert "label_snapshot" in dataset_names
+    assert "factor.factor_daily" in dataset_names

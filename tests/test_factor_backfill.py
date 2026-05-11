@@ -123,6 +123,45 @@ def test_backfill_factor_daily_range_skips_complete_dates(monkeypatch):
     ]
 
 
+def test_derive_factor_backfill_window_uses_market_bounds_and_lookback(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_market_date_bounds",
+        lambda adjust_type="hfq": {
+            "start_date": "1990-12-19",
+            "end_date": "2026-05-08",
+            "date_count": 8200,
+        },
+    )
+    monkeypatch.setattr(
+        factor_backfill,
+        "derive_feature_window",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "start_date": "1991-06-20",
+            "end_date": "2026-05-08",
+            "date_count": 8071,
+        },
+    )
+
+    window = factor_backfill.derive_factor_backfill_window(lookback_bars=130)
+
+    assert window == {
+        "start_date": "1991-06-20",
+        "end_date": "2026-05-08",
+        "date_count": 8071,
+    }
+    assert calls == [
+        {
+            "start_date": "1990-12-19",
+            "end_date": "2026-05-08",
+            "lookback_bars": 130,
+            "adjust_type": "hfq",
+        }
+    ]
+
+
 def test_backfill_factor_daily_range_returns_empty_frame_when_all_dates_complete(monkeypatch):
     class RaisingExecutor:
         def __init__(self, **kwargs):
