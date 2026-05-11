@@ -801,6 +801,52 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
     ]
 
 
+def test_research_preflight_cli_uses_market_start_when_start_omitted(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20"])
+    monkeypatch.setattr(
+        cli,
+        "load_market_date_bounds",
+        lambda: {"start_date": "1990-12-19", "end_date": "2026-05-08", "date_count": 8200},
+    )
+    monkeypatch.setattr(
+        cli,
+        "find_latest_common_label_date",
+        lambda **kwargs: calls.append(("latest", kwargs))
+        or {
+            "latest_common_date": "2026-01-30",
+            "date_count": 122,
+            "horizons": [5, 10, 20, 60],
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "check_factor_label_coverage",
+        lambda **kwargs: calls.append(("coverage", kwargs))
+        or {
+            "status": "ok",
+            "reasons": [],
+            "factor_date_count": 122,
+            "factor_complete_date_count": 122,
+            "missing_horizons": [],
+            "short_label_horizons": [],
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["stock-research", "research-preflight"])
+
+    cli.main()
+
+    assert calls[0][1]["start_date"] == "1990-12-19"
+    assert calls[1][1]["start_date"] == "1990-12-19"
+    assert capsys.readouterr().out.splitlines()[0] == (
+        "research_preflight|latest_common_label_date|2026-01-30|122"
+    )
+
+
 def test_research_preflight_cli_blocks_when_latest_label_date_missing(monkeypatch, capsys):
     import sys
 

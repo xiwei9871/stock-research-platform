@@ -72,6 +72,7 @@ from stock_research.research_preflight import (
     check_industry_membership_coverage,
     find_latest_common_label_date,
 )
+from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.schema import apply_schema
@@ -412,7 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_factor_daily.add_argument("--industry-system", default="csrc")
 
     research_preflight = subparsers.add_parser("research-preflight")
-    research_preflight.add_argument("--start-date", default="2024-01-01")
+    research_preflight.add_argument("--start-date")
     research_preflight.add_argument("--end-date")
     research_preflight.add_argument(
         "--horizons",
@@ -644,8 +645,21 @@ def main() -> None:
         print(f"factor_daily_stored|{count}")
     elif args.command == "research-preflight":
         horizons = args.horizons
+        start_date = args.start_date
+        if start_date is None:
+            bounds = load_market_date_bounds()
+            start_date = bounds["start_date"]
+        if start_date is None:
+            print("research_preflight|latest_common_label_date||0")
+            print("research_preflight|coverage|blocked|factor_dates|0|complete_factor_dates|0")
+            print(
+                "research_preflight|missing_horizons|"
+                + ",".join(str(value) for value in horizons)
+            )
+            print("research_preflight|short_label_horizons|")
+            return
         latest = find_latest_common_label_date(
-            start_date=args.start_date,
+            start_date=start_date,
             horizons=horizons,
         )
         end_date = args.end_date or latest["latest_common_date"]
@@ -661,7 +675,7 @@ def main() -> None:
         factors = args.factor_names if args.factor_names else candidate_factor_names()
         coverage = check_factor_label_coverage(
             factor_names=factors,
-            start_date=args.start_date,
+            start_date=start_date,
             end_date=end_date,
             horizons=horizons,
             calc_version=args.calc_version,
@@ -689,7 +703,7 @@ def main() -> None:
                 print("research_preflight|industry_membership|blocked|market_rows|0|covered_rows|0|missing_rows|0")
             else:
                 industry = check_industry_membership_coverage(
-                    start_date=args.start_date,
+                    start_date=start_date,
                     end_date=end_date,
                     industry_system="csrc",
                     adjust_type="hfq",
