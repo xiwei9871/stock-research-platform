@@ -189,6 +189,15 @@ Archive Phase 3 raw Baostock daily bars while loading normalized market bars:
 /Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
 ```
 
+Build Phase 4 tradability, adjustment factors, and derived corporate action events:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research build-asset-status --start-date 1990-12-19 --end-date YYYY-MM-DD --adjust-type hfq
+/Users/xiwei/stock_research/.venv/bin/stock-research build-adjustment-factors --start-date 1990-12-19 --end-date YYYY-MM-DD --source-version derived_market_daily_bar_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research build-corporate-actions --start-date 1990-12-19 --end-date YYYY-MM-DD --source-version derived_market_daily_bar_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
+```
+
 1. Refresh forward-return labels:
 
 ```bash

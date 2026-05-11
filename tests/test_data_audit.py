@@ -72,3 +72,5 @@ def test_audit_includes_phase_dimension_and_raw_datasets():
     assert "market.trading_calendar" in dataset_names
     assert "core.asset_lifecycle_event" in dataset_names
     assert "raw_baostock.daily_bar_payload" in dataset_names
+    assert "market.adjustment_factor" in dataset_names
+    assert "market.corporate_action" in dataset_names

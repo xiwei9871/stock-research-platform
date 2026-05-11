@@ -98,6 +98,14 @@ def test_research_extension_includes_raw_daily_bar_payload_table():
     assert "idx_raw_baostock_daily_bar_payload_lookup" in sql
 
 
+def test_research_extension_includes_phase4_action_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.adjustment_factor" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.corporate_action" in sql
+    assert "idx_market_adjustment_factor_date" in sql
+    assert "idx_market_corporate_action_asset_date" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

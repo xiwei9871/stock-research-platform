@@ -65,6 +65,42 @@ def test_cli_accepts_load_bars_archive_raw_flag():
     assert args.archive_raw is True
 
 
+def test_cli_accepts_phase4_action_commands():
+    factor_args = build_parser().parse_args(
+        [
+            "build-adjustment-factors",
+            "--start-date",
+            "2024-05-27",
+            "--end-date",
+            "2024-05-31",
+            "--source-version",
+            "derived_v1",
+        ]
+    )
+
+    assert factor_args.command == "build-adjustment-factors"
+    assert factor_args.start_date == "2024-05-27"
+    assert factor_args.end_date == "2024-05-31"
+    assert factor_args.source_version == "derived_v1"
+
+    action_args = build_parser().parse_args(
+        [
+            "build-corporate-actions",
+            "--start-date",
+            "2024-05-27",
+            "--end-date",
+            "2024-05-31",
+            "--source-version",
+            "actions_v1",
+        ]
+    )
+
+    assert action_args.command == "build-corporate-actions"
+    assert action_args.start_date == "2024-05-27"
+    assert action_args.end_date == "2024-05-31"
+    assert action_args.source_version == "actions_v1"
+
+
 def test_cli_accepts_score_factor_daily_command():
     args = build_parser().parse_args(
         [

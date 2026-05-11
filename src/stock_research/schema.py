@@ -275,6 +275,32 @@ CREATE TABLE IF NOT EXISTS market.trading_calendar (
     PRIMARY KEY (exchange, trade_date, source_version)
 );
 
+CREATE TABLE IF NOT EXISTS market.adjustment_factor (
+    asset_id text NOT NULL,
+    trade_date date NOT NULL,
+    raw_close numeric,
+    qfq_close numeric,
+    hfq_close numeric,
+    qfq_factor numeric,
+    hfq_factor numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, trade_date, source_version)
+);
+
+CREATE TABLE IF NOT EXISTS market.corporate_action (
+    asset_id text NOT NULL,
+    event_date date NOT NULL,
+    action_type text NOT NULL,
+    factor_before numeric,
+    factor_after numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, event_date, action_type, source_version)
+);
+
 CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
     industry_system text NOT NULL,
     industry_code text NOT NULL,
@@ -553,6 +579,12 @@ CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
 
 CREATE INDEX IF NOT EXISTS idx_market_trading_calendar_open_date
     ON market.trading_calendar (exchange, is_open, trade_date);
+
+CREATE INDEX IF NOT EXISTS idx_market_adjustment_factor_date
+    ON market.adjustment_factor (trade_date, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_market_corporate_action_asset_date
+    ON market.corporate_action (asset_id, event_date);
 
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
     ON market.industry_daily_bar (trade_date, industry_system, industry_code);

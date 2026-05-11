@@ -12,6 +12,10 @@ from stock_research.backfill_runs import (
     mark_backfill_task_success_for_service,
     reset_stale_backfill_tasks_for_service,
 )
+from stock_research.corporate_actions import (
+    build_adjustment_factors_for_service,
+    build_corporate_actions_from_factors_for_service,
+)
 from stock_research.core_data import (
     build_asset_status_daily_for_service,
     build_industry_daily_bars_for_service,
@@ -222,6 +226,16 @@ def build_parser() -> argparse.ArgumentParser:
     asset_status.add_argument("--start-date")
     asset_status.add_argument("--end-date")
     asset_status.add_argument("--adjust-type", default="hfq")
+
+    adjustment_factors = subparsers.add_parser("build-adjustment-factors")
+    adjustment_factors.add_argument("--start-date")
+    adjustment_factors.add_argument("--end-date")
+    adjustment_factors.add_argument("--source-version", default="derived_market_daily_bar_v1")
+
+    corporate_actions = subparsers.add_parser("build-corporate-actions")
+    corporate_actions.add_argument("--start-date")
+    corporate_actions.add_argument("--end-date")
+    corporate_actions.add_argument("--source-version", default="derived_adjustment_factor_v1")
 
     industry_bars = subparsers.add_parser("build-industry-bars")
     industry_bars.add_argument("--start-date")
@@ -528,6 +542,20 @@ def main() -> None:
             args.adjust_type,
         )
         print("core_asset_status_daily_built")
+    elif args.command == "build-adjustment-factors":
+        build_adjustment_factors_for_service(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source_version=args.source_version,
+        )
+        print("adjustment_factors_built")
+    elif args.command == "build-corporate-actions":
+        build_corporate_actions_from_factors_for_service(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source_version=args.source_version,
+        )
+        print("corporate_actions_built")
     elif args.command == "build-industry-bars":
         build_industry_daily_bars_for_service(
             start_date=args.start_date,
