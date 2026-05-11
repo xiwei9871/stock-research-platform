@@ -72,6 +72,8 @@ def test_enrich_bars_with_industry_uses_point_in_time_membership(monkeypatch):
 
     assert result.iloc[0]["industry_code"] == "T"
     assert "core.industry_membership" in calls[0][0]
+    assert "DISTINCT ON (asset_id)" in calls[0][0]
+    assert "ORDER BY asset_id, start_date DESC" in calls[0][0]
     assert calls[0][1] == ["csrc", "2026-05-08", "2026-05-08"]
 
 

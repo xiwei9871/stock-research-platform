@@ -88,6 +88,113 @@ def test_backfill_factor_daily_range_uses_trade_dates_and_reports_progress(monke
     assert calls[1]["trade_date"] == "2026-05-04"
 
 
+def test_backfill_factor_daily_range_skips_complete_dates(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_trade_dates_for_backfill",
+        lambda **kwargs: ["2026-05-01", "2026-05-04"],
+    )
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_complete_factor_dates",
+        lambda **kwargs: {"2026-05-01"},
+    )
+    monkeypatch.setattr(
+        factor_backfill,
+        "build_and_store_factor_daily",
+        lambda **kwargs: calls.append(kwargs) or 10,
+    )
+
+    result = factor_backfill.backfill_factor_daily_range(
+        start_date="2026-05-01",
+        end_date="2026-05-04",
+        skip_complete=True,
+    )
+
+    assert list(result["trade_date"]) == ["2026-05-04"]
+    assert calls == [
+        {
+            "trade_date": "2026-05-04",
+            "lookback_bars": 130,
+            "industry_system": "csrc",
+        }
+    ]
+
+
+def test_backfill_factor_daily_range_returns_empty_frame_when_all_dates_complete(monkeypatch):
+    class RaisingExecutor:
+        def __init__(self, **kwargs):
+            raise AssertionError("executor should not start when no dates need work")
+
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_trade_dates_for_backfill",
+        lambda **kwargs: ["2026-05-01", "2026-05-04"],
+    )
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_complete_factor_dates",
+        lambda **kwargs: {"2026-05-01", "2026-05-04"},
+    )
+    monkeypatch.setattr(factor_backfill, "ProcessPoolExecutor", RaisingExecutor)
+
+    result = factor_backfill.backfill_factor_daily_range(
+        start_date="2026-05-01",
+        end_date="2026-05-04",
+        skip_complete=True,
+        workers=2,
+    )
+
+    assert result.empty
+    assert list(result.columns) == ["trade_date", "factor_rows"]
+
+
+def test_backfill_factor_daily_range_runs_dates_with_workers(monkeypatch):
+    calls = []
+    executor_kwargs = []
+
+    class ImmediateExecutor:
+        def __init__(self, **kwargs):
+            executor_kwargs.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            from concurrent.futures import Future
+
+            future = Future()
+            future.set_result(fn(*args, **kwargs))
+            return future
+
+    monkeypatch.setattr(factor_backfill, "ProcessPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(
+        factor_backfill,
+        "load_trade_dates_for_backfill",
+        lambda **kwargs: ["2026-05-01", "2026-05-04"],
+    )
+    monkeypatch.setattr(
+        factor_backfill,
+        "build_and_store_factor_daily",
+        lambda **kwargs: calls.append(kwargs) or 10,
+    )
+
+    result = factor_backfill.backfill_factor_daily_range(
+        start_date="2026-05-01",
+        end_date="2026-05-04",
+        workers=2,
+    )
+
+    assert sorted(result["trade_date"]) == ["2026-05-01", "2026-05-04"]
+    assert [call["trade_date"] for call in calls] == ["2026-05-01", "2026-05-04"]
+    assert executor_kwargs == [{"max_workers": 2, "max_tasks_per_child": 1}]
+
+
 class _context:
     def __init__(self, value):
         self.value = value

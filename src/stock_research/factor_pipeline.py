@@ -86,11 +86,15 @@ def enrich_bars_with_industry(
     service: str = SETTINGS.research_service,
 ) -> pd.DataFrame:
     sql = """
-    SELECT asset_id, industry_code, industry_name
+    SELECT DISTINCT ON (asset_id)
+        asset_id,
+        industry_code,
+        industry_name
     FROM core.industry_membership
     WHERE industry_system = %s
       AND start_date <= %s
       AND (end_date IS NULL OR end_date > %s)
+    ORDER BY asset_id, start_date DESC
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [industry_system, trade_date, trade_date])

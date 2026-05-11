@@ -1,10 +1,12 @@
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 
 import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_config import manual_v1_config
 from stock_research.factor_pipeline import build_and_store_factor_daily
 
 
@@ -34,6 +36,48 @@ def load_trade_dates_for_backfill(
     return [str(row["trade_date"])[:10] for row in rows]
 
 
+def load_complete_factor_dates(
+    start_date: str,
+    end_date: str,
+    expected_factor_count: int | None = None,
+    calc_version: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> set[str]:
+    config = manual_v1_config()
+    expected = expected_factor_count or len(config["factor_groups"])
+    version = calc_version or config["calc_version"]
+    sql = """
+    SELECT trade_date
+    FROM factor.factor_daily
+    WHERE trade_date BETWEEN %s AND %s
+      AND calc_version = %s
+    GROUP BY trade_date
+    HAVING count(DISTINCT factor_name) >= %s
+    ORDER BY trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, version, expected])
+    return {str(row["trade_date"])[:10] for row in rows}
+
+
+def _build_factor_daily_for_task(
+    trade_date: str,
+    lookback_bars: int,
+    industry_system: str,
+) -> dict:
+    started_at = time.perf_counter()
+    count = build_and_store_factor_daily(
+        trade_date=trade_date,
+        lookback_bars=lookback_bars,
+        industry_system=industry_system,
+    )
+    return {
+        "trade_date": trade_date,
+        "factor_rows": count,
+        "elapsed_seconds": time.perf_counter() - started_at,
+    }
+
+
 def backfill_factor_daily_range(
     start_date: str,
     end_date: str,
@@ -41,6 +85,8 @@ def backfill_factor_daily_range(
     industry_system: str = "csrc",
     trading_days_only: bool = True,
     adjust_type: str = "hfq",
+    workers: int = 1,
+    skip_complete: bool = False,
     progress: Callable[[dict], None] | None = None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> pd.DataFrame:
@@ -54,7 +100,48 @@ def backfill_factor_daily_range(
         if trading_days_only
         else build_trade_date_range(start_date, end_date)
     )
+    if skip_complete:
+        complete_dates = load_complete_factor_dates(
+            start_date=start_date,
+            end_date=end_date,
+        )
+        trade_dates = [date for date in trade_dates if date not in complete_dates]
+
     total_dates = len(trade_dates)
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    if total_dates == 0:
+        return pd.DataFrame(columns=["trade_date", "factor_rows"])
+    if workers > 1:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            max_tasks_per_child=1,
+        ) as executor:
+            futures = {
+                executor.submit(
+                    _build_factor_daily_for_task,
+                    trade_date,
+                    lookback_bars,
+                    industry_system,
+                ): trade_date
+                for trade_date in trade_dates
+            }
+            for index, future in enumerate(as_completed(futures), start=1):
+                item = future.result()
+                item["index"] = index
+                item["total"] = total_dates
+                if progress is not None:
+                    progress({"event": "done", **item})
+                rows.append(
+                    {
+                        "trade_date": item["trade_date"],
+                        "factor_rows": item["factor_rows"],
+                    }
+                )
+        if not rows:
+            return pd.DataFrame(columns=["trade_date", "factor_rows"])
+        return pd.DataFrame(rows).sort_values("trade_date").reset_index(drop=True)
+
     for index, trade_date in enumerate(trade_dates, start=1):
         if progress is not None:
             progress({"event": "start", "trade_date": trade_date, "index": index, "total": total_dates})
@@ -77,4 +164,6 @@ def backfill_factor_daily_range(
                 }
             )
         rows.append({"trade_date": trade_date, "factor_rows": count})
+    if not rows:
+        return pd.DataFrame(columns=["trade_date", "factor_rows"])
     return pd.DataFrame(rows)
