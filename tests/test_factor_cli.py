@@ -84,6 +84,48 @@ def test_cli_accepts_sync_index_constituents_command():
     assert args.source_version == "baostock_snapshot_v1"
 
 
+def test_cli_accepts_phase6_industry_history_commands():
+    benchmark_args = build_parser().parse_args(
+        [
+            "benchmark-industry-day",
+            "--trade-date",
+            "2024-05-31",
+            "--industry-system",
+            "csrc",
+            "--adjust-type",
+            "hfq",
+        ]
+    )
+
+    assert benchmark_args.command == "benchmark-industry-day"
+    assert benchmark_args.trade_date == "2024-05-31"
+    assert benchmark_args.industry_system == "csrc"
+    assert benchmark_args.adjust_type == "hfq"
+
+    backfill_args = build_parser().parse_args(
+        [
+            "backfill-industry-history",
+            "--start-date",
+            "2024-05-27",
+            "--end-date",
+            "2024-05-31",
+            "--max-dates",
+            "2",
+            "--industry-system",
+            "csrc",
+            "--adjust-type",
+            "hfq",
+        ]
+    )
+
+    assert backfill_args.command == "backfill-industry-history"
+    assert backfill_args.start_date == "2024-05-27"
+    assert backfill_args.end_date == "2024-05-31"
+    assert backfill_args.max_dates == 2
+    assert backfill_args.industry_system == "csrc"
+    assert backfill_args.adjust_type == "hfq"
+
+
 def test_cli_accepts_phase4_action_commands():
     factor_args = build_parser().parse_args(
         [

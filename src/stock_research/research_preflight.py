@@ -123,3 +123,48 @@ def check_factor_label_coverage(
         "short_label_horizons": short_label_horizons,
         "min_label_dates": min_label_dates,
     }
+
+
+def check_industry_membership_coverage(
+    start_date: str,
+    end_date: str,
+    industry_system: str = "csrc",
+    adjust_type: str = "hfq",
+    service: str = SETTINGS.research_service,
+) -> dict:
+    sql = """
+    SELECT
+        count(*) AS market_rows,
+        count(*) FILTER (WHERE has_membership) AS covered_rows,
+        count(*) FILTER (WHERE NOT has_membership) AS missing_rows,
+        count(DISTINCT trade_date) AS date_count
+    FROM (
+        SELECT
+            b.trade_date,
+            b.asset_id,
+            EXISTS (
+                SELECT 1
+                FROM core.industry_membership m
+                WHERE m.asset_id = b.asset_id
+                  AND m.industry_system = %s
+                  AND m.start_date <= b.trade_date
+                  AND (m.end_date IS NULL OR b.trade_date < m.end_date)
+            ) AS has_membership
+        FROM market_daily_bar b
+        WHERE b.adjust_type = %s
+          AND b.trade_date BETWEEN %s AND %s
+    ) covered
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [industry_system, adjust_type, start_date, end_date])
+    row = rows[0] if rows else {}
+    market_rows = int(row.get("market_rows") or 0)
+    covered_rows = int(row.get("covered_rows") or 0)
+    missing_rows = int(row.get("missing_rows") or 0)
+    return {
+        "status": "ok" if missing_rows == 0 else "blocked",
+        "market_rows": market_rows,
+        "covered_rows": covered_rows,
+        "missing_rows": missing_rows,
+        "date_count": int(row.get("date_count") or 0),
+    }

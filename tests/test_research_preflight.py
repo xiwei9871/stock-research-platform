@@ -181,3 +181,40 @@ def test_check_factor_label_coverage_blocks_small_label_samples(monkeypatch):
     assert result["status"] == "blocked"
     assert result["short_label_horizons"] == [5, 10, 20, 60]
     assert "insufficient_label_dates" in result["reasons"]
+
+
+def test_check_industry_membership_coverage_blocks_missing_memberships(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append((sql, params))
+        return [
+            {
+                "market_rows": 100,
+                "covered_rows": 70,
+                "missing_rows": 30,
+                "date_count": 2,
+            }
+        ]
+
+    monkeypatch.setattr(research_preflight, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(research_preflight, "fetch_all", fake_fetch_all)
+
+    result = research_preflight.check_industry_membership_coverage(
+        start_date="2024-05-27",
+        end_date="2024-05-31",
+        industry_system="csrc",
+        adjust_type="hfq",
+    )
+
+    assert result == {
+        "status": "blocked",
+        "market_rows": 100,
+        "covered_rows": 70,
+        "missing_rows": 30,
+        "date_count": 2,
+    }
+    assert "FROM market_daily_bar b" in calls[0][0]
+    assert "core.industry_membership" in calls[0][0]
+    assert "EXISTS (" in calls[0][0]
+    assert calls[0][1] == ["csrc", "hfq", "2024-05-27", "2024-05-31"]

@@ -26,6 +26,10 @@ from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
     sync_asset_lifecycle_from_master,
 )
+from stock_research.industry_history import (
+    benchmark_industry_day,
+    run_industry_history_range,
+)
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_backfill import backfill_factor_daily_range
@@ -64,6 +68,7 @@ from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.research_preflight import (
     check_factor_label_coverage,
+    check_industry_membership_coverage,
     find_latest_common_label_date,
 )
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
@@ -397,6 +402,19 @@ def build_parser() -> argparse.ArgumentParser:
     research_preflight.add_argument("--factor-names", type=parse_factor_names)
     research_preflight.add_argument("--calc-version", default="v1")
     research_preflight.add_argument("--min-label-dates", type=int, default=20)
+    research_preflight.add_argument("--require-industry-membership", action="store_true")
+
+    benchmark_industry_day = subparsers.add_parser("benchmark-industry-day")
+    benchmark_industry_day.add_argument("--trade-date", required=True)
+    benchmark_industry_day.add_argument("--industry-system", default="csrc")
+    benchmark_industry_day.add_argument("--adjust-type", default="hfq")
+
+    backfill_industry_history = subparsers.add_parser("backfill-industry-history")
+    backfill_industry_history.add_argument("--start-date", required=True)
+    backfill_industry_history.add_argument("--end-date", required=True)
+    backfill_industry_history.add_argument("--max-dates", required=True, type=int)
+    backfill_industry_history.add_argument("--industry-system", default="csrc")
+    backfill_industry_history.add_argument("--adjust-type", default="hfq")
 
     backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
     backfill_factor_daily.add_argument("--start-date", required=True)
@@ -623,6 +641,21 @@ def main() -> None:
             "research_preflight|short_label_horizons|"
             + ",".join(str(value) for value in coverage["short_label_horizons"])
         )
+        if args.require_industry_membership:
+            if end_date is None:
+                print("research_preflight|industry_membership|blocked|market_rows|0|covered_rows|0|missing_rows|0")
+            else:
+                industry = check_industry_membership_coverage(
+                    start_date=args.start_date,
+                    end_date=end_date,
+                    industry_system="csrc",
+                    adjust_type="hfq",
+                )
+                print(
+                    "research_preflight|industry_membership|"
+                    f"{industry['status']}|market_rows|{industry['market_rows']}|"
+                    f"covered_rows|{industry['covered_rows']}|missing_rows|{industry['missing_rows']}"
+                )
     elif args.command == "backfill-factor-daily":
         result = backfill_factor_daily_range(
             start_date=args.start_date,
@@ -780,6 +813,42 @@ def main() -> None:
             source_version=args.source_version,
         )
         print(f"index_constituents_synced|{count}")
+    elif args.command == "benchmark-industry-day":
+        result = benchmark_industry_day(
+            trade_date=args.trade_date,
+            industry_system=args.industry_system,
+            adjust_type=args.adjust_type,
+        )
+        print(
+            "industry_day_benchmark|sync_memberships|"
+            f"{result['trade_date']}|rows|{result['membership_rows']}|seconds|{result['sync_seconds']}"
+        )
+        print(
+            "industry_day_benchmark|build_bars|"
+            f"{result['trade_date']}|seconds|{result['build_seconds']}"
+        )
+        print(
+            "industry_day_benchmark|total|"
+            f"{result['trade_date']}|seconds|{result['total_seconds']}"
+        )
+    elif args.command == "backfill-industry-history":
+        result = run_industry_history_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            max_dates=args.max_dates,
+            industry_system=args.industry_system,
+            adjust_type=args.adjust_type,
+            progress=lambda event: print(
+                "industry_history_progress|"
+                f"{event['trade_date']}|{event['index']}|{event['total']}|"
+                f"membership_rows|{event['membership_rows']}|seconds|{event['seconds']}"
+            ),
+        )
+        print(
+            "industry_history_done|"
+            f"dates|{result['dates']}|membership_rows|{result['membership_rows']}|"
+            f"seconds|{result['seconds']}"
+        )
     elif args.command == "sync-baostock-finance":
         counts = sync_finance_for_period(
             args.year,

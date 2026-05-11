@@ -49,7 +49,10 @@ def split_industry(value: str) -> tuple[str, str]:
     return text, text
 
 
-def normalize_industry_row(row: dict[str, Any]) -> dict[str, Any]:
+def normalize_industry_row(
+    row: dict[str, Any],
+    effective_date: str | None = None,
+) -> dict[str, Any]:
     industry_code, industry_name = split_industry(str(row.get("industry", "")))
     return {
         "asset_id": asset_id_from_baostock_code(str(row["code"])),
@@ -59,7 +62,7 @@ def normalize_industry_row(row: dict[str, Any]) -> dict[str, Any]:
         "industry_code": industry_code,
         "industry_name": industry_name,
         "level": 1,
-        "start_date": str(row["updateDate"]),
+        "start_date": effective_date or str(row["updateDate"]),
         "end_date": None,
         "source": "baostock",
     }
@@ -249,7 +252,7 @@ def sync_industry_memberships(
                 f"baostock industry query failed: {rs.error_code} {rs.error_msg}"
             )
         rows = [
-            normalize_industry_row(row)
+            normalize_industry_row(row, effective_date=trade_date)
             for row in _rows_from_result(rs)
             if str(row.get("industry", "")).strip()
         ]

@@ -40,6 +40,24 @@ def test_normalize_industry_row_maps_baostock_code():
     assert normalized["source"] == "baostock"
 
 
+def test_normalize_industry_row_can_use_query_date_as_effective_date():
+    row = {
+        "updateDate": "2026-05-04",
+        "code": "sz.302132",
+        "code_name": "测试股票",
+        "industry": "C39计算机、通信和其他电子设备制造业",
+        "industryClassification": "证监会行业分类",
+    }
+
+    normalized = baostock_ingestion.normalize_industry_row(
+        row,
+        effective_date="2024-05-31",
+    )
+
+    assert normalized["asset_id"] == "CN:SZ:302132"
+    assert normalized["start_date"] == "2024-05-31"
+
+
 def test_upsert_industry_memberships(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(baostock_ingestion, "execute_many", fake_execute_many)
