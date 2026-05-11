@@ -91,6 +91,13 @@ def test_research_extension_includes_calendar_and_lifecycle_tables():
     assert "idx_core_asset_lifecycle_event_asset_date" in sql
 
 
+def test_research_extension_includes_raw_daily_bar_payload_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload" in sql
+    assert "payload_hash text NOT NULL" in sql
+    assert "idx_raw_baostock_daily_bar_payload_lookup" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

@@ -396,6 +396,21 @@ CREATE TABLE IF NOT EXISTS raw_baostock.finance_payload (
     payload_hash text NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload (
+    source_service text NOT NULL,
+    source_table text NOT NULL,
+    adjust_type text NOT NULL,
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_service, source_table, adjust_type, trade_date, asset_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_baostock_daily_bar_payload_lookup
+    ON raw_baostock.daily_bar_payload (adjust_type, trade_date, asset_id);
+
 CREATE TABLE IF NOT EXISTS ingest.batch_job (
     job_id text PRIMARY KEY,
     dataset text NOT NULL,

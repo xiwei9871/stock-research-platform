@@ -66,8 +66,9 @@ def test_run_data_audit_marks_short_history_without_mutation(monkeypatch):
     assert all("insert " not in sql.lower() and "update " not in sql.lower() for sql, _ in calls)
 
 
-def test_audit_includes_calendar_and_lifecycle_datasets():
+def test_audit_includes_phase_dimension_and_raw_datasets():
     dataset_names = {dataset.dataset for dataset in data_audit.AUDIT_DATASETS}
 
     assert "market.trading_calendar" in dataset_names
     assert "core.asset_lifecycle_event" in dataset_names
+    assert "raw_baostock.daily_bar_payload" in dataset_names

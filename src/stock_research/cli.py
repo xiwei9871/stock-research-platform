@@ -273,6 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     load_bars.add_argument("--start-date")
     load_bars.add_argument("--end-date")
     load_bars.add_argument("--limit-tables", type=int)
+    load_bars.add_argument("--archive-raw", action="store_true")
 
     quality = subparsers.add_parser("quality")
     quality.add_argument("--trade-date")
@@ -810,6 +811,7 @@ def main() -> None:
             args.start_date,
             args.end_date,
             args.limit_tables,
+            archive_raw=args.archive_raw,
         )
         qfq = load_market_daily_bars(
             "stock_qfq",
@@ -817,6 +819,7 @@ def main() -> None:
             args.start_date,
             args.end_date,
             args.limit_tables,
+            archive_raw=args.archive_raw,
         )
         print(f"market_rows_loaded|hfq|{hfq}")
         print(f"market_rows_loaded|qfq|{qfq}")

@@ -1,3 +1,5 @@
+import hashlib
+import json
 from typing import Any
 
 from stock_research.assets import (
@@ -6,7 +8,7 @@ from stock_research.assets import (
     is_stock_table,
 )
 from stock_research.config import SETTINGS
-from stock_research.db import connect, fetch_all
+from stock_research.db import connect, execute_many, fetch_all
 
 
 def parse_float(value: Any) -> float | None:
@@ -32,6 +34,47 @@ def normalize_source_row(row: dict[str, Any], adjust_type: str) -> dict[str, Any
         "is_st": str(row["isST"]) == "1",
         "adjust_type": adjust_type,
         "source": "baostock",
+    }
+
+
+def jsonable_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): jsonable_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [jsonable_payload(item) for item in value]
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def canonical_payload_json(payload: dict[str, Any]) -> str:
+    return json.dumps(
+        jsonable_payload(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def raw_payload_hash(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(canonical_payload_json(payload).encode("utf-8")).hexdigest()
+
+
+def raw_daily_bar_payload_row(
+    source_service: str,
+    table_name: str,
+    adjust_type: str,
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    payload = jsonable_payload(row)
+    return {
+        "source_service": source_service,
+        "source_table": table_name,
+        "adjust_type": adjust_type,
+        "trade_date": str(row["trade_date"])[:10],
+        "asset_id": asset_id_from_baostock_code(row["stock_code"]),
+        "payload": payload,
+        "payload_hash": raw_payload_hash(payload),
     }
 
 
@@ -88,6 +131,39 @@ def latest_source_trade_date(service: str, table_name: str = "sh600000") -> str 
     return rows[0]["trade_date"]
 
 
+def upsert_raw_daily_bar_payloads(
+    rows: list[dict[str, Any]],
+    research_service: str = SETTINGS.research_service,
+) -> int:
+    if not rows:
+        return 0
+
+    sql = """
+    INSERT INTO raw_baostock.daily_bar_payload (
+        source_service, source_table, adjust_type, trade_date, asset_id, payload, payload_hash
+    )
+    VALUES (
+        %(source_service)s, %(source_table)s, %(adjust_type)s, %(trade_date)s,
+        %(asset_id)s, %(payload)s::jsonb, %(payload_hash)s
+    )
+    ON CONFLICT (source_service, source_table, adjust_type, trade_date, asset_id)
+    DO UPDATE SET
+        payload = EXCLUDED.payload,
+        payload_hash = EXCLUDED.payload_hash,
+        fetched_at = now()
+    """
+    params = [
+        {
+            **row,
+            "payload": canonical_payload_json(row["payload"]),
+        }
+        for row in rows
+    ]
+    with connect(research_service) as conn:
+        execute_many(conn, sql, params)
+    return len(rows)
+
+
 def upsert_market_rows(
     rows: list[dict[str, Any]],
     research_service: str = SETTINGS.research_service,
@@ -132,6 +208,7 @@ def load_market_daily_bars(
     start_date: str | None = None,
     end_date: str | None = None,
     limit_tables: int | None = None,
+    archive_raw: bool = False,
 ) -> int:
     tables = discover_source_tables(source_service)
     if limit_tables is not None:
@@ -140,6 +217,13 @@ def load_market_daily_bars(
     total = 0
     for table_name in tables:
         source_rows = fetch_source_rows(source_service, table_name, start_date, end_date)
+        if archive_raw:
+            upsert_raw_daily_bar_payloads(
+                [
+                    raw_daily_bar_payload_row(source_service, table_name, adjust_type, row)
+                    for row in source_rows
+                ]
+            )
         normalized = [normalize_source_row(row, adjust_type) for row in source_rows]
         total += upsert_market_rows(normalized)
     return total

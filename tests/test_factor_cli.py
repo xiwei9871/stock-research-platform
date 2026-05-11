@@ -44,6 +44,27 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.industry_system == "csrc"
 
 
+def test_cli_accepts_load_bars_archive_raw_flag():
+    args = build_parser().parse_args(
+        [
+            "load-bars",
+            "--start-date",
+            "2026-05-06",
+            "--end-date",
+            "2026-05-06",
+            "--limit-tables",
+            "1",
+            "--archive-raw",
+        ]
+    )
+
+    assert args.command == "load-bars"
+    assert args.start_date == "2026-05-06"
+    assert args.end_date == "2026-05-06"
+    assert args.limit_tables == 1
+    assert args.archive_raw is True
+
+
 def test_cli_accepts_score_factor_daily_command():
     args = build_parser().parse_args(
         [
