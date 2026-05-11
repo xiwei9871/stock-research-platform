@@ -38,9 +38,8 @@ Purpose: verify the historical factor research loop can run on real PostgreSQL d
 
 ## Next Flow Checks
 
-- Add a first-class CLI command for `research_preflight` so operators do not need `python -c`.
-- Add progress output to `backfill-factor-daily`; 3 days took several minutes with no intermediate output.
-- Run a longer historical backfill range only after choosing a bounded window that can satisfy `min_ic_count`.
+- Completed after this smoke: first-class `research-preflight` CLI, progress output for `backfill-factor-daily`, historical approved-factor flow documentation, and default candidate-factor batch evaluation.
+- Next run: use `research-preflight` to choose the latest common label-covered end date, backfill candidate factors from `2024-01-01`, re-run preflight until coverage is `ok`, then evaluate and score approved factors.
 
 ## Interpretation
 

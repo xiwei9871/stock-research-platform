@@ -161,11 +161,14 @@ MARKET_END_DATE=$(date +%F)
 /Users/xiwei/stock_research/.venv/bin/stock-research labels --end-date "$MARKET_END_DATE"
 ```
 
-2. Find the latest label-covered end date and check coverage:
+2. Find the latest label-covered end date:
 
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --horizons 5,10,20,60 --min-label-dates 20
 ```
+
+Before candidate factors are backfilled, this command may print `research_preflight|coverage|blocked|factor_dates|0`.
+That is expected for a fresh historical range. In this step, use only `research_preflight|latest_common_label_date|...` to choose `END_DATE`.
 
 3. Capture the label-covered end date and backfill all current candidate factors:
 
@@ -174,11 +177,13 @@ END_DATE=$(/Users/xiwei/stock_research/.venv/bin/stock-research research-preflig
 /Users/xiwei/stock_research/.venv/bin/stock-research backfill-factor-daily --start-date 2024-01-01 --end-date "$END_DATE" --lookback-bars 130 --industry-system csrc
 ```
 
-4. Re-run preflight with the same end date:
+4. Re-run preflight with the same end date and require candidate-factor coverage:
 
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 2024-01-01 --end-date "$END_DATE" --horizons 5,10,20,60 --min-label-dates 20
 ```
+
+At this point, `research_preflight|coverage|ok|...` is required before factor-gate evaluation.
 
 5. Batch evaluate default candidate factors:
 
