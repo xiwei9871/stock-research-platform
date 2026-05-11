@@ -2,6 +2,42 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
 
+def find_latest_common_label_date(
+    start_date: str,
+    horizons: list[int],
+    label_set: str = "forward_return",
+    label_version: str = "v1",
+    service: str = SETTINGS.research_service,
+) -> dict:
+    if not horizons:
+        raise ValueError("horizons must not be empty")
+
+    sql = """
+    SELECT max(trade_date) AS latest_common_date,
+           count(*) AS date_count
+    FROM (
+        SELECT trade_date
+        FROM label_snapshot
+        WHERE label_set = %s
+          AND label_version = %s
+          AND horizon = ANY(%s)
+          AND trade_date >= %s
+          AND label_name IN ('forward_return', 'future_return')
+        GROUP BY trade_date
+        HAVING count(DISTINCT horizon) = %s
+    ) covered_dates
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [label_set, label_version, horizons, start_date, len(horizons)])
+    row = rows[0] if rows else {}
+    latest = row.get("latest_common_date")
+    return {
+        "latest_common_date": str(latest)[:10] if latest is not None else None,
+        "date_count": int(row.get("date_count") or 0),
+        "horizons": list(horizons),
+    }
+
+
 def check_factor_label_coverage(
     factor_names: list[str],
     start_date: str,
