@@ -338,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_factor_gate.add_argument("--top-n", type=int, default=30)
 
     evaluate_factor_gate_batch = subparsers.add_parser("evaluate-factor-gate-batch")
-    evaluate_factor_gate_batch.add_argument("--factor-names", required=True)
+    evaluate_factor_gate_batch.add_argument("--factor-names")
     evaluate_factor_gate_batch.add_argument("--start-date", required=True)
     evaluate_factor_gate_batch.add_argument("--end-date", required=True)
     evaluate_factor_gate_batch.add_argument("--horizons", default="5,10,20,60")
@@ -553,8 +553,11 @@ def main() -> None:
             f"{decision['reason']}|{decision['primary_horizon']}"
         )
     elif args.command == "evaluate-factor-gate-batch":
+        factor_names = args.factor_names
+        if isinstance(factor_names, str):
+            factor_names = [value.strip() for value in factor_names.split(",") if value.strip()]
         result = run_factor_gate_batch(
-            factor_names=[value.strip() for value in args.factor_names.split(",") if value.strip()],
+            factor_names=factor_names,
             start_date=args.start_date,
             end_date=args.end_date,
             horizons=[int(value.strip()) for value in args.horizons.split(",") if value.strip()],

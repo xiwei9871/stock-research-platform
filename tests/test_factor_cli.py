@@ -186,8 +186,6 @@ def test_cli_accepts_evaluate_factor_gate_batch_command():
     args = build_parser().parse_args(
         [
             "evaluate-factor-gate-batch",
-            "--factor-names",
-            "alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10",
             "--start-date",
             "2026-01-01",
             "--end-date",
@@ -196,7 +194,7 @@ def test_cli_accepts_evaluate_factor_gate_batch_command():
     )
 
     assert args.command == "evaluate-factor-gate-batch"
-    assert args.factor_names == "alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10"
+    assert args.factor_names is None
     assert args.horizons == "5,10,20,60"
 
 

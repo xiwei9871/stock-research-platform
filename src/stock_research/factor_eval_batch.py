@@ -10,10 +10,11 @@ from stock_research.factor_eval_store import (
     store_factor_approval,
     store_factor_eval_run,
 )
+from stock_research.factor_config import candidate_factor_names
 
 
 def run_factor_gate_batch(
-    factor_names: list[str],
+    factor_names: list[str] | None,
     start_date: str,
     end_date: str,
     horizons: list[int],
@@ -24,7 +25,8 @@ def run_factor_gate_batch(
     top_n: int = 30,
 ) -> pd.DataFrame:
     rows = []
-    for factor_name in factor_names:
+    selected_factor_names = factor_names or candidate_factor_names()
+    for factor_name in selected_factor_names:
         factors, returns = load_multi_horizon_factor_eval_inputs(
             factor_name=factor_name,
             start_date=start_date,
