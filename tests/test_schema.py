@@ -18,6 +18,7 @@ def test_schema_uses_replay_keys():
     assert "feature_version" in sql
     assert "label_version" in sql
     assert "score_version" in sql
+    assert "idx_market_daily_bar_adjust_asset_date_desc" in sql
 
 
 def test_schema_creates_backtest_tables():

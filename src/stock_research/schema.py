@@ -165,6 +165,9 @@ CREATE TABLE IF NOT EXISTS backtest_equity_curve (
 CREATE INDEX IF NOT EXISTS idx_market_daily_bar_trade_date
     ON market_daily_bar (trade_date, adjust_type);
 
+CREATE INDEX IF NOT EXISTS idx_market_daily_bar_adjust_asset_date_desc
+    ON market_daily_bar (adjust_type, asset_id, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_feature_snapshot_trade_date
     ON feature_snapshot (trade_date, feature_set, feature_version);
 
