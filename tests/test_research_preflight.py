@@ -42,6 +42,7 @@ def test_check_factor_label_coverage_reports_overlap(monkeypatch):
         start_date="2026-05-01",
         end_date="2026-05-10",
         horizons=[5],
+        min_label_dates=8,
     )
 
     assert result["status"] == "ok"
@@ -78,3 +79,67 @@ def test_find_latest_common_label_date_requires_all_horizons(monkeypatch):
         "2024-01-01",
         4,
     ]
+
+
+def test_check_factor_label_coverage_blocks_missing_horizons(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        if "factor.factor_daily" in sql:
+            return [
+                {
+                    "min_date": "2024-01-02",
+                    "max_date": "2026-01-30",
+                    "date_count": 300,
+                }
+            ]
+        return [
+            {"horizon": 5, "min_date": "2024-01-02", "max_date": "2026-01-30", "date_count": 300},
+            {"horizon": 10, "min_date": "2024-01-02", "max_date": "2026-01-30", "date_count": 300},
+        ]
+
+    monkeypatch.setattr(research_preflight, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(research_preflight, "fetch_all", fake_fetch_all)
+
+    result = research_preflight.check_factor_label_coverage(
+        factor_names=["ret_20", "qlib_ret_5"],
+        start_date="2024-01-01",
+        end_date="2026-01-30",
+        horizons=[5, 10, 20, 60],
+        min_label_dates=20,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["missing_horizons"] == [20, 60]
+    assert "missing_label_horizons" in result["reasons"]
+
+
+def test_check_factor_label_coverage_blocks_small_label_samples(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        if "factor.factor_daily" in sql:
+            return [
+                {
+                    "min_date": "2026-01-28",
+                    "max_date": "2026-01-30",
+                    "date_count": 3,
+                }
+            ]
+        return [
+            {"horizon": 5, "min_date": "2026-01-28", "max_date": "2026-01-30", "date_count": 3},
+            {"horizon": 10, "min_date": "2026-01-28", "max_date": "2026-01-30", "date_count": 3},
+            {"horizon": 20, "min_date": "2026-01-28", "max_date": "2026-01-30", "date_count": 3},
+            {"horizon": 60, "min_date": "2026-01-28", "max_date": "2026-01-30", "date_count": 3},
+        ]
+
+    monkeypatch.setattr(research_preflight, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(research_preflight, "fetch_all", fake_fetch_all)
+
+    result = research_preflight.check_factor_label_coverage(
+        factor_names=["ret_20"],
+        start_date="2026-01-28",
+        end_date="2026-01-30",
+        horizons=[5, 10, 20, 60],
+        min_label_dates=20,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["short_label_horizons"] == [5, 10, 20, 60]
+    assert "insufficient_label_dates" in result["reasons"]

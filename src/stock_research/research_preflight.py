@@ -44,8 +44,14 @@ def check_factor_label_coverage(
     end_date: str,
     horizons: list[int],
     calc_version: str = "v1",
+    min_label_dates: int = 20,
     service: str = SETTINGS.research_service,
 ) -> dict:
+    if not factor_names:
+        raise ValueError("factor_names must not be empty")
+    if not horizons:
+        raise ValueError("horizons must not be empty")
+
     factor_sql = """
         SELECT min(trade_date) AS min_date, max(trade_date) AS max_date,
                count(DISTINCT trade_date) AS date_count
@@ -61,6 +67,7 @@ def check_factor_label_coverage(
         WHERE label_set = 'forward_return'
           AND label_version = 'v1'
           AND horizon = ANY(%s)
+          AND label_name IN ('forward_return', 'future_return')
           AND trade_date BETWEEN %s AND %s
         GROUP BY horizon
         ORDER BY horizon
@@ -68,13 +75,33 @@ def check_factor_label_coverage(
     with connect(service) as conn:
         factor_rows = fetch_all(conn, factor_sql, [factor_names, calc_version, start_date, end_date])
         label_rows = fetch_all(conn, label_sql, [horizons, start_date, end_date])
+
     factor = factor_rows[0] if factor_rows else {}
+    factor_date_count = int(factor.get("date_count") or 0)
     label_horizons = {int(row["horizon"]): row for row in label_rows}
-    status = "ok" if int(factor.get("date_count") or 0) > 0 and label_horizons else "blocked"
+    missing_horizons = [horizon for horizon in horizons if horizon not in label_horizons]
+    short_label_horizons = [
+        horizon
+        for horizon in horizons
+        if horizon in label_horizons and int(label_horizons[horizon].get("date_count") or 0) < min_label_dates
+    ]
+
+    reasons = []
+    if factor_date_count <= 0:
+        reasons.append("missing_factor_rows")
+    if missing_horizons:
+        reasons.append("missing_label_horizons")
+    if short_label_horizons:
+        reasons.append("insufficient_label_dates")
+
     return {
-        "status": status,
+        "status": "ok" if not reasons else "blocked",
+        "reasons": reasons,
         "factor_min_date": factor.get("min_date"),
         "factor_max_date": factor.get("max_date"),
-        "factor_date_count": int(factor.get("date_count") or 0),
+        "factor_date_count": factor_date_count,
         "label_horizons": label_horizons,
+        "missing_horizons": missing_horizons,
+        "short_label_horizons": short_label_horizons,
+        "min_label_dates": min_label_dates,
     }
