@@ -4,6 +4,14 @@ from uuid import uuid4
 
 from stock_research.assets import sync_asset_master
 from stock_research.backtest import run_top20_backtest
+from stock_research.backfill_runs import (
+    backfill_status_for_service,
+    claim_backfill_tasks_for_service,
+    create_backfill_run_for_service,
+    mark_backfill_task_failed_for_service,
+    mark_backfill_task_success_for_service,
+    reset_stale_backfill_tasks_for_service,
+)
 from stock_research.core_data import (
     build_asset_status_daily_for_service,
     build_industry_daily_bars_for_service,
@@ -156,6 +164,35 @@ def build_parser() -> argparse.ArgumentParser:
 
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
+
+    create_backfill = subparsers.add_parser("create-backfill-run")
+    create_backfill.add_argument("--run-id", required=True)
+    create_backfill.add_argument("--dataset", required=True)
+    create_backfill.add_argument("--source", required=True)
+    create_backfill.add_argument("--source-version", required=True)
+    create_backfill.add_argument("--start-date", required=True)
+    create_backfill.add_argument("--end-date", required=True)
+    create_backfill.add_argument("--months-per-partition", type=int, default=1)
+
+    backfill_status = subparsers.add_parser("backfill-status")
+    backfill_status.add_argument("--run-id", required=True)
+
+    claim_backfill = subparsers.add_parser("claim-backfill-tasks")
+    claim_backfill.add_argument("--run-id", required=True)
+    claim_backfill.add_argument("--limit", type=int, default=10)
+
+    mark_backfill_success = subparsers.add_parser("mark-backfill-task-success")
+    mark_backfill_success.add_argument("--task-id", required=True)
+    mark_backfill_success.add_argument("--rows-read", required=True, type=int)
+    mark_backfill_success.add_argument("--rows-written", required=True, type=int)
+
+    mark_backfill_failed = subparsers.add_parser("mark-backfill-task-failed")
+    mark_backfill_failed.add_argument("--task-id", required=True)
+    mark_backfill_failed.add_argument("--error-message", required=True)
+
+    reset_stale_backfill = subparsers.add_parser("reset-stale-backfill-tasks")
+    reset_stale_backfill.add_argument("--dataset", required=True)
+    reset_stale_backfill.add_argument("--older-than-minutes", type=int, default=60)
 
     asset_status = subparsers.add_parser("build-asset-status")
     asset_status.add_argument("--start-date")
@@ -403,6 +440,51 @@ def main() -> None:
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
+    elif args.command == "create-backfill-run":
+        result = create_backfill_run_for_service(
+            run_id=args.run_id,
+            dataset=args.dataset,
+            source=args.source,
+            source_version=args.source_version,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            months_per_partition=args.months_per_partition,
+        )
+        print(
+            "backfill_run_created|"
+            f"{result['run_id']}|{result['dataset']}|tasks|{result['task_count']}"
+        )
+    elif args.command == "backfill-status":
+        result = backfill_status_for_service(run_id=args.run_id)
+        for status, count in sorted(result["counts"].items()):
+            print(f"backfill_status|{result['run_id']}|{status}|{count}")
+    elif args.command == "claim-backfill-tasks":
+        rows = claim_backfill_tasks_for_service(run_id=args.run_id, limit=args.limit)
+        for row in rows:
+            print(
+                "backfill_task_claimed|"
+                f"{row['task_id']}|{row['partition_key']}|"
+                f"{str(row['start_date'])[:10]}|{str(row['end_date'])[:10]}"
+            )
+    elif args.command == "mark-backfill-task-success":
+        mark_backfill_task_success_for_service(
+            task_id=args.task_id,
+            rows_read=args.rows_read,
+            rows_written=args.rows_written,
+        )
+        print(f"backfill_task_success|{args.task_id}|{args.rows_read}|{args.rows_written}")
+    elif args.command == "mark-backfill-task-failed":
+        mark_backfill_task_failed_for_service(
+            task_id=args.task_id,
+            error_message=args.error_message,
+        )
+        print(f"backfill_task_failed|{args.task_id}|{args.error_message}")
+    elif args.command == "reset-stale-backfill-tasks":
+        count = reset_stale_backfill_tasks_for_service(
+            dataset=args.dataset,
+            older_than_minutes=args.older_than_minutes,
+        )
+        print(f"backfill_task_stale_reset|{args.dataset}|{count}")
     elif args.command == "build-asset-status":
         build_asset_status_daily_for_service(
             args.start_date,

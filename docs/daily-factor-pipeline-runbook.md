@@ -163,6 +163,17 @@ For full-history A-share buildout, run Phase 0 safety checks before starting any
 /Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 1990-12-01 --horizons 5,10,20,60 --min-label-dates 20
 ```
 
+Use the Phase 1 backfill control plane to create and supervise long historical jobs before a dataset-specific worker is attached:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research create-backfill-run --run-id daily-bars-1990-current-v1 --dataset daily-bars --source baostock --source-version v1 --start-date 1990-12-01 --end-date YYYY-MM-DD --months-per-partition 1
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-status --run-id daily-bars-1990-current-v1
+/Users/xiwei/stock_research/.venv/bin/stock-research claim-backfill-tasks --run-id daily-bars-1990-current-v1 --limit 10
+/Users/xiwei/stock_research/.venv/bin/stock-research mark-backfill-task-success --task-id TASK_ID --rows-read 0 --rows-written 0
+/Users/xiwei/stock_research/.venv/bin/stock-research mark-backfill-task-failed --task-id TASK_ID --error-message ERROR
+/Users/xiwei/stock_research/.venv/bin/stock-research reset-stale-backfill-tasks --dataset daily-bars --older-than-minutes 60
+```
+
 1. Refresh forward-return labels:
 
 ```bash

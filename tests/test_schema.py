@@ -75,6 +75,14 @@ def test_research_extension_includes_factor_eval_gate_tables():
     assert "idx_factor_eval_run_factor" in CREATE_RESEARCH_EXTENSION_SQL
 
 
+def test_research_extension_includes_backfill_run_task_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ingest.backfill_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ingest.backfill_task" in sql
+    assert "idx_ingest_backfill_task_status" in sql
+    assert "idx_ingest_backfill_task_run_status" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

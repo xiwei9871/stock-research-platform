@@ -769,3 +769,168 @@ def test_data_audit_cli_prints_lines(monkeypatch, capsys):
         "data_audit|market_daily_bar|short_history|rows|10|dates|2|"
         "min|2024-01-01|max|2024-01-02"
     )
+
+
+def test_backfill_control_plane_cli_accepts_commands():
+    create_args = build_parser().parse_args(
+        [
+            "create-backfill-run",
+            "--run-id",
+            "run-1",
+            "--dataset",
+            "daily-bars",
+            "--source",
+            "baostock",
+            "--source-version",
+            "v1",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-12-31",
+            "--months-per-partition",
+            "1",
+        ]
+    )
+    assert create_args.command == "create-backfill-run"
+    assert create_args.run_id == "run-1"
+
+    status_args = build_parser().parse_args(["backfill-status", "--run-id", "run-1"])
+    assert status_args.command == "backfill-status"
+
+    claim_args = build_parser().parse_args(["claim-backfill-tasks", "--run-id", "run-1", "--limit", "10"])
+    assert claim_args.command == "claim-backfill-tasks"
+
+    success_args = build_parser().parse_args(
+        ["mark-backfill-task-success", "--task-id", "task-1", "--rows-read", "10", "--rows-written", "9"]
+    )
+    assert success_args.command == "mark-backfill-task-success"
+
+    failed_args = build_parser().parse_args(
+        ["mark-backfill-task-failed", "--task-id", "task-1", "--error-message", "boom"]
+    )
+    assert failed_args.command == "mark-backfill-task-failed"
+
+    reset_args = build_parser().parse_args(
+        ["reset-stale-backfill-tasks", "--dataset", "daily-bars", "--older-than-minutes", "60"]
+    )
+    assert reset_args.command == "reset-stale-backfill-tasks"
+
+
+def test_create_backfill_run_cli_prints_summary(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "create_backfill_run_for_service",
+        lambda **kwargs: {"run_id": "run-1", "dataset": "daily-bars", "task_count": 3},
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "create-backfill-run",
+            "--run-id",
+            "run-1",
+            "--dataset",
+            "daily-bars",
+            "--source",
+            "baostock",
+            "--source-version",
+            "v1",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "backfill_run_created|run-1|daily-bars|tasks|3"
+
+
+def test_backfill_status_cli_prints_counts(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "backfill_status_for_service",
+        lambda **kwargs: {"run_id": "run-1", "counts": {"pending": 3, "success": 1}},
+    )
+    monkeypatch.setattr(sys, "argv", ["stock-research", "backfill-status", "--run-id", "run-1"])
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "backfill_status|run-1|pending|3",
+        "backfill_status|run-1|success|1",
+    ]
+
+
+def test_claim_backfill_tasks_cli_prints_claims(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "claim_backfill_tasks_for_service",
+        lambda **kwargs: [
+            {
+                "task_id": "task-1",
+                "partition_key": "2024-01",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "claim-backfill-tasks", "--run-id", "run-1", "--limit", "1"],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == (
+        "backfill_task_claimed|task-1|2024-01|2024-01-01|2024-01-31"
+    )
+
+
+def test_backfill_task_state_cli_prints_results(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(cli, "mark_backfill_task_success_for_service", lambda **kwargs: calls.append(("success", kwargs)))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "mark-backfill-task-success", "--task-id", "task-1", "--rows-read", "10", "--rows-written", "9"],
+    )
+    cli.main()
+    assert capsys.readouterr().out.strip() == "backfill_task_success|task-1|10|9"
+
+    monkeypatch.setattr(cli, "mark_backfill_task_failed_for_service", lambda **kwargs: calls.append(("failed", kwargs)))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "mark-backfill-task-failed", "--task-id", "task-1", "--error-message", "boom"],
+    )
+    cli.main()
+    assert capsys.readouterr().out.strip() == "backfill_task_failed|task-1|boom"
+
+    monkeypatch.setattr(cli, "reset_stale_backfill_tasks_for_service", lambda **kwargs: 2)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "reset-stale-backfill-tasks", "--dataset", "daily-bars", "--older-than-minutes", "60"],
+    )
+    cli.main()
+    assert capsys.readouterr().out.strip() == "backfill_task_stale_reset|daily-bars|2"

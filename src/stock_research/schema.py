@@ -404,6 +404,42 @@ CREATE TABLE IF NOT EXISTS ingest.batch_event (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ingest.backfill_run (
+    run_id text PRIMARY KEY,
+    dataset text NOT NULL,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    start_date date,
+    end_date date,
+    status text NOT NULL DEFAULT 'pending',
+    params jsonb NOT NULL DEFAULT '{}'::jsonb,
+    error_message text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ingest.backfill_task (
+    task_id text PRIMARY KEY,
+    run_id text NOT NULL REFERENCES ingest.backfill_run(run_id),
+    dataset text NOT NULL,
+    partition_key text NOT NULL,
+    start_date date,
+    end_date date,
+    status text NOT NULL DEFAULT 'pending',
+    rows_read integer NOT NULL DEFAULT 0,
+    rows_written integer NOT NULL DEFAULT 0,
+    attempts integer NOT NULL DEFAULT 0,
+    error_message text,
+    params jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (run_id, partition_key)
+);
+
 CREATE TABLE IF NOT EXISTS factor.factor_daily (
     trade_date date NOT NULL,
     asset_id text NOT NULL,
@@ -481,6 +517,12 @@ CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);
+
+CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_status
+    ON ingest.backfill_task (dataset, status, start_date);
+
+CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_run_status
+    ON ingest.backfill_task (run_id, status, start_date);
 
 CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
     ON factor.factor_daily (trade_date, factor_name, calc_version);
