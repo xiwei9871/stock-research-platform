@@ -12,6 +12,7 @@ from stock_research.core_data import (
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_backfill import backfill_factor_daily_range
+from stock_research.factor_config import candidate_factor_names
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.factor_eval.gate import decide_factor_gate
@@ -42,6 +43,10 @@ from stock_research.market_data import load_market_daily_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
+from stock_research.research_preflight import (
+    check_factor_label_coverage,
+    find_latest_common_label_date,
+)
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.schema import apply_schema
@@ -275,6 +280,14 @@ def build_parser() -> argparse.ArgumentParser:
     build_factor_daily.add_argument("--lookback-bars", type=int, default=130)
     build_factor_daily.add_argument("--industry-system", default="csrc")
 
+    research_preflight = subparsers.add_parser("research-preflight")
+    research_preflight.add_argument("--start-date", default="2024-01-01")
+    research_preflight.add_argument("--end-date")
+    research_preflight.add_argument("--horizons", default="5,10,20,60")
+    research_preflight.add_argument("--factor-names")
+    research_preflight.add_argument("--calc-version", default="v1")
+    research_preflight.add_argument("--min-label-dates", type=int, default=20)
+
     backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
     backfill_factor_daily.add_argument("--start-date", required=True)
     backfill_factor_daily.add_argument("--end-date", required=True)
@@ -385,6 +398,42 @@ def main() -> None:
             industry_system=args.industry_system,
         )
         print(f"factor_daily_stored|{count}")
+    elif args.command == "research-preflight":
+        horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
+        factors = (
+            [value.strip() for value in args.factor_names.split(",") if value.strip()]
+            if args.factor_names
+            else candidate_factor_names()
+        )
+        latest = find_latest_common_label_date(
+            start_date=args.start_date,
+            horizons=horizons,
+        )
+        end_date = args.end_date or latest["latest_common_date"]
+        coverage = check_factor_label_coverage(
+            factor_names=factors,
+            start_date=args.start_date,
+            end_date=end_date,
+            horizons=horizons,
+            calc_version=args.calc_version,
+            min_label_dates=args.min_label_dates,
+        )
+        print(
+            "research_preflight|latest_common_label_date|"
+            f"{latest['latest_common_date']}|{latest['date_count']}"
+        )
+        print(
+            "research_preflight|coverage|"
+            f"{coverage['status']}|factor_dates|{coverage['factor_date_count']}"
+        )
+        print(
+            "research_preflight|missing_horizons|"
+            + ",".join(str(value) for value in coverage["missing_horizons"])
+        )
+        print(
+            "research_preflight|short_label_horizons|"
+            + ",".join(str(value) for value in coverage["short_label_horizons"])
+        )
     elif args.command == "backfill-factor-daily":
         result = backfill_factor_daily_range(
             start_date=args.start_date,

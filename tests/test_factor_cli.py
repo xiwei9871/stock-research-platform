@@ -560,3 +560,67 @@ def test_evaluate_factor_gate_batch_cli_prints_rows(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == (
         "factor_gate_batch|alpha101_delta_close_1_rank|approved|passed_thresholds|5|run-1"
     )
+
+
+def test_cli_accepts_research_preflight_command():
+    args = build_parser().parse_args(
+        [
+            "research-preflight",
+            "--start-date",
+            "2024-01-01",
+            "--horizons",
+            "5,10,20,60",
+            "--factor-names",
+            "ret_20,qlib_ret_5",
+            "--min-label-dates",
+            "20",
+        ]
+    )
+
+    assert args.command == "research-preflight"
+    assert args.start_date == "2024-01-01"
+    assert args.horizons == "5,10,20,60"
+    assert args.factor_names == "ret_20,qlib_ret_5"
+    assert args.min_label_dates == 20
+
+
+def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20", "qlib_ret_5"])
+    monkeypatch.setattr(
+        cli,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": "2026-01-30",
+            "date_count": 122,
+            "horizons": [5, 10, 20, 60],
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "check_factor_label_coverage",
+        lambda **kwargs: {
+            "status": "ok",
+            "reasons": [],
+            "factor_date_count": 122,
+            "missing_horizons": [],
+            "short_label_horizons": [],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "research-preflight", "--start-date", "2024-01-01"],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "research_preflight|latest_common_label_date|2026-01-30|122",
+        "research_preflight|coverage|ok|factor_dates|122",
+        "research_preflight|missing_horizons|",
+        "research_preflight|short_label_horizons|",
+    ]
