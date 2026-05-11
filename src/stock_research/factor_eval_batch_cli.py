@@ -5,7 +5,7 @@ from stock_research.factor_eval_batch import run_factor_gate_batch
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m stock_research.factor_eval_batch_cli")
-    parser.add_argument("--factor-names", required=True)
+    parser.add_argument("--factor-names", type=parse_factor_names)
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--end-date", required=True)
     parser.add_argument("--horizons", default="5,10,20,60")
@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(runner=run_factor_gate_batch) -> None:
     args = build_parser().parse_args()
     result = runner(
-        factor_names=_parse_csv(args.factor_names),
+        factor_names=args.factor_names,
         start_date=args.start_date,
         end_date=args.end_date,
         horizons=[int(value) for value in _parse_csv(args.horizons)],
@@ -36,6 +36,13 @@ def main(runner=run_factor_gate_batch) -> None:
             f"{row['factor_name']}|{row['status']}|{row['reason']}|"
             f"{row['primary_horizon']}|{row['eval_run_id']}"
         )
+
+
+def parse_factor_names(value: str) -> list[str]:
+    parts = _parse_csv(value)
+    if not parts or len(parts) != len(value.split(",")):
+        raise argparse.ArgumentTypeError("--factor-names must not contain empty values")
+    return parts
 
 
 def _parse_csv(value: str) -> list[str]:

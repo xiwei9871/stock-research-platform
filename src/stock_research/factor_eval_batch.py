@@ -25,7 +25,7 @@ def run_factor_gate_batch(
     top_n: int = 30,
 ) -> pd.DataFrame:
     rows = []
-    selected_factor_names = factor_names or candidate_factor_names()
+    selected_factor_names = candidate_factor_names() if factor_names is None else factor_names
     for factor_name in selected_factor_names:
         factors, returns = load_multi_horizon_factor_eval_inputs(
             factor_name=factor_name,

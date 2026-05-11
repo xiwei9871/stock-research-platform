@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from stock_research.factor_eval_batch_cli import build_parser, main
 
@@ -27,9 +28,40 @@ def test_factor_eval_batch_cli_parser_accepts_arguments():
         ]
     )
 
-    assert args.factor_names == "alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10"
+    assert args.factor_names == [
+        "alpha101_delta_close_1_rank",
+        "gtja191_amount_momentum_5_10",
+    ]
     assert args.horizons == "5,10,20,60"
     assert args.primary_horizon == 5
+
+
+def test_factor_eval_batch_cli_parser_allows_omitted_factor_names():
+    args = build_parser().parse_args(
+        [
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+        ]
+    )
+
+    assert args.factor_names is None
+
+
+@pytest.mark.parametrize("factor_names", ["", ",", "ret_20,,qlib_ret_5"])
+def test_factor_eval_batch_cli_parser_rejects_invalid_factor_names(factor_names):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "--factor-names",
+                factor_names,
+                "--start-date",
+                "2026-01-01",
+                "--end-date",
+                "2026-05-08",
+            ]
+        )
 
 
 def test_factor_eval_batch_cli_main_prints_stable_rows(monkeypatch, capsys):
@@ -69,3 +101,27 @@ def test_factor_eval_batch_cli_main_prints_stable_rows(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == (
         "factor_gate_batch|alpha101_delta_close_1_rank|approved|passed_thresholds|5|run-1"
     )
+
+
+def test_factor_eval_batch_cli_main_passes_none_when_factor_names_omitted(monkeypatch, capsys):
+    calls = []
+
+    def fake_runner(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame([])
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "python -m stock_research.factor_eval_batch_cli",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+        ],
+    )
+
+    main(runner=fake_runner)
+
+    assert calls[0]["factor_names"] is None
+    assert capsys.readouterr().out == ""

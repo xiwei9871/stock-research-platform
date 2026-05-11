@@ -125,3 +125,33 @@ def test_run_factor_gate_batch_uses_default_candidates_when_factor_names_omitted
     assert list(result["factor_name"]) == ["ret_20", "qlib_ret_5"]
     assert list(result["status"]) == ["approved", "approved"]
     assert [kind for kind, _ in calls] == ["run", "approval", "run", "approval"]
+
+
+def test_run_factor_gate_batch_preserves_explicit_empty_factor_names(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "candidate_factor_names",
+        lambda: calls.append("candidate_factor_names") or ["ret_20"],
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "load_multi_horizon_factor_eval_inputs",
+        lambda **kwargs: calls.append("load_multi_horizon_factor_eval_inputs"),
+    )
+
+    result = factor_eval_batch.run_factor_gate_batch(
+        factor_names=[],
+        start_date="2026-01-01",
+        end_date="2026-05-08",
+        horizons=[5, 10, 20, 60],
+        primary_horizon=5,
+        calc_version="v1",
+        score_version="manual_v1",
+        quantiles=5,
+        top_n=30,
+    )
+
+    assert result.empty
+    assert calls == []
