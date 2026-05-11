@@ -65,6 +65,25 @@ def test_cli_accepts_load_bars_archive_raw_flag():
     assert args.archive_raw is True
 
 
+def test_cli_accepts_sync_index_constituents_command():
+    args = build_parser().parse_args(
+        [
+            "sync-index-constituents",
+            "--trade-date",
+            "2024-05-31",
+            "--index-ids",
+            "CSI_300,CSI_500",
+            "--source-version",
+            "baostock_snapshot_v1",
+        ]
+    )
+
+    assert args.command == "sync-index-constituents"
+    assert args.trade_date == "2024-05-31"
+    assert args.index_ids == ["CSI_300", "CSI_500"]
+    assert args.source_version == "baostock_snapshot_v1"
+
+
 def test_cli_accepts_phase4_action_commands():
     factor_args = build_parser().parse_args(
         [

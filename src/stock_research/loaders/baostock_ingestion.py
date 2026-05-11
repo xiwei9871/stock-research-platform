@@ -17,6 +17,12 @@ INDEX_TARGETS = {
     "CHINEXT": "sz.399006",
 }
 
+INDEX_CONSTITUENT_TARGETS = {
+    "SSE_50": bs.query_sz50_stocks,
+    "CSI_300": bs.query_hs300_stocks,
+    "CSI_500": bs.query_zz500_stocks,
+}
+
 
 def parse_float(value: Any) -> float | None:
     if value is None:
@@ -166,6 +172,62 @@ def upsert_index_daily_bars(conn, rows: list[dict[str, Any]]) -> int:
     return len(rows)
 
 
+def normalize_index_constituent_row(
+    index_id: str,
+    trade_date: str,
+    row: dict[str, Any],
+    source_version: str,
+) -> dict[str, Any]:
+    return {
+        "index_id": index_id,
+        "asset_id": asset_id_from_baostock_code(str(row["code"])),
+        "start_date": trade_date,
+        "end_date": None,
+        "weight": parse_float(row.get("weight")),
+        "source": "baostock",
+        "source_version": source_version,
+    }
+
+
+def upsert_index_constituents(conn, rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+    sql = """
+    INSERT INTO market.index_constituent (
+        index_id,
+        asset_id,
+        start_date,
+        end_date,
+        weight,
+        source,
+        source_version
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (index_id, asset_id, start_date, source_version) DO UPDATE SET
+        end_date = EXCLUDED.end_date,
+        weight = EXCLUDED.weight,
+        source = EXCLUDED.source,
+        updated_at = now()
+    """
+    execute_many(
+        conn,
+        sql,
+        [
+            (
+                row["index_id"],
+                row["asset_id"],
+                row["start_date"],
+                row["end_date"],
+                row["weight"],
+                row["source"],
+                row["source_version"],
+            )
+            for row in rows
+        ],
+    )
+    return len(rows)
+
+
 def _rows_from_result(rs) -> list[dict[str, str]]:
     rows = []
     while rs.next():
@@ -223,5 +285,37 @@ def sync_index_daily_bars(
             rows.extend(normalize_index_row(index_id, row) for row in _rows_from_result(rs))
         with connect(service) as conn:
             return upsert_index_daily_bars(conn, rows)
+    finally:
+        bs.logout()
+
+
+def sync_index_constituents(
+    trade_date: str,
+    index_ids: list[str] | None = None,
+    source_version: str = "baostock_snapshot_v1",
+    service: str = SETTINGS.research_service,
+) -> int:
+    login = bs.login()
+    if login.error_code != "0":
+        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+    try:
+        selected = index_ids if index_ids is not None else list(INDEX_CONSTITUENT_TARGETS)
+        rows = []
+        for index_id in selected:
+            query_fn = INDEX_CONSTITUENT_TARGETS.get(index_id)
+            if query_fn is None:
+                raise ValueError(f"Unsupported index constituent target: {index_id}")
+            rs = query_fn(date=trade_date)
+            if rs.error_code != "0":
+                raise RuntimeError(
+                    f"baostock constituent query failed for {index_id}: "
+                    f"{rs.error_code} {rs.error_msg}"
+                )
+            rows.extend(
+                normalize_index_constituent_row(index_id, trade_date, row, source_version)
+                for row in _rows_from_result(rs)
+            )
+        with connect(service) as conn:
+            return upsert_index_constituents(conn, rows)
     finally:
         bs.logout()

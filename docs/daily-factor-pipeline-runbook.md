@@ -198,6 +198,14 @@ Build Phase 4 tradability, adjustment factors, and derived corporate action even
 /Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
 ```
 
+Build Phase 5 benchmark bars and point-in-time index constituent snapshots:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research sync-index-bars --start-date 1990-12-19 --end-date YYYY-MM-DD
+/Users/xiwei/stock_research/.venv/bin/stock-research sync-index-constituents --trade-date YYYY-MM-DD --index-ids SSE_50,CSI_300,CSI_500 --source-version baostock_snapshot_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
+```
+
 1. Refresh forward-return labels:
 
 ```bash

@@ -106,6 +106,13 @@ def test_research_extension_includes_phase4_action_tables():
     assert "idx_market_corporate_action_asset_date" in sql
 
 
+def test_research_extension_includes_index_constituent_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.index_constituent" in sql
+    assert "source_version text NOT NULL" in sql
+    assert "idx_market_index_constituent_lookup" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"

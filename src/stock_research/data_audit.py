@@ -14,6 +14,8 @@ class AuditDataset:
 AUDIT_DATASETS: list[AuditDataset] = [
     AuditDataset("market_daily_bar", "market_daily_bar", "trade_date"),
     AuditDataset("raw_baostock.daily_bar_payload", "raw_baostock.daily_bar_payload", "trade_date"),
+    AuditDataset("market.index_daily_bar", "market.index_daily_bar", "trade_date"),
+    AuditDataset("market.index_constituent", "market.index_constituent", "start_date"),
     AuditDataset("market.trading_calendar", "market.trading_calendar", "trade_date"),
     AuditDataset("market.adjustment_factor", "market.adjustment_factor", "trade_date"),
     AuditDataset("market.corporate_action", "market.corporate_action", "event_date"),

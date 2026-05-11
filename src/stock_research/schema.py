@@ -265,6 +265,18 @@ CREATE TABLE IF NOT EXISTS market.index_daily_bar (
     PRIMARY KEY (index_id, trade_date)
 );
 
+CREATE TABLE IF NOT EXISTS market.index_constituent (
+    index_id text NOT NULL,
+    asset_id text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    weight numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (index_id, asset_id, start_date, source_version)
+);
+
 CREATE TABLE IF NOT EXISTS market.trading_calendar (
     exchange text NOT NULL,
     trade_date date NOT NULL,
@@ -576,6 +588,9 @@ CREATE INDEX IF NOT EXISTS idx_core_asset_status_daily_lookup
 
 CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
     ON market.index_daily_bar (trade_date, index_id);
+
+CREATE INDEX IF NOT EXISTS idx_market_index_constituent_lookup
+    ON market.index_constituent (index_id, start_date, end_date, asset_id);
 
 CREATE INDEX IF NOT EXISTS idx_market_trading_calendar_open_date
     ON market.trading_calendar (exchange, is_open, trade_date);

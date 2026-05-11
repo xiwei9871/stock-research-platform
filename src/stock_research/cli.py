@@ -54,6 +54,7 @@ from stock_research.ingest_jobs import (
 from stock_research.labels import compute_and_store_labels
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
+    sync_index_constituents,
     sync_industry_memberships,
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
@@ -116,6 +117,10 @@ def parse_str_list(value: str, option_name: str) -> list[str]:
 
 def parse_exchanges(value: str) -> list[str]:
     return parse_str_list(value, "--exchanges")
+
+
+def parse_index_ids(value: str) -> list[str]:
+    return parse_str_list(value, "--index-ids")
 
 
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
@@ -249,6 +254,11 @@ def build_parser() -> argparse.ArgumentParser:
     index_bars = subparsers.add_parser("sync-index-bars")
     index_bars.add_argument("--start-date", required=True)
     index_bars.add_argument("--end-date", required=True)
+
+    index_constituents = subparsers.add_parser("sync-index-constituents")
+    index_constituents.add_argument("--trade-date", required=True)
+    index_constituents.add_argument("--index-ids", type=parse_index_ids)
+    index_constituents.add_argument("--source-version", required=True)
 
     baostock_finance = subparsers.add_parser("sync-baostock-finance")
     baostock_finance.add_argument("--year", required=True, type=int)
@@ -763,6 +773,13 @@ def main() -> None:
     elif args.command == "sync-index-bars":
         count = sync_index_daily_bars(args.start_date, args.end_date)
         print(f"index_daily_bars_synced|{count}")
+    elif args.command == "sync-index-constituents":
+        count = sync_index_constituents(
+            trade_date=args.trade_date,
+            index_ids=args.index_ids,
+            source_version=args.source_version,
+        )
+        print(f"index_constituents_synced|{count}")
     elif args.command == "sync-baostock-finance":
         counts = sync_finance_for_period(
             args.year,

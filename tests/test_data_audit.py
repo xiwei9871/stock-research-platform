@@ -74,3 +74,5 @@ def test_audit_includes_phase_dimension_and_raw_datasets():
     assert "raw_baostock.daily_bar_payload" in dataset_names
     assert "market.adjustment_factor" in dataset_names
     assert "market.corporate_action" in dataset_names
+    assert "market.index_daily_bar" in dataset_names
+    assert "market.index_constituent" in dataset_names
