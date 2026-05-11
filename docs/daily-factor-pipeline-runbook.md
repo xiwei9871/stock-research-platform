@@ -217,6 +217,25 @@ Run a Phase 6 single-day benchmark before any industry-history range job:
 
 For a quick optimization comparison, run the same date twice: the first pass warms the raw industry snapshot cache, the second pass should be much faster. Use `--frequency monthly` to probe a longer window with far fewer remote calls before choosing a daily range.
 
+Build Phase 7 point-in-time finance statements from AKShare after the finance schema is applied:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research apply-research-schema
+/Users/xiwei/stock_research/.venv/bin/stock-research create-ingest-jobs --dataset akshare-finance-statements --start-year 1990 --end-year 2026 --batch-size 5
+/Users/xiwei/stock_research/.venv/bin/stock-research run-ingest-jobs --dataset akshare-finance-statements --limit-jobs 1
+/Users/xiwei/stock_research/.venv/bin/stock-research finance-audit
+```
+
+After the smoke job writes balance-sheet and cash-flow rows without source errors, continue with conservative single-worker batches:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research run-ingest-loop --dataset akshare-finance-statements --jobs-per-round 5 --sleep-seconds 10 --report-target CHAT_OR_GROUP_ID
+/Users/xiwei/stock_research/.venv/bin/stock-research finance-audit
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
+```
+
+Phase 7 finance factors must use only rows with `announcement_date <= trade_date`; use the TTM helpers in `stock_research.services.finance_ttm` for cumulative income-statement fields.
+
 1. Refresh forward-return labels:
 
 ```bash

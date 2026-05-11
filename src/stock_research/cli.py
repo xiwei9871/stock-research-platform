@@ -26,6 +26,7 @@ from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
     sync_asset_lifecycle_from_master,
 )
+from stock_research.finance_audit import format_finance_audit_line, summarize_finance_coverage
 from stock_research.industry_history import (
     benchmark_industry_day,
     run_industry_history_range,
@@ -210,6 +211,8 @@ def build_parser() -> argparse.ArgumentParser:
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
+    subparsers.add_parser("finance-audit")
+
     seed_trading_calendar = subparsers.add_parser("seed-trading-calendar")
     seed_trading_calendar.add_argument("--start-date", required=True)
     seed_trading_calendar.add_argument("--end-date", required=True)
@@ -302,6 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_ingest_loop.add_argument("--jobs-per-round", type=int, default=50)
     run_ingest_loop.add_argument("--sleep-seconds", type=int, default=10)
     run_ingest_loop.add_argument("--max-rounds", type=int)
+    run_ingest_loop.add_argument("--workers", type=int, default=1)
     run_ingest_loop.add_argument("--report-target", required=True)
     run_ingest_loop.add_argument("--report-account", default="jarvis")
     run_ingest_loop.add_argument("--openclaw-bin", default="openclaw")
@@ -543,6 +547,9 @@ def main() -> None:
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
+    elif args.command == "finance-audit":
+        for row in summarize_finance_coverage():
+            print(format_finance_audit_line(row))
     elif args.command == "seed-trading-calendar":
         count = seed_trading_calendar_from_bars(
             start_date=args.start_date,
@@ -944,6 +951,7 @@ def main() -> None:
             progress=print_ingest_progress,
             sleep_seconds=args.sleep_seconds,
             max_rounds=args.max_rounds,
+            workers=args.workers,
         )
         print(f"ingest_loop_rounds|{result['rounds']}")
         print(f"ingest_loop_attempted|{result['attempted']}")

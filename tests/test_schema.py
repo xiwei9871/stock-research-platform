@@ -225,6 +225,32 @@ def test_cli_accepts_ingest_batch_commands():
     assert run_args.command == "run-ingest-jobs"
     assert run_args.limit_jobs == 3
 
+    akshare_create_args = build_parser().parse_args(
+        [
+            "create-ingest-jobs",
+            "--dataset",
+            "akshare-finance-statements",
+            "--start-year",
+            "1990",
+            "--end-year",
+            "2025",
+            "--batch-size",
+            "20",
+        ]
+    )
+    assert akshare_create_args.command == "create-ingest-jobs"
+    assert akshare_create_args.dataset == "akshare-finance-statements"
+    assert akshare_create_args.batch_size == 20
+
+    akshare_run_args = build_parser().parse_args(
+        ["run-ingest-jobs", "--dataset", "akshare-finance-statements", "--limit-jobs", "3"]
+    )
+    assert akshare_run_args.command == "run-ingest-jobs"
+    assert akshare_run_args.dataset == "akshare-finance-statements"
+
+    finance_audit_args = build_parser().parse_args(["finance-audit"])
+    assert finance_audit_args.command == "finance-audit"
+
     status_args = build_parser().parse_args(
         ["ingest-status", "--dataset", "baostock-finance"]
     )
@@ -246,6 +272,8 @@ def test_cli_accepts_ingest_batch_commands():
             "0",
             "--max-rounds",
             "1",
+            "--workers",
+            "2",
             "--report-dry-run",
         ]
     )
@@ -256,6 +284,7 @@ def test_cli_accepts_ingest_batch_commands():
     assert loop_args.report_account == "jarvis"
     assert loop_args.sleep_seconds == 0
     assert loop_args.max_rounds == 1
+    assert loop_args.workers == 2
     assert loop_args.report_dry_run is True
 
 
@@ -284,6 +313,8 @@ def test_cli_main_runs_ingest_loop_and_prints_outputs(monkeypatch, capsys):
             "0",
             "--max-rounds",
             "1",
+            "--workers",
+            "2",
             "--report-dry-run",
         ],
     )
@@ -332,6 +363,7 @@ def test_cli_main_runs_ingest_loop_and_prints_outputs(monkeypatch, capsys):
     assert calls[1][0] == "run_loop"
     assert calls[1][1] == "baostock-finance"
     assert calls[1][2]["jobs_per_round"] == 2
+    assert calls[1][2]["workers"] == 2
 
 
 def test_run_ingest_loop_notification_failure_does_not_abort(monkeypatch, capsys):
