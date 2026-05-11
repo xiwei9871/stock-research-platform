@@ -83,6 +83,24 @@ def test_fetch_runnable_jobs_selects_pending_and_failed(monkeypatch):
     assert params == ["baostock-finance", 5]
 
 
+def test_reset_stale_ingest_jobs_returns_reset_count(monkeypatch):
+    conn = FakeConnection(rows=[{"job_id": "job-1"}, {"job_id": "job-2"}])
+    monkeypatch.setattr(ingest_jobs, "fetch_all", fake_fetch_all)
+
+    count = ingest_jobs.reset_stale_ingest_jobs(
+        conn,
+        dataset="baostock-finance",
+        older_than_minutes=60,
+    )
+
+    assert count == 2
+    sql, params = conn.executed[0]
+    assert "UPDATE ingest.batch_job" in sql
+    assert "status = 'running'" in sql
+    assert "RETURNING job_id" in sql
+    assert params == ["baostock-finance", 60]
+
+
 def test_job_state_updates(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(ingest_jobs, "execute", fake_execute)

@@ -154,6 +154,15 @@ print(build_daily_research_cron_entry())
 
 Use this flow when testing factor effectiveness. `factor.factor_daily` stores candidate factors. A stored factor is not effective until `factor.factor_approval` records `status='approved'` for the target score version.
 
+The current 2024-2026 data range is a smoke-test slice, not a research-grade full-history base.
+For full-history A-share buildout, run Phase 0 safety checks before starting any long mutation job:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research data-audit --expected-start-date 1990-12-01
+/Users/xiwei/stock_research/.venv/bin/stock-research reset-stale-ingest-jobs --dataset baostock-finance --older-than-minutes 60
+/Users/xiwei/stock_research/.venv/bin/stock-research research-preflight --start-date 1990-12-01 --horizons 5,10,20,60 --min-label-dates 20
+```
+
 1. Refresh forward-return labels:
 
 ```bash

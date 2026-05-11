@@ -53,12 +53,22 @@ def check_factor_label_coverage(
         raise ValueError("horizons must not be empty")
 
     factor_sql = """
-        SELECT min(trade_date) AS min_date, max(trade_date) AS max_date,
-               count(DISTINCT trade_date) AS date_count
-        FROM factor.factor_daily
-        WHERE factor_name = ANY(%s)
-          AND calc_version = %s
-          AND trade_date BETWEEN %s AND %s
+        SELECT min_date, max_date, date_count, complete_date_count
+        FROM (
+            SELECT
+                min(trade_date) AS min_date,
+                max(trade_date) AS max_date,
+                count(DISTINCT trade_date) AS date_count,
+                count(*) FILTER (WHERE factor_count = %s) AS complete_date_count
+            FROM (
+                SELECT trade_date, count(DISTINCT factor_name) AS factor_count
+                FROM factor.factor_daily
+                WHERE factor_name = ANY(%s)
+                  AND calc_version = %s
+                  AND trade_date BETWEEN %s AND %s
+                GROUP BY trade_date
+            ) factor_dates
+        ) factor_summary
     """
     label_sql = """
         SELECT horizon, min(trade_date) AS min_date, max(trade_date) AS max_date,
@@ -73,11 +83,16 @@ def check_factor_label_coverage(
         ORDER BY horizon
     """
     with connect(service) as conn:
-        factor_rows = fetch_all(conn, factor_sql, [factor_names, calc_version, start_date, end_date])
+        factor_rows = fetch_all(
+            conn,
+            factor_sql,
+            [len(factor_names), factor_names, calc_version, start_date, end_date],
+        )
         label_rows = fetch_all(conn, label_sql, [horizons, start_date, end_date])
 
     factor = factor_rows[0] if factor_rows else {}
     factor_date_count = int(factor.get("date_count") or 0)
+    factor_complete_date_count = int(factor.get("complete_date_count") or 0)
     label_horizons = {int(row["horizon"]): row for row in label_rows}
     missing_horizons = [horizon for horizon in horizons if horizon not in label_horizons]
     short_label_horizons = [
@@ -89,6 +104,8 @@ def check_factor_label_coverage(
     reasons = []
     if factor_date_count <= 0:
         reasons.append("missing_factor_rows")
+    if factor_complete_date_count < min_label_dates:
+        reasons.append("insufficient_complete_factor_dates")
     if missing_horizons:
         reasons.append("missing_label_horizons")
     if short_label_horizons:
@@ -100,6 +117,7 @@ def check_factor_label_coverage(
         "factor_min_date": factor.get("min_date"),
         "factor_max_date": factor.get("max_date"),
         "factor_date_count": factor_date_count,
+        "factor_complete_date_count": factor_complete_date_count,
         "label_horizons": label_horizons,
         "missing_horizons": missing_horizons,
         "short_label_horizons": short_label_horizons,

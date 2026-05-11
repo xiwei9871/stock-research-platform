@@ -23,7 +23,7 @@ These are the observed gaps as of 2026-05-11:
 - `finance.balance_sheet` and `finance.cash_flow` are empty.
 - `factor.factor_approval` has no approved factors.
 - Long-running finance ingest has pending/running jobs; stale running-job recovery needs first-class tooling.
-- The working tree currently contains uncommitted backfill-progress improvements. Treat those as separate implementation work and do not mix them with this master plan commit unless explicitly requested.
+- Long-backfill testing edits are preserved separately and must not be mixed into full-history Phase 0 unless explicitly requested.
 
 ## Target Data Contract
 
@@ -49,7 +49,7 @@ The platform is usable only when these contracts hold:
 
 **Tasks:**
 
-- [ ] Finish or revert the current uncommitted backfill-progress work in a separate branch commit.
+- [x] Preserve the current long-backfill testing work outside the Phase 0 working tree.
 - [ ] Add a strict factor coverage check that requires each candidate factor to appear on each factor date before preflight reports factor coverage as complete.
 - [ ] Add a stale running-job recovery command for `ingest.batch_job`.
 - [ ] Document that the current 2024-2026 data is a smoke-test slice, not a research-grade historical base.

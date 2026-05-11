@@ -641,6 +641,7 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
             "status": "ok",
             "reasons": [],
             "factor_date_count": 122,
+            "factor_complete_date_count": 122,
             "missing_horizons": [],
             "short_label_horizons": [],
         },
@@ -655,7 +656,7 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
 
     assert capsys.readouterr().out.splitlines() == [
         "research_preflight|latest_common_label_date|2026-01-30|122",
-        "research_preflight|coverage|ok|factor_dates|122",
+        "research_preflight|coverage|ok|factor_dates|122|complete_factor_dates|122",
         "research_preflight|missing_horizons|",
         "research_preflight|short_label_horizons|",
     ]
@@ -691,7 +692,7 @@ def test_research_preflight_cli_blocks_when_latest_label_date_missing(monkeypatc
 
     assert capsys.readouterr().out.splitlines() == [
         "research_preflight|latest_common_label_date||0",
-        "research_preflight|coverage|blocked|factor_dates|0",
+        "research_preflight|coverage|blocked|factor_dates|0|complete_factor_dates|0",
         "research_preflight|missing_horizons|5,10,20,60",
         "research_preflight|short_label_horizons|",
     ]
@@ -711,3 +712,60 @@ def test_research_preflight_cli_rejects_invalid_factor_names():
     for value in ("", ",", "ret_20,,qlib_ret_5"):
         with pytest.raises(SystemExit):
             build_parser().parse_args(["research-preflight", "--factor-names", value])
+
+
+def test_reset_stale_ingest_jobs_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "reset_stale_ingest_jobs_for_service", lambda **kwargs: 2)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "reset-stale-ingest-jobs",
+            "--dataset",
+            "baostock-finance",
+            "--older-than-minutes",
+            "60",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == "ingest_stale_reset|baostock-finance|2"
+
+
+def test_data_audit_cli_prints_lines(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "run_data_audit",
+        lambda **kwargs: [
+            {
+                "dataset": "market_daily_bar",
+                "status": "short_history",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "data-audit", "--expected-start-date", "1990-12-01"],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.strip() == (
+        "data_audit|market_daily_bar|short_history|rows|10|dates|2|"
+        "min|2024-01-01|max|2024-01-02"
+    )

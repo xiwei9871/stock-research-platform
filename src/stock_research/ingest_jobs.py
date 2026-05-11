@@ -146,6 +146,44 @@ def fetch_runnable_jobs(conn, dataset: str, limit_jobs: int) -> list[dict[str, A
     return fetch_all(conn, sql, [dataset, limit_jobs])
 
 
+def reset_stale_ingest_jobs(
+    conn,
+    *,
+    dataset: str,
+    older_than_minutes: int,
+) -> int:
+    if older_than_minutes <= 0:
+        raise ValueError("older_than_minutes must be positive")
+
+    sql = """
+    UPDATE ingest.batch_job
+    SET status = 'pending',
+        error_message = 'reset stale running job',
+        finished_at = now(),
+        updated_at = now()
+    WHERE dataset = %s
+      AND status = 'running'
+      AND started_at < now() - (%s::text || ' minutes')::interval
+    RETURNING job_id
+    """
+    rows = fetch_all(conn, sql, [dataset, older_than_minutes])
+    return len(rows)
+
+
+def reset_stale_ingest_jobs_for_service(
+    dataset: str,
+    *,
+    older_than_minutes: int,
+    service: str = SETTINGS.research_service,
+) -> int:
+    with connect(service) as conn:
+        return reset_stale_ingest_jobs(
+            conn,
+            dataset=dataset,
+            older_than_minutes=older_than_minutes,
+        )
+
+
 def _record_event(conn, job_id: str, status: str, message: str | None = None) -> None:
     sql = """
     INSERT INTO ingest.batch_event (job_id, status, message)

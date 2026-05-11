@@ -9,6 +9,7 @@ from stock_research.core_data import (
     build_industry_daily_bars_for_service,
     sync_core_asset_master_for_service,
 )
+from stock_research.data_audit import format_audit_line, run_data_audit
 from stock_research.features import compute_and_store_p0_features
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.factor_backfill import backfill_factor_daily_range
@@ -30,6 +31,7 @@ from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
     ingest_status_for_service,
+    reset_stale_ingest_jobs_for_service,
     run_ingest_loop_for_service,
     run_ingest_jobs_for_service,
 )
@@ -152,6 +154,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
 
+    data_audit = subparsers.add_parser("data-audit")
+    data_audit.add_argument("--expected-start-date", default="1990-12-01")
+
     asset_status = subparsers.add_parser("build-asset-status")
     asset_status.add_argument("--start-date")
     asset_status.add_argument("--end-date")
@@ -198,6 +203,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest_status = subparsers.add_parser("ingest-status")
     ingest_status.add_argument("--dataset")
+
+    reset_stale_ingest = subparsers.add_parser("reset-stale-ingest-jobs")
+    reset_stale_ingest.add_argument("--dataset", required=True)
+    reset_stale_ingest.add_argument("--older-than-minutes", type=int, default=60)
 
     load_bars = subparsers.add_parser("load-bars")
     load_bars.add_argument("--start-date")
@@ -391,6 +400,9 @@ def main() -> None:
     elif args.command == "sync-core-assets":
         sync_core_asset_master_for_service()
         print("core_asset_master_synced")
+    elif args.command == "data-audit":
+        for row in run_data_audit(expected_start_date=args.expected_start_date):
+            print(format_audit_line(row))
     elif args.command == "build-asset-status":
         build_asset_status_daily_for_service(
             args.start_date,
@@ -422,7 +434,7 @@ def main() -> None:
         end_date = args.end_date or latest["latest_common_date"]
         if end_date is None:
             print(f"research_preflight|latest_common_label_date||{latest['date_count']}")
-            print("research_preflight|coverage|blocked|factor_dates|0")
+            print("research_preflight|coverage|blocked|factor_dates|0|complete_factor_dates|0")
             print(
                 "research_preflight|missing_horizons|"
                 + ",".join(str(value) for value in horizons)
@@ -444,7 +456,8 @@ def main() -> None:
         )
         print(
             "research_preflight|coverage|"
-            f"{coverage['status']}|factor_dates|{coverage['factor_date_count']}"
+            f"{coverage['status']}|factor_dates|{coverage['factor_date_count']}|"
+            f"complete_factor_dates|{coverage['factor_complete_date_count']}"
         )
         print(
             "research_preflight|missing_horizons|"
@@ -664,6 +677,12 @@ def main() -> None:
         print(f"ingest_loop_success|{result['success']}")
         print(f"ingest_loop_failed|{result['failed']}")
         print(f"ingest_loop_done|{result['done']}")
+    elif args.command == "reset-stale-ingest-jobs":
+        count = reset_stale_ingest_jobs_for_service(
+            dataset=args.dataset,
+            older_than_minutes=args.older_than_minutes,
+        )
+        print(f"ingest_stale_reset|{args.dataset}|{count}")
     elif args.command == "ingest-status":
         for row in ingest_status_for_service(args.dataset):
             print(f"ingest_status|{row['dataset']}|{row['status']}|{row['count']}")
