@@ -579,8 +579,8 @@ def test_cli_accepts_research_preflight_command():
 
     assert args.command == "research-preflight"
     assert args.start_date == "2024-01-01"
-    assert args.horizons == "5,10,20,60"
-    assert args.factor_names == "ret_20,qlib_ret_5"
+    assert args.horizons == [5, 10, 20, 60]
+    assert args.factor_names == ["ret_20", "qlib_ret_5"]
     assert args.min_label_dates == 20
 
 
@@ -624,3 +624,55 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
         "research_preflight|missing_horizons|",
         "research_preflight|short_label_horizons|",
     ]
+
+
+def test_research_preflight_cli_blocks_when_latest_label_date_missing(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20", "qlib_ret_5"])
+    monkeypatch.setattr(
+        cli,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": None,
+            "date_count": 0,
+            "horizons": [5, 10, 20, 60],
+        },
+    )
+
+    def fail_check_factor_label_coverage(**kwargs):
+        raise AssertionError("check_factor_label_coverage should not be called")
+
+    monkeypatch.setattr(cli, "check_factor_label_coverage", fail_check_factor_label_coverage)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "research-preflight", "--start-date", "2024-01-01"],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "research_preflight|latest_common_label_date||0",
+        "research_preflight|coverage|blocked|factor_dates|0",
+        "research_preflight|missing_horizons|5,10,20,60",
+        "research_preflight|short_label_horizons|",
+    ]
+
+
+def test_research_preflight_cli_rejects_invalid_horizons():
+    import pytest
+
+    for value in ("", ",", "5,,10"):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["research-preflight", "--horizons", value])
+
+
+def test_research_preflight_cli_rejects_invalid_factor_names():
+    import pytest
+
+    for value in ("", ",", "ret_20,,qlib_ret_5"):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["research-preflight", "--factor-names", value])

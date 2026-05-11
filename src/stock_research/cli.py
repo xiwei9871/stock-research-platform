@@ -78,6 +78,17 @@ def parse_top_ks(value: str) -> list[int]:
     return parse_int_list(value, "--top-ks")
 
 
+def parse_research_horizons(value: str) -> list[int]:
+    return parse_int_list(value, "--horizons")
+
+
+def parse_factor_names(value: str) -> list[str]:
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(part == "" for part in parts):
+        raise argparse.ArgumentTypeError("--factor-names must not contain empty values")
+    return parts
+
+
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
     if total <= 0:
         return "[" + "-" * width + "]"
@@ -283,8 +294,12 @@ def build_parser() -> argparse.ArgumentParser:
     research_preflight = subparsers.add_parser("research-preflight")
     research_preflight.add_argument("--start-date", default="2024-01-01")
     research_preflight.add_argument("--end-date")
-    research_preflight.add_argument("--horizons", default="5,10,20,60")
-    research_preflight.add_argument("--factor-names")
+    research_preflight.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    research_preflight.add_argument("--factor-names", type=parse_factor_names)
     research_preflight.add_argument("--calc-version", default="v1")
     research_preflight.add_argument("--min-label-dates", type=int, default=20)
 
@@ -399,17 +414,22 @@ def main() -> None:
         )
         print(f"factor_daily_stored|{count}")
     elif args.command == "research-preflight":
-        horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
-        factors = (
-            [value.strip() for value in args.factor_names.split(",") if value.strip()]
-            if args.factor_names
-            else candidate_factor_names()
-        )
+        horizons = args.horizons
         latest = find_latest_common_label_date(
             start_date=args.start_date,
             horizons=horizons,
         )
         end_date = args.end_date or latest["latest_common_date"]
+        if end_date is None:
+            print(f"research_preflight|latest_common_label_date||{latest['date_count']}")
+            print("research_preflight|coverage|blocked|factor_dates|0")
+            print(
+                "research_preflight|missing_horizons|"
+                + ",".join(str(value) for value in horizons)
+            )
+            print("research_preflight|short_label_horizons|")
+            return
+        factors = args.factor_names if args.factor_names else candidate_factor_names()
         coverage = check_factor_label_coverage(
             factor_names=factors,
             start_date=args.start_date,
