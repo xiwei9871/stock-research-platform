@@ -30,4 +30,4 @@ def score_approved_factors_range(
             approved_only=True,
         )
         rows.append({"trade_date": trade_date, "score_rows": count})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=["trade_date", "score_rows"])

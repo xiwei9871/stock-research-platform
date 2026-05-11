@@ -45,3 +45,27 @@ def test_score_approved_factors_range_uses_trading_dates_by_default(monkeypatch)
     assert list(result["score_rows"]) == [8, 8]
     assert calls[0]["trade_date"] == "2024-01-02"
     assert calls[0]["approved_only"] is True
+
+
+def test_score_approved_factors_range_empty_trading_dates_keeps_columns(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        approved_scoring_workflow,
+        "load_trade_dates_for_backfill",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        approved_scoring_workflow,
+        "score_stored_factor_daily",
+        lambda **kwargs: calls.append(kwargs) or 8,
+    )
+
+    result = approved_scoring_workflow.score_approved_factors_range(
+        start_date="2024-01-01",
+        end_date="2024-01-05",
+    )
+
+    assert result.empty
+    assert list(result.columns) == ["trade_date", "score_rows"]
+    assert calls == []
