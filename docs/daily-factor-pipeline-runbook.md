@@ -68,6 +68,13 @@ Record non-dry-run daily incremental step status:
 /Users/xiwei/stock_research/.venv/bin/stock-research run-daily-incremental --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --lookback-bars 130 --adjust-type hfq --source-service stock_hfq --industry-system csrc --apply-daily-run-schema --record-run
 ```
 
+Resume an interrupted daily incremental run from a named step, or rerun one step:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research run-daily-incremental --trade-date YYYY-MM-DD --start-at build_factor_daily --record-run
+/Users/xiwei/stock_research/.venv/bin/stock-research run-daily-incremental --trade-date YYYY-MM-DD --only-step score_approved_factors --record-run
+```
+
 The daily incremental DAG loads market bars first, then checks target-date `market_daily_bar` freshness before downstream derived steps.
 
 Check Phase 10 operational health without mutating data:
@@ -81,6 +88,37 @@ Send the same health summary to Feishu only when alerts exist:
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research daily-health --trade-date YYYY-MM-DD --ingest-datasets baostock-finance,akshare-finance-statements --stale-minutes 60 --notify-target OPENCLAW_TARGET --notify-dry-run
 ```
+
+Apply Phase 11 lookup indexes after deploying schema changes:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research apply-research-schema
+```
+
+Export a reproducible research snapshot for a fixed window and score version:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research export-research-snapshot --start-date YYYY-MM-DD --end-date YYYY-MM-DD --score-version manual_v1 --output-dir /Users/xiwei/stock_research/reports/snapshots/SNAPSHOT_NAME
+```
+
+Before any destructive schema migration, generate a backup/restore safety plan and verify an existing dump catalog:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research migration-safety-check --backup-path /Users/xiwei/backups/stock_research_YYYYMMDD.dump --source-service stock_research --restore-service stock_research_restore_check --dry-run
+/Users/xiwei/stock_research/.venv/bin/stock-research migration-safety-check --backup-path /Users/xiwei/backups/stock_research_YYYYMMDD.dump --source-service stock_research --restore-service stock_research_restore_check
+```
+
+After large backfills, run table maintenance from `psql` during a quiet window:
+
+```bash
+psql "service=stock_research" -c "VACUUM ANALYZE market_daily_bar;"
+psql "service=stock_research" -c "VACUUM ANALYZE label_snapshot;"
+psql "service=stock_research" -c "VACUUM ANALYZE factor.factor_daily;"
+psql "service=stock_research" -c "VACUUM ANALYZE factor.stock_score_daily;"
+psql "service=stock_research" -c "VACUUM ANALYZE raw_baostock.daily_bar_payload;"
+```
+
+Partitioning evaluation: keep the current tables unpartitioned until the indexes above and `VACUUM ANALYZE` are applied and measured. Revisit native range partitioning by month or year for `market_daily_bar`, `label_snapshot`, `factor.factor_daily`, `raw_baostock.daily_bar_payload`, `raw_akshare.finance_payload`, and `raw_baostock.finance_payload` once full-history row counts or query plans show date-range scans dominating runtime.
 
 Run TopN research workflow and write performance tear sheet:
 
@@ -343,6 +381,9 @@ cd /Users/xiwei/stock_research
 - Daily incremental dry-run prints the ordered Phase 10 DAG without writing data.
 - Optional daily incremental run recording writes step status to `ops.daily_job_run`.
 - Daily health check prints failed ingest jobs, stale running jobs, failed backfill tasks, stale backfill tasks, and failed daily incremental steps.
+- Phase 11 schema adds lookup indexes for full-history label, factor, score, and raw daily-bar access patterns.
+- Research snapshot export writes `market_daily_bar`, `label_snapshot`, `factor_daily`, `stock_score_daily`, `factor_approval`, and `manifest.json` files for reproducibility.
+- Migration safety check prints the required `pg_dump`, `pg_restore --list`, and isolated restore-check commands before destructive schema migrations.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails

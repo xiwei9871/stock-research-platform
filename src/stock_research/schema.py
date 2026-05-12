@@ -177,6 +177,12 @@ CREATE INDEX IF NOT EXISTS idx_feature_snapshot_trade_date
 CREATE INDEX IF NOT EXISTS idx_label_snapshot_trade_date
     ON label_snapshot (trade_date, label_set, label_version);
 
+CREATE INDEX IF NOT EXISTS idx_label_snapshot_eval_lookup
+    ON label_snapshot (trade_date, horizon, label_name, label_set, label_version, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_label_snapshot_asset_history
+    ON label_snapshot (asset_id, label_set, label_version, horizon, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_selection_result_trade_date
     ON selection_result (trade_date, score_version, rank);
 
@@ -455,6 +461,9 @@ CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload (
 CREATE INDEX IF NOT EXISTS idx_raw_baostock_daily_bar_payload_lookup
     ON raw_baostock.daily_bar_payload (adjust_type, trade_date, asset_id);
 
+CREATE INDEX IF NOT EXISTS idx_raw_baostock_daily_bar_payload_asset_date
+    ON raw_baostock.daily_bar_payload (asset_id, trade_date DESC, adjust_type);
+
 CREATE TABLE IF NOT EXISTS raw_baostock.industry_snapshot_payload (
     snapshot_date date NOT NULL,
     source_endpoint text NOT NULL,
@@ -639,8 +648,17 @@ CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_run_status
 CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
     ON factor.factor_daily (trade_date, factor_name, calc_version);
 
+CREATE INDEX IF NOT EXISTS idx_factor_daily_eval_lookup
+    ON factor.factor_daily (factor_name, calc_version, trade_date, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_factor_daily_asset_history
+    ON factor.factor_daily (asset_id, factor_name, calc_version, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_stock_score_daily_rank
     ON factor.stock_score_daily (trade_date, score_version, rank);
+
+CREATE INDEX IF NOT EXISTS idx_stock_score_daily_asset_history
+    ON factor.stock_score_daily (asset_id, score_version, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_factor_eval_run_factor
     ON factor.factor_eval_run (factor_name, calc_version, created_at DESC);

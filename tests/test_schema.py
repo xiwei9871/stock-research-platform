@@ -72,6 +72,16 @@ def test_research_extension_enforces_point_in_time_columns():
     assert "idx_stock_score_daily_rank" in sql
 
 
+def test_schema_includes_phase11_full_history_indexes():
+    sql = CREATE_TABLES_SQL + CREATE_RESEARCH_EXTENSION_SQL
+    assert "idx_label_snapshot_eval_lookup" in sql
+    assert "idx_label_snapshot_asset_history" in sql
+    assert "idx_factor_daily_eval_lookup" in sql
+    assert "idx_factor_daily_asset_history" in sql
+    assert "idx_stock_score_daily_asset_history" in sql
+    assert "idx_raw_baostock_daily_bar_payload_asset_date" in sql
+
+
 def test_research_extension_includes_factor_eval_gate_tables():
     assert "CREATE TABLE IF NOT EXISTS factor.factor_eval_run" in CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS factor.factor_approval" in CREATE_RESEARCH_EXTENSION_SQL

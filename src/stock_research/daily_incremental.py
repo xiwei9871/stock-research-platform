@@ -39,6 +39,24 @@ FreshnessChecker = Callable[[dict[str, Any]], dict[str, Any]]
 Recorder = Callable[[dict[str, Any]], Any]
 
 
+def select_daily_incremental_steps(
+    start_at: str | None = None,
+    only_step: str | None = None,
+) -> list[str]:
+    if start_at and only_step:
+        raise ValueError("start_at and only_step are mutually exclusive")
+    if only_step:
+        if only_step not in DAILY_INCREMENTAL_STEPS:
+            raise ValueError(f"Unknown daily incremental step: {only_step}")
+        return [only_step]
+    if start_at:
+        if start_at not in DAILY_INCREMENTAL_STEPS:
+            raise ValueError(f"Unknown daily incremental step: {start_at}")
+        start_index = DAILY_INCREMENTAL_STEPS.index(start_at)
+        return DAILY_INCREMENTAL_STEPS[start_index:]
+    return list(DAILY_INCREMENTAL_STEPS)
+
+
 def build_default_step_runners() -> dict[str, StepRunner]:
     return {
         "sync_core_assets": _sync_core_assets_step,
@@ -184,7 +202,10 @@ def run_daily_incremental_pipeline(
     step_runners: dict[str, StepRunner] | None = None,
     freshness_checker: FreshnessChecker | None = None,
     recorder: Recorder | None = None,
+    start_at: str | None = None,
+    only_step: str | None = None,
 ) -> dict[str, Any]:
+    selected_steps = select_daily_incremental_steps(start_at=start_at, only_step=only_step)
     context = {
         "trade_date": trade_date,
         "score_version": score_version,
@@ -194,6 +215,8 @@ def run_daily_incremental_pipeline(
         "adjust_type": adjust_type,
         "source_service": source_service,
         "industry_system": industry_system,
+        "start_at": start_at,
+        "only_step": only_step,
     }
     if freshness_checker is not None:
         freshness = freshness_checker(context)
@@ -207,7 +230,7 @@ def run_daily_incremental_pipeline(
 
     runners = step_runners or {}
     steps = []
-    for step_name in DAILY_INCREMENTAL_STEPS:
+    for step_name in selected_steps:
         if dry_run:
             step_result = {"step": step_name, "status": "planned"}
             steps.append(step_result)

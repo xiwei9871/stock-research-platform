@@ -85,6 +85,7 @@ from stock_research.loaders.baostock_ingestion import (
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
 from stock_research.market_data import load_market_daily_bars
+from stock_research.migration_safety import run_backup_restore_check
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
@@ -96,6 +97,7 @@ from stock_research.research_preflight import (
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.retention_backtest import run_retention_backtest
+from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
 from stock_research.selection import generate_selection, store_selection
 from stock_research.v31_cache import build_v31_cache
@@ -576,6 +578,9 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--adjust-type", default="hfq")
     daily_incremental.add_argument("--source-service", default="stock_hfq")
     daily_incremental.add_argument("--industry-system", default="csrc")
+    daily_incremental_resume = daily_incremental.add_mutually_exclusive_group()
+    daily_incremental_resume.add_argument("--start-at")
+    daily_incremental_resume.add_argument("--only-step")
     daily_incremental.add_argument(
         "--reports-dir",
         default="/Users/xiwei/stock_research/reports",
@@ -593,6 +598,18 @@ def build_parser() -> argparse.ArgumentParser:
     daily_health.add_argument("--notify-account", default="jarvis")
     daily_health.add_argument("--openclaw-bin", default="openclaw")
     daily_health.add_argument("--notify-dry-run", action="store_true")
+
+    export_snapshot = subparsers.add_parser("export-research-snapshot")
+    export_snapshot.add_argument("--start-date", required=True)
+    export_snapshot.add_argument("--end-date", required=True)
+    export_snapshot.add_argument("--score-version", default="manual_v1")
+    export_snapshot.add_argument("--output-dir", required=True)
+
+    migration_safety = subparsers.add_parser("migration-safety-check")
+    migration_safety.add_argument("--backup-path", required=True)
+    migration_safety.add_argument("--source-service", default="stock_research")
+    migration_safety.add_argument("--restore-service")
+    migration_safety.add_argument("--dry-run", action="store_true")
 
     daily_research_report = subparsers.add_parser("run-daily-research-report")
     daily_research_report.add_argument("--trade-date", required=True)
@@ -988,6 +1005,8 @@ def main() -> None:
             step_runners=None if args.dry_run else build_default_step_runners(),
             freshness_checker=None,
             recorder=recorder,
+            start_at=args.start_at,
+            only_step=args.only_step,
         )
         print(f"daily_incremental|status|{result['status']}")
         if "reason" in result:
@@ -1014,6 +1033,28 @@ def main() -> None:
                 openclaw_bin=args.openclaw_bin,
                 dry_run=args.notify_dry_run,
             )
+    elif args.command == "export-research-snapshot":
+        result = export_research_snapshot(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_version=args.score_version,
+            output_dir=args.output_dir,
+        )
+        print(f"research_snapshot|manifest|{result['manifest_path']}")
+        for dataset, rows in result["row_counts"].items():
+            print(f"research_snapshot_dataset|{dataset}|rows|{rows}|{result['files'][dataset]}")
+    elif args.command == "migration-safety-check":
+        result = run_backup_restore_check(
+            backup_path=args.backup_path,
+            source_service=args.source_service,
+            restore_service=args.restore_service,
+            dry_run=args.dry_run,
+        )
+        print(f"migration_safety|status|{result['status']}")
+        for command in result["commands"]:
+            print(f"migration_safety_command|{command}")
+        for check in result["checks"]:
+            print(f"migration_safety_check|{check['check']}|{check['status']}|{check['detail']}")
     elif args.command == "run-daily-research-report":
         result = run_daily_research_report(
             trade_date=args.trade_date,

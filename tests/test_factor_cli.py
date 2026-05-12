@@ -297,6 +297,8 @@ def test_cli_accepts_daily_incremental_command():
             "stock_qfq",
             "--industry-system",
             "sw",
+            "--start-at",
+            "build_factor_daily",
             "--dry-run",
         ]
     )
@@ -309,7 +311,40 @@ def test_cli_accepts_daily_incremental_command():
     assert args.adjust_type == "qfq"
     assert args.source_service == "stock_qfq"
     assert args.industry_system == "sw"
+    assert args.start_at == "build_factor_daily"
+    assert args.only_step is None
     assert args.dry_run is True
+
+
+def test_cli_accepts_daily_incremental_only_step_command():
+    args = build_parser().parse_args(
+        [
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--only-step",
+            "score_approved_factors",
+            "--dry-run",
+        ]
+    )
+
+    assert args.start_at is None
+    assert args.only_step == "score_approved_factors"
+
+
+def test_cli_rejects_daily_incremental_conflicting_resume_options():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "run-daily-incremental",
+                "--trade-date",
+                "2026-05-12",
+                "--start-at",
+                "build_factor_daily",
+                "--only-step",
+                "score_approved_factors",
+            ]
+        )
 
 
 def test_cli_accepts_daily_incremental_recording_flags():
@@ -325,6 +360,49 @@ def test_cli_accepts_daily_incremental_recording_flags():
 
     assert args.apply_daily_run_schema is True
     assert args.record_run is True
+
+
+def test_cli_accepts_export_research_snapshot_command():
+    args = build_parser().parse_args(
+        [
+            "export-research-snapshot",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-12",
+            "--score-version",
+            "manual_v1",
+            "--output-dir",
+            "/tmp/snapshot",
+        ]
+    )
+
+    assert args.command == "export-research-snapshot"
+    assert args.start_date == "2026-01-01"
+    assert args.end_date == "2026-05-12"
+    assert args.score_version == "manual_v1"
+    assert args.output_dir == "/tmp/snapshot"
+
+
+def test_cli_accepts_migration_safety_check_command():
+    args = build_parser().parse_args(
+        [
+            "migration-safety-check",
+            "--backup-path",
+            "/tmp/stock_research.dump",
+            "--source-service",
+            "stock_research",
+            "--restore-service",
+            "stock_research_restore_check",
+            "--dry-run",
+        ]
+    )
+
+    assert args.command == "migration-safety-check"
+    assert args.backup_path == "/tmp/stock_research.dump"
+    assert args.source_service == "stock_research"
+    assert args.restore_service == "stock_research_restore_check"
+    assert args.dry_run is True
 
 
 def test_cli_accepts_daily_research_report_command():
@@ -793,13 +871,21 @@ def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch,
     monkeypatch.setattr(
         sys,
         "argv",
-        ["stock-research", "run-daily-incremental", "--trade-date", "2026-05-12"],
+        [
+            "stock-research",
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--start-at",
+            "build_factor_daily",
+        ],
     )
 
     cli.main()
 
     assert calls[0] == "runners"
     assert "sync_core_assets" in calls[1]["step_runners"]
+    assert calls[1]["start_at"] == "build_factor_daily"
     assert calls[1]["dry_run"] is False
     assert calls[1]["freshness_checker"] is None
     assert capsys.readouterr().out.splitlines() == [
@@ -952,6 +1038,81 @@ def test_daily_health_cli_can_send_dry_run_notification(monkeypatch, capsys):
     assert calls[0]["target"] == "oc_group"
     assert calls[0]["dry_run"] is True
     assert "daily_health|status|alert|alerts|1" in calls[0]["message"]
+
+
+def test_export_research_snapshot_cli_prints_manifest_and_counts(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "export_research_snapshot",
+        lambda **kwargs: {
+            "manifest_path": "/tmp/snapshot/manifest.json",
+            "row_counts": {"factor_daily": 12},
+            "files": {"factor_daily": "/tmp/snapshot/factor_daily.csv"},
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "export-research-snapshot",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-12",
+            "--output-dir",
+            "/tmp/snapshot",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "research_snapshot|manifest|/tmp/snapshot/manifest.json",
+        "research_snapshot_dataset|factor_daily|rows|12|/tmp/snapshot/factor_daily.csv",
+    ]
+
+
+def test_migration_safety_check_cli_prints_plan(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "run_backup_restore_check",
+        lambda **kwargs: {
+            "status": "planned",
+            "commands": [
+                'pg_dump --format=custom --file /tmp/stock_research.dump "service=stock_research"',
+                "pg_restore --list /tmp/stock_research.dump",
+            ],
+            "checks": [],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "migration-safety-check",
+            "--backup-path",
+            "/tmp/stock_research.dump",
+            "--dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "migration_safety|status|planned",
+        'migration_safety_command|pg_dump --format=custom --file /tmp/stock_research.dump "service=stock_research"',
+        "migration_safety_command|pg_restore --list /tmp/stock_research.dump",
+    ]
 
 
 def test_daily_research_report_cli_prints_report_paths(monkeypatch, capsys, tmp_path):
