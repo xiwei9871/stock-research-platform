@@ -23,6 +23,19 @@ def date_text(value: Any) -> str:
     return str(value)[:10]
 
 
+def sina_date_text(value: Any) -> str:
+    text = str(value).strip()
+    if len(text) >= 8 and text[:8].isdigit():
+        return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+    return date_text(value)
+
+
+def report_type_from_period(report_period: str) -> str:
+    if str(report_period).endswith("-12-31"):
+        return "FY"
+    return "Q"
+
+
 def json_safe_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: json_safe_value(item) for key, item in value.items()}
@@ -83,6 +96,55 @@ def normalize_em_cash_flow_row(row: dict[str, Any]) -> dict[str, Any]:
         "capex": capex,
         "free_cash_flow": free_cash_flow,
         "source": "akshare_em",
+    }
+
+
+def normalize_sina_balance_sheet_row(
+    row: dict[str, Any],
+    asset_id: str,
+) -> dict[str, Any]:
+    report_period = sina_date_text(row["报告日"])
+    return {
+        "asset_id": asset_id,
+        "report_period": report_period,
+        "report_type": report_type_from_period(report_period),
+        "announcement_date": sina_date_text(row["公告日期"]),
+        "total_assets": parse_float(row.get("资产总计")),
+        "total_liabilities": parse_float(row.get("负债合计")),
+        "total_equity": parse_float(
+            row.get("所有者权益(或股东权益)合计", row.get("所有者权益"))
+        ),
+        "monetary_funds": parse_float(row.get("货币资金")),
+        "accounts_receivable": parse_float(
+            row.get("应收账款", row.get("应收票据及应收账款"))
+        ),
+        "inventory": parse_float(row.get("存货")),
+        "goodwill": parse_float(row.get("商誉")),
+        "source": "akshare_sina",
+    }
+
+
+def normalize_sina_cash_flow_row(
+    row: dict[str, Any],
+    asset_id: str,
+) -> dict[str, Any]:
+    report_period = sina_date_text(row["报告日"])
+    operating_cash_flow = parse_float(row.get("经营活动产生的现金流量净额"))
+    capex = parse_float(row.get("购建固定资产、无形资产和其他长期资产支付的现金"))
+    free_cash_flow = None
+    if operating_cash_flow is not None and capex is not None:
+        free_cash_flow = operating_cash_flow - capex
+    return {
+        "asset_id": asset_id,
+        "report_period": report_period,
+        "report_type": report_type_from_period(report_period),
+        "announcement_date": sina_date_text(row["公告日期"]),
+        "net_operate_cash_flow": operating_cash_flow,
+        "net_invest_cash_flow": parse_float(row.get("投资活动产生的现金流量净额")),
+        "net_finance_cash_flow": parse_float(row.get("筹资活动产生的现金流量净额")),
+        "capex": capex,
+        "free_cash_flow": free_cash_flow,
+        "source": "akshare_sina",
     }
 
 
@@ -225,6 +287,51 @@ def sync_finance_statements_for_asset(
 def akshare_symbol_from_asset_id(asset_id: str) -> str:
     _market, exchange, symbol = asset_id.split(":", 2)
     return f"{exchange}{symbol}"
+
+
+def sina_stock_code_from_asset_id(asset_id: str) -> str:
+    _market, exchange, symbol = asset_id.split(":", 2)
+    return f"{exchange.lower()}{symbol}"
+
+
+def sync_sina_finance_statements_for_asset(
+    asset_id: str,
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, int]:
+    stock_code = sina_stock_code_from_asset_id(asset_id)
+    balance_df = ak.stock_financial_report_sina(stock=stock_code, symbol="资产负债表")
+    cash_df = ak.stock_financial_report_sina(stock=stock_code, symbol="现金流量表")
+    balance_payload = dataframe_payload(balance_df)
+    cash_payload = dataframe_payload(cash_df)
+    balance_rows = [
+        normalize_sina_balance_sheet_row(row, asset_id)
+        for row in balance_payload
+        if row.get("报告日") and row.get("公告日期")
+    ]
+    cash_rows = [
+        normalize_sina_cash_flow_row(row, asset_id)
+        for row in cash_payload
+        if row.get("报告日") and row.get("公告日期")
+    ]
+    with connect(service) as conn:
+        store_finance_payload(
+            conn,
+            "stock_financial_report_sina",
+            {"stock": stock_code, "symbol": "资产负债表"},
+            balance_payload,
+            asset_id=asset_id,
+        )
+        store_finance_payload(
+            conn,
+            "stock_financial_report_sina",
+            {"stock": stock_code, "symbol": "现金流量表"},
+            cash_payload,
+            asset_id=asset_id,
+        )
+        balance_count = upsert_balance_sheets(conn, balance_rows)
+        cash_count = upsert_cash_flows(conn, cash_rows)
+    return {"balance_sheet": balance_count, "cash_flow": cash_count, "raw_payload": 2}
 
 
 def sync_finance_statements_for_assets(

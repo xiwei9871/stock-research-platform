@@ -1,4 +1,5 @@
 from functools import lru_cache
+import time
 from typing import Any
 
 import baostock as bs
@@ -6,6 +7,12 @@ import baostock as bs
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+
+
+FINANCE_QUERY_MAX_ATTEMPTS = 3
+FINANCE_QUERY_RETRY_ERROR_CODES = {"10001001", "10002007"}
+BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
+BAOSTOCK_LOGIN_RETRY_SECONDS = 2
 
 
 def parse_float(value: Any) -> float | None:
@@ -276,6 +283,41 @@ def _query_rows(func, code: str, year: int, quarter: int) -> list[dict[str, str]
     return _rows_from_result(rs)
 
 
+def _login_or_raise() -> None:
+    last_error = ""
+    for attempt in range(1, BAOSTOCK_LOGIN_MAX_ATTEMPTS + 1):
+        login = bs.login()
+        if login.error_code == "0":
+            return
+        last_error = f"{login.error_code} {login.error_msg}"
+        if (
+            attempt >= BAOSTOCK_LOGIN_MAX_ATTEMPTS
+            or login.error_code not in FINANCE_QUERY_RETRY_ERROR_CODES
+        ):
+            break
+        time.sleep(BAOSTOCK_LOGIN_RETRY_SECONDS)
+    raise RuntimeError(f"baostock login failed: {last_error}")
+
+
+def _query_rows_with_retry(func, code: str, year: int, quarter: int) -> list[dict[str, str]]:
+    last_error: RuntimeError | None = None
+    for attempt in range(1, FINANCE_QUERY_MAX_ATTEMPTS + 1):
+        try:
+            return _query_rows(func, code, year, quarter)
+        except RuntimeError as exc:
+            message = str(exc)
+            last_error = exc
+            if (
+                attempt >= FINANCE_QUERY_MAX_ATTEMPTS
+                or not any(error_code in message for error_code in FINANCE_QUERY_RETRY_ERROR_CODES)
+            ):
+                raise
+            bs.logout()
+            _login_or_raise()
+    assert last_error is not None
+    raise last_error
+
+
 def quarter_end_date(year: int, quarter: int) -> str:
     mapping = {
         1: f"{year}-03-31",
@@ -290,9 +332,7 @@ def quarter_end_date(year: int, quarter: int) -> str:
 
 @lru_cache(maxsize=256)
 def available_baostock_codes_on(date_str: str) -> set[str]:
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+    _login_or_raise()
     try:
         rs = bs.query_all_stock(date_str)
         if rs.error_code != "0":
@@ -359,23 +399,21 @@ def sync_finance_for_period(
             "queried_assets": 0,
         }
 
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+    _login_or_raise()
     try:
         indicators = []
         incomes = []
         share_capital_events = []
         for code in codes:
             print(f"baostock_finance_query|{code}", flush=True)
-            profit_rows = _query_rows(bs.query_profit_data, code, year, quarter)
+            profit_rows = _query_rows_with_retry(bs.query_profit_data, code, year, quarter)
             merged_rows = merge_finance_rows(
                 profit_rows,
-                _query_rows(bs.query_balance_data, code, year, quarter),
-                _query_rows(bs.query_cash_flow_data, code, year, quarter),
-                _query_rows(bs.query_growth_data, code, year, quarter),
-                _query_rows(bs.query_operation_data, code, year, quarter),
-                _query_rows(bs.query_dupont_data, code, year, quarter),
+                _query_rows_with_retry(bs.query_balance_data, code, year, quarter),
+                _query_rows_with_retry(bs.query_cash_flow_data, code, year, quarter),
+                _query_rows_with_retry(bs.query_growth_data, code, year, quarter),
+                _query_rows_with_retry(bs.query_operation_data, code, year, quarter),
+                _query_rows_with_retry(bs.query_dupont_data, code, year, quarter),
             )
             for row in merged_rows:
                 indicators.append(normalize_indicator_row(row))

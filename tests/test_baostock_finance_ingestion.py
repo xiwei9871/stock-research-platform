@@ -220,3 +220,124 @@ def test_sync_finance_for_period_short_circuits_when_no_codes(monkeypatch):
         "queried_assets": 0,
     }
     assert calls == []
+
+
+def test_sync_finance_for_period_retries_not_logged_in(monkeypatch):
+    class DummyContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class Result:
+        fields = ["code", "pubDate", "statDate", "MBRevenue", "netProfit", "epsTTM"]
+
+        def __init__(self, error_code, error_msg="", rows=None):
+            self.error_code = error_code
+            self.error_msg = error_msg
+            self.rows = rows or []
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = ""
+
+    login_calls = []
+    logout_calls = []
+    monkeypatch.setattr(baostock_finance_ingestion, "connect", lambda service: DummyContext())
+    monkeypatch.setattr(
+        baostock_finance_ingestion,
+        "_baostock_codes",
+        lambda conn, limit, offset, year=None, quarter=None: ["sh.600000"],
+    )
+    monkeypatch.setattr(
+        baostock_finance_ingestion.bs,
+        "login",
+        lambda: login_calls.append(True) or Login(),
+    )
+    monkeypatch.setattr(
+        baostock_finance_ingestion.bs,
+        "logout",
+        lambda: logout_calls.append(True),
+    )
+
+    monkeypatch.setattr(
+        baostock_finance_ingestion.bs,
+        "query_profit_data",
+        lambda **kwargs: (
+            Result("10001001", "用户未登录")
+            if len(login_calls) == 1
+            else Result("0", rows=[["sh.600000", "2026-03-31", "2025-12-31", "1", "2", "3"]])
+        ),
+    )
+    for name in [
+        "query_balance_data",
+        "query_cash_flow_data",
+        "query_growth_data",
+        "query_operation_data",
+        "query_dupont_data",
+    ]:
+        monkeypatch.setattr(
+            baostock_finance_ingestion.bs,
+            name,
+            lambda **kwargs: Result(
+                "0",
+                rows=[["sh.600000", "2026-03-31", "2025-12-31", "1", "2", "3"]],
+            ),
+        )
+
+    monkeypatch.setattr(
+        baostock_finance_ingestion,
+        "upsert_finance_rows",
+        lambda conn, indicators, incomes, share_capital_events: {
+            "indicator_quarter": len(indicators),
+            "income_statement": len(incomes),
+            "share_capital_event": len(share_capital_events),
+        },
+    )
+
+    result = baostock_finance_ingestion.sync_finance_for_period(2025, 4, limit=50, offset=0)
+
+    assert result == {
+        "indicator_quarter": 1,
+        "income_statement": 1,
+        "share_capital_event": 1,
+        "queried_assets": 1,
+    }
+    assert len(login_calls) == 2
+    assert len(logout_calls) == 2
+
+
+def test_login_or_raise_retries_transient_network_error(monkeypatch):
+    class Login:
+        def __init__(self, error_code, error_msg=""):
+            self.error_code = error_code
+            self.error_msg = error_msg
+
+    logins = [
+        Login("10002007", "网络接收错误。"),
+        Login("10002007", "网络接收错误。"),
+        Login("0"),
+    ]
+    sleeps = []
+    monkeypatch.setattr(
+        baostock_finance_ingestion.bs,
+        "login",
+        lambda: logins.pop(0),
+    )
+    monkeypatch.setattr(baostock_finance_ingestion.time, "sleep", sleeps.append)
+
+    baostock_finance_ingestion._login_or_raise()
+
+    assert sleeps == [
+        baostock_finance_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
+        baostock_finance_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
+    ]

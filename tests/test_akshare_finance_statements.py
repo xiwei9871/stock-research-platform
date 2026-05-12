@@ -82,6 +82,69 @@ def test_normalize_em_cash_flow_row_maps_absolute_fields():
     assert normalized["source"] == "akshare_em"
 
 
+def test_normalize_sina_balance_sheet_row_maps_absolute_fields():
+    row = {
+        "报告日": "20070331",
+        "公告日期": "20070420",
+        "资产总计": 100.0,
+        "负债合计": 60.0,
+        "所有者权益(或股东权益)合计": 40.0,
+        "货币资金": 10.0,
+        "应收账款": 2.0,
+        "存货": 3.0,
+        "商誉": 4.0,
+    }
+
+    normalized = akshare_finance_statements.normalize_sina_balance_sheet_row(
+        row,
+        "CN:SZ:000987",
+    )
+
+    assert normalized == {
+        "asset_id": "CN:SZ:000987",
+        "report_period": "2007-03-31",
+        "report_type": "Q",
+        "announcement_date": "2007-04-20",
+        "total_assets": 100.0,
+        "total_liabilities": 60.0,
+        "total_equity": 40.0,
+        "monetary_funds": 10.0,
+        "accounts_receivable": 2.0,
+        "inventory": 3.0,
+        "goodwill": 4.0,
+        "source": "akshare_sina",
+    }
+
+
+def test_normalize_sina_cash_flow_row_maps_absolute_fields():
+    row = {
+        "报告日": "20081231",
+        "公告日期": "20090410",
+        "经营活动产生的现金流量净额": 20.0,
+        "投资活动产生的现金流量净额": -5.0,
+        "筹资活动产生的现金流量净额": -3.0,
+        "购建固定资产、无形资产和其他长期资产支付的现金": 2.0,
+    }
+
+    normalized = akshare_finance_statements.normalize_sina_cash_flow_row(
+        row,
+        "CN:SH:600000",
+    )
+
+    assert normalized == {
+        "asset_id": "CN:SH:600000",
+        "report_period": "2008-12-31",
+        "report_type": "FY",
+        "announcement_date": "2009-04-10",
+        "net_operate_cash_flow": 20.0,
+        "net_invest_cash_flow": -5.0,
+        "net_finance_cash_flow": -3.0,
+        "capex": 2.0,
+        "free_cash_flow": 18.0,
+        "source": "akshare_sina",
+    }
+
+
 def test_upsert_balance_sheets_writes_statement_rows(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(akshare_finance_statements, "execute_many", fake_execute_many)
