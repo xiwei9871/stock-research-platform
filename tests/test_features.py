@@ -3,9 +3,12 @@ import pytest
 
 from stock_research.features import (
     compute_p0_features_for_asset,
+    compute_and_store_p0_features_range,
+    derive_feature_backfill_window,
     features_for_trade_date,
     load_bars_for_features,
 )
+from stock_research import features as features_module
 
 
 def make_bars() -> pd.DataFrame:
@@ -103,3 +106,110 @@ def test_load_bars_for_features_uses_latest_rows_per_asset(monkeypatch):
     )
     assert captured["params"] == ["2026-03-11", 120]
     assert list(bars) == ["CN:SH:600000"]
+
+
+def test_derive_feature_backfill_window_uses_market_bounds(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        features_module,
+        "load_market_date_bounds",
+        lambda adjust_type="hfq": {
+            "start_date": "1990-12-19",
+            "end_date": "2026-05-08",
+            "date_count": 8200,
+        },
+    )
+    monkeypatch.setattr(
+        features_module,
+        "derive_feature_window",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "start_date": "1991-06-20",
+            "end_date": "2026-05-08",
+            "date_count": 8071,
+        },
+    )
+
+    window = derive_feature_backfill_window(lookback_bars=130)
+
+    assert window == {
+        "start_date": "1991-06-20",
+        "end_date": "2026-05-08",
+        "date_count": 8071,
+    }
+    assert calls[0]["lookback_bars"] == 130
+
+
+def test_compute_and_store_p0_features_range_skips_complete_dates(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        features_module,
+        "load_trade_dates",
+        lambda start_date, end_date, adjust_type="hfq": ["2026-05-01", "2026-05-04"],
+    )
+    monkeypatch.setattr(
+        features_module,
+        "load_complete_feature_dates",
+        lambda start_date, end_date: {"2026-05-01"},
+    )
+    monkeypatch.setattr(
+        features_module,
+        "compute_and_store_p0_features",
+        lambda trade_date, lookback_bars=120: calls.append((trade_date, lookback_bars)) or 8,
+    )
+
+    result = compute_and_store_p0_features_range(
+        start_date="2026-05-01",
+        end_date="2026-05-04",
+        lookback_bars=130,
+        skip_complete=True,
+    )
+
+    assert list(result["trade_date"]) == ["2026-05-04"]
+    assert list(result["feature_rows"]) == [8]
+    assert calls == [("2026-05-04", 130)]
+
+
+def test_compute_and_store_p0_features_range_runs_with_workers(monkeypatch):
+    calls = []
+    executor_kwargs = []
+
+    class ImmediateExecutor:
+        def __init__(self, **kwargs):
+            executor_kwargs.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            from concurrent.futures import Future
+
+            future = Future()
+            future.set_result(fn(*args, **kwargs))
+            return future
+
+    monkeypatch.setattr(features_module, "ProcessPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(
+        features_module,
+        "load_trade_dates",
+        lambda start_date, end_date, adjust_type="hfq": ["2026-05-01", "2026-05-04"],
+    )
+    monkeypatch.setattr(
+        features_module,
+        "compute_and_store_p0_features",
+        lambda trade_date, lookback_bars=120: calls.append((trade_date, lookback_bars)) or 8,
+    )
+
+    result = compute_and_store_p0_features_range(
+        start_date="2026-05-01",
+        end_date="2026-05-04",
+        lookback_bars=130,
+        workers=2,
+    )
+
+    assert sorted(result["trade_date"]) == ["2026-05-01", "2026-05-04"]
+    assert calls == [("2026-05-01", 130), ("2026-05-04", 130)]
+    assert executor_kwargs == [{"max_workers": 2, "max_tasks_per_child": 1}]

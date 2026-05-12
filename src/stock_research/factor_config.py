@@ -1,0 +1,109 @@
+def manual_v1_config() -> dict:
+    factor_groups = {
+        "ret_5": "momentum",
+        "ret_20": "momentum",
+        "ret_60": "momentum",
+        "momentum_20_5": "momentum",
+        "close_above_ma20": "trend",
+        "close_above_ma60": "trend",
+        "ma20_slope": "trend",
+        "ma60_slope": "trend",
+        "trend_r2_20": "trend",
+        "amount_ratio_5_20": "volume_price",
+        "volume_ratio_5_20": "volume_price",
+        "turnover_ratio_5_20": "volume_price",
+        "price_volume_corr_10": "volume_price",
+        "volatility_20": "risk",
+        "max_drawdown_20": "risk",
+        "atr_pct": "risk",
+        "distance_ma20": "risk",
+        "distance_ma60": "risk",
+        "sector_ret_20": "sector",
+        "stock_excess_ret_20": "sector",
+        "sector_up_ratio": "sector",
+        "alpha101_delta_close_1_rank": "alpha101",
+        "alpha101_corr_open_volume_10": "alpha101",
+        "alpha101_decay_delta_close_5": "alpha101",
+        "gtja191_vp_corr_10": "gtja191",
+        "gtja191_amount_momentum_5_10": "gtja191",
+        "gtja191_intraday_strength_6": "gtja191",
+        "qlib_klen": "qlib",
+        "qlib_kupper": "qlib",
+        "qlib_klower": "qlib",
+        "qlib_ret_5": "qlib",
+    }
+    factor_directions = {
+        "ret_5": "higher",
+        "ret_20": "higher",
+        "ret_60": "higher",
+        "momentum_20_5": "higher",
+        "close_above_ma20": "higher",
+        "close_above_ma60": "higher",
+        "ma20_slope": "higher",
+        "ma60_slope": "higher",
+        "trend_r2_20": "higher",
+        "amount_ratio_5_20": "higher",
+        "volume_ratio_5_20": "higher",
+        "turnover_ratio_5_20": "higher",
+        "price_volume_corr_10": "higher",
+        "volatility_20": "lower",
+        "max_drawdown_20": "higher",
+        "atr_pct": "lower",
+        "distance_ma20": "lower",
+        "distance_ma60": "lower",
+        "sector_ret_20": "higher",
+        "stock_excess_ret_20": "higher",
+        "sector_up_ratio": "higher",
+        "alpha101_delta_close_1_rank": "higher",
+        "alpha101_corr_open_volume_10": "higher",
+        "alpha101_decay_delta_close_5": "higher",
+        "gtja191_vp_corr_10": "higher",
+        "gtja191_amount_momentum_5_10": "higher",
+        "gtja191_intraday_strength_6": "higher",
+        "qlib_klen": "lower",
+        "qlib_kupper": "higher",
+        "qlib_klower": "higher",
+        "qlib_ret_5": "higher",
+    }
+    weights = {
+        "ret_20_score": 0.15,
+        "ret_60_score": 0.10,
+        "momentum_20_5_score": 0.10,
+        "ma20_slope_score": 0.10,
+        "ma60_slope_score": 0.05,
+        "trend_r2_20_score": 0.05,
+        "amount_ratio_5_20_score": 0.08,
+        "volume_ratio_5_20_score": 0.05,
+        "volatility_20_score": 0.10,
+        "max_drawdown_20_score": 0.07,
+        "atr_pct_score": 0.05,
+        "sector_ret_20_score": 0.05,
+        "stock_excess_ret_20_score": 0.05,
+    }
+    return {
+        "score_version": "manual_v1",
+        "calc_version": "v1",
+        "source_data_version": "market_daily_bar:hfq",
+        "factor_groups": factor_groups,
+        "factor_directions": factor_directions,
+        "weights": weights,
+    }
+
+
+def historical_research_start_date() -> str:
+    return "2024-01-01"
+
+
+def default_research_horizons() -> list[int]:
+    return [5, 10, 20, 60]
+
+
+def candidate_factor_names() -> list[str]:
+    return sorted(manual_v1_config()["factor_groups"].keys())
+
+
+def factor_availability_metadata() -> dict[str, dict[str, str | None]]:
+    return {
+        name: {"start_date": None, "reason": "available_full_window"}
+        for name in candidate_factor_names()
+    }

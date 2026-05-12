@@ -18,6 +18,9 @@ def test_schema_uses_replay_keys():
     assert "feature_version" in sql
     assert "label_version" in sql
     assert "score_version" in sql
+    assert "idx_market_daily_bar_adjust_asset_date_desc" in sql
+    assert "idx_market_daily_bar_adjust_date_desc" in sql
+    assert "idx_market_industry_daily_bar_system_date_desc" in CREATE_RESEARCH_EXTENSION_SQL
 
 
 def test_schema_creates_backtest_tables():
@@ -67,6 +70,57 @@ def test_research_extension_enforces_point_in_time_columns():
     assert "idx_ingest_batch_job_status" in sql
     assert "idx_factor_daily_lookup" in sql
     assert "idx_stock_score_daily_rank" in sql
+
+
+def test_research_extension_includes_factor_eval_gate_tables():
+    assert "CREATE TABLE IF NOT EXISTS factor.factor_eval_run" in CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS factor.factor_approval" in CREATE_RESEARCH_EXTENSION_SQL
+    assert "idx_factor_eval_run_factor" in CREATE_RESEARCH_EXTENSION_SQL
+
+
+def test_research_extension_includes_backfill_run_task_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ingest.backfill_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ingest.backfill_task" in sql
+    assert "idx_ingest_backfill_task_status" in sql
+    assert "idx_ingest_backfill_task_run_status" in sql
+
+
+def test_research_extension_includes_calendar_and_lifecycle_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.trading_calendar" in sql
+    assert "CREATE TABLE IF NOT EXISTS core.asset_lifecycle_event" in sql
+    assert "idx_market_trading_calendar_open_date" in sql
+    assert "idx_core_asset_lifecycle_event_asset_date" in sql
+
+
+def test_research_extension_includes_raw_daily_bar_payload_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload" in sql
+    assert "payload_hash text NOT NULL" in sql
+    assert "idx_raw_baostock_daily_bar_payload_lookup" in sql
+
+
+def test_research_extension_includes_raw_industry_snapshot_payload_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS raw_baostock.industry_snapshot_payload" in sql
+    assert "row_count integer NOT NULL" in sql
+    assert "idx_raw_baostock_industry_snapshot_date" in sql
+
+
+def test_research_extension_includes_phase4_action_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.adjustment_factor" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.corporate_action" in sql
+    assert "idx_market_adjustment_factor_date" in sql
+    assert "idx_market_corporate_action_asset_date" in sql
+
+
+def test_research_extension_includes_index_constituent_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.index_constituent" in sql
+    assert "source_version text NOT NULL" in sql
+    assert "idx_market_index_constituent_lookup" in sql
 
 
 def test_cli_accepts_apply_research_schema_command():
@@ -174,14 +228,220 @@ def test_cli_accepts_ingest_batch_commands():
     assert run_args.command == "run-ingest-jobs"
     assert run_args.limit_jobs == 3
 
+    akshare_create_args = build_parser().parse_args(
+        [
+            "create-ingest-jobs",
+            "--dataset",
+            "akshare-finance-statements",
+            "--start-year",
+            "1990",
+            "--end-year",
+            "2025",
+            "--batch-size",
+            "20",
+        ]
+    )
+    assert akshare_create_args.command == "create-ingest-jobs"
+    assert akshare_create_args.dataset == "akshare-finance-statements"
+    assert akshare_create_args.batch_size == 20
+
+    akshare_run_args = build_parser().parse_args(
+        ["run-ingest-jobs", "--dataset", "akshare-finance-statements", "--limit-jobs", "3"]
+    )
+    assert akshare_run_args.command == "run-ingest-jobs"
+    assert akshare_run_args.dataset == "akshare-finance-statements"
+
+    finance_audit_args = build_parser().parse_args(["finance-audit"])
+    assert finance_audit_args.command == "finance-audit"
+
     status_args = build_parser().parse_args(
         ["ingest-status", "--dataset", "baostock-finance"]
     )
     assert status_args.command == "ingest-status"
     assert status_args.dataset == "baostock-finance"
 
+    loop_args = build_parser().parse_args(
+        [
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "50",
+            "--report-target",
+            "oc_group",
+            "--report-account",
+            "jarvis",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--workers",
+            "2",
+            "--report-dry-run",
+        ]
+    )
+    assert loop_args.command == "run-ingest-loop"
+    assert loop_args.dataset == "baostock-finance"
+    assert loop_args.jobs_per_round == 50
+    assert loop_args.report_target == "oc_group"
+    assert loop_args.report_account == "jarvis"
+    assert loop_args.sleep_seconds == 0
+    assert loop_args.max_rounds == 1
+    assert loop_args.workers == 2
+    assert loop_args.report_dry_run is True
+
+    label_args = build_parser().parse_args(
+        [
+            "backfill-labels",
+            "--horizons",
+            "5,20,60",
+            "--start-date",
+            "1990-12-19",
+            "--end-date",
+            "2026-05-08",
+        ]
+    )
+    assert label_args.command == "backfill-labels"
+    assert label_args.horizons == [5, 20, 60]
+    assert label_args.start_date == "1990-12-19"
+    assert label_args.end_date == "2026-05-08"
+
 
 def test_format_progress_bar():
     assert format_progress_bar(0, 10, width=10) == "[----------]"
     assert format_progress_bar(5, 10, width=10) == "[#####-----]"
     assert format_progress_bar(10, 10, width=10) == "[##########]"
+
+
+def test_cli_main_runs_ingest_loop_and_prints_outputs(monkeypatch, capsys):
+    from stock_research import cli
+
+    calls = []
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "2",
+            "--report-target",
+            "oc_group",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--workers",
+            "2",
+            "--report-dry-run",
+        ],
+    )
+
+    def fake_run_loop(dataset, **kwargs):
+        kwargs["report"](
+            {
+                "dataset": "baostock-finance",
+                "round": 1,
+                "attempted": 2,
+                "success": 2,
+                "failed": 0,
+                "rows_read": 100,
+                "rows_written": 0,
+                "status_counts": {"success": 2, "pending": 0},
+                "recent_jobs": [],
+                "done": True,
+            }
+        )
+        calls.append(("run_loop", dataset, kwargs))
+        return {
+            "rounds": 1,
+            "attempted": 2,
+            "success": 2,
+            "failed": 0,
+            "done": True,
+        }
+
+    monkeypatch.setattr(cli, "run_ingest_loop_for_service", fake_run_loop)
+    monkeypatch.setattr(
+        cli,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: calls.append(("send", kwargs)),
+    )
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert "A股财务数据补齐进度" in captured.out
+    assert "ingest_loop_rounds|1" in captured.out
+    assert "ingest_loop_done|True" in captured.out
+    assert calls[0][0] == "send"
+    assert calls[0][1]["target"] == "oc_group"
+    assert calls[0][1]["account"] == "jarvis"
+    assert calls[0][1]["dry_run"] is True
+    assert calls[1][0] == "run_loop"
+    assert calls[1][1] == "baostock-finance"
+    assert calls[1][2]["jobs_per_round"] == 2
+    assert calls[1][2]["workers"] == 2
+
+
+def test_run_ingest_loop_notification_failure_does_not_abort(monkeypatch, capsys):
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "run-ingest-loop",
+            "--dataset",
+            "baostock-finance",
+            "--jobs-per-round",
+            "2",
+            "--sleep-seconds",
+            "0",
+            "--max-rounds",
+            "1",
+            "--report-target",
+            "oc_group",
+        ],
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "run_ingest_loop_for_service",
+        lambda dataset, **kwargs: (
+            kwargs["report"](
+                {
+                    "dataset": "baostock-finance",
+                    "round": 1,
+                    "attempted": 2,
+                    "success": 2,
+                    "failed": 0,
+                    "rows_read": 100,
+                    "rows_written": 0,
+                    "status_counts": {"success": 2, "pending": 0},
+                    "recent_jobs": [],
+                    "done": True,
+                }
+            )
+            or {
+                "rounds": 1,
+                "attempted": 2,
+                "success": 2,
+                "failed": 0,
+                "done": True,
+            }
+        ),
+    )
+
+    def boom(**kwargs):
+        raise RuntimeError("feishu down")
+
+    monkeypatch.setattr(cli, "send_openclaw_feishu_message", boom)
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert "ingest_loop_rounds|1" in captured.out
+    assert "ingest_loop_done|True" in captured.out
+    assert "ingest_loop_report_failed|RuntimeError|feishu down" in captured.err

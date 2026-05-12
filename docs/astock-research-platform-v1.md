@@ -121,6 +121,8 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `factors.trend`、`factors.momentum`、`factors.volume_price`、`factors.sector`、`factors.risk` 的基础 pandas 实现。
 - 已为 `factors.value`、`factors.growth`、`factors.quality`、`factors.alpha101`、`factors.gtja191`、`factors.qlib_alpha` 预留清晰边界。
 - Alpha101、GTJA191、Qlib 当前只作为参考来源，不作为项目主框架或强依赖。
+- 已落地第一批外部参考因子：Alpha101-style、GTJA191-style、Qlib-style 代表性 pandas 实现。
+- 外部参考因子已进入 `factor.factor_daily`，但进入 `factor.stock_score_daily` 前仍需通过 `factor_eval` 评价门禁。
 
 ### 阶段 4：因子评价系统
 
@@ -144,6 +146,8 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `factor_eval.quantile_return`，支持按交易日分位数组收益和 Top-Bottom 收益差。
 - 已落地 `factor_eval.turnover`，支持 TopN 成分换手率。
 - 已落地 `factor_eval.report`，提供轻量因子评价汇总入口。
+- 已落地因子评价门禁：支持多周期评价、分年份诊断、分组表现、行业/市值暴露诊断，以及 `factor.factor_approval` 审批状态记录。
+- 已落地批量因子评价门禁：支持一次性评价多个 Alpha101 / GTJA191 / Qlib-style 候选因子，并写入 `factor.factor_eval_run` 与 `factor.factor_approval`。
 
 ### 阶段 5：多因子打分与 TopN 股票池
 
@@ -168,7 +172,9 @@ backtest         回测结果、持仓、交易日志
 - 已落地 `scoring.pipeline`，支持从长表因子数据生成综合股票得分。
 - 已落地 `factor.factor_daily`、`factor.stock_score_daily` 表结构和索引。
 - 已落地 `factor_store`，支持因子长表 upsert、综合得分 upsert、TopN 读取，以及从长表因子计算并写入综合得分。
-- 下一步需要补 CLI 命令和每日流水线，把基础因子计算、因子存储、综合打分串起来。
+- 已落地历史因子批量回算入口。
+- 已落地 approved-only 评分区间 workflow。
+- 已落地基础因子计算、因子存储、综合打分、每日流水线和历史回填 CLI。
 
 ### 阶段 6：V3 策略回测
 
@@ -183,6 +189,12 @@ backtest         回测结果、持仓、交易日志
 - 绩效指标
 - 回测报告
 
+当前进展：
+
+- 已落地第一版 vectorbt 风格 TopN 回测核心：支持 `factor.stock_score_daily` 输入加载、daily / weekly rebalance、等权持仓、最大持仓数量、交易成本、换手率、资金曲线、调仓交易明细和基础 summary。
+- 已落地第一版 RQAlpha 风格策略生命周期层：提供 `prepare_data`、`before_market`、`generate_signals`、`rebalance`、`after_market`、`generate_report`，用于研究流程编排，不接自动交易、不改 V3 阈值。
+- 已落地 TopN research workflow：可把策略生命周期、向量化回测和绩效 tear sheet 串成一个可复用研究流程，暂不接 CLI。
+
 ### 阶段 7：每日选股与盯盘报告
 
 目标：形成日常可用工具。
@@ -194,6 +206,28 @@ backtest         回测结果、持仓、交易日志
 - 板块强度报告
 - 持仓建议报告
 - 风险提示报告
+
+当前进展：
+
+- 已落地每日 TopN 报告：输出排名、股票、总分、评分版本和 score components，并明确 TopN 只是候选股票池，不是买入信号。
+- 已落地板块强度报告助手：从 `market.industry_daily_bar` 加载行业日线，计算 5 日收益、20 日收益、成交额 5/20 强度和综合排名，并输出 markdown / CSV。该报告只作为研究观察，不构成交易指令。
+- 已落地市场状态报告助手：从 `market.index_daily_bar` 加载指数日线，计算 5/20/60 日收益、MA20、MA60、20 日回撤、成交额 5/20 强度，并输出 `bullish`、`neutral`、`defensive` 状态和风险等级。该状态只作为过滤器，不构成交易指令。
+- 已落地风险提示报告助手：组合市场状态、板块强度、TopN 候选和 P0 特征，输出市场防御、弱板块、短期过热、高波动、深回撤、低流动性等结构化风险提示。风险提示只作为研究过滤器，不构成交易指令。
+- 已落地持仓复核报告助手：把当前持仓与 TopN 排名、市场状态、风险提示交叉，输出 `review`、`monitor`、`blocked` 等人工复核状态和原因，不输出买卖指令。
+- 已落地日报聚合入口：把 TopN、市场状态、板块强度、风险提示和回测报告路径汇总成一个日度研究索引，作为人工复核入口。
+- 已落地日报编排层：从内存中的研究结果一次性写出 TopN、市场状态、板块强度、风险提示、持仓复核和日报索引，后续可接 CLI 或定时任务。
+- 已落地独立日报模块 CLI：通过 `python -m stock_research.reports.daily_research_report_cli` 生成阶段 7 日报。
+- 已落地主 `stock-research run-daily-research-report` 入口，输出与模块 CLI 相同的稳定报告路径。
+- 已补齐日报 CLI 的候选行业上下文：TopN 候选会按 `core.industry_membership` 的 point-in-time 记录补充行业代码和名称，用于弱板块风险判断。
+- 已落地报告运行记录：提供独立 `report.report_run` schema 初始化和写入函数，日报 CLI 可通过 `--apply-report-run-schema --record-run` 持久化生成的报告路径。
+- 已补强持仓复核的组合级风险摘要：报告中显示总权重、最大行业权重，以及是否超过配置阈值。
+- 已落地日报 cron 命令生成器：生成可人工安装的工作日日报 cron 行，不自动修改系统定时任务。
+
+剩余缺口：
+
+- 日报定时任务已具备 cron 行生成器，但尚未自动安装到系统 cron / OpenClaw cron。
+- 持仓复核仍不输出买卖指令或仓位建议，只提供人工复核状态和风险摘要。
+- 外部参考因子的批量评价和审批入口已落地，仍需连接实际数据执行并检查结果。
 
 ## 当前执行顺序
 
@@ -286,6 +320,10 @@ pyfolio / pyfolio-reloaded：
 - GitHub: https://github.com/stefan-jansen/pyfolio-reloaded
 - 重点参考组合风险分析、tear sheet 报告、回撤分析、收益分布分析。
 - 使用边界：不强制直接依赖；可以学习报告组织方式；本项目自己生成 `backtest_report.xlsx`、`backtest_report.md`、净值曲线、回撤曲线。
+
+当前进展：
+
+- 已落地第一版绩效指标和 tear sheet：支持累计收益、年化收益、年化波动率、最大回撤、Sharpe、Sortino、Calmar、胜率、平均持仓天数、年化换手率，并可输出 markdown、metrics CSV、equity CSV、positions CSV。
 
 ### 技术指标库参考
 

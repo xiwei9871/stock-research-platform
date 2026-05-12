@@ -111,6 +111,24 @@ def test_build_composite_scores_normalizes_weights_and_assigns_ranks():
     assert result.set_index("asset_id").loc["A", "score_total"] == pytest.approx(75.0)
 
 
+def test_build_composite_scores_treats_missing_weight_columns_as_zero():
+    frame = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "trend_score": 100.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "trend_score": 50.0},
+        ]
+    )
+
+    result = composite_score.build_composite_scores(
+        frame,
+        weights={"trend_score": 1.0, "sector_score": 1.0},
+        score_version="manual_v1",
+    )
+
+    assert result.set_index("asset_id").loc["A", "score_total"] == pytest.approx(50.0)
+    assert result.set_index("asset_id").loc["B", "score_total"] == pytest.approx(25.0)
+
+
 def test_score_factor_daily_pivots_long_factors_and_applies_directions():
     factors = pd.DataFrame(
         [

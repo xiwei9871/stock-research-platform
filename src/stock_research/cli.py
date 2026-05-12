@@ -1,21 +1,86 @@
 import argparse
+import sys
+from uuid import uuid4
 
 from stock_research.assets import sync_asset_master
 from stock_research.backtest import run_top20_backtest
+from stock_research.backfill_runs import (
+    backfill_status_for_service,
+    claim_backfill_tasks_for_service,
+    create_backfill_run_for_service,
+    mark_backfill_task_failed_for_service,
+    mark_backfill_task_success_for_service,
+    reset_stale_backfill_tasks_for_service,
+)
+from stock_research.corporate_actions import (
+    build_adjustment_factors_for_service,
+    build_corporate_actions_from_factors_for_service,
+)
 from stock_research.core_data import (
     build_asset_status_daily_for_service,
     build_industry_daily_bars_for_service,
     sync_core_asset_master_for_service,
 )
-from stock_research.features import compute_and_store_p0_features
+from stock_research.data_audit import format_audit_line, run_data_audit
+from stock_research.dimensions import (
+    seed_trading_calendar_from_bars,
+    sync_asset_lifecycle_from_master,
+)
+from stock_research.finance_audit import format_finance_audit_line, summarize_finance_coverage
+from stock_research.industry_history import (
+    benchmark_industry_day,
+    run_industry_history_range,
+)
+from stock_research.features import (
+    compute_and_store_p0_features,
+    compute_and_store_p0_features_range,
+    derive_feature_backfill_window,
+)
+from stock_research.feishu_notify import send_openclaw_feishu_message
+from stock_research.factor_backfill import (
+    backfill_factor_daily_range,
+    derive_factor_backfill_window,
+)
+from stock_research.approved_scoring_workflow import score_approved_factors_range
+from stock_research.factor_config import candidate_factor_names
+from stock_research.factor_pipeline import build_and_store_factor_daily
+from stock_research.factor_eval_batch import run_factor_gate_batch
+from stock_research.factor_eval.gate import decide_factor_gate
+from stock_research.factor_eval.multi_horizon import generate_multi_horizon_report
+from stock_research.factor_eval.report import generate_factor_eval_report
+from stock_research.factor_eval_store import (
+    load_factor_eval_inputs,
+    load_multi_horizon_factor_eval_inputs,
+    store_factor_approval,
+    store_factor_eval_run,
+)
+from stock_research.factor_store import load_top_scores, score_stored_factor_daily
+from stock_research.daily_pipeline import run_daily_factor_pipeline
+from stock_research.daily_incremental import (
+    build_default_step_runners,
+    check_market_data_freshness,
+    run_daily_incremental_pipeline,
+)
+from stock_research.daily_job_run_store import (
+    apply_daily_job_run_schema,
+    record_daily_job_run,
+)
+from stock_research.daily_health import (
+    format_operational_health_lines,
+    summarize_operational_health,
+)
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
+    format_ingest_loop_report,
     ingest_status_for_service,
+    reset_stale_ingest_jobs_for_service,
+    run_ingest_loop_for_service,
     run_ingest_jobs_for_service,
 )
-from stock_research.labels import compute_and_store_labels
+from stock_research.labels import compute_and_store_labels, derive_label_backfill_window
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
+    sync_index_constituents,
     sync_industry_memberships,
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
@@ -23,6 +88,13 @@ from stock_research.market_data import load_market_daily_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
+from stock_research.research_preflight import (
+    check_factor_label_coverage,
+    check_industry_membership_coverage,
+    find_latest_common_label_date,
+)
+from stock_research.research_windows import load_market_date_bounds
+from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.schema import apply_schema
 from stock_research.selection import generate_selection, store_selection
@@ -53,6 +125,40 @@ def parse_top_ks(value: str) -> list[int]:
     return parse_int_list(value, "--top-ks")
 
 
+def parse_research_horizons(value: str) -> list[int]:
+    return parse_int_list(value, "--horizons")
+
+
+def parse_factor_names(value: str) -> list[str]:
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(part == "" for part in parts):
+        raise argparse.ArgumentTypeError("--factor-names must not contain empty values")
+    return parts
+
+
+def parse_str_list(value: str, option_name: str) -> list[str]:
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(part == "" for part in parts):
+        raise argparse.ArgumentTypeError(f"{option_name} must not contain empty values")
+    return parts
+
+
+def parse_exchanges(value: str) -> list[str]:
+    return parse_str_list(value, "--exchanges")
+
+
+def parse_index_ids(value: str) -> list[str]:
+    return parse_str_list(value, "--index-ids")
+
+
+def parse_ingest_datasets(value: str) -> list[str]:
+    return parse_str_list(value, "--ingest-datasets")
+
+
+def parse_backfill_run_ids(value: str) -> list[str]:
+    return parse_str_list(value, "--backfill-run-ids")
+
+
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
     if total <= 0:
         return "[" + "-" * width + "]"
@@ -78,6 +184,51 @@ def print_ingest_progress(event: dict) -> None:
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
 
 
+def print_factor_backfill_progress(event: dict) -> None:
+    if event["event"] == "start":
+        print(
+            "factor_daily_backfill|start|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}",
+            flush=True,
+        )
+    elif event["event"] == "done":
+        print(
+            "factor_daily_backfill|done|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}|{event['factor_rows']}",
+            flush=True,
+        )
+
+
+def factor_backfill_progress_printer(interval: int):
+    progress_interval = max(1, int(interval))
+
+    def print_progress(event: dict) -> None:
+        if event["event"] == "done" and progress_interval > 1:
+            index = int(event["index"])
+            total = int(event["total"])
+            if index % progress_interval != 0 and index != total:
+                return
+        if event["event"] == "start" and progress_interval > 1:
+            return
+        print_factor_backfill_progress(event)
+
+    return print_progress
+
+
+def summarize_multi_horizon_report(report: dict) -> dict:
+    summaries = {}
+    for horizon, horizon_report in report.get("reports", {}).items():
+        summaries[str(horizon)] = {
+            "ic_summary": horizon_report.get("ic_summary", {}),
+            "rank_ic_summary": horizon_report.get("rank_ic_summary", {}),
+        }
+    return {
+        "factor_name": report.get("factor_name"),
+        "horizons": report.get("horizons", []),
+        "reports": summaries,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stock-research")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -87,10 +238,63 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
 
+    data_audit = subparsers.add_parser("data-audit")
+    data_audit.add_argument("--expected-start-date", default="1990-12-01")
+
+    subparsers.add_parser("finance-audit")
+
+    seed_trading_calendar = subparsers.add_parser("seed-trading-calendar")
+    seed_trading_calendar.add_argument("--start-date", required=True)
+    seed_trading_calendar.add_argument("--end-date", required=True)
+    seed_trading_calendar.add_argument("--exchanges", type=parse_exchanges, required=True)
+    seed_trading_calendar.add_argument("--source-version", required=True)
+
+    sync_asset_lifecycle = subparsers.add_parser("sync-asset-lifecycle")
+    sync_asset_lifecycle.add_argument("--source-version", required=True)
+
+    create_backfill = subparsers.add_parser("create-backfill-run")
+    create_backfill.add_argument("--run-id", required=True)
+    create_backfill.add_argument("--dataset", required=True)
+    create_backfill.add_argument("--source", required=True)
+    create_backfill.add_argument("--source-version", required=True)
+    create_backfill.add_argument("--start-date", required=True)
+    create_backfill.add_argument("--end-date", required=True)
+    create_backfill.add_argument("--months-per-partition", type=int, default=1)
+
+    backfill_status = subparsers.add_parser("backfill-status")
+    backfill_status.add_argument("--run-id", required=True)
+
+    claim_backfill = subparsers.add_parser("claim-backfill-tasks")
+    claim_backfill.add_argument("--run-id", required=True)
+    claim_backfill.add_argument("--limit", type=int, default=10)
+
+    mark_backfill_success = subparsers.add_parser("mark-backfill-task-success")
+    mark_backfill_success.add_argument("--task-id", required=True)
+    mark_backfill_success.add_argument("--rows-read", required=True, type=int)
+    mark_backfill_success.add_argument("--rows-written", required=True, type=int)
+
+    mark_backfill_failed = subparsers.add_parser("mark-backfill-task-failed")
+    mark_backfill_failed.add_argument("--task-id", required=True)
+    mark_backfill_failed.add_argument("--error-message", required=True)
+
+    reset_stale_backfill = subparsers.add_parser("reset-stale-backfill-tasks")
+    reset_stale_backfill.add_argument("--dataset", required=True)
+    reset_stale_backfill.add_argument("--older-than-minutes", type=int, default=60)
+
     asset_status = subparsers.add_parser("build-asset-status")
     asset_status.add_argument("--start-date")
     asset_status.add_argument("--end-date")
     asset_status.add_argument("--adjust-type", default="hfq")
+
+    adjustment_factors = subparsers.add_parser("build-adjustment-factors")
+    adjustment_factors.add_argument("--start-date")
+    adjustment_factors.add_argument("--end-date")
+    adjustment_factors.add_argument("--source-version", default="derived_market_daily_bar_v1")
+
+    corporate_actions = subparsers.add_parser("build-corporate-actions")
+    corporate_actions.add_argument("--start-date")
+    corporate_actions.add_argument("--end-date")
+    corporate_actions.add_argument("--source-version", default="derived_adjustment_factor_v1")
 
     industry_bars = subparsers.add_parser("build-industry-bars")
     industry_bars.add_argument("--start-date")
@@ -104,6 +308,11 @@ def build_parser() -> argparse.ArgumentParser:
     index_bars = subparsers.add_parser("sync-index-bars")
     index_bars.add_argument("--start-date", required=True)
     index_bars.add_argument("--end-date", required=True)
+
+    index_constituents = subparsers.add_parser("sync-index-constituents")
+    index_constituents.add_argument("--trade-date", required=True)
+    index_constituents.add_argument("--index-ids", type=parse_index_ids)
+    index_constituents.add_argument("--source-version", required=True)
 
     baostock_finance = subparsers.add_parser("sync-baostock-finance")
     baostock_finance.add_argument("--year", required=True, type=int)
@@ -121,13 +330,29 @@ def build_parser() -> argparse.ArgumentParser:
     run_ingest.add_argument("--dataset", required=True)
     run_ingest.add_argument("--limit-jobs", required=True, type=int)
 
+    run_ingest_loop = subparsers.add_parser("run-ingest-loop")
+    run_ingest_loop.add_argument("--dataset", required=True)
+    run_ingest_loop.add_argument("--jobs-per-round", type=int, default=50)
+    run_ingest_loop.add_argument("--sleep-seconds", type=int, default=10)
+    run_ingest_loop.add_argument("--max-rounds", type=int)
+    run_ingest_loop.add_argument("--workers", type=int, default=1)
+    run_ingest_loop.add_argument("--report-target", required=True)
+    run_ingest_loop.add_argument("--report-account", default="jarvis")
+    run_ingest_loop.add_argument("--openclaw-bin", default="openclaw")
+    run_ingest_loop.add_argument("--report-dry-run", action="store_true")
+
     ingest_status = subparsers.add_parser("ingest-status")
     ingest_status.add_argument("--dataset")
+
+    reset_stale_ingest = subparsers.add_parser("reset-stale-ingest-jobs")
+    reset_stale_ingest.add_argument("--dataset", required=True)
+    reset_stale_ingest.add_argument("--older-than-minutes", type=int, default=60)
 
     load_bars = subparsers.add_parser("load-bars")
     load_bars.add_argument("--start-date")
     load_bars.add_argument("--end-date")
     load_bars.add_argument("--limit-tables", type=int)
+    load_bars.add_argument("--archive-raw", action="store_true")
 
     quality = subparsers.add_parser("quality")
     quality.add_argument("--trade-date")
@@ -135,8 +360,26 @@ def build_parser() -> argparse.ArgumentParser:
     features = subparsers.add_parser("features")
     features.add_argument("--trade-date", required=True)
 
+    backfill_features = subparsers.add_parser("backfill-features")
+    backfill_features.add_argument("--start-date")
+    backfill_features.add_argument("--end-date")
+    backfill_features.add_argument("--lookback-bars", type=int, default=120)
+    backfill_features.add_argument("--adjust-type", default="hfq")
+    backfill_features.add_argument("--workers", type=int, default=1)
+    backfill_features.add_argument("--skip-complete", action="store_true")
+
     labels = subparsers.add_parser("labels")
     labels.add_argument("--end-date", required=True)
+
+    backfill_labels = subparsers.add_parser("backfill-labels")
+    backfill_labels.add_argument("--start-date")
+    backfill_labels.add_argument("--end-date")
+    backfill_labels.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    backfill_labels.add_argument("--adjust-type", default="hfq")
 
     select = subparsers.add_parser("select")
     select.add_argument("--trade-date", required=True)
@@ -211,6 +454,162 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
     )
 
+    build_factor_daily = subparsers.add_parser("build-factor-daily")
+    build_factor_daily.add_argument("--trade-date", required=True)
+    build_factor_daily.add_argument("--lookback-bars", type=int, default=130)
+    build_factor_daily.add_argument("--industry-system", default="csrc")
+
+    research_preflight = subparsers.add_parser("research-preflight")
+    research_preflight.add_argument("--start-date")
+    research_preflight.add_argument("--end-date")
+    research_preflight.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    research_preflight.add_argument("--factor-names", type=parse_factor_names)
+    research_preflight.add_argument("--calc-version", default="v1")
+    research_preflight.add_argument("--min-label-dates", type=int, default=20)
+    research_preflight.add_argument("--require-industry-membership", action="store_true")
+
+    benchmark_industry_day = subparsers.add_parser("benchmark-industry-day")
+    benchmark_industry_day.add_argument("--trade-date", required=True)
+    benchmark_industry_day.add_argument("--industry-system", default="csrc")
+    benchmark_industry_day.add_argument("--adjust-type", default="hfq")
+    benchmark_industry_day.add_argument(
+        "--no-cache",
+        dest="use_cache",
+        action="store_false",
+        default=True,
+    )
+
+    backfill_industry_history = subparsers.add_parser("backfill-industry-history")
+    backfill_industry_history.add_argument("--start-date", required=True)
+    backfill_industry_history.add_argument("--end-date", required=True)
+    backfill_industry_history.add_argument("--max-dates", required=True, type=int)
+    backfill_industry_history.add_argument(
+        "--frequency",
+        choices=["daily", "monthly", "quarterly"],
+        default="daily",
+    )
+    backfill_industry_history.add_argument("--industry-system", default="csrc")
+    backfill_industry_history.add_argument("--adjust-type", default="hfq")
+    backfill_industry_history.add_argument(
+        "--no-cache",
+        dest="use_cache",
+        action="store_false",
+        default=True,
+    )
+
+    backfill_factor_daily = subparsers.add_parser("backfill-factor-daily")
+    backfill_factor_daily.add_argument("--start-date")
+    backfill_factor_daily.add_argument("--end-date")
+    backfill_factor_daily.add_argument("--lookback-bars", type=int, default=130)
+    backfill_factor_daily.add_argument("--industry-system", default="csrc")
+    backfill_factor_daily.add_argument("--workers", type=int, default=1)
+    backfill_factor_daily.add_argument("--skip-complete", action="store_true")
+    backfill_factor_daily.add_argument("--progress-interval", type=int, default=1)
+    backfill_factor_daily.add_argument("--exact-window", action="store_true")
+
+    backfill_approved_scores = subparsers.add_parser("backfill-approved-scores")
+    backfill_approved_scores.add_argument("--start-date")
+    backfill_approved_scores.add_argument("--end-date")
+    backfill_approved_scores.add_argument("--score-version", default="manual_v1")
+    backfill_approved_scores.add_argument("--calc-version", default="v1")
+    backfill_approved_scores.add_argument("--adjust-type", default="hfq")
+
+    score_factor_daily = subparsers.add_parser("score-factor-daily")
+    score_factor_daily.add_argument("--trade-date", required=True)
+    score_factor_daily.add_argument("--score-version", default="manual_v1")
+
+    show_top_scores = subparsers.add_parser("show-top-scores")
+    show_top_scores.add_argument("--trade-date", required=True)
+    show_top_scores.add_argument("--score-version", default="manual_v1")
+    show_top_scores.add_argument("--top-n", type=int, default=30)
+
+    eval_factor = subparsers.add_parser("eval-factor")
+    eval_factor.add_argument("--factor-name", required=True)
+    eval_factor.add_argument("--start-date", required=True)
+    eval_factor.add_argument("--end-date", required=True)
+    eval_factor.add_argument("--horizon", type=int, default=5)
+    eval_factor.add_argument("--quantiles", type=int, default=5)
+    eval_factor.add_argument("--top-n", type=int, default=30)
+
+    evaluate_factor_gate = subparsers.add_parser("evaluate-factor-gate")
+    evaluate_factor_gate.add_argument("--factor-name", required=True)
+    evaluate_factor_gate.add_argument("--start-date", required=True)
+    evaluate_factor_gate.add_argument("--end-date", required=True)
+    evaluate_factor_gate.add_argument("--horizons", default="5,10,20,60")
+    evaluate_factor_gate.add_argument("--primary-horizon", type=int, default=5)
+    evaluate_factor_gate.add_argument("--calc-version", default="v1")
+    evaluate_factor_gate.add_argument("--score-version", default="manual_v1")
+    evaluate_factor_gate.add_argument("--quantiles", type=int, default=5)
+    evaluate_factor_gate.add_argument("--top-n", type=int, default=30)
+
+    evaluate_factor_gate_batch = subparsers.add_parser("evaluate-factor-gate-batch")
+    evaluate_factor_gate_batch.add_argument("--factor-names", type=parse_factor_names)
+    evaluate_factor_gate_batch.add_argument("--start-date", required=True)
+    evaluate_factor_gate_batch.add_argument("--end-date", required=True)
+    evaluate_factor_gate_batch.add_argument("--validation-start-date")
+    evaluate_factor_gate_batch.add_argument("--horizons", default="5,10,20,60")
+    evaluate_factor_gate_batch.add_argument("--primary-horizon", type=int, default=5)
+    evaluate_factor_gate_batch.add_argument("--calc-version", default="v1")
+    evaluate_factor_gate_batch.add_argument("--score-version", default="manual_v1")
+    evaluate_factor_gate_batch.add_argument("--quantiles", type=int, default=5)
+    evaluate_factor_gate_batch.add_argument("--top-n", type=int, default=30)
+
+    daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
+    daily_factor_pipeline.add_argument("--trade-date", required=True)
+    daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
+    daily_factor_pipeline.add_argument("--top-n", type=int, default=30)
+    daily_factor_pipeline.add_argument("--lookback-bars", type=int, default=130)
+    daily_factor_pipeline.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    daily_incremental = subparsers.add_parser("run-daily-incremental")
+    daily_incremental.add_argument("--trade-date", required=True)
+    daily_incremental.add_argument("--score-version", default="manual_v1")
+    daily_incremental.add_argument("--top-n", type=int, default=30)
+    daily_incremental.add_argument("--lookback-bars", type=int, default=130)
+    daily_incremental.add_argument("--adjust-type", default="hfq")
+    daily_incremental.add_argument("--source-service", default="stock_hfq")
+    daily_incremental.add_argument("--industry-system", default="csrc")
+    daily_incremental.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    daily_incremental.add_argument("--dry-run", action="store_true")
+    daily_incremental.add_argument("--apply-daily-run-schema", action="store_true")
+    daily_incremental.add_argument("--record-run", action="store_true")
+
+    daily_health = subparsers.add_parser("daily-health")
+    daily_health.add_argument("--trade-date", required=True)
+    daily_health.add_argument("--ingest-datasets", type=parse_ingest_datasets)
+    daily_health.add_argument("--backfill-run-ids", type=parse_backfill_run_ids)
+    daily_health.add_argument("--stale-minutes", type=int, default=60)
+    daily_health.add_argument("--notify-target")
+    daily_health.add_argument("--notify-account", default="jarvis")
+    daily_health.add_argument("--openclaw-bin", default="openclaw")
+    daily_health.add_argument("--notify-dry-run", action="store_true")
+
+    daily_research_report = subparsers.add_parser("run-daily-research-report")
+    daily_research_report.add_argument("--trade-date", required=True)
+    daily_research_report.add_argument("--score-version", default="manual_v1")
+    daily_research_report.add_argument("--top-n", type=int, default=30)
+    daily_research_report.add_argument("--index-id", default="CSI300")
+    daily_research_report.add_argument("--market-lookback-days", type=int, default=90)
+    daily_research_report.add_argument("--industry-system", default="csrc")
+    daily_research_report.add_argument("--sector-lookback-days", type=int, default=60)
+    daily_research_report.add_argument("--positions-csv")
+    daily_research_report.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    daily_research_report.add_argument("--apply-report-run-schema", action="store_true")
+    daily_research_report.add_argument("--record-run", action="store_true")
+
     return parser
 
 
@@ -228,6 +627,68 @@ def main() -> None:
     elif args.command == "sync-core-assets":
         sync_core_asset_master_for_service()
         print("core_asset_master_synced")
+    elif args.command == "data-audit":
+        for row in run_data_audit(expected_start_date=args.expected_start_date):
+            print(format_audit_line(row))
+    elif args.command == "finance-audit":
+        for row in summarize_finance_coverage():
+            print(format_finance_audit_line(row))
+    elif args.command == "seed-trading-calendar":
+        count = seed_trading_calendar_from_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            exchanges=args.exchanges,
+            source_version=args.source_version,
+        )
+        print(f"trading_calendar_seeded|rows|{count}")
+    elif args.command == "sync-asset-lifecycle":
+        count = sync_asset_lifecycle_from_master(source_version=args.source_version)
+        print(f"asset_lifecycle_synced|rows|{count}")
+    elif args.command == "create-backfill-run":
+        result = create_backfill_run_for_service(
+            run_id=args.run_id,
+            dataset=args.dataset,
+            source=args.source,
+            source_version=args.source_version,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            months_per_partition=args.months_per_partition,
+        )
+        print(
+            "backfill_run_created|"
+            f"{result['run_id']}|{result['dataset']}|tasks|{result['task_count']}"
+        )
+    elif args.command == "backfill-status":
+        result = backfill_status_for_service(run_id=args.run_id)
+        for status, count in sorted(result["counts"].items()):
+            print(f"backfill_status|{result['run_id']}|{status}|{count}")
+    elif args.command == "claim-backfill-tasks":
+        rows = claim_backfill_tasks_for_service(run_id=args.run_id, limit=args.limit)
+        for row in rows:
+            print(
+                "backfill_task_claimed|"
+                f"{row['task_id']}|{row['partition_key']}|"
+                f"{str(row['start_date'])[:10]}|{str(row['end_date'])[:10]}"
+            )
+    elif args.command == "mark-backfill-task-success":
+        mark_backfill_task_success_for_service(
+            task_id=args.task_id,
+            rows_read=args.rows_read,
+            rows_written=args.rows_written,
+        )
+        print(f"backfill_task_success|{args.task_id}|{args.rows_read}|{args.rows_written}")
+    elif args.command == "mark-backfill-task-failed":
+        mark_backfill_task_failed_for_service(
+            task_id=args.task_id,
+            error_message=args.error_message,
+        )
+        print(f"backfill_task_failed|{args.task_id}|{args.error_message}")
+    elif args.command == "reset-stale-backfill-tasks":
+        count = reset_stale_backfill_tasks_for_service(
+            dataset=args.dataset,
+            older_than_minutes=args.older_than_minutes,
+        )
+        print(f"backfill_task_stale_reset|{args.dataset}|{count}")
     elif args.command == "build-asset-status":
         build_asset_status_daily_for_service(
             args.start_date,
@@ -235,6 +696,20 @@ def main() -> None:
             args.adjust_type,
         )
         print("core_asset_status_daily_built")
+    elif args.command == "build-adjustment-factors":
+        build_adjustment_factors_for_service(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source_version=args.source_version,
+        )
+        print("adjustment_factors_built")
+    elif args.command == "build-corporate-actions":
+        build_corporate_actions_from_factors_for_service(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source_version=args.source_version,
+        )
+        print("corporate_actions_built")
     elif args.command == "build-industry-bars":
         build_industry_daily_bars_for_service(
             start_date=args.start_date,
@@ -243,12 +718,371 @@ def main() -> None:
             adjust_type=args.adjust_type,
         )
         print("market_industry_daily_bars_built")
+    elif args.command == "build-factor-daily":
+        count = build_and_store_factor_daily(
+            trade_date=args.trade_date,
+            lookback_bars=args.lookback_bars,
+            industry_system=args.industry_system,
+        )
+        print(f"factor_daily_stored|{count}")
+    elif args.command == "research-preflight":
+        horizons = args.horizons
+        start_date = args.start_date
+        if start_date is None:
+            bounds = load_market_date_bounds()
+            start_date = bounds["start_date"]
+        if start_date is None:
+            print("research_preflight|latest_common_label_date||0")
+            print("research_preflight|coverage|blocked|factor_dates|0|complete_factor_dates|0")
+            print(
+                "research_preflight|missing_horizons|"
+                + ",".join(str(value) for value in horizons)
+            )
+            print("research_preflight|short_label_horizons|")
+            return
+        latest = find_latest_common_label_date(
+            start_date=start_date,
+            horizons=horizons,
+        )
+        end_date = args.end_date or latest["latest_common_date"]
+        if end_date is None:
+            print(f"research_preflight|latest_common_label_date||{latest['date_count']}")
+            print("research_preflight|coverage|blocked|factor_dates|0|complete_factor_dates|0")
+            print(
+                "research_preflight|missing_horizons|"
+                + ",".join(str(value) for value in horizons)
+            )
+            print("research_preflight|short_label_horizons|")
+            return
+        factors = args.factor_names if args.factor_names else candidate_factor_names()
+        coverage = check_factor_label_coverage(
+            factor_names=factors,
+            start_date=start_date,
+            end_date=end_date,
+            horizons=horizons,
+            calc_version=args.calc_version,
+            min_label_dates=args.min_label_dates,
+        )
+        print(
+            "research_preflight|latest_common_label_date|"
+            f"{latest['latest_common_date']}|{latest['date_count']}"
+        )
+        print(
+            "research_preflight|coverage|"
+            f"{coverage['status']}|factor_dates|{coverage['factor_date_count']}|"
+            f"complete_factor_dates|{coverage['factor_complete_date_count']}"
+        )
+        print(
+            "research_preflight|missing_horizons|"
+            + ",".join(str(value) for value in coverage["missing_horizons"])
+        )
+        print(
+            "research_preflight|short_label_horizons|"
+            + ",".join(str(value) for value in coverage["short_label_horizons"])
+        )
+        if args.require_industry_membership:
+            if end_date is None:
+                print("research_preflight|industry_membership|blocked|market_rows|0|covered_rows|0|missing_rows|0")
+            else:
+                industry = check_industry_membership_coverage(
+                    start_date=start_date,
+                    end_date=end_date,
+                    industry_system="csrc",
+                    adjust_type="hfq",
+                )
+                print(
+                    "research_preflight|industry_membership|"
+                    f"{industry['status']}|market_rows|{industry['market_rows']}|"
+                    f"covered_rows|{industry['covered_rows']}|missing_rows|{industry['missing_rows']}"
+                )
+    elif args.command == "backfill-factor-daily":
+        if args.exact_window:
+            window = {
+                "start_date": args.start_date,
+                "end_date": args.end_date,
+                "date_count": 0,
+            }
+        else:
+            window = derive_factor_backfill_window(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                lookback_bars=args.lookback_bars,
+                industry_system=args.industry_system,
+            )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("factor_daily_backfill|dates|0")
+            print("factor_daily_backfill|rows|0")
+            return
+        result = backfill_factor_daily_range(
+            start_date=str(window["start_date"]),
+            end_date=str(window["end_date"]),
+            lookback_bars=args.lookback_bars,
+            industry_system=args.industry_system,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+            progress=factor_backfill_progress_printer(args.progress_interval),
+        )
+        total = int(result["factor_rows"].sum()) if not result.empty else 0
+        print(f"factor_daily_backfill|dates|{len(result)}")
+        print(f"factor_daily_backfill|rows|{total}")
+    elif args.command == "backfill-approved-scores":
+        bounds = load_market_date_bounds(adjust_type=args.adjust_type)
+        start_date = args.start_date or bounds["start_date"]
+        end_date = args.end_date or bounds["end_date"]
+        if start_date is None or end_date is None:
+            print("approved_score_backfill|dates|0")
+            print("approved_score_backfill|rows|0")
+            return
+        result = score_approved_factors_range(
+            start_date=str(start_date),
+            end_date=str(end_date),
+            score_version=args.score_version,
+            calc_version=args.calc_version,
+            adjust_type=args.adjust_type,
+        )
+        total = int(result["score_rows"].sum()) if not result.empty else 0
+        print(f"approved_score_backfill|start_date|{start_date}")
+        print(f"approved_score_backfill|end_date|{end_date}")
+        print(f"approved_score_backfill|dates|{len(result)}")
+        print(f"approved_score_backfill|rows|{total}")
+    elif args.command == "score-factor-daily":
+        count = score_stored_factor_daily(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            approved_only=True,
+        )
+        print(f"stock_score_daily_stored|{count}")
+    elif args.command == "show-top-scores":
+        for row in load_top_scores(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+        ):
+            print(
+                f"top_score|{row['trade_date']}|{row['rank']}|"
+                f"{row['asset_id']}|{row['score_total']}|{row['score_version']}"
+            )
+    elif args.command == "eval-factor":
+        factors, returns = load_factor_eval_inputs(
+            factor_name=args.factor_name,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizon=args.horizon,
+        )
+        result = generate_factor_eval_report(
+            factors,
+            returns,
+            factor_name=args.factor_name,
+            return_col=f"forward_return_{args.horizon}d",
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        print(f"factor_eval|{args.factor_name}|mean_ic|{result['ic_summary']['mean_ic']}")
+        print(f"factor_eval|{args.factor_name}|ic_count|{result['ic_summary']['ic_count']}")
+        print(
+            f"factor_eval|{args.factor_name}|mean_rank_ic|"
+            f"{result['rank_ic_summary']['mean_ic']}"
+        )
+    elif args.command == "evaluate-factor-gate":
+        horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
+        factors, returns = load_multi_horizon_factor_eval_inputs(
+            factor_name=args.factor_name,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=horizons,
+            calc_version=args.calc_version,
+        )
+        multi_horizon_report = generate_multi_horizon_report(
+            factors=factors,
+            returns=returns,
+            factor_name=args.factor_name,
+            horizons=horizons,
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        decision = decide_factor_gate(
+            factor_name=args.factor_name,
+            multi_horizon_report=multi_horizon_report,
+            primary_horizon=args.primary_horizon,
+        )
+        run_id = f"factor-eval-{uuid4().hex}"
+        store_factor_eval_run(
+            run_id=run_id,
+            factor_name=args.factor_name,
+            calc_version=args.calc_version,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=horizons,
+            primary_horizon=args.primary_horizon,
+            status=decision["status"],
+            reason=decision["reason"],
+            metrics={
+                "decision": decision,
+                "multi_horizon": summarize_multi_horizon_report(multi_horizon_report),
+            },
+        )
+        store_factor_approval(
+            factor_name=args.factor_name,
+            calc_version=args.calc_version,
+            score_version=args.score_version,
+            status=decision["status"],
+            reason=decision["reason"],
+            eval_run_id=run_id,
+        )
+        print(
+            f"factor_gate|{args.factor_name}|{decision['status']}|"
+            f"{decision['reason']}|{decision['primary_horizon']}"
+        )
+    elif args.command == "evaluate-factor-gate-batch":
+        result = run_factor_gate_batch(
+            factor_names=args.factor_names,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=[int(value.strip()) for value in args.horizons.split(",") if value.strip()],
+            primary_horizon=args.primary_horizon,
+            calc_version=args.calc_version,
+            score_version=args.score_version,
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+            validation_start_date=args.validation_start_date,
+        )
+        for row in result.to_dict("records"):
+            print(
+                "factor_gate_batch|"
+                f"{row['factor_name']}|{row['status']}|{row['reason']}|"
+                f"{row['primary_horizon']}|{row['eval_run_id']}"
+            )
+    elif args.command == "run-daily-factor-pipeline":
+        result = run_daily_factor_pipeline(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            lookback_bars=args.lookback_bars,
+            reports_dir=args.reports_dir,
+        )
+        print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
+        print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
+        print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "run-daily-incremental":
+        if args.apply_daily_run_schema:
+            apply_daily_job_run_schema()
+        recorder = None
+        if args.record_run:
+            recorder = lambda step: record_daily_job_run(
+                trade_date=args.trade_date,
+                step=step["step"],
+                status=step["status"],
+                metadata=step.get("result") or {},
+                error_message=step.get("error"),
+            )
+        result = run_daily_incremental_pipeline(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            lookback_bars=args.lookback_bars,
+            reports_dir=args.reports_dir,
+            adjust_type=args.adjust_type,
+            source_service=args.source_service,
+            industry_system=args.industry_system,
+            dry_run=args.dry_run,
+            step_runners=None if args.dry_run else build_default_step_runners(),
+            freshness_checker=None,
+            recorder=recorder,
+        )
+        print(f"daily_incremental|status|{result['status']}")
+        if "reason" in result:
+            print(f"daily_incremental|reason|{result['reason']}")
+        for step in result["steps"]:
+            print(f"daily_incremental_step|{step['step']}|{step['status']}")
+            if "error" in step:
+                print(f"daily_incremental_step_error|{step['step']}|{step['error']}")
+    elif args.command == "daily-health":
+        result = summarize_operational_health(
+            trade_date=args.trade_date,
+            ingest_datasets=args.ingest_datasets or [],
+            backfill_run_ids=args.backfill_run_ids or [],
+            stale_minutes=args.stale_minutes,
+        )
+        lines = format_operational_health_lines(result)
+        for line in lines:
+            print(line)
+        if args.notify_target and result["status"] == "alert":
+            send_openclaw_feishu_message(
+                message="\n".join(lines),
+                target=args.notify_target,
+                account=args.notify_account,
+                openclaw_bin=args.openclaw_bin,
+                dry_run=args.notify_dry_run,
+            )
+    elif args.command == "run-daily-research-report":
+        result = run_daily_research_report(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            index_id=args.index_id,
+            market_lookback_days=args.market_lookback_days,
+            industry_system=args.industry_system,
+            sector_lookback_days=args.sector_lookback_days,
+            positions_csv=args.positions_csv,
+            reports_dir=args.reports_dir,
+            apply_report_run_schema_first=args.apply_report_run_schema,
+            record_run=args.record_run,
+        )
+        report_paths = result["report_paths"]
+        for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
+            print(f"daily_research_report|{key}|{report_paths[key]['markdown_path']}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")
     elif args.command == "sync-index-bars":
         count = sync_index_daily_bars(args.start_date, args.end_date)
         print(f"index_daily_bars_synced|{count}")
+    elif args.command == "sync-index-constituents":
+        count = sync_index_constituents(
+            trade_date=args.trade_date,
+            index_ids=args.index_ids,
+            source_version=args.source_version,
+        )
+        print(f"index_constituents_synced|{count}")
+    elif args.command == "benchmark-industry-day":
+        result = benchmark_industry_day(
+            trade_date=args.trade_date,
+            industry_system=args.industry_system,
+            adjust_type=args.adjust_type,
+            use_cache=args.use_cache,
+        )
+        print(
+            "industry_day_benchmark|sync_memberships|"
+            f"{result['trade_date']}|rows|{result['membership_rows']}|seconds|{result['sync_seconds']}"
+        )
+        print(
+            "industry_day_benchmark|build_bars|"
+            f"{result['trade_date']}|seconds|{result['build_seconds']}"
+        )
+        print(
+            "industry_day_benchmark|total|"
+            f"{result['trade_date']}|seconds|{result['total_seconds']}"
+        )
+    elif args.command == "backfill-industry-history":
+        result = run_industry_history_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            max_dates=args.max_dates,
+            frequency=args.frequency,
+            industry_system=args.industry_system,
+            adjust_type=args.adjust_type,
+            use_cache=args.use_cache,
+            progress=lambda event: print(
+                "industry_history_progress|"
+                f"{event['trade_date']}|{event['index']}|{event['total']}|"
+                f"membership_rows|{event['membership_rows']}|seconds|{event['seconds']}"
+            ),
+        )
+        print(
+            "industry_history_done|"
+            f"dates|{result['dates']}|membership_rows|{result['membership_rows']}|"
+            f"seconds|{result['seconds']}"
+        )
     elif args.command == "sync-baostock-finance":
         counts = sync_finance_for_period(
             args.year,
@@ -277,6 +1111,45 @@ def main() -> None:
         print(f"ingest_jobs_attempted|{result['attempted']}")
         print(f"ingest_jobs_success|{result['success']}")
         print(f"ingest_jobs_failed|{result['failed']}")
+    elif args.command == "run-ingest-loop":
+        def report(summary: dict) -> None:
+            message = format_ingest_loop_report(summary)
+            print(message, flush=True)
+            try:
+                send_openclaw_feishu_message(
+                    message=message,
+                    target=args.report_target,
+                    account=args.report_account,
+                    openclaw_bin=args.openclaw_bin,
+                    dry_run=args.report_dry_run,
+                )
+            except Exception as exc:
+                print(
+                    f"ingest_loop_report_failed|{exc.__class__.__name__}|{exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+        result = run_ingest_loop_for_service(
+            args.dataset,
+            jobs_per_round=args.jobs_per_round,
+            report=report,
+            progress=print_ingest_progress,
+            sleep_seconds=args.sleep_seconds,
+            max_rounds=args.max_rounds,
+            workers=args.workers,
+        )
+        print(f"ingest_loop_rounds|{result['rounds']}")
+        print(f"ingest_loop_attempted|{result['attempted']}")
+        print(f"ingest_loop_success|{result['success']}")
+        print(f"ingest_loop_failed|{result['failed']}")
+        print(f"ingest_loop_done|{result['done']}")
+    elif args.command == "reset-stale-ingest-jobs":
+        count = reset_stale_ingest_jobs_for_service(
+            dataset=args.dataset,
+            older_than_minutes=args.older_than_minutes,
+        )
+        print(f"ingest_stale_reset|{args.dataset}|{count}")
     elif args.command == "ingest-status":
         for row in ingest_status_for_service(args.dataset):
             print(f"ingest_status|{row['dataset']}|{row['status']}|{row['count']}")
@@ -287,6 +1160,7 @@ def main() -> None:
             args.start_date,
             args.end_date,
             args.limit_tables,
+            archive_raw=args.archive_raw,
         )
         qfq = load_market_daily_bars(
             "stock_qfq",
@@ -294,6 +1168,7 @@ def main() -> None:
             args.start_date,
             args.end_date,
             args.limit_tables,
+            archive_raw=args.archive_raw,
         )
         print(f"market_rows_loaded|hfq|{hfq}")
         print(f"market_rows_loaded|qfq|{qfq}")
@@ -305,8 +1180,50 @@ def main() -> None:
             )
     elif args.command == "features":
         print(f"features_stored|{compute_and_store_p0_features(args.trade_date)}")
+    elif args.command == "backfill-features":
+        window = derive_feature_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+        )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("feature_backfill|dates|0")
+            print("feature_backfill|rows|0")
+            return
+        result = compute_and_store_p0_features_range(
+            start_date=str(window["start_date"]),
+            end_date=str(window["end_date"]),
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+        )
+        total = int(result["feature_rows"].sum()) if not result.empty else 0
+        print(f"feature_backfill|dates|{len(result)}")
+        print(f"feature_backfill|rows|{total}")
     elif args.command == "labels":
         print(f"labels_stored|{compute_and_store_labels(args.end_date)}")
+    elif args.command == "backfill-labels":
+        window = derive_label_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=args.horizons,
+            adjust_type=args.adjust_type,
+        )
+        if window["start_date"] is None or window["end_date"] is None:
+            print("labels_backfill|dates|0")
+            print("labels_backfill|rows|0")
+            return
+        count = compute_and_store_labels(
+            str(window["end_date"]),
+            start_date=str(window["start_date"]),
+            horizons=args.horizons,
+        )
+        print(f"labels_backfill|start_date|{window['start_date']}")
+        print(f"labels_backfill|end_date|{window['end_date']}")
+        print(f"labels_backfill|dates|{window['date_count']}")
+        print(f"labels_backfill|rows|{count}")
     elif args.command == "select":
         selections = generate_selection(args.trade_date, args.top_n)
         print(f"selection_stored|{store_selection(selections)}")

@@ -165,6 +165,12 @@ CREATE TABLE IF NOT EXISTS backtest_equity_curve (
 CREATE INDEX IF NOT EXISTS idx_market_daily_bar_trade_date
     ON market_daily_bar (trade_date, adjust_type);
 
+CREATE INDEX IF NOT EXISTS idx_market_daily_bar_adjust_asset_date_desc
+    ON market_daily_bar (adjust_type, asset_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_market_daily_bar_adjust_date_desc
+    ON market_daily_bar (adjust_type, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_feature_snapshot_trade_date
     ON feature_snapshot (trade_date, feature_set, feature_version);
 
@@ -226,6 +232,17 @@ CREATE TABLE IF NOT EXISTS core.asset_status_daily (
     PRIMARY KEY (trade_date, asset_id)
 );
 
+CREATE TABLE IF NOT EXISTS core.asset_lifecycle_event (
+    asset_id text NOT NULL,
+    event_date date NOT NULL,
+    event_type text NOT NULL,
+    event_value text,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, event_date, event_type, source_version)
+);
+
 CREATE TABLE IF NOT EXISTS core.industry_membership (
     asset_id text NOT NULL,
     industry_system text NOT NULL,
@@ -252,6 +269,54 @@ CREATE TABLE IF NOT EXISTS market.index_daily_bar (
     source text NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (index_id, trade_date)
+);
+
+CREATE TABLE IF NOT EXISTS market.index_constituent (
+    index_id text NOT NULL,
+    asset_id text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    weight numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (index_id, asset_id, start_date, source_version)
+);
+
+CREATE TABLE IF NOT EXISTS market.trading_calendar (
+    exchange text NOT NULL,
+    trade_date date NOT NULL,
+    is_open boolean NOT NULL,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (exchange, trade_date, source_version)
+);
+
+CREATE TABLE IF NOT EXISTS market.adjustment_factor (
+    asset_id text NOT NULL,
+    trade_date date NOT NULL,
+    raw_close numeric,
+    qfq_close numeric,
+    hfq_close numeric,
+    qfq_factor numeric,
+    hfq_factor numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, trade_date, source_version)
+);
+
+CREATE TABLE IF NOT EXISTS market.corporate_action (
+    asset_id text NOT NULL,
+    event_date date NOT NULL,
+    action_type text NOT NULL,
+    factor_before numeric,
+    factor_after numeric,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, event_date, action_type, source_version)
 );
 
 CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
@@ -375,6 +440,35 @@ CREATE TABLE IF NOT EXISTS raw_baostock.finance_payload (
     payload_hash text NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS raw_baostock.daily_bar_payload (
+    source_service text NOT NULL,
+    source_table text NOT NULL,
+    adjust_type text NOT NULL,
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_service, source_table, adjust_type, trade_date, asset_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_baostock_daily_bar_payload_lookup
+    ON raw_baostock.daily_bar_payload (adjust_type, trade_date, asset_id);
+
+CREATE TABLE IF NOT EXISTS raw_baostock.industry_snapshot_payload (
+    snapshot_date date NOT NULL,
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    row_count integer NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (snapshot_date, source_endpoint)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_baostock_industry_snapshot_date
+    ON raw_baostock.industry_snapshot_payload (snapshot_date, source_endpoint);
+
 CREATE TABLE IF NOT EXISTS ingest.batch_job (
     job_id text PRIMARY KEY,
     dataset text NOT NULL,
@@ -404,6 +498,42 @@ CREATE TABLE IF NOT EXISTS ingest.batch_event (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ingest.backfill_run (
+    run_id text PRIMARY KEY,
+    dataset text NOT NULL,
+    source text NOT NULL,
+    source_version text NOT NULL,
+    start_date date,
+    end_date date,
+    status text NOT NULL DEFAULT 'pending',
+    params jsonb NOT NULL DEFAULT '{}'::jsonb,
+    error_message text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ingest.backfill_task (
+    task_id text PRIMARY KEY,
+    run_id text NOT NULL REFERENCES ingest.backfill_run(run_id),
+    dataset text NOT NULL,
+    partition_key text NOT NULL,
+    start_date date,
+    end_date date,
+    status text NOT NULL DEFAULT 'pending',
+    rows_read integer NOT NULL DEFAULT 0,
+    rows_written integer NOT NULL DEFAULT 0,
+    attempts integer NOT NULL DEFAULT 0,
+    error_message text,
+    params jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    started_at timestamptz,
+    finished_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (run_id, partition_key)
+);
+
 CREATE TABLE IF NOT EXISTS factor.factor_daily (
     trade_date date NOT NULL,
     asset_id text NOT NULL,
@@ -430,6 +560,31 @@ CREATE TABLE IF NOT EXISTS factor.stock_score_daily (
     PRIMARY KEY (trade_date, asset_id, score_version)
 );
 
+CREATE TABLE IF NOT EXISTS factor.factor_eval_run (
+    run_id text PRIMARY KEY,
+    factor_name text NOT NULL,
+    calc_version text NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    horizons integer[] NOT NULL,
+    primary_horizon integer NOT NULL,
+    status text NOT NULL,
+    reason text NOT NULL,
+    metrics jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS factor.factor_approval (
+    factor_name text NOT NULL,
+    calc_version text NOT NULL,
+    score_version text NOT NULL,
+    status text NOT NULL,
+    reason text NOT NULL,
+    eval_run_id text NOT NULL REFERENCES factor.factor_eval_run(run_id),
+    approved_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (factor_name, calc_version, score_version)
+);
+
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_quarter_pit
     ON finance.indicator_quarter (asset_id, announcement_date DESC, report_period DESC);
 
@@ -445,23 +600,50 @@ CREATE INDEX IF NOT EXISTS idx_finance_cash_flow_pit
 CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
     ON core.industry_membership (asset_id, industry_system, start_date, end_date);
 
+CREATE INDEX IF NOT EXISTS idx_core_asset_lifecycle_event_asset_date
+    ON core.asset_lifecycle_event (asset_id, event_date, event_type);
+
 CREATE INDEX IF NOT EXISTS idx_core_asset_status_daily_lookup
     ON core.asset_status_daily (trade_date, asset_id);
 
 CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
     ON market.index_daily_bar (trade_date, index_id);
 
+CREATE INDEX IF NOT EXISTS idx_market_index_constituent_lookup
+    ON market.index_constituent (index_id, start_date, end_date, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_market_trading_calendar_open_date
+    ON market.trading_calendar (exchange, is_open, trade_date);
+
+CREATE INDEX IF NOT EXISTS idx_market_adjustment_factor_date
+    ON market.adjustment_factor (trade_date, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_market_corporate_action_asset_date
+    ON market.corporate_action (asset_id, event_date);
+
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
     ON market.industry_daily_bar (trade_date, industry_system, industry_code);
 
+CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_system_date_desc
+    ON market.industry_daily_bar (industry_system, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);
+
+CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_status
+    ON ingest.backfill_task (dataset, status, start_date);
+
+CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_run_status
+    ON ingest.backfill_task (run_id, status, start_date);
 
 CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
     ON factor.factor_daily (trade_date, factor_name, calc_version);
 
 CREATE INDEX IF NOT EXISTS idx_stock_score_daily_rank
     ON factor.stock_score_daily (trade_date, score_version, rank);
+
+CREATE INDEX IF NOT EXISTS idx_factor_eval_run_factor
+    ON factor.factor_eval_run (factor_name, calc_version, created_at DESC);
 """
 
 
