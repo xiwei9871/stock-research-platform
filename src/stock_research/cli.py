@@ -65,6 +65,10 @@ from stock_research.daily_job_run_store import (
     apply_daily_job_run_schema,
     record_daily_job_run,
 )
+from stock_research.daily_health import (
+    format_operational_health_lines,
+    summarize_operational_health,
+)
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -145,6 +149,14 @@ def parse_exchanges(value: str) -> list[str]:
 
 def parse_index_ids(value: str) -> list[str]:
     return parse_str_list(value, "--index-ids")
+
+
+def parse_ingest_datasets(value: str) -> list[str]:
+    return parse_str_list(value, "--ingest-datasets")
+
+
+def parse_backfill_run_ids(value: str) -> list[str]:
+    return parse_str_list(value, "--backfill-run-ids")
 
 
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
@@ -572,6 +584,16 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--apply-daily-run-schema", action="store_true")
     daily_incremental.add_argument("--record-run", action="store_true")
 
+    daily_health = subparsers.add_parser("daily-health")
+    daily_health.add_argument("--trade-date", required=True)
+    daily_health.add_argument("--ingest-datasets", type=parse_ingest_datasets)
+    daily_health.add_argument("--backfill-run-ids", type=parse_backfill_run_ids)
+    daily_health.add_argument("--stale-minutes", type=int, default=60)
+    daily_health.add_argument("--notify-target")
+    daily_health.add_argument("--notify-account", default="jarvis")
+    daily_health.add_argument("--openclaw-bin", default="openclaw")
+    daily_health.add_argument("--notify-dry-run", action="store_true")
+
     daily_research_report = subparsers.add_parser("run-daily-research-report")
     daily_research_report.add_argument("--trade-date", required=True)
     daily_research_report.add_argument("--score-version", default="manual_v1")
@@ -974,6 +996,24 @@ def main() -> None:
             print(f"daily_incremental_step|{step['step']}|{step['status']}")
             if "error" in step:
                 print(f"daily_incremental_step_error|{step['step']}|{step['error']}")
+    elif args.command == "daily-health":
+        result = summarize_operational_health(
+            trade_date=args.trade_date,
+            ingest_datasets=args.ingest_datasets or [],
+            backfill_run_ids=args.backfill_run_ids or [],
+            stale_minutes=args.stale_minutes,
+        )
+        lines = format_operational_health_lines(result)
+        for line in lines:
+            print(line)
+        if args.notify_target and result["status"] == "alert":
+            send_openclaw_feishu_message(
+                message="\n".join(lines),
+                target=args.notify_target,
+                account=args.notify_account,
+                openclaw_bin=args.openclaw_bin,
+                dry_run=args.notify_dry_run,
+            )
     elif args.command == "run-daily-research-report":
         result = run_daily_research_report(
             trade_date=args.trade_date,

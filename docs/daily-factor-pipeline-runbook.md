@@ -70,6 +70,18 @@ Record non-dry-run daily incremental step status:
 
 The daily incremental DAG loads market bars first, then checks target-date `market_daily_bar` freshness before downstream derived steps.
 
+Check Phase 10 operational health without mutating data:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research daily-health --trade-date YYYY-MM-DD --ingest-datasets baostock-finance,akshare-finance-statements --backfill-run-ids RUN_ID --stale-minutes 60
+```
+
+Send the same health summary to Feishu only when alerts exist:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research daily-health --trade-date YYYY-MM-DD --ingest-datasets baostock-finance,akshare-finance-statements --stale-minutes 60 --notify-target OPENCLAW_TARGET --notify-dry-run
+```
+
 Run TopN research workflow and write performance tear sheet:
 
 ```bash
@@ -330,6 +342,7 @@ cd /Users/xiwei/stock_research
 - Optional report run recording writes generated report paths to `report.report_run`.
 - Daily incremental dry-run prints the ordered Phase 10 DAG without writing data.
 - Optional daily incremental run recording writes step status to `ops.daily_job_run`.
+- Daily health check prints failed ingest jobs, stale running jobs, failed backfill tasks, stale backfill tasks, and failed daily incremental steps.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails

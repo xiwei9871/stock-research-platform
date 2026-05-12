@@ -861,6 +861,99 @@ def test_daily_incremental_cli_can_record_step_runs(monkeypatch, capsys):
     ]
 
 
+def test_daily_health_cli_prints_health_lines(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "summarize_operational_health",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "trade_date": kwargs["trade_date"],
+            "status": "alert",
+            "alert_count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "format_operational_health_lines",
+        lambda result: ["daily_health|status|alert|alerts|1"],
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "daily-health",
+            "--trade-date",
+            "2026-05-12",
+            "--ingest-datasets",
+            "baostock-finance,akshare-finance-statements",
+            "--backfill-run-ids",
+            "bars-1,labels-1",
+            "--stale-minutes",
+            "30",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0] == {
+        "trade_date": "2026-05-12",
+        "ingest_datasets": ["baostock-finance", "akshare-finance-statements"],
+        "backfill_run_ids": ["bars-1", "labels-1"],
+        "stale_minutes": 30,
+    }
+    assert capsys.readouterr().out.splitlines() == [
+        "daily_health|status|alert|alerts|1",
+    ]
+
+
+def test_daily_health_cli_can_send_dry_run_notification(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "summarize_operational_health",
+        lambda **kwargs: {"trade_date": "2026-05-12", "status": "alert", "alert_count": 1},
+    )
+    monkeypatch.setattr(
+        cli,
+        "format_operational_health_lines",
+        lambda result: ["daily_health|status|alert|alerts|1"],
+    )
+    monkeypatch.setattr(
+        cli,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "daily-health",
+            "--trade-date",
+            "2026-05-12",
+            "--notify-target",
+            "oc_group",
+            "--notify-dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["target"] == "oc_group"
+    assert calls[0]["dry_run"] is True
+    assert "daily_health|status|alert|alerts|1" in calls[0]["message"]
+
+
 def test_daily_research_report_cli_prints_report_paths(monkeypatch, capsys, tmp_path):
     import sys
 
