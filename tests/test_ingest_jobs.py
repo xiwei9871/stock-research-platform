@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from stock_research import ingest_jobs
 
 
@@ -483,6 +485,58 @@ def test_run_ingest_loop_runs_until_no_pending_and_reports_each_round(monkeypatc
     assert reports[1]["round"] == 2
     assert reports[1]["done"] is True
     assert sleep_calls == [5]
+
+
+def test_parallel_run_ingest_loop_reads_status_with_fresh_connection(monkeypatch):
+    loop_conn = FakeConnection()
+    fresh_conn = FakeConnection()
+    reports = []
+
+    @contextmanager
+    def fake_connect(service):
+        assert service == "stock_research"
+        yield fresh_conn
+
+    def fake_ingest_status(conn, dataset):
+        if conn is loop_conn:
+            raise AssertionError("stale loop connection reused for status")
+        assert conn is fresh_conn
+        assert dataset == "baostock-finance"
+        return [{"dataset": dataset, "status": "success", "count": 1}]
+
+    def fake_recent_jobs(conn, dataset, limit=12):
+        if conn is loop_conn:
+            raise AssertionError("stale loop connection reused for recent jobs")
+        assert conn is fresh_conn
+        return [{"job_id": "job-1", "status": "success", "rows_read": 50, "rows_written": 150}]
+
+    monkeypatch.setattr(
+        ingest_jobs,
+        "run_ingest_jobs_parallel_for_service",
+        lambda dataset, limit_jobs, workers, service: {
+            "attempted": 1,
+            "success": 1,
+            "failed": 0,
+            "rows_read": 50,
+            "rows_written": 150,
+        },
+    )
+    monkeypatch.setattr(ingest_jobs, "connect", fake_connect)
+    monkeypatch.setattr(ingest_jobs, "ingest_status", fake_ingest_status)
+    monkeypatch.setattr(ingest_jobs, "recent_ingest_jobs", fake_recent_jobs)
+
+    result = ingest_jobs.run_ingest_loop(
+        loop_conn,
+        "baostock-finance",
+        jobs_per_round=1,
+        report=reports.append,
+        sleep_seconds=0,
+        workers=2,
+    )
+
+    assert result["done"] is True
+    assert reports[0]["status_counts"] == {"success": 1}
+    assert reports[0]["recent_jobs"][0]["job_id"] == "job-1"
 
 
 def test_run_ingest_jobs_parallel_splits_limit_and_aggregates_results(monkeypatch):

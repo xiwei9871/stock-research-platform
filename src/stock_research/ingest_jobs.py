@@ -645,7 +645,13 @@ def run_ingest_loop(
             result.get("rows_written", 0)
         )
 
-        counts = status_counts(ingest_status(conn, dataset))
+        if workers > 1:
+            with connect(service) as status_conn:
+                counts = status_counts(ingest_status(status_conn, dataset))
+                recent_jobs = recent_ingest_jobs(status_conn, dataset)
+        else:
+            counts = status_counts(ingest_status(conn, dataset))
+            recent_jobs = recent_ingest_jobs(conn, dataset)
         done = int(counts.get("pending", 0)) == 0 and int(counts.get("running", 0)) == 0
         totals["done"] = done
         summary = {
@@ -657,7 +663,7 @@ def run_ingest_loop(
             "rows_read": int(result.get("rows_read", 0)),
             "rows_written": int(result.get("rows_written", 0)),
             "status_counts": counts,
-            "recent_jobs": recent_ingest_jobs(conn, dataset),
+            "recent_jobs": recent_jobs,
             "done": done,
         }
         if report:
@@ -692,6 +698,18 @@ def run_ingest_loop_for_service(
     workers: int = 1,
     service: str = SETTINGS.research_service,
 ) -> dict[str, int | bool]:
+    if workers > 1:
+        return run_ingest_loop(
+            None,
+            dataset,
+            jobs_per_round=jobs_per_round,
+            report=report,
+            progress=progress,
+            sleep_seconds=sleep_seconds,
+            max_rounds=max_rounds,
+            workers=workers,
+            service=service,
+        )
     with connect(service) as conn:
         return run_ingest_loop(
             conn,
