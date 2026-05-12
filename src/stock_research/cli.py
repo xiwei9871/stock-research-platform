@@ -41,6 +41,7 @@ from stock_research.factor_backfill import (
     backfill_factor_daily_range,
     derive_factor_backfill_window,
 )
+from stock_research.approved_scoring_workflow import score_approved_factors_range
 from stock_research.factor_config import candidate_factor_names
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
@@ -55,6 +56,15 @@ from stock_research.factor_eval_store import (
 )
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
 from stock_research.daily_pipeline import run_daily_factor_pipeline
+from stock_research.daily_incremental import (
+    build_default_step_runners,
+    check_market_data_freshness,
+    run_daily_incremental_pipeline,
+)
+from stock_research.daily_job_run_store import (
+    apply_daily_job_run_schema,
+    record_daily_job_run,
+)
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -487,6 +497,14 @@ def build_parser() -> argparse.ArgumentParser:
     backfill_factor_daily.add_argument("--workers", type=int, default=1)
     backfill_factor_daily.add_argument("--skip-complete", action="store_true")
     backfill_factor_daily.add_argument("--progress-interval", type=int, default=1)
+    backfill_factor_daily.add_argument("--exact-window", action="store_true")
+
+    backfill_approved_scores = subparsers.add_parser("backfill-approved-scores")
+    backfill_approved_scores.add_argument("--start-date")
+    backfill_approved_scores.add_argument("--end-date")
+    backfill_approved_scores.add_argument("--score-version", default="manual_v1")
+    backfill_approved_scores.add_argument("--calc-version", default="v1")
+    backfill_approved_scores.add_argument("--adjust-type", default="hfq")
 
     score_factor_daily = subparsers.add_parser("score-factor-daily")
     score_factor_daily.add_argument("--trade-date", required=True)
@@ -520,6 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_factor_gate_batch.add_argument("--factor-names", type=parse_factor_names)
     evaluate_factor_gate_batch.add_argument("--start-date", required=True)
     evaluate_factor_gate_batch.add_argument("--end-date", required=True)
+    evaluate_factor_gate_batch.add_argument("--validation-start-date")
     evaluate_factor_gate_batch.add_argument("--horizons", default="5,10,20,60")
     evaluate_factor_gate_batch.add_argument("--primary-horizon", type=int, default=5)
     evaluate_factor_gate_batch.add_argument("--calc-version", default="v1")
@@ -536,6 +555,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--reports-dir",
         default="/Users/xiwei/stock_research/reports",
     )
+
+    daily_incremental = subparsers.add_parser("run-daily-incremental")
+    daily_incremental.add_argument("--trade-date", required=True)
+    daily_incremental.add_argument("--score-version", default="manual_v1")
+    daily_incremental.add_argument("--top-n", type=int, default=30)
+    daily_incremental.add_argument("--lookback-bars", type=int, default=130)
+    daily_incremental.add_argument("--adjust-type", default="hfq")
+    daily_incremental.add_argument("--source-service", default="stock_hfq")
+    daily_incremental.add_argument("--industry-system", default="csrc")
+    daily_incremental.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    daily_incremental.add_argument("--dry-run", action="store_true")
+    daily_incremental.add_argument("--apply-daily-run-schema", action="store_true")
+    daily_incremental.add_argument("--record-run", action="store_true")
 
     daily_research_report = subparsers.add_parser("run-daily-research-report")
     daily_research_report.add_argument("--trade-date", required=True)
@@ -739,12 +774,19 @@ def main() -> None:
                     f"covered_rows|{industry['covered_rows']}|missing_rows|{industry['missing_rows']}"
                 )
     elif args.command == "backfill-factor-daily":
-        window = derive_factor_backfill_window(
-            start_date=args.start_date,
-            end_date=args.end_date,
-            lookback_bars=args.lookback_bars,
-            industry_system=args.industry_system,
-        )
+        if args.exact_window:
+            window = {
+                "start_date": args.start_date,
+                "end_date": args.end_date,
+                "date_count": 0,
+            }
+        else:
+            window = derive_factor_backfill_window(
+                start_date=args.start_date,
+                end_date=args.end_date,
+                lookback_bars=args.lookback_bars,
+                industry_system=args.industry_system,
+            )
         if window["start_date"] is None or window["end_date"] is None:
             print("factor_daily_backfill|dates|0")
             print("factor_daily_backfill|rows|0")
@@ -761,10 +803,31 @@ def main() -> None:
         total = int(result["factor_rows"].sum()) if not result.empty else 0
         print(f"factor_daily_backfill|dates|{len(result)}")
         print(f"factor_daily_backfill|rows|{total}")
+    elif args.command == "backfill-approved-scores":
+        bounds = load_market_date_bounds(adjust_type=args.adjust_type)
+        start_date = args.start_date or bounds["start_date"]
+        end_date = args.end_date or bounds["end_date"]
+        if start_date is None or end_date is None:
+            print("approved_score_backfill|dates|0")
+            print("approved_score_backfill|rows|0")
+            return
+        result = score_approved_factors_range(
+            start_date=str(start_date),
+            end_date=str(end_date),
+            score_version=args.score_version,
+            calc_version=args.calc_version,
+            adjust_type=args.adjust_type,
+        )
+        total = int(result["score_rows"].sum()) if not result.empty else 0
+        print(f"approved_score_backfill|start_date|{start_date}")
+        print(f"approved_score_backfill|end_date|{end_date}")
+        print(f"approved_score_backfill|dates|{len(result)}")
+        print(f"approved_score_backfill|rows|{total}")
     elif args.command == "score-factor-daily":
         count = score_stored_factor_daily(
             trade_date=args.trade_date,
             score_version=args.score_version,
+            approved_only=True,
         )
         print(f"stock_score_daily_stored|{count}")
     elif args.command == "show-top-scores":
@@ -859,6 +922,7 @@ def main() -> None:
             score_version=args.score_version,
             quantiles=args.quantiles,
             top_n=args.top_n,
+            validation_start_date=args.validation_start_date,
         )
         for row in result.to_dict("records"):
             print(
@@ -877,6 +941,39 @@ def main() -> None:
         print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "run-daily-incremental":
+        if args.apply_daily_run_schema:
+            apply_daily_job_run_schema()
+        recorder = None
+        if args.record_run:
+            recorder = lambda step: record_daily_job_run(
+                trade_date=args.trade_date,
+                step=step["step"],
+                status=step["status"],
+                metadata=step.get("result") or {},
+                error_message=step.get("error"),
+            )
+        result = run_daily_incremental_pipeline(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            lookback_bars=args.lookback_bars,
+            reports_dir=args.reports_dir,
+            adjust_type=args.adjust_type,
+            source_service=args.source_service,
+            industry_system=args.industry_system,
+            dry_run=args.dry_run,
+            step_runners=None if args.dry_run else build_default_step_runners(),
+            freshness_checker=None,
+            recorder=recorder,
+        )
+        print(f"daily_incremental|status|{result['status']}")
+        if "reason" in result:
+            print(f"daily_incremental|reason|{result['reason']}")
+        for step in result["steps"]:
+            print(f"daily_incremental_step|{step['step']}|{step['status']}")
+            if "error" in step:
+                print(f"daily_incremental_step_error|{step['step']}|{step['error']}")
     elif args.command == "run-daily-research-report":
         result = run_daily_research_report(
             trade_date=args.trade_date,

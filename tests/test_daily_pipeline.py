@@ -12,7 +12,7 @@ def test_run_daily_factor_pipeline_runs_build_score_topn_and_report(monkeypatch)
     monkeypatch.setattr(
         daily_pipeline,
         "score_stored_factor_daily",
-        lambda **kwargs: calls.append("score") or 20,
+        lambda **kwargs: calls.append(("score", kwargs)) or 20,
     )
     monkeypatch.setattr(
         daily_pipeline,
@@ -27,7 +27,9 @@ def test_run_daily_factor_pipeline_runs_build_score_topn_and_report(monkeypatch)
 
     result = daily_pipeline.run_daily_factor_pipeline("2026-05-08", top_n=10)
 
-    assert calls == ["build", "score"]
+    assert calls[0] == "build"
+    assert calls[1][0] == "score"
+    assert calls[1][1]["approved_only"] is True
     assert result["factor_rows"] == 100
     assert result["score_rows"] == 20
     assert result["top_scores"][0]["asset_id"] == "A"

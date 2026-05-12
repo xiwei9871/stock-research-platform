@@ -49,8 +49,10 @@ def test_load_market_bars_for_factor_date_queries_lookback_window(monkeypatch):
 
     assert len(bars) == 1
     assert bars.iloc[0]["asset_id"] == "CN:SH:600001"
-    assert "row_number() over" in calls[0][0]
-    assert calls[0][1] == ["2026-05-08", "hfq", 130]
+    assert "row_number() over" not in calls[0][0]
+    assert "lookback_dates" in calls[0][0]
+    assert "LIMIT %s" in calls[0][0]
+    assert calls[0][1] == ["hfq", "2026-05-08", 130, "hfq"]
 
 
 def test_enrich_bars_with_industry_uses_point_in_time_membership(monkeypatch):
@@ -95,7 +97,10 @@ def test_load_industry_bars_for_factor_date_queries_window(monkeypatch):
 
     assert len(result) == 1
     assert "market.industry_daily_bar" in calls[0][0]
-    assert calls[0][1] == ["2026-05-08", "csrc", 130]
+    assert "row_number() over" not in calls[0][0]
+    assert "lookback_dates" in calls[0][0]
+    assert "LIMIT %s" in calls[0][0]
+    assert calls[0][1] == ["csrc", "2026-05-08", 130, "csrc"]
 
 
 def test_compute_technical_factor_rows_returns_long_factor_daily_rows():

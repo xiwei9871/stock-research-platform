@@ -19,6 +19,7 @@ def run_daily_factor_pipeline(
     score_rows = score_stored_factor_daily(
         trade_date=trade_date,
         score_version=score_version,
+        approved_only=True,
     )
     top_scores = load_top_scores(
         trade_date=trade_date,

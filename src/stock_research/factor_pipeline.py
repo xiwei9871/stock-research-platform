@@ -38,44 +38,35 @@ def load_market_bars_for_factor_date(
     service: str = SETTINGS.research_service,
 ) -> pd.DataFrame:
     sql = """
-    WITH ranked AS (
-        SELECT
-            trade_date,
-            asset_id,
-            open,
-            high,
-            low,
-            close,
-            preclose,
-            volume,
-            amount,
-            turnover_rate,
-            trade_status,
-            is_st,
-            row_number() over (partition by asset_id order by trade_date desc) AS row_num
+    WITH lookback_dates AS (
+        SELECT DISTINCT trade_date
         FROM market_daily_bar
-        WHERE trade_date <= %s
-          AND adjust_type = %s
+        WHERE adjust_type = %s
+          AND trade_date <= %s
+        ORDER BY trade_date DESC
+        LIMIT %s
     )
     SELECT
-        trade_date,
-        asset_id,
-        open,
-        high,
-        low,
-        close,
-        preclose,
-        volume,
-        amount,
-        turnover_rate,
-        trade_status,
-        is_st
-    FROM ranked
-    WHERE row_num <= %s
-    ORDER BY asset_id, trade_date
+        bars.trade_date,
+        bars.asset_id,
+        bars.open,
+        bars.high,
+        bars.low,
+        bars.close,
+        bars.preclose,
+        bars.volume,
+        bars.amount,
+        bars.turnover_rate,
+        bars.trade_status,
+        bars.is_st
+    FROM market_daily_bar bars
+    JOIN lookback_dates dates
+      ON dates.trade_date = bars.trade_date
+    WHERE bars.adjust_type = %s
+    ORDER BY bars.asset_id, bars.trade_date
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [trade_date, adjust_type, lookback_bars])
+        rows = fetch_all(conn, sql, [adjust_type, trade_date, lookback_bars, adjust_type])
     return pd.DataFrame(rows)
 
 
@@ -114,40 +105,33 @@ def load_industry_bars_for_factor_date(
     service: str = SETTINGS.research_service,
 ) -> pd.DataFrame:
     sql = """
-    WITH ranked AS (
-        SELECT
-            trade_date,
-            industry_code,
-            industry_name,
-            open,
-            high,
-            low,
-            close,
-            preclose,
-            volume,
-            amount,
-            row_number() over (partition by industry_code order by trade_date desc) AS row_num
+    WITH lookback_dates AS (
+        SELECT DISTINCT trade_date
         FROM market.industry_daily_bar
-        WHERE trade_date <= %s
-          AND industry_system = %s
+        WHERE industry_system = %s
+          AND trade_date <= %s
+        ORDER BY trade_date DESC
+        LIMIT %s
     )
     SELECT
-        trade_date,
-        industry_code,
-        industry_name,
-        open,
-        high,
-        low,
-        close,
-        preclose,
-        volume,
-        amount
-    FROM ranked
-    WHERE row_num <= %s
-    ORDER BY industry_code, trade_date
+        bars.trade_date,
+        bars.industry_code,
+        bars.industry_name,
+        bars.open,
+        bars.high,
+        bars.low,
+        bars.close,
+        bars.preclose,
+        bars.volume,
+        bars.amount
+    FROM market.industry_daily_bar bars
+    JOIN lookback_dates dates
+      ON dates.trade_date = bars.trade_date
+    WHERE bars.industry_system = %s
+    ORDER BY bars.industry_code, bars.trade_date
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [trade_date, industry_system, lookback_bars])
+        rows = fetch_all(conn, sql, [industry_system, trade_date, lookback_bars, industry_system])
     return pd.DataFrame(rows)
 
 

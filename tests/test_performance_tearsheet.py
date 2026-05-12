@@ -73,6 +73,8 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
     assert set(paths) == {
         "report_path",
         "metrics_path",
+        "subperiod_metrics_path",
+        "regime_metrics_path",
         "equity_curve_path",
         "positions_path",
         "trades_path",
@@ -83,11 +85,19 @@ def test_write_performance_tearsheet_writes_markdown_and_csv_outputs(tmp_path):
     assert "# Performance Tear Sheet" in report_text
     assert "仅作为研究验证，不构成交易指令。" in report_text
     assert "| cumulative_return |" in report_text
+    assert "## Subperiod Metrics" in report_text
+    assert "## Regime Metrics" in report_text
     assert "topn-test" in report_text
 
     metrics = pd.read_csv(paths["metrics_path"])
     assert "cumulative_return" in set(metrics["metric"])
     assert "sharpe_ratio" in set(metrics["metric"])
+    subperiod_metrics = pd.read_csv(paths["subperiod_metrics_path"])
+    assert set(subperiod_metrics["period"].astype(str)) == {"2026"}
+    assert "cumulative_return" in set(subperiod_metrics["metric"])
+    regime_metrics = pd.read_csv(paths["regime_metrics_path"])
+    assert set(regime_metrics["regime"]) == {"up_days", "down_days"}
+    assert "mean_net_return" in set(regime_metrics["metric"])
     assert pd.read_csv(paths["equity_curve_path"]).shape[0] == 2
     assert pd.read_csv(paths["positions_path"]).shape[0] == 1
     assert pd.read_csv(paths["trades_path"]).shape[0] == 1

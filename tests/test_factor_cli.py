@@ -55,6 +55,7 @@ def test_cli_accepts_backfill_factor_daily_command():
             "--skip-complete",
             "--progress-interval",
             "10",
+            "--exact-window",
         ]
     )
 
@@ -66,6 +67,7 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.workers == 4
     assert args.skip_complete is True
     assert args.progress_interval == 10
+    assert args.exact_window is True
 
 
 def test_cli_accepts_load_bars_archive_raw_flag():
@@ -277,6 +279,54 @@ def test_cli_accepts_daily_factor_pipeline_command():
     assert args.lookback_bars == 130
 
 
+def test_cli_accepts_daily_incremental_command():
+    args = build_parser().parse_args(
+        [
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--score-version",
+            "manual_v1",
+            "--top-n",
+            "30",
+            "--lookback-bars",
+            "130",
+            "--adjust-type",
+            "qfq",
+            "--source-service",
+            "stock_qfq",
+            "--industry-system",
+            "sw",
+            "--dry-run",
+        ]
+    )
+
+    assert args.command == "run-daily-incremental"
+    assert args.trade_date == "2026-05-12"
+    assert args.score_version == "manual_v1"
+    assert args.top_n == 30
+    assert args.lookback_bars == 130
+    assert args.adjust_type == "qfq"
+    assert args.source_service == "stock_qfq"
+    assert args.industry_system == "sw"
+    assert args.dry_run is True
+
+
+def test_cli_accepts_daily_incremental_recording_flags():
+    args = build_parser().parse_args(
+        [
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--apply-daily-run-schema",
+            "--record-run",
+        ]
+    )
+
+    assert args.apply_daily_run_schema is True
+    assert args.record_run is True
+
+
 def test_cli_accepts_daily_research_report_command():
     args = build_parser().parse_args(
         [
@@ -486,12 +536,69 @@ def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
     ]
 
 
+def test_backfill_factor_daily_cli_exact_window_skips_derived_window(monkeypatch, capsys):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "derive_factor_backfill_window",
+        lambda **kwargs: calls.append(("derive", kwargs))
+        or {
+            "start_date": "2026-01-01",
+            "end_date": "2026-05-08",
+            "date_count": 2,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "backfill_factor_daily_range",
+        lambda **kwargs: calls.append(("backfill", kwargs))
+        or pd.DataFrame([{"trade_date": "2025-05-09", "factor_rows": 10}]),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-factor-daily",
+            "--start-date",
+            "2025-05-09",
+            "--end-date",
+            "2026-05-08",
+            "--exact-window",
+            "--workers",
+            "2",
+        ],
+    )
+
+    cli.main()
+
+    assert [call[0] for call in calls] == ["backfill"]
+    assert calls[0][1]["start_date"] == "2025-05-09"
+    assert calls[0][1]["end_date"] == "2026-05-08"
+    assert calls[0][1]["workers"] == 2
+    assert capsys.readouterr().out.splitlines() == [
+        "factor_daily_backfill|dates|1",
+        "factor_daily_backfill|rows|10",
+    ]
+
+
 def test_score_factor_daily_cli_prints_count(monkeypatch, capsys):
     import sys
 
     import stock_research.cli as cli
 
-    monkeypatch.setattr(cli, "score_stored_factor_daily", lambda **kwargs: 12)
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "score_stored_factor_daily",
+        lambda **kwargs: calls.append(kwargs) or 12,
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -500,6 +607,7 @@ def test_score_factor_daily_cli_prints_count(monkeypatch, capsys):
 
     cli.main()
 
+    assert calls[0]["approved_only"] is True
     assert capsys.readouterr().out.strip() == "stock_score_daily_stored|12"
 
 
@@ -615,6 +723,141 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
         "daily_factor_pipeline|factor_rows|100",
         "daily_factor_pipeline|score_rows|20",
         "daily_factor_pipeline|top_scores|3",
+    ]
+
+
+def test_daily_incremental_cli_prints_step_status(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "run_daily_incremental_pipeline",
+        lambda **kwargs: {
+            "trade_date": kwargs["trade_date"],
+            "status": "planned",
+            "steps": [
+                {"step": "sync_core_assets", "status": "planned"},
+                {"step": "load_market_bars", "status": "planned"},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert capsys.readouterr().out.splitlines() == [
+        "daily_incremental|status|planned",
+        "daily_incremental_step|sync_core_assets|planned",
+        "daily_incremental_step|load_market_bars|planned",
+    ]
+
+
+def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "build_default_step_runners",
+        lambda: calls.append("runners") or {"sync_core_assets": lambda context: {"rows": 1}},
+    )
+    monkeypatch.setattr(
+        cli,
+        "check_market_data_freshness",
+        lambda context: {"status": "ok", "bar_count": 100},
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_daily_incremental_pipeline",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "trade_date": kwargs["trade_date"],
+            "status": "success",
+            "steps": [{"step": "sync_core_assets", "status": "success"}],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "run-daily-incremental", "--trade-date", "2026-05-12"],
+    )
+
+    cli.main()
+
+    assert calls[0] == "runners"
+    assert "sync_core_assets" in calls[1]["step_runners"]
+    assert calls[1]["dry_run"] is False
+    assert calls[1]["freshness_checker"] is None
+    assert capsys.readouterr().out.splitlines() == [
+        "daily_incremental|status|success",
+        "daily_incremental_step|sync_core_assets|success",
+    ]
+
+
+def test_daily_incremental_cli_can_record_step_runs(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(cli, "apply_daily_job_run_schema", lambda: calls.append("schema"))
+
+    def fake_record_daily_job_run(**kwargs):
+        calls.append(("record", kwargs))
+        return "run-1"
+
+    monkeypatch.setattr(cli, "record_daily_job_run", fake_record_daily_job_run)
+
+    def fake_run_daily_incremental_pipeline(**kwargs):
+        kwargs["recorder"](
+            {"step": "sync_core_assets", "status": "success", "result": {"rows": 1}}
+        )
+        return {
+            "trade_date": kwargs["trade_date"],
+            "status": "success",
+            "steps": [{"step": "sync_core_assets", "status": "success"}],
+        }
+
+    monkeypatch.setattr(
+        cli,
+        "run_daily_incremental_pipeline",
+        fake_run_daily_incremental_pipeline,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "run-daily-incremental",
+            "--trade-date",
+            "2026-05-12",
+            "--apply-daily-run-schema",
+            "--record-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0] == "schema"
+    assert calls[1][0] == "record"
+    assert calls[1][1]["step"] == "sync_core_assets"
+    assert capsys.readouterr().out.splitlines() == [
+        "daily_incremental|status|success",
+        "daily_incremental_step|sync_core_assets|success",
     ]
 
 
@@ -759,6 +1002,52 @@ def test_evaluate_factor_gate_batch_cli_prints_rows(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == (
         "factor_gate_batch|alpha101_delta_close_1_rank|approved|passed_thresholds|5|run-1"
     )
+
+
+def test_evaluate_factor_gate_batch_cli_accepts_validation_start_date(monkeypatch):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "run_factor_gate_batch",
+        lambda **kwargs: calls.append(kwargs)
+        or pd.DataFrame(
+            [
+                {
+                    "factor_name": "ret_20",
+                    "status": "approved",
+                    "reason": "passed_thresholds",
+                    "primary_horizon": 5,
+                    "eval_run_id": "run-1",
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "evaluate-factor-gate-batch",
+            "--factor-names",
+            "ret_20",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-05-08",
+            "--validation-start-date",
+            "2026-03-01",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["validation_start_date"] == "2026-03-01"
 
 
 def test_cli_accepts_research_preflight_command():
@@ -1034,6 +1323,83 @@ def test_backfill_factor_daily_cli_uses_derived_window(monkeypatch, capsys):
     assert capsys.readouterr().out.splitlines()[-2:] == [
         "factor_daily_backfill|dates|1",
         "factor_daily_backfill|rows|1",
+    ]
+
+
+def test_cli_accepts_backfill_approved_scores_command():
+    args = build_parser().parse_args(
+        [
+            "backfill-approved-scores",
+            "--start-date",
+            "1991-06-20",
+            "--end-date",
+            "2026-02-02",
+            "--score-version",
+            "manual_v1",
+            "--calc-version",
+            "v1",
+            "--adjust-type",
+            "hfq",
+        ]
+    )
+
+    assert args.command == "backfill-approved-scores"
+    assert args.start_date == "1991-06-20"
+    assert args.end_date == "2026-02-02"
+    assert args.score_version == "manual_v1"
+    assert args.calc_version == "v1"
+    assert args.adjust_type == "hfq"
+
+
+def test_backfill_approved_scores_cli_uses_market_bounds(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "load_market_date_bounds",
+        lambda adjust_type="hfq": calls.append(("bounds", adjust_type))
+        or {
+            "start_date": "1990-12-19",
+            "end_date": "2026-05-08",
+            "date_count": 8200,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "score_approved_factors_range",
+        lambda **kwargs: calls.append(("score", kwargs))
+        or __import__("pandas").DataFrame(
+            [
+                {"trade_date": "1990-12-19", "score_rows": 3},
+                {"trade_date": "1990-12-20", "score_rows": 4},
+            ]
+        ),
+    )
+    monkeypatch.setattr(sys, "argv", ["stock-research", "backfill-approved-scores"])
+
+    cli.main()
+
+    assert calls == [
+        ("bounds", "hfq"),
+        (
+            "score",
+            {
+                "start_date": "1990-12-19",
+                "end_date": "2026-05-08",
+                "score_version": "manual_v1",
+                "calc_version": "v1",
+                "adjust_type": "hfq",
+            },
+        ),
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "approved_score_backfill|start_date|1990-12-19",
+        "approved_score_backfill|end_date|2026-05-08",
+        "approved_score_backfill|dates|2",
+        "approved_score_backfill|rows|7",
     ]
 
 

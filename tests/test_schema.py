@@ -19,6 +19,8 @@ def test_schema_uses_replay_keys():
     assert "label_version" in sql
     assert "score_version" in sql
     assert "idx_market_daily_bar_adjust_asset_date_desc" in sql
+    assert "idx_market_daily_bar_adjust_date_desc" in sql
+    assert "idx_market_industry_daily_bar_system_date_desc" in CREATE_RESEARCH_EXTENSION_SQL
 
 
 def test_schema_creates_backtest_tables():

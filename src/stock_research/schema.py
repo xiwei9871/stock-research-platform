@@ -168,6 +168,9 @@ CREATE INDEX IF NOT EXISTS idx_market_daily_bar_trade_date
 CREATE INDEX IF NOT EXISTS idx_market_daily_bar_adjust_asset_date_desc
     ON market_daily_bar (adjust_type, asset_id, trade_date DESC);
 
+CREATE INDEX IF NOT EXISTS idx_market_daily_bar_adjust_date_desc
+    ON market_daily_bar (adjust_type, trade_date DESC);
+
 CREATE INDEX IF NOT EXISTS idx_feature_snapshot_trade_date
     ON feature_snapshot (trade_date, feature_set, feature_version);
 
@@ -620,6 +623,9 @@ CREATE INDEX IF NOT EXISTS idx_market_corporate_action_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
     ON market.industry_daily_bar (trade_date, industry_system, industry_code);
+
+CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_system_date_desc
+    ON market.industry_daily_bar (industry_system, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);

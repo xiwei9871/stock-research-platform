@@ -30,6 +30,8 @@ Score factor daily:
 /Users/xiwei/stock_research/.venv/bin/stock-research score-factor-daily --trade-date YYYY-MM-DD --score-version manual_v1
 ```
 
+This command scores approved factors only.
+
 Show Top30:
 
 ```bash
@@ -45,7 +47,7 @@ Evaluate a candidate factor before scoring promotion:
 Evaluate multiple candidate factors before scoring promotion:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --factor-names alpha101_delta_close_1_rank,gtja191_amount_momentum_5_10,qlib_ret_5 --start-date YYYY-MM-DD --end-date YYYY-MM-DD --validation-start-date YYYY-MM-DD --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
 ```
 
 Run full daily pipeline:
@@ -53,6 +55,20 @@ Run full daily pipeline:
 ```bash
 /Users/xiwei/stock_research/.venv/bin/stock-research run-daily-factor-pipeline --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --lookback-bars 130
 ```
+
+Preview the Phase 10 daily incremental DAG without mutating data:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research run-daily-incremental --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --lookback-bars 130 --adjust-type hfq --source-service stock_hfq --industry-system csrc --dry-run
+```
+
+Record non-dry-run daily incremental step status:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/stock-research run-daily-incremental --trade-date YYYY-MM-DD --score-version manual_v1 --top-n 30 --lookback-bars 130 --adjust-type hfq --source-service stock_hfq --industry-system csrc --apply-daily-run-schema --record-run
+```
+
+The daily incremental DAG loads market bars first, then checks target-date `market_daily_bar` freshness before downstream derived steps.
 
 Run TopN research workflow and write performance tear sheet:
 
@@ -276,17 +292,16 @@ At this point, `research_preflight|coverage|ok|...` is required before factor-ga
 6. Batch evaluate default candidate factors:
 
 ```bash
-/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 1990-12-01 --end-date "$END_DATE" --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
+/Users/xiwei/stock_research/.venv/bin/stock-research evaluate-factor-gate-batch --start-date 1990-12-01 --end-date "$END_DATE" --validation-start-date 2018-01-01 --horizons 5,10,20,60 --primary-horizon 5 --score-version manual_v1
 ```
 
-6. Score the historical range with approved factors only from Python until a dedicated CLI command is added:
+7. Score the historical range with approved factors only:
 
 ```bash
-cd /Users/xiwei/stock_research
-.venv/bin/python -c "from stock_research.approved_scoring_workflow import score_approved_factors_range; result = score_approved_factors_range('1990-12-01', '$END_DATE', score_version='manual_v1'); print(result.to_string(index=False)); print('approved_score_rows|' + str(int(result['score_rows'].sum()) if not result.empty else 0))"
+/Users/xiwei/stock_research/.venv/bin/stock-research backfill-approved-scores --start-date 1990-12-01 --end-date "$END_DATE" --score-version manual_v1 --calc-version v1
 ```
 
-7. Run TopN research workflow on approved-only scores:
+8. Run TopN research workflow on approved-only scores:
 
 ```bash
 cd /Users/xiwei/stock_research
@@ -302,7 +317,7 @@ cd /Users/xiwei/stock_research
 - `factor.stock_score_daily` has ranked rows for the trade date.
 - TopN command prints ranked candidates.
 - Daily TopN report writes markdown and CSV files with rank, asset, total score, score version, score components, and a candidate-pool guardrail.
-- TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics/equity/positions CSV files.
+- TopN research workflow prints `topn_research_workflow|...` paths and writes a markdown tear sheet plus metrics, subperiod metrics, regime metrics, equity, positions, and trades CSV files.
 - Sector strength report writes markdown and CSV files under `reports/sector_strength/`.
 - Market state report writes markdown and CSV files under `reports/market_state/`.
 - Risk alert report writes markdown and CSV files under `reports/risk_alerts/`.
@@ -313,6 +328,8 @@ cd /Users/xiwei/stock_research
 - Main `stock-research run-daily-research-report` prints the same stable report paths.
 - Cron helper can generate a weekday report command for manual installation.
 - Optional report run recording writes generated report paths to `report.report_run`.
+- Daily incremental dry-run prints the ordered Phase 10 DAG without writing data.
+- Optional daily incremental run recording writes step status to `ops.daily_job_run`.
 - Reports are written under `reports/`, which is ignored by Git.
 
 ## Guardrails
@@ -321,4 +338,5 @@ cd /Users/xiwei/stock_research
 - Do not treat TopN as a buy signal.
 - Do not change V3 strategy thresholds in this pipeline.
 - Alpha101 / GTJA191 / Qlib-style factors are research candidates until factor evaluation approves them for scoring.
-- Code-level scoring can enforce the factor gate with `score_stored_factor_daily(..., approved_only=True)`, which loads only factors marked `approved` in `factor.factor_approval` for the requested `score_version`. The main CLI keeps its current compatible default until unrelated `cli.py` changes are resolved.
+- Code-level scoring can enforce the factor gate with `score_stored_factor_daily(..., approved_only=True)`, which loads only factors marked `approved` in `factor.factor_approval` for the requested `score_version`. Use `stock-research backfill-approved-scores` for validated historical score generation.
+- Non-dry-run daily incremental execution checks `market_daily_bar` freshness for the target date before downstream steps run.
