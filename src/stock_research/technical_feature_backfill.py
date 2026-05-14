@@ -1,0 +1,239 @@
+from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import time
+
+import pandas as pd
+
+from stock_research.config import SETTINGS
+from stock_research.db import connect, fetch_all
+from stock_research.factor_backfill import (
+    build_trade_date_range,
+    load_trade_dates_for_backfill,
+)
+from stock_research.research_windows import load_market_date_bounds
+from stock_research.technical_feature_store import (
+    TECHNICAL_FEATURE_CALC_VERSION,
+    TECHNICAL_FEATURE_SOURCE,
+    build_and_store_stock_technical_features_daily,
+)
+
+
+def load_complete_technical_feature_dates(
+    start_date: str,
+    end_date: str,
+    adjust_type: str = "qfq",
+    calc_version: str = TECHNICAL_FEATURE_CALC_VERSION,
+    source_data_version: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> set[str]:
+    version = source_data_version or f"market_daily_bar:{adjust_type}"
+    sql = """
+    WITH expected_assets AS (
+        SELECT DISTINCT trade_date, asset_id
+        FROM market_daily_bar
+        WHERE adjust_type = %s
+          AND trade_date BETWEEN %s AND %s
+    ),
+    actual_assets AS (
+        SELECT DISTINCT trade_date, asset_id
+        FROM factor.stock_technical_features_daily
+        WHERE adjust_type = %s
+          AND source = %s
+          AND source_data_version = %s
+          AND calc_version = %s
+          AND trade_date BETWEEN %s AND %s
+    )
+    SELECT DISTINCT expected_assets.trade_date
+    FROM expected_assets
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM expected_assets missing_expected
+        WHERE missing_expected.trade_date = expected_assets.trade_date
+          AND NOT EXISTS (
+              SELECT 1
+              FROM actual_assets
+              WHERE actual_assets.trade_date = missing_expected.trade_date
+                AND actual_assets.asset_id = missing_expected.asset_id
+          )
+    )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM actual_assets stale_actual
+          WHERE stale_actual.trade_date = expected_assets.trade_date
+            AND NOT EXISTS (
+                SELECT 1
+                FROM expected_assets
+                WHERE expected_assets.trade_date = stale_actual.trade_date
+                  AND expected_assets.asset_id = stale_actual.asset_id
+            )
+      )
+    ORDER BY expected_assets.trade_date
+    """
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            sql,
+            [
+                adjust_type,
+                start_date,
+                end_date,
+                adjust_type,
+                TECHNICAL_FEATURE_SOURCE,
+                version,
+                calc_version,
+                start_date,
+                end_date,
+            ],
+        )
+    return {str(row["trade_date"])[:10] for row in rows}
+
+
+def derive_technical_feature_backfill_window(
+    *,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    lookback_bars: int = 260,
+    adjust_type: str = "qfq",
+) -> dict[str, str | int | None]:
+    bounds = load_market_date_bounds(adjust_type=adjust_type)
+    window_start = start_date or bounds["start_date"]
+    window_end = end_date or bounds["end_date"]
+    if window_start is None or window_end is None:
+        return {"start_date": None, "end_date": None, "date_count": 0}
+    if start_date is None and end_date is None:
+        date_count = int(bounds.get("date_count") or 0)
+    else:
+        date_count = len(
+            load_trade_dates_for_backfill(
+                start_date=str(window_start),
+                end_date=str(window_end),
+                adjust_type=adjust_type,
+            )
+        )
+    return {
+        "start_date": str(window_start),
+        "end_date": str(window_end),
+        "date_count": date_count,
+    }
+
+
+def _build_technical_features_daily_for_task(
+    trade_date: str,
+    lookback_bars: int,
+    adjust_type: str,
+    source_data_version: str | None,
+) -> dict:
+    started_at = time.perf_counter()
+    count = build_and_store_stock_technical_features_daily(
+        trade_date=trade_date,
+        lookback_bars=lookback_bars,
+        adjust_type=adjust_type,
+        source_data_version=source_data_version,
+    )
+    return {
+        "trade_date": trade_date,
+        "feature_rows": count,
+        "elapsed_seconds": time.perf_counter() - started_at,
+    }
+
+
+def backfill_technical_features_daily_range(
+    start_date: str,
+    end_date: str,
+    lookback_bars: int = 260,
+    adjust_type: str = "qfq",
+    source_data_version: str | None = None,
+    trading_days_only: bool = True,
+    workers: int = 1,
+    skip_complete: bool = False,
+    progress: Callable[[dict], None] | None = None,
+    clock: Callable[[], float] = time.perf_counter,
+) -> pd.DataFrame:
+    rows = []
+    trade_dates = (
+        load_trade_dates_for_backfill(
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type,
+        )
+        if trading_days_only
+        else build_trade_date_range(start_date, end_date)
+    )
+    if skip_complete:
+        complete_dates = load_complete_technical_feature_dates(
+            start_date=start_date,
+            end_date=end_date,
+            adjust_type=adjust_type,
+            source_data_version=source_data_version,
+        )
+        trade_dates = [trade_date for trade_date in trade_dates if trade_date not in complete_dates]
+
+    total_dates = len(trade_dates)
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    if total_dates == 0:
+        return pd.DataFrame(columns=["trade_date", "feature_rows"])
+
+    if workers > 1:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            max_tasks_per_child=1,
+        ) as executor:
+            futures = {
+                executor.submit(
+                    _build_technical_features_daily_for_task,
+                    trade_date,
+                    lookback_bars,
+                    adjust_type,
+                    source_data_version,
+                ): {"trade_date": trade_date, "index": index}
+                for index, trade_date in enumerate(trade_dates, start=1)
+            }
+            for future in as_completed(futures):
+                metadata = futures[future]
+                item = future.result()
+                item["index"] = metadata["index"]
+                item["total"] = total_dates
+                if progress is not None:
+                    progress({"event": "done", **item})
+                rows.append(
+                    {
+                        "trade_date": item["trade_date"],
+                        "feature_rows": item["feature_rows"],
+                    }
+                )
+        if not rows:
+            return pd.DataFrame(columns=["trade_date", "feature_rows"])
+        return pd.DataFrame(rows).sort_values("trade_date").reset_index(drop=True)
+
+    for index, trade_date in enumerate(trade_dates, start=1):
+        if progress is not None:
+            progress(
+                {
+                    "event": "start",
+                    "trade_date": trade_date,
+                    "index": index,
+                    "total": total_dates,
+                }
+            )
+        started_at = clock()
+        count = build_and_store_stock_technical_features_daily(
+            trade_date=trade_date,
+            lookback_bars=lookback_bars,
+            adjust_type=adjust_type,
+            source_data_version=source_data_version,
+        )
+        elapsed_seconds = clock() - started_at
+        if progress is not None:
+            progress(
+                {
+                    "event": "done",
+                    "trade_date": trade_date,
+                    "index": index,
+                    "total": total_dates,
+                    "feature_rows": count,
+                    "elapsed_seconds": elapsed_seconds,
+                }
+            )
+        rows.append({"trade_date": trade_date, "feature_rows": count})
+    return pd.DataFrame(rows)
