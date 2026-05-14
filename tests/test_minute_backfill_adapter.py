@@ -160,6 +160,7 @@ def test_run_backfill_once_with_timeout_terminates_work_in_background(monkeypatc
         workers=2,
         run_timeout_seconds=0.01,
         reset_stale_before_run=False,
+        lock_path=tmp_path / "minute-backfill-watchdog.lock",
     )
     time.sleep(0.35)
 
@@ -167,7 +168,7 @@ def test_run_backfill_once_with_timeout_terminates_work_in_background(monkeypatc
     assert marker.exists() is False
 
 
-def test_run_backfill_once_with_timeout_reports_failed_when_child_exits_without_result(monkeypatch):
+def test_run_backfill_once_with_timeout_reports_failed_when_child_exits_without_result(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "stock_research.minute_backfill_adapter.run_baostock_minute_backfill",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
@@ -185,6 +186,7 @@ def test_run_backfill_once_with_timeout_reports_failed_when_child_exits_without_
         workers=2,
         run_timeout_seconds=5,
         reset_stale_before_run=False,
+        lock_path=tmp_path / "minute-backfill-watchdog.lock",
     )
 
     assert result == {

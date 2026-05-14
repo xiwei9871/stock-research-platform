@@ -1,6 +1,9 @@
+import importlib
+
 import pytest
 
 from stock_research.cli import build_parser
+import stock_research.technical_feature_store as technical_feature_store
 
 
 def test_cli_accepts_build_factor_daily_command():
@@ -68,6 +71,83 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.skip_complete is True
     assert args.progress_interval == 10
     assert args.exact_window is True
+
+
+def test_cli_accepts_backfill_technical_features_daily_command():
+    args = build_parser().parse_args(
+        [
+            "backfill-technical-features-daily",
+            "--lookback-bars",
+            "260",
+            "--adjust-type",
+            "qfq",
+            "--workers",
+            "3",
+            "--skip-complete",
+            "--progress-interval",
+            "5",
+            "--source-data-version",
+            "market_daily_bar:qfq@v2",
+        ]
+    )
+
+    assert args.command == "backfill-technical-features-daily"
+    assert args.start_date is None
+    assert args.end_date is None
+    assert args.lookback_bars == 260
+    assert args.adjust_type == "qfq"
+    assert args.workers == 3
+    assert args.skip_complete is True
+    assert args.progress_interval == 5
+    assert args.source_data_version == "market_daily_bar:qfq@v2"
+
+
+def test_cli_accepts_technical_feature_gap_check_command():
+    args = build_parser().parse_args(
+        [
+            "technical-feature-gap-check",
+            "--start-date",
+            "2024-03-01",
+            "--end-date",
+            "2024-03-31",
+            "--adjust-type",
+            "hfq",
+            "--calc-version",
+            "v2",
+            "--source-data-version",
+            "market_daily_bar:hfq@custom",
+        ]
+    )
+
+    assert args.command == "technical-feature-gap-check"
+    assert args.start_date == "2024-03-01"
+    assert args.end_date == "2024-03-31"
+    assert args.adjust_type == "hfq"
+    assert args.calc_version == "v2"
+    assert args.source_data_version == "market_daily_bar:hfq@custom"
+
+
+def test_cli_technical_feature_gap_check_uses_shared_default_calc_version(monkeypatch):
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        technical_feature_store,
+        "TECHNICAL_FEATURE_CALC_VERSION",
+        "shared_v3",
+    )
+    reloaded = importlib.reload(cli)
+
+    args = reloaded.build_parser().parse_args(
+        [
+            "technical-feature-gap-check",
+            "--start-date",
+            "2024-03-01",
+            "--end-date",
+            "2024-03-31",
+        ]
+    )
+
+    assert args.calc_version == "shared_v3"
 
 
 def test_cli_accepts_load_bars_archive_raw_flag():
@@ -158,6 +238,153 @@ def test_cli_accepts_phase6_industry_history_commands():
         ["benchmark-industry-day", "--trade-date", "2024-05-31", "--no-cache"]
     )
     assert no_cache_args.use_cache is False
+
+
+def test_cli_accepts_minute_backfill_watchdog_command():
+    args = build_parser().parse_args(
+        [
+            "minute-backfill-watchdog",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--max-jobs",
+            "200",
+            "--workers",
+            "3",
+            "--stale-after-minutes",
+            "45",
+            "--run-timeout-seconds",
+            "1200",
+            "--output-dir",
+            "outputs/watchdog",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--openclaw-bin",
+            "/opt/bin/openclaw",
+            "--report-dry-run",
+        ]
+    )
+
+    assert args.command == "minute-backfill-watchdog"
+    assert args.start_date == "2024-01-01"
+    assert args.end_date == "2024-03-31"
+    assert args.freq == "5min"
+    assert args.adjust_types == ["raw", "qfq"]
+    assert args.max_jobs == 200
+    assert args.workers == 3
+    assert args.stale_after_minutes == 45
+    assert args.run_timeout_seconds == 1200
+    assert args.output_dir == "outputs/watchdog"
+    assert args.report_target == "chat:test"
+    assert args.report_account == "ops"
+    assert args.openclaw_bin == "/opt/bin/openclaw"
+    assert args.report_dry_run is True
+
+
+def test_cli_accepts_generic_backfill_watchdog_command_for_minute_adapter():
+    args = build_parser().parse_args(
+        [
+            "backfill-watchdog",
+            "--adapter",
+            "minute",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--max-jobs",
+            "200",
+            "--workers",
+            "3",
+            "--stale-after-minutes",
+            "45",
+            "--run-timeout-seconds",
+            "1200",
+            "--output-dir",
+            "outputs/watchdog",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--openclaw-bin",
+            "/opt/bin/openclaw",
+            "--report-dry-run",
+        ]
+    )
+
+    assert args.command == "backfill-watchdog"
+    assert args.adapter == "minute"
+    assert args.start_date == "2024-01-01"
+    assert args.end_date == "2024-03-31"
+    assert args.freq == "5min"
+    assert args.adjust_types == ["raw", "qfq"]
+    assert args.max_jobs == 200
+    assert args.workers == 3
+    assert args.stale_after_minutes == 45
+    assert args.run_timeout_seconds == 1200
+    assert args.output_dir == "outputs/watchdog"
+    assert args.report_target == "chat:test"
+    assert args.report_account == "ops"
+    assert args.openclaw_bin == "/opt/bin/openclaw"
+    assert args.report_dry_run is True
+
+
+def test_cli_accepts_generic_backfill_watchdog_command_for_technical_features_adapter():
+    args = build_parser().parse_args(
+        [
+            "backfill-watchdog",
+            "--adapter",
+            "technical-features",
+            "--start-date",
+            "1991-01-01",
+            "--end-date",
+            "2026-05-14",
+            "--adjust-type",
+            "qfq",
+            "--lookback-bars",
+            "260",
+            "--source-data-version",
+            "market_daily_bar:qfq",
+            "--max-jobs",
+            "50",
+            "--workers",
+            "2",
+            "--stale-after-minutes",
+            "20",
+            "--run-timeout-seconds",
+            "1800",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--report-dry-run",
+        ]
+    )
+
+    assert args.command == "backfill-watchdog"
+    assert args.adapter == "technical-features"
+    assert args.start_date == "1991-01-01"
+    assert args.end_date == "2026-05-14"
+    assert args.adjust_type == "qfq"
+    assert args.lookback_bars == 260
+    assert args.source_data_version == "market_daily_bar:qfq"
+    assert args.max_jobs == 50
+    assert args.workers == 2
+    assert args.stale_after_minutes == 20
+    assert args.run_timeout_seconds == 1800
+    assert args.report_target == "chat:test"
+    assert args.report_account == "ops"
+    assert args.report_dry_run is True
 
 
 def test_cli_accepts_phase4_action_commands():
@@ -663,6 +890,424 @@ def test_backfill_factor_daily_cli_exact_window_skips_derived_window(monkeypatch
     assert capsys.readouterr().out.splitlines() == [
         "factor_daily_backfill|dates|1",
         "factor_daily_backfill|rows|10",
+    ]
+
+
+def test_minute_backfill_watchdog_cli_dispatches_and_prints_summary(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_minute_backfill_watchdog",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "status": {"watchdog_action": "restarted"},
+            "pre_summary": {"success_jobs": 5},
+            "post_summary": {"success_jobs": 7},
+            "run_result": {"rows": 480},
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "minute-backfill-watchdog",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--max-jobs",
+            "200",
+            "--workers",
+            "3",
+            "--stale-after-minutes",
+            "45",
+            "--run-timeout-seconds",
+            "1200",
+            "--output-dir",
+            "outputs/watchdog",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--openclaw-bin",
+            "/opt/bin/openclaw",
+            "--report-dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2024-01-01",
+            "end_date": "2024-03-31",
+            "freq": "5min",
+            "adjust_types": ["raw", "qfq"],
+            "max_jobs": 200,
+            "workers": 3,
+            "stale_after_minutes": 45,
+            "run_timeout_seconds": 1200,
+            "report_target": "chat:test",
+            "report_account": "ops",
+            "openclaw_bin": "/opt/bin/openclaw",
+            "report_dry_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "minute_backfill_watchdog|action|restarted",
+        "minute_backfill_watchdog|delta_success|2",
+        "minute_backfill_watchdog|delta_rows|480",
+    ]
+
+
+def test_generic_backfill_watchdog_cli_dispatches_minute_adapter_and_prints_summary(
+    monkeypatch, capsys
+):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_minute_backfill_watchdog",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "status": {"watchdog_action": "restarted"},
+            "pre_summary": {"success_jobs": 5},
+            "post_summary": {"success_jobs": 7},
+            "run_result": {"rows": 480},
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-watchdog",
+            "--adapter",
+            "minute",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--max-jobs",
+            "200",
+            "--workers",
+            "3",
+            "--stale-after-minutes",
+            "45",
+            "--run-timeout-seconds",
+            "1200",
+            "--output-dir",
+            "outputs/watchdog",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--openclaw-bin",
+            "/opt/bin/openclaw",
+            "--report-dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2024-01-01",
+            "end_date": "2024-03-31",
+            "freq": "5min",
+            "adjust_types": ["raw", "qfq"],
+            "max_jobs": 200,
+            "workers": 3,
+            "stale_after_minutes": 45,
+            "run_timeout_seconds": 1200,
+            "report_target": "chat:test",
+            "report_account": "ops",
+            "openclaw_bin": "/opt/bin/openclaw",
+            "report_dry_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "minute_backfill_watchdog|action|restarted",
+        "minute_backfill_watchdog|delta_success|2",
+        "minute_backfill_watchdog|delta_rows|480",
+    ]
+
+
+def test_generic_backfill_watchdog_cli_dispatches_technical_features_adapter_and_prints_summary(
+    monkeypatch, capsys
+):
+    import sys
+
+    from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
+    import stock_research.cli as cli
+
+    calls = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_backfill_watchdog",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=True,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={
+                    "completed_through": None,
+                    "currently_working_on": "1991-01-01",
+                },
+                current_frontier={
+                    "completed_through": "1991-01-02",
+                    "currently_working_on": "1991-01-03",
+                },
+            ),
+            "pre_summary": BackfillSummary(10, 10, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(10, 8, 0, 2, 0, 0, 200),
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-watchdog",
+            "--adapter",
+            "technical-features",
+            "--start-date",
+            "1991-01-01",
+            "--end-date",
+            "2026-05-14",
+            "--adjust-type",
+            "qfq",
+            "--lookback-bars",
+            "260",
+            "--source-data-version",
+            "market_daily_bar:qfq",
+            "--max-jobs",
+            "50",
+            "--workers",
+            "2",
+            "--stale-after-minutes",
+            "20",
+            "--run-timeout-seconds",
+            "1800",
+            "--report-target",
+            "chat:test",
+            "--report-account",
+            "ops",
+            "--report-dry-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "1991-01-01",
+            "end_date": "2026-05-14",
+            "adjust_type": "qfq",
+            "lookback_bars": 260,
+            "source_data_version": "market_daily_bar:qfq",
+            "max_jobs": 50,
+            "workers": 2,
+            "stale_after_minutes": 20,
+            "run_timeout_seconds": 1800,
+            "report_target": "chat:test",
+            "report_account": "ops",
+            "openclaw_bin": "openclaw",
+            "report_dry_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "technical_feature_watchdog|action|healthy",
+        "technical_feature_watchdog|delta_success|2",
+        "technical_feature_watchdog|delta_rows|200",
+    ]
+
+
+def test_backfill_technical_features_daily_cli_prints_summary(monkeypatch, capsys):
+    import sys
+
+    import pandas as pd
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    def fake_backfill_technical_features_daily_range(**kwargs):
+        calls.append(kwargs)
+        kwargs["progress"](
+            {"event": "start", "trade_date": "2026-05-01", "index": 1, "total": 2}
+        )
+        kwargs["progress"](
+            {
+                "event": "done",
+                "trade_date": "2026-05-01",
+                "index": 1,
+                "total": 2,
+                "feature_rows": 10,
+                "elapsed_seconds": 1.5,
+            }
+        )
+        kwargs["progress"](
+            {"event": "start", "trade_date": "2026-05-06", "index": 2, "total": 2}
+        )
+        kwargs["progress"](
+            {
+                "event": "done",
+                "trade_date": "2026-05-06",
+                "index": 2,
+                "total": 2,
+                "feature_rows": 20,
+                "elapsed_seconds": 2.0,
+            }
+        )
+        return pd.DataFrame(
+            [
+                {"trade_date": "2026-05-01", "feature_rows": 10},
+                {"trade_date": "2026-05-06", "feature_rows": 20},
+            ]
+        )
+
+    monkeypatch.setattr(
+        cli,
+        "derive_technical_feature_backfill_window",
+        lambda **kwargs: {
+            "start_date": "2026-04-01",
+            "end_date": kwargs["end_date"],
+            "date_count": 2,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "backfill_technical_features_daily_range",
+        fake_backfill_technical_features_daily_range,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "backfill-technical-features-daily",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-06",
+            "--workers",
+            "4",
+            "--skip-complete",
+            "--progress-interval",
+            "2",
+            "--source-data-version",
+            "market_daily_bar:qfq@v2",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["start_date"] == "2026-05-01"
+    assert calls[0]["workers"] == 4
+    assert calls[0]["skip_complete"] is True
+    assert calls[0]["source_data_version"] == "market_daily_bar:qfq@v2"
+    assert calls[0]["adjust_type"] == "qfq"
+    assert capsys.readouterr().out.splitlines() == [
+        "technical_feature_daily_backfill|done|2026-05-06|2|2|20",
+        "technical_feature_daily_backfill|dates|2",
+        "technical_feature_daily_backfill|rows|30",
+    ]
+
+
+def test_technical_feature_gap_check_cli_prints_issue_dates_and_summary(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_gap_check",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "dates": [
+                {
+                    "trade_date": "2024-03-01",
+                    "market_assets": 5124,
+                    "feature_rows": 5110,
+                    "missing": 14,
+                    "stale": 0,
+                    "missing_assets": ["A"],
+                    "stale_assets": [],
+                    "has_gap": True,
+                },
+                {
+                    "trade_date": "2024-03-04",
+                    "market_assets": 5120,
+                    "feature_rows": 5120,
+                    "missing": 0,
+                    "stale": 0,
+                    "missing_assets": [],
+                    "stale_assets": [],
+                    "has_gap": False,
+                },
+            ],
+            "summary": {"dates": 250, "dates_with_gaps": 3},
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "technical-feature-gap-check",
+            "--start-date",
+            "2024-03-01",
+            "--end-date",
+            "2024-12-31",
+            "--adjust-type",
+            "qfq",
+            "--calc-version",
+            "v1",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2024-03-01",
+            "end_date": "2024-12-31",
+            "adjust_type": "qfq",
+            "calc_version": "v1",
+            "source_data_version": None,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "technical_feature_gap_check|date|2024-03-01|market_assets=5124|feature_rows=5110|missing=14|stale=0",
+        "technical_feature_gap_check|summary|dates=250|dates_with_gaps=3",
     ]
 
 

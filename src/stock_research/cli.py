@@ -31,6 +31,24 @@ from stock_research.industry_history import (
     benchmark_industry_day,
     run_industry_history_range,
 )
+from stock_research.industry_focus_score import run_industry_focus_backtest_report
+from stock_research.industry_focus_v2 import (
+    run_industry_focus_v2_backtest,
+    run_industry_focus_v2_diagnostics,
+)
+from stock_research.industry_factor_audit import (
+    run_fixed_industry_reconciliation,
+    run_industry_error_audit,
+)
+from stock_research.industry_mainline_regime import (
+    run_industry_mainline_regime_diagnostics,
+)
+from stock_research.industry_regime_gated_backtest import (
+    run_industry_regime_gated_backtest,
+)
+from stock_research.industry_exposure_risk_control import (
+    run_industry_exposure_risk_control,
+)
 from stock_research.features import (
     compute_and_store_p0_features,
     compute_and_store_p0_features_range,
@@ -69,6 +87,18 @@ from stock_research.daily_health import (
     format_operational_health_lines,
     summarize_operational_health,
 )
+from stock_research.dragon_strategy_research import run_dragon_research_v1
+from stock_research.dragon_case_library import (
+    apply_source_backfill,
+    build_source_backfill_check_report,
+    build_source_backfill_workpack,
+    compare_source_backfill_curated,
+    run_dragon_case_expand_web_seeds,
+    import_web_seeds,
+    run_dragon_case_library_build,
+    run_dragon_case_library_diagnose,
+    run_dragon_case_web_verify,
+)
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -78,6 +108,15 @@ from stock_research.ingest_jobs import (
     run_ingest_jobs_for_service,
 )
 from stock_research.labels import compute_and_store_labels, derive_label_backfill_window
+from stock_research.lhb_data import (
+    run_dragon_case_lhb_alignment_audit,
+    run_dragon_case_lhb_summary_report,
+    run_lhb_coverage_and_failure_rule_plan,
+    run_lhb_risk_feature_diagnostics,
+    run_lhb_case_difference_report,
+    run_lhb_event_features_build,
+    run_lhb_sample_import,
+)
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
     sync_index_constituents,
@@ -86,6 +125,15 @@ from stock_research.loaders.baostock_ingestion import (
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
 from stock_research.market_data import load_market_daily_bars
 from stock_research.migration_safety import run_backup_restore_check
+from stock_research.minute_backfill import (
+    load_backfill_status,
+    plan_baostock_minute_backfill,
+    run_baostock_minute_backfill,
+    run_baostock_minute_backfill_range,
+    validate_minute_bars,
+)
+from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
+from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
@@ -100,6 +148,29 @@ from stock_research.retention_backtest import run_retention_backtest
 from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
 from stock_research.selection import generate_selection, store_selection
+from stock_research.trend_candidate_backtest import run_trend_candidate_backtest_report
+from stock_research.trend_candidate_enrichment import (
+    run_entry_success_candidate_v2_report,
+    run_entry_success_reverse_profile_report,
+    run_candidate_enrichment_report,
+    run_full_universe_candidate_enrichment_report,
+)
+from stock_research.trend_factor_profile import run_mid_trend_factor_profile_report
+from stock_research.trend_lifecycle import run_trend_lifecycle_v1_report
+from stock_research.technical_feature_store import (
+    TECHNICAL_FEATURE_CALC_VERSION,
+    build_and_store_stock_technical_features_daily,
+)
+from stock_research.technical_feature_backfill import (
+    backfill_technical_features_daily_range,
+    derive_technical_feature_backfill_window,
+)
+from stock_research.technical_feature_audit import (
+    run_technical_feature_gap_check,
+)
+from stock_research.technical_feature_watchdog import (
+    run_technical_feature_backfill_watchdog,
+)
 from stock_research.v31_cache import build_v31_cache
 
 
@@ -153,6 +224,17 @@ def parse_index_ids(value: str) -> list[str]:
     return parse_str_list(value, "--index-ids")
 
 
+def parse_adjust_types(value: str) -> list[str]:
+    adjust_types = parse_str_list(value, "--adjust-types")
+    allowed = {"raw", "qfq", "hfq"}
+    invalid = [item for item in adjust_types if item not in allowed]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            "--adjust-types values must be one of raw, qfq, hfq"
+        )
+    return adjust_types
+
+
 def parse_ingest_datasets(value: str) -> list[str]:
     return parse_str_list(value, "--ingest-datasets")
 
@@ -186,6 +268,87 @@ def print_ingest_progress(event: dict) -> None:
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
 
 
+def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start-date")
+    parser.add_argument("--end-date")
+    parser.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    parser.add_argument(
+        "--adjust-types",
+        type=parse_adjust_types,
+        default=["raw", "qfq"],
+    )
+    parser.add_argument("--max-jobs", type=int, default=1200)
+    parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--stale-after-minutes", type=int, default=20)
+    parser.add_argument("--run-timeout-seconds", type=int, default=1800)
+    parser.add_argument("--output-dir", default="outputs/research")
+    parser.add_argument("--report-target", required=True)
+    parser.add_argument("--report-account", default="jarvis")
+    parser.add_argument("--openclaw-bin", default="openclaw")
+    parser.add_argument("--report-dry-run", action="store_true")
+
+
+def run_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_minute_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        freq=args.freq,
+        adjust_types=args.adjust_types,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = (
+        int(result["post_summary"]["success_jobs"])
+        - int(result["pre_summary"]["success_jobs"])
+    )
+    print(f"minute_backfill_watchdog|action|{result['status']['watchdog_action']}")
+    print(f"minute_backfill_watchdog|delta_success|{delta_success}")
+    print(f"minute_backfill_watchdog|delta_rows|{result['run_result']['rows']}")
+
+
+def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lookback-bars", type=int, default=260)
+    parser.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    parser.add_argument("--source-data-version")
+
+
+def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_technical_feature_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        adjust_type=args.adjust_type,
+        lookback_bars=args.lookback_bars,
+        source_data_version=args.source_data_version,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = result["post_summary"].success_tasks - result["pre_summary"].success_tasks
+    delta_rows = result["post_summary"].total_rows_written - result["pre_summary"].total_rows_written
+    print(f"technical_feature_watchdog|action|{result['status'].watchdog_action}")
+    print(f"technical_feature_watchdog|delta_success|{delta_success}")
+    print(f"technical_feature_watchdog|delta_rows|{max(0, delta_rows)}")
+
+
 def print_factor_backfill_progress(event: dict) -> None:
     if event["event"] == "start":
         print(
@@ -213,6 +376,37 @@ def factor_backfill_progress_printer(interval: int):
         if event["event"] == "start" and progress_interval > 1:
             return
         print_factor_backfill_progress(event)
+
+    return print_progress
+
+
+def print_technical_feature_backfill_progress(event: dict) -> None:
+    if event["event"] == "start":
+        print(
+            "technical_feature_daily_backfill|start|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}",
+            flush=True,
+        )
+    elif event["event"] == "done":
+        print(
+            "technical_feature_daily_backfill|done|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}|{event['feature_rows']}",
+            flush=True,
+        )
+
+
+def technical_feature_backfill_progress_printer(interval: int):
+    progress_interval = max(1, int(interval))
+
+    def print_progress(event: dict) -> None:
+        if event["event"] == "done" and progress_interval > 1:
+            index = int(event["index"])
+            total = int(event["total"])
+            if index % progress_interval != 0 and index != total:
+                return
+        if event["event"] == "start" and progress_interval > 1:
+            return
+        print_technical_feature_backfill_progress(event)
 
     return print_progress
 
@@ -297,6 +491,10 @@ def build_parser() -> argparse.ArgumentParser:
     corporate_actions.add_argument("--start-date")
     corporate_actions.add_argument("--end-date")
     corporate_actions.add_argument("--source-version", default="derived_adjustment_factor_v1")
+    corporate_actions.add_argument(
+        "--factor-source-version",
+        default="derived_market_daily_bar_v1",
+    )
 
     industry_bars = subparsers.add_parser("build-industry-bars")
     industry_bars.add_argument("--start-date")
@@ -321,6 +519,94 @@ def build_parser() -> argparse.ArgumentParser:
     baostock_finance.add_argument("--quarter", required=True, type=int)
     baostock_finance.add_argument("--limit", type=int)
     baostock_finance.add_argument("--offset", type=int, default=0)
+
+    baostock_minutes = subparsers.add_parser("sync-baostock-minute-bars")
+    baostock_minutes.add_argument("--start-date", default="2024-01-01")
+    baostock_minutes.add_argument("--end-date", required=True)
+    baostock_minutes.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    baostock_minutes.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    baostock_minutes.add_argument("--limit-assets", type=int)
+    baostock_minutes.add_argument("--sleep-seconds", type=float, default=0.0)
+
+    plan_minute_backfill = subparsers.add_parser("plan-baostock-minute-backfill")
+    plan_minute_backfill.add_argument("--start-date", required=True)
+    plan_minute_backfill.add_argument("--end-date", required=True)
+    plan_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    plan_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    plan_minute_backfill.add_argument("--batch-by", choices=["month"], default="month")
+    plan_minute_backfill.add_argument("--output-dir", default="outputs/research")
+    plan_minute_backfill.add_argument("--limit-assets", type=int)
+
+    run_minute_backfill = subparsers.add_parser("run-baostock-minute-backfill")
+    run_minute_backfill.add_argument("--start-date")
+    run_minute_backfill.add_argument("--end-date")
+    run_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    run_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    run_minute_backfill.add_argument("--batch-by", choices=["month"], default="month")
+    run_minute_backfill.add_argument("--max-jobs", type=int, default=50)
+    run_minute_backfill.add_argument("--retry-failed", action="store_true")
+    run_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.5)
+    run_minute_backfill.add_argument("--workers", type=int, default=1)
+
+    run_minute_backfill_range = subparsers.add_parser("run-baostock-minute-backfill-range")
+    run_minute_backfill_range.add_argument("--start-date", required=True)
+    run_minute_backfill_range.add_argument("--end-date", required=True)
+    run_minute_backfill_range.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    run_minute_backfill_range.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    run_minute_backfill_range.add_argument("--batch-by", choices=["month"], default="month")
+    run_minute_backfill_range.add_argument("--max-jobs", type=int, default=500)
+    run_minute_backfill_range.add_argument("--retry-failed", action="store_true")
+    run_minute_backfill_range.add_argument("--sleep-seconds", type=float, default=0.1)
+    run_minute_backfill_range.add_argument("--workers", type=int, default=1)
+    run_minute_backfill_range.add_argument("--output-dir", default="outputs/research")
+    run_minute_backfill_range.add_argument("--limit-assets", type=int)
+    run_minute_backfill_range.add_argument("--report-target", required=True)
+    run_minute_backfill_range.add_argument("--report-account", default="jarvis")
+    run_minute_backfill_range.add_argument("--openclaw-bin", default="openclaw")
+    run_minute_backfill_range.add_argument("--report-dry-run", action="store_true")
+
+    minute_backfill_watchdog = subparsers.add_parser("minute-backfill-watchdog")
+    add_minute_backfill_watchdog_arguments(minute_backfill_watchdog)
+
+    backfill_watchdog = subparsers.add_parser("backfill-watchdog")
+    backfill_watchdog.add_argument(
+        "--adapter",
+        choices=["minute", "technical-features"],
+        required=True,
+    )
+    add_minute_backfill_watchdog_arguments(backfill_watchdog)
+    add_technical_feature_watchdog_arguments(backfill_watchdog)
+
+    status_minute_backfill = subparsers.add_parser("baostock-minute-backfill-status")
+    status_minute_backfill.add_argument("--output-dir", default="outputs/research")
+
+    validate_minutes = subparsers.add_parser("validate-minute-bars")
+    validate_minutes.add_argument("--start-date", required=True)
+    validate_minutes.add_argument("--end-date", required=True)
+    validate_minutes.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    validate_minutes.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    validate_minutes.add_argument("--output-dir", default="outputs/research")
+    validate_minutes.add_argument("--limit-rows", type=int)
 
     create_ingest = subparsers.add_parser("create-ingest-jobs")
     create_ingest.add_argument("--dataset", required=True)
@@ -570,6 +856,45 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    technical_features_daily = subparsers.add_parser("build-technical-features-daily")
+    technical_features_daily.add_argument("--trade-date", required=True)
+    technical_features_daily.add_argument("--lookback-bars", type=int, default=260)
+    technical_features_daily.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+
+    backfill_technical_features_daily = subparsers.add_parser(
+        "backfill-technical-features-daily"
+    )
+    backfill_technical_features_daily.add_argument("--start-date")
+    backfill_technical_features_daily.add_argument("--end-date")
+    backfill_technical_features_daily.add_argument("--lookback-bars", type=int, default=260)
+    backfill_technical_features_daily.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    backfill_technical_features_daily.add_argument("--source-data-version")
+    backfill_technical_features_daily.add_argument("--workers", type=int, default=1)
+    backfill_technical_features_daily.add_argument("--skip-complete", action="store_true")
+    backfill_technical_features_daily.add_argument("--progress-interval", type=int, default=1)
+
+    technical_feature_gap_check = subparsers.add_parser("technical-feature-gap-check")
+    technical_feature_gap_check.add_argument("--start-date", required=True)
+    technical_feature_gap_check.add_argument("--end-date", required=True)
+    technical_feature_gap_check.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    technical_feature_gap_check.add_argument(
+        "--calc-version",
+        default=TECHNICAL_FEATURE_CALC_VERSION,
+    )
+    technical_feature_gap_check.add_argument("--source-data-version")
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -626,6 +951,416 @@ def build_parser() -> argparse.ArgumentParser:
     )
     daily_research_report.add_argument("--apply-report-run-schema", action="store_true")
     daily_research_report.add_argument("--record-run", action="store_true")
+
+    trend_lifecycle_v1 = subparsers.add_parser("trend-lifecycle-v1")
+    trend_lifecycle_v1.add_argument("--start-date", required=True)
+    trend_lifecycle_v1.add_argument("--end-date", required=True)
+    trend_lifecycle_v1.add_argument("--score-version", default="manual_v1")
+    trend_lifecycle_v1.add_argument("--top-n", type=int, default=20)
+    trend_lifecycle_v1.add_argument("--adjust-type", default="hfq")
+    trend_lifecycle_v1.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_factor_profile = subparsers.add_parser("mid-trend-factor-profile")
+    mid_trend_factor_profile.add_argument("--start-date", required=True)
+    mid_trend_factor_profile.add_argument("--end-date", required=True)
+    mid_trend_factor_profile.add_argument("--lifecycle-samples-path", required=True)
+    mid_trend_factor_profile.add_argument("--factor-names", type=parse_factor_names)
+    mid_trend_factor_profile.add_argument("--period", default="Q")
+    mid_trend_factor_profile.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_candidate_enrichment = subparsers.add_parser("mid-trend-candidate-enrichment")
+    mid_trend_candidate_enrichment.add_argument("--start-date", required=True)
+    mid_trend_candidate_enrichment.add_argument("--end-date", required=True)
+    mid_trend_candidate_enrichment.add_argument("--candidate-rank-path", required=True)
+    mid_trend_candidate_enrichment.add_argument("--entry-success-labels-path", required=True)
+    mid_trend_candidate_enrichment.add_argument("--max-factors", type=int)
+    mid_trend_candidate_enrichment.add_argument("--min-candidate-score", type=float, default=0.0)
+    mid_trend_candidate_enrichment.add_argument("--quantiles", type=int, default=5)
+    mid_trend_candidate_enrichment.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    mid_trend_candidate_enrichment.add_argument("--period", default="Q")
+    mid_trend_candidate_enrichment.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_full_universe_enrichment = subparsers.add_parser(
+        "mid-trend-full-universe-enrichment"
+    )
+    mid_trend_full_universe_enrichment.add_argument("--start-date", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--end-date", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--candidate-scores-path", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--adjust-type", default="hfq")
+    mid_trend_full_universe_enrichment.add_argument("--quantiles", type=int, default=5)
+    mid_trend_full_universe_enrichment.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    mid_trend_full_universe_enrichment.add_argument("--period", default="Q")
+    mid_trend_full_universe_enrichment.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    entry_success_reverse_profile = subparsers.add_parser("entry-success-reverse-profile")
+    entry_success_reverse_profile.add_argument("--start-date", required=True)
+    entry_success_reverse_profile.add_argument("--end-date", required=True)
+    entry_success_reverse_profile.add_argument("--entry-success-labels-path", required=True)
+    entry_success_reverse_profile.add_argument("--factor-names", type=parse_factor_names)
+    entry_success_reverse_profile.add_argument("--horizons", type=parse_research_horizons, default=(20, 40, 60))
+    entry_success_reverse_profile.add_argument("--period", default="Q")
+    entry_success_reverse_profile.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    entry_success_candidate_v2 = subparsers.add_parser("entry-success-candidate-v2")
+    entry_success_candidate_v2.add_argument("--start-date", required=True)
+    entry_success_candidate_v2.add_argument("--end-date", required=True)
+    entry_success_candidate_v2.add_argument("--factor-rank-path", required=True)
+    entry_success_candidate_v2.add_argument("--horizon", type=int, default=40)
+    entry_success_candidate_v2.add_argument("--max-factors", type=int)
+    entry_success_candidate_v2.add_argument("--min-candidate-score", type=float, default=0.0)
+    entry_success_candidate_v2.add_argument("--min-sign-match-rate", type=float, default=0.6)
+    entry_success_candidate_v2.add_argument("--adjust-type", default="hfq")
+    entry_success_candidate_v2.add_argument("--quantiles", type=int, default=5)
+    entry_success_candidate_v2.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    entry_success_candidate_v2.add_argument("--period", default="Q")
+    entry_success_candidate_v2.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    trend_candidate_backtest = subparsers.add_parser("trend-candidate-backtest")
+    trend_candidate_backtest.add_argument("--start-date", required=True)
+    trend_candidate_backtest.add_argument("--end-date", required=True)
+    trend_candidate_backtest.add_argument("--candidate-scores-path", required=True)
+    trend_candidate_backtest.add_argument("--top-ns", type=parse_top_ks, default=(20, 50))
+    trend_candidate_backtest.add_argument("--holding-days", type=parse_holding_days, default=(5, 10, 20))
+    trend_candidate_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    trend_candidate_backtest.add_argument("--adjust-type", default="hfq")
+    trend_candidate_backtest.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    industry_focus_backtest = subparsers.add_parser("industry-focus-backtest")
+    industry_focus_backtest.add_argument("--start-date", required=True)
+    industry_focus_backtest.add_argument("--end-date", required=True)
+    industry_focus_backtest.add_argument("--top-n", type=int, default=20)
+    industry_focus_backtest.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_focus_backtest.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_focus_backtest.add_argument("--industry-system", default="csrc")
+    industry_focus_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_focus_backtest.add_argument("--adjust-type", default="hfq")
+    industry_focus_backtest.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    industry_v1_attribution = subparsers.add_parser("industry-v1-attribution")
+    industry_v1_attribution.add_argument("--start-date", required=True)
+    industry_v1_attribution.add_argument("--end-date", required=True)
+    industry_v1_attribution.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_v1_attribution.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_v1_attribution.add_argument("--industry-system", default="csrc")
+    industry_v1_attribution.add_argument("--industry-level", type=int, default=1)
+    industry_v1_attribution.add_argument("--adjust-type", default="hfq")
+    industry_v1_attribution.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_focus_v2_diagnostics = subparsers.add_parser("industry-focus-v2-diagnostics")
+    industry_focus_v2_diagnostics.add_argument("--start-date", required=True)
+    industry_focus_v2_diagnostics.add_argument("--end-date", required=True)
+    industry_focus_v2_diagnostics.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_focus_v2_diagnostics.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_focus_v2_diagnostics.add_argument("--industry-system", default="csrc")
+    industry_focus_v2_diagnostics.add_argument("--industry-level", type=int, default=1)
+    industry_focus_v2_diagnostics.add_argument("--adjust-type", default="hfq")
+    industry_focus_v2_diagnostics.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_focus_v2_backtest = subparsers.add_parser("industry-focus-v2-backtest")
+    industry_focus_v2_backtest.add_argument("--start-date", required=True)
+    industry_focus_v2_backtest.add_argument("--end-date", required=True)
+    industry_focus_v2_backtest.add_argument("--diagnostics-path", required=True)
+    industry_focus_v2_backtest.add_argument("--top-n", type=int, default=20)
+    industry_focus_v2_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    industry_focus_v2_backtest.add_argument("--industry-system", default="csrc")
+    industry_focus_v2_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_focus_v2_backtest.add_argument("--adjust-type", default="hfq")
+    industry_focus_v2_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_research_v1 = subparsers.add_parser("dragon-research-v1")
+    dragon_research_v1.add_argument("--start-date", required=True)
+    dragon_research_v1.add_argument("--end-date", required=True)
+    dragon_research_v1.add_argument("--hot-industry-top-n", type=int, default=6)
+    dragon_research_v1.add_argument("--adjust-type", default="hfq")
+    dragon_research_v1.add_argument("--industry-system", default="csrc")
+    dragon_research_v1.add_argument("--industry-level", type=int, default=1)
+    dragon_research_v1.add_argument("--industry-diagnostics-path")
+    dragon_research_v1.add_argument("--candidate-scores-path")
+    dragon_research_v1.add_argument("--lifecycle-samples-path")
+    dragon_research_v1.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_library_build = subparsers.add_parser("dragon-case-library-build")
+    dragon_case_library_build.add_argument("--start-date", required=True)
+    dragon_case_library_build.add_argument("--end-date", required=True)
+    dragon_case_library_build.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_library_build.add_argument(
+        "--seed-path",
+        default="/Users/xiwei/stock_research/data/seed/dragon_case_seed.csv",
+    )
+    dragon_case_library_build.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_library_diagnose = subparsers.add_parser("dragon-case-library-diagnose")
+    dragon_case_library_diagnose.add_argument("--case-path", required=True)
+    dragon_case_library_diagnose.add_argument("--start-date", required=True)
+    dragon_case_library_diagnose.add_argument("--end-date", required=True)
+    dragon_case_library_diagnose.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_library_diagnose.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_import_web_seeds = subparsers.add_parser("dragon-case-import-web-seeds")
+    dragon_case_import_web_seeds.add_argument("--input", required=True)
+    dragon_case_import_web_seeds.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_expand_web_seeds = subparsers.add_parser("dragon-case-expand-web-seeds")
+    dragon_case_expand_web_seeds.add_argument("--article-seed", required=True)
+    dragon_case_expand_web_seeds.add_argument("--output", required=True)
+    dragon_case_expand_web_seeds.add_argument("--start-date", required=True)
+    dragon_case_expand_web_seeds.add_argument("--end-date", required=True)
+    dragon_case_expand_web_seeds.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_web_verify = subparsers.add_parser("dragon-case-web-verify")
+    dragon_case_web_verify.add_argument("--candidate-path", required=True)
+    dragon_case_web_verify.add_argument("--start-date", required=True)
+    dragon_case_web_verify.add_argument("--end-date", required=True)
+    dragon_case_web_verify.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_web_verify.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_apply_source_backfill = subparsers.add_parser("dragon-case-apply-source-backfill")
+    dragon_case_apply_source_backfill.add_argument("--tasks-path", required=True)
+    dragon_case_apply_source_backfill.add_argument(
+        "--article-seed",
+        default="/Users/xiwei/stock_research/data/seed/dragon_case_web_article_seed_2024_2026.csv",
+    )
+    dragon_case_apply_source_backfill.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_apply_source_backfill.add_argument("--dry-run", action="store_true")
+
+    dragon_case_source_backfill_compare = subparsers.add_parser("dragon-case-source-backfill-compare")
+    dragon_case_source_backfill_compare.add_argument("--before-curated", required=True)
+    dragon_case_source_backfill_compare.add_argument("--after-curated", required=True)
+    dragon_case_source_backfill_compare.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_source_backfill_workpack = subparsers.add_parser("dragon-case-source-backfill-workpack")
+    dragon_case_source_backfill_workpack.add_argument("--tasks-path", required=True)
+    dragon_case_source_backfill_workpack.add_argument("--top-n", type=int, default=20)
+    dragon_case_source_backfill_workpack.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_source_backfill_check = subparsers.add_parser("dragon-case-source-backfill-check")
+    dragon_case_source_backfill_check.add_argument("--apply-summary", required=True)
+    dragon_case_source_backfill_check.add_argument("--delta-summary", required=True)
+    dragon_case_source_backfill_check.add_argument("--curated", required=True)
+    dragon_case_source_backfill_check.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_sample_import = subparsers.add_parser("lhb-sample-import")
+    lhb_sample_import.add_argument("--start-date", required=True)
+    lhb_sample_import.add_argument("--end-date", required=True)
+    lhb_sample_import.add_argument("--ts-codes")
+    lhb_sample_import.add_argument("--provider", default="tushare")
+    lhb_sample_import.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_event_features_build = subparsers.add_parser("lhb-build-event-features")
+    lhb_event_features_build.add_argument("--start-date", required=True)
+    lhb_event_features_build.add_argument("--end-date", required=True)
+    lhb_event_features_build.add_argument("--ts-codes")
+    lhb_event_features_build.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_lhb_alignment = subparsers.add_parser("dragon-case-lhb-alignment-audit")
+    dragon_case_lhb_alignment.add_argument("--curated-path", required=True)
+    dragon_case_lhb_alignment.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_lhb_summary = subparsers.add_parser("dragon-case-lhb-summary")
+    dragon_case_lhb_summary.add_argument("--curated-path", required=True)
+    dragon_case_lhb_summary.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_case_difference_report = subparsers.add_parser("lhb-case-difference-report")
+    lhb_case_difference_report.add_argument("--case-path", required=True)
+    lhb_case_difference_report.add_argument("--lhb-features-path", required=True)
+    lhb_case_difference_report.add_argument("--alignment-path", required=True)
+    lhb_case_difference_report.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_risk_feature_diagnostics = subparsers.add_parser("lhb-risk-feature-diagnostics")
+    lhb_risk_feature_diagnostics.add_argument("--case-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument("--lhb-features-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument("--alignment-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_coverage_failure_plan = subparsers.add_parser("lhb-coverage-failure-plan")
+    lhb_coverage_failure_plan.add_argument(
+        "--coverage-gap-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_coverage_gap_recommendations.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    fixed_industry_reconciliation = subparsers.add_parser(
+        "fixed-industry-reconciliation"
+    )
+    fixed_industry_reconciliation.add_argument("--start-date", required=True)
+    fixed_industry_reconciliation.add_argument("--end-date", required=True)
+    fixed_industry_reconciliation.add_argument("--top-n", type=int, default=20)
+    fixed_industry_reconciliation.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    fixed_industry_reconciliation.add_argument("--industry-system", default="csrc")
+    fixed_industry_reconciliation.add_argument("--industry-level", type=int, default=1)
+    fixed_industry_reconciliation.add_argument("--adjust-type", default="hfq")
+    fixed_industry_reconciliation.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_error_audit = subparsers.add_parser("industry-error-audit")
+    industry_error_audit.add_argument("--diagnostics-path", required=True)
+    industry_error_audit.add_argument("--start-date", required=True)
+    industry_error_audit.add_argument("--end-date", required=True)
+    industry_error_audit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    industry_error_audit.add_argument(
+        "--backtest-summary-path",
+        default="/Users/xiwei/stock_research/outputs/research/industry_focus_score_v2_backtest_summary.csv",
+    )
+    industry_error_audit.add_argument(
+        "--annual-metrics-path",
+        default="/Users/xiwei/stock_research/outputs/research/industry_focus_score_v2_backtest_annual_metrics.csv",
+    )
+
+    industry_mainline_regime = subparsers.add_parser(
+        "industry-mainline-regime-diagnostics"
+    )
+    industry_mainline_regime.add_argument("--diagnostics-path", required=True)
+    industry_mainline_regime.add_argument("--start-date", required=True)
+    industry_mainline_regime.add_argument("--end-date", required=True)
+    industry_mainline_regime.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_regime_gated_backtest = subparsers.add_parser(
+        "industry-regime-gated-backtest"
+    )
+    industry_regime_gated_backtest.add_argument("--start-date", required=True)
+    industry_regime_gated_backtest.add_argument("--end-date", required=True)
+    industry_regime_gated_backtest.add_argument("--diagnostics-path", required=True)
+    industry_regime_gated_backtest.add_argument("--regime-path", required=True)
+    industry_regime_gated_backtest.add_argument("--mainline-path", required=True)
+    industry_regime_gated_backtest.add_argument("--top-n", type=int, default=20)
+    industry_regime_gated_backtest.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    industry_regime_gated_backtest.add_argument("--industry-system", default="csrc")
+    industry_regime_gated_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_regime_gated_backtest.add_argument("--adjust-type", default="hfq")
+    industry_regime_gated_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_exposure_risk_control = subparsers.add_parser(
+        "industry-exposure-risk-control"
+    )
+    industry_exposure_risk_control.add_argument("--start-date", required=True)
+    industry_exposure_risk_control.add_argument("--end-date", required=True)
+    industry_exposure_risk_control.add_argument("--diagnostics-path", required=True)
+    industry_exposure_risk_control.add_argument("--regime-path", required=True)
+    industry_exposure_risk_control.add_argument("--mainline-path", required=True)
+    industry_exposure_risk_control.add_argument("--top-n", type=int, default=20)
+    industry_exposure_risk_control.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    industry_exposure_risk_control.add_argument("--industry-system", default="csrc")
+    industry_exposure_risk_control.add_argument("--industry-level", type=int, default=1)
+    industry_exposure_risk_control.add_argument("--adjust-type", default="hfq")
+    industry_exposure_risk_control.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
 
     return parser
 
@@ -725,6 +1460,7 @@ def main() -> None:
             start_date=args.start_date,
             end_date=args.end_date,
             source_version=args.source_version,
+            factor_source_version=args.factor_source_version,
         )
         print("corporate_actions_built")
     elif args.command == "build-industry-bars":
@@ -980,6 +1716,64 @@ def main() -> None:
         print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "build-technical-features-daily":
+        count = build_and_store_stock_technical_features_daily(
+            trade_date=args.trade_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+        )
+        print(f"technical_features_daily_stored|{count}")
+    elif args.command == "backfill-technical-features-daily":
+        window = derive_technical_feature_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+        )
+        start_date = args.start_date or window["start_date"]
+        end_date = args.end_date or window["end_date"]
+        if start_date is None or end_date is None:
+            print("technical_feature_daily_backfill|dates|0")
+            print("technical_feature_daily_backfill|rows|0")
+            return
+        result = backfill_technical_features_daily_range(
+            start_date=str(start_date),
+            end_date=str(end_date),
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            source_data_version=args.source_data_version,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+            progress=technical_feature_backfill_progress_printer(args.progress_interval),
+        )
+        total = int(result["feature_rows"].sum()) if not result.empty else 0
+        print(f"technical_feature_daily_backfill|dates|{len(result)}")
+        print(f"technical_feature_daily_backfill|rows|{total}")
+    elif args.command == "technical-feature-gap-check":
+        result = run_technical_feature_gap_check(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            calc_version=args.calc_version,
+            source_data_version=args.source_data_version,
+        )
+        for row in result.get("dates", []):
+            if not row.get("has_gap"):
+                continue
+            print(
+                "technical_feature_gap_check|date|"
+                f"{row['trade_date']}|"
+                f"market_assets={int(row['market_assets'])}|"
+                f"feature_rows={int(row['feature_rows'])}|"
+                f"missing={int(row['missing'])}|"
+                f"stale={int(row['stale'])}"
+            )
+        summary = result.get("summary", {})
+        print(
+            "technical_feature_gap_check|summary|"
+            f"dates={int(summary.get('dates') or 0)}|"
+            f"dates_with_gaps={int(summary.get('dates_with_gaps') or 0)}"
+        )
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()
@@ -1072,6 +1866,553 @@ def main() -> None:
         report_paths = result["report_paths"]
         for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
             print(f"daily_research_report|{key}|{report_paths[key]['markdown_path']}")
+    elif args.command == "trend-lifecycle-v1":
+        result = run_trend_lifecycle_v1_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"trend_lifecycle_v1|report|{paths['markdown_report']}")
+        print(f"trend_lifecycle_v1|trend_segments|{paths['trend_segments']}")
+        print(f"trend_lifecycle_v1|lifecycle_samples|{paths['lifecycle_samples']}")
+        print(f"trend_lifecycle_v1|entry_success_labels|{paths['entry_success_labels']}")
+        print(f"trend_lifecycle_v1|top20_stage_hit_report|{paths['top20_stage_hit_report']}")
+        print(f"trend_lifecycle_v1|segments|{len(result['segments'])}")
+        print(f"trend_lifecycle_v1|lifecycle_samples_rows|{len(result['lifecycle_samples'])}")
+        print(f"trend_lifecycle_v1|entry_success_rows|{len(result['entry_success'])}")
+        print(f"trend_lifecycle_v1|top20_stage_hit_rows|{len(result['top20_stage_hits'])}")
+        print(f"trend_lifecycle_v1|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-factor-profile":
+        result = run_mid_trend_factor_profile_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lifecycle_samples_path=args.lifecycle_samples_path,
+            factor_names=args.factor_names,
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_factor_profile|report|{paths['markdown_report']}")
+        print(f"mid_trend_factor_profile|factor_profile|{paths['factor_profile']}")
+        print(f"mid_trend_factor_profile|stage_stability|{paths['stage_stability']}")
+        print(f"mid_trend_factor_profile|candidate_rank|{paths['candidate_rank']}")
+        print(f"mid_trend_factor_profile|stage_signatures|{paths['stage_signatures']}")
+        print(f"mid_trend_factor_profile|profile_rows|{len(result['profile'])}")
+        print(f"mid_trend_factor_profile|stability_rows|{len(result['stability'])}")
+        print(f"mid_trend_factor_profile|candidate_rows|{len(result['candidate_rank'])}")
+        print(f"mid_trend_factor_profile|stage_signature_rows|{len(result['stage_signatures'])}")
+        print(f"mid_trend_factor_profile|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-candidate-enrichment":
+        result = run_candidate_enrichment_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_rank_path=args.candidate_rank_path,
+            entry_success_labels_path=args.entry_success_labels_path,
+            max_factors=args.max_factors,
+            min_candidate_score=args.min_candidate_score,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_candidate_enrichment|report|{paths['markdown_report']}")
+        print(f"mid_trend_candidate_enrichment|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "mid_trend_candidate_enrichment|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(f"mid_trend_candidate_enrichment|enrichment_by_topn|{paths['enrichment_by_topn']}")
+        print(f"mid_trend_candidate_enrichment|enrichment_by_period|{paths['enrichment_by_period']}")
+        print(f"mid_trend_candidate_enrichment|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(f"mid_trend_candidate_enrichment|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"mid_trend_candidate_enrichment|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"mid_trend_candidate_enrichment|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"mid_trend_candidate_enrichment|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-full-universe-enrichment":
+        result = run_full_universe_candidate_enrichment_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_scores_path=args.candidate_scores_path,
+            adjust_type=args.adjust_type,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_full_universe_enrichment|report|{paths['markdown_report']}")
+        print(f"mid_trend_full_universe_enrichment|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "mid_trend_full_universe_enrichment|candidate_entry_success_labels|"
+            f"{paths['candidate_entry_success_labels']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_topn|"
+            f"{paths['enrichment_by_topn']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_period|"
+            f"{paths['enrichment_by_period']}"
+        )
+        print(f"mid_trend_full_universe_enrichment|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(
+            "mid_trend_full_universe_enrichment|entry_success_rows|"
+            f"{len(result['candidate_entry_success_labels'])}"
+        )
+        print(f"mid_trend_full_universe_enrichment|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"mid_trend_full_universe_enrichment|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"mid_trend_full_universe_enrichment|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"mid_trend_full_universe_enrichment|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "entry-success-reverse-profile":
+        result = run_entry_success_reverse_profile_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            entry_success_labels_path=args.entry_success_labels_path,
+            factor_names=args.factor_names,
+            horizons=tuple(args.horizons),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"entry_success_reverse_profile|report|{paths['markdown_report']}")
+        print(
+            "entry_success_reverse_profile|factor_profile|"
+            f"{paths['entry_success_factor_profile']}"
+        )
+        print(
+            "entry_success_reverse_profile|factor_rank|"
+            f"{paths['entry_success_factor_rank']}"
+        )
+        print(f"entry_success_reverse_profile|factor_profile_rows|{len(result['factor_profile'])}")
+        print(f"entry_success_reverse_profile|factor_rank_rows|{len(result['factor_rank'])}")
+        print(f"entry_success_reverse_profile|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "entry-success-candidate-v2":
+        result = run_entry_success_candidate_v2_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            factor_rank_path=args.factor_rank_path,
+            horizon=args.horizon,
+            max_factors=args.max_factors,
+            min_candidate_score=args.min_candidate_score,
+            min_sign_match_rate=args.min_sign_match_rate,
+            adjust_type=args.adjust_type,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"entry_success_candidate_v2|report|{paths['markdown_report']}")
+        print(f"entry_success_candidate_v2|candidate_rank|{paths['candidate_rank']}")
+        print(f"entry_success_candidate_v2|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "entry_success_candidate_v2|candidate_entry_success_labels|"
+            f"{paths['candidate_entry_success_labels']}"
+        )
+        print(
+            "entry_success_candidate_v2|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(f"entry_success_candidate_v2|enrichment_by_topn|{paths['enrichment_by_topn']}")
+        print(f"entry_success_candidate_v2|enrichment_by_period|{paths['enrichment_by_period']}")
+        print(f"entry_success_candidate_v2|candidate_rank_rows|{len(result['candidate_rank'])}")
+        print(f"entry_success_candidate_v2|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(f"entry_success_candidate_v2|entry_success_rows|{len(result['candidate_entry_success_labels'])}")
+        print(f"entry_success_candidate_v2|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"entry_success_candidate_v2|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"entry_success_candidate_v2|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"entry_success_candidate_v2|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "trend-candidate-backtest":
+        result = run_trend_candidate_backtest_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_scores_path=args.candidate_scores_path,
+            top_ns=tuple(args.top_ns),
+            holding_days=tuple(args.holding_days),
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"trend_candidate_backtest|report|{paths['markdown_report']}")
+        print(f"trend_candidate_backtest|summary|{paths['summary']}")
+        print(f"trend_candidate_backtest|equity_curve|{paths['equity_curve']}")
+        print(f"trend_candidate_backtest|positions|{paths['positions']}")
+        print(f"trend_candidate_backtest|trades|{paths['trades']}")
+        print(f"trend_candidate_backtest|summary_rows|{len(result['summary'])}")
+        print(f"trend_candidate_backtest|equity_rows|{len(result['equity_curve'])}")
+        print(f"trend_candidate_backtest|position_rows|{len(result['positions'])}")
+        print(f"trend_candidate_backtest|trade_rows|{len(result['trades'])}")
+        print(f"trend_candidate_backtest|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "industry-focus-backtest":
+        result = run_industry_focus_backtest_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            dynamic_top_k=args.dynamic_top_k,
+            min_industry_stocks=args.min_industry_stocks,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"industry_focus_backtest|report|{paths['markdown_report']}")
+        print(f"industry_focus_backtest|summary|{paths['summary']}")
+        print(f"industry_focus_backtest|industry_scores|{paths['industry_scores']}")
+        print(f"industry_focus_backtest|focus_industries_daily|{paths['focus_industries_daily']}")
+        print(f"industry_focus_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command in {"industry-v1-attribution", "industry-focus-v2-diagnostics"}:
+        result = run_industry_focus_v2_diagnostics(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            min_industry_stocks=args.min_industry_stocks,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+            dynamic_top_k=args.dynamic_top_k,
+        )
+        paths = result["paths"]
+        prefix = "industry_v1_attribution" if args.command == "industry-v1-attribution" else "industry_focus_v2_diagnostics"
+        print(f"{prefix}|v1_failure_attribution|{paths['v1_failure_attribution']}")
+        print(f"{prefix}|v2_diagnostics|{paths['v2_diagnostics']}")
+        print(f"{prefix}|v1_rows|{len(result['v1_failure_attribution'])}")
+        print(f"{prefix}|v2_rows|{len(result['v2_diagnostics'])}")
+    elif args.command == "industry-focus-v2-backtest":
+        result = run_industry_focus_v2_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_focus_v2_backtest|summary|{paths['summary']}")
+        print(f"industry_focus_v2_backtest|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_focus_v2_backtest|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_focus_v2_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command == "dragon-research-v1":
+        result = run_dragon_research_v1(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            hot_industry_top_n=args.hot_industry_top_n,
+            adjust_type=args.adjust_type,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            industry_diagnostics_path=args.industry_diagnostics_path,
+            candidate_scores_path=args.candidate_scores_path,
+            lifecycle_samples_path=args.lifecycle_samples_path,
+        )
+        paths = result["paths"]
+        print(f"dragon_research_v1|diagnostics|{paths['diagnostics']}")
+        print(f"dragon_research_v1|monthly_summary|{paths['monthly_summary']}")
+        print(f"dragon_research_v1|role_effectiveness|{paths['role_effectiveness']}")
+        print(f"dragon_research_v1|yearly_diagnosis|{paths['yearly_diagnosis']}")
+        print(f"dragon_research_v1|report|{paths['markdown_report']}")
+        print(f"dragon_research_v1|diagnostic_rows|{len(result['diagnostics'])}")
+        print(f"dragon_research_v1|role_rows|{len(result['role_effectiveness'])}")
+        print(f"dragon_research_v1|yearly_rows|{len(result['yearly_diagnosis'])}")
+    elif args.command == "dragon-case-library-build":
+        result = run_dragon_case_library_build(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            seed_path=args.seed_path,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_library_build|case_library|{result['paths']['case_library']}")
+        if "auto_candidates" in result.get("paths", {}):
+            print(f"dragon_case_library_build|auto_candidates_csv|{result['paths']['auto_candidates']}")
+        print(f"dragon_case_library_build|cases|{len(result['case_library'])}")
+        print(f"dragon_case_library_build|auto_candidates|{len(result['auto_candidates'])}")
+    elif args.command == "dragon-case-library-diagnose":
+        result = run_dragon_case_library_diagnose(
+            case_path=args.case_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_library_diagnose|event_diagnostics|{result['paths']['event_diagnostics']}")
+        print(
+            "dragon_case_library_diagnose|success_failure_comparison|"
+            f"{result['paths']['success_failure_comparison']}"
+        )
+        print(f"dragon_case_library_diagnose|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_library_diagnose|event_rows|{len(result['event_diagnostics'])}")
+        print(f"dragon_case_library_diagnose|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-import-web-seeds":
+        result = import_web_seeds(args.input, args.output_dir)
+        print(f"dragon_case_import_web_seeds|web_candidates|{result['paths']['web_candidates']}")
+        print(f"dragon_case_import_web_seeds|rows|{len(result['web_candidates'])}")
+    elif args.command == "dragon-case-expand-web-seeds":
+        result = run_dragon_case_expand_web_seeds(
+            article_seed_path=args.article_seed,
+            output_path=args.output,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_expand_web_seeds|web_seed|{result['paths']['web_seed']}")
+        print(f"dragon_case_expand_web_seeds|summary|{result['paths']['summary']}")
+        print(f"dragon_case_expand_web_seeds|unmatched|{result['paths']['unmatched']}")
+        print(f"dragon_case_expand_web_seeds|coverage|{result['paths']['coverage']}")
+        print(f"dragon_case_expand_web_seeds|report|{result['paths']['report']}")
+        print(f"dragon_case_expand_web_seeds|matched|{len(result['web_seed'])}")
+        print(f"dragon_case_expand_web_seeds|unmatched_rows|{len(result['unmatched'])}")
+    elif args.command == "dragon-case-web-verify":
+        result = run_dragon_case_web_verify(
+            candidate_path=args.candidate_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_web_verify|event_verification|{result['paths']['event_verification']}")
+        print(f"dragon_case_web_verify|factor_review|{result['paths']['factor_review']}")
+        print(f"dragon_case_web_verify|curated_library|{result['paths']['curated_library']}")
+        print(f"dragon_case_web_verify|source_evidence|{result['paths']['source_evidence']}")
+        print(f"dragon_case_web_verify|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_web_verify|web_candidates|{len(result['web_candidates'])}")
+        print(f"dragon_case_web_verify|verified|{len(result['verified'])}")
+        print(f"dragon_case_web_verify|curated|{len(result['curated'])}")
+    elif args.command == "dragon-case-apply-source-backfill":
+        result = apply_source_backfill(
+            tasks_path=args.tasks_path,
+            article_seed_path=args.article_seed,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+        )
+        print(f"dragon_case_apply_source_backfill|summary|{result['paths']['summary']}")
+        print(f"dragon_case_apply_source_backfill|errors|{result['paths']['errors']}")
+        print(f"dragon_case_apply_source_backfill|report|{result['paths']['report']}")
+        print(f"dragon_case_apply_source_backfill|article_seed|{result['paths']['article_seed']}")
+        print(f"dragon_case_apply_source_backfill|inserted|{int(result['summary'].iloc[0]['inserted_article_seed_rows'])}")
+        print(f"dragon_case_apply_source_backfill|skipped_duplicate|{int(result['summary'].iloc[0]['skipped_duplicate_rows'])}")
+        print(f"dragon_case_apply_source_backfill|dry_run|{args.dry_run}")
+    elif args.command == "dragon-case-source-backfill-compare":
+        result = compare_source_backfill_curated(
+            before_curated_path=args.before_curated,
+            after_curated_path=args.after_curated,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_source_backfill_compare|delta|{result['paths']['delta']}")
+        print(f"dragon_case_source_backfill_compare|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-source-backfill-workpack":
+        import pandas as pd
+
+        tasks = pd.read_csv(args.tasks_path, low_memory=False)
+        result = build_source_backfill_workpack(tasks, top_n=args.top_n, output_dir=args.output_dir)
+        print(f"dragon_case_source_backfill_workpack|csv|{result['paths']['csv']}")
+        print(f"dragon_case_source_backfill_workpack|markdown|{result['paths']['markdown']}")
+        print(f"dragon_case_source_backfill_workpack|next_commands|{result['paths']['next_commands']}")
+        print(f"dragon_case_source_backfill_workpack|rows|{len(result['workpack'])}")
+    elif args.command == "dragon-case-source-backfill-check":
+        import pandas as pd
+        from pathlib import Path
+
+        apply_summary = pd.read_csv(args.apply_summary, low_memory=False)
+        delta_summary = pd.read_csv(args.delta_summary, low_memory=False)
+        curated = pd.read_csv(args.curated, low_memory=False)
+        report = build_source_backfill_check_report(apply_summary, delta_summary, curated)
+        out = Path(args.output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        report_path = out / "dragon_case_source_backfill_check_report.md"
+        report_path.write_text(report, encoding="utf-8")
+        print(f"dragon_case_source_backfill_check|report|{report_path}")
+    elif args.command == "lhb-sample-import":
+        ts_codes = parse_str_list(args.ts_codes, "--ts-codes") if args.ts_codes else None
+        result = run_lhb_sample_import(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+            output_dir=args.output_dir,
+            provider=args.provider,
+        )
+        print(f"lhb_sample_import|top_list|{result['paths']['top_list']}")
+        print(f"lhb_sample_import|top_inst|{result['paths']['top_inst']}")
+        print(f"lhb_sample_import|top_list_rows|{len(result['top_list'])}")
+        print(f"lhb_sample_import|top_inst_rows|{len(result['top_inst'])}")
+    elif args.command == "lhb-build-event-features":
+        ts_codes = parse_str_list(args.ts_codes, "--ts-codes") if args.ts_codes else None
+        result = run_lhb_event_features_build(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_event_features_build|lhb_event_features|{result['paths']['lhb_event_features']}")
+        print(f"lhb_event_features_build|rows|{len(result['lhb_event_features'])}")
+    elif args.command == "dragon-case-lhb-alignment-audit":
+        result = run_dragon_case_lhb_alignment_audit(
+            curated_path=args.curated_path,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_lhb_alignment_audit|alignment_audit|{result['paths']['alignment_audit']}")
+        print(f"dragon_case_lhb_alignment_audit|rows|{len(result['alignment_audit'])}")
+        print(f"dragon_case_lhb_alignment_audit|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-lhb-summary":
+        result = run_dragon_case_lhb_summary_report(
+            curated_path=args.curated_path,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_lhb_summary|summary|{result['paths']['summary']}")
+        print(f"dragon_case_lhb_summary|comparison|{result['paths']['comparison']}")
+        print(f"dragon_case_lhb_summary|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_lhb_summary|rows|{len(result['summary'])}")
+    elif args.command == "lhb-case-difference-report":
+        result = run_lhb_case_difference_report(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_case_difference_report|case_type_difference_summary|{result['paths']['case_type_difference_summary']}")
+        print(f"lhb_case_difference_report|event_window_difference|{result['paths']['event_window_difference']}")
+        print(f"lhb_case_difference_report|risk_signal_effectiveness|{result['paths']['risk_signal_effectiveness']}")
+        print(f"lhb_case_difference_report|positive_signal_effectiveness|{result['paths']['positive_signal_effectiveness']}")
+        print(f"lhb_case_difference_report|case_event_detail|{result['paths']['case_event_detail']}")
+        print(f"lhb_case_difference_report|coverage_summary|{result['paths']['coverage_summary']}")
+        print(f"lhb_case_difference_report|report|{result['paths']['markdown_report']}")
+        print(f"lhb_case_difference_report|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-risk-feature-diagnostics":
+        result = run_lhb_risk_feature_diagnostics(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_risk_feature_diagnostics|risk_feature_case_detail|{result['paths']['risk_feature_case_detail']}")
+        print(f"lhb_risk_feature_diagnostics|risk_score_bucket_effectiveness|{result['paths']['risk_score_bucket_effectiveness']}")
+        print(f"lhb_risk_feature_diagnostics|risk_failure_type_cross|{result['paths']['risk_failure_type_cross']}")
+        print(f"lhb_risk_feature_diagnostics|dragon_risk_cross_diagnostics|{result['paths']['dragon_risk_cross_diagnostics']}")
+        print(f"lhb_risk_feature_diagnostics|coverage_gap_recommendations|{result['paths']['coverage_gap_recommendations']}")
+        print(f"lhb_risk_feature_diagnostics|report|{result['paths']['markdown_report']}")
+        print(f"lhb_risk_feature_diagnostics|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-coverage-failure-plan":
+        result = run_lhb_coverage_and_failure_rule_plan(
+            coverage_gap_path=args.coverage_gap_path,
+            case_path=args.case_path,
+            snapshot_path=args.snapshot_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_coverage_failure_plan|coverage_expansion_plan|{result['paths']['coverage_expansion_plan']}")
+        print(f"lhb_coverage_failure_plan|coverage_expansion_summary|{result['paths']['coverage_expansion_summary']}")
+        print(f"lhb_coverage_failure_plan|next_commands|{result['paths']['next_commands']}")
+        print(f"lhb_coverage_failure_plan|failure_rule_audit|{result['paths']['failure_rule_audit']}")
+        print(f"lhb_coverage_failure_plan|failure_rule_suggestions|{result['paths']['failure_rule_suggestions']}")
+        print(f"lhb_coverage_failure_plan|report|{result['paths']['markdown_report']}")
+        print(f"lhb_coverage_failure_plan|warnings|{len(result['warnings'])}")
+    elif args.command == "fixed-industry-reconciliation":
+        result = run_fixed_industry_reconciliation(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"fixed_industry_reconciliation|csv|{paths['reconciliation']}")
+        print(f"fixed_industry_reconciliation|rows|{len(result['reconciliation'])}")
+        print(f"fixed_industry_reconciliation|explanation|{result['explanation']}")
+    elif args.command == "industry-error-audit":
+        result = run_industry_error_audit(
+            diagnostics_path=args.diagnostics_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            backtest_summary_path=args.backtest_summary_path,
+            annual_metrics_path=args.annual_metrics_path,
+        )
+        paths = result["paths"]
+        print(f"industry_error_audit|monthly|{paths['monthly']}")
+        print(f"industry_error_audit|summary|{paths['summary']}")
+        print(f"industry_error_audit|tag_effectiveness|{paths['tag_effectiveness']}")
+        print(f"industry_error_audit|component_effectiveness|{paths['component_effectiveness']}")
+        print(f"industry_error_audit|yearly|{paths['yearly']}")
+        print(f"industry_error_audit|markdown_report|{paths['markdown_report']}")
+        print(f"industry_error_audit|monthly_rows|{len(result['monthly'])}")
+        print(f"industry_error_audit|summary_rows|{len(result['summary'])}")
+    elif args.command == "industry-mainline-regime-diagnostics":
+        result = run_industry_mainline_regime_diagnostics(
+            diagnostics_path=args.diagnostics_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        paths = result["paths"]
+        print(f"industry_mainline_regime|diagnostics|{paths['diagnostics']}")
+        print(f"industry_mainline_regime|market_regimes|{paths['market_regimes']}")
+        print(
+            "industry_mainline_regime|regime_effectiveness|"
+            f"{paths['regime_effectiveness']}"
+        )
+        print(f"industry_mainline_regime|tag_effectiveness|{paths['tag_effectiveness']}")
+        print(f"industry_mainline_regime|markdown_report|{paths['markdown_report']}")
+        print(f"industry_mainline_regime|diagnostic_rows|{len(result['diagnostics'])}")
+        print(f"industry_mainline_regime|regime_rows|{len(result['market_regimes'])}")
+    elif args.command == "industry-regime-gated-backtest":
+        result = run_industry_regime_gated_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            regime_path=args.regime_path,
+            mainline_path=args.mainline_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_regime_gated_backtest|summary|{paths['summary']}")
+        print(f"industry_regime_gated_backtest|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_regime_gated_backtest|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_regime_gated_backtest|industry_exposure|{paths['industry_exposure']}")
+        print(f"industry_regime_gated_backtest|turnover_detail|{paths['turnover_detail']}")
+        print(f"industry_regime_gated_backtest|markdown_report|{paths['markdown_report']}")
+        print(f"industry_regime_gated_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command == "industry-exposure-risk-control":
+        result = run_industry_exposure_risk_control(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            regime_path=args.regime_path,
+            mainline_path=args.mainline_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_exposure_risk_control|summary|{paths['summary']}")
+        print(f"industry_exposure_risk_control|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_exposure_risk_control|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_exposure_risk_control|industry_exposure|{paths['industry_exposure']}")
+        print(f"industry_exposure_risk_control|turnover_detail|{paths['turnover_detail']}")
+        print(f"industry_exposure_risk_control|markdown_report|{paths['markdown_report']}")
+        print(f"industry_exposure_risk_control|summary_rows|{len(result['summary'])}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")
@@ -1135,6 +2476,112 @@ def main() -> None:
         print(f"finance_indicator_quarter_synced|{counts['indicator_quarter']}")
         print(f"finance_income_statement_synced|{counts['income_statement']}")
         print(f"finance_share_capital_event_synced|{counts['share_capital_event']}")
+    elif args.command == "sync-baostock-minute-bars":
+        counts = sync_baostock_stock_minute_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            limit_assets=args.limit_assets,
+            sleep_seconds=args.sleep_seconds,
+        )
+        for adjust_type, count in counts.items():
+            print(f"stock_minute_bars_synced|{args.freq}|{adjust_type}|{count}")
+    elif args.command == "plan-baostock-minute-backfill":
+        result = plan_baostock_minute_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            output_dir=args.output_dir,
+            limit_assets=args.limit_assets,
+        )
+        for key, value in result["summary"].items():
+            print(f"minute_backfill_plan|{key}|{value}")
+    elif args.command == "run-baostock-minute-backfill":
+        result = run_baostock_minute_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            max_jobs=args.max_jobs,
+            retry_failed=args.retry_failed,
+            sleep_seconds=args.sleep_seconds,
+            workers=args.workers,
+        )
+        for key, value in result.items():
+            print(f"minute_backfill_run|{key}|{value}")
+    elif args.command == "run-baostock-minute-backfill-range":
+        def report(summary: dict) -> None:
+            month = summary["month"]
+            job_summary = summary["job_summary"]
+            validation_summary = summary["validation_summary"]
+            message = (
+                f"minute_backfill_month_done|{month}\n"
+                f"jobs_total={job_summary['total_jobs']}\n"
+                f"jobs_success={job_summary['success_jobs']}\n"
+                f"jobs_failed={job_summary['failed_jobs']}\n"
+                f"market_rows={job_summary['total_market_rows']}\n"
+                f"staging_rows={job_summary['total_staging_rows']}\n"
+                f"validation_errors={validation_summary['error_count']}"
+            )
+            print(message, flush=True)
+            try:
+                send_openclaw_feishu_message(
+                    message=message,
+                    target=args.report_target,
+                    account=args.report_account,
+                    openclaw_bin=args.openclaw_bin,
+                    dry_run=args.report_dry_run,
+                )
+            except Exception as exc:
+                print(
+                    f"minute_backfill_report_failed|{exc.__class__.__name__}|{exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+        result = run_baostock_minute_backfill_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            max_jobs=args.max_jobs,
+            retry_failed=args.retry_failed,
+            sleep_seconds=args.sleep_seconds,
+            workers=args.workers,
+            output_dir=args.output_dir,
+            limit_assets=args.limit_assets,
+            report=report,
+        )
+        for key, value in result.items():
+            print(f"minute_backfill_range|{key}|{value}")
+    elif args.command == "minute-backfill-watchdog":
+        run_minute_backfill_watchdog_command(args)
+    elif args.command == "backfill-watchdog":
+        if args.adapter == "minute":
+            run_minute_backfill_watchdog_command(args)
+        elif args.adapter == "technical-features":
+            run_technical_feature_watchdog_command(args)
+    elif args.command == "baostock-minute-backfill-status":
+        result = load_backfill_status(output_dir=args.output_dir)
+        for key, value in result["summary"].items():
+            print(f"minute_backfill_status|{key}|{value}")
+        print(f"minute_backfill_status_by_period_rows|{len(result['by_period'])}")
+    elif args.command == "validate-minute-bars":
+        result = validate_minute_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            output_dir=args.output_dir,
+            limit_rows=args.limit_rows,
+        )
+        for key, value in result["summary"].items():
+            print(f"minute_bar_validation|{key}|{value}")
     elif args.command == "create-ingest-jobs":
         count = create_ingest_jobs_for_service(
             args.dataset,

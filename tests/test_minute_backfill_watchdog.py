@@ -540,7 +540,7 @@ def test_run_minute_backfill_watchdog_feishu_send_respects_dry_run(
     assert sent[0]["dry_run"] is expected_dry_run
 
 
-def test_run_backfill_once_with_timeout_returns_promptly(monkeypatch):
+def test_run_backfill_once_with_timeout_returns_promptly(monkeypatch, tmp_path):
     completed = threading.Event()
 
     def fake_run_baostock_minute_backfill(**kwargs):
@@ -570,6 +570,7 @@ def test_run_backfill_once_with_timeout_returns_promptly(monkeypatch):
         sleep_seconds=0.0,
         workers=2,
         run_timeout_seconds=0.01,
+        lock_path=tmp_path / "minute-backfill-watchdog.lock",
     )
     elapsed = time.monotonic() - started
 
@@ -579,7 +580,7 @@ def test_run_backfill_once_with_timeout_returns_promptly(monkeypatch):
     assert completed.is_set() is False
 
 
-def test_run_backfill_once_with_timeout_returns_completed_result(monkeypatch):
+def test_run_backfill_once_with_timeout_returns_completed_result(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "stock_research.minute_backfill_adapter.run_baostock_minute_backfill",
         lambda **kwargs: {
@@ -601,6 +602,7 @@ def test_run_backfill_once_with_timeout_returns_completed_result(monkeypatch):
         sleep_seconds=0.0,
         workers=2,
         run_timeout_seconds=5,
+        lock_path=tmp_path / "minute-backfill-watchdog.lock",
     )
 
     assert result == {
