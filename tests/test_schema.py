@@ -36,6 +36,7 @@ def test_research_extension_creates_schemas_and_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS raw_akshare" in sql
     assert "CREATE SCHEMA IF NOT EXISTS raw_baostock" in sql
+    assert "CREATE SCHEMA IF NOT EXISTS staging" in sql
     assert "CREATE SCHEMA IF NOT EXISTS core" in sql
     assert "CREATE SCHEMA IF NOT EXISTS finance" in sql
     assert "CREATE SCHEMA IF NOT EXISTS market" in sql
@@ -58,6 +59,57 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_event" in sql
     assert "CREATE TABLE IF NOT EXISTS factor.factor_daily" in sql
     assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
+
+
+def test_research_extension_includes_unified_stock_minute_bar_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.stock_minute_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.baostock_stock_minute_bar" in sql
+    assert "freq text NOT NULL" in sql
+    assert "adjust_type text NOT NULL" in sql
+    assert "CHECK (freq IN ('1min', '5min', '15min', '30min', '60min'))" in sql
+    assert "CHECK (adjust_type IN ('raw', 'qfq', 'hfq'))" in sql
+    assert "PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)" in sql
+    assert "PARTITION BY RANGE (trade_date)" in sql
+    assert "idx_market_stock_minute_bar_asset_time" in sql
+    assert "idx_market_stock_minute_bar_date_freq_adjust" in sql
+    assert "idx_market_stock_minute_bar_time_freq" in sql
+    assert "idx_staging_baostock_stock_minute_bar_date" in sql
+
+
+def test_research_extension_reserves_intraday_feature_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS factor.stock_intraday_features_daily" in sql
+    assert "CREATE TABLE IF NOT EXISTS factor.industry_intraday_features_daily" in sql
+    assert "idx_factor_stock_intraday_features_daily_lookup" in sql
+    assert "idx_factor_industry_intraday_features_daily_lookup" in sql
+
+
+def test_research_extension_includes_stock_technical_features_daily_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS factor.stock_technical_features_daily" in sql
+    assert "PRIMARY KEY (trade_date, asset_id, adjust_type, source_data_version, calc_version)" in sql
+    assert "CHECK (adjust_type IN ('raw', 'qfq', 'hfq'))" in sql
+    assert "ma5 numeric" in sql
+    assert "macd_hist numeric" in sql
+    assert "rsi6 numeric" in sql
+    assert "boll_mid_20 numeric" in sql
+    assert "atr14 numeric" in sql
+    assert "ret_1d numeric" in sql
+    assert "ret_20d numeric" in sql
+    assert "close_position_in_day numeric" in sql
+    assert "idx_factor_stock_technical_features_daily_lookup" in sql
+    assert "idx_factor_stock_technical_features_daily_asset_history" in sql
+
+
+def test_research_extension_includes_minute_backfill_job_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job" in sql
+    assert "status text NOT NULL" in sql
+    assert "CHECK (status IN ('pending', 'running', 'success', 'failed', 'skipped'))" in sql
+    assert "UNIQUE (ts_code, start_date, end_date, freq, adjust_type, source)" in sql
+    assert "idx_market_minute_bar_backfill_job_status" in sql
+    assert "idx_market_minute_bar_backfill_job_period" in sql
 
 
 def test_research_extension_enforces_point_in_time_columns():
@@ -131,6 +183,15 @@ def test_research_extension_includes_index_constituent_table():
     assert "CREATE TABLE IF NOT EXISTS market.index_constituent" in sql
     assert "source_version text NOT NULL" in sql
     assert "idx_market_index_constituent_lookup" in sql
+
+
+def test_research_extension_includes_lhb_tables_and_event_features():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS market.lhb_top_list_daily" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.lhb_top_inst_daily" in sql
+    assert "CREATE TABLE IF NOT EXISTS factor.lhb_event_features_daily" in sql
+    assert "repeat_on_list_count_5d" in sql
+    assert "institution_net_buy" in sql
 
 
 def test_cli_accepts_apply_research_schema_command():
@@ -210,6 +271,119 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert finance_args.quarter == 4
     assert finance_args.limit == 20
     assert finance_args.offset == 40
+
+    minute_args = build_parser().parse_args(
+        [
+            "sync-baostock-minute-bars",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2026-05-13",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--limit-assets",
+            "10",
+        ]
+    )
+    assert minute_args.command == "sync-baostock-minute-bars"
+    assert minute_args.start_date == "2024-01-01"
+    assert minute_args.end_date == "2026-05-13"
+    assert minute_args.freq == "5min"
+    assert minute_args.adjust_types == ["raw", "qfq"]
+    assert minute_args.limit_assets == 10
+
+    plan_args = build_parser().parse_args(
+        [
+            "plan-baostock-minute-backfill",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2026-05-13",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--batch-by",
+            "month",
+            "--output-dir",
+            "outputs/research",
+        ]
+    )
+    assert plan_args.command == "plan-baostock-minute-backfill"
+    assert plan_args.batch_by == "month"
+
+    run_args = build_parser().parse_args(
+        [
+            "run-baostock-minute-backfill",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2026-05-13",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--batch-by",
+            "month",
+            "--max-jobs",
+            "50",
+            "--retry-failed",
+            "--sleep-seconds",
+            "0.5",
+            "--workers",
+            "4",
+        ]
+    )
+    assert run_args.command == "run-baostock-minute-backfill"
+    assert run_args.max_jobs == 50
+    assert run_args.retry_failed is True
+    assert run_args.workers == 4
+
+    range_args = build_parser().parse_args(
+        [
+            "run-baostock-minute-backfill-range",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-03-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--max-jobs",
+            "200",
+            "--workers",
+            "6",
+            "--report-target",
+            "chat:oc_82dd978138a0cde5864868c5b5b8e754",
+            "--report-account",
+            "jarvis",
+        ]
+    )
+    assert range_args.command == "run-baostock-minute-backfill-range"
+    assert range_args.workers == 6
+    assert range_args.report_account == "jarvis"
+
+    status_args = build_parser().parse_args(["baostock-minute-backfill-status"])
+    assert status_args.command == "baostock-minute-backfill-status"
+
+    validate_args = build_parser().parse_args(
+        [
+            "validate-minute-bars",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2026-05-13",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+        ]
+    )
+    assert validate_args.command == "validate-minute-bars"
+    assert validate_args.adjust_types == ["raw", "qfq"]
 
 
 def test_cli_accepts_ingest_batch_commands():

@@ -80,3 +80,4 @@ def test_audit_includes_phase_dimension_and_raw_datasets():
     assert "feature_snapshot" in dataset_names
     assert "label_snapshot" in dataset_names
     assert "factor.factor_daily" in dataset_names
+    assert "factor.stock_technical_features_daily" in dataset_names

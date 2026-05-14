@@ -389,3 +389,176 @@ def test_sync_index_constituents_uses_selected_targets(monkeypatch):
 
     assert count == 1
     assert calls[0][1][0]["index_id"] == "CSI_300"
+
+
+def test_sync_index_constituents_retries_transient_not_logged_in(monkeypatch):
+    conn = FakeConnection()
+    login_calls = []
+    logout_calls = []
+    query_calls = []
+    upserted = []
+
+    class Result:
+        fields = ["code", "code_name"]
+
+        def __init__(self, error_code, error_msg="", rows=None):
+            self.error_code = error_code
+            self.error_msg = error_msg
+            self.rows = rows or []
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = ""
+
+    results = [
+        Result("10001001", "用户未登录"),
+        Result("0", rows=[["sh.600000", "浦发银行"]]),
+    ]
+
+    monkeypatch.setattr(baostock_ingestion, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: login_calls.append(True) or Login(),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "logout",
+        lambda: logout_calls.append(True),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "query_hs300_stocks",
+        lambda date="": query_calls.append(date) or results.pop(0),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "INDEX_CONSTITUENT_TARGETS",
+        {"CSI_300": baostock_ingestion.bs.query_hs300_stocks},
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_index_constituents",
+        lambda opened, rows: upserted.append(rows) or len(rows),
+    )
+
+    count = baostock_ingestion.sync_index_constituents(
+        trade_date="2024-05-31",
+        index_ids=["CSI_300"],
+        source_version="baostock_snapshot_v1",
+    )
+
+    assert count == 1
+    assert query_calls == ["2024-05-31", "2024-05-31"]
+    assert len(login_calls) == 2
+    assert len(logout_calls) == 2
+    assert upserted[0][0]["asset_id"] == "CN:SH:600000"
+
+
+def test_sync_index_constituents_retries_multiple_transient_not_logged_in(monkeypatch):
+    conn = FakeConnection()
+    login_calls = []
+    logout_calls = []
+    query_calls = []
+    upserted = []
+
+    class Result:
+        fields = ["code", "code_name"]
+
+        def __init__(self, error_code, error_msg="", rows=None):
+            self.error_code = error_code
+            self.error_msg = error_msg
+            self.rows = rows or []
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = ""
+
+    results = [
+        Result("10001001", "用户未登录"),
+        Result("10001001", "用户未登录"),
+        Result("0", rows=[["sh.600000", "浦发银行"]]),
+    ]
+
+    monkeypatch.setattr(baostock_ingestion, "connect", lambda service: _ConnectionContext(conn))
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: login_calls.append(True) or Login(),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "logout",
+        lambda: logout_calls.append(True),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "query_hs300_stocks",
+        lambda date="": query_calls.append(date) or results.pop(0),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "INDEX_CONSTITUENT_TARGETS",
+        {"CSI_300": baostock_ingestion.bs.query_hs300_stocks},
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "upsert_index_constituents",
+        lambda opened, rows: upserted.append(rows) or len(rows),
+    )
+
+    count = baostock_ingestion.sync_index_constituents(
+        trade_date="2024-05-31",
+        index_ids=["CSI_300"],
+        source_version="baostock_snapshot_v1",
+    )
+
+    assert count == 1
+    assert query_calls == ["2024-05-31", "2024-05-31", "2024-05-31"]
+    assert len(login_calls) == 3
+    assert len(logout_calls) == 3
+    assert upserted[0][0]["asset_id"] == "CN:SH:600000"
+
+
+def test_login_or_raise_retries_transient_network_error(monkeypatch):
+    class Login:
+        def __init__(self, error_code, error_msg=""):
+            self.error_code = error_code
+            self.error_msg = error_msg
+
+    logins = [
+        Login("10002007", "网络接收错误。"),
+        Login("10002007", "网络接收错误。"),
+        Login("0"),
+    ]
+    sleeps = []
+
+    monkeypatch.setattr(
+        baostock_ingestion.bs,
+        "login",
+        lambda: logins.pop(0),
+    )
+    monkeypatch.setattr(baostock_ingestion.time, "sleep", sleeps.append)
+
+    baostock_ingestion._login_or_raise()
+
+    assert sleeps == [
+        baostock_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
+        baostock_ingestion.BAOSTOCK_LOGIN_RETRY_SECONDS,
+    ]

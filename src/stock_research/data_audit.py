@@ -23,6 +23,11 @@ AUDIT_DATASETS: list[AuditDataset] = [
     AuditDataset("label_snapshot", "label_snapshot", "trade_date"),
     AuditDataset("feature_snapshot", "feature_snapshot", "trade_date"),
     AuditDataset("factor.factor_daily", "factor.factor_daily", "trade_date"),
+    AuditDataset(
+        "factor.stock_technical_features_daily",
+        "factor.stock_technical_features_daily",
+        "trade_date",
+    ),
     AuditDataset("core.asset_lifecycle_event", "core.asset_lifecycle_event", "event_date"),
     AuditDataset("core.industry_membership", "core.industry_membership", "start_date"),
     AuditDataset("market.industry_daily_bar", "market.industry_daily_bar", "trade_date"),

@@ -1,5 +1,6 @@
 import re
 import json
+import time
 from typing import Any
 
 import baostock as bs
@@ -25,6 +26,11 @@ INDEX_CONSTITUENT_TARGETS = {
     "CSI_500": bs.query_zz500_stocks,
 }
 
+BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
+BAOSTOCK_LOGIN_RETRY_SECONDS = 2
+BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
+INDEX_CONSTITUENT_QUERY_MAX_ATTEMPTS = 3
+INDEX_CONSTITUENT_QUERY_RETRY_ERROR_CODES = {"10001001"}
 INDUSTRY_SNAPSHOT_ENDPOINT = "query_stock_industry"
 INDUSTRY_QUERY_MAX_ATTEMPTS = 3
 INDUSTRY_QUERY_RETRY_ERROR_CODES = {"10001001"}
@@ -37,6 +43,22 @@ def parse_float(value: Any) -> float | None:
     if text == "":
         return None
     return float(text)
+
+
+def _login_or_raise():
+    last_error = ""
+    for attempt in range(BAOSTOCK_LOGIN_MAX_ATTEMPTS):
+        login = bs.login()
+        if login.error_code == "0":
+            return login
+        last_error = f"{login.error_code} {login.error_msg}"
+        if (
+            login.error_code not in BAOSTOCK_LOGIN_RETRY_ERROR_CODES
+            or attempt + 1 >= BAOSTOCK_LOGIN_MAX_ATTEMPTS
+        ):
+            break
+        time.sleep(BAOSTOCK_LOGIN_RETRY_SECONDS)
+    raise RuntimeError(f"baostock login failed: {last_error}")
 
 
 def normalize_industry_system(value: str) -> str:
@@ -393,27 +415,33 @@ def sync_index_constituents(
     source_version: str = "baostock_snapshot_v1",
     service: str = SETTINGS.research_service,
 ) -> int:
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
-    try:
-        selected = index_ids if index_ids is not None else list(INDEX_CONSTITUENT_TARGETS)
-        rows = []
-        for index_id in selected:
-            query_fn = INDEX_CONSTITUENT_TARGETS.get(index_id)
-            if query_fn is None:
-                raise ValueError(f"Unsupported index constituent target: {index_id}")
-            rs = query_fn(date=trade_date)
-            if rs.error_code != "0":
+    selected = index_ids if index_ids is not None else list(INDEX_CONSTITUENT_TARGETS)
+    rows = []
+    for index_id in selected:
+        query_fn = INDEX_CONSTITUENT_TARGETS.get(index_id)
+        if query_fn is None:
+            raise ValueError(f"Unsupported index constituent target: {index_id}")
+        attempts = 0
+        while True:
+            _login_or_raise()
+            try:
+                rs = query_fn(date=trade_date)
+            finally:
+                bs.logout()
+            if rs.error_code == "0":
+                break
+            attempts += 1
+            if (
+                rs.error_code not in INDEX_CONSTITUENT_QUERY_RETRY_ERROR_CODES
+                or attempts >= INDEX_CONSTITUENT_QUERY_MAX_ATTEMPTS
+            ):
                 raise RuntimeError(
                     f"baostock constituent query failed for {index_id}: "
                     f"{rs.error_code} {rs.error_msg}"
                 )
-            rows.extend(
-                normalize_index_constituent_row(index_id, trade_date, row, source_version)
-                for row in _rows_from_result(rs)
-            )
-        with connect(service) as conn:
-            return upsert_index_constituents(conn, rows)
-    finally:
-        bs.logout()
+        rows.extend(
+            normalize_index_constituent_row(index_id, trade_date, row, source_version)
+            for row in _rows_from_result(rs)
+        )
+    with connect(service) as conn:
+        return upsert_index_constituents(conn, rows)

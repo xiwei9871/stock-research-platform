@@ -1,5 +1,42 @@
+import datetime as dt
+
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
+
+
+STOCK_MINUTE_BAR_PARTITIONED_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_time timestamp without time zone NOT NULL,
+    trade_date date NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
+) PARTITION BY RANGE (trade_date);
+"""
+
+
+CREATE_RESEARCH_SCHEMAS_SQL = """
+CREATE SCHEMA IF NOT EXISTS raw_akshare;
+CREATE SCHEMA IF NOT EXISTS raw_baostock;
+CREATE SCHEMA IF NOT EXISTS staging;
+CREATE SCHEMA IF NOT EXISTS core;
+CREATE SCHEMA IF NOT EXISTS finance;
+CREATE SCHEMA IF NOT EXISTS market;
+CREATE SCHEMA IF NOT EXISTS factor;
+CREATE SCHEMA IF NOT EXISTS backtest;
+CREATE SCHEMA IF NOT EXISTS ingest;
+"""
 
 
 CREATE_TABLES_SQL = """
@@ -196,6 +233,7 @@ CREATE INDEX IF NOT EXISTS idx_backtest_equity_curve_run_date
 CREATE_RESEARCH_EXTENSION_SQL = """
 CREATE SCHEMA IF NOT EXISTS raw_akshare;
 CREATE SCHEMA IF NOT EXISTS raw_baostock;
+CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS finance;
 CREATE SCHEMA IF NOT EXISTS market;
@@ -340,6 +378,69 @@ CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
     source text NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (industry_system, industry_code, trade_date)
+);
+
+CREATE TABLE IF NOT EXISTS staging.baostock_stock_minute_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    baostock_code text NOT NULL,
+    raw_date text NOT NULL,
+    raw_time text NOT NULL,
+    trade_time timestamp without time zone NOT NULL,
+    trade_date date NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, baostock_code, trade_time, freq, adjust_type)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_time timestamp without time zone NOT NULL,
+    trade_date date NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
+) PARTITION BY RANGE (trade_date);
+
+CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job (
+    job_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    baostock_code text NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    status text NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed', 'skipped')) DEFAULT 'pending',
+    attempt_count integer NOT NULL DEFAULT 0,
+    row_count_market integer NOT NULL DEFAULT 0,
+    row_count_staging integer NOT NULL DEFAULT 0,
+    started_at timestamptz,
+    finished_at timestamptz,
+    last_error text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (ts_code, start_date, end_date, freq, adjust_type, source)
 );
 
 CREATE TABLE IF NOT EXISTS finance.income_statement (
@@ -569,6 +670,84 @@ CREATE TABLE IF NOT EXISTS factor.stock_score_daily (
     PRIMARY KEY (trade_date, asset_id, score_version)
 );
 
+CREATE TABLE IF NOT EXISTS factor.stock_technical_features_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    source text NOT NULL,
+    source_data_version text NOT NULL,
+    calc_version text NOT NULL,
+    ma5 numeric,
+    ma10 numeric,
+    ma20 numeric,
+    ma60 numeric,
+    ma120 numeric,
+    ema12 numeric,
+    ema26 numeric,
+    macd_dif numeric,
+    macd_dea numeric,
+    macd_hist numeric,
+    rsi6 numeric,
+    rsi12 numeric,
+    rsi24 numeric,
+    boll_upper_20 numeric,
+    boll_mid_20 numeric,
+    boll_lower_20 numeric,
+    atr14 numeric,
+    cci14 numeric,
+    kdj_k numeric,
+    kdj_d numeric,
+    kdj_j numeric,
+    adx14 numeric,
+    obv numeric,
+    ret_1d numeric,
+    ret_20d numeric,
+    close_position_in_day numeric,
+    computed_at timestamptz NOT NULL DEFAULT now(),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, adjust_type, source_data_version, calc_version)
+);
+
+CREATE TABLE IF NOT EXISTS factor.stock_intraday_features_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    feature_name text NOT NULL,
+    feature_value numeric,
+    calc_version text NOT NULL,
+    source text NOT NULL,
+    source_data_version text NOT NULL,
+    computed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, freq, adjust_type, feature_name, calc_version)
+);
+
+CREATE TABLE IF NOT EXISTS factor.industry_intraday_features_daily (
+    trade_date date NOT NULL,
+    industry_system text NOT NULL,
+    industry_code text NOT NULL,
+    industry_name text NOT NULL,
+    freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
+    adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
+    feature_name text NOT NULL,
+    feature_value numeric,
+    calc_version text NOT NULL,
+    source text NOT NULL,
+    source_data_version text NOT NULL,
+    computed_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (
+        trade_date,
+        industry_system,
+        industry_code,
+        freq,
+        adjust_type,
+        feature_name,
+        calc_version
+    )
+);
+
 CREATE TABLE IF NOT EXISTS factor.factor_eval_run (
     run_id text PRIMARY KEY,
     factor_name text NOT NULL,
@@ -592,6 +771,67 @@ CREATE TABLE IF NOT EXISTS factor.factor_approval (
     eval_run_id text NOT NULL REFERENCES factor.factor_eval_run(run_id),
     approved_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (factor_name, calc_version, score_version)
+);
+
+CREATE TABLE IF NOT EXISTS market.lhb_top_list_daily (
+    trade_date date NOT NULL,
+    ts_code text NOT NULL,
+    name text,
+    close numeric,
+    pct_change numeric,
+    turnover_rate numeric,
+    amount numeric,
+    l_sell numeric,
+    l_buy numeric,
+    l_amount numeric,
+    net_amount numeric,
+    net_rate numeric,
+    amount_rate numeric,
+    float_values numeric,
+    reason text,
+    source text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, ts_code, reason, source)
+);
+
+CREATE TABLE IF NOT EXISTS market.lhb_top_inst_daily (
+    trade_date date NOT NULL,
+    ts_code text NOT NULL,
+    exalter text NOT NULL,
+    buy numeric,
+    buy_rate numeric,
+    sell numeric,
+    sell_rate numeric,
+    net_buy numeric,
+    reason text,
+    source text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, ts_code, exalter, source)
+);
+
+CREATE TABLE IF NOT EXISTS factor.lhb_event_features_daily (
+    trade_date date NOT NULL,
+    ts_code text NOT NULL,
+    on_lhb boolean NOT NULL DEFAULT false,
+    lhb_reason text,
+    lhb_net_buy_amount numeric,
+    lhb_net_buy_ratio numeric,
+    lhb_buy_amount numeric,
+    lhb_sell_amount numeric,
+    institution_net_buy numeric,
+    top_seat_concentration numeric,
+    repeat_on_list_count_3d integer,
+    repeat_on_list_count_5d integer,
+    lhb_after_limit_up boolean NOT NULL DEFAULT false,
+    lhb_after_break_limit boolean NOT NULL DEFAULT false,
+    lhb_after_reversal boolean NOT NULL DEFAULT false,
+    lhb_one_day_pump_risk numeric,
+    source text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, ts_code, source)
 );
 
 CREATE INDEX IF NOT EXISTS idx_finance_indicator_quarter_pit
@@ -636,6 +876,24 @@ CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_system_date_desc
     ON market.industry_daily_bar (industry_system, trade_date DESC);
 
+CREATE INDEX IF NOT EXISTS idx_staging_baostock_stock_minute_bar_date
+    ON staging.baostock_stock_minute_bar (trade_date, freq, adjust_type);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_minute_bar_asset_time
+    ON market.stock_minute_bar (asset_id, trade_time);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_minute_bar_date_freq_adjust
+    ON market.stock_minute_bar (trade_date, freq, adjust_type);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_minute_bar_time_freq
+    ON market.stock_minute_bar (trade_time, freq);
+
+CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_status
+    ON market.minute_bar_backfill_job (status, start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_period
+    ON market.minute_bar_backfill_job (start_date, end_date, freq, adjust_type, source);
+
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);
 
@@ -660,12 +918,139 @@ CREATE INDEX IF NOT EXISTS idx_stock_score_daily_rank
 CREATE INDEX IF NOT EXISTS idx_stock_score_daily_asset_history
     ON factor.stock_score_daily (asset_id, score_version, trade_date DESC);
 
+CREATE INDEX IF NOT EXISTS idx_factor_stock_technical_features_daily_lookup
+    ON factor.stock_technical_features_daily (trade_date, adjust_type, calc_version, asset_id);
+
+CREATE INDEX IF NOT EXISTS idx_factor_stock_technical_features_daily_asset_history
+    ON factor.stock_technical_features_daily (asset_id, adjust_type, calc_version, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_factor_stock_intraday_features_daily_lookup
+    ON factor.stock_intraday_features_daily (trade_date, freq, adjust_type, feature_name);
+
+CREATE INDEX IF NOT EXISTS idx_factor_industry_intraday_features_daily_lookup
+    ON factor.industry_intraday_features_daily (trade_date, industry_system, freq, adjust_type, feature_name);
+
 CREATE INDEX IF NOT EXISTS idx_factor_eval_run_factor
     ON factor.factor_eval_run (factor_name, calc_version, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_market_lhb_top_list_daily_lookup
+    ON market.lhb_top_list_daily (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_market_lhb_top_inst_daily_lookup
+    ON market.lhb_top_inst_daily (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_factor_lhb_event_features_daily_lookup
+    ON factor.lhb_event_features_daily (ts_code, trade_date DESC);
 """
 
 
 def apply_schema(service: str = SETTINGS.research_service) -> None:
     with connect(service) as conn:
         execute(conn, CREATE_TABLES_SQL)
+        execute(conn, CREATE_RESEARCH_SCHEMAS_SQL)
+        migrate_stock_minute_bar_to_partitioned(conn)
         execute(conn, CREATE_RESEARCH_EXTENSION_SQL)
+        ensure_stock_minute_bar_partitions(conn)
+
+
+def migrate_stock_minute_bar_to_partitioned(conn) -> None:
+    existing = conn.execute(
+        """
+        SELECT c.relkind, p.partrelid IS NOT NULL AS is_partitioned
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        LEFT JOIN pg_partitioned_table p ON p.partrelid = c.oid
+        WHERE n.nspname = 'market'
+          AND c.relname = 'stock_minute_bar'
+        """
+    ).fetchone()
+    if existing is None or existing["is_partitioned"]:
+        return
+
+    conn.execute("ALTER TABLE market.stock_minute_bar RENAME TO stock_minute_bar_unpartitioned_backup")
+    conn.execute(
+        "ALTER INDEX IF EXISTS market.stock_minute_bar_pkey "
+        "RENAME TO stock_minute_bar_unpartitioned_backup_pkey"
+    )
+    for index_name in [
+        "idx_market_stock_minute_bar_asset_time",
+        "idx_market_stock_minute_bar_date_freq_adjust",
+        "idx_market_stock_minute_bar_time_freq",
+    ]:
+        conn.execute(
+            f"ALTER INDEX IF EXISTS market.{index_name} RENAME TO {index_name}_backup"
+        )
+    conn.execute(STOCK_MINUTE_BAR_PARTITIONED_TABLE_SQL)
+    ensure_stock_minute_bar_partitions(conn)
+    conn.execute(
+        """
+        INSERT INTO market.stock_minute_bar (
+            trade_date,
+            asset_id,
+            ts_code,
+            trade_time,
+            freq,
+            adjust_type,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            amount,
+            source,
+            created_at,
+            updated_at
+        )
+        SELECT
+            trade_date,
+            asset_id,
+            ts_code,
+            trade_time,
+            freq,
+            adjust_type,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            amount,
+            source,
+            created_at,
+            updated_at
+        FROM market.stock_minute_bar_unpartitioned_backup
+        ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)
+        DO NOTHING
+        """
+    )
+
+
+def ensure_stock_minute_bar_partitions(
+    conn,
+    start_month: dt.date = dt.date(2024, 1, 1),
+    end_month: dt.date = dt.date(2027, 1, 1),
+) -> None:
+    conn.execute(STOCK_MINUTE_BAR_PARTITIONED_TABLE_SQL)
+    current = start_month
+    while current < end_month:
+        next_month = _add_month(current)
+        suffix = current.strftime("%Y_%m")
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS market.stock_minute_bar_{suffix}
+            PARTITION OF market.stock_minute_bar
+            FOR VALUES FROM ('{current.isoformat()}') TO ('{next_month.isoformat()}')
+            """
+        )
+        current = next_month
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS market.stock_minute_bar_default
+        PARTITION OF market.stock_minute_bar DEFAULT
+        """
+    )
+
+
+def _add_month(value: dt.date) -> dt.date:
+    if value.month == 12:
+        return dt.date(value.year + 1, 1, 1)
+    return dt.date(value.year, value.month + 1, 1)
