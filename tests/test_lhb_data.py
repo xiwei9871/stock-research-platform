@@ -681,6 +681,91 @@ def test_lhb_coverage_failure_plan_cli(monkeypatch, capsys):
     assert "lhb_coverage_failure_plan|report|/tmp/report.md" in out
 
 
+def test_lhb_after_failure_rule_v21_outputs_suffixed_files(tmp_path):
+    curated = _sample_lhb_curated_extended()
+    failure_view = pd.DataFrame(
+        [
+            {"case_id": "c_success", "verified_case_type_v2_1": "second_wave", "old_verified_case_type": "second_wave", "event_date": "2026-05-12", "event_type": "second_wave_start", "label_change_reason": "keep", "confidence": 0.5, "source_origin": "web_seed_verified", "web_source_available": True, "local_event_verified": True, "future_5d_return": 0.12, "future_10d_return": 0.20, "future_10d_max_drawdown": -0.05},
+            {"case_id": "c_failed_wave", "verified_case_type_v2_1": "failed_second_wave", "old_verified_case_type": "failed_second_wave", "event_date": "2024-01-24", "event_type": "second_wave_start", "label_change_reason": "keep", "confidence": 0.78, "source_origin": "web_seed_verified", "web_source_available": True, "local_event_verified": True, "future_5d_return": -0.05, "future_10d_return": -0.10, "future_10d_max_drawdown": -0.15},
+            {"case_id": "c_a_kill", "verified_case_type_v2_1": "a_kill_failure", "old_verified_case_type": "a_kill_failure", "event_date": "2025-09-18", "event_type": "a_kill_start", "label_change_reason": "keep", "confidence": 0.90, "source_origin": "local_auto_candidate", "web_source_available": False, "local_event_verified": True, "future_5d_return": -0.12, "future_10d_return": -0.20, "future_10d_max_drawdown": -0.25},
+        ]
+    )
+    old_detail = lhb_data.build_lhb_case_difference_report(
+        curated=_sample_lhb_curated(),
+        lhb_features=_sample_lhb_features(),
+        alignment_audit=_sample_lhb_alignment(),
+        output_dir=tmp_path,
+        factor_review=_sample_lhb_factor_review(),
+    )["case_event_detail"]
+    old_risk = lhb_data.build_lhb_risk_feature_diagnostics(
+        curated=_sample_lhb_curated(),
+        lhb_features=_sample_lhb_features(),
+        alignment_audit=_sample_lhb_alignment(),
+        output_dir=tmp_path,
+        factor_review=_sample_lhb_factor_review(),
+        optional_diagnostics={},
+    )["risk_feature_case_detail"]
+    old_detail.to_csv(tmp_path / "lhb_case_event_detail.csv", index=False)
+    old_risk.to_csv(tmp_path / "lhb_risk_feature_case_detail.csv", index=False)
+
+    result = lhb_data.build_lhb_diagnostics_after_failure_rule_v21(
+        curated=curated,
+        failure_v21_view=failure_view,
+        lhb_features=_sample_lhb_features(),
+        alignment_audit=_sample_lhb_alignment(),
+        factor_review=_sample_lhb_factor_review(),
+        optional_diagnostics={},
+        output_dir=tmp_path,
+    )
+
+    assert Path(result["paths"]["curated_failure_v21"]).exists()
+    assert Path(result["paths"]["case_type_difference_summary"]).name.endswith("_v2_1.csv")
+    assert Path(result["paths"]["risk_feature_case_detail"]).name.endswith("_v2_1.csv")
+    assert Path(result["paths"]["comparison"]).exists()
+    assert "verified_case_type_v2_1" in result["curated_failure_v21"].columns
+    assert "metric" in result["comparison"].columns
+
+
+def test_lhb_after_failure_rule_v21_cli(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "run_lhb_diagnostics_after_failure_rule_v21",
+        lambda **kwargs: {
+            "paths": {
+                "curated_failure_v21": "/tmp/view.csv",
+                "transition_matrix": "/tmp/transitions.csv",
+                "case_type_difference_summary": "/tmp/case_type_v2_1.csv",
+                "risk_feature_case_detail": "/tmp/risk_v2_1.csv",
+                "comparison": "/tmp/compare.csv",
+                "markdown_report": "/tmp/report.md",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "lhb-risk-diagnostics-after-failure-rule-v2-1",
+            "--case-path",
+            "/tmp/cases.csv",
+            "--failure-audit-path",
+            "/tmp/failure_audit.csv",
+            "--snapshot-path",
+            "/tmp/snapshot.csv",
+            "--lhb-features-path",
+            "/tmp/features.csv",
+            "--alignment-path",
+            "/tmp/alignment.csv",
+            "--output-dir",
+            "/tmp",
+        ],
+    )
+    cli.main()
+    out = capsys.readouterr().out
+    assert "lhb_after_failure_rule_v2_1|curated_failure_v21|/tmp/view.csv" in out
+    assert "lhb_after_failure_rule_v2_1|report|/tmp/report.md" in out
+
+
 def test_lhb_sample_import_cli(monkeypatch, capsys):
     monkeypatch.setattr(
         cli,

@@ -8,6 +8,10 @@ import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.dragon_case_library import (
+    build_failure_event_rule_v21_curated_view,
+    build_failure_event_rule_v21_transition_matrix,
+)
 
 
 TOP_LIST_COLUMNS = [
@@ -803,6 +807,131 @@ def run_lhb_risk_feature_diagnostics(
         output_dir=output_dir,
         factor_review=factor_review,
         optional_diagnostics=optional_diagnostics,
+    )
+
+
+def build_lhb_diagnostics_after_failure_rule_v21(
+    *,
+    curated: pd.DataFrame,
+    failure_v21_view: pd.DataFrame,
+    lhb_features: pd.DataFrame,
+    alignment_audit: pd.DataFrame,
+    factor_review: pd.DataFrame,
+    optional_diagnostics: dict[str, pd.DataFrame] | None,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    optional_diagnostics = optional_diagnostics or {}
+    curated_failure_v21 = _merge_failure_v21_view(curated, failure_v21_view)
+    alignment_v21 = _apply_failure_v21_labels_to_alignment(alignment_audit, curated_failure_v21)
+    detail = _build_lhb_case_event_detail(curated_failure_v21, alignment_v21, factor_review, lhb_features=lhb_features)
+    case_type_summary = _build_lhb_case_type_difference_summary(detail)
+    event_window = _build_lhb_event_window_difference(curated_failure_v21, alignment_v21, lhb_features, factor_review)
+    coverage = _build_lhb_case_coverage_summary(curated_failure_v21, alignment_v21)
+    risk_detail = _standardize_lhb_risk_features(detail)
+    risk_bucket = _build_lhb_risk_score_bucket_effectiveness(risk_detail)
+    risk_cross = _build_lhb_risk_failure_type_cross(risk_detail)
+    dragon_cross = _build_lhb_dragon_risk_cross(risk_detail, optional_diagnostics)
+    coverage_gaps = _build_lhb_coverage_gap_recommendations(risk_detail)
+    transition_matrix = build_failure_event_rule_v21_transition_matrix(failure_v21_view)
+    comparison = _build_lhb_v2_vs_v21_comparison(
+        output_dir=output_dir,
+        new_detail=detail,
+        curated=curated,
+        failure_v21_view=failure_v21_view,
+    )
+    report = _lhb_after_failure_rule_v21_markdown(
+        transition_matrix=transition_matrix,
+        case_type_summary=case_type_summary,
+        risk_cross=risk_cross,
+        comparison=comparison,
+        warnings=warnings,
+    )
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "curated_failure_v21": str(out / "dragon_case_curated_library_failure_v2_1.csv"),
+        "transition_matrix": str(out / "failure_event_rule_v2_1_transition_matrix.csv"),
+        "case_type_difference_summary": str(out / "lhb_case_type_difference_summary_v2_1.csv"),
+        "event_window_difference": str(out / "lhb_event_window_difference_v2_1.csv"),
+        "case_event_detail": str(out / "lhb_case_event_detail_v2_1.csv"),
+        "coverage_summary": str(out / "lhb_case_coverage_summary_v2_1.csv"),
+        "risk_feature_case_detail": str(out / "lhb_risk_feature_case_detail_v2_1.csv"),
+        "risk_score_bucket_effectiveness": str(out / "lhb_risk_score_bucket_effectiveness_v2_1.csv"),
+        "risk_failure_type_cross": str(out / "lhb_risk_failure_type_cross_v2_1.csv"),
+        "dragon_risk_cross_diagnostics": str(out / "lhb_dragon_risk_cross_diagnostics_v2_1.csv"),
+        "coverage_gap_recommendations": str(out / "lhb_coverage_gap_recommendations_v2_1.csv"),
+        "comparison": str(out / "lhb_risk_diagnostics_v2_vs_v2_1_comparison.csv"),
+        "markdown_report": str(out / "lhb_risk_diagnostics_after_failure_rule_v2_1_report.md"),
+    }
+    curated_failure_v21.to_csv(paths["curated_failure_v21"], index=False)
+    transition_matrix.to_csv(paths["transition_matrix"], index=False)
+    case_type_summary.to_csv(paths["case_type_difference_summary"], index=False)
+    event_window.to_csv(paths["event_window_difference"], index=False)
+    detail.to_csv(paths["case_event_detail"], index=False)
+    coverage.to_csv(paths["coverage_summary"], index=False)
+    risk_detail.to_csv(paths["risk_feature_case_detail"], index=False)
+    risk_bucket.to_csv(paths["risk_score_bucket_effectiveness"], index=False)
+    risk_cross.to_csv(paths["risk_failure_type_cross"], index=False)
+    dragon_cross.to_csv(paths["dragon_risk_cross_diagnostics"], index=False)
+    coverage_gaps.to_csv(paths["coverage_gap_recommendations"], index=False)
+    comparison.to_csv(paths["comparison"], index=False)
+    Path(paths["markdown_report"]).write_text(report, encoding="utf-8")
+    return {
+        "curated_failure_v21": curated_failure_v21,
+        "transition_matrix": transition_matrix,
+        "case_type_difference_summary": case_type_summary,
+        "event_window_difference": event_window,
+        "case_event_detail": detail,
+        "coverage_summary": coverage,
+        "risk_feature_case_detail": risk_detail,
+        "risk_score_bucket_effectiveness": risk_bucket,
+        "risk_failure_type_cross": risk_cross,
+        "dragon_risk_cross_diagnostics": dragon_cross,
+        "coverage_gap_recommendations": coverage_gaps,
+        "comparison": comparison,
+        "warnings": warnings,
+        "paths": paths,
+    }
+
+
+def run_lhb_diagnostics_after_failure_rule_v21(
+    *,
+    case_path: str | Path,
+    failure_audit_path: str | Path,
+    snapshot_path: str | Path,
+    lhb_features_path: str | Path,
+    alignment_path: str | Path,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    out = Path(output_dir)
+    curated = pd.read_csv(case_path, low_memory=False)
+    failure_audit = pd.read_csv(failure_audit_path, low_memory=False)
+    snapshot = pd.read_csv(snapshot_path, low_memory=False)
+    lhb_features = pd.read_csv(lhb_features_path, low_memory=False)
+    alignment = pd.read_csv(alignment_path, low_memory=False)
+    factor_path = out / "dragon_case_factor_review_2024_2026.csv"
+    factor_review = pd.read_csv(factor_path, low_memory=False) if factor_path.exists() else pd.DataFrame()
+    optional_paths = {
+        "dragon_v1_3": out / "dragon_strategy_v1_3_diagnostics.csv",
+        "dragon_v1_2": out / "dragon_strategy_v1_2_diagnostics.csv",
+        "case_factor_snapshot": out / "dragon_case_factor_snapshot_2024_2026.csv",
+    }
+    optional_diagnostics = {name: pd.read_csv(path, low_memory=False) for name, path in optional_paths.items() if path.exists()}
+    failure_v21_view = build_failure_event_rule_v21_curated_view(
+        curated=curated,
+        case_factor_snapshot=snapshot,
+        failure_rule_audit=failure_audit,
+    )
+    return build_lhb_diagnostics_after_failure_rule_v21(
+        curated=curated,
+        failure_v21_view=failure_v21_view,
+        lhb_features=lhb_features,
+        alignment_audit=alignment,
+        factor_review=factor_review,
+        optional_diagnostics=optional_diagnostics,
+        output_dir=output_dir,
     )
 
 
@@ -1966,6 +2095,115 @@ def _build_lhb_case_coverage_summary(curated: pd.DataFrame, alignment_audit: pd.
     ], columns=columns)
 
 
+def _merge_failure_v21_view(curated: pd.DataFrame, failure_v21_view: pd.DataFrame) -> pd.DataFrame:
+    if curated.empty:
+        return curated.copy()
+    if failure_v21_view.empty:
+        data = curated.copy()
+        data["old_verified_case_type"] = data.get("verified_case_type", "")
+        data["verified_case_type_v2_1"] = data.get("verified_case_type", "")
+        return data
+    merged = curated.merge(
+        failure_v21_view[
+            [
+                "case_id",
+                "old_verified_case_type",
+                "verified_case_type_v2_1",
+                "event_date",
+                "event_type",
+                "label_change_reason",
+                "confidence",
+                "source_origin",
+                "web_source_available",
+                "local_event_verified",
+            ]
+        ].drop_duplicates(subset=["case_id"]),
+        on="case_id",
+        how="left",
+    )
+    merged["old_verified_case_type"] = merged["old_verified_case_type"].fillna(merged.get("verified_case_type", ""))
+    merged["verified_case_type"] = merged["verified_case_type_v2_1"].fillna(merged.get("verified_case_type", ""))
+    merged["case_type"] = merged["verified_case_type"]
+    return merged
+
+
+def _apply_failure_v21_labels_to_alignment(alignment_audit: pd.DataFrame, curated_failure_v21: pd.DataFrame) -> pd.DataFrame:
+    if alignment_audit.empty:
+        return alignment_audit.copy()
+    label_map = curated_failure_v21.set_index("case_id")["verified_case_type_v2_1"].to_dict() if "verified_case_type_v2_1" in curated_failure_v21.columns else {}
+    data = alignment_audit.copy()
+    data["case_type"] = data["case_id"].map(label_map).fillna(data.get("case_type", ""))
+    return data
+
+
+def _build_lhb_v2_vs_v21_comparison(
+    *,
+    output_dir: str | Path,
+    new_detail: pd.DataFrame,
+    curated: pd.DataFrame,
+    failure_v21_view: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = ["metric", "old_value", "v2_1_value", "delta", "interpretation"]
+    out = Path(output_dir)
+    old_detail_path = out / "lhb_case_event_detail.csv"
+    old_detail = pd.read_csv(old_detail_path, low_memory=False) if old_detail_path.exists() else pd.DataFrame()
+
+    old_curated = curated.copy()
+    old_curated["old_verified_case_type"] = old_curated.get("verified_case_type", "")
+
+    def _metric(frame: pd.DataFrame, label: str, field: str) -> float | int | None:
+        if frame.empty:
+            return None
+        subset = frame[frame.get("verified_case_type", pd.Series(dtype=str)).fillna("").astype(str) == label]
+        if field == "count":
+            return int(len(subset))
+        if subset.empty:
+            return None
+        if field == "lhb_after_3d_rate":
+            return float(pd.to_numeric(subset["lhb_after_3d"], errors="coerce").fillna(False).astype(bool).mean())
+        values = pd.to_numeric(subset[field], errors="coerce")
+        return float(values.mean()) if values.notna().any() else None
+
+    def _case_count(frame: pd.DataFrame, label_col: str, label: str) -> int:
+        if frame.empty or label_col not in frame.columns:
+            return 0
+        subset = frame[frame[label_col].fillna("").astype(str) == label]
+        return int(subset["case_id"].nunique()) if "case_id" in subset.columns else int(len(subset))
+
+    metric_defs = [
+        ("a_kill_failure_count", "a_kill_failure", "count", "A杀样本数变化"),
+        ("failed_second_wave_count", "failed_second_wave", "count", "失败二波样本数变化"),
+        ("high_open_low_close_failure_count", "high_open_low_close_failure", "count", "高开低走失败样本数变化"),
+        ("a_kill_avg_lhb_net_buy", "a_kill_failure", "lhb_net_buy_amount_event", "A杀事件日净买额是否更负"),
+        ("a_kill_avg_pump_risk", "a_kill_failure", "lhb_one_day_pump_risk", "A杀 pump risk 是否更高"),
+        ("a_kill_avg_future_5d_return", "a_kill_failure", "future_5d_return", "A杀 5 日收益是否更差"),
+        ("a_kill_avg_future_10d_return", "a_kill_failure", "future_10d_return", "A杀 10 日收益是否更差"),
+        ("a_kill_avg_future_10d_max_drawdown", "a_kill_failure", "future_10d_max_drawdown", "A杀 10 日回撤是否更深"),
+        ("failed_second_wave_avg_lhb_net_buy", "failed_second_wave", "lhb_net_buy_amount_event", "失败二波净买额"),
+        ("failed_second_wave_after_3d_lhb_rate", "failed_second_wave", "lhb_after_3d_rate", "失败二波事件后 LHB 关注率"),
+        ("failed_second_wave_avg_future_10d_return", "failed_second_wave", "future_10d_return", "失败二波 10 日收益"),
+    ]
+    rows = []
+    for metric, label, field, interpretation in metric_defs:
+        if field == "count":
+            old_value = _case_count(old_curated, "old_verified_case_type", label)
+            new_value = _case_count(failure_v21_view, "verified_case_type_v2_1", label)
+        else:
+            old_value = _metric(old_detail, label, field)
+            new_value = _metric(new_detail, label, field)
+        delta = (new_value - old_value) if old_value is not None and new_value is not None else None
+        rows.append(
+            {
+                "metric": metric,
+                "old_value": old_value,
+                "v2_1_value": new_value,
+                "delta": delta,
+                "interpretation": interpretation,
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=columns)
+
+
 def _lhb_case_difference_markdown(
     *,
     case_type_summary: pd.DataFrame,
@@ -2008,6 +2246,62 @@ def _lhb_case_difference_markdown(
             "",
             "### Event Window",
             _table_preview(event_window, rows=20),
+            "",
+            "### Warnings",
+            *(warnings or ["无"]),
+        ]
+    )
+
+
+def _lhb_after_failure_rule_v21_markdown(
+    *,
+    transition_matrix: pd.DataFrame,
+    case_type_summary: pd.DataFrame,
+    risk_cross: pd.DataFrame,
+    comparison: pd.DataFrame,
+    warnings: list[str],
+) -> str:
+    a_kill = case_type_summary[case_type_summary["verified_case_type"] == "a_kill_failure"] if not case_type_summary.empty else case_type_summary
+    failed_wave = case_type_summary[case_type_summary["verified_case_type"] == "failed_second_wave"] if not case_type_summary.empty else case_type_summary
+    hocl = case_type_summary[case_type_summary["verified_case_type"] == "high_open_low_close_failure"] if not case_type_summary.empty else case_type_summary
+    sample_note = []
+    if hocl.empty or int(pd.to_numeric(hocl["sample_count"], errors="coerce").fillna(0).sum()) < 3:
+        sample_note.append("high_open_low_close_failure 样本仍偏少。")
+    if case_type_summary[case_type_summary["verified_case_type"] == "failed_reversal"].empty:
+        sample_note.append("failed_reversal 样本偏少。")
+    if case_type_summary[case_type_summary["verified_case_type"] == "one_day_pump"].empty:
+        sample_note.append("one_day_pump 样本偏少。")
+    return "\n".join(
+        [
+            "# LHB Risk Diagnostics after Failure Rule v2.1",
+            "",
+            "## 1. 背景",
+            "v2.1 收紧了 A杀定义，要求绑定破位上下文，避免深跌但无破位事件的样本被直接归入 A杀。",
+            "",
+            "## 2. 标签迁移结果",
+            _table_preview(transition_matrix, rows=20),
+            "",
+            "## 3. A杀样本 LHB 特征",
+            _table_preview(a_kill, rows=12),
+            "",
+            "## 4. 失败二波样本 LHB 特征",
+            _table_preview(failed_wave, rows=16),
+            "",
+            "## 5. high_open_low_close_failure",
+            _table_preview(hocl, rows=12),
+            *(sample_note or [""]),
+            "",
+            "## 6. 成功二波对照",
+            _table_preview(case_type_summary[case_type_summary["verified_case_type"] == "second_wave"], rows=12),
+            "",
+            "## 7. v2 vs v2.1 结论变化",
+            _table_preview(comparison, rows=20),
+            "",
+            "## 8. 下一步建议",
+            "保留 v2.1 的 A杀定义；继续补 failed_reversal / one_day_pump 样本，暂时仍不接策略打分。",
+            "",
+            "### Risk Cross",
+            _table_preview(risk_cross, rows=20),
             "",
             "### Warnings",
             *(warnings or ["无"]),

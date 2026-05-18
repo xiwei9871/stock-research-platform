@@ -10,6 +10,9 @@ from stock_research.dragon_case_library import (
     build_case_library_from_seed_and_bars,
     build_case_factor_snapshot,
     build_article_seed_suggestions,
+    build_failure_event_rule_v21_curated_view,
+    build_failure_event_rule_v21_transition_matrix,
+    build_failure_event_rule_v2_diagnostics,
     build_failure_target_audit,
     build_factor_alignment_audit,
     build_local_candidate_source_priority,
@@ -34,6 +37,7 @@ from stock_research.dragon_case_library import (
     read_case_seed,
     read_web_article_seed,
     read_web_case_seed,
+    run_failure_event_rule_v2_diagnostics,
     run_dragon_case_web_verify,
     verify_web_candidates,
 )
@@ -662,6 +666,124 @@ def test_failure_target_audit_covers_failure_types():
     assert got["FWave"] == "failed_second_wave"
     assert got["Pump"] == "one_day_pump"
     assert got["HOCL"] == "high_open_low_close_failure"
+
+
+def test_failure_event_rule_v2_refines_failure_boundaries(tmp_path):
+    curated = pd.DataFrame(
+        [
+            {"case_id": "c1", "ts_code": "000001.SZ", "stock_name": "AKill", "case_year": 2024, "verified_case_type": "failed_second_wave", "success_or_failure": "failure"},
+            {"case_id": "c2", "ts_code": "000002.SZ", "stock_name": "FRev", "case_year": 2024, "verified_case_type": "break_then_reversal", "success_or_failure": "mixed"},
+            {"case_id": "c3", "ts_code": "000003.SZ", "stock_name": "Pump", "case_year": 2025, "verified_case_type": "weak_to_strong", "success_or_failure": "unknown"},
+            {"case_id": "c4", "ts_code": "000004.SZ", "stock_name": "HOCL", "case_year": 2026, "verified_case_type": "second_wave", "success_or_failure": "failure"},
+        ]
+    )
+    snapshot = pd.DataFrame(
+        [
+            {"case_id": "c1", "ts_code": "000001.SZ", "stock_name": "AKill", "event_type": "second_wave_start", "event_date": "2024-01-10", "relative_day": 0, "trade_date": "2024-01-10", "stage_return": 0.9, "pre_3d_return": 0.18, "pre_5d_return": 0.30, "future_1d_return": -0.05, "future_3d_return": -0.11, "future_5d_return": -0.18, "future_10d_return": -0.24, "future_5d_max_drawdown": -0.19, "future_10d_max_drawdown": -0.28, "amount_vs_20d": 2.6, "high_to_close_drawdown": -0.05, "close_position_in_day": 0.22, "is_limit_up_day": False, "is_break_limit_event": True, "is_reversal_event": False, "is_second_wave_event": True, "is_a_kill_event": False, "limit_up_count_before_event": 3, "max_limit_up_count": 3},
+            {"case_id": "c2", "ts_code": "000002.SZ", "stock_name": "FRev", "event_type": "reversal", "event_date": "2024-02-10", "relative_day": 0, "trade_date": "2024-02-10", "stage_return": 0.45, "pre_3d_return": 0.08, "pre_5d_return": 0.16, "future_1d_return": -0.01, "future_3d_return": -0.05, "future_5d_return": -0.08, "future_10d_return": -0.09, "future_5d_max_drawdown": -0.10, "future_10d_max_drawdown": -0.12, "amount_vs_20d": 1.7, "high_to_close_drawdown": -0.04, "close_position_in_day": 0.30, "is_limit_up_day": True, "is_break_limit_event": False, "is_reversal_event": True, "is_second_wave_event": False, "is_a_kill_event": False, "limit_up_count_before_event": 1, "max_limit_up_count": 2},
+            {"case_id": "c3", "ts_code": "000003.SZ", "stock_name": "Pump", "event_type": "first_limit_up", "event_date": "2025-03-10", "relative_day": 0, "trade_date": "2025-03-10", "stage_return": 0.16, "pre_3d_return": 0.02, "pre_5d_return": 0.05, "future_1d_return": -0.04, "future_3d_return": -0.08, "future_5d_return": -0.07, "future_10d_return": -0.04, "future_5d_max_drawdown": -0.09, "future_10d_max_drawdown": -0.10, "amount_vs_20d": 2.4, "high_to_close_drawdown": -0.03, "close_position_in_day": 0.45, "is_limit_up_day": True, "is_break_limit_event": False, "is_reversal_event": False, "is_second_wave_event": False, "is_a_kill_event": False, "limit_up_count_before_event": 0, "max_limit_up_count": 1},
+            {"case_id": "c4", "ts_code": "000004.SZ", "stock_name": "HOCL", "event_type": "peak", "event_date": "2026-05-10", "relative_day": 0, "trade_date": "2026-05-10", "stage_return": 0.42, "pre_3d_return": 0.12, "pre_5d_return": 0.20, "future_1d_return": -0.03, "future_3d_return": -0.07, "future_5d_return": -0.09, "future_10d_return": -0.10, "future_5d_max_drawdown": -0.11, "future_10d_max_drawdown": -0.13, "amount_vs_20d": 2.0, "high_to_close_drawdown": -0.10, "close_position_in_day": 0.18, "is_limit_up_day": False, "is_break_limit_event": True, "is_reversal_event": False, "is_second_wave_event": False, "is_a_kill_event": False, "limit_up_count_before_event": 2, "max_limit_up_count": 2},
+        ]
+    )
+
+    result = build_failure_event_rule_v2_diagnostics(curated=curated, case_factor_snapshot=snapshot, output_dir=tmp_path)
+    audit = result["audit"]
+    got = dict(zip(audit["stock_name"], audit["suggested_case_type_v2"], strict=False))
+
+    assert got["AKill"] == "a_kill_failure"
+    assert got["FRev"] == "failed_reversal"
+    assert got["Pump"] == "one_day_pump"
+    assert got["HOCL"] == "high_open_low_close_failure"
+    assert audit[audit["stock_name"] == "AKill"].iloc[0]["boundary_tag"] == "a_kill_over_failed_second_wave"
+    assert Path(result["paths"]["audit"]).exists()
+    assert Path(result["paths"]["report"]).read_text(encoding="utf-8").startswith("# Failure Event Rule v2")
+
+
+def test_failure_event_rule_v21_does_not_escalate_plain_peak_to_a_kill(tmp_path):
+    curated = pd.DataFrame(
+        [
+            {"case_id": "c1", "ts_code": "000001.SZ", "stock_name": "PeakWave", "case_year": 2024, "verified_case_type": "second_wave", "success_or_failure": "success"},
+            {"case_id": "c2", "ts_code": "000002.SZ", "stock_name": "BreakKill", "case_year": 2024, "verified_case_type": "failed_second_wave", "success_or_failure": "failure"},
+        ]
+    )
+    snapshot = pd.DataFrame(
+        [
+            {"case_id": "c1", "ts_code": "000001.SZ", "stock_name": "PeakWave", "event_type": "peak", "event_date": "2024-09-06", "relative_day": 0, "trade_date": "2024-09-06", "stage_return": 2.0, "pre_3d_return": 0.25, "pre_5d_return": 0.55, "future_1d_return": -0.08, "future_3d_return": -0.17, "future_5d_return": -0.29, "future_10d_return": -0.31, "future_5d_max_drawdown": -0.29, "future_10d_max_drawdown": -0.31, "amount_vs_20d": 3.0, "high_to_close_drawdown": 0.0, "close_position_in_day": 1.0, "is_limit_up_day": False, "is_break_limit_event": False, "is_reversal_event": False, "is_second_wave_event": False, "is_a_kill_event": False, "limit_up_count_before_event": 0, "max_limit_up_count": 0},
+            {"case_id": "c2", "ts_code": "000002.SZ", "stock_name": "BreakKill", "event_type": "break_limit", "event_date": "2024-09-09", "relative_day": 0, "trade_date": "2024-09-09", "stage_return": 1.1, "pre_3d_return": 0.18, "pre_5d_return": 0.32, "future_1d_return": -0.07, "future_3d_return": -0.16, "future_5d_return": -0.22, "future_10d_return": -0.24, "future_5d_max_drawdown": -0.22, "future_10d_max_drawdown": -0.29, "amount_vs_20d": 2.2, "high_to_close_drawdown": 0.09, "close_position_in_day": 0.12, "is_limit_up_day": False, "is_break_limit_event": True, "is_reversal_event": False, "is_second_wave_event": True, "is_a_kill_event": False, "limit_up_count_before_event": 2, "max_limit_up_count": 2},
+        ]
+    )
+
+    result = build_failure_event_rule_v2_diagnostics(curated=curated, case_factor_snapshot=snapshot, output_dir=tmp_path)
+    audit = result["audit"]
+    got = dict(zip(audit["stock_name"], audit["suggested_case_type_v2"], strict=False))
+
+    assert got["PeakWave"] == "failed_second_wave"
+    assert got["BreakKill"] == "a_kill_failure"
+    assert audit[audit["stock_name"] == "PeakWave"].iloc[0]["boundary_tag"] == "failed_second_wave_without_deep_a_kill"
+
+
+def test_failure_event_rule_v21_curated_view_and_transition_matrix():
+    curated = pd.DataFrame(
+        [
+            {"case_id": "c1", "ts_code": "000001.SZ", "stock_name": "A", "case_year": 2024, "verified_case_type": "a_kill_failure", "success_or_failure": "failure", "source_origin": "web_seed_verified", "web_source_available": True, "local_event_verified": True},
+            {"case_id": "c2", "ts_code": "000002.SZ", "stock_name": "B", "case_year": 2024, "verified_case_type": "failed_second_wave", "success_or_failure": "failure", "source_origin": "local_auto_candidate", "web_source_available": False, "local_event_verified": True},
+        ]
+    )
+    snapshot = pd.DataFrame(
+        [
+            {"case_id": "c1", "event_type": "second_wave_start", "event_date": "2024-01-10", "relative_day": 0, "future_5d_return": -0.08, "future_10d_return": -0.09, "future_10d_max_drawdown": -0.12},
+            {"case_id": "c2", "event_type": "break_limit", "event_date": "2024-01-15", "relative_day": 0, "future_5d_return": -0.18, "future_10d_return": -0.24, "future_10d_max_drawdown": -0.28},
+        ]
+    )
+    audit = pd.DataFrame(
+        [
+            {"case_id": "c1", "event_type": "second_wave_start", "event_date": "2024-01-10", "suggested_case_type_v2": "failed_second_wave", "rule_reason": "r1", "rule_confidence": 0.78, "post_5d_return": -0.08, "post_10d_return": -0.09, "post_10d_max_drawdown": -0.12},
+            {"case_id": "c2", "event_type": "break_limit", "event_date": "2024-01-15", "suggested_case_type_v2": "a_kill_failure", "rule_reason": "r2", "rule_confidence": 0.90, "post_5d_return": -0.18, "post_10d_return": -0.24, "post_10d_max_drawdown": -0.28},
+        ]
+    )
+
+    view = build_failure_event_rule_v21_curated_view(curated=curated, case_factor_snapshot=snapshot, failure_rule_audit=audit)
+    transitions = build_failure_event_rule_v21_transition_matrix(view)
+
+    got = dict(zip(view["stock_name"], view["verified_case_type_v2_1"], strict=False))
+    assert got["A"] == "failed_second_wave"
+    assert got["B"] == "a_kill_failure"
+    assert "label_change_reason" in view.columns
+    assert set(transitions["old_verified_case_type"]) == {"a_kill_failure", "failed_second_wave"}
+    assert "avg_future_10d_max_drawdown" in transitions.columns
+
+
+def test_failure_event_rule_v2_cli(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "run_failure_event_rule_v2_diagnostics",
+        lambda **kwargs: {
+            "paths": {
+                "audit": "/tmp/audit.csv",
+                "summary": "/tmp/summary.csv",
+                "report": "/tmp/report.md",
+            },
+            "audit": pd.DataFrame([1]),
+            "summary": pd.DataFrame([1]),
+        },
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stock-research",
+            "dragon-case-failure-event-rules-v2",
+            "--case-path",
+            "/tmp/curated.csv",
+            "--snapshot-path",
+            "/tmp/snapshot.csv",
+            "--output-dir",
+            "/tmp",
+        ],
+    )
+    cli.main()
+    out = capsys.readouterr().out
+    assert "failure_event_rule_v2|audit|/tmp/audit.csv" in out
+    assert "failure_event_rule_v2|report|/tmp/report.md" in out
 
 
 def test_failure_score_can_sort_priorities():

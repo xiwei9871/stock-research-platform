@@ -371,6 +371,82 @@ FAILURE_TARGET_AUDIT_COLUMNS = [
     "suggested_search_query_2",
 ]
 
+FAILURE_EVENT_RULE_V2_AUDIT_COLUMNS = [
+    "case_id",
+    "ts_code",
+    "stock_name",
+    "case_year",
+    "current_verified_case_type",
+    "success_or_failure",
+    "event_type",
+    "event_date",
+    "stage_return",
+    "pre_3d_return",
+    "pre_5d_return",
+    "post_1d_return",
+    "post_3d_return",
+    "post_5d_return",
+    "post_10d_return",
+    "post_5d_max_drawdown",
+    "post_10d_max_drawdown",
+    "amount_vs_20d",
+    "high_to_close_drawdown",
+    "close_position_in_day",
+    "limit_up_count_before_event",
+    "max_limit_up_count",
+    "is_limit_up_day",
+    "is_break_limit_event",
+    "is_reversal_event",
+    "is_second_wave_event",
+    "is_a_kill_event",
+    "suggested_case_type_v2",
+    "boundary_tag",
+    "rule_reason",
+    "rule_confidence",
+    "labeling_uses_post_event_diagnostics",
+]
+
+FAILURE_EVENT_RULE_V2_SUMMARY_COLUMNS = [
+    "current_verified_case_type",
+    "suggested_case_type_v2",
+    "boundary_tag",
+    "sample_count",
+    "avg_post_3d_return",
+    "avg_post_5d_return",
+    "avg_post_10d_return",
+    "avg_post_10d_max_drawdown",
+    "avg_rule_confidence",
+]
+
+FAILURE_EVENT_RULE_V21_CURATED_VIEW_COLUMNS = [
+    "case_id",
+    "ts_code",
+    "stock_name",
+    "case_year",
+    "old_verified_case_type",
+    "verified_case_type_v2_1",
+    "success_or_failure",
+    "event_date",
+    "event_type",
+    "label_change_reason",
+    "confidence",
+    "source_origin",
+    "web_source_available",
+    "local_event_verified",
+    "future_5d_return",
+    "future_10d_return",
+    "future_10d_max_drawdown",
+]
+
+FAILURE_EVENT_RULE_V21_TRANSITION_COLUMNS = [
+    "old_verified_case_type",
+    "verified_case_type_v2_1",
+    "sample_count",
+    "avg_future_5d_return",
+    "avg_future_10d_return",
+    "avg_future_10d_max_drawdown",
+]
+
 LOCAL_SOURCE_PRIORITY_COLUMNS = [
     "case_id",
     "ts_code",
@@ -2345,6 +2421,344 @@ def build_failure_target_audit(curated: pd.DataFrame, factor_snapshot: pd.DataFr
     ).reindex(columns=FAILURE_TARGET_AUDIT_COLUMNS)
 
 
+def build_failure_event_rule_v2_diagnostics(
+    *,
+    curated: pd.DataFrame,
+    case_factor_snapshot: pd.DataFrame,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    audit = _build_failure_event_rule_v2_audit(curated, case_factor_snapshot)
+    summary = _build_failure_event_rule_v2_summary(audit)
+    curated_view = build_failure_event_rule_v21_curated_view(
+        curated=curated,
+        case_factor_snapshot=case_factor_snapshot,
+        failure_rule_audit=audit,
+    )
+    transition_matrix = build_failure_event_rule_v21_transition_matrix(curated_view)
+    report = _failure_event_rule_v2_report(audit, summary)
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "audit": str(out / "failure_event_rule_v2_audit.csv"),
+        "summary": str(out / "failure_event_rule_v2_summary.csv"),
+        "curated_view": str(out / "dragon_case_curated_library_failure_v2_1.csv"),
+        "transition_matrix": str(out / "failure_event_rule_v2_1_transition_matrix.csv"),
+        "report": str(out / "failure_event_rule_v2_report.md"),
+    }
+    audit.to_csv(paths["audit"], index=False)
+    summary.to_csv(paths["summary"], index=False)
+    curated_view.to_csv(paths["curated_view"], index=False)
+    transition_matrix.to_csv(paths["transition_matrix"], index=False)
+    Path(paths["report"]).write_text(report, encoding="utf-8")
+    return {
+        "audit": audit,
+        "summary": summary,
+        "curated_view": curated_view,
+        "transition_matrix": transition_matrix,
+        "paths": paths,
+    }
+
+
+def run_failure_event_rule_v2_diagnostics(
+    *,
+    case_path: str | Path,
+    snapshot_path: str | Path,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    curated = pd.read_csv(case_path, low_memory=False)
+    snapshot = pd.read_csv(snapshot_path, low_memory=False)
+    return build_failure_event_rule_v2_diagnostics(
+        curated=curated,
+        case_factor_snapshot=snapshot,
+        output_dir=output_dir,
+    )
+
+
+def _build_failure_event_rule_v2_audit(curated: pd.DataFrame, snapshot: pd.DataFrame) -> pd.DataFrame:
+    if curated.empty or snapshot.empty:
+        return pd.DataFrame(columns=FAILURE_EVENT_RULE_V2_AUDIT_COLUMNS)
+    meta = curated.set_index("case_id").to_dict("index") if "case_id" in curated.columns else {}
+    frame = snapshot.copy()
+    if "relative_day" in frame.columns:
+        frame = frame[pd.to_numeric(frame["relative_day"], errors="coerce").fillna(999).eq(0)].copy()
+    rows: list[dict[str, Any]] = []
+    for record in frame.fillna("").to_dict("records"):
+        case_id = str(record.get("case_id") or "")
+        case_meta = meta.get(case_id, {})
+        features = _failure_event_features(record)
+        suggested, boundary, reason, confidence = _classify_failure_event_rule_v2(features)
+        if suggested == "no_failure_signal":
+            continue
+        rows.append(
+            {
+                "case_id": case_id,
+                "ts_code": _normalize_ts_code(case_meta.get("ts_code") or record.get("ts_code")),
+                "stock_name": str(case_meta.get("stock_name") or record.get("stock_name") or ""),
+                "case_year": int(pd.to_numeric(case_meta.get("case_year", record.get("case_year")), errors="coerce") or 0),
+                "current_verified_case_type": str(case_meta.get("verified_case_type") or case_meta.get("case_type") or ""),
+                "success_or_failure": str(case_meta.get("success_or_failure") or ""),
+                "event_type": features["event_type"],
+                "event_date": str(record.get("event_date") or record.get("trade_date") or ""),
+                **{key: features[key] for key in [
+                    "stage_return",
+                    "pre_3d_return",
+                    "pre_5d_return",
+                    "post_1d_return",
+                    "post_3d_return",
+                    "post_5d_return",
+                    "post_10d_return",
+                    "post_5d_max_drawdown",
+                    "post_10d_max_drawdown",
+                    "amount_vs_20d",
+                    "high_to_close_drawdown",
+                    "close_position_in_day",
+                    "limit_up_count_before_event",
+                    "max_limit_up_count",
+                    "is_limit_up_day",
+                    "is_break_limit_event",
+                    "is_reversal_event",
+                    "is_second_wave_event",
+                    "is_a_kill_event",
+                ]},
+                "suggested_case_type_v2": suggested,
+                "boundary_tag": boundary,
+                "rule_reason": reason,
+                "rule_confidence": confidence,
+                "labeling_uses_post_event_diagnostics": True,
+            }
+        )
+    if not rows:
+        return pd.DataFrame(columns=FAILURE_EVENT_RULE_V2_AUDIT_COLUMNS)
+    return (
+        pd.DataFrame(rows)
+        .reindex(columns=FAILURE_EVENT_RULE_V2_AUDIT_COLUMNS)
+        .sort_values(["case_year", "suggested_case_type_v2", "rule_confidence"], ascending=[True, True, False])
+        .reset_index(drop=True)
+    )
+
+
+def build_failure_event_rule_v21_curated_view(
+    *,
+    curated: pd.DataFrame,
+    case_factor_snapshot: pd.DataFrame,
+    failure_rule_audit: pd.DataFrame,
+) -> pd.DataFrame:
+    if curated.empty:
+        return pd.DataFrame(columns=FAILURE_EVENT_RULE_V21_CURATED_VIEW_COLUMNS)
+    snapshot = case_factor_snapshot.copy() if not case_factor_snapshot.empty else pd.DataFrame()
+    if not snapshot.empty and "relative_day" in snapshot.columns:
+        snapshot = snapshot[pd.to_numeric(snapshot["relative_day"], errors="coerce").fillna(999).eq(0)].copy()
+    snapshot_lookup = snapshot.to_dict("records")
+    snapshot_by_case: dict[str, list[dict[str, Any]]] = {}
+    for record in snapshot_lookup:
+        snapshot_by_case.setdefault(str(record.get("case_id") or ""), []).append(record)
+
+    audit_by_case: dict[str, list[dict[str, Any]]] = {}
+    if not failure_rule_audit.empty:
+        for record in failure_rule_audit.fillna("").to_dict("records"):
+            audit_by_case.setdefault(str(record.get("case_id") or ""), []).append(record)
+
+    rows: list[dict[str, Any]] = []
+    for record in curated.fillna("").to_dict("records"):
+        case_id = str(record.get("case_id") or "")
+        audit_records = audit_by_case.get(case_id, [])
+        selected_audit = _select_primary_failure_rule_row(audit_records)
+        selected_snapshot = _select_primary_snapshot_row(snapshot_by_case.get(case_id, []), selected_audit)
+        old_label = str(record.get("verified_case_type") or record.get("case_type") or "")
+        new_label = str(selected_audit.get("suggested_case_type_v2") if selected_audit else old_label)
+        rows.append(
+            {
+                "case_id": case_id,
+                "ts_code": _normalize_ts_code(record.get("ts_code")),
+                "stock_name": str(record.get("stock_name") or ""),
+                "case_year": int(pd.to_numeric(record.get("case_year"), errors="coerce") or 0),
+                "old_verified_case_type": old_label,
+                "verified_case_type_v2_1": new_label,
+                "success_or_failure": str(record.get("success_or_failure") or ""),
+                "event_date": str((selected_audit or {}).get("event_date") or (selected_snapshot or {}).get("event_date") or ""),
+                "event_type": str((selected_audit or {}).get("event_type") or (selected_snapshot or {}).get("event_type") or ""),
+                "label_change_reason": str((selected_audit or {}).get("rule_reason") or "retained_old_label_no_v2_override"),
+                "confidence": _float((selected_audit or {}).get("rule_confidence")),
+                "source_origin": str(record.get("source_origin") or ""),
+                "web_source_available": bool(record.get("web_source_available")),
+                "local_event_verified": bool(record.get("local_event_verified")),
+                "future_5d_return": _float((selected_audit or {}).get("post_5d_return") or (selected_snapshot or {}).get("future_5d_return")),
+                "future_10d_return": _float((selected_audit or {}).get("post_10d_return") or (selected_snapshot or {}).get("future_10d_return")),
+                "future_10d_max_drawdown": _float((selected_audit or {}).get("post_10d_max_drawdown") or (selected_snapshot or {}).get("future_10d_max_drawdown")),
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=FAILURE_EVENT_RULE_V21_CURATED_VIEW_COLUMNS)
+
+
+def build_failure_event_rule_v21_transition_matrix(view: pd.DataFrame) -> pd.DataFrame:
+    if view.empty:
+        return pd.DataFrame(columns=FAILURE_EVENT_RULE_V21_TRANSITION_COLUMNS)
+    rows: list[dict[str, Any]] = []
+    for (old_label, new_label), group in view.groupby(["old_verified_case_type", "verified_case_type_v2_1"], dropna=False):
+        rows.append(
+            {
+                "old_verified_case_type": old_label,
+                "verified_case_type_v2_1": new_label,
+                "sample_count": int(len(group)),
+                "avg_future_5d_return": pd.to_numeric(group["future_5d_return"], errors="coerce").mean(),
+                "avg_future_10d_return": pd.to_numeric(group["future_10d_return"], errors="coerce").mean(),
+                "avg_future_10d_max_drawdown": pd.to_numeric(group["future_10d_max_drawdown"], errors="coerce").mean(),
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=FAILURE_EVENT_RULE_V21_TRANSITION_COLUMNS).sort_values(["old_verified_case_type", "verified_case_type_v2_1"]).reset_index(drop=True)
+
+
+def _select_primary_failure_rule_row(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not records:
+        return None
+    priority = {
+        "a_kill_failure": 1,
+        "high_open_low_close_failure": 2,
+        "failed_reversal": 3,
+        "failed_second_wave": 4,
+        "one_day_pump": 5,
+    }
+    ordered = sorted(
+        records,
+        key=lambda row: (
+            priority.get(str(row.get("suggested_case_type_v2") or ""), 99),
+            -_float(row.get("rule_confidence")),
+            _float(row.get("post_10d_max_drawdown")),
+            _float(row.get("post_5d_return")),
+            str(row.get("event_date") or ""),
+        ),
+    )
+    return ordered[0]
+
+
+def _select_primary_snapshot_row(records: list[dict[str, Any]], selected_audit: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not records:
+        return None
+    if selected_audit:
+        event_type = str(selected_audit.get("event_type") or "")
+        event_date = str(selected_audit.get("event_date") or "")
+        for record in records:
+            if str(record.get("event_type") or "") == event_type and str(record.get("event_date") or "") == event_date:
+                return record
+    ordered = sorted(
+        records,
+        key=lambda row: (
+            _float(row.get("future_10d_max_drawdown")),
+            _float(row.get("future_5d_return")),
+            str(row.get("event_date") or ""),
+        ),
+    )
+    return ordered[0]
+
+
+def _failure_event_features(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_type": str(record.get("event_type") or ""),
+        "stage_return": _float(record.get("stage_return")),
+        "pre_3d_return": _float(record.get("pre_3d_return")),
+        "pre_5d_return": _float(record.get("pre_5d_return")),
+        "post_1d_return": _float(record.get("future_1d_return")),
+        "post_3d_return": _float(record.get("future_3d_return")),
+        "post_5d_return": _float(record.get("future_5d_return")),
+        "post_10d_return": _float(record.get("future_10d_return")),
+        "post_5d_max_drawdown": _float(record.get("future_5d_max_drawdown")),
+        "post_10d_max_drawdown": _float(record.get("future_10d_max_drawdown")),
+        "amount_vs_20d": _float(record.get("amount_vs_20d")),
+        "high_to_close_drawdown": _float(record.get("high_to_close_drawdown")),
+        "close_position_in_day": _float(record.get("close_position_in_day")),
+        "limit_up_count_before_event": int(_float(record.get("limit_up_count_before_event"))),
+        "max_limit_up_count": int(_float(record.get("max_limit_up_count"))),
+        "is_limit_up_day": _truthy(record.get("is_limit_up_day")),
+        "is_break_limit_event": _truthy(record.get("is_break_limit_event")),
+        "is_reversal_event": _truthy(record.get("is_reversal_event")),
+        "is_second_wave_event": _truthy(record.get("is_second_wave_event")),
+        "is_a_kill_event": _truthy(record.get("is_a_kill_event")),
+    }
+
+
+def _classify_failure_event_rule_v2(features: dict[str, Any]) -> tuple[str, str, str, float]:
+    event_type = features["event_type"]
+    stage_return = features["stage_return"]
+    pre_5d = features["pre_5d_return"]
+    post_1d = features["post_1d_return"]
+    post_3d = features["post_3d_return"]
+    post_5d = features["post_5d_return"]
+    post_10d = features["post_10d_return"]
+    dd_10d = features["post_10d_max_drawdown"]
+    amount_vs_20d = features["amount_vs_20d"]
+    high_to_close = abs(features["high_to_close_drawdown"])
+    close_position = features["close_position_in_day"]
+    limit_count = max(features["limit_up_count_before_event"], features["max_limit_up_count"])
+    popularity_confirmed = limit_count >= 2 or stage_return >= 0.35 or amount_vs_20d >= 1.8
+    break_context = features["is_a_kill_event"] or features["is_break_limit_event"] or event_type in {"break_limit", "a_kill_start"}
+
+    if popularity_confirmed and break_context and (post_10d <= -0.16 or dd_10d <= -0.20) and post_5d <= -0.08:
+        boundary = "a_kill_over_failed_second_wave" if features["is_second_wave_event"] or event_type == "second_wave_start" else "a_kill_confirmed"
+        return "a_kill_failure", boundary, "高人气确认后 5/10 日持续走弱且回撤较深，优先归为 A杀风险。", 0.90
+    if features["is_reversal_event"] or event_type == "reversal":
+        if (post_3d <= -0.03 or post_5d <= -0.05) and (close_position <= 0.40 or high_to_close >= 0.04):
+            return "failed_reversal", "failed_reversal_after_rebound_attempt", "反包尝试后 3-5 日无法延续，且日内收盘/回落质量偏弱。", 0.82
+    if popularity_confirmed and (features["is_break_limit_event"] or event_type in {"peak", "break_limit"}) and high_to_close >= 0.08 and close_position <= 0.30 and (post_3d <= -0.04 or post_5d <= -0.05):
+        return "high_open_low_close_failure", "high_position_intraday_fade", "已有高度后冲高回落、收盘位置低，后续延续走弱。", 0.80
+    if features["is_second_wave_event"] or event_type == "second_wave_start" or (event_type == "peak" and popularity_confirmed):
+        if (post_5d <= -0.05 or dd_10d <= -0.12) and ((not break_context) or post_10d > -0.16):
+            return "failed_second_wave", "failed_second_wave_without_deep_a_kill", "二波尝试后承接不足，但未达到纯 A杀深度。", 0.78
+    if (
+        (features["is_limit_up_day"] or event_type == "first_limit_up")
+        and limit_count <= 1
+        and stage_return < 0.30
+        and amount_vs_20d >= 1.5
+        and (post_1d <= -0.03 or post_3d <= -0.05)
+    ):
+        return "one_day_pump", "single_day_pulse_no_follow_through", "单日放量脉冲后次日/3日回落，且缺少前置高度。", 0.76
+    return "no_failure_signal", "not_applicable", "未满足 v2 失败事件边界。", 0.0
+
+
+def _build_failure_event_rule_v2_summary(audit: pd.DataFrame) -> pd.DataFrame:
+    if audit.empty:
+        return pd.DataFrame(columns=FAILURE_EVENT_RULE_V2_SUMMARY_COLUMNS)
+    rows = []
+    for keys, group in audit.groupby(["current_verified_case_type", "suggested_case_type_v2", "boundary_tag"], dropna=False):
+        current, suggested, boundary = keys
+        rows.append(
+            {
+                "current_verified_case_type": current,
+                "suggested_case_type_v2": suggested,
+                "boundary_tag": boundary,
+                "sample_count": int(len(group)),
+                "avg_post_3d_return": pd.to_numeric(group["post_3d_return"], errors="coerce").mean(),
+                "avg_post_5d_return": pd.to_numeric(group["post_5d_return"], errors="coerce").mean(),
+                "avg_post_10d_return": pd.to_numeric(group["post_10d_return"], errors="coerce").mean(),
+                "avg_post_10d_max_drawdown": pd.to_numeric(group["post_10d_max_drawdown"], errors="coerce").mean(),
+                "avg_rule_confidence": pd.to_numeric(group["rule_confidence"], errors="coerce").mean(),
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=FAILURE_EVENT_RULE_V2_SUMMARY_COLUMNS).sort_values(["suggested_case_type_v2", "sample_count"], ascending=[True, False]).reset_index(drop=True)
+
+
+def _failure_event_rule_v2_report(audit: pd.DataFrame, summary: pd.DataFrame) -> str:
+    return "\n".join(
+        [
+            "# Failure Event Rule v2",
+            "",
+            "## 1. 目标",
+            "本轮只校准失败事件标签边界，不接策略打分、不做组合回测、不接实盘。",
+            "",
+            "## 2. 规则边界",
+            "v2 将 A杀、失败二波、失败反包、高开低走失败、一日游拆开；future 字段只用于事后案例标注和诊断，不允许进入交易信号。",
+            "",
+            "## 3. 汇总",
+            _table_preview(summary, rows=20),
+            "",
+            "## 4. 明细样例",
+            _table_preview(audit, rows=20),
+            "",
+            "## 5. 下一步",
+            "用 v2 审计结果修正 web search targets 和 source backfill 优先级；随后重跑 LHB risk diagnostics。",
+        ]
+    )
+
+
 def build_local_candidate_source_priority(
     curated: pd.DataFrame,
     failure_target_audit: pd.DataFrame,
@@ -4238,3 +4652,12 @@ def _float(value: object) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _truthy(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text in {"1", "true", "t", "yes", "y"}
