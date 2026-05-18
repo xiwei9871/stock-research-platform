@@ -77,13 +77,14 @@ def run_minute_backfill_watchdog(
             status=result["status"],
             extra_lines=extra_lines,
         )
-    send_openclaw_feishu_message(
-        message=message,
-        target=report_target,
-        account=report_account,
-        openclaw_bin=openclaw_bin,
-        dry_run=report_dry_run,
-    )
+    if _should_send_watchdog_message(result["status"]):
+        send_openclaw_feishu_message(
+            message=message,
+            target=report_target,
+            account=report_account,
+            openclaw_bin=openclaw_bin,
+            dry_run=report_dry_run,
+        )
     legacy_status = _legacy_status_dict(
         post_rows=result["post_rows"],
         post_summary=post_summary,
@@ -155,3 +156,10 @@ def _count_statuses(rows: list[dict[str, Any]]) -> dict[str, int]:
         row_status = str(row.get("status"))
         counts[row_status] = counts.get(row_status, 0) + 1
     return counts
+
+
+def _should_send_watchdog_message(status: Any) -> bool:
+    return bool(
+        status.work_remaining
+        or status.watchdog_action != WATCHDOG_ACTION_HEALTHY
+    )

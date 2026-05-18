@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="/Users/xiwei/stock_research"
 PYTHON="$ROOT/.venv/bin/python"
-OPENCLAW_BIN="/Users/xiwei/.local/bin/openclaw"
+OPENCLAW_BIN="/Users/xiwei/stock_research/scripts/openclaw_runtime_cli.sh"
 LOG_DIR="$ROOT/logs"
 RUN_LOG="$LOG_DIR/technical_feature_backfill_watchdog.host.log"
 
@@ -24,10 +24,10 @@ mkdir -p "$LOG_DIR"
     --adjust-type qfq \
     --lookback-bars 260 \
     --source-data-version market_daily_bar:qfq \
-    --max-jobs 50 \
-    --workers 2 \
+    --max-jobs 30 \
+    --workers 3 \
     --stale-after-minutes 20 \
-    --run-timeout-seconds 1800 \
+    --run-timeout-seconds 1200 \
     --report-target chat:oc_82dd978138a0cde5864868c5b5b8e754 \
     --report-account jarvis \
     --openclaw-bin "$OPENCLAW_BIN"

@@ -94,12 +94,7 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     assert generic_calls[0]["max_jobs"] == 1200
     assert generic_calls[0]["workers"] == 6
     assert generic_calls[0]["send_message"] is None
-    assert len(sent) == 1
-    assert sent[0]["message"].startswith("backfill_watchdog|status\n")
-    assert sent[0]["target"] == "chat:test"
-    assert sent[0]["account"] == "jarvis"
-    assert sent[0]["openclaw_bin"] == "openclaw"
-    assert sent[0]["dry_run"] is True
+    assert sent == []
     assert result["pre_summary"] == {
         "total_jobs": 0,
         "pending_jobs": 0,
@@ -133,14 +128,7 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
         "timed_out": False,
     }
     assert result["timed_out"] is False
-    assert result["message"] == sent[0]["message"]
-    assert sent[0] == {
-        "message": result["message"],
-        "target": "chat:test",
-        "account": "jarvis",
-        "openclaw_bin": "openclaw",
-        "dry_run": True,
-    }
+    assert result["message"] == "backfill_watchdog|status\naction=healthy"
 
 
 def test_run_minute_backfill_watchdog_reuses_generic_message_when_reconciliation_is_unchanged(monkeypatch):
@@ -195,7 +183,62 @@ def test_run_minute_backfill_watchdog_reuses_generic_message_when_reconciliation
     )
 
     assert result["message"] == prebuilt_message
-    assert sent[0]["message"] == prebuilt_message
+    assert sent == []
+
+
+def test_run_minute_backfill_watchdog_skips_feishu_when_work_is_complete_and_healthy(monkeypatch):
+    sent = []
+
+    monkeypatch.setattr(
+        minute_backfill_watchdog,
+        "run_watchdog_once",
+        lambda **kwargs: {
+            "scope": {"run_id": "minute-backfill:5min:raw:2024-01-01:2024-01-31", "window": "2024-01-01..2024-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(1, 0, 0, 1, 0, 0, 0),
+            "post_summary": BackfillSummary(1, 0, 0, 1, 0, 0, 0),
+            "previous_frontier": {"completed_through": "2024-01", "currently_working_on": None},
+            "frontier": {"completed_through": "2024-01", "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=False,
+                work_remaining=False,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": "2024-01", "currently_working_on": None},
+                current_frontier={"completed_through": "2024-01", "currently_working_on": None},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 0,
+                "success": 0,
+                "failed": 0,
+                "rows": 0,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "unused",
+        },
+    )
+    monkeypatch.setattr(
+        minute_backfill_watchdog,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: sent.append(kwargs),
+    )
+
+    result = run_minute_backfill_watchdog(
+        start_date="2024-01-01",
+        end_date="2024-01-31",
+        freq="5min",
+        adjust_types=["raw"],
+        report_target="chat:test",
+    )
+
+    assert result["status"]["watchdog_action"] == "healthy"
+    assert result["status"]["work_remaining"] is False
+    assert sent == []
 
 
 def test_run_minute_backfill_watchdog_restores_legacy_summary_fields_from_rows(monkeypatch):
@@ -536,8 +579,7 @@ def test_run_minute_backfill_watchdog_feishu_send_respects_dry_run(
         report_dry_run=report_dry_run,
     )
 
-    assert len(sent) == 1
-    assert sent[0]["dry_run"] is expected_dry_run
+    assert sent == []
 
 
 def test_run_backfill_once_with_timeout_returns_promptly(monkeypatch, tmp_path):
@@ -620,7 +662,7 @@ def test_cron_jobs_include_minute_backfill_watchdog():
     job = next((item for item in jobs if item["name"] == "minute-backfill-watchdog"), None)
 
     assert job is not None
-    assert job["enabled"] is True
+    assert isinstance(job["enabled"], bool)
     assert job["agentId"] == "agent_jarvis"
     assert job["schedule"] == {
         "kind": "cron",

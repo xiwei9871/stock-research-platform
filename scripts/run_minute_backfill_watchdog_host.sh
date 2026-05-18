@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="/Users/xiwei/stock_research"
 PYTHON="$ROOT/.venv/bin/python"
-OPENCLAW_BIN="/Users/xiwei/.local/bin/openclaw"
+OPENCLAW_BIN="/Users/xiwei/stock_research/scripts/openclaw_runtime_cli.sh"
 LOG_DIR="$ROOT/logs"
 RUN_LOG="$LOG_DIR/minute_backfill_watchdog.host.log"
 

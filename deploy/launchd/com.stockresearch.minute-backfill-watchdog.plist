@@ -5,6 +5,12 @@
   <key>Label</key>
   <string>com.stockresearch.minute-backfill-watchdog</string>
 
+  <key>LimitLoadToSessionType</key>
+  <array>
+    <string>Aqua</string>
+    <string>Background</string>
+  </array>
+
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
