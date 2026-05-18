@@ -85,10 +85,15 @@ def test_technical_feature_store_columns_include_current_output_schema():
         "source_data_version",
         "calc_version",
     ]
-    assert technical_feature_store.TECHNICAL_FEATURE_TABLE_COLUMNS[-3:] == [
+    assert technical_feature_store.TECHNICAL_FEATURE_TABLE_COLUMNS[-8:] == [
         "ret_1d",
         "ret_20d",
         "close_position_in_day",
+        "amount_vs_20d",
+        "high_to_close_drawdown",
+        "volatility_5d",
+        "max_drawdown_20d",
+        "atr_pct14",
     ]
 
 
@@ -154,6 +159,11 @@ def test_build_stock_technical_features_daily_keeps_requested_trade_date(monkeyp
     assert result["ret_1d"].notna().all()
     assert result["ret_20d"].notna().all()
     assert result["close_position_in_day"].notna().all()
+    assert result["amount_vs_20d"].notna().all()
+    assert result["high_to_close_drawdown"].notna().all()
+    assert result["volatility_5d"].notna().all()
+    assert result["max_drawdown_20d"].notna().all()
+    assert result["atr_pct14"].notna().all()
 
 
 def test_build_stock_technical_features_daily_uses_requested_source_data_version(monkeypatch):
@@ -217,6 +227,11 @@ def test_upsert_stock_technical_features_daily_writes_replay_safe_rows(monkeypat
                 "ret_1d": 0.05,
                 "ret_20d": 0.25,
                 "close_position_in_day": 0.75,
+                "amount_vs_20d": 1.6,
+                "high_to_close_drawdown": 0.08,
+                "volatility_5d": 0.03,
+                "max_drawdown_20d": -0.12,
+                "atr_pct14": 0.09,
             }
         ]
     )
@@ -238,6 +253,11 @@ def test_upsert_stock_technical_features_daily_writes_replay_safe_rows(monkeypat
     assert "ret_1d = EXCLUDED.ret_1d" in upsert_sql
     assert "ret_20d = EXCLUDED.ret_20d" in upsert_sql
     assert "close_position_in_day = EXCLUDED.close_position_in_day" in upsert_sql
+    assert "amount_vs_20d = EXCLUDED.amount_vs_20d" in upsert_sql
+    assert "high_to_close_drawdown = EXCLUDED.high_to_close_drawdown" in upsert_sql
+    assert "volatility_5d = EXCLUDED.volatility_5d" in upsert_sql
+    assert "max_drawdown_20d = EXCLUDED.max_drawdown_20d" in upsert_sql
+    assert "atr_pct14 = EXCLUDED.atr_pct14" in upsert_sql
     assert "computed_at = now()" in upsert_sql
     assert "updated_at = now()" in upsert_sql
 
@@ -282,6 +302,11 @@ def test_upsert_stock_technical_features_daily_keeps_distinct_source_versions(mo
                 "ret_1d": 0.05,
                 "ret_20d": 0.25,
                 "close_position_in_day": 0.75,
+                "amount_vs_20d": 1.6,
+                "high_to_close_drawdown": 0.08,
+                "volatility_5d": 0.03,
+                "max_drawdown_20d": -0.12,
+                "atr_pct14": 0.09,
             },
             {
                 "trade_date": "2026-01-25",
@@ -317,6 +342,11 @@ def test_upsert_stock_technical_features_daily_keeps_distinct_source_versions(mo
                 "ret_1d": 0.06,
                 "ret_20d": 0.26,
                 "close_position_in_day": 0.76,
+                "amount_vs_20d": 1.7,
+                "high_to_close_drawdown": 0.07,
+                "volatility_5d": 0.031,
+                "max_drawdown_20d": -0.11,
+                "atr_pct14": 0.095,
             },
         ]
     )

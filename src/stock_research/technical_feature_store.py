@@ -159,7 +159,12 @@ def upsert_stock_technical_features_daily(
         obv double precision,
         ret_1d double precision,
         ret_20d double precision,
-        close_position_in_day double precision
+        close_position_in_day double precision,
+        amount_vs_20d double precision,
+        high_to_close_drawdown double precision,
+        volatility_5d double precision,
+        max_drawdown_20d double precision,
+        atr_pct14 double precision
     ) ON COMMIT DROP
     """
     copy_sql = """
@@ -168,7 +173,8 @@ def upsert_stock_technical_features_daily(
         calc_version, ma5, ma10, ma20, ma60, ma120, ema12, ema26, macd_dif,
         macd_dea, macd_hist, rsi6, rsi12, rsi24, boll_upper_20, boll_mid_20,
         boll_lower_20, atr14, cci14, kdj_k, kdj_d, kdj_j, adx14, obv, ret_1d,
-        ret_20d, close_position_in_day
+        ret_20d, close_position_in_day, amount_vs_20d, high_to_close_drawdown,
+        volatility_5d, max_drawdown_20d, atr_pct14
     ) FROM STDIN
     """
     update_columns = [
@@ -186,14 +192,16 @@ def upsert_stock_technical_features_daily(
         calc_version, ma5, ma10, ma20, ma60, ma120, ema12, ema26, macd_dif,
         macd_dea, macd_hist, rsi6, rsi12, rsi24, boll_upper_20, boll_mid_20,
         boll_lower_20, atr14, cci14, kdj_k, kdj_d, kdj_j, adx14, obv, ret_1d,
-        ret_20d, close_position_in_day
+        ret_20d, close_position_in_day, amount_vs_20d, high_to_close_drawdown,
+        volatility_5d, max_drawdown_20d, atr_pct14
     )
     SELECT
         trade_date, asset_id, ts_code, adjust_type, source, source_data_version,
         calc_version, ma5, ma10, ma20, ma60, ma120, ema12, ema26, macd_dif,
         macd_dea, macd_hist, rsi6, rsi12, rsi24, boll_upper_20, boll_mid_20,
         boll_lower_20, atr14, cci14, kdj_k, kdj_d, kdj_j, adx14, obv, ret_1d,
-        ret_20d, close_position_in_day
+        ret_20d, close_position_in_day, amount_vs_20d, high_to_close_drawdown,
+        volatility_5d, max_drawdown_20d, atr_pct14
     FROM tmp_stock_technical_features_daily
     ON CONFLICT (trade_date, asset_id, adjust_type, source_data_version, calc_version)
     DO UPDATE SET

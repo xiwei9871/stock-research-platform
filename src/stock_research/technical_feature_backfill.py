@@ -175,10 +175,7 @@ def backfill_technical_features_daily_range(
         return pd.DataFrame(columns=["trade_date", "feature_rows"])
 
     if workers > 1:
-        with ProcessPoolExecutor(
-            max_workers=workers,
-            max_tasks_per_child=1,
-        ) as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(
                     _build_technical_features_daily_for_task,
@@ -237,3 +234,52 @@ def backfill_technical_features_daily_range(
             )
         rows.append({"trade_date": trade_date, "feature_rows": count})
     return pd.DataFrame(rows)
+
+
+def run_technical_feature_backfill_benchmark(
+    *,
+    start_date: str,
+    end_date: str,
+    lookback_bars: int = 260,
+    adjust_type: str = "qfq",
+    workers: int = 1,
+    strategy: str = "current",
+    bench_tag: str | None = None,
+    source_data_version: str | None = None,
+) -> dict[str, str | int | float]:
+    resolved_strategy = str(strategy)
+    if resolved_strategy not in {"current", "parallel_dates"}:
+        raise ValueError(f"unsupported benchmark strategy: {resolved_strategy}")
+    resolved_workers = 1 if resolved_strategy == "current" else max(1, int(workers))
+    resolved_source_data_version = source_data_version or (
+        f"market_daily_bar:{adjust_type}@bench_{bench_tag or 'default'}"
+    )
+
+    started_at = time.perf_counter()
+    result = backfill_technical_features_daily_range(
+        start_date=start_date,
+        end_date=end_date,
+        lookback_bars=lookback_bars,
+        adjust_type=adjust_type,
+        source_data_version=resolved_source_data_version,
+        workers=resolved_workers,
+        skip_complete=False,
+        trading_days_only=True,
+        progress=None,
+    )
+    elapsed_seconds = time.perf_counter() - started_at
+    date_count = int(len(result))
+    row_count = int(result["feature_rows"].sum()) if not result.empty else 0
+    rows_per_second = 0.0 if elapsed_seconds <= 0 else row_count / elapsed_seconds
+    dates_per_second = 0.0 if elapsed_seconds <= 0 else date_count / elapsed_seconds
+    return {
+        "strategy": resolved_strategy,
+        "workers": resolved_workers,
+        "bench_tag": bench_tag or "default",
+        "source_data_version": resolved_source_data_version,
+        "dates": date_count,
+        "rows": row_count,
+        "elapsed_seconds": round(elapsed_seconds, 4),
+        "rows_per_second": round(rows_per_second, 4),
+        "dates_per_second": round(dates_per_second, 4),
+    }

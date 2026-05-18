@@ -2,8 +2,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stock_research.factors.base import max_drawdown
 from stock_research.technical_features import (
     TECHNICAL_FEATURE_COLUMNS,
+    _rolling_max_drawdown,
     compute_daily_technical_features,
 )
 
@@ -19,6 +21,8 @@ def make_bars(closes: list[float]) -> pd.DataFrame:
             "close": closes,
             "preclose": [np.nan] + closes[:-1],
             "volume": [1000.0 + index * 10.0 for index in range(period_count)],
+            "amount": [10000.0 + index * 200.0 for index in range(period_count)],
+            "turnover_rate": [1.0 + index * 0.02 for index in range(period_count)],
         }
     )
 
@@ -73,6 +77,11 @@ def test_constant_lists_full_technical_feature_schema():
         "ret_1d",
         "ret_20d",
         "close_position_in_day",
+        "amount_vs_20d",
+        "high_to_close_drawdown",
+        "volatility_5d",
+        "max_drawdown_20d",
+        "atr_pct14",
     ]
 
 
@@ -97,6 +106,8 @@ def test_compute_daily_technical_features_outputs_expected_latest_values():
     macd_dif = ema12 - ema26
     macd_dea = macd_dif.ewm(span=9, adjust=False).mean()
     rolling_std = close.rolling(20).std()
+    amount = pd.Series([10000.0 + index * 200.0 for index in range(30)], dtype="float64")
+    ret_1d = close.pct_change()
 
     assert latest["ma20"] == pytest.approx(close.tail(20).mean())
     assert latest["ret_20d"] == pytest.approx(30.0 / 10.0 - 1.0)
@@ -108,6 +119,11 @@ def test_compute_daily_technical_features_outputs_expected_latest_values():
     assert latest["boll_upper_20"] == pytest.approx(float(close.tail(20).mean() + 2.0 * rolling_std.iloc[-1]))
     assert latest["boll_lower_20"] == pytest.approx(float(close.tail(20).mean() - 2.0 * rolling_std.iloc[-1]))
     assert latest["close_position_in_day"] == pytest.approx((30.0 - 28.0) / (31.0 - 28.0))
+    assert latest["amount_vs_20d"] == pytest.approx(float(amount.iloc[-1] / amount.tail(20).mean()))
+    assert latest["high_to_close_drawdown"] == pytest.approx((31.0 - 30.0) / 31.0)
+    assert latest["volatility_5d"] == pytest.approx(float(ret_1d.tail(5).std()))
+    assert latest["max_drawdown_20d"] == pytest.approx(0.0)
+    assert latest["atr_pct14"] == pytest.approx(float(latest["atr14"] / 30.0))
 
 
 def test_compute_daily_technical_features_uses_sorted_trade_dates_for_history():
@@ -155,6 +171,41 @@ def test_compute_daily_technical_features_uses_wilder_rsi_smoothing():
     result = compute_daily_technical_features(bars)
 
     assert result.iloc[-1]["rsi6"] == pytest.approx(wilder_rsi(closes, window=6))
+
+
+def test_rolling_max_drawdown_matches_pandas_reference_with_missing_values():
+    close = pd.Series(
+        [
+            10.0,
+            12.0,
+            11.0,
+            13.0,
+            9.0,
+            8.0,
+            9.0,
+            7.0,
+            8.0,
+            10.0,
+            np.nan,
+            9.0,
+            8.0,
+            11.0,
+            10.0,
+            12.0,
+            11.0,
+            13.0,
+            12.0,
+            14.0,
+            13.0,
+            15.0,
+        ],
+        dtype="float64",
+    )
+
+    expected = close.rolling(20).apply(max_drawdown, raw=False)
+    result = _rolling_max_drawdown(close, window=20)
+
+    pd.testing.assert_series_equal(result, expected, check_names=False)
 
 
 def test_compute_daily_technical_features_recovers_atr_after_interior_missing_bar():

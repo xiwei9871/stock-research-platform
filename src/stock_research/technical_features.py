@@ -3,7 +3,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from stock_research.factors.base import numeric_series, prepare_daily_bars, safe_divide
+from stock_research.factors.base import (
+    numeric_series,
+    prepare_daily_bars,
+    safe_divide,
+)
 
 
 TECHNICAL_FEATURE_COLUMNS = [
@@ -33,6 +37,11 @@ TECHNICAL_FEATURE_COLUMNS = [
     "ret_1d",
     "ret_20d",
     "close_position_in_day",
+    "amount_vs_20d",
+    "high_to_close_drawdown",
+    "volatility_5d",
+    "max_drawdown_20d",
+    "atr_pct14",
 ]
 
 
@@ -174,6 +183,30 @@ def _adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.S
     return adx
 
 
+def _rolling_max_drawdown(values: pd.Series, window: int) -> pd.Series:
+    clean = pd.to_numeric(values, errors="coerce")
+    result = pd.Series(np.nan, index=clean.index, dtype="float64")
+    if len(clean) < window:
+        return result
+
+    window_values = np.lib.stride_tricks.sliding_window_view(
+        clean.to_numpy(dtype="float64", copy=False),
+        window_shape=window,
+    )
+    valid = ~np.isnan(window_values).any(axis=1)
+    if not valid.any():
+        return result
+
+    valid_windows = window_values[valid]
+    running_max = np.maximum.accumulate(valid_windows, axis=1)
+    drawdowns = valid_windows / running_max - 1.0
+    result_values = drawdowns.min(axis=1)
+
+    result_array = result.to_numpy(dtype="float64", copy=True)
+    result_array[np.flatnonzero(valid) + window - 1] = result_values
+    return pd.Series(result_array, index=clean.index, dtype="float64")
+
+
 def compute_daily_technical_features(bars: pd.DataFrame) -> pd.DataFrame:
     frame = prepare_daily_bars(bars)
     if frame.empty:
@@ -184,6 +217,7 @@ def compute_daily_technical_features(bars: pd.DataFrame) -> pd.DataFrame:
     low = numeric_series(frame, "low")
     preclose = numeric_series(frame, "preclose").fillna(close.shift(1))
     volume = numeric_series(frame, "volume")
+    amount = numeric_series(frame, "amount")
 
     result = pd.DataFrame({"trade_date": frame["trade_date"]})
 
@@ -225,5 +259,10 @@ def compute_daily_technical_features(bars: pd.DataFrame) -> pd.DataFrame:
     result["ret_1d"] = safe_divide(close, close.shift(1)) - 1.0
     result["ret_20d"] = safe_divide(close, close.shift(20)) - 1.0
     result["close_position_in_day"] = safe_divide(close - low, high - low)
+    result["amount_vs_20d"] = safe_divide(amount, amount.rolling(20).mean())
+    result["high_to_close_drawdown"] = safe_divide(high - close, high)
+    result["volatility_5d"] = result["ret_1d"].rolling(5).std()
+    result["max_drawdown_20d"] = _rolling_max_drawdown(close, window=20)
+    result["atr_pct14"] = safe_divide(result["atr14"], close)
 
     return result[["trade_date", *TECHNICAL_FEATURE_COLUMNS]]

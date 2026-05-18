@@ -704,6 +704,11 @@ CREATE TABLE IF NOT EXISTS factor.stock_technical_features_daily (
     ret_1d numeric,
     ret_20d numeric,
     close_position_in_day numeric,
+    amount_vs_20d numeric,
+    high_to_close_drawdown numeric,
+    volatility_5d numeric,
+    max_drawdown_20d numeric,
+    atr_pct14 numeric,
     computed_at timestamptz NOT NULL DEFAULT now(),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -950,7 +955,51 @@ def apply_schema(service: str = SETTINGS.research_service) -> None:
         execute(conn, CREATE_RESEARCH_SCHEMAS_SQL)
         migrate_stock_minute_bar_to_partitioned(conn)
         execute(conn, CREATE_RESEARCH_EXTENSION_SQL)
+        ensure_research_schema_compatibility(conn)
         ensure_stock_minute_bar_partitions(conn)
+
+
+def ensure_research_schema_compatibility(conn) -> None:
+    technical_feature_columns: tuple[tuple[str, str], ...] = (
+        ("ma5", "numeric"),
+        ("ma10", "numeric"),
+        ("ma20", "numeric"),
+        ("ma60", "numeric"),
+        ("ma120", "numeric"),
+        ("ema12", "numeric"),
+        ("ema26", "numeric"),
+        ("macd_dif", "numeric"),
+        ("macd_dea", "numeric"),
+        ("macd_hist", "numeric"),
+        ("rsi6", "numeric"),
+        ("rsi12", "numeric"),
+        ("rsi24", "numeric"),
+        ("boll_upper_20", "numeric"),
+        ("boll_mid_20", "numeric"),
+        ("boll_lower_20", "numeric"),
+        ("atr14", "numeric"),
+        ("cci14", "numeric"),
+        ("kdj_k", "numeric"),
+        ("kdj_d", "numeric"),
+        ("kdj_j", "numeric"),
+        ("adx14", "numeric"),
+        ("obv", "numeric"),
+        ("ret_1d", "numeric"),
+        ("ret_20d", "numeric"),
+        ("close_position_in_day", "numeric"),
+        ("amount_vs_20d", "numeric"),
+        ("high_to_close_drawdown", "numeric"),
+        ("volatility_5d", "numeric"),
+        ("max_drawdown_20d", "numeric"),
+        ("atr_pct14", "numeric"),
+    )
+    for column_name, column_type in technical_feature_columns:
+        conn.execute(
+            f"""
+            ALTER TABLE factor.stock_technical_features_daily
+            ADD COLUMN IF NOT EXISTS {column_name} {column_type}
+            """
+        )
 
 
 def migrate_stock_minute_bar_to_partitioned(conn) -> None:

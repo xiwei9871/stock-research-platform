@@ -98,6 +98,11 @@ def test_research_extension_includes_stock_technical_features_daily_table():
     assert "ret_1d numeric" in sql
     assert "ret_20d numeric" in sql
     assert "close_position_in_day numeric" in sql
+    assert "amount_vs_20d numeric" in sql
+    assert "high_to_close_drawdown numeric" in sql
+    assert "volatility_5d numeric" in sql
+    assert "max_drawdown_20d numeric" in sql
+    assert "atr_pct14 numeric" in sql
     assert "idx_factor_stock_technical_features_daily_lookup" in sql
     assert "idx_factor_stock_technical_features_daily_asset_history" in sql
 
