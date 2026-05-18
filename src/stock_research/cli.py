@@ -73,6 +73,7 @@ from stock_research.factor_eval_store import (
     store_factor_eval_run,
 )
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
+from stock_research.factor_gate_watchdog import run_factor_gate_batch_watchdog
 from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.daily_incremental import (
     build_default_step_runners,
@@ -93,6 +94,9 @@ from stock_research.dragon_case_library import (
     build_source_backfill_check_report,
     build_source_backfill_workpack,
     compare_source_backfill_curated,
+    build_failure_event_rule_v21_curated_view,
+    build_failure_event_rule_v21_transition_matrix,
+    run_failure_event_rule_v2_diagnostics,
     run_dragon_case_expand_web_seeds,
     import_web_seeds,
     run_dragon_case_library_build,
@@ -111,6 +115,7 @@ from stock_research.labels import compute_and_store_labels, derive_label_backfil
 from stock_research.lhb_data import (
     run_dragon_case_lhb_alignment_audit,
     run_dragon_case_lhb_summary_report,
+    run_lhb_diagnostics_after_failure_rule_v21,
     run_lhb_coverage_and_failure_rule_plan,
     run_lhb_risk_feature_diagnostics,
     run_lhb_case_difference_report,
@@ -161,9 +166,13 @@ from stock_research.technical_feature_store import (
     TECHNICAL_FEATURE_CALC_VERSION,
     build_and_store_stock_technical_features_daily,
 )
+from stock_research.technical_feature_promotion_audit import (
+    run_technical_feature_promotion_audit,
+)
 from stock_research.technical_feature_backfill import (
     backfill_technical_features_daily_range,
     derive_technical_feature_backfill_window,
+    run_technical_feature_backfill_benchmark,
 )
 from stock_research.technical_feature_audit import (
     run_technical_feature_gap_check,
@@ -171,6 +180,7 @@ from stock_research.technical_feature_audit import (
 from stock_research.technical_feature_watchdog import (
     run_technical_feature_backfill_watchdog,
 )
+from stock_research.technical_method_validation import run_validate_technical_methods
 from stock_research.v31_cache import build_v31_cache
 
 
@@ -326,6 +336,17 @@ def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) ->
     parser.add_argument("--source-data-version")
 
 
+def add_factor_gate_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--factor-names", type=parse_factor_names)
+    parser.add_argument("--validation-start-date")
+    parser.add_argument("--horizons", default="5,10,20,60")
+    parser.add_argument("--primary-horizon", type=int, default=5)
+    parser.add_argument("--calc-version", default="v1")
+    parser.add_argument("--score-version", default="manual_v1")
+    parser.add_argument("--quantiles", type=int, default=5)
+    parser.add_argument("--top-n", type=int, default=30)
+
+
 def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     result = run_technical_feature_backfill_watchdog(
         start_date=args.start_date,
@@ -347,6 +368,36 @@ def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     print(f"technical_feature_watchdog|action|{result['status'].watchdog_action}")
     print(f"technical_feature_watchdog|delta_success|{delta_success}")
     print(f"technical_feature_watchdog|delta_rows|{max(0, delta_rows)}")
+
+
+def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
+    horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
+    result = run_factor_gate_batch_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        validation_start_date=args.validation_start_date,
+        horizons=horizons,
+        primary_horizon=args.primary_horizon,
+        calc_version=args.calc_version,
+        score_version=args.score_version,
+        quantiles=args.quantiles,
+        top_n=args.top_n,
+        factor_names=args.factor_names,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = result["post_summary"].success_tasks - result["pre_summary"].success_tasks
+    delta_rows = result["post_summary"].total_rows_written - result["pre_summary"].total_rows_written
+    print(f"factor_gate_watchdog|action|{result['status'].watchdog_action}")
+    print(f"factor_gate_watchdog|delta_success|{delta_success}")
+    print(f"factor_gate_watchdog|delta_rows|{max(0, delta_rows)}")
+    print(f"factor_gate_watchdog|work_remaining|{result['status'].work_remaining}")
 
 
 def print_factor_backfill_progress(event: dict) -> None:
@@ -587,11 +638,12 @@ def build_parser() -> argparse.ArgumentParser:
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
         "--adapter",
-        choices=["minute", "technical-features"],
+        choices=["minute", "technical-features", "factor-gate"],
         required=True,
     )
     add_minute_backfill_watchdog_arguments(backfill_watchdog)
     add_technical_feature_watchdog_arguments(backfill_watchdog)
+    add_factor_gate_watchdog_arguments(backfill_watchdog)
 
     status_minute_backfill = subparsers.add_parser("baostock-minute-backfill-status")
     status_minute_backfill.add_argument("--output-dir", default="outputs/research")
@@ -881,6 +933,25 @@ def build_parser() -> argparse.ArgumentParser:
     backfill_technical_features_daily.add_argument("--skip-complete", action="store_true")
     backfill_technical_features_daily.add_argument("--progress-interval", type=int, default=1)
 
+    benchmark_technical_feature_backfill = subparsers.add_parser(
+        "benchmark-technical-feature-backfill"
+    )
+    benchmark_technical_feature_backfill.add_argument("--start-date", required=True)
+    benchmark_technical_feature_backfill.add_argument("--end-date", required=True)
+    benchmark_technical_feature_backfill.add_argument("--lookback-bars", type=int, default=260)
+    benchmark_technical_feature_backfill.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    benchmark_technical_feature_backfill.add_argument(
+        "--strategy",
+        choices=["current", "parallel_dates"],
+        default="current",
+    )
+    benchmark_technical_feature_backfill.add_argument("--workers", type=int, default=1)
+    benchmark_technical_feature_backfill.add_argument("--bench-tag", required=True)
+
     technical_feature_gap_check = subparsers.add_parser("technical-feature-gap-check")
     technical_feature_gap_check.add_argument("--start-date", required=True)
     technical_feature_gap_check.add_argument("--end-date", required=True)
@@ -894,6 +965,24 @@ def build_parser() -> argparse.ArgumentParser:
         default=TECHNICAL_FEATURE_CALC_VERSION,
     )
     technical_feature_gap_check.add_argument("--source-data-version")
+
+    technical_feature_promotion_audit = subparsers.add_parser("technical-feature-promotion-audit")
+    technical_feature_promotion_audit.add_argument("--start-date", required=True)
+    technical_feature_promotion_audit.add_argument("--end-date", required=True)
+    technical_feature_promotion_audit.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    technical_feature_promotion_audit.add_argument("--sample-size", type=int)
+    technical_feature_promotion_audit.add_argument("--asset-id")
+    technical_feature_promotion_audit.add_argument("--ts-code")
+    technical_feature_promotion_audit.add_argument(
+        "--feature-source",
+        choices=["technical_table", "computed_on_fly"],
+        default="technical_table",
+    )
+    technical_feature_promotion_audit.add_argument("--output-dir", required=True)
 
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
@@ -1198,6 +1287,61 @@ def build_parser() -> argparse.ArgumentParser:
     dragon_case_source_backfill_check.add_argument("--delta-summary", required=True)
     dragon_case_source_backfill_check.add_argument("--curated", required=True)
     dragon_case_source_backfill_check.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_failure_event_rules_v2 = subparsers.add_parser("dragon-case-failure-event-rules-v2")
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    validate_technical_methods = subparsers.add_parser("validate-technical-methods")
+    validate_technical_methods.add_argument("--start-date", required=True)
+    validate_technical_methods.add_argument("--end-date", required=True)
+    validate_technical_methods.add_argument("--adjust-type", default="qfq")
+    validate_technical_methods.add_argument("--sample-size", type=int)
+    validate_technical_methods.add_argument("--asset-id")
+    validate_technical_methods.add_argument("--ts-code")
+    validate_technical_methods.add_argument("--feature-source", default="technical_table")
+    validate_technical_methods.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_risk_diagnostics_after_failure_rule_v21 = subparsers.add_parser(
+        "lhb-risk-diagnostics-after-failure-rule-v2-1"
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--failure-audit-path",
+        default="/Users/xiwei/stock_research/outputs/research/failure_event_rule_v2_audit.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--lhb-features-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_event_features_daily_sample.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--alignment-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_lhb_alignment_audit_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
         "--output-dir",
         default="/Users/xiwei/stock_research/outputs/research",
     )
@@ -1749,6 +1893,37 @@ def main() -> None:
         total = int(result["feature_rows"].sum()) if not result.empty else 0
         print(f"technical_feature_daily_backfill|dates|{len(result)}")
         print(f"technical_feature_daily_backfill|rows|{total}")
+    elif args.command == "benchmark-technical-feature-backfill":
+        result = run_technical_feature_backfill_benchmark(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            workers=args.workers,
+            strategy=args.strategy,
+            bench_tag=args.bench_tag,
+        )
+        print(f"technical_feature_benchmark|strategy|{result['strategy']}")
+        print(f"technical_feature_benchmark|workers|{result['workers']}")
+        print(f"technical_feature_benchmark|bench_tag|{result['bench_tag']}")
+        print(
+            "technical_feature_benchmark|source_data_version|"
+            f"{result['source_data_version']}"
+        )
+        print(f"technical_feature_benchmark|dates|{result['dates']}")
+        print(f"technical_feature_benchmark|rows|{result['rows']}")
+        print(
+            "technical_feature_benchmark|elapsed_seconds|"
+            f"{result['elapsed_seconds']}"
+        )
+        print(
+            "technical_feature_benchmark|rows_per_second|"
+            f"{result['rows_per_second']}"
+        )
+        print(
+            "technical_feature_benchmark|dates_per_second|"
+            f"{result['dates_per_second']}"
+        )
     elif args.command == "technical-feature-gap-check":
         result = run_technical_feature_gap_check(
             start_date=args.start_date,
@@ -2235,6 +2410,67 @@ def main() -> None:
         report_path = out / "dragon_case_source_backfill_check_report.md"
         report_path.write_text(report, encoding="utf-8")
         print(f"dragon_case_source_backfill_check|report|{report_path}")
+    elif args.command == "dragon-case-failure-event-rules-v2":
+        result = run_failure_event_rule_v2_diagnostics(
+            case_path=args.case_path,
+            snapshot_path=args.snapshot_path,
+            output_dir=args.output_dir,
+        )
+        print(f"failure_event_rule_v2|audit|{result['paths']['audit']}")
+        print(f"failure_event_rule_v2|summary|{result['paths']['summary']}")
+        print(f"failure_event_rule_v2|report|{result['paths']['report']}")
+        print(f"failure_event_rule_v2|audit_rows|{len(result['audit'])}")
+    elif args.command == "validate-technical-methods":
+        result = run_validate_technical_methods(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            feature_source=args.feature_source,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_method_validation|feature_bucket_effectiveness|{result['paths']['feature_bucket_effectiveness']}")
+        print(f"technical_method_validation|combo_effectiveness|{result['paths']['combo_effectiveness']}")
+        print(f"technical_method_validation|regime_effectiveness|{result['paths']['regime_effectiveness']}")
+        print(f"technical_method_validation|case_event_effectiveness|{result['paths']['case_event_effectiveness']}")
+        print(f"technical_method_validation|lhb_cross_effectiveness|{result['paths']['lhb_cross_effectiveness']}")
+        print(f"technical_method_validation|feature_correlation|{result['paths']['feature_correlation']}")
+        print(f"technical_method_validation|redundancy_report|{result['paths']['redundancy_report']}")
+        print(f"technical_method_validation|recommendation|{result['paths']['recommendation']}")
+        print(f"technical_method_validation|report|{result['paths']['report']}")
+        print(f"technical_method_validation|rows|{len(result['dataset'])}")
+    elif args.command == "technical-feature-promotion-audit":
+        result = run_technical_feature_promotion_audit(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            feature_source=args.feature_source,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_feature_promotion_audit|audit|{result['paths']['promotion_audit']}")
+        print(f"technical_feature_promotion_audit|watchlist|{result['paths']['watchlist_readiness']}")
+        print(f"technical_feature_promotion_audit|report|{result['paths']['report']}")
+        print(f"technical_feature_promotion_audit|rows|{len(result['promotion_audit'])}")
+    elif args.command == "lhb-risk-diagnostics-after-failure-rule-v2-1":
+        result = run_lhb_diagnostics_after_failure_rule_v21(
+            case_path=args.case_path,
+            failure_audit_path=args.failure_audit_path,
+            snapshot_path=args.snapshot_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_after_failure_rule_v2_1|curated_failure_v21|{result['paths']['curated_failure_v21']}")
+        print(f"lhb_after_failure_rule_v2_1|transition_matrix|{result['paths']['transition_matrix']}")
+        print(f"lhb_after_failure_rule_v2_1|case_type_difference_summary|{result['paths']['case_type_difference_summary']}")
+        print(f"lhb_after_failure_rule_v2_1|risk_feature_case_detail|{result['paths']['risk_feature_case_detail']}")
+        print(f"lhb_after_failure_rule_v2_1|comparison|{result['paths']['comparison']}")
+        print(f"lhb_after_failure_rule_v2_1|report|{result['paths']['markdown_report']}")
     elif args.command == "lhb-sample-import":
         ts_codes = parse_str_list(args.ts_codes, "--ts-codes") if args.ts_codes else None
         result = run_lhb_sample_import(
@@ -2566,6 +2802,8 @@ def main() -> None:
             run_minute_backfill_watchdog_command(args)
         elif args.adapter == "technical-features":
             run_technical_feature_watchdog_command(args)
+        elif args.adapter == "factor-gate":
+            run_factor_gate_watchdog_command(args)
     elif args.command == "baostock-minute-backfill-status":
         result = load_backfill_status(output_dir=args.output_dir)
         for key, value in result["summary"].items():

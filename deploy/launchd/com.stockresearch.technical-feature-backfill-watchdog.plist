@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.stockresearch.technical-feature-backfill-watchdog</string>
+
+  <key>LimitLoadToSessionType</key>
+  <array>
+    <string>Aqua</string>
+    <string>Background</string>
+  </array>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/xiwei/stock_research/scripts/run_technical_feature_backfill_watchdog_host.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/xiwei/stock_research</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/xiwei</string>
+    <key>PATH</key>
+    <string>/Users/xiwei/.local/npm/bin:/Users/xiwei/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/xiwei/stock_research/logs/technical_feature_backfill_watchdog.launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/xiwei/stock_research/logs/technical_feature_backfill_watchdog.launchd.err.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

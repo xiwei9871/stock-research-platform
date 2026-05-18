@@ -102,6 +102,37 @@ def test_cli_accepts_backfill_technical_features_daily_command():
     assert args.source_data_version == "market_daily_bar:qfq@v2"
 
 
+def test_cli_accepts_benchmark_technical_feature_backfill_command():
+    args = build_parser().parse_args(
+        [
+            "benchmark-technical-feature-backfill",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-06",
+            "--strategy",
+            "parallel_dates",
+            "--workers",
+            "4",
+            "--bench-tag",
+            "demo",
+            "--lookback-bars",
+            "260",
+            "--adjust-type",
+            "qfq",
+        ]
+    )
+
+    assert args.command == "benchmark-technical-feature-backfill"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-06"
+    assert args.strategy == "parallel_dates"
+    assert args.workers == 4
+    assert args.bench_tag == "demo"
+    assert args.lookback_bars == 260
+    assert args.adjust_type == "qfq"
+
+
 def test_cli_accepts_technical_feature_gap_check_command():
     args = build_parser().parse_args(
         [
@@ -125,6 +156,31 @@ def test_cli_accepts_technical_feature_gap_check_command():
     assert args.adjust_type == "hfq"
     assert args.calc_version == "v2"
     assert args.source_data_version == "market_daily_bar:hfq@custom"
+
+
+def test_cli_accepts_technical_feature_promotion_audit_command():
+    args = build_parser().parse_args(
+        [
+            "technical-feature-promotion-audit",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2026-05-13",
+            "--adjust-type",
+            "qfq",
+            "--feature-source",
+            "computed_on_fly",
+            "--output-dir",
+            "outputs/research",
+        ]
+    )
+
+    assert args.command == "technical-feature-promotion-audit"
+    assert args.start_date == "2024-01-01"
+    assert args.end_date == "2026-05-13"
+    assert args.adjust_type == "qfq"
+    assert args.feature_source == "computed_on_fly"
+    assert args.output_dir == "outputs/research"
 
 
 def test_cli_technical_feature_gap_check_uses_shared_default_calc_version(monkeypatch):
@@ -1240,6 +1296,74 @@ def test_backfill_technical_features_daily_cli_prints_summary(monkeypatch, capsy
     ]
 
 
+def test_benchmark_technical_feature_backfill_cli_prints_summary(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_backfill_benchmark",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "strategy": "parallel_dates",
+            "workers": 4,
+            "bench_tag": "demo",
+            "source_data_version": "market_daily_bar:qfq@bench_demo",
+            "dates": 2,
+            "rows": 30,
+            "elapsed_seconds": 12.5,
+            "rows_per_second": 2.4,
+            "dates_per_second": 0.16,
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "benchmark-technical-feature-backfill",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-06",
+            "--strategy",
+            "parallel_dates",
+            "--workers",
+            "4",
+            "--bench-tag",
+            "demo",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-06",
+            "lookback_bars": 260,
+            "adjust_type": "qfq",
+            "workers": 4,
+            "strategy": "parallel_dates",
+            "bench_tag": "demo",
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "technical_feature_benchmark|strategy|parallel_dates",
+        "technical_feature_benchmark|workers|4",
+        "technical_feature_benchmark|bench_tag|demo",
+        "technical_feature_benchmark|source_data_version|market_daily_bar:qfq@bench_demo",
+        "technical_feature_benchmark|dates|2",
+        "technical_feature_benchmark|rows|30",
+        "technical_feature_benchmark|elapsed_seconds|12.5",
+        "technical_feature_benchmark|rows_per_second|2.4",
+        "technical_feature_benchmark|dates_per_second|0.16",
+    ]
+
+
 def test_technical_feature_gap_check_cli_prints_issue_dates_and_summary(monkeypatch, capsys):
     import sys
 
@@ -2248,6 +2372,46 @@ def test_cli_accepts_backfill_approved_scores_command():
     assert args.score_version == "manual_v1"
     assert args.calc_version == "v1"
     assert args.adjust_type == "hfq"
+
+
+def test_cli_accepts_factor_gate_backfill_watchdog_command():
+    args = build_parser().parse_args(
+        [
+            "backfill-watchdog",
+            "--adapter",
+            "factor-gate",
+            "--start-date",
+            "1991-06-24",
+            "--end-date",
+            "2026-04-28",
+            "--validation-start-date",
+            "2018-01-01",
+            "--horizons",
+            "5,10,20,60",
+            "--primary-horizon",
+            "5",
+            "--calc-version",
+            "v1",
+            "--score-version",
+            "manual_v1",
+            "--quantiles",
+            "5",
+            "--top-n",
+            "30",
+            "--max-jobs",
+            "1",
+            "--workers",
+            "1",
+            "--report-target",
+            "chat:test",
+        ]
+    )
+
+    assert args.command == "backfill-watchdog"
+    assert args.adapter == "factor-gate"
+    assert args.validation_start_date == "2018-01-01"
+    assert args.score_version == "manual_v1"
+    assert args.max_jobs == 1
 
 
 def test_backfill_approved_scores_cli_uses_market_bounds(monkeypatch, capsys):
