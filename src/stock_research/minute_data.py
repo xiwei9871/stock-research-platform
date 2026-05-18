@@ -28,6 +28,8 @@ ADJUST_TO_BAOSTOCK = {
 BAOSTOCK_MAX_ATTEMPTS = 3
 BAOSTOCK_RETRYABLE_ERROR_CODES = {"10001001", "10002007"}
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
+BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
+BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
 
 
 def parse_float(value: Any) -> float | None:
@@ -293,9 +295,19 @@ def upsert_stock_minute_bars(
 
 
 def login_or_raise() -> None:
-    login = bs.login()
-    if login.error_code != "0":
-        raise RuntimeError(f"baostock login failed: {login.error_code} {login.error_msg}")
+    last_error = ""
+    for attempt in range(BAOSTOCK_LOGIN_MAX_ATTEMPTS):
+        login = bs.login()
+        if login.error_code == "0":
+            return
+        last_error = f"{login.error_code} {login.error_msg}"
+        if (
+            login.error_code not in BAOSTOCK_LOGIN_RETRY_ERROR_CODES
+            or attempt + 1 >= BAOSTOCK_LOGIN_MAX_ATTEMPTS
+        ):
+            break
+        time.sleep(BAOSTOCK_RETRY_SLEEP_SECONDS)
+    raise RuntimeError(f"baostock login failed: {last_error}")
 
 
 def sync_baostock_stock_minute_bars(

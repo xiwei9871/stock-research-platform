@@ -177,6 +177,30 @@ def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     assert calls == {"query": 2, "login": 1, "logout": 1}
 
 
+def test_login_or_raise_retries_transient_network_error(monkeypatch):
+    class Login:
+        def __init__(self, error_code, error_msg=""):
+            self.error_code = error_code
+            self.error_msg = error_msg
+
+    logins = [
+        Login("10002007", "网络接收错误。"),
+        Login("10002007", "网络接收错误。"),
+        Login("0", "success"),
+    ]
+    sleeps = []
+
+    monkeypatch.setattr(minute_data.bs, "login", lambda: logins.pop(0))
+    monkeypatch.setattr(minute_data.time, "sleep", sleeps.append)
+
+    minute_data.login_or_raise()
+
+    assert sleeps == [
+        minute_data.BAOSTOCK_RETRY_SLEEP_SECONDS,
+        minute_data.BAOSTOCK_RETRY_SLEEP_SECONDS,
+    ]
+
+
 def test_ts_code_from_baostock_code_uses_tushare_order():
     assert ts_code_from_baostock_code("sh.600000") == "600000.SH"
     assert ts_code_from_baostock_code("sz.000001") == "000001.SZ"
