@@ -11,8 +11,13 @@ def calc_quantile_return(
     factor_col: str = "factor_value",
     return_col: str = "forward_return_5d",
     quantiles: int = 5,
+    merged_frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    merged = merged_factor_returns(factors, returns, factor_col, return_col)
+    merged = (
+        merged_factor_returns(factors, returns, factor_col, return_col)
+        if merged_frame is None
+        else merged_frame.copy()
+    )
     if merged.empty:
         return pd.DataFrame(columns=["trade_date", "quantile", "mean_return", "count"])
 
@@ -68,10 +73,11 @@ def _assign_quantiles(group: pd.DataFrame, factor_col: str, quantiles: int) -> p
     if group[factor_col].nunique(dropna=True) < quantiles:
         return pd.DataFrame(columns=list(group.columns) + ["quantile"])
     result = group.copy()
-    result["quantile"] = pd.qcut(
+    quantile_codes = pd.qcut(
         result[factor_col],
         q=quantiles,
-        labels=range(1, quantiles + 1),
+        labels=False,
         duplicates="drop",
     )
+    result["quantile"] = quantile_codes + 1
     return result.dropna(subset=["quantile"])

@@ -40,40 +40,54 @@ def run_factor_gate_batch(
             horizons=horizons,
             calc_version=calc_version,
         )
-        multi_horizon_report = generate_multi_horizon_report(
-            factors=factors,
-            returns=returns,
-            factor_name=factor_name,
-            horizons=horizons,
-            quantiles=quantiles,
-            top_n=top_n,
-        )
-        decision = decide_factor_gate(
-            factor_name=factor_name,
-            multi_horizon_report=multi_horizon_report,
-            primary_horizon=primary_horizon,
-        )
+        multi_horizon_report = None
         validation_report = None
-        if validation_start_date:
-            validation_factors, validation_returns = load_multi_horizon_factor_eval_inputs(
-                factor_name=factor_name,
-                start_date=validation_start_date,
-                end_date=end_date,
-                horizons=horizons,
-                calc_version=calc_version,
-            )
-            validation_report = generate_multi_horizon_report(
-                factors=validation_factors,
-                returns=validation_returns,
+        if factors.empty:
+            decision = {
+                "factor_name": factor_name,
+                "status": "rejected",
+                "reason": "missing_factor_data",
+                "primary_horizon": primary_horizon,
+            }
+        else:
+            multi_horizon_report = generate_multi_horizon_report(
+                factors=factors,
+                returns=returns,
                 factor_name=factor_name,
                 horizons=horizons,
                 quantiles=quantiles,
                 top_n=top_n,
             )
+            decision = decide_factor_gate(
+                factor_name=factor_name,
+                multi_horizon_report=multi_horizon_report,
+                primary_horizon=primary_horizon,
+            )
+            if validation_start_date:
+                validation_factors, validation_returns = load_multi_horizon_factor_eval_inputs(
+                    factor_name=factor_name,
+                    start_date=validation_start_date,
+                    end_date=end_date,
+                    horizons=horizons,
+                    calc_version=calc_version,
+                )
+                if not validation_factors.empty:
+                    validation_report = generate_multi_horizon_report(
+                        factors=validation_factors,
+                        returns=validation_returns,
+                        factor_name=factor_name,
+                        horizons=horizons,
+                        quantiles=quantiles,
+                        top_n=top_n,
+                    )
         run_id = _new_run_id(factor_name)
         metrics = {
             "decision": decision,
-            "multi_horizon": _summarize_multi_horizon_report(multi_horizon_report),
+            "multi_horizon": (
+                _summarize_multi_horizon_report(multi_horizon_report)
+                if multi_horizon_report is not None
+                else None
+            ),
         }
         if validation_report is not None:
             metrics["walk_forward"] = {

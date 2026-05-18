@@ -219,6 +219,7 @@ def _latest_technical_factor_names() -> tuple[str, ...]:
         "trend_slope_20",
         "trend_r2_20",
         "amount_ratio_5_20",
+        "amount_vs_20d",
         "volume_ratio_5_20",
         "turnover_ratio_5_20",
         "price_volume_corr_10",
@@ -226,10 +227,12 @@ def _latest_technical_factor_names() -> tuple[str, ...]:
         "obv_trend_20",
         "volume_breakout",
         "amount_breakout",
+        "volatility_5d",
         "volatility_20",
         "max_drawdown_20",
         "atr_14",
         "atr_pct",
+        "high_to_close_drawdown",
         "distance_ma20",
         "distance_ma60",
         "upper_shadow_ratio",
@@ -277,6 +280,8 @@ def _latest_technical_factor_values(frame: pd.DataFrame) -> dict[str, float | bo
     obv_series = (price_direction * volume.fillna(0.0)).cumsum()
     obv = _latest(obv_series)
     amount_mean_20 = _latest_mean(amount, 20)
+    amount_vs_20d = _safe_ratio(_latest(amount), amount_mean_20)
+    high_to_close_drawdown = _safe_ratio(latest_high - latest_close, latest_high)
 
     return {
         "ret_5": ret_5,
@@ -303,6 +308,7 @@ def _latest_technical_factor_values(frame: pd.DataFrame) -> dict[str, float | bo
         "trend_slope_20": _latest_rolling_slope(close, 20),
         "trend_r2_20": _latest_rolling_r2(close, 20),
         "amount_ratio_5_20": _safe_ratio(_latest_mean(amount, 5), amount_mean_20),
+        "amount_vs_20d": amount_vs_20d,
         "volume_ratio_5_20": _safe_ratio(_latest_mean(volume, 5), _latest_mean(volume, 20)),
         "turnover_ratio_5_20": _safe_ratio(_latest_mean(turnover, 5), _latest_mean(turnover, 20)),
         "price_volume_corr_10": _latest_corr(close, volume, 10),
@@ -310,10 +316,12 @@ def _latest_technical_factor_values(frame: pd.DataFrame) -> dict[str, float | bo
         "obv_trend_20": obv - _lag_value(obv_series, 20),
         "volume_breakout": _safe_ge(_latest(volume), _latest_max(volume, 20)),
         "amount_breakout": _safe_ge(_latest(amount), _latest_max(amount, 20)),
+        "volatility_5d": _latest_volatility(close, 5),
         "volatility_20": _latest_volatility(close, 20),
         "max_drawdown_20": _latest_max_drawdown(close, 20),
         "atr_14": atr_14,
         "atr_pct": _safe_ratio(atr_14, latest_close),
+        "high_to_close_drawdown": high_to_close_drawdown,
         "distance_ma20": _safe_ratio(latest_close, ma20) - 1.0,
         "distance_ma60": _safe_ratio(latest_close, ma60) - 1.0,
         "upper_shadow_ratio": _safe_ratio(upper_shadow, full_range),

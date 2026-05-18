@@ -1,3 +1,7 @@
+from decimal import Decimal
+
+from pandas.api.types import is_float_dtype
+
 from stock_research import factor_eval_store
 
 
@@ -58,6 +62,49 @@ def test_load_multi_horizon_factor_eval_inputs_pivots_return_columns(monkeypatch
         "2026-01-01",
         "2026-02-01",
     ]
+
+
+def test_load_multi_horizon_factor_eval_inputs_normalizes_decimal_columns_to_float(monkeypatch):
+    def fake_fetch_all(conn, sql, params=None):
+        if "factor.factor_daily" in sql:
+            return [
+                {
+                    "trade_date": "2026-01-01",
+                    "asset_id": "A",
+                    "factor_value": Decimal("1.25"),
+                }
+            ]
+        return [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "horizon": 5,
+                "forward_return": Decimal("0.02"),
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "horizon": 10,
+                "forward_return": Decimal("0.04"),
+            },
+        ]
+
+    monkeypatch.setattr(factor_eval_store, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(factor_eval_store, "fetch_all", fake_fetch_all)
+
+    factors, returns = factor_eval_store.load_multi_horizon_factor_eval_inputs(
+        factor_name="ret_20",
+        start_date="2026-01-01",
+        end_date="2026-02-01",
+        horizons=[5, 10],
+    )
+
+    assert is_float_dtype(factors["factor_value"])
+    assert is_float_dtype(returns["forward_return_5d"])
+    assert is_float_dtype(returns["forward_return_10d"])
+    assert factors.iloc[0]["factor_value"] == 1.25
+    assert returns.iloc[0]["forward_return_5d"] == 0.02
+    assert returns.iloc[0]["forward_return_10d"] == 0.04
 
 
 def test_store_factor_eval_run_writes_metrics_json(monkeypatch):

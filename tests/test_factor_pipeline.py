@@ -11,8 +11,14 @@ def test_manual_v1_config_contains_directions_weights_and_groups():
     assert config["calc_version"] == "v1"
     assert config["source_data_version"] == "market_daily_bar:hfq"
     assert config["factor_groups"]["ret_20"] == "momentum"
+    assert config["factor_groups"]["amount_vs_20d"] == "volume_price"
+    assert config["factor_groups"]["volatility_5d"] == "risk"
+    assert config["factor_groups"]["high_to_close_drawdown"] == "risk"
     assert config["factor_directions"]["ret_20"] == "higher"
     assert config["factor_directions"]["volatility_20"] == "lower"
+    assert config["factor_directions"]["amount_vs_20d"] == "lower"
+    assert config["factor_directions"]["volatility_5d"] == "lower"
+    assert config["factor_directions"]["high_to_close_drawdown"] == "lower"
     assert config["weights"]["ret_20_score"] > 0
     assert config["weights"]["volatility_20_score"] > 0
 
@@ -171,10 +177,13 @@ def test_compute_technical_factor_rows_matches_reference_latest_values():
         "ma20_slope": "trend",
         "trend_r2_20": "trend",
         "amount_ratio_5_20": "volume_price",
+        "amount_vs_20d": "volume_price",
         "price_volume_corr_10": "volume_price",
         "volatility_20": "risk",
+        "volatility_5d": "risk",
         "max_drawdown_20": "risk",
         "atr_pct": "risk",
+        "high_to_close_drawdown": "risk",
         "distance_ma60": "risk",
     }
 
@@ -194,10 +203,17 @@ def test_compute_technical_factor_rows_matches_reference_latest_values():
     assert values["ma20_slope"] == pytest.approx(5.0)
     assert values["trend_r2_20"] == pytest.approx(1.0)
     assert values["amount_ratio_5_20"] > 1.0
+    expected_amount_vs_20d = (1000000.0 + 69 * 1000) / pd.Series(
+        [1000000.0 + index * 1000 for index in range(50, 70)],
+        dtype="float64",
+    ).mean()
+    assert values["amount_vs_20d"] == pytest.approx(expected_amount_vs_20d)
     assert values["price_volume_corr_10"] == pytest.approx(1.0)
     assert values["volatility_20"] >= 0.0
+    assert values["volatility_5d"] >= 0.0
     assert values["max_drawdown_20"] == pytest.approx(0.0)
     assert values["atr_pct"] > 0.0
+    assert values["high_to_close_drawdown"] == pytest.approx((71.0 - 70.0) / 71.0)
     assert values["distance_ma60"] > 0.0
 
 

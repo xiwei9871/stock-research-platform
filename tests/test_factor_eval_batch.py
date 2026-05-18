@@ -158,6 +158,97 @@ def test_run_factor_gate_batch_preserves_explicit_empty_factor_names(monkeypatch
     assert calls == []
 
 
+def test_run_factor_gate_batch_rejects_missing_factor_data(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "load_multi_horizon_factor_eval_inputs",
+        lambda **kwargs: (
+            pd.DataFrame(columns=["trade_date", "asset_id", "factor_value"]),
+            pd.DataFrame(
+                {
+                    "trade_date": ["2026-01-01"],
+                    "asset_id": ["A"],
+                    "forward_return_5d": [0.02],
+                }
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "generate_multi_horizon_report",
+        lambda **kwargs: calls.append(("report", kwargs)),
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "store_factor_eval_run",
+        lambda **kwargs: calls.append(("run", kwargs)),
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "store_factor_approval",
+        lambda **kwargs: calls.append(("approval", kwargs)),
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "_new_run_id",
+        lambda factor_name: f"run-{factor_name}",
+    )
+
+    result = factor_eval_batch.run_factor_gate_batch(
+        factor_names=["amount_vs_20d"],
+        start_date="2026-01-01",
+        end_date="2026-05-08",
+        horizons=[5, 10, 20, 60],
+        primary_horizon=5,
+        calc_version="v1",
+        score_version="manual_v1",
+        quantiles=5,
+        top_n=30,
+    )
+
+    assert list(result["factor_name"]) == ["amount_vs_20d"]
+    assert list(result["status"]) == ["rejected"]
+    assert list(result["reason"]) == ["missing_factor_data"]
+    assert calls == [
+        (
+            "run",
+            {
+                "run_id": "run-amount_vs_20d",
+                "factor_name": "amount_vs_20d",
+                "calc_version": "v1",
+                "start_date": "2026-01-01",
+                "end_date": "2026-05-08",
+                "horizons": [5, 10, 20, 60],
+                "primary_horizon": 5,
+                "status": "rejected",
+                "reason": "missing_factor_data",
+                "metrics": {
+                    "decision": {
+                        "factor_name": "amount_vs_20d",
+                        "status": "rejected",
+                        "reason": "missing_factor_data",
+                        "primary_horizon": 5,
+                    },
+                    "multi_horizon": None,
+                },
+            },
+        ),
+        (
+            "approval",
+            {
+                "factor_name": "amount_vs_20d",
+                "calc_version": "v1",
+                "score_version": "manual_v1",
+                "status": "rejected",
+                "reason": "missing_factor_data",
+                "eval_run_id": "run-amount_vs_20d",
+            },
+        ),
+    ]
+
+
 def test_run_factor_gate_batch_can_use_walk_forward_validation(monkeypatch):
     calls = []
 
