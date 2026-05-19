@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pandas as pd
 
 from stock_research.watchlist.workflow import build_watchlist_snapshot
@@ -17,7 +19,7 @@ def test_build_watchlist_snapshot_loads_context_and_persists_signal_rows(monkeyp
     )
     monkeypatch.setattr(
         "stock_research.watchlist.workflow.load_top_scores",
-        lambda **kwargs: [{"asset_id": "A", "rank": 1, "score_total": 88.0}],
+        lambda **kwargs: [{"asset_id": "A", "rank": 1, "score_total": Decimal("88.0")}],
     )
     monkeypatch.setattr(
         "stock_research.watchlist.workflow.load_feature_snapshot",
@@ -63,3 +65,5 @@ def test_build_watchlist_snapshot_loads_context_and_persists_signal_rows(monkeyp
 
     assert len(frame) == 2
     assert len(calls) == 1
+    assert calls[0].iloc[0]["reason_json"]["score_total"] == 88.0
+    assert isinstance(calls[0].iloc[0]["reason_json"]["score_total"], float)

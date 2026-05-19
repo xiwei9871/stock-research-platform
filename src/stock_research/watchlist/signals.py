@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from numbers import Integral, Real
+from typing import Any
+
 import pandas as pd
 
 from stock_research.watchlist.risk import classify_watchlist_risks
@@ -62,18 +66,20 @@ def _signal_row(
 ) -> dict[str, object]:
     must_watch = "candidate" in signal_tags and "risk_excluded" not in risk_tags
     primary_signal = _primary_signal(signal_tags)
-    score_total = score_row.get("score_total") if score_row else 0.0
-    sector_context = item.get("sector_context", {})
+    score_total = _json_safe_value(score_row.get("score_total") if score_row else 0.0)
+    sector_context = _json_safe_value(item.get("sector_context", {}))
     reason_json = {
-        "score_rank": score_row.get("rank") if score_row else None,
+        "score_rank": _json_safe_value(score_row.get("rank") if score_row else None),
         "score_total": score_total,
-        "feature_values": {
-            key: feature_values[key]
-            for key in sorted(feature_values)
-            if key in {"ret_5d", "ret_20d", "ma20_deviation", "max_drawdown_20d"}
-        },
+        "feature_values": _json_safe_value(
+            {
+                key: feature_values[key]
+                for key in sorted(feature_values)
+                if key in {"ret_5d", "ret_20d", "ma20_deviation", "max_drawdown_20d"}
+            }
+        ),
         "sector_context": sector_context,
-        "market_state": item.get("market_state", {}),
+        "market_state": _json_safe_value(item.get("market_state", {})),
         "signal_tags": signal_tags,
         "risk_tags": risk_tags,
         "must_watch": must_watch,
@@ -135,11 +141,15 @@ def build_watchlist_signal_rows(
         industry_code = industry_context.get("industry_code")
         if industry_code:
             sector_row = sector_map.get(str(industry_code))
+            if sector_row is not None:
+                sector_row = dict(sector_row)
+                sector_row["sector_strength_count"] = len(sector_strength)
         sector_context = dict(industry_context)
         if sector_row:
             sector_context |= {
                 "strength_rank": sector_row.get("strength_rank"),
                 "strength_score": sector_row.get("strength_score"),
+                "sector_strength_count": len(sector_strength),
             }
         item_context = dict(item)
         item_context["market_state"] = market_state
@@ -176,3 +186,28 @@ def _primary_signal(signal_tags: list[str]) -> str:
         if tag in signal_tags:
             return tag
     return "neutral"
+
+
+def _json_safe_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {key: _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, Real):
+        return float(value)
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return value
