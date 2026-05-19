@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from uuid import uuid4
 
@@ -181,6 +182,14 @@ from stock_research.technical_feature_watchdog import (
     run_technical_feature_backfill_watchdog,
 )
 from stock_research.technical_method_validation import run_validate_technical_methods
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseService,
+    get_universe_preset,
+    load_watchlist_codes,
+    write_universe_artifacts,
+)
 from stock_research.v31_cache import build_v31_cache
 
 
@@ -251,6 +260,61 @@ def parse_ingest_datasets(value: str) -> list[str]:
 
 def parse_backfill_run_ids(value: str) -> list[str]:
     return parse_str_list(value, "--backfill-run-ids")
+
+
+def build_universe_config_from_args(
+    args: argparse.Namespace,
+    *,
+    watchlist_codes: list[str] | None = None,
+) -> UniverseConfig:
+    overrides: dict[str, object] = {}
+    if getattr(args, "min_listed_days", None) is not None:
+        overrides["min_listed_days"] = int(args.min_listed_days)
+    if getattr(args, "min_avg_turnover_amount", None) is not None:
+        overrides["min_avg_turnover_amount"] = float(args.min_avg_turnover_amount)
+    if getattr(args, "min_avg_volume", None) is not None:
+        overrides["min_avg_volume"] = float(args.min_avg_volume)
+    if getattr(args, "liquidity_lookback_days", None) is not None:
+        overrides["liquidity_lookback_days"] = int(args.liquidity_lookback_days)
+    if getattr(args, "max_suspended_days", None) is not None:
+        overrides["max_suspended_days"] = int(args.max_suspended_days)
+    return get_universe_preset(
+        args.date,
+        args.preset,
+        watchlist_codes=watchlist_codes,
+        **overrides,
+    )
+
+
+def build_universe_artifacts(
+    *,
+    result: object,
+    output_dir: str,
+) -> object:
+    return write_universe_artifacts(result, output_dir)
+
+
+def universe_member_to_json(member: UniverseMember) -> str:
+    return json.dumps(
+        {
+            "trade_date": member.trade_date,
+            "asset_id": member.asset_id,
+            "stock_code": member.stock_code,
+            "stock_name": member.stock_name,
+            "board": member.board,
+            "listed_days": member.listed_days,
+            "is_st": member.is_st,
+            "is_suspended": member.is_suspended,
+            "avg_turnover_amount": member.avg_turnover_amount,
+            "avg_volume": member.avg_volume,
+            "industry": member.industry,
+            "included": member.included,
+            "include_reasons": member.include_reasons,
+            "exclude_reasons": member.exclude_reasons,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
 
 
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
@@ -1522,11 +1586,42 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/outputs/research",
     )
 
+    build_universe = subparsers.add_parser("build-universe")
+    build_universe.add_argument("--date", required=True)
+    build_universe.add_argument("--preset", default="research_default")
+    build_universe.add_argument("--output", required=True)
+    build_universe.add_argument("--min-listed-days", type=int)
+    build_universe.add_argument("--min-avg-turnover-amount", type=float)
+    build_universe.add_argument("--min-avg-volume", type=float)
+    build_universe.add_argument("--liquidity-lookback-days", type=int)
+    build_universe.add_argument("--max-suspended-days", type=int)
+
+    explain_universe = subparsers.add_parser("explain-universe")
+    explain_universe.add_argument("--date", required=True)
+    explain_universe.add_argument("--code", required=True)
+    explain_universe.add_argument("--preset", default="research_default")
+    explain_universe.add_argument("--min-listed-days", type=int)
+    explain_universe.add_argument("--min-avg-turnover-amount", type=float)
+    explain_universe.add_argument("--min-avg-volume", type=float)
+    explain_universe.add_argument("--liquidity-lookback-days", type=int)
+    explain_universe.add_argument("--max-suspended-days", type=int)
+
+    check_watchlist_universe = subparsers.add_parser("check-watchlist-universe")
+    check_watchlist_universe.add_argument("--date", required=True)
+    check_watchlist_universe.add_argument("--watchlist", required=True)
+    check_watchlist_universe.add_argument("--preset", default="watchlist_check")
+    check_watchlist_universe.add_argument("--output", required=True)
+    check_watchlist_universe.add_argument("--min-listed-days", type=int)
+    check_watchlist_universe.add_argument("--min-avg-turnover-amount", type=float)
+    check_watchlist_universe.add_argument("--min-avg-volume", type=float)
+    check_watchlist_universe.add_argument("--liquidity-lookback-days", type=int)
+    check_watchlist_universe.add_argument("--max-suspended-days", type=int)
+
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main_for_args(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
 
     if args.command == "apply-schema":
         apply_schema()
@@ -3035,6 +3130,32 @@ def main() -> None:
         )
         print(f"v31_cache_manifest|{result['paths']['manifest']}")
         print(f"v31_cache_candidates|{result['counts']['retention_candidates']}")
+    elif args.command == "build-universe":
+        config = build_universe_config_from_args(args)
+        result = UniverseService().build_universe(config)
+        build_universe_artifacts(result=result, output_dir=args.output)
+        print(f"universe_build|output|{args.output}")
+        print(f"universe_build|included|{result.included_count}")
+        print(f"universe_build|excluded|{result.excluded_count}")
+    elif args.command == "explain-universe":
+        config = build_universe_config_from_args(args)
+        member = UniverseService().explain_stock(args.code, args.date, config)
+        print(universe_member_to_json(member))
+    elif args.command == "check-watchlist-universe":
+        watchlist_codes = load_watchlist_codes(args.watchlist)
+        config = build_universe_config_from_args(
+            args,
+            watchlist_codes=watchlist_codes,
+        )
+        result = UniverseService().build_universe(config)
+        build_universe_artifacts(result=result, output_dir=args.output)
+        print(f"watchlist_universe|output|{args.output}")
+        print(f"watchlist_universe|members|{result.total_candidates}")
+        print(f"watchlist_universe|included|{result.included_count}")
+
+
+def main() -> None:
+    main_for_args()
 
 
 if __name__ == "__main__":
