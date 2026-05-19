@@ -419,6 +419,8 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_technical_features_ad
             "20",
             "--run-timeout-seconds",
             "1800",
+            "--sleep-between-runs-seconds",
+            "15",
             "--report-target",
             "chat:test",
             "--report-account",
@@ -438,6 +440,7 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_technical_features_ad
     assert args.workers == 2
     assert args.stale_after_minutes == 20
     assert args.run_timeout_seconds == 1800
+    assert args.sleep_between_runs_seconds == 15
     assert args.report_target == "chat:test"
     assert args.report_account == "ops"
     assert args.report_dry_run is True
@@ -1141,6 +1144,7 @@ def test_generic_backfill_watchdog_cli_dispatches_technical_features_adapter_and
             ),
             "pre_summary": BackfillSummary(10, 10, 0, 0, 0, 0, 0),
             "post_summary": BackfillSummary(10, 8, 0, 2, 0, 0, 200),
+            "run_result": {"sleep_between_runs_seconds": 15},
         },
         raising=False,
     )
@@ -1170,6 +1174,8 @@ def test_generic_backfill_watchdog_cli_dispatches_technical_features_adapter_and
             "20",
             "--run-timeout-seconds",
             "1800",
+            "--sleep-between-runs-seconds",
+            "15",
             "--report-target",
             "chat:test",
             "--report-account",

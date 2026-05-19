@@ -334,6 +334,7 @@ def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) ->
         default="qfq",
     )
     parser.add_argument("--source-data-version")
+    parser.add_argument("--sleep-between-runs-seconds", type=float, default=0.0)
 
 
 def add_factor_gate_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
@@ -358,6 +359,7 @@ def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
         workers=args.workers,
         stale_after_minutes=args.stale_after_minutes,
         run_timeout_seconds=args.run_timeout_seconds,
+        sleep_between_runs_seconds=args.sleep_between_runs_seconds,
         report_target=args.report_target,
         report_account=args.report_account,
         openclaw_bin=args.openclaw_bin,
@@ -365,9 +367,23 @@ def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     )
     delta_success = result["post_summary"].success_tasks - result["pre_summary"].success_tasks
     delta_rows = result["post_summary"].total_rows_written - result["pre_summary"].total_rows_written
+    run_result = result.get("run_result", {})
     print(f"technical_feature_watchdog|action|{result['status'].watchdog_action}")
     print(f"technical_feature_watchdog|delta_success|{delta_success}")
     print(f"technical_feature_watchdog|delta_rows|{max(0, delta_rows)}")
+    for key in (
+        "batch_start_date",
+        "batch_end_date",
+        "batch_size_days",
+        "worker_count",
+        "compute_seconds",
+        "sleep_between_runs_seconds",
+        "rows_written",
+        "days_per_hour",
+        "rows_per_hour",
+        "timed_out",
+    ):
+        print(f"technical_feature_watchdog|{key}|{run_result.get(key, '')}")
 
 
 def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:

@@ -130,7 +130,7 @@ def test_factor_gate_adapter_run_once_evaluates_next_pending_batch(monkeypatch, 
     assert result["rows"] == 1
 
 
-def test_run_factor_gate_batch_watchdog_sends_generic_message(monkeypatch, tmp_path):
+def test_run_factor_gate_batch_watchdog_sends_generic_message_when_work_remains(monkeypatch, tmp_path):
     generic_calls = []
     sent = []
 
@@ -140,14 +140,14 @@ def test_run_factor_gate_batch_watchdog_sends_generic_message(monkeypatch, tmp_p
             "scope": {},
             "pre_rows": [],
             "post_rows": [],
-            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "pre_summary": BackfillSummary(0, 1, 0, 0, 0, 0, 0),
             "post_summary": BackfillSummary(1, 0, 0, 1, 0, 0, 1),
             "previous_frontier": {"completed_through": None, "currently_working_on": "ret_20"},
             "frontier": {"completed_through": "ret_20", "currently_working_on": None},
             "status": BackfillWatchdogStatus(
                 watchdog_action="healthy",
                 progress_advanced=True,
-                work_remaining=False,
+                work_remaining=True,
                 stale_tasks_reset=0,
                 timed_out=False,
                 previous_frontier={"completed_through": None, "currently_working_on": "ret_20"},
@@ -156,10 +156,10 @@ def test_run_factor_gate_batch_watchdog_sends_generic_message(monkeypatch, tmp_p
             "stale_tasks_reset": 0,
             "run_result": {
                 "attempted": 1,
-                "success": 0,
+                "success": 1,
                 "failed": 0,
-                "rows": 0,
-                "status": "started",
+                "rows": 1,
+                "status": "completed",
                 "timed_out": False,
             },
             "timed_out": False,
@@ -195,3 +195,60 @@ def test_run_factor_gate_batch_watchdog_sends_generic_message(monkeypatch, tmp_p
         }
     ]
     assert result["message"] == "factor_gate_batch watchdog: healthy"
+
+
+def test_run_factor_gate_batch_watchdog_skips_feishu_when_work_is_complete_and_healthy(monkeypatch, tmp_path):
+    sent = []
+
+    monkeypatch.setattr(
+        factor_gate_watchdog,
+        "run_watchdog_once",
+        lambda **kwargs: {
+            "scope": {},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(34, 0, 0, 34, 0, 0, 34),
+            "post_summary": BackfillSummary(34, 0, 0, 34, 0, 0, 34),
+            "previous_frontier": {"completed_through": "volume_ratio_5_20", "currently_working_on": None},
+            "frontier": {"completed_through": "volume_ratio_5_20", "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=False,
+                work_remaining=False,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": "volume_ratio_5_20", "currently_working_on": None},
+                current_frontier={"completed_through": "volume_ratio_5_20", "currently_working_on": None},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 0,
+                "success": 0,
+                "failed": 0,
+                "rows": 0,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "factor_gate_batch watchdog: healthy",
+        },
+    )
+    monkeypatch.setattr(
+        factor_gate_watchdog,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: sent.append(kwargs),
+    )
+
+    result = factor_gate_watchdog.run_factor_gate_batch_watchdog(
+        start_date="1991-06-24",
+        end_date="2026-04-28",
+        validation_start_date="2018-01-01",
+        report_target="chat:test",
+        report_account="jarvis",
+        openclaw_bin="openclaw",
+        report_dry_run=True,
+        log_path=tmp_path / "factor-gate.log",
+    )
+
+    assert result["message"] == "factor_gate_batch watchdog: healthy"
+    assert sent == []

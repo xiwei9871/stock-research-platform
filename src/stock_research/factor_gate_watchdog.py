@@ -16,6 +16,9 @@ from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.feishu_notify import send_openclaw_feishu_message
 
 
+WATCHDOG_ACTION_HEALTHY = "healthy"
+
+
 DEFAULT_FACTOR_GATE_WATCHDOG_LOG = (
     Path("/Users/xiwei/stock_research")
     / "logs"
@@ -230,14 +233,22 @@ def run_factor_gate_batch_watchdog(
         workers=workers,
         send_message=None,
     )
-    send_openclaw_feishu_message(
-        message=result["message"],
-        target=report_target,
-        account=report_account,
-        openclaw_bin=openclaw_bin,
-        dry_run=report_dry_run,
-    )
+    if _should_send_watchdog_message(result["status"]):
+        send_openclaw_feishu_message(
+            message=result["message"],
+            target=report_target,
+            account=report_account,
+            openclaw_bin=openclaw_bin,
+            dry_run=report_dry_run,
+        )
     return result
+
+
+def _should_send_watchdog_message(status: Any) -> bool:
+    return bool(
+        status.work_remaining
+        or status.watchdog_action != WATCHDOG_ACTION_HEALTHY
+    )
 
 
 def _load_factor_gate_approval_rows(

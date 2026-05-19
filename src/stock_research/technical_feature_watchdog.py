@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+import time
 from typing import Any
 
 from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
@@ -27,6 +29,7 @@ class TechnicalFeatureBackfillAdapter:
     lookback_bars: int = 260
     source_data_version: str | None = None
     calc_version: str = TECHNICAL_FEATURE_CALC_VERSION
+    sleep_between_runs_seconds: float = 0.0
 
     task_name: str = "technical_feature_backfill"
     dataset: str = "factor.stock_technical_features_daily"
@@ -113,7 +116,7 @@ class TechnicalFeatureBackfillAdapter:
         workers: int,
         run_timeout_seconds: int,
     ) -> dict[str, Any]:
-        del scope, run_timeout_seconds
+        del scope
         pending_dates = [
             str(row["trade_date"])
             for row in self.load_status_rows()
@@ -137,15 +140,26 @@ class TechnicalFeatureBackfillAdapter:
             trading_days_only=True,
             workers=workers,
             skip_complete=True,
+            run_timeout_seconds=run_timeout_seconds,
         )
+        result_attrs = getattr(result, "attrs", {})
         rows = int(result["feature_rows"].sum()) if not result.empty else 0
         return {
             "attempted": len(pending_dates),
             "success": len(result),
             "failed": 0,
             "rows": rows,
+            "rows_written": int(result_attrs.get("rows_written", rows)),
+            "batch_start_date": result_attrs.get("batch_start_date"),
+            "batch_end_date": result_attrs.get("batch_end_date"),
+            "batch_size_days": int(result_attrs.get("batch_size_days", len(pending_dates)) or 0),
+            "worker_count": int(result_attrs.get("worker_count", workers) or 0),
+            "compute_seconds": float(result_attrs.get("compute_seconds", 0.0) or 0.0),
+            "days_per_hour": float(result_attrs.get("days_per_hour", 0.0) or 0.0),
+            "rows_per_hour": float(result_attrs.get("rows_per_hour", 0.0) or 0.0),
+            "sleep_between_runs_seconds": float(self.sleep_between_runs_seconds),
             "status": "completed",
-            "timed_out": False,
+            "timed_out": bool(result_attrs.get("timed_out", False)),
         }
 
     def format_extra_status_lines(
@@ -166,6 +180,15 @@ class TechnicalFeatureBackfillAdapter:
             f"run_success={int(run_result.get('success', 0) or 0)}",
             f"run_failed={int(run_result.get('failed', 0) or 0)}",
             f"run_rows={int(run_result.get('rows', 0) or 0)}",
+            f"batch_start_date={run_result.get('batch_start_date') or ''}",
+            f"batch_end_date={run_result.get('batch_end_date') or ''}",
+            f"batch_size_days={int(run_result.get('batch_size_days', 0) or 0)}",
+            f"worker_count={int(run_result.get('worker_count', 0) or 0)}",
+            f"compute_seconds={float(run_result.get('compute_seconds', 0.0) or 0.0)}",
+            f"sleep_between_runs_seconds={float(run_result.get('sleep_between_runs_seconds', 0.0) or 0.0)}",
+            f"rows_written={int(run_result.get('rows_written', 0) or 0)}",
+            f"days_per_hour={float(run_result.get('days_per_hour', 0.0) or 0.0)}",
+            f"rows_per_hour={float(run_result.get('rows_per_hour', 0.0) or 0.0)}",
         ]
 
 
@@ -180,10 +203,12 @@ def run_technical_feature_backfill_watchdog(
     workers: int = 2,
     stale_after_minutes: int = 20,
     run_timeout_seconds: int = 1800,
+    sleep_between_runs_seconds: float = 0.0,
     report_target: str,
     report_account: str = "jarvis",
     openclaw_bin: str = "openclaw",
     report_dry_run: bool = False,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     adapter = TechnicalFeatureBackfillAdapter(
         start_date=start_date,
@@ -191,6 +216,7 @@ def run_technical_feature_backfill_watchdog(
         adjust_type=adjust_type,
         lookback_bars=lookback_bars,
         source_data_version=source_data_version,
+        sleep_between_runs_seconds=sleep_between_runs_seconds,
     )
     result = run_watchdog_once(
         adapter=adapter,
@@ -207,6 +233,8 @@ def run_technical_feature_backfill_watchdog(
         openclaw_bin=openclaw_bin,
         dry_run=report_dry_run,
     )
+    if sleep_between_runs_seconds > 0:
+        sleep(float(sleep_between_runs_seconds))
     return result
 
 
