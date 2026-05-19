@@ -23,6 +23,21 @@ def test_write_watchlist_report_writes_markdown_json_csv_and_must_watch(tmp_path
                 "must_watch": True,
                 "reason_json": {"score_rank": 1},
                 "output_version": "v1",
+            },
+            {
+                "watchlist_id": "core",
+                "trade_date": "2026-05-20",
+                "asset_id": "B",
+                "stock_code": "000002.SZ",
+                "stock_name": "B",
+                "priority": 20,
+                "signal_score": 55.0,
+                "primary_signal": "candidate",
+                "signal_tags": ["candidate"],
+                "risk_tags": ["risk_excluded"],
+                "must_watch": False,
+                "reason_json": {"score_rank": None},
+                "output_version": "v1",
             }
         ]
     )
@@ -33,13 +48,29 @@ def test_write_watchlist_report_writes_markdown_json_csv_and_must_watch(tmp_path
     assert Path(paths["json_path"]).name == "watchlist_report_2026-05-20_core.json"
     assert Path(paths["signals_csv_path"]).name == "watchlist_signals_2026-05-20_core.csv"
     assert Path(paths["must_watch_csv_path"]).name == "must_watch_2026-05-20_core.csv"
+    assert Path(paths["signals_csv_path"]).exists()
+    assert Path(paths["must_watch_csv_path"]).exists()
 
     json_rows = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
     assert json_rows[0]["signal_tags"] == "[\"candidate\", \"must_watch\"]"
     assert json_rows[0]["risk_tags"] == "[]"
     assert json_rows[0]["reason_json"] == "{\"score_rank\": 1}"
+    assert json_rows[1]["signal_tags"] == "[\"candidate\"]"
+    assert json_rows[1]["risk_tags"] == "[\"risk_excluded\"]"
+    assert json_rows[1]["reason_json"] == "{\"score_rank\": null}"
+
+    must_watch_rows = pd.read_csv(Path(paths["must_watch_csv_path"]))
+    assert len(must_watch_rows) == 1
+    assert bool(must_watch_rows.iloc[0]["must_watch"]) is True
 
     markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
     assert "## Must Watch" in markdown
     assert "## Candidate" in markdown
     assert "## Risk Excluded" in markdown
+    must_watch_section = markdown.split("## Candidate")[0]
+    candidate_section = markdown.split("## Candidate")[1].split("## Risk Excluded")[0]
+    risk_section = markdown.split("## Risk Excluded")[1]
+    assert "A" in must_watch_section
+    assert "B" not in must_watch_section
+    assert "B" not in candidate_section
+    assert "B" in risk_section

@@ -57,15 +57,17 @@ def _watchlist_markdown(signal_rows: pd.DataFrame) -> str:
         "",
     ]
 
-    sections = [
-        ("Must Watch", lambda row: bool(row.get("must_watch"))),
-        ("Candidate", lambda row: _primary_signal(row) == "candidate" and not bool(row.get("must_watch"))),
-        ("Risk Excluded", lambda row: _is_risk_excluded(row)),
-    ]
-
     records = signal_rows.to_dict("records")
-    for title, predicate in sections:
-        rows = [row for row in records if predicate(row)]
+    grouped_rows = {
+        "Must Watch": [],
+        "Candidate": [],
+        "Risk Excluded": [],
+    }
+    for row in records:
+        grouped_rows[_report_group(row)].append(row)
+
+    for title in ("Must Watch", "Candidate", "Risk Excluded"):
+        rows = grouped_rows[title]
         lines.extend([f"## {title}", ""])
         if not rows:
             lines.append("No rows.")
@@ -94,9 +96,13 @@ def _watchlist_markdown(signal_rows: pd.DataFrame) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _is_risk_excluded(row: dict[str, Any]) -> bool:
+def _report_group(row: dict[str, Any]) -> str:
+    if bool(row.get("must_watch")):
+        return "Must Watch"
     risk_tags = row.get("risk_tags") or []
-    return "risk_excluded" in risk_tags or (not bool(row.get("must_watch")) and _primary_signal(row) != "candidate")
+    if "risk_excluded" in risk_tags:
+        return "Risk Excluded"
+    return "Candidate"
 
 
 def _primary_signal(row: dict[str, Any]) -> str:
