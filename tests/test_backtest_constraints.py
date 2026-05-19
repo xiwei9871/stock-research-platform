@@ -99,8 +99,8 @@ def test_flag_parsing_handles_string_and_na_like_values_safely():
     assert reason is None
 
 
-@pytest.mark.parametrize("trade_status", [None, "bad", pd.NA])
-def test_missing_or_malformed_trade_status_blocks_when_suspended_checks_are_enabled(trade_status):
+@pytest.mark.parametrize("trade_status", [None, "bad", pd.NA, 1, 1.0, True])
+def test_non_exact_trade_status_values_block_when_suspended_checks_are_enabled(trade_status):
     constraints = BacktestExecutionConstraints()
 
     allowed, reason = can_open_long(
@@ -115,6 +115,23 @@ def test_missing_or_malformed_trade_status_blocks_when_suspended_checks_are_enab
 
     assert allowed is False
     assert reason == "suspended"
+
+
+def test_exact_string_trade_status_one_is_allowed_under_suspended_checks():
+    constraints = BacktestExecutionConstraints()
+
+    allowed, reason = can_open_long(
+        {
+            "trade_status": "1",
+            "is_suspended": False,
+            "is_limit_up": False,
+            "amount": 100.0,
+        },
+        constraints,
+    )
+
+    assert allowed is True
+    assert reason is None
 
 
 def test_one_way_cost_rate_adds_commission_stamp_duty_and_slippage():
@@ -147,3 +164,34 @@ def test_one_way_cost_rate_rejects_unsupported_side():
 def test_negative_config_values_are_rejected(field, kwargs):
     with pytest.raises(ValueError, match=field):
         BacktestExecutionConstraints(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("commission_bps", {"commission_bps": float("nan")}),
+        ("stamp_duty_bps", {"stamp_duty_bps": float("nan")}),
+        ("slippage_bps", {"slippage_bps": float("nan")}),
+        ("min_amount", {"min_amount": float("nan")}),
+    ],
+)
+def test_nan_config_values_are_rejected(field, kwargs):
+    with pytest.raises(ValueError, match=field):
+        BacktestExecutionConstraints(**kwargs)
+
+
+def test_malformed_amount_is_rejected_as_low_amount():
+    constraints = BacktestExecutionConstraints(min_amount=10.0)
+
+    allowed, reason = can_open_long(
+        {
+            "trade_status": "1",
+            "is_suspended": False,
+            "is_limit_up": False,
+            "amount": "not-a-number",
+        },
+        constraints,
+    )
+
+    assert allowed is False
+    assert reason == "low_amount"

@@ -33,9 +33,9 @@ def can_open_long(
         return False, "suspended"
     if constraints.block_limit_up_buy and _flag_is_true(bar.get("is_limit_up")):
         return False, "limit_up"
-    amount = bar.get("amount")
-    if constraints.min_amount is not None and (
-        pd.isna(amount) or float(amount) < float(constraints.min_amount)
+    if constraints.min_amount is not None and _amount_is_low(
+        bar.get("amount"),
+        constraints.min_amount,
     ):
         return False, "low_amount"
     return True, None
@@ -52,9 +52,9 @@ def can_close_long(
         return False, "suspended"
     if constraints.block_limit_down_sell and _flag_is_true(bar.get("is_limit_down")):
         return False, "limit_down"
-    amount = bar.get("amount")
-    if constraints.min_amount is not None and (
-        pd.isna(amount) or float(amount) < float(constraints.min_amount)
+    if constraints.min_amount is not None and _amount_is_low(
+        bar.get("amount"),
+        constraints.min_amount,
     ):
         return False, "low_amount"
     return True, None
@@ -68,6 +68,8 @@ def one_way_cost_rate(side: str, constraints: BacktestExecutionConstraints) -> f
 
 
 def _validate_non_negative(name: str, value: float) -> None:
+    if pd.isna(value):
+        raise ValueError(f"{name} must be non-negative")
     if value < 0:
         raise ValueError(f"{name} must be non-negative")
 
@@ -90,12 +92,13 @@ def _flag_is_true(value: Any) -> bool:
 
 
 def _is_tradable_trade_status(value: Any) -> bool:
-    if pd.isna(value):
-        return False
-    if isinstance(value, bool):
-        return value is True
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value == 1
-    if isinstance(value, str):
-        return value.strip() == "1"
-    return False
+    return isinstance(value, str) and value == "1"
+
+
+def _amount_is_low(amount: Any, min_amount: float) -> bool:
+    if pd.isna(amount):
+        return True
+    try:
+        return float(amount) < float(min_amount)
+    except (TypeError, ValueError):
+        return True
