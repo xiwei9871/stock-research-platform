@@ -301,6 +301,42 @@ def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
     assert calls[0]["trade_date"].nunique() == 1
 
 
+def test_build_and_store_factor_daily_rejects_unknown_registry_factor(monkeypatch):
+    monkeypatch.setattr(
+        factor_pipeline,
+        "manual_v1_config",
+        lambda: {
+            "score_version": "manual_v1",
+            "calc_version": "v1",
+            "source_data_version": "market_daily_bar:hfq",
+            "factor_groups": {"not_a_real_factor": "momentum"},
+            "factor_directions": {"not_a_real_factor": "higher"},
+            "weights": {"ret_20_score": 1.0},
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_market_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "enrich_bars_with_industry",
+        lambda bars, **kwargs: bars,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_industry_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+
+    with pytest.raises(ValueError, match="not_a_real_factor"):
+        factor_pipeline.build_and_store_factor_daily(
+            "2026-03-11",
+            lookback_bars=130,
+        )
+
+
 def test_compute_sector_factor_rows_returns_sector_factor_daily_rows():
     dates = pd.date_range("2026-01-01", periods=25, freq="D")
     stock_bars = pd.DataFrame(

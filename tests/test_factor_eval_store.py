@@ -175,6 +175,14 @@ def test_store_factor_approval_upserts_status(monkeypatch):
     assert calls[0][1]["score_version"] == "manual_v1"
 
 
+def test_load_factor_eval_metadata_frame_returns_registry_rows():
+    frame = factor_eval_store.load_factor_eval_metadata_frame(["ret_20"])
+
+    assert list(frame["factor_name"]) == ["ret_20"]
+    assert frame.iloc[0]["factor_group"] == "momentum"
+    assert frame.iloc[0]["direction"] == "higher"
+
+
 class _context:
     def __init__(self, value):
         self.value = value

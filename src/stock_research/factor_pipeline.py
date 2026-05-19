@@ -6,6 +6,10 @@ import pandas as pd
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
+from stock_research.factor_registry import (
+    validate_factor_direction_mapping,
+    validate_factor_group_mapping,
+)
 from stock_research.factor_store import upsert_factor_daily
 from stock_research.factors import (
     alpha101,
@@ -554,6 +558,8 @@ def build_and_store_factor_daily(
     industry_system: str = "csrc",
 ) -> int:
     config = manual_v1_config()
+    validate_factor_group_mapping(config["factor_groups"])
+    validate_factor_direction_mapping(config["factor_directions"])
     bars = load_market_bars_for_factor_date(trade_date, lookback_bars=lookback_bars)
     enriched_bars = enrich_bars_with_industry(
         bars,
