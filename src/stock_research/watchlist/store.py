@@ -34,6 +34,19 @@ WATCHLIST_SIGNAL_COLUMNS = [
     "output_version",
 ]
 
+WATCHLIST_ITEM_DEFAULTS = {
+    "priority": 100,
+    "active": True,
+}
+
+WATCHLIST_SIGNAL_DEFAULTS = {
+    "priority": 100,
+    "signal_tags": [],
+    "risk_tags": [],
+    "must_watch": False,
+    "reason_json": {},
+}
+
 
 def upsert_watchlist_items(
     items: pd.DataFrame,
@@ -42,7 +55,7 @@ def upsert_watchlist_items(
     if items.empty:
         return 0
 
-    rows = items.to_dict("records")
+    rows = _shape_rows(items, WATCHLIST_ITEM_COLUMNS, WATCHLIST_ITEM_DEFAULTS)
     sql = """
     INSERT INTO watchlist.watchlist_item (
         watchlist_id, asset_id, stock_code, stock_name, priority, active, note, source
@@ -91,7 +104,7 @@ def load_watchlist_items(
     sql += "\n    ORDER BY priority, stock_code"
     with connect(service) as conn:
         rows = fetch_all(conn, sql, params)
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=WATCHLIST_ITEM_COLUMNS)
 
 
 def store_watchlist_daily_signals(
@@ -101,7 +114,8 @@ def store_watchlist_daily_signals(
     if signals.empty:
         return 0
 
-    rows = [_signal_row(row) for row in signals.to_dict("records")]
+    rows = _shape_rows(signals, WATCHLIST_SIGNAL_COLUMNS, WATCHLIST_SIGNAL_DEFAULTS)
+    rows = [_signal_row(row) for row in rows]
     sql = """
     INSERT INTO watchlist.watchlist_daily_signal (
         watchlist_id, trade_date, asset_id, stock_code, stock_name, priority,
@@ -163,15 +177,55 @@ def load_watchlist_daily_signals(
     sql += "\n    ORDER BY must_watch DESC, priority, stock_code"
     with connect(service) as conn:
         rows = fetch_all(conn, sql, params)
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=WATCHLIST_SIGNAL_COLUMNS)
 
 
 def _signal_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(row)
-    normalized["signal_tags"] = _json_dumps(normalized.get("signal_tags", []))
-    normalized["risk_tags"] = _json_dumps(normalized.get("risk_tags", []))
-    normalized["reason_json"] = _json_dumps(normalized.get("reason_json", {}))
+    normalized["signal_tags"] = _json_dumps(_clean_json_value(normalized["signal_tags"]))
+    normalized["risk_tags"] = _json_dumps(_clean_json_value(normalized["risk_tags"]))
+    normalized["reason_json"] = _json_dumps(_clean_json_value(normalized["reason_json"]))
     return normalized
+
+
+def _shape_rows(
+    frame: pd.DataFrame,
+    columns: list[str],
+    defaults: dict[str, Any],
+) -> list[dict[str, Any]]:
+    shaped_rows: list[dict[str, Any]] = []
+    for record in frame.to_dict("records"):
+        shaped_row: dict[str, Any] = {}
+        for column in columns:
+            value = record.get(column)
+            if column in defaults and _is_missing(value):
+                value = defaults[column]
+            shaped_row[column] = value
+        shaped_rows.append(shaped_row)
+    return shaped_rows
+
+
+def _clean_json_value(value: Any) -> Any:
+    if _is_missing(value):
+        return None
+    if isinstance(value, dict):
+        return {key: _clean_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clean_json_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_clean_json_value(item) for item in value]
+    return value
+
+
+def _is_missing(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (list, tuple, dict)):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except Exception:
+        return False
 
 
 def _json_dumps(value: Any) -> str:
