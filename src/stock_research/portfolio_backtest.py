@@ -13,6 +13,11 @@ from stock_research.backtest import (
     select_top_for_date,
     sell_bar_for_holding,
 )
+from stock_research.run_card import write_run_card
+from stock_research.services.universe_service import (
+    UniverseResult,
+    filter_dataframe_by_universe,
+)
 
 
 TRADE_COLUMNS = [
@@ -97,6 +102,7 @@ def simulate_portfolio_config(
     feature_frame: pd.DataFrame,
     bar_frame: pd.DataFrame,
     config: PortfolioConfig,
+    universe_result: UniverseResult | None = None,
 ) -> PortfolioResult:
     if config.holding_days <= 0:
         raise ValueError("holding_days must be positive")
@@ -105,6 +111,18 @@ def simulate_portfolio_config(
 
     features = _normalize_dates(feature_frame)
     bars = _normalize_dates(bar_frame)
+    features = filter_dataframe_by_universe(
+        features,
+        universe_result,
+        asset_id_col="asset_id",
+        code_col="stock_code",
+    )
+    bars = filter_dataframe_by_universe(
+        bars,
+        universe_result,
+        asset_id_col="asset_id",
+        code_col="stock_code",
+    )
     trading_dates = _trading_dates(bars)
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
@@ -350,6 +368,7 @@ def run_portfolio_backtest(
     top_ks: tuple[int, ...] = (5, 10),
     holding_days: tuple[int, ...] = (5, 10, 15, 20, 30),
     reports_dir: str | Path = Path("/Users/xiwei/stock_research/reports"),
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, object]:
     horizons = tuple(int(value) for value in holding_days)
     top_values = tuple(int(value) for value in top_ks)
@@ -377,7 +396,17 @@ def run_portfolio_backtest(
                     initial_cash,
                 ),
             )
-            results.append(simulate_portfolio_config(features, bars, config))
+            if universe_result is None:
+                results.append(simulate_portfolio_config(features, bars, config))
+            else:
+                results.append(
+                    simulate_portfolio_config(
+                        features,
+                        bars,
+                        config,
+                        universe_result=universe_result,
+                    )
+                )
 
     summary = pd.DataFrame(
         [summarize_portfolio_result(result) for result in results],
@@ -393,6 +422,17 @@ def run_portfolio_backtest(
         holding_days=horizons,
         reports_dir=reports_dir,
     )
+    run_card = write_portfolio_run_card(
+        results=results,
+        summary=summary,
+        start_date=start_date,
+        end_date=end_date,
+        initial_cash=float(initial_cash),
+        top_ks=top_values,
+        holding_days=horizons,
+        reports_dir=reports_dir,
+        report_paths=report_paths,
+    )
     return {
         "results": results,
         "equity_curve": _combined_equity_curve(results),
@@ -400,7 +440,78 @@ def run_portfolio_backtest(
         "summary": summary,
         "report_path": report_paths["report_path"],
         "report_paths": report_paths,
+        "run_card": run_card,
     }
+
+
+def write_portfolio_run_card(
+    *,
+    results: list[PortfolioResult],
+    summary: pd.DataFrame,
+    start_date: object,
+    end_date: object,
+    initial_cash: float,
+    top_ks: tuple[int, ...],
+    holding_days: tuple[int, ...],
+    reports_dir: str | Path,
+    report_paths: dict[str, str],
+) -> dict[str, str]:
+    equity_curve = _combined_equity_curve(results)
+    trades = _combined_trades(results)
+    actual_dates = (
+        sorted(equity_curve["date"].astype(str).unique().tolist())
+        if not equity_curve.empty and "date" in equity_curve.columns
+        else []
+    )
+    asset_count = int(trades["asset_id"].nunique()) if not trades.empty and "asset_id" in trades.columns else 0
+    warnings: list[str] = []
+    if summary.empty:
+        warnings.append("summary_empty")
+    if trades.empty:
+        warnings.append("trades_empty")
+    if equity_curve.empty:
+        warnings.append("equity_curve_empty")
+    return write_run_card(
+        output_dir=Path(reports_dir) / "run_card",
+        run_type="portfolio_backtest",
+        run_id=(
+            f"portfolio:{_iso_date(start_date)}:{_iso_date(end_date)}:"
+            f"top{'-'.join(str(value) for value in top_ks)}:"
+            f"h{'-'.join(str(value) for value in holding_days)}"
+        ),
+        title="Portfolio Backtest",
+        config={
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "initial_cash": float(initial_cash),
+            "top_ks": list(top_ks),
+            "holding_days": list(holding_days),
+        },
+        metrics={
+            "workflow_type": "portfolio_backtest",
+            "strategy_count": len(results),
+            "summary_rows": int(len(summary)),
+            "final_equity_mean": _mean_numeric_value(summary, "final_equity"),
+            "max_drawdown_min": _min_numeric_value(summary, "max_drawdown"),
+            "total_return_mean": _mean_numeric_value(summary, "total_return"),
+            "annualized_return": None,
+            "sharpe": None,
+            "trade_count": int(len(trades)),
+            "rebalance_count": int(len(equity_curve)),
+            "position_count": asset_count,
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+        },
+        artifact_paths=report_paths,
+        warnings=warnings,
+        data_coverage={
+            "input_start_date": _iso_date(start_date),
+            "input_end_date": _iso_date(end_date),
+            "actual_dates": actual_dates,
+            "row_count": int(len(trades)),
+            "asset_count": asset_count,
+        },
+    )
 
 
 def _normalize_dates(frame: pd.DataFrame) -> pd.DataFrame:

@@ -1,11 +1,20 @@
+import json
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseResult,
+)
 import stock_research.vectorized_topn_backtest as vectorized_topn_backtest
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     load_vectorized_topn_inputs,
     run_vectorized_topn_backtest,
+    write_vectorized_topn_run_card,
 )
 
 
@@ -29,6 +38,64 @@ def _prices(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
             {"trade_date": trade_date, "asset_id": asset_id, "close": close}
             for trade_date, asset_id, close in rows
         ]
+    )
+
+
+def _universe_result(
+    included: list[tuple[str, str]],
+    excluded: list[tuple[str, str]] | None = None,
+) -> UniverseResult:
+    config = UniverseConfig(as_of_date="2026-01-01")
+    members: list[UniverseMember] = []
+    for asset_id, stock_code in included:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-01",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100_000_000.0,
+                avg_volume=10_000_000.0,
+                industry="Bank",
+                included=True,
+                include_reasons=["board_allowed:main"],
+                exclude_reasons=[],
+            )
+        )
+    for asset_id, stock_code in excluded or []:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-01",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100_000_000.0,
+                avg_volume=10_000_000.0,
+                industry="Bank",
+                included=False,
+                include_reasons=[],
+                exclude_reasons=["manual_exclude"],
+            )
+        )
+    return UniverseResult(
+        config=config,
+        as_of_date="2026-01-01",
+        total_candidates=len(members),
+        included_count=sum(1 for member in members if member.included),
+        excluded_count=sum(1 for member in members if not member.included),
+        members=members,
+        included_codes=[member.stock_code for member in members if member.included],
+        excluded_codes=[member.stock_code for member in members if not member.included],
+        summary_by_reason={"include": {"board_allowed:main": len(included)}, "exclude": {}},
+        warnings=[],
     )
 
 
@@ -200,6 +267,127 @@ def test_run_vectorized_topn_backtest_outputs_rebalance_trade_details():
     assert list(trades["delta_weight"]) == pytest.approx([0.5, 0.5, -0.5, 0.5])
     assert list(trades["turnover_contribution"]) == pytest.approx([0.5, 0.5, 0.5, 0.5])
     assert list(trades["transaction_cost"]) == pytest.approx([0.0005, 0.0005, 0.0005, 0.0005])
+
+
+def test_write_vectorized_topn_run_card_writes_expected_artifacts(tmp_path):
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 90.0),
+            ("2026-01-01", "B", 2, 80.0),
+        ]
+    )
+    prices = _prices(
+        [
+            ("2026-01-01", "A", 10.0),
+            ("2026-01-01", "B", 20.0),
+            ("2026-01-02", "A", 11.0),
+            ("2026-01-02", "B", 21.0),
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-02",
+        top_n=2,
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+    paths = write_vectorized_topn_run_card(result, tmp_path)
+
+    run_dir = Path(paths["run_card_dir"])
+    assert (run_dir / "run_card.json").exists()
+    assert (run_dir / "run_card.md").exists()
+    assert (run_dir / "evidence" / "manifest.json").exists()
+    assert paths["run_card_json_path"].endswith("run_card.json")
+    assert Path(paths["metrics_json_path"]).exists()
+    assert Path(paths["config_snapshot_path"]).exists()
+    assert Path(paths["warnings_md_path"]).exists()
+    assert Path(paths["data_coverage_json_path"]).exists()
+    coverage = json.loads(Path(paths["data_coverage_json_path"]).read_text(encoding="utf-8"))
+    assert coverage["coverage_ratio"] is None
+    assert coverage["missing_dates"] is None
+    assert coverage["missing_assets"] is None
+
+
+def test_run_vectorized_topn_backtest_filters_scores_and_prices_by_universe_result():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 99.0),
+            ("2026-01-01", "B", 2, 90.0),
+            ("2026-01-01", "C", 3, 80.0),
+        ]
+    )
+    prices = _prices(
+        [
+            ("2026-01-01", "A", 10.0),
+            ("2026-01-01", "B", 20.0),
+            ("2026-01-01", "C", 30.0),
+            ("2026-01-02", "A", 11.0),
+            ("2026-01-02", "B", 21.0),
+            ("2026-01-02", "C", 31.0),
+        ]
+    )
+    universe_result = _universe_result(
+        included=[("B", "B"), ("C", "C")],
+        excluded=[("A", "A")],
+    )
+
+    result = run_vectorized_topn_backtest(
+        scores,
+        prices,
+        VectorizedTopNConfig(start_date="2026-01-01", end_date="2026-01-02", top_n=2),
+        universe_result=universe_result,
+    )
+
+    assert list(result.positions["asset_id"]) == ["B", "C"]
+    assert result.equity_curve.iloc[0]["holdings_count"] == 2
+
+
+def test_load_vectorized_topn_inputs_filters_loaded_rows_by_universe_result(monkeypatch):
+    calls = []
+    universe_result = _universe_result(
+        included=[("CN:SH:600002", "600002.SH")],
+        excluded=[("CN:SH:600001", "600001.SH")],
+    )
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        if "factor.stock_score_daily" in sql:
+            return [
+                {
+                    "trade_date": "2026-01-01",
+                    "asset_id": "CN:SH:600001",
+                    "rank": 1,
+                    "score_total": 90.0,
+                },
+                {
+                    "trade_date": "2026-01-01",
+                    "asset_id": "CN:SH:600002",
+                    "rank": 2,
+                    "score_total": 80.0,
+                },
+            ]
+        return [
+            {"trade_date": "2026-01-01", "asset_id": "CN:SH:600001", "close": 10.0},
+            {"trade_date": "2026-01-01", "asset_id": "CN:SH:600002", "close": 20.0},
+        ]
+
+    monkeypatch.setattr(
+        vectorized_topn_backtest,
+        "connect",
+        lambda service: _context(object()),
+    )
+    monkeypatch.setattr(vectorized_topn_backtest, "fetch_all", fake_fetch_all)
+
+    scores, prices = load_vectorized_topn_inputs(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        score_version="manual_v1",
+        adjust_type="hfq",
+        universe_result=universe_result,
+    )
+
+    assert scores["asset_id"].tolist() == ["CN:SH:600002"]
+    assert prices["asset_id"].tolist() == ["CN:SH:600002"]
 
 
 def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):

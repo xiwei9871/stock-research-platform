@@ -1,9 +1,12 @@
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.run_card import write_run_card
+from stock_research.services.universe_service import UniverseResult, get_universe_allowed_ids
 
 
 SCORE_VERSION = "baseline_rules_v1"
@@ -88,12 +91,17 @@ def load_trade_status(trade_date: str) -> dict[str, dict[str, object]]:
 def generate_selection(
     trade_date: str,
     top_n: int = SETTINGS.selection_top_n,
+    universe_result: UniverseResult | None = None,
+    output_dir: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     matrix = load_feature_matrix(trade_date)
     trade_status = load_trade_status(trade_date)
+    allowed_ids = get_universe_allowed_ids(universe_result)
     scored: list[dict[str, Any]] = []
 
     for asset_id, features in matrix.items():
+        if allowed_ids is not None and str(asset_id) not in allowed_ids:
+            continue
         status = trade_status.get(asset_id, {})
         # Selection applies hard ST/suspension filters from market_daily_bar.
         if status.get("is_st") is True or str(status.get("trade_status")) != "1":
@@ -127,6 +135,15 @@ def generate_selection(
                 "feature_snapshot_version": FEATURE_SNAPSHOT_VERSION,
             }
         )
+    if output_dir is not None:
+        run_card = write_selection_run_card(
+            trade_date=trade_date,
+            top_n=top_n,
+            results=results,
+            output_dir=output_dir,
+        )
+        for row in results:
+            row.update(run_card)
     return results
 
 
@@ -164,3 +181,39 @@ def store_selection(results: list[dict[str, Any]]) -> int:
         with conn.cursor() as cur:
             cur.executemany(sql, rows)
     return len(results)
+
+
+def write_selection_run_card(
+    *,
+    trade_date: str,
+    top_n: int,
+    results: list[dict[str, Any]],
+    output_dir: str | Path,
+) -> dict[str, str]:
+    top_score = max((float(row["score"]) for row in results), default=None)
+    asset_ids = [str(row["asset_id"]) for row in results if row.get("asset_id")]
+    return write_run_card(
+        output_dir=Path(output_dir) / "run_card",
+        run_type="selection",
+        run_id=f"selection:{trade_date}:{SCORE_VERSION}:top{top_n}",
+        title="Daily Selection",
+        config={
+            "trade_date": trade_date,
+            "top_n": int(top_n),
+            "score_version": SCORE_VERSION,
+            "feature_snapshot_version": FEATURE_SNAPSHOT_VERSION,
+        },
+        metrics={
+            "selected_count": len(results),
+            "top_score": top_score,
+        },
+        artifact_paths={},
+        warnings=["selection_empty"] if not results else [],
+        data_coverage={
+            "input_start_date": trade_date,
+            "input_end_date": trade_date,
+            "actual_dates": [trade_date] if results else [],
+            "row_count": len(results),
+            "asset_count": len(set(asset_ids)),
+        },
+    )

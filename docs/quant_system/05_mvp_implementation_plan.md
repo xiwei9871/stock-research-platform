@@ -86,6 +86,24 @@
 
 建立统一 Universe Layer，作为全市场扫描、回测、watchlist 和报告的共同入口。
 
+### 当前落地状态
+
+- 已开始落地第一版 `Universe Layer`
+- 当前实现文件见：
+  `src/stock_research/services/universe_service.py`
+  `tests/test_universe.py`
+  `docs/quant_system/09_p0_universe_layer.md`
+- 已接入首个下游消费点：
+  `src/stock_research/vectorized_topn_backtest.py`
+- 已接入第二个下游消费点：
+  `src/stock_research/retention_backtest.py`
+- 已接入第三个下游消费点：
+  `src/stock_research/selection.py`
+  `src/stock_research/factor_store.py`
+  `src/stock_research/daily_pipeline.py`
+- 已接入第四个下游消费点：
+  `src/stock_research/portfolio_backtest.py`
+
 ### 当前已有基础
 
 - 指数成分股 universe 能力：
@@ -176,6 +194,17 @@
 
 把当前因子体系从“可计算”升级为“可管理、可解释、可追溯”。
 
+### 当前落地状态
+
+- 已开始落地第一版代码侧 `Factor Registry`
+- 当前实现文件见：
+  `src/stock_research/factor_registry.py`
+  `src/stock_research/factor_config.py`
+  `src/stock_research/factor_pipeline.py`
+  `src/stock_research/factor_store.py`
+  `src/stock_research/factor_eval_store.py`
+- 当前阶段不改数据库 schema，先统一 metadata 单一真相源和代码侧校验
+
 ### 当前已有基础
 
 - 因子配置：
@@ -265,6 +294,32 @@
 ### 目标
 
 让每次因子验证、回测、日报、策略实验都可复现、可审计。
+
+### 当前落地状态
+
+- 已开始落地第一版共享 `run_card` artifact 层
+- 当前实现文件见：
+  `src/stock_research/run_card.py`
+- 已接入首批流程：
+  `src/stock_research/factor_eval_batch.py`
+  `src/stock_research/vectorized_topn_backtest.py`
+  `src/stock_research/reports/daily_research_report_cli.py`
+- 已接入后续回测流程：
+  `src/stock_research/retention_backtest.py`
+  `src/stock_research/portfolio_backtest.py`
+- 已接入选股与日频研究流程：
+  `src/stock_research/selection.py`
+  `src/stock_research/daily_pipeline.py`
+- 已开始产出第一批 evidence bundle：
+  `metrics.json`
+  `config_snapshot.json`
+  `warnings.md`
+  `data_coverage.json`
+- `data_coverage` 当前采用 unknown-safe 语义：
+  未知覆盖不写成完整覆盖，未知 `coverage_ratio` 为 `null`，
+  未知 `missing_dates` / `missing_assets` 为 `null`，
+  只有真实计算过才写 `[]` 或数值
+- 当前阶段保留已有数据库运行记录表，只补统一 artifact，不改 `report.report_run` / `ops.daily_job_run` schema
 
 ### 当前已有基础
 

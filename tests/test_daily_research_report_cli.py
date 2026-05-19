@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -168,7 +169,16 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
 
     def fake_writer(**kwargs):
         calls.update(kwargs)
-        return {"report_paths": {"bundle": {"markdown_path": tmp_path / "bundle.md"}}}
+        return {
+            "report_paths": {
+                "bundle": {"markdown_path": tmp_path / "bundle.md"},
+                "topn": {"markdown_path": tmp_path / "topn.md"},
+                "market_state": {"markdown_path": tmp_path / "market.md"},
+                "sector_strength": {"markdown_path": tmp_path / "sector.md"},
+                "risk_alerts": {"markdown_path": tmp_path / "risk.md"},
+                "position_review": {"markdown_path": tmp_path / "positions.md"},
+            }
+        }
 
     monkeypatch.setattr(daily_research_report_cli, "write_daily_research_reports", fake_writer)
     record_calls = []
@@ -204,9 +214,19 @@ def test_run_daily_research_report_loads_inputs_and_writes_reports(monkeypatch, 
     assert calls["feature_snapshot"].iloc[0]["feature_name"] == "ret_5d"
     assert calls["output_dir"] == tmp_path
     assert result["report_run_id"] == "run-1"
+    assert Path(result["run_card"]["run_card_json_path"]).exists()
+    assert Path(result["run_card"]["metrics_json_path"]).exists()
+    assert Path(result["run_card"]["config_snapshot_path"]).exists()
+    assert Path(result["run_card"]["warnings_md_path"]).exists()
+    assert Path(result["run_card"]["data_coverage_json_path"]).exists()
+    coverage = json.loads(Path(result["run_card"]["data_coverage_json_path"]).read_text(encoding="utf-8"))
+    assert coverage["coverage_ratio"] is None
+    assert coverage["missing_dates"] is None
+    assert coverage["missing_assets"] is None
     assert record_calls[0] == "schema"
     assert record_calls[1]["trade_date"] == "2026-05-08"
     assert record_calls[1]["report_type"] == "daily_research"
+    assert "run_card" in record_calls[1]["metadata"]
 
 
 def test_load_feature_snapshot_queries_requested_assets(monkeypatch):

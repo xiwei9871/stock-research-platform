@@ -1,10 +1,16 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.run_card import write_run_card
+from stock_research.services.universe_service import (
+    UniverseResult,
+    filter_dataframe_by_universe,
+)
 
 
 EQUITY_COLUMNS = [
@@ -62,6 +68,7 @@ def load_vectorized_topn_inputs(
     end_date: str,
     score_version: str = "manual_v1",
     adjust_type: str = "hfq",
+    universe_result: UniverseResult | None = None,
     service: str = SETTINGS.research_service,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     score_sql = """
@@ -81,13 +88,24 @@ def load_vectorized_topn_inputs(
     with connect(service) as conn:
         score_rows = fetch_all(conn, score_sql, [score_version, start_date, end_date])
         price_rows = fetch_all(conn, price_sql, [adjust_type, start_date, end_date])
-    return pd.DataFrame(score_rows), pd.DataFrame(price_rows)
+    scores = filter_dataframe_by_universe(
+        pd.DataFrame(score_rows),
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    prices = filter_dataframe_by_universe(
+        pd.DataFrame(price_rows),
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    return scores, prices
 
 
 def run_vectorized_topn_backtest(
     scores: pd.DataFrame,
     prices: pd.DataFrame,
     config: VectorizedTopNConfig,
+    universe_result: UniverseResult | None = None,
 ) -> VectorizedTopNResult:
     if config.top_n <= 0:
         raise ValueError("top_n must be positive")
@@ -96,8 +114,16 @@ def run_vectorized_topn_backtest(
     if config.rebalance_frequency not in {"daily", "weekly"}:
         raise ValueError("rebalance_frequency must be daily or weekly")
 
-    normalized_scores = _normalize_scores(scores)
-    normalized_prices = _normalize_prices(prices)
+    normalized_scores = filter_dataframe_by_universe(
+        _normalize_scores(scores),
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    normalized_prices = filter_dataframe_by_universe(
+        _normalize_prices(prices),
+        universe_result,
+        asset_id_col="asset_id",
+    )
     trading_dates = _trading_dates(normalized_prices, config.start_date, config.end_date)
     returns = _close_to_close_returns(normalized_prices)
     rebalance_dates = set(
@@ -163,6 +189,49 @@ def run_vectorized_topn_backtest(
         positions=positions,
         trades=trades,
         summary=_summarize(equity_curve),
+    )
+
+
+def write_vectorized_topn_run_card(
+    result: VectorizedTopNResult,
+    output_dir: str | Path,
+) -> dict[str, str]:
+    config = result.config
+    actual_dates = (
+        result.equity_curve["date"].astype(str).tolist()
+        if not result.equity_curve.empty and "date" in result.equity_curve.columns
+        else []
+    )
+    return write_run_card(
+        output_dir=output_dir,
+        run_type="vectorized_topn_backtest",
+        run_id=(
+            f"vectorized:{_iso_date(config.start_date)}:{_iso_date(config.end_date)}:"
+            f"top{config.top_n}:{config.rebalance_frequency}"
+        ),
+        title="Vectorized TopN Backtest",
+        config={
+            "start_date": _iso_date(config.start_date),
+            "end_date": _iso_date(config.end_date),
+            "top_n": config.top_n,
+            "rebalance_frequency": config.rebalance_frequency,
+            "transaction_cost_bps": config.transaction_cost_bps,
+            "max_positions": config.max_positions,
+        },
+        metrics=result.summary,
+        artifact_paths={
+            "equity_rows": len(result.equity_curve),
+            "position_rows": len(result.positions),
+            "trade_rows": len(result.trades),
+        },
+        warnings=["equity_curve_empty"] if result.equity_curve.empty else [],
+        data_coverage={
+            "input_start_date": _iso_date(config.start_date),
+            "input_end_date": _iso_date(config.end_date),
+            "actual_dates": actual_dates,
+            "row_count": len(result.positions),
+            "asset_count": int(result.positions["asset_id"].nunique()) if not result.positions.empty else 0,
+        },
     )
 
 

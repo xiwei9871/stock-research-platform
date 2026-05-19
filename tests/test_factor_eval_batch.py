@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 import pandas as pd
 
@@ -340,6 +343,61 @@ def test_run_factor_gate_batch_can_use_walk_forward_validation(monkeypatch):
         "start_date": "2026-03-01",
         "end_date": "2026-05-08",
     }
+
+
+def test_run_factor_gate_batch_writes_run_card_artifacts(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "load_multi_horizon_factor_eval_inputs",
+        lambda **kwargs: (
+            pd.DataFrame({"trade_date": ["2026-01-01"], "asset_id": ["A"], "factor_value": [1.0]}),
+            pd.DataFrame({"trade_date": ["2026-01-01"], "asset_id": ["A"], "forward_return_5d": [0.02]}),
+        ),
+    )
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "generate_multi_horizon_report",
+        lambda **kwargs: {
+            "factor_name": kwargs["factor_name"],
+            "horizons": kwargs["horizons"],
+            "reports": {
+                5: {
+                    "ic_summary": {
+                        "mean_ic": 0.04,
+                        "icir": 0.6,
+                        "ic_count": 30,
+                    }
+                }
+            },
+        },
+    )
+    monkeypatch.setattr(factor_eval_batch, "store_factor_eval_run", lambda **kwargs: None)
+    monkeypatch.setattr(factor_eval_batch, "store_factor_approval", lambda **kwargs: None)
+    monkeypatch.setattr(
+        factor_eval_batch,
+        "_new_run_id",
+        lambda factor_name: f"run-{factor_name}",
+    )
+
+    result = factor_eval_batch.run_factor_gate_batch(
+        factor_names=["ret_20"],
+        start_date="2026-01-01",
+        end_date="2026-05-08",
+        horizons=[5, 10],
+        output_dir=tmp_path,
+    )
+
+    assert Path(result.iloc[0]["run_card_json_path"]).exists()
+    assert Path(result.iloc[0]["run_card_markdown_path"]).exists()
+    assert Path(result.iloc[0]["metrics_json_path"]).exists()
+    assert Path(result.iloc[0]["config_snapshot_path"]).exists()
+    assert Path(result.iloc[0]["warnings_md_path"]).exists()
+    assert Path(result.iloc[0]["data_coverage_json_path"]).exists()
+    assert result.iloc[0]["run_card_json_path"].endswith("run_card.json")
+    coverage = json.loads(Path(result.iloc[0]["data_coverage_json_path"]).read_text(encoding="utf-8"))
+    assert coverage["coverage_ratio"] is None
+    assert coverage["missing_dates"] is None
+    assert coverage["missing_assets"] is None
 
 
 @pytest.mark.parametrize("validation_start_date", ["2026-01-01", "2026-06-01"])

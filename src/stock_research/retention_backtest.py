@@ -16,7 +16,13 @@ from stock_research.backtest import (
     next_trade_date,
 )
 from stock_research.portfolio_backtest import shares_for_budget
+from stock_research.run_card import write_run_card
 from stock_research.selection import score_asset
+from stock_research.services.universe_service import (
+    UniverseResult,
+    filter_dataframe_by_universe,
+    get_universe_allowed_ids,
+)
 
 
 RETENTION_TRADE_COLUMNS = [
@@ -104,6 +110,7 @@ def simulate_retention_config(
     bar_frame: pd.DataFrame,
     config: RetentionConfig,
     signal_cache: dict[str, dict[str, Any]] | None = None,
+    universe_result: UniverseResult | None = None,
 ) -> RetentionResult:
     if config.max_positions <= 0:
         raise ValueError("max_positions must be positive")
@@ -116,8 +123,24 @@ def simulate_retention_config(
     if config.exit_confirm_days <= 0:
         raise ValueError("exit_confirm_days must be positive")
 
-    features = _normalize_dates(feature_frame)
-    bars = _normalize_dates(bar_frame)
+    features = _normalize_dates(
+        filter_dataframe_by_universe(
+            feature_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    bars = _normalize_dates(
+        filter_dataframe_by_universe(
+            bar_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    filtered_signal_cache = _filter_retention_signal_cache_by_universe(
+        signal_cache,
+        universe_result,
+    )
     trading_dates = _trading_dates(bars)
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
@@ -184,8 +207,8 @@ def simulate_retention_config(
 
         if current_date <= end_date:
             signal = (
-                signal_cache.get(current_date, {})
-                if signal_cache is not None
+                filtered_signal_cache.get(current_date, {})
+                if filtered_signal_cache is not None
                 else {}
             )
             selections = signal.get("selections")
@@ -198,6 +221,7 @@ def simulate_retention_config(
                     bars,
                     current_date,
                     config,
+                    universe_result=universe_result,
                 )
             if feature_values is None:
                 feature_values = _feature_values_for_date(features, current_date)
@@ -226,16 +250,28 @@ def select_retention_candidates(
     bar_frame: pd.DataFrame,
     selection_date: object,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> list[BacktestSelection]:
     normalized_date = _iso_date(selection_date)
     if feature_frame.empty or bar_frame.empty:
         return []
 
-    matrix = _feature_values_for_date(feature_frame, normalized_date)
+    filtered_features = filter_dataframe_by_universe(
+        feature_frame,
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    filtered_bars = filter_dataframe_by_universe(
+        bar_frame,
+        universe_result,
+        asset_id_col="asset_id",
+    )
+
+    matrix = _feature_values_for_date(filtered_features, normalized_date)
     if not matrix:
         return []
 
-    bars = bar_frame.copy()
+    bars = filtered_bars.copy()
     bars["trade_date"] = bars["trade_date"].map(_iso_date)
     bars = bars[bars["trade_date"] == normalized_date]
     if bars.empty:
@@ -469,6 +505,7 @@ def run_retention_backtest(
     reports_dir: str | Path = Path("/Users/xiwei/stock_research/reports"),
     variant: str = "v1",
     cache_dir: str | Path | None = Path("/Users/xiwei/stock_research/cache/v3_1"),
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, object]:
     normalized_variant = _normalize_variant(variant)
     top_values = tuple(int(value) for value in top_ks)
@@ -492,6 +529,7 @@ def run_retention_backtest(
             start_date=start_date,
             end_date=end_date,
             config=signal_config,
+            universe_result=universe_result,
         )
     else:
         features, bars = load_backtest_inputs(
@@ -499,7 +537,12 @@ def run_retention_backtest(
             end_date,
             future_buffer_days=30,
         )
-        signal_cache = _build_retention_signal_cache(features, bars, signal_config)
+        signal_cache = _build_retention_signal_cache(
+            features,
+            bars,
+            signal_config,
+            universe_result=universe_result,
+        )
 
     results: list[RetentionResult] = []
     for top_k in top_values:
@@ -517,12 +560,17 @@ def run_retention_backtest(
                 normalized_variant,
             ),
         )
+        simulate_kwargs = {
+            "signal_cache": signal_cache,
+        }
+        if universe_result is not None:
+            simulate_kwargs["universe_result"] = universe_result
         results.append(
             simulate_retention_config(
                 features,
                 bars,
                 config,
-                signal_cache=signal_cache,
+                **simulate_kwargs,
             )
         )
 
@@ -540,6 +588,17 @@ def run_retention_backtest(
         variant=normalized_variant,
         reports_dir=reports_dir,
     )
+    run_card = write_retention_run_card(
+        results=results,
+        summary=summary,
+        start_date=start_date,
+        end_date=end_date,
+        initial_cash=float(initial_cash),
+        top_ks=top_values,
+        variant=normalized_variant,
+        reports_dir=reports_dir,
+        report_paths=report_paths,
+    )
     return {
         "results": results,
         "equity_curve": _combined_equity_curve(results),
@@ -547,7 +606,77 @@ def run_retention_backtest(
         "summary": summary,
         "report_path": report_paths["report_path"],
         "report_paths": report_paths,
+        "run_card": run_card,
     }
+
+
+def write_retention_run_card(
+    *,
+    results: list[RetentionResult],
+    summary: pd.DataFrame,
+    start_date: object,
+    end_date: object,
+    initial_cash: float,
+    top_ks: tuple[int, ...],
+    variant: str,
+    reports_dir: str | Path,
+    report_paths: dict[str, str],
+) -> dict[str, str]:
+    equity_curve = _combined_equity_curve(results)
+    trades = _combined_trades(results)
+    actual_dates = (
+        sorted(equity_curve["date"].astype(str).unique().tolist())
+        if not equity_curve.empty and "date" in equity_curve.columns
+        else []
+    )
+    asset_count = int(trades["asset_id"].nunique()) if not trades.empty and "asset_id" in trades.columns else 0
+    warnings: list[str] = []
+    if summary.empty:
+        warnings.append("summary_empty")
+    if trades.empty:
+        warnings.append("trades_empty")
+    if equity_curve.empty:
+        warnings.append("equity_curve_empty")
+    return write_run_card(
+        output_dir=Path(reports_dir) / "run_card",
+        run_type="retention_backtest",
+        run_id=(
+            f"retention:{_iso_date(start_date)}:{_iso_date(end_date)}:"
+            f"top{'-'.join(str(value) for value in top_ks)}:{variant}"
+        ),
+        title="Retention Backtest",
+        config={
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "initial_cash": float(initial_cash),
+            "top_ks": list(top_ks),
+            "variant": variant,
+        },
+        metrics={
+            "workflow_type": "retention_backtest",
+            "strategy_count": len(results),
+            "summary_rows": int(len(summary)),
+            "final_equity_mean": _mean_numeric_value(summary, "final_equity"),
+            "max_drawdown_min": _min_numeric_value(summary, "max_drawdown"),
+            "total_return_mean": _mean_numeric_value(summary, "total_return"),
+            "trade_count": int(len(trades)),
+            "position_count": asset_count,
+            "win_rate_mean": _mean_numeric_value(summary, "win_rate"),
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "candidate_count": None,
+            "retained_count": int(len(results)),
+        },
+        artifact_paths=report_paths,
+        warnings=warnings,
+        data_coverage={
+            "input_start_date": _iso_date(start_date),
+            "input_end_date": _iso_date(end_date),
+            "actual_dates": actual_dates,
+            "row_count": int(len(trades)),
+            "asset_count": asset_count,
+        },
+    )
 
 
 def _normalize_variant(variant: str) -> str:
@@ -563,11 +692,24 @@ def _build_retention_signal_cache(
     feature_frame: pd.DataFrame,
     bar_frame: pd.DataFrame,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, dict[str, Any]]:
     if "trade_date" not in feature_frame.columns or "trade_date" not in bar_frame.columns:
         return {}
-    features = _normalize_dates(feature_frame)
-    bars = _normalize_dates(bar_frame)
+    features = _normalize_dates(
+        filter_dataframe_by_universe(
+            feature_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    bars = _normalize_dates(
+        filter_dataframe_by_universe(
+            bar_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
     cache: dict[str, dict[str, Any]] = {}
@@ -588,6 +730,7 @@ def _build_retention_signal_cache(
                 bars,
                 trade_date,
                 config,
+                universe_result=universe_result,
             ),
             "feature_values": feature_values_by_date.get(trade_date, {}),
             "market_allows_entry": market_entry_by_date.get(trade_date, True),
@@ -601,6 +744,7 @@ def _load_v31_signal_cache(
     start_date: object,
     end_date: object,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, dict[str, Any]]:
     cache_path = Path(cache_dir)
     manifest_path = cache_path / "manifest.json"
@@ -635,7 +779,7 @@ def _load_v31_signal_cache(
     selections = _selections_from_candidate_cache(candidates, feature_values, config)
 
     dates = sorted(set(feature_values) | set(selections) | set(market_entry) | set(board_assets))
-    return {
+    result = {
         trade_date: {
             "selections": selections.get(trade_date, []),
             "feature_values": feature_values.get(trade_date, {}),
@@ -644,6 +788,42 @@ def _load_v31_signal_cache(
         }
         for trade_date in dates
     }
+    return _filter_retention_signal_cache_by_universe(result, universe_result)
+
+
+def _filter_retention_signal_cache_by_universe(
+    signal_cache: dict[str, dict[str, Any]] | None,
+    universe_result: UniverseResult | None,
+) -> dict[str, dict[str, Any]] | None:
+    if signal_cache is None or universe_result is None:
+        return signal_cache
+    allowed = get_universe_allowed_ids(universe_result)
+    if allowed is None:
+        return signal_cache
+    filtered: dict[str, dict[str, Any]] = {}
+    for trade_date, payload in signal_cache.items():
+        selections = [
+            selection
+            for selection in payload.get("selections", [])
+            if str(selection.asset_id) in allowed
+        ]
+        feature_values = {
+            str(asset_id): values
+            for asset_id, values in payload.get("feature_values", {}).items()
+            if str(asset_id) in allowed
+        }
+        entry_allowed_assets = payload.get("entry_allowed_assets")
+        if entry_allowed_assets is not None:
+            entry_allowed_assets = {
+                str(asset_id) for asset_id in entry_allowed_assets if str(asset_id) in allowed
+            }
+        filtered[trade_date] = {
+            "selections": selections,
+            "feature_values": feature_values,
+            "market_allows_entry": payload.get("market_allows_entry", True),
+            "entry_allowed_assets": entry_allowed_assets,
+        }
+    return filtered
 
 
 def _read_cache_frame(path: str) -> pd.DataFrame:

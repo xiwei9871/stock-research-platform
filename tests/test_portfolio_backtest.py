@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import pytest
 
 import stock_research.cli as cli
 import stock_research.portfolio_backtest as portfolio_backtest
+from stock_research.backtest import BacktestSelection, LOW_LIQUIDITY_THRESHOLD
 from stock_research.portfolio_backtest import (
     PortfolioConfig,
     PortfolioResult,
@@ -14,6 +16,11 @@ from stock_research.portfolio_backtest import (
     simulate_portfolio_config,
     summarize_portfolio_result,
     write_portfolio_report,
+)
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseResult,
 )
 
 
@@ -57,6 +64,62 @@ def _bars(asset_prices: dict[str, dict[str, float]]) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(rows)
+
+
+def _universe_result(
+    included: list[tuple[str, str]],
+    excluded: list[tuple[str, str]] | None = None,
+) -> UniverseResult:
+    members = [
+        UniverseMember(
+            trade_date="2026-05-07",
+            asset_id=asset_id,
+            stock_code=stock_code,
+            stock_name=stock_code,
+            board="main",
+            listed_days=120,
+            is_st=False,
+            is_suspended=False,
+            avg_turnover_amount=100000000.0,
+            avg_volume=1000000.0,
+            industry="industry",
+            included=True,
+            include_reasons=["universe"],
+            exclude_reasons=[],
+        )
+        for asset_id, stock_code in included
+    ]
+    for asset_id, stock_code in excluded or []:
+        members.append(
+            UniverseMember(
+                trade_date="2026-05-07",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="star",
+                listed_days=10,
+                is_st=True,
+                is_suspended=True,
+                avg_turnover_amount=1000.0,
+                avg_volume=10.0,
+                industry="industry",
+                included=False,
+                include_reasons=[],
+                exclude_reasons=["universe_excluded"],
+            )
+        )
+    return UniverseResult(
+        config=UniverseConfig(as_of_date="2026-05-07"),
+        as_of_date="2026-05-07",
+        total_candidates=len(members),
+        included_count=len(included),
+        excluded_count=len(excluded or []),
+        members=members,
+        included_codes=[stock_code for _, stock_code in included],
+        excluded_codes=[stock_code for _, stock_code in excluded or []],
+        summary_by_reason={"include": {"universe": len(included)}, "exclude": {"universe_excluded": len(excluded or [])}},
+        warnings=[],
+    )
 
 
 def test_shares_for_budget_rounds_down_to_integer_lots():
@@ -337,6 +400,123 @@ def test_simulate_portfolio_config_carries_last_mark_when_current_open_is_missin
     assert missing_open_day["equity"] == pytest.approx(3200.0)
 
 
+def test_simulate_portfolio_config_filters_inputs_by_universe_result_before_selection(
+    monkeypatch,
+):
+    feature_frame = pd.concat(
+        [
+            _features("2026-05-07", [("CN:SH:600001", 0.90)]),
+            _features("2026-05-07", [("CN:SH:600002", 0.10)]),
+        ],
+        ignore_index=True,
+    )
+    bar_frame = _bars(
+        {
+            "CN:SH:600001": {
+                "2026-05-07": 10.0,
+                "2026-05-08": 10.0,
+            },
+            "CN:SH:600002": {
+                "2026-05-07": 11.0,
+                "2026-05-08": 11.0,
+            },
+        }
+    )
+    config = PortfolioConfig(
+        start_date="2026-05-07",
+        end_date="2026-05-08",
+        initial_cash=10000.0,
+        top_k=1,
+        holding_days=1,
+        strategy_id="unit",
+    )
+    universe_result = _universe_result(
+        included=[("CN:SH:600002", "600002")],
+        excluded=[("CN:SH:600001", "600001")],
+    )
+    select_calls = []
+
+    def fake_select_top_for_date(
+        features,
+        bars,
+        selection_date,
+        top_n=20,
+        liquidity_threshold=LOW_LIQUIDITY_THRESHOLD,
+    ):
+        select_calls.append((features.copy(), bars.copy(), selection_date, top_n))
+        return [
+            BacktestSelection(
+                selection_date=str(selection_date),
+                asset_id="CN:SH:600002",
+                rank=1,
+                score=0.9,
+                ret_20d=0.10,
+                amount_20d_avg=100000000.0,
+            )
+        ]
+
+    monkeypatch.setattr(portfolio_backtest, "select_top_for_date", fake_select_top_for_date)
+
+    result = simulate_portfolio_config(
+        feature_frame,
+        bar_frame,
+        config,
+        universe_result=universe_result,
+    )
+
+    assert select_calls
+    first_features, first_bars, _, _ = select_calls[0]
+    assert sorted(first_features["asset_id"].unique()) == ["CN:SH:600002"]
+    assert sorted(first_bars["asset_id"].unique()) == ["CN:SH:600002"]
+    assert set(result.trades["asset_id"]) == {"CN:SH:600002"}
+
+
+def test_run_portfolio_backtest_passes_universe_result_to_simulation(
+    monkeypatch, tmp_path
+):
+    feature_frame = pd.DataFrame({"feature": [1]})
+    bar_frame = pd.DataFrame({"bar": [1]})
+    universe_result = _universe_result(included=[("A", "A")], excluded=[("B", "B")])
+    calls = []
+
+    def fake_load(start_date, end_date, future_buffer_days=30):
+        return feature_frame, bar_frame
+
+    def fake_simulate(features, bars, config, universe_result=None):
+        calls.append(universe_result)
+        return PortfolioResult(
+            config=config,
+            equity_curve=pd.DataFrame(
+                [
+                    {
+                        "strategy_id": config.strategy_id,
+                        "date": config.end_date,
+                        "cash": config.initial_cash,
+                        "market_value": 0.0,
+                        "equity": config.initial_cash,
+                        "drawdown": 0.0,
+                        "open_positions": 0,
+                    }
+                ]
+            ),
+            trades=pd.DataFrame(columns=["status", "return_value", "skip_reason"]),
+        )
+
+    monkeypatch.setattr(portfolio_backtest, "load_backtest_inputs", fake_load)
+    monkeypatch.setattr(portfolio_backtest, "simulate_portfolio_config", fake_simulate)
+
+    run_portfolio_backtest(
+        "2026-04-01",
+        "2026-05-07",
+        initial_cash=123000.0,
+        reports_dir=tmp_path,
+        universe_result=universe_result,
+    )
+
+    assert calls
+    assert all(call is universe_result for call in calls)
+
+
 def test_run_portfolio_backtest_runs_all_top_k_and_holding_day_combinations(
     monkeypatch, tmp_path
 ):
@@ -423,6 +603,16 @@ def test_run_portfolio_backtest_runs_all_top_k_and_holding_day_combinations(
     assert output["trades"].shape[0] == 4
     assert output["summary"].shape[0] == 4
     assert Path(output["report_path"]).exists()
+    assert Path(output["run_card"]["run_card_json_path"]).exists()
+    assert Path(output["run_card"]["run_card_md_path"]).exists()
+    assert Path(output["run_card"]["metrics_json_path"]).exists()
+    assert Path(output["run_card"]["config_snapshot_path"]).exists()
+    assert Path(output["run_card"]["warnings_md_path"]).exists()
+    assert Path(output["run_card"]["data_coverage_json_path"]).exists()
+    coverage = json.loads(Path(output["run_card"]["data_coverage_json_path"]).read_text(encoding="utf-8"))
+    assert coverage["coverage_ratio"] is None
+    assert coverage["missing_dates"] is None
+    assert coverage["missing_assets"] is None
 
 
 def test_run_portfolio_backtest_uses_default_horizon_future_buffer(monkeypatch, tmp_path):
@@ -463,6 +653,69 @@ def test_run_portfolio_backtest_uses_default_horizon_future_buffer(monkeypatch, 
     )
 
     assert calls == [("load", "2026-04-01", "2026-05-07", 90)]
+
+
+def test_run_portfolio_backtest_creates_unique_run_card_directories(monkeypatch, tmp_path):
+    def fake_load(start_date, end_date, future_buffer_days=30):
+        return pd.DataFrame({"feature": [1]}), pd.DataFrame({"bar": [1]})
+
+    def fake_simulate(features, bars, config):
+        equity_curve = pd.DataFrame(
+            [
+                {
+                    "strategy_id": config.strategy_id,
+                    "date": config.end_date,
+                    "cash": config.initial_cash,
+                    "market_value": 0.0,
+                    "equity": config.initial_cash,
+                    "drawdown": 0.0,
+                    "open_positions": 0,
+                }
+            ]
+        )
+        trades = pd.DataFrame(
+            [
+                {
+                    "strategy_id": config.strategy_id,
+                    "top_k": config.top_k,
+                    "holding_days": config.holding_days,
+                    "status": "closed",
+                    "return_value": 0.01,
+                    "skip_reason": None,
+                }
+            ]
+        )
+        return PortfolioResult(config=config, equity_curve=equity_curve, trades=trades)
+
+    monkeypatch.setattr(portfolio_backtest, "load_backtest_inputs", fake_load)
+    monkeypatch.setattr(portfolio_backtest, "simulate_portfolio_config", fake_simulate)
+
+    first = run_portfolio_backtest(
+        "2026-04-01",
+        "2026-05-07",
+        initial_cash=123000.0,
+        top_ks=(2, 3),
+        holding_days=(4, 6),
+        reports_dir=tmp_path,
+    )
+    first_path = Path(first["run_card"]["run_card_json_path"])
+    first_payload = json.loads(first_path.read_text(encoding="utf-8"))
+
+    second = run_portfolio_backtest(
+        "2026-04-01",
+        "2026-05-07",
+        initial_cash=123000.0,
+        top_ks=(2, 3),
+        holding_days=(4, 6),
+        reports_dir=tmp_path,
+    )
+    second_path = Path(second["run_card"]["run_card_json_path"])
+
+    assert first["run_card"]["run_card_dir"] != second["run_card"]["run_card_dir"]
+    assert first["run_card"]["run_card_json_path"] != second["run_card"]["run_card_json_path"]
+    assert first_path.exists()
+    assert second_path.exists()
+    assert json.loads(first_path.read_text(encoding="utf-8")) == first_payload
 
 
 def test_run_portfolio_backtest_returns_stable_empty_summary_columns(monkeypatch, tmp_path):

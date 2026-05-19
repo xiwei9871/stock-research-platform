@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -10,6 +11,11 @@ from stock_research.retention_backtest import (
     RetentionConfig,
     RetentionResult,
     simulate_retention_config,
+)
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseResult,
 )
 
 
@@ -83,6 +89,64 @@ def _bars(asset_prices: dict[str, dict[str, float | None]]) -> pd.DataFrame:
                 }
             )
     return pd.DataFrame(rows)
+
+
+def _universe_result(
+    included: list[tuple[str, str]],
+    excluded: list[tuple[str, str]] | None = None,
+) -> UniverseResult:
+    config = UniverseConfig(as_of_date="2026-01-02")
+    members: list[UniverseMember] = []
+    for asset_id, stock_code in included:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-02",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100000000.0,
+                avg_volume=10000000.0,
+                industry="Bank",
+                included=True,
+                include_reasons=["board_allowed:main"],
+                exclude_reasons=[],
+            )
+        )
+    for asset_id, stock_code in excluded or []:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-02",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100000000.0,
+                avg_volume=10000000.0,
+                industry="Bank",
+                included=False,
+                include_reasons=[],
+                exclude_reasons=["manual_exclude"],
+            )
+        )
+    return UniverseResult(
+        config=config,
+        as_of_date="2026-01-02",
+        total_candidates=len(members),
+        included_count=sum(1 for member in members if member.included),
+        excluded_count=sum(1 for member in members if not member.included),
+        members=members,
+        included_codes=[member.stock_code for member in members if member.included],
+        excluded_codes=[member.stock_code for member in members if not member.included],
+        summary_by_reason={"include": {"board_allowed:main": len(included)}, "exclude": {}},
+        warnings=[],
+    )
 
 
 def test_retention_holds_while_asset_stays_in_top20_and_exits_after_drop():
@@ -524,6 +588,70 @@ def test_retention_v31_hard_entry_filter_excludes_overheated_candidate():
     )
 
     assert [selection.asset_id for selection in selections] == ["STEADY"]
+
+
+def test_select_retention_candidates_filters_by_universe_result():
+    feature_frame = _features("2026-01-02", [("A", 0.30), ("B", 0.40)])
+    bar_frame = _bars({"A": {"2026-01-02": 10.0}, "B": {"2026-01-02": 10.0}})
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-02",
+        strategy_id="unit",
+    )
+    universe_result = _universe_result(included=[("B", "B")], excluded=[("A", "A")])
+
+    selections = retention_backtest.select_retention_candidates(
+        feature_frame,
+        bar_frame,
+        "2026-01-02",
+        config,
+        universe_result=universe_result,
+    )
+
+    assert [selection.asset_id for selection in selections] == ["B"]
+
+
+def test_simulate_retention_config_filters_signal_cache_by_universe_result():
+    feature_frame = _features("2026-01-02", [("A", 0.30), ("B", 0.40)])
+    bar_frame = _bars(
+        {
+            "A": {"2026-01-02": 10.0, "2026-01-05": 10.0},
+            "B": {"2026-01-02": 10.0, "2026-01-05": 10.0},
+        }
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-05",
+        initial_cash=10000.0,
+        max_positions=1,
+        strategy_id="unit",
+    )
+    signal_cache = {
+        "2026-01-02": {
+            "selections": [
+                BacktestSelection("2026-01-02", "A", 1, 10.0, 0.30, 100000000.0),
+                BacktestSelection("2026-01-02", "B", 2, 9.0, 0.40, 100000000.0),
+            ],
+            "feature_values": {"A": {}, "B": {}},
+            "market_allows_entry": True,
+            "entry_allowed_assets": {"A", "B"},
+        }
+    }
+    universe_result = _universe_result(included=[("B", "B")], excluded=[("A", "A")])
+
+    result = simulate_retention_config(
+        feature_frame,
+        bar_frame,
+        config,
+        signal_cache=signal_cache,
+        universe_result=universe_result,
+    )
+
+    assert set(result.trades["asset_id"]) == {"B"}
+
+
+def test_filter_retention_signal_cache_keeps_none_when_universe_is_none():
+    assert retention_backtest._filter_retention_signal_cache_by_universe(None, None) is None
 
 
 def test_retention_v31_market_filter_blocks_new_entries():
@@ -1118,6 +1246,16 @@ def test_run_retention_backtest_runs_top5_and_top10_configs(monkeypatch, tmp_pat
     assert output["trades"].shape[0] == 2
     assert output["summary"].shape[0] == 2
     assert Path(output["report_path"]).exists()
+    assert Path(output["run_card"]["run_card_json_path"]).exists()
+    assert Path(output["run_card"]["run_card_md_path"]).exists()
+    assert Path(output["run_card"]["metrics_json_path"]).exists()
+    assert Path(output["run_card"]["config_snapshot_path"]).exists()
+    assert Path(output["run_card"]["warnings_md_path"]).exists()
+    assert Path(output["run_card"]["data_coverage_json_path"]).exists()
+    coverage = json.loads(Path(output["run_card"]["data_coverage_json_path"]).read_text(encoding="utf-8"))
+    assert coverage["coverage_ratio"] is None
+    assert coverage["missing_dates"] is None
+    assert coverage["missing_assets"] is None
 
 
 def test_run_retention_backtest_applies_v2_variant_config(monkeypatch, tmp_path):
@@ -1167,6 +1305,68 @@ def test_run_retention_backtest_applies_v2_variant_config(monkeypatch, tmp_path)
     assert config.use_adjusted_score is True
     assert config.strategy_id.startswith("retention_v2:")
     assert "retention_v2_" in Path(output["report_path"]).name
+
+
+def test_run_retention_backtest_creates_unique_run_card_directories(monkeypatch, tmp_path):
+    def fake_load(start_date, end_date, future_buffer_days=30):
+        return pd.DataFrame({"feature": [1]}), pd.DataFrame({"bar": [1]})
+
+    def fake_simulate(features, bars, config, signal_cache=None):
+        return RetentionResult(
+            config=config,
+            equity_curve=pd.DataFrame(
+                [
+                    {
+                        "strategy_id": config.strategy_id,
+                        "date": config.end_date,
+                        "cash": config.initial_cash,
+                        "market_value": float(config.max_positions),
+                        "equity": config.initial_cash + config.max_positions,
+                        "drawdown": 0.0,
+                        "open_positions": 0,
+                    }
+                ]
+            ),
+            trades=pd.DataFrame(
+                [
+                    {
+                        "strategy_id": config.strategy_id,
+                        "max_positions": config.max_positions,
+                        "status": "closed",
+                        "buy_date": "2026-01-02",
+                        "sell_date": "2026-01-06",
+                        "return_value": 0.01,
+                        "skip_reason": None,
+                    }
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(retention_backtest, "load_backtest_inputs", fake_load)
+    monkeypatch.setattr(retention_backtest, "simulate_retention_config", fake_simulate)
+
+    first = retention_backtest.run_retention_backtest(
+        "2026-01-01",
+        "2026-05-07",
+        initial_cash=123000.0,
+        reports_dir=tmp_path,
+    )
+    first_path = Path(first["run_card"]["run_card_json_path"])
+    first_payload = json.loads(first_path.read_text(encoding="utf-8"))
+
+    second = retention_backtest.run_retention_backtest(
+        "2026-01-01",
+        "2026-05-07",
+        initial_cash=123000.0,
+        reports_dir=tmp_path,
+    )
+    second_path = Path(second["run_card"]["run_card_json_path"])
+
+    assert first["run_card"]["run_card_dir"] != second["run_card"]["run_card_dir"]
+    assert first["run_card"]["run_card_json_path"] != second["run_card"]["run_card_json_path"]
+    assert first_path.exists()
+    assert second_path.exists()
+    assert json.loads(first_path.read_text(encoding="utf-8")) == first_payload
 
 
 def test_run_retention_backtest_reuses_signal_cache_across_topk_configs(
