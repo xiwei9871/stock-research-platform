@@ -1,4 +1,9 @@
 import pandas as pd
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseResult,
+)
 
 from stock_research import factor_store
 
@@ -48,6 +53,64 @@ class FakeConnection:
 
     def cursor(self):
         return self.cursor_obj
+
+
+def _universe_result(
+    included: list[tuple[str, str]],
+    excluded: list[tuple[str, str]] | None = None,
+) -> UniverseResult:
+    config = UniverseConfig(as_of_date="2026-01-01")
+    members: list[UniverseMember] = []
+    for asset_id, stock_code in included:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-01",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100000000.0,
+                avg_volume=10000000.0,
+                industry="Bank",
+                included=True,
+                include_reasons=["board_allowed:main"],
+                exclude_reasons=[],
+            )
+        )
+    for asset_id, stock_code in excluded or []:
+        members.append(
+            UniverseMember(
+                trade_date="2026-01-01",
+                asset_id=asset_id,
+                stock_code=stock_code,
+                stock_name=stock_code,
+                board="main",
+                listed_days=1000,
+                is_st=False,
+                is_suspended=False,
+                avg_turnover_amount=100000000.0,
+                avg_volume=10000000.0,
+                industry="Bank",
+                included=False,
+                include_reasons=[],
+                exclude_reasons=["manual_exclude"],
+            )
+        )
+    return UniverseResult(
+        config=config,
+        as_of_date="2026-01-01",
+        total_candidates=len(members),
+        included_count=sum(1 for member in members if member.included),
+        excluded_count=sum(1 for member in members if not member.included),
+        members=members,
+        included_codes=[member.stock_code for member in members if member.included],
+        excluded_codes=[member.stock_code for member in members if not member.included],
+        summary_by_reason={"include": {"board_allowed:main": len(included)}, "exclude": {}},
+        warnings=[],
+    )
 
 
 def test_upsert_factor_daily_writes_factor_rows(monkeypatch):
@@ -140,6 +203,56 @@ def test_load_top_scores_queries_factor_scores(monkeypatch):
     assert rows[0]["asset_id"] == "A"
     assert "FROM factor.stock_score_daily" in calls[0][0]
     assert calls[0][1] == ["2026-01-01", "manual_v1", 10]
+
+
+def test_load_top_scores_filters_rows_by_universe_result(monkeypatch):
+    universe_result = _universe_result(
+        included=[("CN:SH:600002", "600002.SH"), ("CN:SH:600003", "600003.SH")],
+        excluded=[("CN:SH:600001", "600001.SH")],
+    )
+
+    def fake_fetch_all(conn, sql, params=None):
+        rows = [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "CN:SH:600001",
+                "rank": 1,
+                "score_total": 88.5,
+                "score_version": "manual_v1",
+                "score_components": {"trend": 90.0},
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "CN:SH:600002",
+                "rank": 2,
+                "score_total": 77.5,
+                "score_version": "manual_v1",
+                "score_components": {"trend": 80.0},
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "CN:SH:600003",
+                "rank": 3,
+                "score_total": 70.5,
+                "score_version": "manual_v1",
+                "score_components": {"trend": 75.0},
+            },
+        ]
+        if params and len(params) == 3:
+            return rows[: params[2]]
+        return rows
+
+    monkeypatch.setattr(factor_store, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(factor_store, "fetch_all", fake_fetch_all)
+
+    rows = factor_store.load_top_scores(
+        "2026-01-01",
+        score_version="manual_v1",
+        top_n=2,
+        universe_result=universe_result,
+    )
+
+    assert [row["asset_id"] for row in rows] == ["CN:SH:600002", "CN:SH:600003"]
 
 
 def test_load_factor_daily_queries_trade_date_and_calc_version(monkeypatch):

@@ -8,6 +8,10 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
 from stock_research.scoring.pipeline import score_factor_daily
+from stock_research.services.universe_service import (
+    UniverseResult,
+    filter_dataframe_by_universe,
+)
 
 
 FACTOR_COLUMNS = [
@@ -128,9 +132,16 @@ def load_top_scores(
     trade_date: object,
     score_version: str,
     top_n: int,
+    universe_result: UniverseResult | None = None,
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
-    sql = """
+    params: list[object] = [_date_string(trade_date), score_version]
+    limit_sql = "LIMIT %s"
+    if universe_result is None:
+        params.append(top_n)
+    else:
+        limit_sql = ""
+    sql = f"""
     SELECT
         trade_date,
         asset_id,
@@ -142,10 +153,18 @@ def load_top_scores(
     WHERE trade_date = %s
       AND score_version = %s
     ORDER BY rank, asset_id
-    LIMIT %s
+    {limit_sql}
     """
     with connect(service) as conn:
-        return fetch_all(conn, sql, [_date_string(trade_date), score_version, top_n])
+        rows = fetch_all(conn, sql, params)
+    frame = filter_dataframe_by_universe(
+        pd.DataFrame(rows),
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    if universe_result is not None:
+        frame = frame.head(top_n).reset_index(drop=True)
+    return frame.to_dict("records")
 
 
 def load_factor_daily(
