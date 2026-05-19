@@ -1,3 +1,6 @@
+from datetime import date
+from decimal import Decimal
+
 import pandas as pd
 
 import stock_research.cli as cli
@@ -132,7 +135,16 @@ def test_watchlist_report_cli_loads_persisted_rows_and_writes_report(monkeypatch
 
     def fake_load_watchlist_daily_signals(watchlist_id, trade_date):
         calls["load"] = (watchlist_id, trade_date)
-        return pd.DataFrame([{"watchlist_id": watchlist_id, "trade_date": trade_date, "must_watch": True}])
+        return pd.DataFrame(
+            [
+                {
+                    "watchlist_id": watchlist_id,
+                    "trade_date": date(2026, 5, 20),
+                    "priority": Decimal("10"),
+                    "must_watch": True,
+                }
+            ]
+        )
 
     def fake_write_watchlist_report(rows, output_dir):
         calls["write"] = (rows.copy(), output_dir)
@@ -171,6 +183,8 @@ def test_watchlist_report_cli_loads_persisted_rows_and_writes_report(monkeypatch
     assert calls["load"] == ("core", "2026-05-20")
     assert calls["write"][1] == "/tmp/watchlist"
     assert list(calls["write"][0]["must_watch"]) == [True]
+    assert calls["write"][0].iloc[0]["trade_date"] == date(2026, 5, 20)
+    assert calls["write"][0].iloc[0]["priority"] == Decimal("10")
 
 
 def test_watchlist_explain_cli_delegates_to_workflow(monkeypatch, capsys):
@@ -178,7 +192,13 @@ def test_watchlist_explain_cli_delegates_to_workflow(monkeypatch, capsys):
 
     def fake_explain_watchlist_asset(**kwargs):
         calls["explain"] = kwargs
-        return {"asset_id": kwargs["asset_id"], "trade_date": kwargs["trade_date"], "watchlist_id": kwargs["watchlist_id"]}
+        return {
+            "asset_id": kwargs["asset_id"],
+            "trade_date": date(2026, 5, 20),
+            "watchlist_id": kwargs["watchlist_id"],
+            "signal_score": Decimal("88.5"),
+            "priority": Decimal("10"),
+        }
 
     monkeypatch.setattr(
         "stock_research.cli.explain_watchlist_asset",
@@ -204,5 +224,5 @@ def test_watchlist_explain_cli_delegates_to_workflow(monkeypatch, capsys):
     }
     assert (
         capsys.readouterr().out.strip()
-        == '{"asset_id": "CN:SH:600000", "trade_date": "2026-05-20", "watchlist_id": "core"}'
+        == '{"asset_id": "CN:SH:600000", "priority": 10, "signal_score": 88.5, "trade_date": "2026-05-20", "watchlist_id": "core"}'
     )

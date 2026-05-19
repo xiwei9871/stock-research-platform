@@ -151,7 +151,7 @@ from stock_research.research_preflight import (
 )
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
-from stock_research.reports.watchlist_report import write_watchlist_report
+from stock_research.reports.watchlist_report import _json_safe_value, write_watchlist_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
@@ -3220,10 +3220,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "watchlist-explain":
         print(
             json.dumps(
-                explain_watchlist_asset(
+                _json_safe_value(
+                    explain_watchlist_asset(
                     trade_date=args.trade_date,
                     watchlist_id=args.watchlist_id,
                     asset_id=args.asset_id,
+                    )
                 ),
                 ensure_ascii=False,
                 sort_keys=True,

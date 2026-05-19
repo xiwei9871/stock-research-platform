@@ -1,3 +1,6 @@
+from datetime import date
+from decimal import Decimal
+import pytest
 import json
 from pathlib import Path
 
@@ -74,3 +77,76 @@ def test_write_watchlist_report_writes_markdown_json_csv_and_must_watch(tmp_path
     assert "B" not in must_watch_section
     assert "B" not in candidate_section
     assert "B" in risk_section
+
+
+def test_write_watchlist_report_normalizes_typed_values_and_validates_identity(tmp_path):
+    typed_frame = pd.DataFrame(
+        [
+            {
+                "watchlist_id": "core",
+                "trade_date": date(2026, 5, 20),
+                "asset_id": "A",
+                "stock_code": "000001.SZ",
+                "stock_name": "A",
+                "priority": Decimal("10"),
+                "signal_score": Decimal("88.5"),
+                "primary_signal": "candidate",
+                "signal_tags": ["candidate"],
+                "risk_tags": [],
+                "must_watch": True,
+                "reason_json": {"score_rank": Decimal("1")},
+                "output_version": "v1",
+            }
+        ]
+    )
+
+    paths = write_watchlist_report(typed_frame, output_dir=tmp_path)
+    json_rows = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
+
+    assert json_rows[0]["trade_date"] == "2026-05-20"
+    assert json_rows[0]["priority"] == 10
+    assert json_rows[0]["signal_score"] == 88.5
+    assert json_rows[0]["signal_tags"] == "[\"candidate\"]"
+    assert json_rows[0]["risk_tags"] == "[]"
+    assert json_rows[0]["reason_json"] == "{\"score_rank\": 1}"
+
+    with pytest.raises(ValueError, match="empty"):
+        write_watchlist_report(pd.DataFrame(), output_dir=tmp_path)
+
+    mixed_frame = pd.DataFrame(
+        [
+            {
+                "watchlist_id": "core",
+                "trade_date": "2026-05-20",
+                "asset_id": "A",
+                "stock_code": "000001.SZ",
+                "stock_name": "A",
+                "priority": 10,
+                "signal_score": 88.0,
+                "primary_signal": "candidate",
+                "signal_tags": ["candidate"],
+                "risk_tags": [],
+                "must_watch": True,
+                "reason_json": {"score_rank": 1},
+                "output_version": "v1",
+            },
+            {
+                "watchlist_id": "alt",
+                "trade_date": "2026-05-20",
+                "asset_id": "B",
+                "stock_code": "000002.SZ",
+                "stock_name": "B",
+                "priority": 20,
+                "signal_score": 55.0,
+                "primary_signal": "candidate",
+                "signal_tags": ["candidate"],
+                "risk_tags": [],
+                "must_watch": False,
+                "reason_json": {"score_rank": None},
+                "output_version": "v1",
+            },
+        ]
+    )
+
+    with pytest.raises(ValueError, match="watchlist_id"):
+        write_watchlist_report(mixed_frame, output_dir=tmp_path)
