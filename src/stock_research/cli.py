@@ -996,6 +996,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["raw", "qfq", "hfq"],
         default="qfq",
     )
+    technical_features_daily.add_argument(
+        "--build-strategy",
+        choices=["legacy", "batch_frame", "latest_only"],
+        default="latest_only",
+    )
 
     backfill_technical_features_daily = subparsers.add_parser(
         "backfill-technical-features-daily"
@@ -1012,6 +1017,11 @@ def build_parser() -> argparse.ArgumentParser:
     backfill_technical_features_daily.add_argument("--workers", type=int, default=1)
     backfill_technical_features_daily.add_argument("--skip-complete", action="store_true")
     backfill_technical_features_daily.add_argument("--progress-interval", type=int, default=1)
+    backfill_technical_features_daily.add_argument(
+        "--build-strategy",
+        choices=["legacy", "batch_frame", "latest_only"],
+        default="latest_only",
+    )
 
     benchmark_technical_feature_backfill = subparsers.add_parser(
         "benchmark-technical-feature-backfill"
