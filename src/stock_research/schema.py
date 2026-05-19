@@ -654,7 +654,7 @@ CREATE TABLE IF NOT EXISTS watchlist.watchlist_item (
     priority integer NOT NULL DEFAULT 100,
     active boolean NOT NULL DEFAULT true,
     note text,
-    source text,
+    source text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (watchlist_id, asset_id)
@@ -668,12 +668,12 @@ CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal (
     stock_name text NOT NULL,
     priority integer NOT NULL DEFAULT 100,
     signal_score numeric,
-    primary_signal text,
+    primary_signal text NOT NULL,
     signal_tags jsonb NOT NULL DEFAULT '[]'::jsonb,
     risk_tags jsonb NOT NULL DEFAULT '[]'::jsonb,
     must_watch boolean NOT NULL DEFAULT false,
     reason_json jsonb NOT NULL DEFAULT '{}'::jsonb,
-    output_version text,
+    output_version text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (watchlist_id, trade_date, asset_id)
