@@ -4,6 +4,12 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.backtest_constraints import (
+    BacktestExecutionConstraints,
+    can_close_long,
+    can_open_long,
+    one_way_cost_rate,
+)
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.run_card import write_run_card
@@ -34,13 +40,17 @@ POSITION_COLUMNS = [
 
 TRADE_COLUMNS = [
     "rebalance_date",
+    "signal_date",
+    "execution_date",
     "asset_id",
     "side",
     "previous_weight",
     "target_weight",
+    "executed_weight",
     "delta_weight",
     "turnover_contribution",
     "transaction_cost",
+    "skip_reason",
 ]
 
 
@@ -52,6 +62,9 @@ class VectorizedTopNConfig:
     rebalance_frequency: str = "daily"
     transaction_cost_bps: float = 0.0
     max_positions: int | None = None
+    execution_constraints: BacktestExecutionConstraints = field(
+        default_factory=BacktestExecutionConstraints
+    )
 
 
 @dataclass(frozen=True)
@@ -129,40 +142,50 @@ def run_vectorized_topn_backtest(
     rebalance_dates = set(
         _rebalance_dates(normalized_scores, trading_dates, config.rebalance_frequency)
     )
+    execution_constraints = _effective_execution_constraints(config)
+    prices_by_date = _price_bars_by_date(normalized_prices)
 
     equity = 1.0
     peak = 1.0
-    previous_weights: dict[str, float] = {}
     current_weights: dict[str, float] = {}
+    cash_weight = 1.0
     equity_rows: list[dict[str, Any]] = []
     position_rows: list[dict[str, Any]] = []
     trade_rows: list[dict[str, Any]] = []
-    cost_rate = float(config.transaction_cost_bps) / 10000.0
-
-    for index, trade_date in enumerate(trading_dates[:-1]):
-        next_date = trading_dates[index + 1]
+    for index, execution_date in enumerate(trading_dates[1:], start=1):
+        signal_date = trading_dates[index - 1]
         turnover = 0.0
-        if trade_date in rebalance_dates:
+        if signal_date in rebalance_dates:
             target_weights, selected_rows = _target_weights_for_date(
                 normalized_scores,
-                trade_date,
+                signal_date,
                 config,
             )
-            turnover = _weight_turnover(previous_weights, target_weights)
-            trade_rows.extend(
-                _trade_rows_for_rebalance(
-                    trade_date,
-                    previous_weights,
-                    target_weights,
-                    cost_rate,
+            execution_bars = prices_by_date.get(execution_date, {})
+            current_weights, cash_weight, trade_rows_for_signal = _execute_rebalance(
+                signal_date=signal_date,
+                execution_date=execution_date,
+                current_weights=current_weights,
+                cash_weight=cash_weight,
+                target_weights=target_weights,
+                execution_bars=execution_bars,
+                constraints=execution_constraints,
+            )
+            trade_rows.extend(trade_rows_for_signal)
+            position_rows.extend(selected_rows)
+            turnover = float(
+                sum(
+                    abs(float(row["executed_weight"]) - float(row["previous_weight"]))
+                    for row in trade_rows_for_signal
                 )
             )
-            previous_weights = target_weights
-            current_weights = target_weights
-            position_rows.extend(selected_rows)
 
+        next_index = index + 1
+        if next_index >= len(trading_dates):
+            continue
+        next_date = trading_dates[next_index]
         gross_return = _portfolio_return(current_weights, returns, next_date)
-        transaction_cost = turnover * cost_rate
+        transaction_cost = float(sum(float(row["transaction_cost"]) for row in trade_rows_for_signal))
         net_return = gross_return - transaction_cost
         equity *= 1.0 + net_return
         peak = max(peak, equity)
@@ -247,11 +270,36 @@ def _normalize_scores(scores: pd.DataFrame) -> pd.DataFrame:
 
 def _normalize_prices(prices: pd.DataFrame) -> pd.DataFrame:
     if prices.empty:
-        return pd.DataFrame(columns=["trade_date", "asset_id", "close"])
+        return pd.DataFrame(
+            columns=[
+                "trade_date",
+                "asset_id",
+                "open",
+                "close",
+                "amount",
+                "trade_status",
+                "is_limit_up",
+                "is_limit_down",
+                "is_suspended",
+            ]
+        )
     frame = prices.copy()
     frame["trade_date"] = frame["trade_date"].map(_iso_date)
-    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
-    return frame.dropna(subset=["close"])
+    if "close" not in frame.columns and "open" in frame.columns:
+        frame["close"] = frame["open"]
+    if "open" not in frame.columns:
+        frame["open"] = frame.get("close")
+    for col in ["open", "close", "amount"]:
+        if col not in frame.columns:
+            frame[col] = pd.NA
+        frame[col] = pd.to_numeric(frame[col], errors="coerce")
+    if "trade_status" not in frame.columns:
+        frame["trade_status"] = "1"
+    for col in ["is_limit_up", "is_limit_down", "is_suspended"]:
+        if col not in frame.columns:
+            frame[col] = False
+    frame = frame.dropna(subset=["close"])
+    return frame
 
 
 def _iso_date(value: object) -> str:
@@ -309,6 +357,38 @@ def _rebalance_dates(
     return weekly_dates
 
 
+def _effective_execution_constraints(config: VectorizedTopNConfig) -> BacktestExecutionConstraints:
+    constraints = config.execution_constraints
+    if (
+        float(config.transaction_cost_bps) != 0.0
+        and constraints.commission_bps == 0.0
+        and constraints.stamp_duty_bps == 0.0
+        and constraints.slippage_bps == 0.0
+    ):
+        return BacktestExecutionConstraints(
+            commission_bps=float(config.transaction_cost_bps),
+            stamp_duty_bps=constraints.stamp_duty_bps,
+            slippage_bps=constraints.slippage_bps,
+            min_amount=constraints.min_amount,
+            block_suspended=constraints.block_suspended,
+            block_limit_up_buy=constraints.block_limit_up_buy,
+            block_limit_down_sell=constraints.block_limit_down_sell,
+        )
+    return constraints
+
+
+def _price_bars_by_date(prices: pd.DataFrame) -> dict[str, dict[str, dict[str, Any]]]:
+    if prices.empty:
+        return {}
+    grouped: dict[str, dict[str, dict[str, Any]]] = {}
+    for trade_date, frame in prices.groupby("trade_date", sort=True):
+        grouped[str(trade_date)] = {
+            str(row["asset_id"]): row.to_dict()
+            for _, row in frame.iterrows()
+        }
+    return grouped
+
+
 def _target_weights_for_date(
     scores: pd.DataFrame,
     trade_date: str,
@@ -352,33 +432,132 @@ def _weight_turnover(
     )
 
 
-def _trade_rows_for_rebalance(
-    rebalance_date: str,
-    previous_weights: dict[str, float],
+def _execute_rebalance(
+    *,
+    signal_date: str,
+    execution_date: str,
+    current_weights: dict[str, float],
+    cash_weight: float,
     target_weights: dict[str, float],
-    cost_rate: float,
-) -> list[dict[str, Any]]:
+    execution_bars: dict[str, dict[str, Any]],
+    constraints: BacktestExecutionConstraints,
+) -> tuple[dict[str, float], float, list[dict[str, Any]]]:
+    updated_weights = dict(current_weights)
+    cash = float(cash_weight)
     rows = []
-    for asset_id in sorted(set(previous_weights) | set(target_weights)):
-        previous_weight = float(previous_weights.get(asset_id, 0.0))
+    cost_rate_buy = one_way_cost_rate("buy", constraints)
+    cost_rate_sell = one_way_cost_rate("sell", constraints)
+
+    sell_assets = sorted(
+        asset_id
+        for asset_id in set(updated_weights) | set(target_weights)
+        if float(updated_weights.get(asset_id, 0.0)) > float(target_weights.get(asset_id, 0.0))
+    )
+    buy_assets = [
+        asset_id
+        for asset_id in target_weights.keys()
+        if float(target_weights.get(asset_id, 0.0)) > float(updated_weights.get(asset_id, 0.0))
+    ]
+
+    for asset_id in sell_assets:
+        previous_weight = float(updated_weights.get(asset_id, 0.0))
         target_weight = float(target_weights.get(asset_id, 0.0))
-        delta_weight = target_weight - previous_weight
-        if delta_weight == 0:
+        bar = execution_bars.get(asset_id, {})
+        allowed, reason = can_close_long(bar, constraints)
+        if not allowed:
+            rows.append(
+                {
+                    "rebalance_date": signal_date,
+                    "signal_date": signal_date,
+                    "execution_date": execution_date,
+                    "asset_id": asset_id,
+                    "side": "sell",
+                    "previous_weight": previous_weight,
+                    "target_weight": target_weight,
+                    "executed_weight": previous_weight,
+                    "delta_weight": 0.0,
+                    "turnover_contribution": 0.0,
+                    "transaction_cost": 0.0,
+                    "skip_reason": reason,
+                }
+            )
             continue
+        executed_weight = target_weight
+        delta_weight = executed_weight - previous_weight
         turnover_contribution = abs(delta_weight)
+        cash += previous_weight - executed_weight
+        if executed_weight > 0:
+            updated_weights[asset_id] = executed_weight
+        else:
+            updated_weights.pop(asset_id, None)
         rows.append(
             {
-                "rebalance_date": rebalance_date,
+                "rebalance_date": signal_date,
+                "signal_date": signal_date,
+                "execution_date": execution_date,
                 "asset_id": asset_id,
-                "side": "buy" if delta_weight > 0 else "sell",
+                "side": "sell",
                 "previous_weight": previous_weight,
                 "target_weight": target_weight,
+                "executed_weight": executed_weight,
                 "delta_weight": delta_weight,
                 "turnover_contribution": turnover_contribution,
-                "transaction_cost": turnover_contribution * cost_rate,
+                "transaction_cost": turnover_contribution * cost_rate_sell,
+                "skip_reason": None,
             }
         )
-    return rows
+
+    for asset_id in buy_assets:
+        current_weight = float(updated_weights.get(asset_id, 0.0))
+        target_weight = float(target_weights.get(asset_id, 0.0))
+        if target_weight <= current_weight:
+            continue
+        bar = execution_bars.get(asset_id, {})
+        allowed, reason = can_open_long(bar, constraints)
+        if not allowed:
+            rows.append(
+                {
+                    "rebalance_date": signal_date,
+                    "signal_date": signal_date,
+                    "execution_date": execution_date,
+                    "asset_id": asset_id,
+                    "side": "buy",
+                    "previous_weight": current_weight,
+                    "target_weight": target_weight,
+                    "executed_weight": current_weight,
+                    "delta_weight": 0.0,
+                    "turnover_contribution": 0.0,
+                    "transaction_cost": 0.0,
+                    "skip_reason": reason,
+                }
+            )
+            continue
+        desired_delta = target_weight - current_weight
+        executed_delta = min(desired_delta, cash)
+        executed_weight = current_weight + executed_delta
+        cash -= executed_delta
+        if executed_weight > 0:
+            updated_weights[asset_id] = executed_weight
+        else:
+            updated_weights.pop(asset_id, None)
+        rows.append(
+            {
+                "rebalance_date": signal_date,
+                "signal_date": signal_date,
+                "execution_date": execution_date,
+                "asset_id": asset_id,
+                "side": "buy",
+                "previous_weight": current_weight,
+                "target_weight": target_weight,
+                "executed_weight": executed_weight,
+                "delta_weight": executed_delta,
+                "turnover_contribution": abs(executed_delta),
+                "transaction_cost": abs(executed_delta) * cost_rate_buy,
+                "skip_reason": None if executed_delta == desired_delta else "insufficient_cash",
+            }
+        )
+
+    return updated_weights, cash, rows
 
 
 def _portfolio_return(
