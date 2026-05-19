@@ -122,4 +122,23 @@ def _load_sector_strength(
         end_date=trade_date,
         industry_system=industry_system,
     )
-    return calc_sector_strength(bars, trade_date=trade_date, top_n=top_n)
+    sector_top_n = _sector_strength_top_n(bars, trade_date=trade_date, requested_top_n=top_n)
+    return calc_sector_strength(bars, trade_date=trade_date, top_n=sector_top_n)
+
+
+def _sector_strength_top_n(
+    bars: pd.DataFrame,
+    *,
+    trade_date: str,
+    requested_top_n: int,
+) -> int:
+    if bars.empty or "industry_code" not in bars.columns:
+        return requested_top_n
+
+    frame = bars.copy()
+    if "trade_date" in frame.columns:
+        frame["trade_date"] = frame["trade_date"].map(lambda value: pd.Timestamp(value).date().isoformat())
+        frame = frame[frame["trade_date"] <= trade_date]
+
+    current_sector_count = int(frame["industry_code"].dropna().astype(str).nunique())
+    return max(requested_top_n, current_sector_count)
