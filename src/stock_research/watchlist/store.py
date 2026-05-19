@@ -69,7 +69,7 @@ def upsert_watchlist_items(
 
 def load_watchlist_items(
     watchlist_id: str,
-    active_only: bool = False,
+    active_only: bool = True,
     service: str = SETTINGS.research_service,
 ) -> pd.DataFrame:
     sql = """
