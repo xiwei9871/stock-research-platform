@@ -61,6 +61,14 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
 
 
+def test_research_extension_creates_watchlist_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE SCHEMA IF NOT EXISTS watchlist;" in sql
+    assert "CREATE TABLE IF NOT EXISTS watchlist.watchlist_item" in sql
+    assert "CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal" in sql
+
+
 def test_research_extension_includes_unified_stock_minute_bar_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS market.stock_minute_bar" in sql

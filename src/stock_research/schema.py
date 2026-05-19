@@ -644,6 +644,41 @@ CREATE TABLE IF NOT EXISTS ingest.backfill_task (
     UNIQUE (run_id, partition_key)
 );
 
+CREATE SCHEMA IF NOT EXISTS watchlist;
+
+CREATE TABLE IF NOT EXISTS watchlist.watchlist_item (
+    watchlist_id text NOT NULL,
+    asset_id text NOT NULL,
+    stock_code text NOT NULL,
+    stock_name text NOT NULL,
+    priority integer NOT NULL DEFAULT 100,
+    active boolean NOT NULL DEFAULT true,
+    note text,
+    source text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (watchlist_id, asset_id)
+);
+
+CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal (
+    watchlist_id text NOT NULL,
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    stock_code text NOT NULL,
+    stock_name text NOT NULL,
+    priority integer NOT NULL DEFAULT 100,
+    signal_score numeric,
+    primary_signal text,
+    signal_tags jsonb NOT NULL DEFAULT '[]'::jsonb,
+    risk_tags jsonb NOT NULL DEFAULT '[]'::jsonb,
+    must_watch boolean NOT NULL DEFAULT false,
+    reason_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+    output_version text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (watchlist_id, trade_date, asset_id)
+);
+
 CREATE TABLE IF NOT EXISTS factor.factor_daily (
     trade_date date NOT NULL,
     asset_id text NOT NULL,
