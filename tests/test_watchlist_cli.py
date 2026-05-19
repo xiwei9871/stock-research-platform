@@ -85,3 +85,5 @@ def test_watchlist_build_cli_prints_summary_and_run_card(monkeypatch, capsys):
     assert "watchlist_build|watchlist_id|core" in lines
     assert "watchlist_build|members|2" in lines
     assert "watchlist_build|must_watch|1" in lines
+    assert "watchlist_build|report|/tmp/watchlist.md" in lines
+    assert "watchlist_build|run_card|/tmp/run_card.json" in lines

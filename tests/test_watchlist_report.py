@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +29,17 @@ def test_write_watchlist_report_writes_markdown_json_csv_and_must_watch(tmp_path
 
     paths = write_watchlist_report(frame, output_dir=tmp_path)
 
-    assert Path(paths["markdown_path"]).exists()
-    assert Path(paths["json_path"]).exists()
-    assert Path(paths["signals_csv_path"]).exists()
-    assert Path(paths["must_watch_csv_path"]).exists()
+    assert Path(paths["markdown_path"]).name == "watchlist_report_2026-05-20_core.md"
+    assert Path(paths["json_path"]).name == "watchlist_report_2026-05-20_core.json"
+    assert Path(paths["signals_csv_path"]).name == "watchlist_signals_2026-05-20_core.csv"
+    assert Path(paths["must_watch_csv_path"]).name == "must_watch_2026-05-20_core.csv"
+
+    json_rows = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
+    assert json_rows[0]["signal_tags"] == "[\"candidate\", \"must_watch\"]"
+    assert json_rows[0]["risk_tags"] == "[]"
+    assert json_rows[0]["reason_json"] == "{\"score_rank\": 1}"
+
+    markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+    assert "## Must Watch" in markdown
+    assert "## Candidate" in markdown
+    assert "## Risk Excluded" in markdown
