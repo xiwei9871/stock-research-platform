@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 from uuid import uuid4
 
 from stock_research.assets import sync_asset_master
@@ -150,6 +151,7 @@ from stock_research.research_preflight import (
 )
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
+from stock_research.reports.watchlist_report import write_watchlist_report
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
@@ -182,6 +184,7 @@ from stock_research.technical_feature_watchdog import (
     run_technical_feature_backfill_watchdog,
 )
 from stock_research.technical_method_validation import run_validate_technical_methods
+from stock_research.run_card import write_run_card
 from stock_research.services.universe_service import (
     UniverseConfig,
     UniverseMember,
@@ -191,6 +194,8 @@ from stock_research.services.universe_service import (
     write_universe_artifacts,
 )
 from stock_research.v31_cache import build_v31_cache
+from stock_research.watchlist.workflow import build_watchlist_snapshot, explain_watchlist_asset
+from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
 def parse_int_list(value: str, option_name: str) -> list[int]:
@@ -1627,6 +1632,23 @@ def build_parser() -> argparse.ArgumentParser:
     check_watchlist_universe.add_argument("--liquidity-lookback-days", type=int)
     check_watchlist_universe.add_argument("--max-suspended-days", type=int)
 
+    watchlist_build = subparsers.add_parser("watchlist-build")
+    watchlist_build.add_argument("--trade-date", required=True)
+    watchlist_build.add_argument("--watchlist-id", required=True)
+    watchlist_build.add_argument("--score-version", default="manual_v1")
+    watchlist_build.add_argument("--top-n", type=int, default=30)
+    watchlist_build.add_argument("--output-dir", required=True)
+
+    watchlist_report = subparsers.add_parser("watchlist-report")
+    watchlist_report.add_argument("--trade-date", required=True)
+    watchlist_report.add_argument("--watchlist-id", required=True)
+    watchlist_report.add_argument("--output-dir", required=True)
+
+    watchlist_explain = subparsers.add_parser("watchlist-explain")
+    watchlist_explain.add_argument("--trade-date", required=True)
+    watchlist_explain.add_argument("--watchlist-id", required=True)
+    watchlist_explain.add_argument("--asset-id", required=True)
+
     return parser
 
 
@@ -2522,7 +2544,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"dragon_case_source_backfill_workpack|rows|{len(result['workpack'])}")
     elif args.command == "dragon-case-source-backfill-check":
         import pandas as pd
-        from pathlib import Path
 
         apply_summary = pd.read_csv(args.apply_summary, low_memory=False)
         delta_summary = pd.read_csv(args.delta_summary, low_memory=False)
@@ -3162,6 +3183,52 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"watchlist_universe|output|{args.output}")
         print(f"watchlist_universe|members|{result.total_candidates}")
         print(f"watchlist_universe|included|{result.included_count}")
+    elif args.command == "watchlist-build":
+        rows = build_watchlist_snapshot(
+            trade_date=args.trade_date,
+            watchlist_id=args.watchlist_id,
+            score_version=args.score_version,
+            top_n=args.top_n,
+        )
+        report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
+        run_card = write_run_card(
+            output_dir=Path(args.output_dir) / "run_card",
+            run_type="watchlist_build",
+            run_id=f"watchlist:{args.watchlist_id}:{args.trade_date}",
+            title="Watchlist Build",
+            config={
+                "trade_date": args.trade_date,
+                "watchlist_id": args.watchlist_id,
+                "score_version": args.score_version,
+                "top_n": args.top_n,
+            },
+            metrics={
+                "rows": len(rows),
+                "must_watch": int(rows["must_watch"].sum()) if not rows.empty else 0,
+            },
+            artifact_paths=report_paths,
+        )
+        print(f"watchlist_build|watchlist_id|{args.watchlist_id}")
+        print(f"watchlist_build|members|{len(rows)}")
+        print(f"watchlist_build|must_watch|{int(rows['must_watch'].sum()) if not rows.empty else 0}")
+        print(f"watchlist_build|report|{report_paths['markdown_path']}")
+        print(f"watchlist_build|run_card|{run_card['run_card_json_path']}")
+    elif args.command == "watchlist-report":
+        rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
+        report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
+        print(f"watchlist_report|markdown|{report_paths['markdown_path']}")
+    elif args.command == "watchlist-explain":
+        print(
+            json.dumps(
+                explain_watchlist_asset(
+                    trade_date=args.trade_date,
+                    watchlist_id=args.watchlist_id,
+                    asset_id=args.asset_id,
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
 
 
 def main() -> None:
