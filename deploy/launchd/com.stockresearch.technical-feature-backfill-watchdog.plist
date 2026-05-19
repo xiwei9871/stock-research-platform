@@ -26,12 +26,14 @@
     <string>/Users/xiwei</string>
     <key>PATH</key>
     <string>/Users/xiwei/.local/npm/bin:/Users/xiwei/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>TECHNICAL_FEATURE_WATCHDOG_START_INTERVAL_SECONDS</key>
+    <string>60</string>
     <key>TECHNICAL_FEATURE_WATCHDOG_SLEEP_BETWEEN_RUNS_SECONDS</key>
     <string>0</string>
   </dict>
 
   <key>StartInterval</key>
-  <integer>300</integer>
+  <integer>60</integer>
 
   <key>StandardOutPath</key>
   <string>/Users/xiwei/stock_research/logs/technical_feature_backfill_watchdog.launchd.out.log</string>

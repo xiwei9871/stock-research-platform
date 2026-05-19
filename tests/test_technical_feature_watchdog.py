@@ -287,19 +287,26 @@ def test_cron_jobs_include_technical_feature_backfill_watchdog():
     )
 
 
-def test_launchd_plist_uses_300_second_start_interval():
+def test_launchd_plist_uses_60_second_start_interval_and_exports_value():
     plist_path = Path(
         "/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.technical-feature-backfill-watchdog.plist"
     )
     root = ET.fromstring(plist_path.read_text())
     entries = list(root.find("dict"))
     start_interval = None
+    env_values: dict[str, str] = {}
     for index, node in enumerate(entries):
         if node.tag == "key" and node.text == "StartInterval":
             start_interval = int(entries[index + 1].text)
-            break
+        if node.tag == "key" and node.text == "EnvironmentVariables":
+            env_dict = entries[index + 1]
+            env_entries = list(env_dict)
+            for env_index, env_node in enumerate(env_entries):
+                if env_node.tag == "key":
+                    env_values[str(env_node.text)] = str(env_entries[env_index + 1].text)
 
-    assert start_interval == 300
+    assert start_interval == 60
+    assert env_values["TECHNICAL_FEATURE_WATCHDOG_START_INTERVAL_SECONDS"] == "60"
 
 
 def test_host_script_skips_when_lock_exists(tmp_path):

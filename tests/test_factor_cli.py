@@ -1197,17 +1197,20 @@ def test_generic_backfill_watchdog_cli_dispatches_technical_features_adapter_and
             "workers": 2,
             "stale_after_minutes": 20,
             "run_timeout_seconds": 1800,
+            "sleep_between_runs_seconds": 15,
             "report_target": "chat:test",
             "report_account": "ops",
             "openclaw_bin": "openclaw",
             "report_dry_run": True,
         }
     ]
-    assert capsys.readouterr().out.splitlines() == [
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[:3] == [
         "technical_feature_watchdog|action|healthy",
         "technical_feature_watchdog|delta_success|2",
         "technical_feature_watchdog|delta_rows|200",
     ]
+    assert "technical_feature_watchdog|sleep_between_runs_seconds|15" in lines
 
 
 def test_backfill_technical_features_daily_cli_prints_summary(monkeypatch, capsys):

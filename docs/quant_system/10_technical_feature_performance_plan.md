@@ -48,20 +48,20 @@ This stage intentionally avoids formula changes and schema changes.
 ## 30-Minute Gap Source
 
 - The observed `30` minute gap is not caused by a hidden Python sleep in `technical_feature_watchdog.py`.
-- The current source is the external launchd schedule in [com.stockresearch.technical-feature-backfill-watchdog.plist](/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.technical-feature-backfill-watchdog.plist:31), which uses `StartInterval = 1800`.
+- The current source is the external launchd schedule in [com.stockresearch.technical-feature-backfill-watchdog.plist](/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.technical-feature-backfill-watchdog.plist:31), which now uses `StartInterval = 60`.
 - The host wrapper script is [run_technical_feature_backfill_watchdog_host.sh](/Users/xiwei/stock_research/scripts/run_technical_feature_backfill_watchdog_host.sh:1).
-- Stage 1 keeps that production cadence unchanged by default and only makes any in-process sleep explicit and configurable.
+- Stage 1 makes any in-process sleep explicit and configurable, while launch cadence is controlled by launchd plus the host-level lock.
 
 ## Scheduling Tuning
 
-- The next low-risk step is to reduce [launchd](/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.technical-feature-backfill-watchdog.plist:33) `StartInterval` to `300` seconds.
+- The current low-risk launchd setting uses [com.stockresearch.technical-feature-backfill-watchdog.plist](/Users/xiwei/stock_research/deploy/launchd/com.stockresearch.technical-feature-backfill-watchdog.plist:33) `StartInterval = 60` seconds.
 - Setting it to `0` is not recommended because it would allow the job to relaunch immediately and amplify startup churn.
 - A host-level lock is required because the batch itself can still run longer than the launch interval.
 - The host script should acquire a lock before spawning the CLI and exit early with a clear skip message if another instance is already running.
 - Safe rollout:
   - wait for the current batch to finish
   - reload the launchd job with the updated plist and host script
-  - confirm the log prints `start_interval_seconds=300`
+  - confirm the log prints `start_interval_seconds=60`
   - confirm `whether_lock_acquired=true` on the active batch
   - confirm a second trigger logs `skipped because another technical-feature watchdog is running` instead of starting a second batch
 - Expected wall-clock gain:
