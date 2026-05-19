@@ -166,6 +166,40 @@ def test_build_stock_technical_features_daily_keeps_requested_trade_date(monkeyp
     assert result["atr_pct14"].notna().all()
 
 
+def test_build_stock_technical_features_daily_defaults_to_latest_only(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_frame_for_technical_features",
+        lambda trade_date, **kwargs: pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-01-25",
+                    "asset_id": "000001.SZ",
+                    "open": 1.0,
+                    "high": 2.0,
+                    "low": 0.5,
+                    "close": 1.5,
+                    "preclose": 1.4,
+                    "volume": 1000.0,
+                    "amount": 10000.0,
+                    "turnover_rate": 1.0,
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "_build_technical_feature_rows_latest_only",
+        lambda *args, **kwargs: calls.append(kwargs) or [],
+    )
+
+    technical_feature_store.build_stock_technical_features_daily("2026-01-25")
+
+    assert calls[0]["normalized_trade_date"] == "2026-01-25"
+
+
 def test_build_stock_technical_features_daily_uses_requested_source_data_version(monkeypatch):
     bars = {
         "000001.SZ": _bars_for_dates("000001.SZ", [float(index) for index in range(1, 26)]).drop(
@@ -185,6 +219,189 @@ def test_build_stock_technical_features_daily_uses_requested_source_data_version
     )
 
     assert result["source_data_version"].tolist() == ["market_daily_bar:qfq@v2"]
+
+
+def test_load_bars_frame_for_technical_features_preserves_asset_column(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql, params))
+        return _bars_for_dates("000001.SZ", [10.0, 11.0]).to_dict("records")
+
+    monkeypatch.setattr(technical_feature_store, "connect", lambda service: _context(object()))
+    monkeypatch.setattr(technical_feature_store, "fetch_all", fake_fetch_all)
+
+    result = technical_feature_store.load_bars_frame_for_technical_features(
+        "2026-01-02",
+        lookback_bars=260,
+        adjust_type="qfq",
+    )
+
+    assert list(result.columns) == [
+        "trade_date",
+        "asset_id",
+        "open",
+        "high",
+        "low",
+        "close",
+        "preclose",
+        "volume",
+        "amount",
+        "turnover_rate",
+    ]
+    assert calls[0][1] == ["qfq", "2026-01-02", 260, "qfq"]
+
+
+def test_build_stock_technical_features_daily_batch_matches_legacy_rows(monkeypatch):
+    bars_frame = pd.concat(
+        [
+            _bars_for_dates("000001.SZ", [float(index) for index in range(1, 26)]),
+            _bars_for_dates("000002.SZ", [float(index) for index in range(11, 36)]),
+        ],
+        ignore_index=True,
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_frame_for_technical_features",
+        lambda trade_date, **kwargs: bars_frame,
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_for_technical_features",
+        lambda trade_date, **kwargs: {
+            "000001.SZ": bars_frame.loc[bars_frame["asset_id"] == "000001.SZ"].drop(columns=["asset_id"]).reset_index(drop=True),
+            "000002.SZ": bars_frame.loc[bars_frame["asset_id"] == "000002.SZ"].drop(columns=["asset_id"]).reset_index(drop=True),
+        },
+    )
+
+    legacy = technical_feature_store.build_stock_technical_features_daily(
+        "2026-01-25",
+        adjust_type="qfq",
+        build_strategy="legacy",
+    )
+    batch = technical_feature_store.build_stock_technical_features_daily(
+        "2026-01-25",
+        adjust_type="qfq",
+        build_strategy="batch_frame",
+    )
+
+    pd.testing.assert_frame_equal(batch, legacy)
+
+
+def test_build_stock_technical_features_daily_batch_frame_passes_group_with_asset_id(
+    monkeypatch,
+):
+    bars_frame = pd.concat(
+        [
+            _bars_for_dates("000001.SZ", [float(index) for index in range(1, 8)]),
+            _bars_for_dates("000002.SZ", [float(index) for index in range(11, 18)]),
+        ],
+        ignore_index=True,
+    )
+    seen_columns = []
+
+    def fake_compute(bars):
+        seen_columns.append(list(bars.columns))
+        return pd.DataFrame(
+            [
+                {
+                    "trade_date": bars["trade_date"].iloc[-1],
+                    **{column: 1.0 for column in technical_feature_store.TECHNICAL_FEATURE_COLUMNS},
+                }
+            ]
+        )
+
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_frame_for_technical_features",
+        lambda trade_date, **kwargs: bars_frame,
+    )
+    monkeypatch.setattr(technical_feature_store, "compute_daily_technical_features", fake_compute)
+
+    technical_feature_store.build_stock_technical_features_daily(
+        "2026-01-07",
+        adjust_type="qfq",
+        build_strategy="batch_frame",
+    )
+
+    assert seen_columns == [
+        ["asset_id", "trade_date", "open", "high", "low", "close", "preclose", "volume", "amount", "turnover_rate"],
+        ["asset_id", "trade_date", "open", "high", "low", "close", "preclose", "volume", "amount", "turnover_rate"],
+    ]
+
+
+def test_build_and_store_stock_technical_features_daily_passes_build_strategy(monkeypatch):
+    features = pd.DataFrame([{"trade_date": "2026-01-25"}])
+    build_calls = []
+    store_calls = []
+    monkeypatch.setattr(
+        technical_feature_store,
+        "build_stock_technical_features_daily",
+        lambda trade_date, **kwargs: build_calls.append((trade_date, kwargs)) or features,
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "upsert_stock_technical_features_daily",
+        lambda frame: store_calls.append(frame) or len(frame),
+    )
+
+    count = technical_feature_store.build_and_store_stock_technical_features_daily(
+        "2026-01-25",
+        lookback_bars=260,
+        adjust_type="qfq",
+        source_data_version="market_daily_bar:qfq@v2",
+        build_strategy="batch_frame",
+    )
+
+    assert count == 1
+    assert build_calls == [
+        (
+            "2026-01-25",
+            {
+                "lookback_bars": 260,
+                "adjust_type": "qfq",
+                "source_data_version": "market_daily_bar:qfq@v2",
+                "build_strategy": "batch_frame",
+            },
+        )
+    ]
+    assert store_calls == [features]
+
+
+def test_build_stock_technical_features_daily_latest_only_matches_legacy_rows(monkeypatch):
+    bars_frame = pd.concat(
+        [
+            _bars_for_dates("000001.SZ", [float(index) for index in range(1, 26)]),
+            _bars_for_dates("000002.SZ", [float(index) for index in range(11, 36)]),
+        ],
+        ignore_index=True,
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_frame_for_technical_features",
+        lambda trade_date, **kwargs: bars_frame,
+    )
+    monkeypatch.setattr(
+        technical_feature_store,
+        "load_bars_for_technical_features",
+        lambda trade_date, **kwargs: {
+            "000001.SZ": bars_frame.loc[bars_frame["asset_id"] == "000001.SZ"].drop(columns=["asset_id"]).reset_index(drop=True),
+            "000002.SZ": bars_frame.loc[bars_frame["asset_id"] == "000002.SZ"].drop(columns=["asset_id"]).reset_index(drop=True),
+        },
+    )
+
+    legacy = technical_feature_store.build_stock_technical_features_daily(
+        "2026-01-25",
+        adjust_type="qfq",
+        build_strategy="legacy",
+    )
+    latest_only = technical_feature_store.build_stock_technical_features_daily(
+        "2026-01-25",
+        adjust_type="qfq",
+        build_strategy="latest_only",
+    )
+
+    pd.testing.assert_frame_equal(latest_only, legacy)
 
 
 def test_upsert_stock_technical_features_daily_writes_replay_safe_rows(monkeypatch):
@@ -396,6 +613,7 @@ def test_build_and_store_stock_technical_features_daily_delegates(monkeypatch):
                 "lookback_bars": 260,
                 "adjust_type": "qfq",
                 "source_data_version": "market_daily_bar:qfq@v2",
+                "build_strategy": "latest_only",
             },
         )
     ]

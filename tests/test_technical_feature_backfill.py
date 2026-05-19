@@ -28,12 +28,14 @@ def test_backfill_technical_features_daily_range_runs_each_date(monkeypatch):
             "lookback_bars": 260,
             "adjust_type": "qfq",
             "source_data_version": "bars:v2",
+            "build_strategy": "latest_only",
         },
         {
             "trade_date": "2026-05-02",
             "lookback_bars": 260,
             "adjust_type": "qfq",
             "source_data_version": "bars:v2",
+            "build_strategy": "latest_only",
         },
     ]
 
@@ -71,6 +73,7 @@ def test_backfill_technical_features_daily_range_uses_trade_dates_and_reports_pr
     assert calls[1]["trade_date"] == "2026-05-06"
     assert calls[0]["source_data_version"] == "bars:v2"
     assert calls[1]["source_data_version"] == "bars:v2"
+    assert calls[0]["build_strategy"] == "latest_only"
 
 
 def test_backfill_technical_features_daily_range_skips_complete_dates(monkeypatch):
@@ -106,6 +109,36 @@ def test_backfill_technical_features_daily_range_skips_complete_dates(monkeypatc
             "lookback_bars": 260,
             "adjust_type": "qfq",
             "source_data_version": "bars:v2",
+            "build_strategy": "latest_only",
+        }
+    ]
+
+
+def test_backfill_technical_features_daily_range_passes_build_strategy(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        technical_feature_backfill,
+        "build_and_store_stock_technical_features_daily",
+        lambda **kwargs: calls.append(kwargs) or 5,
+    )
+
+    technical_feature_backfill.backfill_technical_features_daily_range(
+        start_date="2026-05-01",
+        end_date="2026-05-01",
+        adjust_type="qfq",
+        source_data_version="bars:v2",
+        trading_days_only=False,
+        build_strategy="latest_only",
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-01",
+            "lookback_bars": 260,
+            "adjust_type": "qfq",
+            "source_data_version": "bars:v2",
+            "build_strategy": "latest_only",
         }
     ]
 
@@ -382,6 +415,7 @@ def test_run_technical_feature_backfill_benchmark_current_uses_serial_workers(mo
             "source_data_version": "market_daily_bar:qfq@bench_demo",
             "workers": 1,
             "skip_complete": False,
+            "build_strategy": "legacy",
             "trading_days_only": True,
             "progress": None,
         }
@@ -423,6 +457,7 @@ def test_run_technical_feature_backfill_benchmark_parallel_dates_uses_requested_
             "source_data_version": "market_daily_bar:qfq@bench_demo",
             "workers": 4,
             "skip_complete": False,
+            "build_strategy": "legacy",
             "trading_days_only": True,
             "progress": None,
         }

@@ -9,6 +9,7 @@ from stock_research.technical_features import (
     TECHNICAL_FEATURE_COLUMNS,
     compute_daily_technical_features,
 )
+from stock_research.technical_features_fast import compute_latest_technical_features_fast
 
 
 TECHNICAL_FEATURE_METADATA_COLUMNS = [
@@ -30,7 +31,7 @@ TECHNICAL_FEATURE_CALC_VERSION = "v1"
 TECHNICAL_FEATURE_SOURCE = "technical_features"
 
 
-def load_bars_for_technical_features(
+def load_bars_frame_for_technical_features(
     trade_date: str,
     lookback_bars: int = 260,
     adjust_type: str = "qfq",
@@ -67,6 +68,49 @@ def load_bars_for_technical_features(
 
     frame = pd.DataFrame(rows)
     if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "trade_date",
+                "asset_id",
+                "open",
+                "high",
+                "low",
+                "close",
+                "preclose",
+                "volume",
+                "amount",
+                "turnover_rate",
+            ]
+        )
+    return frame[
+        [
+            "trade_date",
+            "asset_id",
+            "open",
+            "high",
+            "low",
+            "close",
+            "preclose",
+            "volume",
+            "amount",
+            "turnover_rate",
+        ]
+    ]
+
+
+def load_bars_for_technical_features(
+    trade_date: str,
+    lookback_bars: int = 260,
+    adjust_type: str = "qfq",
+    service: str = SETTINGS.research_service,
+) -> dict[str, pd.DataFrame]:
+    frame = load_bars_frame_for_technical_features(
+        trade_date,
+        lookback_bars=lookback_bars,
+        adjust_type=adjust_type,
+        service=service,
+    )
+    if frame.empty:
         return {}
 
     grouped = frame.groupby("asset_id", sort=False)
@@ -81,15 +125,69 @@ def build_stock_technical_features_daily(
     lookback_bars: int = 260,
     adjust_type: str = "qfq",
     source_data_version: str | None = None,
+    build_strategy: str = "latest_only",
 ) -> pd.DataFrame:
     normalized_trade_date = _date_string(trade_date)
     resolved_source_data_version = source_data_version or f"market_daily_bar:{adjust_type}"
+    if build_strategy == "legacy":
+        bars_by_asset = load_bars_for_technical_features(
+            normalized_trade_date,
+            lookback_bars=lookback_bars,
+            adjust_type=adjust_type,
+        )
+        rows = _build_technical_feature_rows_for_assets(
+            bars_by_asset.items(),
+            normalized_trade_date=normalized_trade_date,
+            adjust_type=adjust_type,
+            source_data_version=resolved_source_data_version,
+        )
+        return pd.DataFrame(rows, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+
+    if build_strategy == "batch_frame":
+        frame = load_bars_frame_for_technical_features(
+            normalized_trade_date,
+            lookback_bars=lookback_bars,
+            adjust_type=adjust_type,
+        )
+        if frame.empty:
+            return pd.DataFrame(columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+        grouped = frame.groupby("asset_id", sort=False, group_keys=False)
+        rows = _build_technical_feature_rows_for_assets(
+            ((str(asset_id), group) for asset_id, group in grouped),
+            normalized_trade_date=normalized_trade_date,
+            adjust_type=adjust_type,
+            source_data_version=resolved_source_data_version,
+        )
+        return pd.DataFrame(rows, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+
+    if build_strategy == "latest_only":
+        frame = load_bars_frame_for_technical_features(
+            normalized_trade_date,
+            lookback_bars=lookback_bars,
+            adjust_type=adjust_type,
+        )
+        if frame.empty:
+            return pd.DataFrame(columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+        rows = _build_technical_feature_rows_latest_only(
+            ((str(asset_id), group) for asset_id, group in frame.groupby("asset_id", sort=False, group_keys=False)),
+            normalized_trade_date=normalized_trade_date,
+            adjust_type=adjust_type,
+            source_data_version=resolved_source_data_version,
+        )
+        return pd.DataFrame(rows, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+
+    raise ValueError(f"unsupported technical feature build strategy: {build_strategy}")
+
+
+def _build_technical_feature_rows_for_assets(
+    asset_bars_iter: Any,
+    *,
+    normalized_trade_date: str,
+    adjust_type: str,
+    source_data_version: str,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for asset_id, bars in load_bars_for_technical_features(
-        normalized_trade_date,
-        lookback_bars=lookback_bars,
-        adjust_type=adjust_type,
-    ).items():
+    for asset_id, bars in asset_bars_iter:
         features = compute_daily_technical_features(bars)
         if features.empty:
             continue
@@ -107,14 +205,40 @@ def build_stock_technical_features_daily(
             "ts_code": str(asset_id),
             "adjust_type": str(adjust_type),
             "source": TECHNICAL_FEATURE_SOURCE,
-            "source_data_version": resolved_source_data_version,
+            "source_data_version": source_data_version,
             "calc_version": TECHNICAL_FEATURE_CALC_VERSION,
         }
         for column in TECHNICAL_FEATURE_COLUMNS:
             row[column] = _optional_float(latest.get(column))
         rows.append(row)
+    return rows
 
-    return pd.DataFrame(rows, columns=TECHNICAL_FEATURE_TABLE_COLUMNS)
+
+def _build_technical_feature_rows_latest_only(
+    asset_bars_iter: Any,
+    *,
+    normalized_trade_date: str,
+    adjust_type: str,
+    source_data_version: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for asset_id, bars in asset_bars_iter:
+        latest = compute_latest_technical_features_fast(bars)
+        if _date_string(latest.get("trade_date")) != normalized_trade_date:
+            continue
+        row = {
+            "trade_date": normalized_trade_date,
+            "asset_id": str(asset_id),
+            "ts_code": str(asset_id),
+            "adjust_type": str(adjust_type),
+            "source": TECHNICAL_FEATURE_SOURCE,
+            "source_data_version": source_data_version,
+            "calc_version": TECHNICAL_FEATURE_CALC_VERSION,
+        }
+        for column in TECHNICAL_FEATURE_COLUMNS:
+            row[column] = _optional_float(latest.get(column))
+        rows.append(row)
+    return rows
 
 
 def upsert_stock_technical_features_daily(
@@ -224,12 +348,14 @@ def build_and_store_stock_technical_features_daily(
     lookback_bars: int = 260,
     adjust_type: str = "qfq",
     source_data_version: str | None = None,
+    build_strategy: str = "latest_only",
 ) -> int:
     features = build_stock_technical_features_daily(
         trade_date,
         lookback_bars=lookback_bars,
         adjust_type=adjust_type,
         source_data_version=source_data_version,
+        build_strategy=build_strategy,
     )
     return upsert_stock_technical_features_daily(features)
 

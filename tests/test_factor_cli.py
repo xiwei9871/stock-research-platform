@@ -1277,6 +1277,8 @@ def test_backfill_technical_features_daily_cli_prints_summary(monkeypatch, capsy
             "--skip-complete",
             "--progress-interval",
             "2",
+            "--build-strategy",
+            "latest_only",
             "--source-data-version",
             "market_daily_bar:qfq@v2",
         ],
@@ -1289,11 +1291,26 @@ def test_backfill_technical_features_daily_cli_prints_summary(monkeypatch, capsy
     assert calls[0]["skip_complete"] is True
     assert calls[0]["source_data_version"] == "market_daily_bar:qfq@v2"
     assert calls[0]["adjust_type"] == "qfq"
+    assert calls[0]["build_strategy"] == "latest_only"
     assert capsys.readouterr().out.splitlines() == [
         "technical_feature_daily_backfill|done|2026-05-06|2|2|20",
         "technical_feature_daily_backfill|dates|2",
         "technical_feature_daily_backfill|rows|30",
     ]
+
+
+def test_cli_accepts_backfill_technical_features_daily_default_latest_only():
+    args = build_parser().parse_args(
+        [
+            "backfill-technical-features-daily",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-06",
+        ]
+    )
+
+    assert args.build_strategy == "latest_only"
 
 
 def test_benchmark_technical_feature_backfill_cli_prints_summary(monkeypatch, capsys):

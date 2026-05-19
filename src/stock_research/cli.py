@@ -1865,6 +1865,7 @@ def main() -> None:
             trade_date=args.trade_date,
             lookback_bars=args.lookback_bars,
             adjust_type=args.adjust_type,
+            build_strategy=args.build_strategy,
         )
         print(f"technical_features_daily_stored|{count}")
     elif args.command == "backfill-technical-features-daily":
@@ -1888,6 +1889,7 @@ def main() -> None:
             source_data_version=args.source_data_version,
             workers=args.workers,
             skip_complete=args.skip_complete,
+            build_strategy=args.build_strategy,
             progress=technical_feature_backfill_progress_printer(args.progress_interval),
         )
         total = int(result["feature_rows"].sum()) if not result.empty else 0

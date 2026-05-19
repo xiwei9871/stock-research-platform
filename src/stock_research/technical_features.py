@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import numpy as np
 import pandas as pd
 
@@ -43,6 +44,9 @@ TECHNICAL_FEATURE_COLUMNS = [
     "max_drawdown_20d",
     "atr_pct14",
 ]
+
+TECHNICAL_FEATURE_ENGINE_ENV = "STOCK_RESEARCH_TECHNICAL_FEATURE_ENGINE"
+DEFAULT_TECHNICAL_FEATURE_ENGINE = "fast"
 
 
 def _wilder_average(values: pd.Series, window: int) -> pd.Series:
@@ -207,7 +211,16 @@ def _rolling_max_drawdown(values: pd.Series, window: int) -> pd.Series:
     return pd.Series(result_array, index=clean.index, dtype="float64")
 
 
-def compute_daily_technical_features(bars: pd.DataFrame) -> pd.DataFrame:
+def resolve_technical_feature_engine(engine: str | None = None) -> str:
+    resolved = str(engine or os.environ.get(TECHNICAL_FEATURE_ENGINE_ENV) or DEFAULT_TECHNICAL_FEATURE_ENGINE)
+    if resolved not in {"fast", "legacy"}:
+        raise ValueError(
+            f"unsupported technical feature engine: {resolved}"
+        )
+    return resolved
+
+
+def compute_daily_technical_features_legacy(bars: pd.DataFrame) -> pd.DataFrame:
     frame = prepare_daily_bars(bars)
     if frame.empty:
         return pd.DataFrame(columns=["trade_date", *TECHNICAL_FEATURE_COLUMNS])
@@ -266,3 +279,19 @@ def compute_daily_technical_features(bars: pd.DataFrame) -> pd.DataFrame:
     result["atr_pct14"] = safe_divide(result["atr14"], close)
 
     return result[["trade_date", *TECHNICAL_FEATURE_COLUMNS]]
+
+
+def compute_daily_technical_features(
+    bars: pd.DataFrame,
+    *,
+    engine: str | None = None,
+) -> pd.DataFrame:
+    resolved_engine = resolve_technical_feature_engine(engine)
+    if resolved_engine == "legacy":
+        return compute_daily_technical_features_legacy(bars)
+
+    from stock_research.technical_features_fast import (
+        compute_daily_technical_features_fast,
+    )
+
+    return compute_daily_technical_features_fast(bars)
