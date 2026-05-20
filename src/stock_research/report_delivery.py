@@ -581,8 +581,6 @@ def detect_report_type(artifact: ReportArtifact) -> str:
     for report_type in REPORT_TYPE_PRIORITY:
         if report_type == "risk_alert_report" and _has_any_marker(marker_text, ("risk_alert", "risk alerts", "risk-alert")):
             return report_type
-        if report_type == "must_watch_report" and _has_any_marker(marker_text, ("must_watch", "must watch")):
-            return report_type
         if report_type == "watchlist_signal_report" and _has_any_marker(
             marker_text, ("watchlist_signals", "watchlist_signal", "signal_watchlist")
         ):

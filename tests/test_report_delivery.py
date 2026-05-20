@@ -159,6 +159,36 @@ def test_collect_artifacts_keeps_real_watchlist_bundle_as_watchlist_report_when_
     ]
 
 
+def test_collect_artifacts_classifies_primary_must_watch_artifact_as_must_watch_report(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "must_watch_2026-05-20_core_a.md").write_text("# Must Watch\n", encoding="utf-8")
+    (source_dir / "watchlist_signals_2026-05-20_core_b.md").write_text(
+        "# Watchlist Signals\n",
+        encoding="utf-8",
+    )
+    (source_dir / "watchlist_report_2026-05-20_core_c.md").write_text(
+        "# Watchlist Report\n",
+        encoding="utf-8",
+    )
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    report_types = {item.report_type for item in artifacts}
+    must_watch_artifact = next(item for item in artifacts if item.markdown_path and "must_watch" in item.markdown_path)
+
+    assert warnings == []
+    assert report_types == {"must_watch_report", "watchlist_signal_report", "watchlist_report"}
+    assert must_watch_artifact.report_type == "must_watch_report"
+
+
 def test_collect_artifacts_returns_warning_for_empty_input_dir(tmp_path):
     input_dir = tmp_path / "empty"
     input_dir.mkdir()
