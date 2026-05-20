@@ -152,6 +152,7 @@ from stock_research.research_preflight import (
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.reports.watchlist_report import _json_safe_value, write_watchlist_report
+from stock_research.backtest_constraints import BacktestExecutionConstraints
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
@@ -865,6 +866,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--cache-dir",
         default="/Users/xiwei/stock_research/cache/v3_1",
     )
+    retention_backtest.add_argument("--commission-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--stamp-duty-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--slippage-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--min-amount", type=float)
 
     v31_cache = subparsers.add_parser("build-v31-cache")
     v31_cache.add_argument("--start-date", required=True)
@@ -3134,11 +3139,18 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(f"portfolio_backtest_configs|{len(result['summary'])}")
     elif args.command == "retention-backtest":
+        execution_constraints = BacktestExecutionConstraints(
+            commission_bps=args.commission_bps,
+            stamp_duty_bps=args.stamp_duty_bps,
+            slippage_bps=args.slippage_bps,
+            min_amount=args.min_amount,
+        )
         retention_kwargs = {
             "initial_cash": args.initial_cash,
             "top_ks": args.top_ks,
             "variant": args.variant,
             "reports_dir": args.reports_dir,
+            "execution_constraints": execution_constraints,
         }
         if str(args.variant).strip().lower() in {"v3.1", "v31"}:
             retention_kwargs["cache_dir"] = args.cache_dir

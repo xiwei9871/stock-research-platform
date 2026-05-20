@@ -7,6 +7,7 @@ import pytest
 from stock_research import cli
 import stock_research.retention_backtest as retention_backtest
 from stock_research.backtest import BacktestSelection
+from stock_research.backtest_constraints import BacktestExecutionConstraints
 from stock_research.retention_backtest import (
     RetentionConfig,
     RetentionResult,
@@ -381,6 +382,75 @@ def test_retention_uses_target_equal_weight_integer_lots():
     assert trade["buy_date"] == "2026-01-05"
     assert trade["shares"] == 2700
     assert trade["buy_value"] == pytest.approx(99900.0)
+
+
+def test_retention_skips_limit_up_buy_via_shared_constraints():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.0, "close": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": True, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.5, "close": 10.5, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-06",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+
+    result = simulate_retention_config(feature_frame, bar_frame, config)
+
+    skipped = result.trades[result.trades["skip_reason"] == "limit_up"]
+    assert len(skipped) == 1
+
+
+def test_retention_rolls_limit_down_sell_until_executable():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_5d", "feature_value": 0.01},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_20d", "feature_value": 0.02},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_60d", "feature_value": 0.03},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ma20_deviation", "feature_value": 0.01},
+            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "max_drawdown_20d", "feature_value": -0.01},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.0, "close": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": True, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-07", "open": 9.8, "close": 9.8, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-07",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+
+    result = simulate_retention_config(feature_frame, bar_frame, config)
+
+    closed = result.trades[result.trades["status"] == "closed"].iloc[0]
+    assert closed["sell_date"] == "2026-01-07"
 
 
 def test_retention_v2_observes_one_day_outside_top20_before_exiting():
@@ -1559,6 +1629,7 @@ def test_cli_main_runs_retention_backtest_and_prints_outputs(monkeypatch, capsys
                 "top_ks": [5, 10],
                 "variant": "v2",
                 "reports_dir": "/Users/xiwei/stock_research/reports",
+                "execution_constraints": BacktestExecutionConstraints(),
             },
         )
     ]

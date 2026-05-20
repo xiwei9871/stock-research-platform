@@ -1,19 +1,23 @@
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from stock_research.backtest import (
-    BacktestBar,
     BacktestSelection,
     FEATURE_COLUMNS,
     REQUIRED_SCORE_FEATURES,
-    apply_buy_filter,
     load_backtest_bars,
     load_backtest_inputs,
     next_trade_date,
+)
+from stock_research.backtest_constraints import (
+    BacktestExecutionConstraints,
+    can_close_long,
+    can_open_long,
+    one_way_cost_rate,
 )
 from stock_research.portfolio_backtest import shares_for_budget
 from stock_research.run_card import write_run_card
@@ -96,6 +100,9 @@ class RetentionConfig:
     market_entry_filter: bool = False
     board_entry_filter: bool = False
     stop_loss_pct: float | None = None
+    execution_constraints: BacktestExecutionConstraints = field(
+        default_factory=BacktestExecutionConstraints
+    )
 
 
 @dataclass(frozen=True)
@@ -142,9 +149,16 @@ def simulate_retention_config(
         universe_result,
     )
     trading_dates = _trading_dates(bars)
+    signal_dates = _trading_dates(features)
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
-    simulation_dates = [date for date in trading_dates if start_date <= date]
+    simulation_dates = sorted(
+        {
+            date
+            for date in [*trading_dates, *signal_dates]
+            if start_date <= date
+        }
+    )
 
     bars_by_date_asset = _bars_by_date_asset(bars)
     pending_buys: dict[str, list[dict[str, Any]]] = {}
@@ -163,7 +177,7 @@ def simulate_retention_config(
         ):
             break
 
-        cash = _execute_pending_sells(current_date, cash, positions, bars_by_date_asset)
+        cash = _execute_pending_sells(current_date, cash, positions, bars_by_date_asset, config)
 
         for pending_buy in pending_buys.pop(current_date, []):
             cash, finalized = _execute_pending_buy(
@@ -274,17 +288,20 @@ def select_retention_candidates(
     bars = filtered_bars.copy()
     bars["trade_date"] = bars["trade_date"].map(_iso_date)
     bars = bars[bars["trade_date"] == normalized_date]
-    if bars.empty:
-        return []
-    bars_by_asset = bars.drop_duplicates("asset_id").set_index("asset_id")
+    bars_by_asset = (
+        bars.drop_duplicates("asset_id").set_index("asset_id")
+        if not bars.empty
+        else None
+    )
 
     scored: list[dict[str, Any]] = []
     for asset_id, features in matrix.items():
-        if asset_id not in bars_by_asset.index:
-            continue
-        status = bars_by_asset.loc[asset_id]
-        if bool(status["is_st"]) is True or str(status["trade_status"]) != "1":
-            continue
+        if bars_by_asset is not None:
+            if asset_id not in bars_by_asset.index:
+                continue
+            status = bars_by_asset.loc[asset_id]
+            if bool(status["is_st"]) is True or str(status["trade_status"]) != "1":
+                continue
         if any(_is_missing(features.get(name)) for name in REQUIRED_SCORE_FEATURES):
             continue
         amount_20d_avg = features.get("amount_20d_avg")
@@ -506,6 +523,7 @@ def run_retention_backtest(
     variant: str = "v1",
     cache_dir: str | Path | None = Path("/Users/xiwei/stock_research/cache/v3_1"),
     universe_result: UniverseResult | None = None,
+    execution_constraints: BacktestExecutionConstraints | None = None,
 ) -> dict[str, object]:
     normalized_variant = _normalize_variant(variant)
     top_values = tuple(int(value) for value in top_ks)
@@ -516,6 +534,7 @@ def run_retention_backtest(
         initial_cash=float(initial_cash),
         max_positions=top_values[0] if top_values else 1,
         strategy_id=None,
+        execution_constraints=execution_constraints,
     )
     if normalized_variant == "v3.1" and cache_dir is not None:
         features = pd.DataFrame(columns=FEATURE_COLUMNS)
@@ -559,6 +578,7 @@ def run_retention_backtest(
                 initial_cash,
                 normalized_variant,
             ),
+            execution_constraints=execution_constraints,
         )
         simulate_kwargs = {
             "signal_cache": signal_cache,
@@ -646,6 +666,7 @@ def write_retention_run_card(
         ),
         title="Retention Backtest",
         config={
+            **(asdict(results[0].config) if results else {}),
             "start_date": _iso_date(start_date),
             "end_date": _iso_date(end_date),
             "initial_cash": float(initial_cash),
@@ -1158,14 +1179,19 @@ def _retention_config_for_variant(
     initial_cash: float,
     max_positions: int,
     strategy_id: str | None,
+    execution_constraints: BacktestExecutionConstraints | None = None,
 ) -> RetentionConfig:
+    base_kwargs = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "initial_cash": initial_cash,
+        "max_positions": max_positions,
+        "strategy_id": strategy_id,
+        "execution_constraints": execution_constraints or BacktestExecutionConstraints(),
+    }
     if variant == "v2":
         return RetentionConfig(
-            start_date=start_date,
-            end_date=end_date,
-            initial_cash=initial_cash,
-            max_positions=max_positions,
-            strategy_id=strategy_id,
+            **base_kwargs,
             entry_top_n=20,
             observe_top_n=30,
             exit_confirm_days=2,
@@ -1174,11 +1200,7 @@ def _retention_config_for_variant(
         )
     if variant == "v3.1":
         return RetentionConfig(
-            start_date=start_date,
-            end_date=end_date,
-            initial_cash=initial_cash,
-            max_positions=max_positions,
-            strategy_id=strategy_id,
+            **base_kwargs,
             entry_top_n=20,
             observe_top_n=30,
             exit_confirm_days=2,
@@ -1189,13 +1211,7 @@ def _retention_config_for_variant(
             board_entry_filter=True,
             stop_loss_pct=0.10,
         )
-    return RetentionConfig(
-        start_date=start_date,
-        end_date=end_date,
-        initial_cash=initial_cash,
-        max_positions=max_positions,
-        strategy_id=strategy_id,
-    )
+    return RetentionConfig(**base_kwargs)
 
 
 def _exit_rule_description(variant: str) -> str:
@@ -1298,7 +1314,7 @@ def _execute_pending_buy(
     cash: float,
     positions: list[dict[str, Any]],
     trade_rows: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
     config: RetentionConfig,
 ) -> tuple[float, bool]:
     selection = pending_buy["selection"]
@@ -1306,35 +1322,47 @@ def _execute_pending_buy(
         return cash, False
 
     buy_bar = bars_by_date_asset.get((current_date, selection.asset_id))
-    decision = apply_buy_filter(selection, buy_bar)
-    if not decision.can_buy or buy_bar is None:
+    if buy_bar is None:
         trade_rows.append(
             _skip_trade(
                 selection,
                 current_date,
                 config,
-                decision.skip_reason or "missing_next_buy_date",
+                "suspended",
             )
         )
         return cash, True
 
-    if buy_bar.open is None:
+    allowed, reason = can_open_long(buy_bar, config.execution_constraints)
+    if not allowed:
+        trade_rows.append(
+            _skip_trade(
+                selection,
+                current_date,
+                config,
+                reason or "suspended",
+            )
+        )
+        return cash, True
+
+    if buy_bar.get("open") is None:
         trade_rows.append(_skip_trade(selection, current_date, config, "missing_price"))
         return cash, True
 
     equity = cash + _market_value(positions, bars_by_date_asset, current_date)
     target_budget = equity / config.max_positions
-    affordable_budget = min(target_budget, cash)
-    shares = shares_for_budget(affordable_budget, buy_bar.open, config.lot_size)
+    buy_cost_rate = one_way_cost_rate("buy", config.execution_constraints)
+    affordable_budget = min(target_budget, cash / (1.0 + buy_cost_rate))
+    shares = shares_for_budget(affordable_budget, float(buy_bar["open"]), config.lot_size)
     if shares == 0:
         trade_rows.append(
             _skip_trade(selection, current_date, config, "insufficient_lot_cash")
         )
         return cash, True
 
-    buy_open = float(buy_bar.open)
+    buy_open = float(buy_bar["open"])
     buy_value = shares * buy_open
-    cash -= buy_value
+    cash -= buy_value * (1.0 + buy_cost_rate)
     trade = _base_trade_row(selection, current_date, config)
     trade.update(
         {
@@ -1356,6 +1384,7 @@ def _execute_pending_buy(
             "last_price": buy_open,
             "out_of_entry_count": 0,
             "exit_reason": None,
+            "buy_cost_rate": buy_cost_rate,
         }
     )
     return cash, True
@@ -1365,7 +1394,8 @@ def _execute_pending_sells(
     current_date: str,
     cash: float,
     positions: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
+    config: RetentionConfig,
 ) -> float:
     remaining: list[dict[str, Any]] = []
     for position in positions:
@@ -1375,21 +1405,42 @@ def _execute_pending_sells(
             continue
 
         bar = bars_by_date_asset.get((current_date, position["asset_id"]))
+        if bar is None:
+            remaining.append(position)
+            continue
+
+        allowed, _reason = can_close_long(bar, config.execution_constraints)
+        if not allowed:
+            remaining.append(position)
+            continue
+
         if not _is_tradable_open(bar):
             remaining.append(position)
             continue
 
-        sell_open = float(bar.open)  # type: ignore[arg-type,union-attr]
+        sell_open = float(bar["open"])
+        sell_cost_rate = one_way_cost_rate(
+            "sell",
+            config.execution_constraints,
+        )
         position["last_price"] = sell_open
         sell_value = int(position["shares"]) * sell_open
-        cash += sell_value
+        cash += sell_value * (1.0 - sell_cost_rate)
         trade = position["trade"]
         trade.update(
             {
                 "sell_date": current_date,
                 "sell_open": sell_open,
                 "sell_value": sell_value,
-                "return_value": round(sell_open / float(trade["buy_open"]) - 1.0, 10),
+                "return_value": round(
+                    (sell_value * (1.0 - sell_cost_rate))
+                    / (
+                        float(trade["buy_value"])
+                        * (1.0 + float(position.get("buy_cost_rate", 0.0)))
+                    )
+                    - 1.0,
+                    10,
+                ),
                 "status": "closed",
                 "exit_reason": position.get("exit_reason") or "exit_top20",
             }
@@ -1400,14 +1451,14 @@ def _execute_pending_sells(
 
 def _market_value(
     positions: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
     current_date: str,
 ) -> float:
     value = 0.0
     for position in positions:
         bar = bars_by_date_asset.get((current_date, position["asset_id"]))
-        if bar is not None and bar.open is not None:
-            position["last_price"] = float(bar.open)
+        if bar is not None and bar.get("open") is not None:
+            position["last_price"] = float(bar["open"])
         value += int(position["shares"]) * float(position["last_price"])
     return value
 
@@ -1786,21 +1837,25 @@ def _markdown_cell(value: object) -> str:
     return str(value).replace("|", "\\|")
 
 
-def _bars_by_date_asset(bar_frame: pd.DataFrame) -> dict[tuple[str, str], BacktestBar]:
-    indexed: dict[tuple[str, str], BacktestBar] = {}
+def _bars_by_date_asset(bar_frame: pd.DataFrame) -> dict[tuple[str, str], dict[str, Any]]:
+    indexed: dict[tuple[str, str], dict[str, Any]] = {}
     if bar_frame.empty:
         return indexed
     for row in bar_frame.to_dict("records"):
-        bar = BacktestBar(
-            asset_id=str(row["asset_id"]),
-            trade_date=_iso_date(row["trade_date"]),
-            open=_float_or_none(row.get("open")),
-            preclose=_float_or_none(row.get("preclose")),
-            amount=_float_or_none(row.get("amount")),
-            trade_status=str(row.get("trade_status")),
-            is_st=bool(row.get("is_st")),
-        )
-        indexed[(bar.trade_date, bar.asset_id)] = bar
+        trade_date = _iso_date(row["trade_date"])
+        asset_id = str(row["asset_id"])
+        indexed[(trade_date, asset_id)] = {
+            "asset_id": asset_id,
+            "trade_date": trade_date,
+            "open": _float_or_none(row.get("open")),
+            "preclose": _float_or_none(row.get("preclose")),
+            "amount": _float_or_none(row.get("amount")),
+            "trade_status": str(row.get("trade_status")),
+            "is_st": _bool_value(row.get("is_st")),
+            "is_suspended": _bool_value(row.get("is_suspended")),
+            "is_limit_up": _bool_value(row.get("is_limit_up")),
+            "is_limit_down": _bool_value(row.get("is_limit_down")),
+        }
     return indexed
 
 
@@ -1810,10 +1865,10 @@ def _float_or_none(value: object) -> float | None:
     return float(value)
 
 
-def _is_tradable_open(bar: BacktestBar | None) -> bool:
+def _is_tradable_open(bar: dict[str, Any] | None) -> bool:
     return (
         bar is not None
-        and bar.trade_status == "1"
-        and bar.open is not None
-        and not pd.isna(bar.open)
+        and str(bar.get("trade_status")) == "1"
+        and bar.get("open") is not None
+        and not pd.isna(bar.get("open"))
     )

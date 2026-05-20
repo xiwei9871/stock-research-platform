@@ -227,6 +227,31 @@ def test_cli_accepts_load_bars_archive_raw_flag():
     assert args.archive_raw is True
 
 
+def test_cli_accepts_retention_execution_constraint_flags():
+    args = build_parser().parse_args(
+        [
+            "retention-backtest",
+            "--start-date",
+            "2026-01-01",
+            "--end-date",
+            "2026-01-31",
+            "--commission-bps",
+            "5",
+            "--stamp-duty-bps",
+            "10",
+            "--slippage-bps",
+            "8",
+            "--min-amount",
+            "30000000",
+        ]
+    )
+
+    assert args.commission_bps == 5.0
+    assert args.stamp_duty_bps == 10.0
+    assert args.slippage_bps == 8.0
+    assert args.min_amount == 30000000.0
+
+
 def test_cli_accepts_sync_index_constituents_command():
     args = build_parser().parse_args(
         [
