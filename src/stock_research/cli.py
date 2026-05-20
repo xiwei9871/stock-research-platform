@@ -567,6 +567,35 @@ def summarize_multi_horizon_report(report: dict) -> dict:
     }
 
 
+def build_blocked_data_quality_report() -> dict:
+    checks = [
+        {
+            "check_name": "latest_common_label_date",
+            "status": "blocked",
+            "kind": "research_preflight",
+            "metrics": {
+                "date_count": 0,
+            },
+        },
+        {
+            "check_name": "factor_label_coverage",
+            "status": "blocked",
+            "kind": "research_preflight",
+            "metrics": {
+                "factor_date_count": 0,
+                "complete_factor_date_count": 0,
+            },
+        },
+    ]
+    return {
+        "overall_status": "blocked",
+        "generated_at": "",
+        "checks": checks,
+        "blocked_checks": [check["check_name"] for check in checks],
+        "warning_checks": [],
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stock-research")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1702,21 +1731,30 @@ def main_for_args(argv: list[str] | None = None) -> None:
         if start_date is None:
             bounds = load_market_date_bounds()
             start_date = bounds["start_date"]
-        latest = find_latest_common_label_date(
-            start_date=start_date,
-            horizons=args.horizons,
-        )
-        end_date = args.end_date or latest["latest_common_date"]
-        report = run_data_quality(
-            expected_start_date=args.expected_start_date,
-            start_date=start_date,
-            end_date=end_date,
-            horizons=args.horizons,
-            factor_names=args.factor_names,
-            calc_version=args.calc_version,
-            min_label_dates=args.min_label_dates,
-            require_industry_membership=args.require_industry_membership,
-        )
+        report = None
+        if start_date is None:
+            report = build_blocked_data_quality_report()
+        else:
+            end_date = args.end_date
+            if end_date is None:
+                latest = find_latest_common_label_date(
+                    start_date=start_date,
+                    horizons=args.horizons,
+                )
+                end_date = latest["latest_common_date"]
+                if end_date is None:
+                    report = build_blocked_data_quality_report()
+            if report is None:
+                report = run_data_quality(
+                    expected_start_date=args.expected_start_date,
+                    start_date=start_date,
+                    end_date=end_date,
+                    horizons=args.horizons,
+                    factor_names=args.factor_names,
+                    calc_version=args.calc_version,
+                    min_label_dates=args.min_label_dates,
+                    require_industry_membership=args.require_industry_membership,
+                )
         if args.json:
             print(json.dumps(report, ensure_ascii=False))
         else:

@@ -2273,6 +2273,80 @@ def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocke
     assert json.loads(capsys.readouterr().out) == report
 
 
+def test_data_quality_cli_blocks_when_market_start_missing(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "load_market_date_bounds",
+        lambda: {"start_date": None, "end_date": "2026-05-08", "date_count": 8200},
+    )
+
+    def fail_find_latest_common_label_date(**kwargs):
+        raise AssertionError("find_latest_common_label_date should not be called")
+
+    def fail_run_data_quality(**kwargs):
+        raise AssertionError("run_data_quality should not be called")
+
+    monkeypatch.setattr(cli, "find_latest_common_label_date", fail_find_latest_common_label_date)
+    monkeypatch.setattr(cli, "run_data_quality", fail_run_data_quality)
+    monkeypatch.setattr(sys, "argv", ["stock-research", "data-quality"])
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main()
+
+    assert excinfo.value.code == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "data_quality|summary|blocked|checks|2|blocked|2|warning|0",
+        "data_quality|latest_common_label_date|blocked|kind|research_preflight|date_count|0",
+        "data_quality|factor_label_coverage|blocked|kind|research_preflight|factor_date_count|0|complete_factor_date_count|0",
+    ]
+
+
+def test_data_quality_cli_blocks_when_latest_common_label_date_missing(monkeypatch, capsys):
+    import json
+    import sys
+
+    import stock_research.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": None,
+            "date_count": 0,
+            "horizons": kwargs["horizons"],
+        },
+    )
+
+    def fail_run_data_quality(**kwargs):
+        raise AssertionError("run_data_quality should not be called")
+
+    monkeypatch.setattr(cli, "run_data_quality", fail_run_data_quality)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "data-quality", "--start-date", "2024-01-01", "--json"],
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert excinfo.value.code == 1
+    assert payload["overall_status"] == "blocked"
+    assert payload["blocked_checks"] == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+    ]
+    assert [check["check_name"] for check in payload["checks"]] == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+    ]
+
+
 def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, capsys):
     import sys
 
