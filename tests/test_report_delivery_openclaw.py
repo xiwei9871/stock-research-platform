@@ -1,82 +1,287 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
-from stock_research import report_delivery
+import pytest
+
 import stock_research.report_delivery_openclaw as report_delivery_openclaw
 
 
-def _write_local_manifest(tmp_path: Path) -> Path:
-    artifacts = [
-        report_delivery.ReportArtifact(
-            artifact_id="run_card_bundle:2026-05-20:abc123",
-            report_type="run_card_bundle",
-            title="Daily Research",
-            trade_date="2026-05-20",
-            generated_at="2026-05-20T08:00:00Z",
-            run_card_path=str(tmp_path / "run_card.json"),
-            evidence_dir=str(tmp_path / "evidence"),
-            recommended_channels=["local", "openclaw"],
-            summary="Daily research bundle",
+def _touch(path: Path, content: str = "x") -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return str(path)
+
+
+def _artifact(
+    tmp_path: Path,
+    *,
+    artifact_id: str,
+    report_type: str,
+    title: str,
+    severity: str = "info",
+    recommended_channels: list[str] | None = None,
+    markdown_exists: bool = True,
+    json_exists: bool = False,
+    csv_exists: bool = False,
+    run_card_exists: bool = False,
+    evidence_exists: bool = False,
+    requires_attention: bool = False,
+) -> dict[str, object]:
+    markdown_path = tmp_path / f"{artifact_id}.md"
+    json_path = tmp_path / f"{artifact_id}.json"
+    csv_path = tmp_path / f"{artifact_id}.csv"
+    run_card_path = tmp_path / f"{artifact_id}_run_card.json"
+    evidence_dir = tmp_path / f"{artifact_id}_evidence"
+
+    artifact: dict[str, object] = {
+        "artifact_id": artifact_id,
+        "report_type": report_type,
+        "title": title,
+        "trade_date": "2026-05-20",
+        "generated_at": "2026-05-21T08:00:00Z",
+        "markdown_path": str(markdown_path),
+        "json_path": str(json_path),
+        "csv_paths": [str(csv_path)],
+        "run_card_path": str(run_card_path),
+        "evidence_dir": str(evidence_dir),
+        "warnings": [],
+        "severity": severity,
+        "summary": f"{title} summary",
+        "tags": [report_type],
+        "recommended_channels": list(recommended_channels or ["local"]),
+        "requires_attention": requires_attention,
+        "delivery_priority": 10,
+        "metadata": {"source_path": str(markdown_path)},
+    }
+
+    if markdown_exists:
+        _touch(markdown_path, f"# {title}\n")
+    if json_exists:
+        _touch(json_path, "{}\n")
+    if csv_exists:
+        _touch(csv_path, "a,b\n1,2\n")
+    if run_card_exists:
+        _touch(run_card_path, "{}\n")
+    if evidence_exists:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        _touch(evidence_dir / "evidence.txt", "evidence\n")
+
+    return artifact
+
+
+def _write_manifest(tmp_path: Path, artifacts: list[dict[str, object]]) -> Path:
+    manifest = {
+        "generated_at": "2026-05-21T08:10:00Z",
+        "trade_date": "2026-05-20",
+        "channel": "local",
+        "artifact_count": len(artifacts),
+        "report_types": sorted({str(artifact["report_type"]) for artifact in artifacts}),
+        "requires_attention_count": sum(1 for artifact in artifacts if artifact["requires_attention"]),
+        "high_severity_count": sum(
+            1 for artifact in artifacts if artifact["severity"] in {"high", "critical"}
         ),
-        report_delivery.ReportArtifact(
-            artifact_id="watchlist_report:2026-05-20:def456",
-            report_type="watchlist_report",
-            title="Watchlist",
-            trade_date="2026-05-20",
-            generated_at="2026-05-20T08:05:00Z",
-            json_path=str(tmp_path / "watchlist.json"),
-            recommended_channels=["local"],
-            summary="Watchlist report",
-        ),
-    ]
-    manifest = report_delivery.build_manifest(
-        trade_date="2026-05-20",
-        artifacts=artifacts,
-        warnings=[],
-        errors=[],
-        generated_at="2026-05-20T08:10:00Z",
-    )
+        "artifacts": artifacts,
+        "warnings": [],
+        "errors": [],
+    }
     manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n")
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
     return manifest_path
 
 
-def test_load_local_manifest_filters_single_openclaw_routable_artifact(tmp_path):
-    manifest_path = _write_local_manifest(tmp_path)
+def test_default_export_only_includes_openclaw_artifacts(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="daily_topn",
+                report_type="daily_topn_report",
+                title="Daily TopN",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+            ),
+            _artifact(
+                tmp_path,
+                artifact_id="watchlist",
+                report_type="watchlist_report",
+                title="Watchlist",
+                recommended_channels=["local"],
+                json_exists=True,
+            ),
+        ],
+    )
 
     adapter = report_delivery_openclaw.OpenClawExportAdapter()
-    manifest = adapter.load_local_manifest(manifest_path)
-    artifacts = adapter.select_openclaw_artifacts(manifest)
+    result = adapter.export(manifest_path)
 
-    assert len(artifacts) == 1
-    assert artifacts[0]["artifact_id"] == "run_card_bundle:2026-05-20:abc123"
-    assert artifacts[0]["recommended_channels"] == ["local", "openclaw"]
+    assert result.item_count == 1
+    assert [item.artifact_id for item in result.items] == ["daily_topn"]
 
 
-def test_build_openclaw_item_uses_stable_run_card_routing(tmp_path):
-    manifest_path = _write_local_manifest(tmp_path)
+def test_include_all_exports_all_artifacts(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="daily_topn",
+                report_type="daily_topn_report",
+                title="Daily TopN",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+            ),
+            _artifact(
+                tmp_path,
+                artifact_id="watchlist",
+                report_type="watchlist_report",
+                title="Watchlist",
+                recommended_channels=["local"],
+                json_exists=True,
+            ),
+        ],
+    )
 
     adapter = report_delivery_openclaw.OpenClawExportAdapter()
-    manifest = adapter.load_local_manifest(manifest_path)
-    artifact = adapter.select_openclaw_artifacts(manifest)[0]
+    result = adapter.export(manifest_path, include_all=True)
+
+    assert result.item_count == 2
+    assert [item.artifact_id for item in result.items] == ["daily_topn", "watchlist"]
+
+
+def test_min_severity_filters_by_threshold(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="info_report",
+                report_type="generic_report",
+                title="Info",
+                severity="info",
+                recommended_channels=["local", "openclaw"],
+                markdown_exists=True,
+            ),
+            _artifact(
+                tmp_path,
+                artifact_id="medium_report",
+                report_type="generic_report",
+                title="Medium",
+                severity="medium",
+                recommended_channels=["local", "openclaw"],
+                markdown_exists=True,
+            ),
+            _artifact(
+                tmp_path,
+                artifact_id="high_report",
+                report_type="generic_report",
+                title="High",
+                severity="high",
+                recommended_channels=["local", "openclaw"],
+                markdown_exists=True,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path, min_severity="medium")
+
+    assert [item.artifact_id for item in result.items] == ["medium_report", "high_report"]
+
+
+def test_missing_source_paths_are_skipped_with_warning(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="broken_report",
+                report_type="generic_report",
+                title="Broken",
+                recommended_channels=["local", "openclaw"],
+                markdown_exists=False,
+                json_exists=False,
+                csv_exists=False,
+                run_card_exists=False,
+                evidence_exists=False,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    assert result.item_count == 0
+    assert any(warning.startswith("missing_source_path:") for warning in result.warnings)
+
+
+@pytest.mark.parametrize(
+    ("report_type", "expected_action", "expected_route"),
+    [
+        ("run_card_bundle", "review_evidence", "evidence_review"),
+        ("daily_topn_report", "review_topn_candidates", "daily_research"),
+        ("watchlist_report", "review_watchlist", "daily_research"),
+        ("must_watch_report", "review_must_watch", "daily_research"),
+        ("risk_alert_report", "review_risk_alert", "research_alert"),
+        ("factor_eval_report", "review_factor_eval", "research_validation"),
+        ("backtest_report", "review_backtest", "research_validation"),
+        ("generic_report", "review_report", "research_inbox"),
+    ],
+)
+def test_mapping_rules_render_stable_actions_and_routes(
+    tmp_path: Path,
+    report_type: str,
+    expected_action: str,
+    expected_route: str,
+) -> None:
+    artifact = _artifact(
+        tmp_path,
+        artifact_id=f"{report_type}:2026-05-20:abc123",
+        report_type=report_type,
+        title=report_type.replace("_", " ").title(),
+        recommended_channels=["local", "openclaw"],
+        markdown_exists=True,
+        json_exists=True,
+        csv_exists=True,
+        run_card_exists=True,
+        evidence_exists=True,
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
     item = adapter.build_openclaw_item(artifact)
 
-    assert item.artifact_id == "run_card_bundle:2026-05-20:abc123"
-    assert item.report_type == "run_card_bundle"
-    assert item.route == "openclaw.report.run_card_bundle"
-    assert item.action == "publish"
-    assert item.payload["artifact_id"] == "run_card_bundle:2026-05-20:abc123"
-    assert item.payload["source_paths"]["run_card_path"] == str(tmp_path / "run_card.json")
-    assert item.payload["source_paths"]["evidence_dir"] == str(tmp_path / "evidence")
+    assert item.recommended_action == expected_action
+    assert item.openclaw_route == expected_route
+    assert item.payload["recommended_action"] == expected_action
+    assert item.payload["openclaw_route"] == expected_route
 
 
-def test_export_directory_input_uses_resolved_manifest_path(tmp_path):
-    manifest_path = _write_local_manifest(tmp_path)
-    manifest_dir = manifest_path.parent
+def test_export_item_preserves_source_evidence_and_run_card_references(tmp_path: Path) -> None:
+    artifact = _artifact(
+        tmp_path,
+        artifact_id="run_card_bundle:2026-05-20:abc123",
+        report_type="run_card_bundle",
+        title="Run Card",
+        recommended_channels=["local", "openclaw"],
+        markdown_exists=True,
+        json_exists=True,
+        csv_exists=True,
+        run_card_exists=True,
+        evidence_exists=True,
+    )
 
     adapter = report_delivery_openclaw.OpenClawExportAdapter()
-    result = adapter.export(manifest_dir)
+    item = adapter.build_openclaw_item(artifact)
 
-    assert result.manifest_path == str(manifest_path)
-    assert result.log_path is None
-    assert result.item_count == 1
+    assert item.source_paths == [
+        str(tmp_path / "run_card_bundle:2026-05-20:abc123.md"),
+        str(tmp_path / "run_card_bundle:2026-05-20:abc123.json"),
+        str(tmp_path / "run_card_bundle:2026-05-20:abc123.csv"),
+    ]
+    assert item.evidence_paths == [str(tmp_path / "run_card_bundle:2026-05-20:abc123_evidence")]
+    assert item.run_card_path == str(tmp_path / "run_card_bundle:2026-05-20:abc123_run_card.json")
+    assert item.payload["source_paths"] == item.source_paths
+    assert item.payload["evidence_paths"] == item.evidence_paths
+    assert item.payload["run_card_path"] == item.run_card_path
