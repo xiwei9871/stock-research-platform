@@ -300,6 +300,14 @@ def test_collect_artifacts_finds_markdown_h1_after_old_cutoff(tmp_path):
                 "preamble 7",
                 "preamble 8",
                 "preamble 9",
+                "preamble 10",
+                "preamble 11",
+                "preamble 12",
+                "preamble 13",
+                "preamble 14",
+                "preamble 15",
+                "preamble 16",
+                "preamble 17",
                 "# Late TopN Title",
             ]
         )

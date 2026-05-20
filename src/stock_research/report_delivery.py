@@ -889,7 +889,7 @@ def _recommended_channels_for(report_type: str) -> list[str]:
     return ["local"]
 
 
-def _load_markdown_title(path: Path, *, max_lines: int = 16) -> str:
+def _load_markdown_title(path: Path, *, max_lines: int = 32) -> str:
     try:
         with path.open("r", encoding="utf-8") as handle:
             for _ in range(max_lines):
