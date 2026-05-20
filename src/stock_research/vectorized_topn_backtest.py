@@ -92,7 +92,7 @@ def load_vectorized_topn_inputs(
     ORDER BY trade_date, rank, asset_id
     """
     price_sql = """
-    SELECT trade_date, asset_id, close
+    SELECT trade_date, asset_id, open, close, amount, trade_status, is_limit_up, is_limit_down, is_suspended
     FROM market_daily_bar
     WHERE adjust_type = %s
       AND trade_date BETWEEN %s AND %s
@@ -149,20 +149,37 @@ def run_vectorized_topn_backtest(
     peak = 1.0
     current_weights: dict[str, float] = {}
     cash_weight = 1.0
+    pending_sell_targets: dict[str, dict[str, Any]] = {}
     equity_rows: list[dict[str, Any]] = []
     position_rows: list[dict[str, Any]] = []
     trade_rows: list[dict[str, Any]] = []
     for index, execution_date in enumerate(trading_dates[1:], start=1):
         signal_date = trading_dates[index - 1]
         turnover = 0.0
+        trade_rows_for_date: list[dict[str, Any]] = []
+        execution_bars = prices_by_date.get(execution_date, {})
+        current_weights, cash_weight, pending_sell_targets, retry_rows = _retry_pending_sell_orders(
+            current_weights=current_weights,
+            cash_weight=cash_weight,
+            pending_sell_targets=pending_sell_targets,
+            execution_date=execution_date,
+            execution_bars=execution_bars,
+            constraints=execution_constraints,
+        )
+        trade_rows_for_date.extend(retry_rows)
+        turnover = float(
+            sum(
+                abs(float(row["executed_weight"]) - float(row["previous_weight"]))
+                for row in retry_rows
+            )
+        )
         if signal_date in rebalance_dates:
             target_weights, selected_rows = _target_weights_for_date(
                 normalized_scores,
                 signal_date,
                 config,
             )
-            execution_bars = prices_by_date.get(execution_date, {})
-            current_weights, cash_weight, trade_rows_for_signal = _execute_rebalance(
+            current_weights, cash_weight, pending_sell_targets, signal_rows = _execute_signal_rebalance(
                 signal_date=signal_date,
                 execution_date=execution_date,
                 current_weights=current_weights,
@@ -170,22 +187,24 @@ def run_vectorized_topn_backtest(
                 target_weights=target_weights,
                 execution_bars=execution_bars,
                 constraints=execution_constraints,
+                pending_sell_targets=pending_sell_targets,
             )
-            trade_rows.extend(trade_rows_for_signal)
+            trade_rows_for_date.extend(signal_rows)
             position_rows.extend(selected_rows)
             turnover = float(
                 sum(
                     abs(float(row["executed_weight"]) - float(row["previous_weight"]))
-                    for row in trade_rows_for_signal
+                    for row in trade_rows_for_date
                 )
             )
 
+        trade_rows.extend(trade_rows_for_date)
         next_index = index + 1
         if next_index >= len(trading_dates):
             continue
         next_date = trading_dates[next_index]
         gross_return = _portfolio_return(current_weights, returns, next_date)
-        transaction_cost = float(sum(float(row["transaction_cost"]) for row in trade_rows_for_signal))
+        transaction_cost = float(sum(float(row["transaction_cost"]) for row in trade_rows_for_date))
         net_return = gross_return - transaction_cost
         equity *= 1.0 + net_return
         peak = max(peak, equity)
@@ -432,7 +451,7 @@ def _weight_turnover(
     )
 
 
-def _execute_rebalance(
+def _execute_signal_rebalance(
     *,
     signal_date: str,
     execution_date: str,
@@ -441,9 +460,11 @@ def _execute_rebalance(
     target_weights: dict[str, float],
     execution_bars: dict[str, dict[str, Any]],
     constraints: BacktestExecutionConstraints,
-) -> tuple[dict[str, float], float, list[dict[str, Any]]]:
+    pending_sell_targets: dict[str, dict[str, Any]],
+) -> tuple[dict[str, float], float, dict[str, dict[str, Any]], list[dict[str, Any]]]:
     updated_weights = dict(current_weights)
     cash = float(cash_weight)
+    pending_sell_targets = dict(pending_sell_targets)
     rows = []
     cost_rate_buy = one_way_cost_rate("buy", constraints)
     cost_rate_sell = one_way_cost_rate("sell", constraints)
@@ -481,7 +502,12 @@ def _execute_rebalance(
                     "skip_reason": reason,
                 }
             )
+            pending_sell_targets[asset_id] = {
+                "signal_date": signal_date,
+                "target_weight": target_weight,
+            }
             continue
+        pending_sell_targets.pop(asset_id, None)
         executed_weight = target_weight
         delta_weight = executed_weight - previous_weight
         turnover_contribution = abs(delta_weight)
@@ -557,7 +583,83 @@ def _execute_rebalance(
             }
         )
 
-    return updated_weights, cash, rows
+    return updated_weights, cash, pending_sell_targets, rows
+
+
+def _retry_pending_sell_orders(
+    *,
+    current_weights: dict[str, float],
+    cash_weight: float,
+    pending_sell_targets: dict[str, dict[str, Any]],
+    execution_date: str,
+    execution_bars: dict[str, dict[str, Any]],
+    constraints: BacktestExecutionConstraints,
+) -> tuple[dict[str, float], float, dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    if not pending_sell_targets:
+        return current_weights, cash_weight, pending_sell_targets, []
+
+    updated_weights = dict(current_weights)
+    cash = float(cash_weight)
+    remaining: dict[str, dict[str, Any]] = {}
+    rows: list[dict[str, Any]] = []
+    cost_rate_sell = one_way_cost_rate("sell", constraints)
+
+    for asset_id, order in sorted(
+        pending_sell_targets.items(),
+        key=lambda item: (str(item[1]["signal_date"]), str(item[0])),
+    ):
+        previous_weight = float(updated_weights.get(asset_id, 0.0))
+        target_weight = float(order["target_weight"])
+        if previous_weight <= target_weight:
+            continue
+        bar = execution_bars.get(asset_id, {})
+        allowed, reason = can_close_long(bar, constraints)
+        if not allowed:
+            rows.append(
+                {
+                    "rebalance_date": order["signal_date"],
+                    "signal_date": order["signal_date"],
+                    "execution_date": execution_date,
+                    "asset_id": asset_id,
+                    "side": "sell",
+                    "previous_weight": previous_weight,
+                    "target_weight": target_weight,
+                    "executed_weight": previous_weight,
+                    "delta_weight": 0.0,
+                    "turnover_contribution": 0.0,
+                    "transaction_cost": 0.0,
+                    "skip_reason": reason,
+                }
+            )
+            remaining[asset_id] = order
+            continue
+
+        executed_weight = target_weight
+        delta_weight = executed_weight - previous_weight
+        turnover_contribution = abs(delta_weight)
+        cash += previous_weight - executed_weight
+        if executed_weight > 0:
+            updated_weights[asset_id] = executed_weight
+        else:
+            updated_weights.pop(asset_id, None)
+        rows.append(
+            {
+                "rebalance_date": order["signal_date"],
+                "signal_date": order["signal_date"],
+                "execution_date": execution_date,
+                "asset_id": asset_id,
+                "side": "sell",
+                "previous_weight": previous_weight,
+                "target_weight": target_weight,
+                "executed_weight": executed_weight,
+                "delta_weight": delta_weight,
+                "turnover_contribution": turnover_contribution,
+                "transaction_cost": turnover_contribution * cost_rate_sell,
+                "skip_reason": None,
+            }
+        )
+
+    return updated_weights, cash, remaining, rows
 
 
 def _portfolio_return(

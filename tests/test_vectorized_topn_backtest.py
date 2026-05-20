@@ -326,6 +326,189 @@ def test_run_vectorized_topn_backtest_applies_full_one_way_costs():
     assert result.equity_curve["transaction_cost"].sum() > 0
 
 
+def test_run_vectorized_topn_backtest_retries_blocked_sell_until_later_executable_date():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 99.0),
+            ("2026-01-01", "B", 2, 98.0),
+            ("2026-01-02", "B", 1, 97.0),
+            ("2026-01-02", "C", 2, 96.0),
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "B",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "C",
+                "open": 30.0,
+                "close": 30.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-03",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": True,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-03",
+                "asset_id": "B",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-03",
+                "asset_id": "C",
+                "open": 30.0,
+                "close": 30.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-04",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-04",
+                "asset_id": "B",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-04",
+                "asset_id": "C",
+                "open": 30.0,
+                "close": 30.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-05",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-05",
+                "asset_id": "B",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-05",
+                "asset_id": "C",
+                "open": 30.0,
+                "close": 30.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-05",
+        top_n=2,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+
+    a_sells = result.trades[(result.trades["asset_id"] == "A") & (result.trades["side"] == "sell")]
+    assert list(a_sells["execution_date"]) == ["2026-01-03", "2026-01-04"]
+    assert a_sells.iloc[0]["skip_reason"] == "limit_down"
+    assert pd.isna(a_sells.iloc[1]["skip_reason"])
+    assert result.equity_curve.iloc[-1]["holdings_count"] == 1
+
+
 def test_run_vectorized_topn_backtest_weekly_rebalances_first_available_week_date():
     scores = _scores(
         [
@@ -547,8 +730,28 @@ def test_load_vectorized_topn_inputs_filters_loaded_rows_by_universe_result(monk
                 },
             ]
         return [
-            {"trade_date": "2026-01-01", "asset_id": "CN:SH:600001", "close": 10.0},
-            {"trade_date": "2026-01-01", "asset_id": "CN:SH:600002", "close": 20.0},
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "CN:SH:600001",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "CN:SH:600002",
+                "open": 20.0,
+                "close": 20.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
         ]
 
     monkeypatch.setattr(
@@ -568,6 +771,15 @@ def test_load_vectorized_topn_inputs_filters_loaded_rows_by_universe_result(monk
 
     assert scores["asset_id"].tolist() == ["CN:SH:600002"]
     assert prices["asset_id"].tolist() == ["CN:SH:600002"]
+    assert {
+        "open",
+        "close",
+        "amount",
+        "trade_status",
+        "is_limit_up",
+        "is_limit_down",
+        "is_suspended",
+    }.issubset(prices.columns)
 
 
 def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
@@ -584,7 +796,19 @@ def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
                     "score_total": 90.0,
                 }
             ]
-        return [{"trade_date": "2026-01-01", "asset_id": "A", "close": 10.0}]
+        return [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            }
+        ]
 
     monkeypatch.setattr(
         vectorized_topn_backtest,
@@ -606,6 +830,8 @@ def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
     assert calls[0][1] == ["manual_v1", "2026-01-01", "2026-01-31"]
     assert "FROM market_daily_bar" in calls[1][0]
     assert calls[1][1] == ["hfq", "2026-01-01", "2026-01-31"]
+    assert "open" in calls[1][0]
+    assert "is_limit_up" in calls[1][0]
 
 
 class _context:
