@@ -147,20 +147,19 @@ class OpenClawSender:
                     "generated_at": generated_at,
                 },
             )
-            transport_result = self.transport.send(payload, config)
             return OpenClawSendResult(
                 send_id=send_id,
                 channel="openclaw",
                 status="dry_run",
                 dry_run=True,
                 item_count=payload["item_count"],
-                sent_count=int(transport_result.get("sent_count", 0)),
-                failed_count=int(transport_result.get("failed_count", 0)),
-                skipped_count=int(transport_result.get("skipped_count", 0)),
+                sent_count=0,
+                failed_count=0,
+                skipped_count=0,
                 preview_path=str(preview_path),
                 send_log_path=str(send_log_path),
-                errors=list(transport_result.get("errors", [])),
-                warnings=list(transport_result.get("warnings", [])),
+                errors=[],
+                warnings=[],
                 generated_at=generated_at,
             )
 

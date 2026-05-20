@@ -57,6 +57,15 @@ def _write_export(tmp_path: Path) -> tuple[Path, Path]:
     return manifest_path, items_path
 
 
+class _FailingNonDryTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+        self.calls += 1
+        raise AssertionError("dry_run sender must not invoke non-dry transport")
+
+
 def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
     manifest_path, items_path = _write_export(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
@@ -90,6 +99,35 @@ def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
     assert result.skipped_count == 0
     assert Path(result.preview_path).exists()
     assert Path(result.send_log_path).exists()
+
+
+def test_openclaw_sender_dry_run_does_not_invoke_non_dry_transport(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    transport = _FailingNonDryTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.dry_run is True
+    assert transport.calls == 0
 
 
 def test_openclaw_sender_no_dry_run_without_endpoint_fails_clearly(tmp_path: Path) -> None:
