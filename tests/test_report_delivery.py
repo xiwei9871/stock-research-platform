@@ -284,6 +284,43 @@ def test_collect_artifacts_classifies_daily_topn_markdown_artifact(tmp_path):
     assert artifact.delivery_priority == 10
 
 
+def test_collect_artifacts_finds_markdown_h1_after_old_cutoff(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    markdown_path = source_dir / "daily_topn_2026-05-20_manual_v1.md"
+    markdown_path.write_text(
+        "\n".join(
+            [
+                "preamble 1",
+                "preamble 2",
+                "preamble 3",
+                "preamble 4",
+                "preamble 5",
+                "preamble 6",
+                "preamble 7",
+                "preamble 8",
+                "preamble 9",
+                "# Late TopN Title",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    artifacts, warnings = report_delivery.LocalDeliveryAdapter().collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.summary == "Late TopN Title"
+
+
 def test_collect_artifacts_classifies_merged_daily_topn_artifact(tmp_path):
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
