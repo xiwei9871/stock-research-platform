@@ -2186,21 +2186,36 @@ def test_data_quality_cli_text_mode_prints_summary_and_check(monkeypatch, capsys
 
     import stock_research.cli as cli
 
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": "2026-01-30",
+            "date_count": 122,
+            "horizons": kwargs["horizons"],
+        },
+    )
     monkeypatch.setattr(
         cli,
         "run_data_quality",
-        lambda **kwargs: {
+        lambda **kwargs: calls.append(kwargs)
+        or {
             "overall_status": "ok",
-            "checks": [{"check_name": "market_daily_bar", "status": "ok", "kind": "data_audit"}],
+            "checks": [
+                {
+                    "check_name": "market_daily_bar",
+                    "status": "ok",
+                    "kind": "data_audit",
+                    "metrics": {
+                        "rows": 10,
+                        "date_count": 2,
+                    },
+                }
+            ],
             "blocked_checks": [],
             "warning_checks": [],
         },
-    )
-    monkeypatch.setattr(cli, "format_data_quality_summary_line", lambda report: "summary-line")
-    monkeypatch.setattr(
-        cli,
-        "format_data_quality_check_line",
-        lambda check: f"check-line|{check['check_name']}",
     )
     monkeypatch.setattr(
         sys,
@@ -2210,14 +2225,16 @@ def test_data_quality_cli_text_mode_prints_summary_and_check(monkeypatch, capsys
             "data-quality",
             "--start-date",
             "2024-01-01",
-            "--end-date",
-            "2024-12-31",
         ],
     )
 
     cli.main()
 
-    assert capsys.readouterr().out.splitlines() == ["summary-line", "check-line|market_daily_bar"]
+    assert calls[0]["end_date"] == "2026-01-30"
+    assert capsys.readouterr().out.splitlines() == [
+        "data_quality|summary|ok|checks|1|blocked|0|warning|0",
+        "data_quality|market_daily_bar|ok|kind|data_audit|rows|10|date_count|2",
+    ]
 
 
 def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocked(
@@ -2254,41 +2271,6 @@ def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocke
 
     assert excinfo.value.code == 1
     assert json.loads(capsys.readouterr().out) == report
-
-
-def test_data_quality_cli_uses_market_start_when_start_omitted(monkeypatch, capsys):
-    import sys
-
-    import stock_research.cli as cli
-
-    calls = []
-    monkeypatch.setattr(
-        cli,
-        "load_market_date_bounds",
-        lambda: {"start_date": "1990-12-19", "end_date": "2026-05-08", "date_count": 8200},
-    )
-    monkeypatch.setattr(
-        cli,
-        "run_data_quality",
-        lambda **kwargs: calls.append(kwargs)
-        or {
-            "overall_status": "ok",
-            "checks": [],
-            "blocked_checks": [],
-            "warning_checks": [],
-        },
-    )
-    monkeypatch.setattr(cli, "format_data_quality_summary_line", lambda report: "summary-line")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["stock-research", "data-quality", "--end-date", "2024-12-31"],
-    )
-
-    cli.main()
-
-    assert calls[0]["start_date"] == "1990-12-19"
-    assert capsys.readouterr().out.splitlines() == ["summary-line"]
 
 
 def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, capsys):

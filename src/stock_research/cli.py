@@ -1702,10 +1702,15 @@ def main_for_args(argv: list[str] | None = None) -> None:
         if start_date is None:
             bounds = load_market_date_bounds()
             start_date = bounds["start_date"]
+        latest = find_latest_common_label_date(
+            start_date=start_date,
+            horizons=args.horizons,
+        )
+        end_date = args.end_date or latest["latest_common_date"]
         report = run_data_quality(
             expected_start_date=args.expected_start_date,
             start_date=start_date,
-            end_date=args.end_date,
+            end_date=end_date,
             horizons=args.horizons,
             factor_names=args.factor_names,
             calc_version=args.calc_version,
