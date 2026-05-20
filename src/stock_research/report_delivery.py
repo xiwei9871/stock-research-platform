@@ -248,6 +248,7 @@ class LocalDeliveryAdapter:
         report_type = self._infer_report_type(path)
         title = path.stem.replace("_", " ")
         metadata: dict[str, Any] = {"path": str(path)}
+        artifact_warnings: list[str] = []
 
         if bundle_root is not None:
             report_type = "run_card"
@@ -261,7 +262,10 @@ class LocalDeliveryAdapter:
                 metadata["watchlist_trade_date"] = watchlist_identity[0]
                 metadata["watchlist_id"] = watchlist_identity[1]
         if path.suffix.lower() == ".json":
-            _load_json_preview(path, warnings)
+            json_warnings: list[str] = []
+            _load_json_preview(path, json_warnings)
+            warnings.extend(json_warnings)
+            artifact_warnings.extend(json_warnings)
 
         artifact_id = self._artifact_id_for(path, report_type, trade_date)
         kwargs: dict[str, Any] = {
@@ -271,6 +275,7 @@ class LocalDeliveryAdapter:
             "trade_date": trade_date,
             "generated_at": "",
             "metadata": metadata,
+            "warnings": artifact_warnings,
         }
         if path.suffix.lower() == ".md":
             kwargs["markdown_path"] = str(path)
@@ -642,15 +647,15 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
     resolved_type = report_type or detect_report_type(artifact)
 
     if resolved_type == "daily_topn_report":
-        filename_summary = _summary_from_filename(artifact)
-        if filename_summary:
-            return filename_summary
         json_summary = _summary_from_json(artifact)
         if json_summary:
             return json_summary
         markdown_summary = _summary_from_markdown(artifact)
         if markdown_summary:
             return markdown_summary
+        filename_summary = _summary_from_filename(artifact)
+        if filename_summary:
+            return filename_summary
         return ""
 
     if resolved_type == "run_card_bundle":

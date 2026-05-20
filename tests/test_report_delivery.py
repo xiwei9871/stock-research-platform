@@ -277,7 +277,7 @@ def test_collect_artifacts_classifies_daily_topn_markdown_artifact(tmp_path):
     assert warnings == []
     assert artifact.report_type == "daily_topn_report"
     assert artifact.severity == "info"
-    assert artifact.summary == "Daily TopN"
+    assert artifact.summary == "topn"
     assert artifact.tags == ["daily", "topn"]
     assert artifact.recommended_channels == ["local", "openclaw"]
     assert artifact.requires_attention is False
@@ -304,7 +304,7 @@ def test_collect_artifacts_classifies_merged_daily_topn_artifact(tmp_path):
     assert warnings == []
     assert artifact.report_type == "daily_topn_report"
     assert artifact.severity == "info"
-    assert artifact.summary == "Daily TopN"
+    assert artifact.summary == "topn"
     assert artifact.tags == ["daily", "topn"]
     assert artifact.recommended_channels == ["local", "openclaw"]
     assert artifact.requires_attention is False
@@ -335,7 +335,13 @@ def test_metadata_flags_track_available_file_types(tmp_path):
         artifact_paths=[],
     )
 
-    metadata = artifacts[0].metadata
+    artifact = next(item for item in artifacts if item.report_type == "daily_topn_report")
+    metadata = artifact.metadata
+    assert metadata["source_path"] == str(source_dir / "daily_topn_2026-05-20_manual_v1.md")
+    assert "markdown" in metadata["detected_by"]
+    assert "json" in metadata["detected_by"]
+    assert "csv" in metadata["detected_by"]
+    assert metadata["file_count"] == 3
     assert metadata["source_kind"] == "file"
     assert metadata["has_markdown"] is True
     assert metadata["has_json"] is True
@@ -382,8 +388,10 @@ def test_corrupt_json_adds_warning_without_crashing(tmp_path):
         artifact_paths=[],
     )
 
+    artifact = next(item for item in artifacts if item.report_type == "risk_alert_report")
     assert len(artifacts) == 1
-    assert artifacts[0].report_type == "risk_alert_report"
+    assert artifact.warnings == [f"invalid_json:{bad_json}"]
+    assert artifact.metadata["warning_count"] == 1
     assert any("invalid_json:" in warning for warning in warnings)
 
 
@@ -581,7 +589,7 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     assert len(manifest["artifacts"]) == 1
     assert artifact["report_type"] == "daily_topn_report"
     assert artifact["severity"] == "info"
-    assert artifact["summary"] == "Daily TopN"
+    assert artifact["summary"] == "topn"
     assert artifact["tags"] == ["daily", "topn"]
     assert artifact["recommended_channels"] == ["local", "openclaw"]
     assert artifact["requires_attention"] is False
