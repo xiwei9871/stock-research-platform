@@ -201,6 +201,9 @@ class HttpOpenClawTransport:
         else:
             payload = {}
 
+        payload.pop("openclaw_transport_result", None)
+        payload.pop("openclaw_transport_error", None)
+
         if config.test_mode:
             payload["metadata"] = _test_mode_payload_metadata()
 

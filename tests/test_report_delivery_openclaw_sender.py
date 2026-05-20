@@ -1186,6 +1186,7 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
                         "severity": "info",
                         "tags": ["daily", "topn"],
                         "openclaw_transport_result": "failure",
+                        "openclaw_transport_error": "simulated transport failure",
                     },
                 }
             ],
@@ -1213,13 +1214,14 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
             "summary": "Daily TopN summary",
             "severity": "info",
             "tags": ["daily", "topn"],
-            "openclaw_transport_result": "failure",
             "metadata": {
                 "source": "stock_research_openclaw_smoke_test",
                 "test_mode": True,
             },
         },
     }
+    assert "openclaw_transport_result" not in body["payload"]
+    assert "openclaw_transport_error" not in body["payload"]
     assert "item_count" not in body
     assert "source_manifest_path" not in body
     assert captured["closed"] is True
