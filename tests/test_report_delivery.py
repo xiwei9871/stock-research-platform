@@ -152,6 +152,22 @@ def test_collect_artifacts_warns_for_missing_explicit_path(tmp_path):
     assert warnings == [f"missing_input_dir:{missing_input_dir}"]
 
 
+def test_collect_artifacts_warns_for_missing_explicit_artifact_path(tmp_path):
+    missing_artifact_path = tmp_path / "missing-artifact.json"
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[missing_artifact_path],
+    )
+
+    assert artifacts == []
+    assert warnings == [f"missing_artifact_path:{missing_artifact_path}"]
+
+
 def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
