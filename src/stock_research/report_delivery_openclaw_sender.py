@@ -369,10 +369,11 @@ class OpenClawSender:
         )
 
     def write_send_log(self, send_log_path: str | Path, records: list[dict[str, Any]]) -> None:
-        Path(send_log_path).write_text(
-            "\n".join(json.dumps(record, ensure_ascii=True, sort_keys=True) for record in records) + "\n",
-            encoding="utf-8",
-        )
+        path = Path(send_log_path)
+        with path.open("a", encoding="utf-8") as handle:
+            for record in records:
+                handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True))
+                handle.write("\n")
 
     def _generated_at(self) -> str:
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

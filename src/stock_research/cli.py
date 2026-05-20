@@ -3323,6 +3323,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"report_delivery_openclaw_send|skipped_count|{result.skipped_count}")
         print(f"report_delivery_openclaw_send|preview|{result.preview_path}")
         print(f"report_delivery_openclaw_send|log|{result.send_log_path}")
+        if not result.dry_run and result.status != "sent":
+            raise RuntimeError(
+                "report-delivery-openclaw-send: "
+                f"non-dry-run send failed with status {result.status}; "
+                f"artifacts preserved at {result.send_log_path}"
+            )
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,

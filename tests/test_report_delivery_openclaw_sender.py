@@ -504,6 +504,27 @@ def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
     assert "Authorization" not in send_log_text
 
 
+def test_write_send_log_appends_records(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    send_log_path = tmp_path / "send_log.jsonl"
+
+    sender.write_send_log(send_log_path, [{"send_id": "first", "status": "sent"}])
+    sender.write_send_log(send_log_path, [{"send_id": "second", "status": "failed"}])
+
+    send_log_records = [
+        json.loads(line)
+        for line in send_log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert send_log_records == [
+        {"send_id": "first", "status": "sent"},
+        {"send_id": "second", "status": "failed"},
+    ]
+
+
 def test_non_dry_run_sender_writes_preview_and_log_when_transport_raises(
     tmp_path: Path,
 ) -> None:

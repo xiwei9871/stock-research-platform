@@ -1273,6 +1273,104 @@ def test_report_delivery_openclaw_send_cli_no_dry_run_without_endpoint_fails_cle
         )
 
 
+def test_report_delivery_openclaw_send_cli_fails_on_non_dry_run_send_failure(
+    monkeypatch, capsys
+):
+    calls: list[dict[str, object]] = []
+
+    class FakeOpenClawSender:
+        def __init__(self, transport):
+            calls.append({"transport": transport.__class__.__name__})
+
+        def load_export(self, manifest_path, items_path):
+            calls.append(
+                {
+                    "load_export_manifest_path": manifest_path,
+                    "load_export_items_path": items_path,
+                }
+            )
+            return {
+                "manifest": {"trade_date": "2026-05-21"},
+                "items": [],
+                "manifest_path": manifest_path,
+                "items_path": items_path,
+            }
+
+        def send_batch(self, *, manifest_path, items_path, config):
+            calls.append(
+                {
+                    "manifest_path": manifest_path,
+                    "items_path": items_path,
+                    "config": config,
+                }
+            )
+            assert config.dry_run is False
+            return SimpleNamespace(
+                send_id="openclaw-send:1:2026-05-21T09:00:00Z:outputs/openclaw/openclaw_manifest.json",
+                channel="openclaw",
+                status="failed",
+                dry_run=False,
+                item_count=1,
+                sent_count=0,
+                failed_count=1,
+                skipped_count=0,
+                preview_path="outputs/openclaw_send/2026-05-21/send_preview.json",
+                send_log_path="outputs/openclaw_send/2026-05-21/send_log.jsonl",
+            )
+
+    monkeypatch.setattr(cli, "OpenClawSender", FakeOpenClawSender)
+    monkeypatch.setenv("OPENCLAW_TOKEN", "secret-token")
+
+    with pytest.raises(
+        RuntimeError,
+        match="non-dry-run send failed with status failed",
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                "outputs/openclaw/openclaw_manifest.json",
+                "--items",
+                "outputs/openclaw/openclaw_items.jsonl",
+                "--output-dir",
+                "outputs/openclaw_send/2026-05-21",
+                "--no-dry-run",
+                "--endpoint",
+                "https://openclaw.example.test/send",
+                "--allow-live-send",
+                "--limit",
+                "1",
+                "--route-allowlist",
+                "research_inbox",
+                "--severity-max",
+                "low",
+                "--test-mode",
+            ]
+        )
+
+    assert calls[0] == {"transport": "HttpOpenClawTransport"}
+    assert calls[1] == {
+        "load_export_manifest_path": "outputs/openclaw/openclaw_manifest.json",
+        "load_export_items_path": "outputs/openclaw/openclaw_items.jsonl",
+    }
+    assert calls[2]["manifest_path"] == "outputs/openclaw/openclaw_manifest.json"
+    assert calls[2]["items_path"] == "outputs/openclaw/openclaw_items.jsonl"
+    assert isinstance(calls[2]["config"], cli.OpenClawSendConfig)
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery_openclaw_send|status|failed",
+        "report_delivery_openclaw_send|dry_run|False",
+        "report_delivery_openclaw_send|send_id|openclaw-send:1:2026-05-21T09:00:00Z:outputs/openclaw/openclaw_manifest.json",
+        "report_delivery_openclaw_send|item_count|1",
+        "report_delivery_openclaw_send|sent_count|0",
+        "report_delivery_openclaw_send|failed_count|1",
+        "report_delivery_openclaw_send|skipped_count|0",
+        "report_delivery_openclaw_send|preview|outputs/openclaw_send/2026-05-21/send_preview.json",
+        "report_delivery_openclaw_send|log|outputs/openclaw_send/2026-05-21/send_log.jsonl",
+    ]
+
+
 def test_report_delivery_openclaw_send_cli_rejects_trade_date_mismatch(
     tmp_path, monkeypatch
 ):
