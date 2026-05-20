@@ -49,53 +49,68 @@ class LocalDeliveryAdapter:
     ) -> tuple[list[ReportArtifact], list[str]]:
         artifacts_by_key: dict[tuple[str, str], ReportArtifact] = {}
         warnings: list[str] = []
-        scanned_dirs: set[Path] = set()
-
-        for root in [*input_dirs, *report_dirs, *run_card_dirs]:
+        for root in input_dirs:
             path = Path(root)
             if not path.exists():
                 continue
-            if path.is_dir():
-                scanned_dirs.add(path)
-                self._scan_dir(path, trade_date, artifacts_by_key, warnings)
-            else:
-                artifact = self._artifact_from_path(path, trade_date)
-                if artifact is not None:
-                    artifacts_by_key[self._artifact_key(artifact)] = artifact
+            self._collect_path(path, trade_date, artifacts_by_key, warnings)
+
+        for root in report_dirs:
+            path = Path(root)
+            if not path.exists():
+                warnings.append(f"missing_report_dir:{path}")
+                continue
+            self._collect_path(path, trade_date, artifacts_by_key, warnings)
+
+        for root in run_card_dirs:
+            path = Path(root)
+            if not path.exists():
+                warnings.append(f"missing_run_card_dir:{path}")
+                continue
+            self._collect_path(path, trade_date, artifacts_by_key, warnings)
 
         for item in artifact_paths:
             path = Path(item)
             if not path.exists():
                 warnings.append(f"missing_artifact_path:{path}")
                 continue
-            if path.is_dir():
-                scanned_dirs.add(path)
-                self._scan_dir(path, trade_date, artifacts_by_key, warnings)
-                continue
-            artifact = self._artifact_from_path(path, trade_date)
-            if artifact is not None:
-                artifacts_by_key[self._artifact_key(artifact)] = artifact
-
-        for directory in scanned_dirs:
-            if not self._directory_contains_supported_artifacts(directory):
-                warnings.append(f"no_artifacts_found:{directory}")
+            self._collect_path(path, trade_date, artifacts_by_key, warnings)
 
         return list(artifacts_by_key.values()), warnings
+
+    def _collect_path(
+        self,
+        path: Path,
+        trade_date: str,
+        artifacts_by_key: dict[tuple[str, str], ReportArtifact],
+        warnings: list[str],
+    ) -> None:
+        if path.is_dir():
+            found = self._scan_dir(path, trade_date, artifacts_by_key)
+            if not found:
+                warnings.append(f"no_artifacts_found:{path}")
+            return
+
+        artifact = self._artifact_from_path(path, trade_date)
+        if artifact is not None:
+            self._merge_artifact(artifacts_by_key, artifact)
 
     def _scan_dir(
         self,
         root: Path,
         trade_date: str,
         artifacts_by_key: dict[tuple[str, str], ReportArtifact],
-        warnings: list[str],
-    ) -> None:
+    ) -> bool:
+        found = False
         for path in sorted(root.rglob("*")):
             if not path.is_file():
                 continue
             artifact = self._artifact_from_path(path, trade_date)
             if artifact is None:
                 continue
-            artifacts_by_key[self._artifact_key(artifact)] = artifact
+            self._merge_artifact(artifacts_by_key, artifact)
+            found = True
+        return found
 
     def _artifact_from_path(self, path: Path, trade_date: str) -> ReportArtifact | None:
         if not path.exists() or not path.is_file():
@@ -156,12 +171,45 @@ class LocalDeliveryAdapter:
         digest = sha1(f"{trade_date}:{report_type}:{path}".encode("utf-8")).hexdigest()[:12]
         return f"{report_type}:{trade_date}:{digest}"
 
-    def _artifact_key(self, artifact: ReportArtifact) -> tuple[str, str]:
-        return (artifact.report_type, artifact.title)
+    def _merge_artifact(
+        self,
+        artifacts_by_key: dict[tuple[str, str], ReportArtifact],
+        artifact: ReportArtifact,
+    ) -> None:
+        key = self._artifact_key_for_path(Path(artifact.metadata["path"]), artifact.report_type)
+        current = artifacts_by_key.get(key)
+        if current is None:
+            artifacts_by_key[key] = artifact
+            return
 
-    def _directory_contains_supported_artifacts(self, root: Path) -> bool:
-        for path in root.rglob("*"):
-            if path.is_file() and path.suffix.lower() in {".md", ".json", ".csv"}:
-                if self._artifact_from_path(path, trade_date="") is not None:
-                    return True
-        return False
+        markdown_path = current.markdown_path or artifact.markdown_path
+        json_path = current.json_path or artifact.json_path
+        run_card_path = current.run_card_path or artifact.run_card_path
+        evidence_dir = current.evidence_dir or artifact.evidence_dir
+        csv_paths = list(dict.fromkeys([*current.csv_paths, *artifact.csv_paths]))
+        warnings = list(dict.fromkeys([*current.warnings, *artifact.warnings]))
+        metadata = {**current.metadata, **artifact.metadata}
+
+        artifacts_by_key[key] = ReportArtifact(
+            artifact_id=current.artifact_id,
+            report_type=current.report_type,
+            title=current.title,
+            trade_date=current.trade_date,
+            generated_at=current.generated_at or artifact.generated_at,
+            markdown_path=markdown_path,
+            json_path=json_path,
+            csv_paths=csv_paths,
+            run_card_path=run_card_path,
+            evidence_dir=evidence_dir,
+            warnings=warnings,
+            severity=current.severity,
+            summary=current.summary or artifact.summary,
+            metadata=metadata,
+        )
+
+    def _artifact_key_for_path(self, path: Path, report_type: str) -> tuple[str, str]:
+        if report_type == "run_card":
+            return (report_type, str(path.parent))
+        if report_type == "evidence_bundle":
+            return (report_type, str(path.parent))
+        return (report_type, str(path.with_suffix("")))
