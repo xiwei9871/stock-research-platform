@@ -2264,6 +2264,102 @@ def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocke
     assert json.loads(capsys.readouterr().out) == report
 
 
+def test_data_quality_cli_uses_market_start_when_start_omitted(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+    import stock_research.data_quality as data_quality
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "load_market_date_bounds",
+        lambda: {"start_date": "1990-12-19", "end_date": "2026-05-08", "date_count": 8200},
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "candidate_factor_names",
+        lambda: ["ret_20"],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "ok", "rows": 0}],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: calls.append(("latest", kwargs))
+        or {
+            "latest_common_date": "2024-12-31",
+            "date_count": 122,
+            "horizons": kwargs["horizons"],
+        },
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "check_factor_label_coverage",
+        lambda **kwargs: calls.append(("coverage", kwargs))
+        or {
+            "status": "ok",
+            "reasons": [],
+            "factor_date_count": 122,
+            "factor_complete_date_count": 122,
+            "missing_horizons": [],
+            "short_label_horizons": [],
+            "required_factor_names": [],
+            "unavailable_factor_names": [],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["stock-research", "data-quality", "--end-date", "2024-12-31"],
+    )
+
+    cli.main()
+
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+        ("latest", {"start_date": "1990-12-19", "horizons": [5, 10, 20, 60]}),
+        (
+            "coverage",
+            {
+                "factor_names": ["ret_20"],
+                "start_date": "1990-12-19",
+                "end_date": "2024-12-31",
+                "horizons": [5, 10, 20, 60],
+                "calc_version": "v1",
+                "min_label_dates": 20,
+            },
+        ),
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "data_quality|summary|ok|checks|4|blocked|0|warning|0",
+        "data_quality|market_daily_bar|ok|kind|data_audit|rows|10|date_count|2|min_date|2024-01-01|max_date|2024-01-02",
+        "data_quality|missing_balance_sheet|ok|kind|finance_audit|rows|0",
+        "data_quality|latest_common_label_date|ok|kind|research_preflight|latest_common_date|2024-12-31|date_count|122|requested_end_date|2024-12-31",
+        "data_quality|factor_label_coverage|ok|kind|research_preflight|factor_date_count|122|complete_factor_date_count|122",
+    ]
+
+
 def test_data_quality_cli_blocks_when_market_start_missing(monkeypatch, capsys):
     import sys
 
