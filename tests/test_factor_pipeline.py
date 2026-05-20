@@ -668,10 +668,15 @@ def test_build_and_store_factor_daily_appends_quality_and_value_rows(monkeypatch
 
     count = factor_pipeline.build_and_store_factor_daily("2026-03-11")
 
-    names = set(stored[0]["factor_name"])
+    stored_rows = stored[0]
+    names = set(stored_rows["factor_name"])
     assert "ret_20" in names
     assert "roe" in names
     assert "pb" in names
+    fundamentals = stored_rows[stored_rows["factor_name"].isin(["roe", "pb"])]
+    assert set(fundamentals["factor_name"]) == {"roe", "pb"}
+    assert set(fundamentals["source"]) == {"fundamental"}
+    assert set(fundamentals["source_data_version"]) == {"pit_finance_v1"}
     assert count == len(stored[0])
 
 

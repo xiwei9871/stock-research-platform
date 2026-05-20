@@ -57,18 +57,13 @@ def test_manual_v1_config_is_derived_from_registry_maps():
 
 def test_manual_v1_config_does_not_add_fundamental_weights():
     config = factor_config.manual_v1_config()
+    fundamental_factor_names = {
+        metadata.factor_name
+        for metadata in factor_registry.list_factor_metadata()
+        if metadata.source == "fundamental"
+    }
 
-    for factor_name in (
-        "roe",
-        "roa",
-        "gross_margin",
-        "net_margin",
-        "debt_ratio",
-        "ocf_to_np",
-        "pe_ttm",
-        "ps_ttm",
-        "pb",
-    ):
+    for factor_name in fundamental_factor_names:
         assert factor_name in config["factor_groups"]
         assert factor_name in config["factor_directions"]
         assert f"{factor_name}_score" not in config["weights"]

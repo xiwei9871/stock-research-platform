@@ -68,39 +68,53 @@ def _universe_result(
 
 
 def test_run_daily_factor_pipeline_runs_build_score_topn_and_report(monkeypatch):
-    calls = []
+    build_calls = []
+    score_calls = []
+    top_score_calls = []
+    report_calls = []
 
     monkeypatch.setattr(
         daily_pipeline,
         "build_and_store_factor_daily",
-        lambda **kwargs: calls.append(("build", kwargs)) or 100,
+        lambda **kwargs: build_calls.append(kwargs) or 100,
     )
     monkeypatch.setattr(
         daily_pipeline,
         "score_stored_factor_daily",
-        lambda **kwargs: calls.append(("score", kwargs)) or 20,
+        lambda **kwargs: score_calls.append(kwargs) or 20,
     )
     monkeypatch.setattr(
         daily_pipeline,
         "load_top_scores",
-        lambda **kwargs: [{"trade_date": "2026-05-08", "asset_id": "A", "rank": 1, "score_total": 88.5}],
+        lambda **kwargs: top_score_calls.append(kwargs)
+        or [{"trade_date": "2026-05-08", "asset_id": "A", "rank": 1, "score_total": 88.5}],
     )
     monkeypatch.setattr(
         daily_pipeline,
         "write_daily_topn_report",
-        lambda **kwargs: {"markdown_path": "/tmp/report.md", "csv_path": "/tmp/report.csv"},
+        lambda **kwargs: report_calls.append(kwargs)
+        or {"markdown_path": "/tmp/report.md", "csv_path": "/tmp/report.csv"},
     )
 
     result = daily_pipeline.run_daily_factor_pipeline("2026-05-08", top_n=10)
 
-    assert calls[0] == ("build", {"trade_date": "2026-05-08", "lookback_bars": 130})
-    assert calls[1][0] == "score"
-    assert calls[1][1] == {
-        "trade_date": "2026-05-08",
-        "score_version": "manual_v1",
-        "approved_only": True,
-    }
-    assert calls[1][1]["approved_only"] is True
+    assert len(build_calls) == 1
+    assert build_calls[0]["trade_date"] == "2026-05-08"
+    assert build_calls[0]["lookback_bars"] == 130
+    assert len(score_calls) == 1
+    assert score_calls[0]["trade_date"] == "2026-05-08"
+    assert score_calls[0]["score_version"] == "manual_v1"
+    assert score_calls[0]["approved_only"] is True
+    assert len(top_score_calls) == 1
+    assert top_score_calls[0]["trade_date"] == "2026-05-08"
+    assert top_score_calls[0]["score_version"] == "manual_v1"
+    assert top_score_calls[0]["top_n"] == 10
+    assert top_score_calls[0]["universe_result"] is None
+    assert len(report_calls) == 1
+    assert report_calls[0]["trade_date"] == "2026-05-08"
+    assert report_calls[0]["score_version"] == "manual_v1"
+    assert report_calls[0]["top_scores"] == result["top_scores"]
+    assert report_calls[0]["output_dir"] == "/Users/xiwei/stock_research/reports"
     assert result["factor_rows"] == 100
     assert result["score_rows"] == 20
     assert result["top_scores"][0]["asset_id"] == "A"
