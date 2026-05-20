@@ -239,22 +239,19 @@ class OpenClawSender:
                 f"OpenClaw sender manifest item_count must be an integer: {manifest_path}"
             )
 
-        if manifest_item_count != len(items):
-            raise OpenClawSendInputError(
-                "OpenClaw sender export bundle mismatch: "
-                f"manifest item_count={manifest_item_count}, "
-                f"items jsonl entries={len(items)} "
-                f"for {manifest_path} and {items_path}"
-            )
-
-        if not manifest_items:
-            return
-
         if manifest_item_count != len(manifest_items):
             raise OpenClawSendInputError(
                 "OpenClaw sender export bundle mismatch: "
                 f"manifest item_count={manifest_item_count}, "
                 f"manifest items={len(manifest_items)} "
+                f"for {manifest_path} and {items_path}"
+            )
+
+        if manifest_item_count != len(items):
+            raise OpenClawSendInputError(
+                "OpenClaw sender export bundle mismatch: "
+                f"manifest item_count={manifest_item_count}, "
+                f"items jsonl entries={len(items)} "
                 f"for {manifest_path} and {items_path}"
             )
 

@@ -283,6 +283,16 @@ def parse_backfill_run_ids(value: str) -> list[str]:
     return parse_str_list(value, "--backfill-run-ids")
 
 
+def parse_openclaw_timeout_seconds(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "report-delivery-openclaw-send: "
+            f"OPENCLAW_TIMEOUT_SECONDS must be numeric, got {value!r}"
+        ) from exc
+
+
 def build_universe_config_from_args(
     args: argparse.Namespace,
     *,
@@ -912,8 +922,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_delivery_openclaw_send.add_argument("--endpoint", default=os.environ.get("OPENCLAW_ENDPOINT"))
     report_delivery_openclaw_send.add_argument(
         "--timeout-seconds",
-        type=float,
-        default=float(os.environ.get("OPENCLAW_TIMEOUT_SECONDS", "10")),
+        default=os.environ.get("OPENCLAW_TIMEOUT_SECONDS", "10.0"),
     )
     report_delivery_openclaw_send.add_argument("--retry-count", type=int, default=0)
     report_delivery_openclaw_send.add_argument(
@@ -3287,6 +3296,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
         print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")
     elif args.command == "report-delivery-openclaw-send":
+        timeout_seconds = parse_openclaw_timeout_seconds(args.timeout_seconds)
         sender = OpenClawSender(
             transport=DryRunOpenClawTransport() if args.dry_run else HttpOpenClawTransport()
         )
@@ -3304,7 +3314,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 config=OpenClawSendConfig(
                     endpoint=args.endpoint,
                     token=os.environ.get("OPENCLAW_TOKEN"),
-                    timeout_seconds=args.timeout_seconds,
+                    timeout_seconds=timeout_seconds,
                     dry_run=args.dry_run,
                     retry_count=args.retry_count,
                     retry_backoff_seconds=args.retry_backoff_seconds,

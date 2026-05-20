@@ -1095,7 +1095,7 @@ def test_cli_accepts_report_delivery_openclaw_send_command(monkeypatch):
     assert args.output_dir == "outputs/openclaw_send/2026-05-21"
     assert args.dry_run is True
     assert args.endpoint is None
-    assert args.timeout_seconds == 10.0
+    assert args.timeout_seconds == "10.0"
     assert args.retry_count == 0
     assert args.retry_backoff_seconds == 1.0
     assert args.allow_live_send is False
@@ -1104,6 +1104,50 @@ def test_cli_accepts_report_delivery_openclaw_send_command(monkeypatch):
     assert args.severity_max is None
     assert args.test_mode is False
     assert not hasattr(args, "token")
+
+
+def test_cli_unrelated_commands_ignore_invalid_openclaw_timeout_env(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_TIMEOUT_SECONDS", "not-a-number")
+
+    args = build_parser().parse_args(
+        [
+            "build-factor-daily",
+            "--trade-date",
+            "2026-05-08",
+            "--lookback-bars",
+            "130",
+            "--industry-system",
+            "csrc",
+        ]
+    )
+
+    assert args.command == "build-factor-daily"
+    assert args.trade_date == "2026-05-08"
+    assert args.lookback_bars == 130
+    assert args.industry_system == "csrc"
+
+
+def test_report_delivery_openclaw_send_cli_rejects_invalid_timeout_env(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_TIMEOUT_SECONDS", "not-a-number")
+    monkeypatch.delenv("OPENCLAW_ENDPOINT", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=r"report-delivery-openclaw-send: OPENCLAW_TIMEOUT_SECONDS must be numeric",
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                "outputs/openclaw/openclaw_manifest.json",
+                "--items",
+                "outputs/openclaw/openclaw_items.jsonl",
+                "--output-dir",
+                "outputs/openclaw_send/2026-05-21",
+            ]
+        )
 
 
 def test_report_delivery_openclaw_send_cli_dry_run_prints_summary(monkeypatch, capsys):
@@ -1232,7 +1276,15 @@ def test_report_delivery_openclaw_send_cli_no_dry_run_without_endpoint_fails_cle
   "dry_run": true,
   "source_manifest_path": "outputs/report_delivery/2026-05-21/manifest.json",
   "item_count": 1,
-  "items": [],
+  "items": [
+    {
+      "item_id": "openclaw:1",
+      "artifact_id": "daily_topn_report:2026-05-21:abc",
+      "report_type": "daily_topn_report",
+      "openclaw_route": "research_inbox",
+      "severity": "info"
+    }
+  ],
   "warnings": [],
   "errors": []
 }
