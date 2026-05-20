@@ -1172,30 +1172,23 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
                     "artifact_id": "daily_topn_report:2026-05-20:abc",
                     "report_type": "daily_topn_report",
                     "openclaw_route": "daily_research",
+                    "route": "daily_research",
+                    "action": "review_topn_candidates",
+                    "title": "Daily TopN",
+                    "summary": "Daily TopN summary",
+                    "severity": "info",
+                    "tags": ["daily", "topn"],
                     "payload": {
+                        "route": "daily_research",
+                        "action": "review_topn_candidates",
                         "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "tags": ["daily", "topn"],
                         "openclaw_transport_result": "failure",
                     },
                 }
             ],
-            "payload": {
-                "items": [
-                    {
-                        "item_id": "openclaw:1",
-                        "artifact_id": "daily_topn_report:2026-05-20:abc",
-                        "report_type": "daily_topn_report",
-                        "openclaw_route": "daily_research",
-                        "payload": {
-                            "title": "Daily TopN",
-                            "openclaw_transport_result": "failure",
-                        },
-                    }
-                ],
-                "metadata": {
-                    "source": "stock_research_openclaw_smoke_test",
-                    "test_mode": True,
-                },
-            },
         },
         config,
     )
@@ -1207,21 +1200,20 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
     assert headers["authorization"] == "Bearer secret-token"
     body = json.loads(bytes(captured["data"]).decode("utf-8"))
     assert body == {
-        "items": [
-            {
-                "item_id": "openclaw:1",
-                "artifact_id": "daily_topn_report:2026-05-20:abc",
-                "report_type": "daily_topn_report",
-                "openclaw_route": "daily_research",
-                "payload": {
-                    "title": "Daily TopN",
-                    "openclaw_transport_result": "failure",
-                },
-            }
-        ],
-        "metadata": {
-            "source": "stock_research_openclaw_smoke_test",
-            "test_mode": True,
+        "route": "daily_research",
+        "action": "review_topn_candidates",
+        "title": "Daily TopN",
+        "summary": "Daily TopN summary",
+        "severity": "info",
+        "tags": ["daily", "topn"],
+        "payload": {
+            "route": "daily_research",
+            "action": "review_topn_candidates",
+            "title": "Daily TopN",
+            "summary": "Daily TopN summary",
+            "severity": "info",
+            "tags": ["daily", "topn"],
+            "openclaw_transport_result": "failure",
         },
     }
     assert "item_count" not in body

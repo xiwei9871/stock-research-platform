@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -285,12 +286,20 @@ def parse_backfill_run_ids(value: str) -> list[str]:
 
 def parse_openclaw_timeout_seconds(value: object) -> float:
     try:
-        return float(value)
+        timeout_seconds = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(
             "report-delivery-openclaw-send: "
-            f"OPENCLAW_TIMEOUT_SECONDS must be numeric, got {value!r}"
+            "--timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0, "
+            f"got {value!r}"
         ) from exc
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError(
+            "report-delivery-openclaw-send: "
+            "--timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0, "
+            f"got {value!r}"
+        )
+    return timeout_seconds
 
 
 def build_universe_config_from_args(

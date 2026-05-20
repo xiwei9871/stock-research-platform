@@ -123,9 +123,15 @@ class HttpOpenClawTransport:
         if not config.endpoint:
             raise ValueError("endpoint is required for live HTTP send")
 
-        transport_payload = payload.get("payload")
-        if not isinstance(transport_payload, dict):
-            raise ValueError("OpenClaw transport payload must be a JSON object")
+        items = payload.get("items")
+        if not isinstance(items, list) or len(items) != 1:
+            raise ValueError("OpenClaw transport requires exactly one deliverable item")
+
+        item = items[0]
+        if not isinstance(item, dict):
+            raise ValueError("OpenClaw transport item must be a JSON object")
+
+        transport_payload = self._build_transport_payload(item)
 
         body = json.dumps(transport_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
         headers: dict[str, str] = {
@@ -183,6 +189,23 @@ class HttpOpenClawTransport:
             "OpenClaw HTTP transport received an unexpected response from "
             f"{config.endpoint}: HTTP {response_status_text}"
         )
+
+    def _build_transport_payload(self, item: dict[str, Any]) -> dict[str, Any]:
+        nested_payload = item.get("payload")
+        if isinstance(nested_payload, dict):
+            payload = dict(nested_payload)
+        else:
+            payload = {}
+
+        return {
+            "route": str(item.get("route", item.get("openclaw_route", payload.get("route", "")))),
+            "action": str(item.get("action", payload.get("action", ""))),
+            "title": str(item.get("title", payload.get("title", ""))),
+            "summary": str(item.get("summary", payload.get("summary", ""))),
+            "severity": str(item.get("severity", payload.get("severity", "info"))),
+            "tags": list(item.get("tags", payload.get("tags", []))),
+            "payload": payload,
+        }
 
 
 class OpenClawSender:

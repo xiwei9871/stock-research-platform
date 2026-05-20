@@ -1133,7 +1133,7 @@ def test_report_delivery_openclaw_send_cli_rejects_invalid_timeout_env(monkeypat
 
     with pytest.raises(
         ValueError,
-        match=r"report-delivery-openclaw-send: OPENCLAW_TIMEOUT_SECONDS must be numeric",
+        match=r"report-delivery-openclaw-send: --timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0",
     ):
         cli.main_for_args(
             [
@@ -1146,6 +1146,34 @@ def test_report_delivery_openclaw_send_cli_rejects_invalid_timeout_env(monkeypat
                 "outputs/openclaw/openclaw_items.jsonl",
                 "--output-dir",
                 "outputs/openclaw_send/2026-05-21",
+            ]
+        )
+
+
+@pytest.mark.parametrize("timeout_value", ["0", "-1", "inf", "nan"])
+def test_report_delivery_openclaw_send_cli_rejects_non_positive_or_non_finite_timeouts(
+    monkeypatch, timeout_value
+):
+    monkeypatch.delenv("OPENCLAW_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("OPENCLAW_ENDPOINT", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=r"report-delivery-openclaw-send: --timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0",
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                "outputs/openclaw/openclaw_manifest.json",
+                "--items",
+                "outputs/openclaw/openclaw_items.jsonl",
+                "--output-dir",
+                "outputs/openclaw_send/2026-05-21",
+                "--timeout-seconds",
+                timeout_value,
             ]
         )
 
