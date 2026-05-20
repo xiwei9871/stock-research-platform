@@ -31,12 +31,13 @@ def test_collect_artifacts_aggregates_real_run_card_bundle(tmp_path):
         artifact_paths=[],
     )
 
-    run_card_artifact = next(item for item in artifacts if item.report_type == "run_card")
+    run_card_artifact = next(item for item in artifacts if item.report_type == "run_card_bundle")
 
-    assert len([item for item in artifacts if item.report_type == "run_card"]) == 1
+    assert len([item for item in artifacts if item.report_type == "run_card_bundle"]) == 1
     assert "evidence_bundle" not in {item.report_type for item in artifacts}
     assert run_card_artifact.run_card_path == output["run_card_json_path"]
     assert run_card_artifact.evidence_dir == str((Path(output["run_card_dir"]) / "evidence"))
+    assert run_card_artifact.recommended_channels == ["local", "openclaw"]
     assert warnings == []
 
 
@@ -87,9 +88,9 @@ def test_collect_artifacts_aggregates_real_watchlist_outputs(tmp_path):
         artifact_paths=[],
     )
 
-    watchlist_artifact = next(item for item in artifacts if item.report_type == "watchlist")
+    watchlist_artifact = next(item for item in artifacts if item.report_type == "must_watch_report")
 
-    assert len([item for item in artifacts if item.report_type == "watchlist"]) == 1
+    assert len([item for item in artifacts if item.report_type == "must_watch_report"]) == 1
     assert watchlist_artifact.markdown_path == output["markdown_path"]
     assert watchlist_artifact.json_path == output["json_path"]
     assert watchlist_artifact.csv_paths == [
@@ -187,7 +188,7 @@ def test_collect_artifacts_classifies_daily_topn_markdown_artifact(tmp_path):
     assert warnings == []
     assert artifact.report_type == "daily_topn_report"
     assert artifact.severity == "info"
-    assert artifact.summary == "Daily TopN"
+    assert artifact.summary == "topn"
     assert artifact.tags == ["daily", "topn"]
     assert artifact.recommended_channels == ["local", "openclaw"]
     assert artifact.requires_attention is False
@@ -214,11 +215,106 @@ def test_collect_artifacts_classifies_merged_daily_topn_artifact(tmp_path):
     assert warnings == []
     assert artifact.report_type == "daily_topn_report"
     assert artifact.severity == "info"
-    assert artifact.summary == "Daily TopN"
+    assert artifact.summary == "topn"
     assert artifact.tags == ["daily", "topn"]
     assert artifact.recommended_channels == ["local", "openclaw"]
     assert artifact.requires_attention is False
     assert artifact.delivery_priority == 10
+
+
+def test_collect_artifacts_classifies_daily_market_markdown_by_marker_and_h1(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "market_state_2026-05-20.md").write_text("# Market State\n\nstatus", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "daily_market_report"
+    assert artifact.severity == "info"
+    assert artifact.summary == "Market State"
+
+
+def test_collect_artifacts_classifies_explicit_risk_alert_report(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "risk_alerts_2026-05-20.md").write_text(
+        "# Risk Alerts\n\n| Severity | Scope | Asset | Type | Metric | Value | Message |\n"
+        "| --- | --- | --- | --- | --- | ---: | --- |\n"
+        "| high | market |  | market_defensive | risk_level | high | Market is defensive |\n",
+        encoding="utf-8",
+    )
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "risk_alert_report"
+    assert artifact.severity in {"high", "critical"}
+    assert artifact.requires_attention is True
+
+
+def test_collect_artifacts_does_not_promote_plain_watchlist_json_to_risk_alert(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "watchlist_report_2026-05-20_core.json").write_text(
+        json.dumps({"risk_score": 0.97}),
+        encoding="utf-8",
+    )
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.json_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "watchlist_report"
+    assert artifact.severity == "info"
+
+
+def test_collect_artifacts_falls_back_to_generic_report_for_unknown_file(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "notes_2026-05-20.md").write_text("plain notes", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "generic_report"
+    assert artifact.severity == "info"
+    assert artifact.recommended_channels == ["local"]
 
 
 def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
@@ -281,7 +377,7 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     assert len(manifest["artifacts"]) == 1
     assert artifact["report_type"] == "daily_topn_report"
     assert artifact["severity"] == "info"
-    assert artifact["summary"] == "Daily TopN"
+    assert artifact["summary"] == "topn"
     assert artifact["tags"] == ["daily", "topn"]
     assert artifact["recommended_channels"] == ["local", "openclaw"]
     assert artifact["requires_attention"] is False

@@ -21,6 +21,26 @@ RUN_CARD_FILENAMES = {
 WATCHLIST_FILE_RE = re.compile(
     r"^(watchlist_report|watchlist_signals|must_watch)_(\d{4}-\d{2}-\d{2})_(.+)\.(md|json|csv)$"
 )
+REPORT_TYPE_PRIORITY = [
+    "run_card_bundle",
+    "risk_alert_report",
+    "must_watch_report",
+    "watchlist_signal_report",
+    "watchlist_report",
+    "factor_eval_report",
+    "daily_topn_report",
+    "daily_market_report",
+    "backtest_report",
+    "generic_report",
+]
+SEVERITY_ORDER = {
+    "critical": 4,
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "info": 0,
+    "unknown": 0,
+}
 
 
 @dataclass(frozen=True)
@@ -330,23 +350,10 @@ class LocalDeliveryAdapter:
         )
 
     def _classify_artifacts(self, artifacts: list[ReportArtifact]) -> list[ReportArtifact]:
-        return [self._classify_artifact(artifact) for artifact in artifacts]
+        return [classify_artifact(artifact) for artifact in artifacts]
 
     def _classify_artifact(self, artifact: ReportArtifact) -> ReportArtifact:
-        markdown_path_value = artifact.markdown_path
-        markdown_path = Path(markdown_path_value) if markdown_path_value is not None else None
-        if artifact.report_type == "topn" and markdown_path is not None and markdown_path.name.startswith("daily_topn_"):
-            return replace(
-                artifact,
-                report_type="daily_topn_report",
-                severity="info",
-                summary="Daily TopN",
-                tags=["daily", "topn"],
-                recommended_channels=["local", "openclaw"],
-                requires_attention=False,
-                delivery_priority=10,
-            )
-        return artifact
+        return classify_artifact(artifact)
 
     def _artifact_key_for_path(self, path: Path, report_type: str) -> tuple[str, str]:
         if report_type == "run_card":
@@ -512,6 +519,277 @@ class LocalDeliveryAdapter:
         except ValueError:
             return paths[0].parent
         return common_path
+
+
+def classify_artifact(artifact: ReportArtifact) -> ReportArtifact:
+    report_type = detect_report_type(artifact)
+    severity = detect_severity(artifact, report_type=report_type)
+    summary = extract_summary(artifact, report_type=report_type)
+    recommended_channels = _recommended_channels_for(report_type)
+    requires_attention = artifact.requires_attention or severity in {"high", "critical"}
+
+    tags = list(artifact.tags)
+    if report_type == "daily_topn_report":
+        tags = list(dict.fromkeys([*tags, "daily", "topn"]))
+    elif report_type == "daily_market_report":
+        tags = list(dict.fromkeys([*tags, "daily", "market"]))
+    elif report_type == "run_card_bundle":
+        tags = list(dict.fromkeys([*tags, "run_card", "bundle"]))
+    elif report_type == "risk_alert_report":
+        tags = list(dict.fromkeys([*tags, "risk", "alert"]))
+
+    return replace(
+        artifact,
+        report_type=report_type,
+        severity=severity,
+        summary=summary,
+        tags=tags,
+        recommended_channels=recommended_channels,
+        requires_attention=requires_attention,
+    )
+
+
+def detect_report_type(artifact: ReportArtifact) -> str:
+    marker_text = _artifact_marker_text(artifact)
+    for report_type in REPORT_TYPE_PRIORITY:
+        if report_type == "run_card_bundle" and _has_run_card_bundle_marker(artifact, marker_text):
+            return report_type
+        if report_type == "risk_alert_report" and _has_any_marker(marker_text, ("risk_alert", "risk alerts", "risk-alert")):
+            return report_type
+        if report_type == "must_watch_report" and _has_any_marker(marker_text, ("must_watch", "must watch")):
+            return report_type
+        if report_type == "watchlist_signal_report" and _has_any_marker(
+            marker_text, ("watchlist_signals", "watchlist_signal", "signal_watchlist")
+        ):
+            return report_type
+        if report_type == "watchlist_report" and _has_any_marker(
+            marker_text, ("watchlist_report", "watchlist report", "watchlist")
+        ):
+            return report_type
+        if report_type == "factor_eval_report" and _has_any_marker(marker_text, ("factor_eval", "factor eval")):
+            return report_type
+        if report_type == "daily_topn_report" and _has_any_marker(marker_text, ("daily_topn", "topn")):
+            return report_type
+        if report_type == "daily_market_report" and _has_any_marker(
+            marker_text,
+            ("daily_market", "market_state", "market_regime", "market_summary", "market_report"),
+        ):
+            return report_type
+        if report_type == "backtest_report" and _has_any_marker(marker_text, ("backtest",)):
+            return report_type
+    return "generic_report"
+
+
+def detect_severity(artifact: ReportArtifact, *, report_type: str | None = None) -> str:
+    resolved_type = report_type or detect_report_type(artifact)
+    if resolved_type != "risk_alert_report":
+        return "info"
+
+    severities: list[str] = []
+    for path in _artifact_source_paths(artifact):
+        if path.suffix.lower() == ".md":
+            severities.extend(_severity_tokens_from_text(path.read_text(encoding="utf-8")))
+        elif path.suffix.lower() == ".json":
+            severities.extend(_severity_tokens_from_json(path))
+
+    if not severities:
+        return "info"
+    return max(severities, key=lambda value: SEVERITY_ORDER.get(value, 0))
+
+
+def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None) -> str:
+    resolved_type = report_type or detect_report_type(artifact)
+
+    markdown_summary = _summary_from_markdown(artifact)
+    if markdown_summary:
+        return markdown_summary
+
+    json_summary = _summary_from_json(artifact)
+    if json_summary:
+        return json_summary
+
+    if resolved_type == "run_card_bundle":
+        run_card_summary = _summary_from_run_card_bundle(artifact)
+        if run_card_summary:
+            return run_card_summary
+
+    cleaned_filename = _summary_from_filename(artifact)
+    if cleaned_filename:
+        return cleaned_filename
+
+    return resolved_type.replace("_", " ").title()
+
+
+def _artifact_source_paths(artifact: ReportArtifact) -> list[Path]:
+    unique_paths: list[Path] = []
+    for path_value in [
+        artifact.markdown_path,
+        artifact.json_path,
+        artifact.run_card_path,
+        *artifact.csv_paths,
+    ]:
+        if path_value is None:
+            continue
+        path = Path(path_value)
+        if path not in unique_paths:
+            unique_paths.append(path)
+    return unique_paths
+
+
+def _artifact_marker_text(artifact: ReportArtifact) -> str:
+    parts: list[str] = [artifact.report_type.lower(), artifact.title.lower()]
+    for path in _artifact_source_paths(artifact):
+        parts.extend(part.lower() for part in path.parts)
+        parts.append(path.stem.lower())
+        if path.suffix.lower() == ".md":
+            h1 = _markdown_h1(path)
+            if h1:
+                parts.append(h1.lower())
+        elif path.suffix.lower() == ".json":
+            payload = _safe_json_load(path)
+            if isinstance(payload, dict):
+                for key in ("title", "report_type", "type", "name"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        parts.append(value.lower())
+
+    bundle_dir_value = artifact.metadata.get("bundle_dir")
+    if isinstance(bundle_dir_value, str):
+        bundle_dir = Path(bundle_dir_value)
+        parts.extend(part.lower() for part in bundle_dir.parts)
+        parts.append(bundle_dir.name.lower())
+
+    return " ".join(parts)
+
+
+def _has_run_card_bundle_marker(artifact: ReportArtifact, marker_text: str) -> bool:
+    if artifact.run_card_path is not None:
+        return True
+    if isinstance(artifact.metadata.get("bundle_dir"), str):
+        return True
+    return _has_any_marker(
+        marker_text,
+        ("run_card.json", "run_card.md", "metrics.json", "config_snapshot", "warnings.md", "data_coverage.json"),
+    )
+
+
+def _has_any_marker(marker_text: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in marker_text for marker in markers)
+
+
+def _summary_from_markdown(artifact: ReportArtifact) -> str:
+    for path in _artifact_source_paths(artifact):
+        if path.suffix.lower() != ".md":
+            continue
+        h1 = _markdown_h1(path)
+        if h1:
+            return h1
+    return ""
+
+
+def _summary_from_json(artifact: ReportArtifact) -> str:
+    for path in _artifact_source_paths(artifact):
+        if path.suffix.lower() != ".json":
+            continue
+        payload = _safe_json_load(path)
+        if isinstance(payload, dict):
+            for key in ("summary", "title"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+    return ""
+
+
+def _summary_from_run_card_bundle(artifact: ReportArtifact) -> str:
+    if artifact.run_card_path is not None:
+        payload = _safe_json_load(Path(artifact.run_card_path))
+        if isinstance(payload, dict):
+            title = payload.get("title")
+            if isinstance(title, str) and title.strip():
+                return title.strip()
+            warnings = payload.get("warnings")
+            if isinstance(warnings, list) and warnings:
+                first_warning = warnings[0]
+                if isinstance(first_warning, str) and first_warning.strip():
+                    return first_warning.strip()
+    return ""
+
+
+def _summary_from_filename(artifact: ReportArtifact) -> str:
+    for path in _artifact_source_paths(artifact):
+        candidate = _clean_filename(path.stem)
+        if candidate:
+            return candidate
+    return ""
+
+
+def _recommended_channels_for(report_type: str) -> list[str]:
+    if report_type == "run_card_bundle":
+        return ["local", "openclaw"]
+    if report_type == "daily_topn_report":
+        return ["local", "openclaw"]
+    return ["local"]
+
+
+def _markdown_h1(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    for line in text.splitlines():
+        match = re.match(r"^\s*#\s+(.+?)\s*$", line)
+        if match is not None:
+            return match.group(1).strip()
+    return ""
+
+
+def _safe_json_load(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _severity_tokens_from_text(text: str) -> list[str]:
+    tokens: list[str] = []
+    for match in re.finditer(r"\b(critical|high|medium|low|info)\b", text, flags=re.IGNORECASE):
+        token = match.group(1).lower()
+        if token not in tokens:
+            tokens.append(token)
+    return tokens
+
+
+def _severity_tokens_from_json(path: Path) -> list[str]:
+    payload = _safe_json_load(path)
+    tokens: list[str] = []
+    for value in _iter_json_values(payload):
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower in SEVERITY_ORDER and lower not in tokens:
+                tokens.append(lower)
+    return tokens
+
+
+def _iter_json_values(value: Any) -> list[Any]:
+    if isinstance(value, dict):
+        items: list[Any] = []
+        for item in value.values():
+            items.extend(_iter_json_values(item))
+        return items
+    if isinstance(value, list):
+        items: list[Any] = []
+        for item in value:
+            items.extend(_iter_json_values(item))
+        return items
+    return [value]
+
+
+def _clean_filename(value: str) -> str:
+    cleaned = value.replace("_", " ").replace("-", " ")
+    cleaned = re.sub(r"\b\d{4}\b", "", cleaned)
+    cleaned = re.sub(r"\b\d{2}\b", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned.title()
 
 
 def build_manifest(
