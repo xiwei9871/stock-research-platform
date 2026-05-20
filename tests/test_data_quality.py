@@ -403,6 +403,46 @@ def test_run_data_quality_blocks_when_start_date_missing(monkeypatch):
     assert coverage["details"]["reasons"] == ["missing_start_date"]
 
 
+def test_run_data_quality_blocks_industry_membership_when_start_date_missing(monkeypatch):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+
+    def fail_find_latest_common_label_date(**kwargs):
+        raise AssertionError("find_latest_common_label_date should not be called")
+
+    monkeypatch.setattr(data_quality, "find_latest_common_label_date", fail_find_latest_common_label_date)
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date=None,
+        end_date=None,
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=True,
+    )
+
+    check_names = [check["check_name"] for check in report["checks"]]
+    assert check_names == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+        "industry_membership_coverage",
+    ]
+    industry = report["checks"][2]
+    assert report["blocked_checks"] == check_names
+    assert industry["status"] == "blocked"
+    assert industry["kind"] == "research_preflight"
+    assert industry["source"] == "research_preflight"
+    assert industry["metrics"] == {
+        "market_rows": 0,
+        "covered_rows": 0,
+        "missing_rows": 0,
+        "date_count": 0,
+    }
+    assert industry["details"]["reasons"] == ["missing_start_date"]
+
+
 def test_run_data_quality_blocks_when_derived_end_date_missing(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -476,6 +516,63 @@ def test_run_data_quality_blocks_when_derived_end_date_missing(monkeypatch):
     }
     assert latest["details"]["reasons"] == ["missing_latest_common_date"]
     assert coverage["details"]["reasons"] == ["missing_latest_common_date"]
+
+
+def test_run_data_quality_blocks_industry_membership_when_derived_end_date_missing(monkeypatch):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+
+    def fail_check_factor_label_coverage(**kwargs):
+        raise AssertionError("check_factor_label_coverage should not be called")
+
+    def fail_check_industry_membership_coverage(**kwargs):
+        raise AssertionError("check_industry_membership_coverage should not be called")
+
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": None,
+            "date_count": 0,
+            "horizons": kwargs["horizons"],
+        },
+    )
+    monkeypatch.setattr(data_quality, "check_factor_label_coverage", fail_check_factor_label_coverage)
+    monkeypatch.setattr(
+        data_quality,
+        "check_industry_membership_coverage",
+        fail_check_industry_membership_coverage,
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date=None,
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=True,
+    )
+
+    check_names = [check["check_name"] for check in report["checks"]]
+    assert check_names == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+        "industry_membership_coverage",
+    ]
+    industry = report["checks"][2]
+    assert report["blocked_checks"] == check_names
+    assert industry["status"] == "blocked"
+    assert industry["kind"] == "research_preflight"
+    assert industry["source"] == "research_preflight"
+    assert industry["metrics"] == {
+        "market_rows": 0,
+        "covered_rows": 0,
+        "missing_rows": 0,
+        "date_count": 0,
+    }
+    assert industry["details"]["reasons"] == ["missing_latest_common_date"]
 
 
 def test_run_data_quality_reuses_derived_latest_snapshot(monkeypatch):

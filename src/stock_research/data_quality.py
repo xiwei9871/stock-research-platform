@@ -37,6 +37,7 @@ def run_data_quality(
                 horizons=horizons,
                 requested_end_date=end_date,
                 resolved_factor_names=selected_factor_names,
+                require_industry_membership=require_industry_membership,
             )
         )
         return _build_report(checks)
@@ -70,6 +71,7 @@ def run_data_quality(
                     requested_end_date=None,
                     latest=latest,
                     resolved_factor_names=selected_factor_names,
+                    require_industry_membership=require_industry_membership,
                 )
             )
             return _build_report(checks)
@@ -124,6 +126,7 @@ def _build_blocked_window_checks(
     requested_end_date: str | None,
     latest: dict[str, Any] | None = None,
     resolved_factor_names: list[str],
+    require_industry_membership: bool,
 ) -> list[dict[str, Any]]:
     latest_metrics = {
         "latest_common_date": _normalize_optional_date(latest.get("latest_common_date")) if latest else None,
@@ -131,7 +134,7 @@ def _build_blocked_window_checks(
     }
     if requested_end_date is not None:
         latest_metrics["requested_end_date"] = requested_end_date
-    return [
+    checks = [
         _normalize_check(
             check_name="latest_common_label_date",
             status="blocked",
@@ -163,6 +166,9 @@ def _build_blocked_window_checks(
             },
         ),
     ]
+    if require_industry_membership:
+        checks.append(_blocked_industry_membership_coverage_check(reason=reason))
+    return checks
 
 
 def _build_data_audit_checks(*, expected_start_date: str) -> list[dict[str, Any]]:
@@ -387,6 +393,24 @@ def _blocked_factor_label_coverage_check(
             "resolved_factor_names": list(factor_names),
             "reasons": _preflight_error_reasons(error, factor_names=factor_names, horizons=horizons),
             "error": str(error),
+        },
+    )
+
+
+def _blocked_industry_membership_coverage_check(*, reason: str) -> dict[str, Any]:
+    return _normalize_check(
+        check_name="industry_membership_coverage",
+        status="blocked",
+        kind="research_preflight",
+        source="research_preflight",
+        metrics={
+            "market_rows": 0,
+            "covered_rows": 0,
+            "missing_rows": 0,
+            "date_count": 0,
+        },
+        details={
+            "reasons": [reason],
         },
     )
 
