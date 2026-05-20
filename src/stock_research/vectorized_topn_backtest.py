@@ -217,22 +217,42 @@ def run_vectorized_topn_backtest(
                 transaction_cost = float(
                     sum(float(row["transaction_cost"]) for row in trade_rows_for_date)
                 )
-                net_return = -transaction_cost
-                equity *= 1.0 + net_return
-                peak = max(peak, equity)
-                drawdown = equity / peak - 1.0 if peak else 0.0
-                equity_rows.append(
-                    {
-                        "date": execution_date,
-                        "gross_return": 0.0,
-                        "turnover": turnover,
-                        "transaction_cost": transaction_cost,
-                        "net_return": net_return,
-                        "equity": equity,
-                        "drawdown": drawdown,
-                        "holdings_count": len(current_weights),
-                    }
-                )
+                if equity_rows and equity_rows[-1]["date"] == execution_date:
+                    last_row = equity_rows[-1]
+                    previous_equity = (
+                        float(equity_rows[-2]["equity"]) if len(equity_rows) > 1 else 1.0
+                    )
+                    combined_transaction_cost = float(last_row["transaction_cost"]) + transaction_cost
+                    combined_equity = float(last_row["equity"]) * (1.0 - transaction_cost)
+                    combined_net_return = combined_equity / previous_equity - 1.0
+                    last_row.update(
+                        {
+                            "turnover": turnover,
+                            "transaction_cost": combined_transaction_cost,
+                            "net_return": combined_net_return,
+                            "equity": combined_equity,
+                            "drawdown": combined_equity / peak - 1.0 if peak else 0.0,
+                            "holdings_count": len(current_weights),
+                        }
+                    )
+                    equity = combined_equity
+                else:
+                    net_return = -transaction_cost
+                    equity *= 1.0 + net_return
+                    peak = max(peak, equity)
+                    drawdown = equity / peak - 1.0 if peak else 0.0
+                    equity_rows.append(
+                        {
+                            "date": execution_date,
+                            "gross_return": 0.0,
+                            "turnover": turnover,
+                            "transaction_cost": transaction_cost,
+                            "net_return": net_return,
+                            "equity": equity,
+                            "drawdown": drawdown,
+                            "holdings_count": len(current_weights),
+                        }
+                    )
             trade_rows.extend(trade_rows_for_date)
             continue
         next_date = trading_dates[next_index]

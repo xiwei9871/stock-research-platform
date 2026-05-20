@@ -135,9 +135,9 @@ def test_run_vectorized_topn_backtest_daily_rebalances_topn_with_costs():
     result = run_vectorized_topn_backtest(scores, prices, config)
 
     assert result.equity_curve.iloc[-1]["date"] == "2026-01-03"
-    assert result.equity_curve.iloc[0]["transaction_cost"] == pytest.approx(0.001)
-    assert result.equity_curve.iloc[-1]["transaction_cost"] == pytest.approx(0.001)
-    assert result.equity_curve.iloc[-1]["net_return"] == pytest.approx(-0.001)
+    assert result.equity_curve["date"].is_unique
+    assert result.equity_curve.iloc[-1]["transaction_cost"] == pytest.approx(0.002)
+    assert result.equity_curve.iloc[-1]["net_return"] == pytest.approx(0.047951)
     assert result.equity_curve["transaction_cost"].sum() == pytest.approx(0.002)
     assert result.summary["total_return"] == pytest.approx(result.equity_curve.iloc[-1]["equity"] - 1.0)
 
@@ -370,6 +370,7 @@ def test_run_vectorized_topn_backtest_counts_final_day_execution_cost():
 
     assert list(result.trades["execution_date"]) == ["2026-01-02"]
     assert result.equity_curve.iloc[-1]["date"] == "2026-01-02"
+    assert result.equity_curve["date"].is_unique
     assert result.equity_curve.iloc[-1]["transaction_cost"] > 0
     assert result.summary["total_return"] < 0
 
