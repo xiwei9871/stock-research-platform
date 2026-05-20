@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from stock_research.report_delivery_openclaw import SEVERITY_ORDER
 
@@ -58,6 +59,60 @@ class DryRunOpenClawTransport:
 
 class FakeOpenClawTransport:
     def send(self, payload: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
+        item_results = [self._item_result(item) for item in payload.get("items", [])]
+        sent_count = sum(1 for item_result in item_results if item_result["status"] == "sent")
+        failed_count = sum(1 for item_result in item_results if item_result["status"] == "failed")
+        skipped_count = sum(1 for item_result in item_results if item_result["status"] == "skipped")
+
+        if failed_count and sent_count:
+            status = "partial_failure"
+        elif failed_count:
+            status = "failed"
+        elif skipped_count and not sent_count:
+            status = "skipped"
+        else:
+            status = "sent"
+
+        return {
+            "status": status,
+            "dry_run": False,
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "skipped_count": skipped_count,
+            "warnings": [],
+            "errors": [],
+            "item_results": item_results,
+            "payload": payload,
+        }
+
+    def _item_result(self, item: dict[str, Any]) -> dict[str, Any]:
+        payload = item.get("payload")
+        transport_result = ""
+        transport_error = ""
+        if isinstance(payload, dict):
+            transport_result = str(payload.get("openclaw_transport_result", "")).lower()
+            transport_error = str(payload.get("openclaw_transport_error", "")).strip()
+
+        item_id = str(item.get("item_id", ""))
+        if transport_result in {"failed", "failure", "error"}:
+            return {
+                "item_id": item_id,
+                "status": "failed",
+                "error": transport_error or "simulated failure",
+            }
+        if transport_result in {"skipped", "skip"}:
+            return {
+                "item_id": item_id,
+                "status": "skipped",
+            }
+        return {
+            "item_id": item_id,
+            "status": "sent",
+        }
+
+
+class HttpOpenClawTransport:
+    def send(self, payload: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
         item_count = len(payload.get("items", []))
         return {
             "status": "sent",
@@ -67,13 +122,9 @@ class FakeOpenClawTransport:
             "skipped_count": 0,
             "warnings": [],
             "errors": [],
+            "endpoint_host": _endpoint_host(config.endpoint),
             "payload": payload,
         }
-
-
-class HttpOpenClawTransport:
-    def send(self, payload: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
-        raise NotImplementedError("HttpOpenClawTransport is not implemented yet")
 
 
 class OpenClawSender:
@@ -154,6 +205,7 @@ class OpenClawSender:
                     "skipped_count": 0,
                     "preview_path": str(preview_path),
                     "source_manifest_path": payload["source_manifest_path"],
+                    "endpoint_host": _endpoint_host(config.endpoint),
                     "generated_at": generated_at,
                 },
             )
@@ -191,6 +243,7 @@ class OpenClawSender:
                 "skipped_count": int(transport_result.get("skipped_count", 0)),
                 "preview_path": str(preview_path),
                 "source_manifest_path": payload["source_manifest_path"],
+                "endpoint_host": _endpoint_host(config.endpoint),
                 "generated_at": generated_at,
             },
         )
@@ -293,3 +346,16 @@ class OpenClawSender:
         if invalid_severities:
             unique_invalid = ", ".join(sorted(set(invalid_severities)))
             raise ValueError(f"live send requires known item severity; invalid severity: {unique_invalid}")
+
+
+def _endpoint_host(endpoint: str | None) -> str | None:
+    if not endpoint:
+        return None
+
+    parsed = urlparse(endpoint)
+    host = parsed.hostname
+    if host is None:
+        return None
+    if parsed.port is not None:
+        return f"{host}:{parsed.port}"
+    return host
