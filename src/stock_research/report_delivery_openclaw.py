@@ -30,9 +30,7 @@ class OpenClawExportResult:
 
 class OpenClawExportAdapter:
     def load_local_manifest(self, manifest_path: str | Path) -> dict[str, Any]:
-        path = Path(manifest_path)
-        if path.is_dir():
-            path = path / "manifest.json"
+        path = self._resolved_manifest_path(manifest_path)
         return json.loads(path.read_text(encoding="utf-8"))
 
     def select_openclaw_artifacts(self, manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -51,6 +49,15 @@ class OpenClawExportAdapter:
     def build_openclaw_item(self, artifact: dict[str, Any]) -> OpenClawExportItem:
         report_type = str(artifact.get("report_type", "generic_report"))
         route, action = self._route_and_action_for(report_type)
+        source_paths = {
+            "markdown_path": artifact.get("markdown_path"),
+            "json_path": artifact.get("json_path"),
+            "csv_paths": list(artifact.get("csv_paths", [])),
+            "run_card_path": artifact.get("run_card_path"),
+            "evidence_dir": artifact.get("evidence_dir"),
+        }
+        metadata = artifact.get("metadata", {})
+        bundle_dir = metadata.get("bundle_dir") if isinstance(metadata, dict) else None
         payload = {
             "artifact_id": artifact.get("artifact_id", ""),
             "report_type": report_type,
@@ -61,6 +68,8 @@ class OpenClawExportAdapter:
             "severity": artifact.get("severity", "info"),
             "requires_attention": bool(artifact.get("requires_attention", False)),
             "recommended_channels": list(artifact.get("recommended_channels", [])),
+            "source_paths": source_paths,
+            "bundle_dir": bundle_dir,
             "route": route,
             "action": action,
         }
@@ -82,11 +91,12 @@ class OpenClawExportAdapter:
         *,
         log_path: str | Path | None = None,
     ) -> OpenClawExportResult:
-        manifest = self.load_local_manifest(manifest_path)
+        resolved_manifest_path = self._resolved_manifest_path(manifest_path)
+        manifest = self.load_local_manifest(resolved_manifest_path)
         artifacts = self.select_openclaw_artifacts(manifest)
         items = [self.build_openclaw_item(artifact) for artifact in artifacts]
         result = OpenClawExportResult(
-            manifest_path=str(Path(manifest_path)),
+            manifest_path=str(resolved_manifest_path),
             item_count=len(items),
             items=items,
             warnings=[],
@@ -114,3 +124,9 @@ class OpenClawExportAdapter:
         if report_type == "daily_topn_report":
             return ("openclaw.report.daily_topn_report", "publish")
         return (f"openclaw.report.{report_type}", "preview")
+
+    def _resolved_manifest_path(self, manifest_path: str | Path) -> Path:
+        path = Path(manifest_path)
+        if path.is_dir():
+            return path / "manifest.json"
+        return path

@@ -66,3 +66,17 @@ def test_build_openclaw_item_uses_stable_run_card_routing(tmp_path):
     assert item.route == "openclaw.report.run_card_bundle"
     assert item.action == "publish"
     assert item.payload["artifact_id"] == "run_card_bundle:2026-05-20:abc123"
+    assert item.payload["source_paths"]["run_card_path"] == str(tmp_path / "run_card.json")
+    assert item.payload["source_paths"]["evidence_dir"] == str(tmp_path / "evidence")
+
+
+def test_export_directory_input_uses_resolved_manifest_path(tmp_path):
+    manifest_path = _write_local_manifest(tmp_path)
+    manifest_dir = manifest_path.parent
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_dir)
+
+    assert result.manifest_path == str(manifest_path)
+    assert result.log_path is None
+    assert result.item_count == 1
