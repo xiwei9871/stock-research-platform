@@ -316,8 +316,14 @@ def openclaw_export(
     min_severity: str,
     dry_run: bool,
 ):
-    del trade_date
     adapter = OpenClawExportAdapter()
+    manifest = adapter.load_local_manifest(manifest_path)
+    source_trade_date = str(manifest.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-openclaw-export: "
+            f"trade-date {trade_date} does not match manifest trade_date {source_trade_date}"
+        )
     return adapter.export(
         manifest_path,
         include_all=include_all,
@@ -3232,7 +3238,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(f"report_delivery_openclaw|status|{result.status}")
         print(f"report_delivery_openclaw|item_count|{result.item_count}")
-        print(f"report_delivery_openclaw|manifest|{result.manifest_path}")
+        print(f"report_delivery_openclaw|manifest|{result.openclaw_manifest_path}")
         print(f"report_delivery_openclaw|items|{result.openclaw_items_path}")
         print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
         print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")

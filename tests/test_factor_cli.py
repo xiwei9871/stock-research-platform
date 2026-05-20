@@ -1026,7 +1026,8 @@ def test_report_delivery_openclaw_export_cli_prints_summary(monkeypatch, capsys)
         return SimpleNamespace(
             status="dry_run",
             item_count=2,
-            manifest_path="outputs/openclaw/manifest.json",
+            manifest_path="outputs/delivery/manifest.json",
+            openclaw_manifest_path="outputs/openclaw/openclaw_manifest.json",
             openclaw_items_path="outputs/openclaw/items.jsonl",
             output_dir="outputs/openclaw",
             openclaw_delivery_log_path="outputs/openclaw/delivery_log.jsonl",
@@ -1062,11 +1063,38 @@ def test_report_delivery_openclaw_export_cli_prints_summary(monkeypatch, capsys)
     assert capsys.readouterr().out.splitlines() == [
         "report_delivery_openclaw|status|dry_run",
         "report_delivery_openclaw|item_count|2",
-        "report_delivery_openclaw|manifest|outputs/openclaw/manifest.json",
+        "report_delivery_openclaw|manifest|outputs/openclaw/openclaw_manifest.json",
         "report_delivery_openclaw|items|outputs/openclaw/items.jsonl",
         "report_delivery_openclaw|output_dir|outputs/openclaw",
         "report_delivery_openclaw|log|outputs/openclaw/delivery_log.jsonl",
     ]
+
+
+def test_report_delivery_openclaw_export_cli_rejects_trade_date_mismatch(monkeypatch):
+    def fake_load_local_manifest(self, manifest_path):
+        assert manifest_path == "outputs/delivery/manifest.json"
+        return {"trade_date": "2026-05-21"}
+
+    monkeypatch.setattr(cli.OpenClawExportAdapter, "load_local_manifest", fake_load_local_manifest)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"report-delivery-openclaw-export: trade-date 2026-05-20 "
+            r"does not match manifest trade_date 2026-05-21"
+        ),
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-export",
+                "--trade-date",
+                "2026-05-20",
+                "--manifest",
+                "outputs/delivery/manifest.json",
+                "--output-dir",
+                "outputs/openclaw",
+            ]
+        )
 
 
 def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
