@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import urllib.error
 
 import pytest
 
@@ -495,12 +496,131 @@ def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
     )
 
     send_log_text = Path(result.send_log_path).read_text(encoding="utf-8")
-    send_log_record = json.loads(send_log_text)
+    send_log_records = [json.loads(line) for line in send_log_text.splitlines() if line.strip()]
 
-    assert send_log_record["endpoint_host"] == "openclaw.example.test"
-    assert "endpoint" not in send_log_record
+    assert send_log_records[0]["endpoint_host"] == "openclaw.example.test"
+    assert "endpoint" not in send_log_records[0]
     assert "super-secret-token" not in send_log_text
     assert "Authorization" not in send_log_text
+
+
+def test_non_dry_run_sender_writes_preview_and_log_when_transport_raises(
+    tmp_path: Path,
+) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    class _FailingTransport:
+        def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+            raise RuntimeError("simulated transport failure")
+
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=_FailingTransport())
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "failed"
+    assert result.failed_count == 1
+    assert Path(result.preview_path).exists()
+    assert Path(result.send_log_path).exists()
+
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert send_log_records[0]["status"] == "failed"
+    assert send_log_records[0]["error"] == "simulated transport failure"
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["status"] == "failed"
+    assert send_log_records[1]["error"] == "simulated transport failure"
+
+
+def test_partial_failure_send_log_preserves_per_item_outcomes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path, items_path = _write_export_with_multiple_items(tmp_path)
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    original_load_export = sender.load_export
+
+    def _load_export_with_partial_failure(
+        manifest_path: str | Path, items_path: str | Path
+    ) -> dict[str, object]:
+        export_data = original_load_export(manifest_path, items_path)
+        export_items = export_data["items"]
+        export_items[1]["payload"]["openclaw_transport_result"] = "failure"
+        export_items[1]["payload"]["openclaw_transport_error"] = "simulated transport failure"
+        return export_data
+
+    monkeypatch.setattr(sender, "load_export", _load_export_with_partial_failure)
+    monkeypatch.setattr(sender, "_validate_live_send_config", lambda config: None)
+    monkeypatch.setattr(sender, "_validate_live_send_items", lambda items: None)
+
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["daily_research", "research_validation", "research_alert"],
+        severity_max="critical",
+        test_mode=True,
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "partial_failure"
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert send_log_records[0]["status"] == "partial_failure"
+    assert send_log_records[0]["failed_count"] == 1
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["artifact_id"] == "daily_topn_report:2026-05-20:abc"
+    assert send_log_records[1]["report_type"] == "daily_topn_report"
+    assert send_log_records[1]["openclaw_route"] == "daily_research"
+    assert send_log_records[1]["status"] == "sent"
+    assert send_log_records[2]["item_id"] == "openclaw:2"
+    assert send_log_records[2]["artifact_id"] == "factor_eval_report:2026-05-20:def"
+    assert send_log_records[2]["report_type"] == "factor_eval_report"
+    assert send_log_records[2]["openclaw_route"] == "research_validation"
+    assert send_log_records[2]["status"] == "failed"
+    assert send_log_records[2]["error"] == "simulated transport failure"
+    assert send_log_records[3]["item_id"] == "openclaw:3"
+    assert send_log_records[3]["artifact_id"] == "risk_alert_report:2026-05-20:ghi"
+    assert send_log_records[3]["report_type"] == "risk_alert_report"
+    assert send_log_records[3]["openclaw_route"] == "research_alert"
+    assert send_log_records[3]["status"] == "sent"
 
 
 def test_live_send_with_zero_deliverable_items_fails_clearly(tmp_path: Path) -> None:
@@ -557,6 +677,62 @@ def test_dry_run_transport_never_accesses_network(monkeypatch: pytest.MonkeyPatc
 
     assert result["dry_run"] is True
     assert result["status"] == "dry_run"
+
+
+def test_http_transport_builds_request_and_surfaces_http_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_urlopen(request: object, timeout: float) -> None:
+        captured["url"] = getattr(request, "full_url", None)
+        captured["method"] = getattr(request, "method", None)
+        captured["headers"] = dict(getattr(request, "header_items", lambda: [])())
+        captured["data"] = getattr(request, "data", None)
+        captured["timeout"] = timeout
+        raise urllib.error.URLError("simulated connection failure")
+
+    monkeypatch.setattr(report_delivery_openclaw_sender, "urlopen", _fake_urlopen)
+
+    transport = report_delivery_openclaw_sender.HttpOpenClawTransport()
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="secret-token",
+        timeout_seconds=12.5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir="/tmp/openclaw-send",
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated connection failure"):
+        transport.send(
+            {
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    }
+                ]
+            },
+            config,
+        )
+
+    assert captured["url"] == "https://openclaw.example.test/send"
+    assert captured["method"] == "POST"
+    assert captured["timeout"] == 12.5
+    headers = {str(key).lower(): str(value) for key, value in dict(captured["headers"]).items()}
+    assert headers["authorization"] == "Bearer secret-token"
+    body = json.loads(bytes(captured["data"]).decode("utf-8"))
+    assert body["items"][0]["item_id"] == "openclaw:1"
 
 
 def test_openclaw_sender_no_dry_run_without_endpoint_fails_clearly(tmp_path: Path) -> None:
