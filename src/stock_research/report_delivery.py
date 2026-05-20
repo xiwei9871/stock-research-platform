@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from hashlib import sha1
 import json
@@ -38,6 +38,10 @@ class ReportArtifact:
     warnings: list[str] = field(default_factory=list)
     severity: str = "info"
     summary: str = ""
+    tags: list[str] = field(default_factory=list)
+    recommended_channels: list[str] = field(default_factory=lambda: ["local"])
+    requires_attention: bool = False
+    delivery_priority: int = 10
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -94,7 +98,7 @@ class LocalDeliveryAdapter:
                 continue
             self._collect_path(path, trade_date, artifacts_by_key, warnings)
 
-        return list(artifacts_by_key.values()), warnings
+        return self._classify_artifacts(list(artifacts_by_key.values())), warnings
 
     def deliver_local(
         self,
@@ -316,8 +320,38 @@ class LocalDeliveryAdapter:
             warnings=warnings,
             severity=current.severity,
             summary=current.summary or artifact.summary,
+            tags=list(dict.fromkeys([*current.tags, *artifact.tags])),
+            recommended_channels=list(
+                dict.fromkeys([*current.recommended_channels, *artifact.recommended_channels])
+            ),
+            requires_attention=current.requires_attention or artifact.requires_attention,
+            delivery_priority=min(current.delivery_priority, artifact.delivery_priority),
             metadata=metadata,
         )
+
+    def _classify_artifacts(self, artifacts: list[ReportArtifact]) -> list[ReportArtifact]:
+        return [self._classify_artifact(artifact) for artifact in artifacts]
+
+    def _classify_artifact(self, artifact: ReportArtifact) -> ReportArtifact:
+        path_value = artifact.metadata.get("path")
+        path = Path(path_value) if isinstance(path_value, str) else None
+        if (
+            artifact.report_type == "topn"
+            and path is not None
+            and path.suffix.lower() == ".md"
+            and path.name.startswith("daily_topn_")
+        ):
+            return replace(
+                artifact,
+                report_type="daily_topn_report",
+                severity="info",
+                summary="Daily TopN",
+                tags=["daily", "topn"],
+                recommended_channels=["local", "openclaw"],
+                requires_attention=False,
+                delivery_priority=10,
+            )
+        return artifact
 
     def _artifact_key_for_path(self, path: Path, report_type: str) -> tuple[str, str]:
         if report_type == "run_card":
@@ -415,6 +449,10 @@ class LocalDeliveryAdapter:
                 warnings=list(artifact.warnings),
                 severity=artifact.severity,
                 summary=artifact.summary,
+                tags=list(artifact.tags),
+                recommended_channels=list(artifact.recommended_channels),
+                requires_attention=artifact.requires_attention,
+                delivery_priority=artifact.delivery_priority,
                 metadata={**artifact.metadata, "delivered_path": str(copied_bundle_root)},
             )
 
@@ -445,6 +483,10 @@ class LocalDeliveryAdapter:
             warnings=list(artifact.warnings),
             severity=artifact.severity,
             summary=artifact.summary,
+            tags=list(artifact.tags),
+            recommended_channels=list(artifact.recommended_channels),
+            requires_attention=artifact.requires_attention,
+            delivery_priority=artifact.delivery_priority,
             metadata={**artifact.metadata, "delivered_path": str(destination_root)},
         )
 

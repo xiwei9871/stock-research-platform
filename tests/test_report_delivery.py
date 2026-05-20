@@ -168,6 +168,32 @@ def test_collect_artifacts_warns_for_missing_explicit_artifact_path(tmp_path):
     assert warnings == [f"missing_artifact_path:{missing_artifact_path}"]
 
 
+def test_collect_artifacts_classifies_daily_topn_markdown_artifact(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text("# topn\n", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "daily_topn_report"
+    assert artifact.severity == "info"
+    assert artifact.summary == "Daily TopN"
+    assert artifact.tags == ["daily", "topn"]
+    assert artifact.recommended_channels == ["local", "openclaw"]
+    assert artifact.requires_attention is False
+    assert artifact.delivery_priority == 10
+
+
 def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
@@ -199,6 +225,34 @@ def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
     assert len(log_lines) == 1
     assert json.loads(log_lines[0])["status"] == "completed"
     assert any(path.name == "daily_topn_2026-05-20_manual_v1.md" for path in copied_artifacts)
+
+
+def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text("# topn\n", encoding="utf-8")
+
+    result = report_delivery.deliver_local_reports(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+        output_dir=tmp_path / "delivery",
+        dry_run=True,
+    )
+
+    manifest = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
+    artifact = manifest["artifacts"][0]
+
+    assert result.status == "dry_run"
+    assert artifact["report_type"] == "daily_topn_report"
+    assert artifact["severity"] == "info"
+    assert artifact["summary"] == "Daily TopN"
+    assert artifact["tags"] == ["daily", "topn"]
+    assert artifact["recommended_channels"] == ["local", "openclaw"]
+    assert artifact["requires_attention"] is False
+    assert artifact["delivery_priority"] == 10
 
 
 def test_deliver_local_dry_run_does_not_write_delivery_log(tmp_path):
