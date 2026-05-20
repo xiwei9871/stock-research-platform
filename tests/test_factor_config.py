@@ -17,6 +17,40 @@ def test_candidate_factor_names_include_current_pipeline_outputs():
     assert len(names) == len(set(names))
 
 
+def test_candidate_factor_names_include_fundamental_factors_without_changing_manual_weights():
+    names = factor_config.candidate_factor_names()
+    config = factor_config.manual_v1_config()
+
+    for factor_name in (
+        "roe",
+        "roa",
+        "gross_margin",
+        "net_margin",
+        "debt_ratio",
+        "ocf_to_np",
+        "pe_ttm",
+        "ps_ttm",
+        "pb",
+    ):
+        assert factor_name in names
+
+    assert config["weights"] == {
+        "ret_20_score": 0.15,
+        "ret_60_score": 0.10,
+        "momentum_20_5_score": 0.10,
+        "ma20_slope_score": 0.10,
+        "ma60_slope_score": 0.05,
+        "trend_r2_20_score": 0.05,
+        "amount_ratio_5_20_score": 0.08,
+        "volume_ratio_5_20_score": 0.05,
+        "volatility_20_score": 0.10,
+        "max_drawdown_20_score": 0.07,
+        "atr_pct_score": 0.05,
+        "sector_ret_20_score": 0.05,
+        "stock_excess_ret_20_score": 0.05,
+    }
+
+
 def test_factor_availability_metadata_covers_candidate_factors():
     metadata = factor_config.factor_availability_metadata()
 

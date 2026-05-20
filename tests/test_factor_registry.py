@@ -11,12 +11,40 @@ def test_factor_registry_returns_metadata_for_manual_factor():
     assert meta.calc_version == "v1"
 
 
+def test_factor_registry_returns_metadata_for_fundamental_factor():
+    meta = factor_registry.get_factor_metadata("roe")
+
+    assert meta.factor_name == "roe"
+    assert meta.factor_group == "quality"
+    assert meta.direction == "higher"
+    assert meta.source == "fundamental"
+    assert meta.status == "validated"
+    assert meta.calc_version == "v1"
+
+
 def test_factor_registry_lists_all_known_factor_names_sorted():
     names = factor_registry.list_factor_names()
 
     assert "ret_20" in names
     assert "volatility_20" in names
     assert names == sorted(names)
+
+
+def test_factor_registry_lists_fundamental_factor_names():
+    names = factor_registry.list_factor_names()
+
+    for factor_name in (
+        "roe",
+        "roa",
+        "gross_margin",
+        "net_margin",
+        "debt_ratio",
+        "ocf_to_np",
+        "pe_ttm",
+        "ps_ttm",
+        "pb",
+    ):
+        assert factor_name in names
 
 
 def test_manual_v1_config_is_derived_from_registry_maps():
