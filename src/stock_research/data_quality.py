@@ -43,7 +43,24 @@ def run_data_quality(
 
     latest = None
     if end_date is None:
-        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+        try:
+            latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+        except ValueError as exc:
+            checks.extend(
+                [
+                    _blocked_latest_common_label_date_check(
+                        error=exc,
+                        horizons=horizons,
+                        requested_end_date=None,
+                    ),
+                    _blocked_factor_label_coverage_check(
+                        error=exc,
+                        factor_names=selected_factor_names,
+                        horizons=horizons,
+                    ),
+                ]
+            )
+            return _build_report(checks)
         end_date = _normalize_optional_date(latest.get("latest_common_date"))
         if end_date is None:
             checks.extend(

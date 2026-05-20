@@ -530,6 +530,67 @@ def test_run_data_quality_reuses_derived_latest_snapshot(monkeypatch):
     }
 
 
+def test_run_data_quality_blocks_when_derived_end_date_lookup_raises(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "blocked", "rows": 2}],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("horizons must not be empty")),
+    )
+
+    def fail_check_factor_label_coverage(**kwargs):
+        raise AssertionError("check_factor_label_coverage should not be called")
+
+    monkeypatch.setattr(data_quality, "check_factor_label_coverage", fail_check_factor_label_coverage)
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date=None,
+        horizons=[],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+    ]
+    assert report["overall_status"] == "blocked"
+    assert report["blocked_checks"] == [
+        "missing_balance_sheet",
+        "latest_common_label_date",
+        "factor_label_coverage",
+    ]
+    latest = report["checks"][2]
+    coverage = report["checks"][3]
+    assert latest["details"]["reasons"] == ["empty_horizons"]
+    assert coverage["details"]["reasons"] == ["empty_horizons"]
+
+
 def test_formatters_emit_stable_summary_and_check_lines():
     report = {
         "overall_status": "warning",
