@@ -17,6 +17,10 @@ SEVERITY_ORDER = {
 DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+class OpenClawManifestError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class OpenClawExportItem:
     item_id: str
@@ -68,7 +72,14 @@ class OpenClawExportResult:
 class OpenClawExportAdapter:
     def load_local_manifest(self, manifest_path: str | Path) -> dict[str, Any]:
         path = self._resolved_manifest_path(manifest_path)
-        return json.loads(path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest not found: {path}") from exc
+        except json.JSONDecodeError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest is not valid JSON: {path}") from exc
+        except OSError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest is not readable: {path}") from exc
 
     def select_openclaw_artifacts(
         self,
@@ -78,7 +89,7 @@ class OpenClawExportAdapter:
         min_severity: str = "info",
         manifest_root: str | Path | None = None,
     ) -> list[dict[str, Any]]:
-        selected, _ = self._select_openclaw_artifacts_with_warnings(
+        selected, _, _ = self._select_openclaw_artifacts_with_diagnostics(
             manifest,
             include_all=include_all,
             min_severity=min_severity,
@@ -86,25 +97,28 @@ class OpenClawExportAdapter:
         )
         return selected
 
-    def _select_openclaw_artifacts_with_warnings(
+    def _select_openclaw_artifacts_with_diagnostics(
         self,
         manifest: dict[str, Any],
         *,
         include_all: bool = False,
         min_severity: str = "info",
         manifest_root: str | Path | None = None,
-    ) -> tuple[list[dict[str, Any]], list[str]]:
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
         artifacts = manifest.get("artifacts", [])
         if not isinstance(artifacts, list):
-            return [], []
+            warning = "invalid_artifacts_section:expected_list"
+            return [], [warning], [warning]
 
         selected: list[dict[str, Any]] = []
         warnings: list[str] = []
+        errors: list[str] = []
         severity_threshold = self._severity_rank(min_severity)
         resolved_manifest_root = self._resolved_manifest_root(manifest_root)
 
-        for artifact in artifacts:
+        for index, artifact in enumerate(artifacts):
             if not isinstance(artifact, dict):
+                warnings.append(f"invalid_artifact_entry:index={index}:expected_dict")
                 continue
 
             if not include_all:
@@ -126,7 +140,7 @@ class OpenClawExportAdapter:
                 continue
             selected.append(sanitized_artifact)
 
-        return selected, list(dict.fromkeys(warnings))
+        return selected, list(dict.fromkeys(warnings)), list(dict.fromkeys(errors))
 
     def build_openclaw_item(
         self,
@@ -213,7 +227,7 @@ class OpenClawExportAdapter:
             trade_date=str(manifest.get("trade_date", "")),
             log_path=log_path,
         )
-        artifacts, warnings = self._select_openclaw_artifacts_with_warnings(
+        artifacts, warnings, errors = self._select_openclaw_artifacts_with_diagnostics(
             manifest,
             include_all=include_all,
             min_severity=min_severity,
@@ -223,7 +237,7 @@ class OpenClawExportAdapter:
             self.build_openclaw_item(artifact, manifest_root=resolved_manifest_path.parent)
             for artifact in artifacts
         ]
-        if not items and not warnings:
+        if not items and not warnings and not errors:
             warnings.append("empty_match_set:no_openclaw_artifacts_selected")
 
         export_id = self._export_id_for(
@@ -252,7 +266,7 @@ class OpenClawExportAdapter:
             openclaw_items_path=str(openclaw_items_path),
             openclaw_delivery_log_path=str(openclaw_delivery_log_path),
             warnings=list(dict.fromkeys(warnings)),
-            errors=[],
+            errors=list(dict.fromkeys(errors)),
             log_path=str(openclaw_delivery_log_path),
         )
         self.write_openclaw_package(

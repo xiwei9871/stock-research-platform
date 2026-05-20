@@ -217,6 +217,37 @@ def test_missing_source_paths_are_skipped_with_warning(tmp_path: Path) -> None:
     assert any(warning.startswith("missing_source_path:") for warning in result.warnings)
 
 
+@pytest.mark.parametrize(
+    ("manifest_content", "expected_message"),
+    [
+        ("", "OpenClaw manifest is not valid JSON"),
+        ("not-json", "OpenClaw manifest is not valid JSON"),
+    ],
+)
+def test_load_local_manifest_wraps_invalid_json_errors(
+    tmp_path: Path,
+    manifest_content: str,
+    expected_message: str,
+) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(manifest_content, encoding="utf-8")
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+
+    with pytest.raises(report_delivery_openclaw.OpenClawManifestError, match=expected_message):
+        adapter.load_local_manifest(manifest_path)
+
+
+def test_load_local_manifest_wraps_missing_manifest_error(tmp_path: Path) -> None:
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+
+    with pytest.raises(
+        report_delivery_openclaw.OpenClawManifestError,
+        match="OpenClaw manifest not found",
+    ):
+        adapter.load_local_manifest(tmp_path / "missing-manifest.json")
+
+
 def test_openclaw_export_writes_manifest_items_and_log(tmp_path: Path) -> None:
     manifest_path = _write_manifest(
         tmp_path,
@@ -328,6 +359,55 @@ def test_openclaw_export_empty_match_set_does_not_crash(tmp_path: Path) -> None:
     assert manifest["items"] == []
     assert any(warning.startswith("missing_source_path:") for warning in manifest["warnings"])
     assert items_file.read_text(encoding="utf-8") == ""
+
+
+def test_openclaw_export_reports_non_list_artifacts_section(tmp_path: Path) -> None:
+    manifest = {
+        "generated_at": "2026-05-21T08:10:00Z",
+        "trade_date": "2026-05-20",
+        "channel": "local",
+        "artifact_count": 1,
+        "report_types": ["daily_topn_report"],
+        "requires_attention_count": 0,
+        "high_severity_count": 0,
+        "artifacts": {"artifact_id": "broken"},
+        "warnings": [],
+        "errors": [],
+    }
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    assert result.item_count == 0
+    assert "invalid_artifacts_section:expected_list" in result.errors
+    assert result.warnings == ["invalid_artifacts_section:expected_list"]
+
+
+def test_openclaw_export_reports_non_dict_artifact_rows(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="daily_topn",
+                report_type="daily_topn_report",
+                title="Daily TopN",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+            ),
+        ],
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"] = [manifest["artifacts"][0], "broken-row"]
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path, include_all=True)
+
+    assert result.item_count == 1
+    assert any(warning == "invalid_artifact_entry:index=1:expected_dict" for warning in result.warnings)
 
 
 def test_openclaw_export_defaults_to_openclaw_output_root_sibling_of_trade_date_dir(
