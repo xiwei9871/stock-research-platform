@@ -174,6 +174,7 @@ class OpenClawSender:
             )
 
         self._validate_live_send_config(config)
+        self._validate_live_send_items(payload["items"])
 
         transport_result = self.transport.send(payload, config)
         self.write_send_preview(preview_path, payload)
@@ -270,8 +271,20 @@ class OpenClawSender:
             problems.append("route_allowlist must be non-empty")
         if config.severity_max in (None, ""):
             problems.append("severity_max must be present")
+        elif str(config.severity_max).lower() not in {"info", "low", "medium", "high"}:
+            problems.append("severity_max must stay within the smoke-test envelope; critical is not allowed")
         if not config.test_mode:
             problems.append("test_mode must be True")
 
         if problems:
             raise ValueError("live send requires " + ", ".join(problems))
+
+    def _validate_live_send_items(self, items: list[dict[str, Any]]) -> None:
+        invalid_severities: list[str] = []
+        for item in items:
+            severity = str(item.get("severity", "")).lower()
+            if severity not in {"critical", "high", "medium", "low", "info"}:
+                invalid_severities.append(severity or "<missing>")
+        if invalid_severities:
+            unique_invalid = ", ".join(sorted(set(invalid_severities)))
+            raise ValueError(f"live send requires known item severity; invalid severity: {unique_invalid}")
