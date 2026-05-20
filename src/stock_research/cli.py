@@ -24,6 +24,11 @@ from stock_research.core_data import (
     sync_core_asset_master_for_service,
 )
 from stock_research.data_audit import format_audit_line, run_data_audit
+from stock_research.data_quality import (
+    format_data_quality_check_line,
+    format_data_quality_summary_line,
+    run_data_quality,
+)
 from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
     sync_asset_lifecycle_from_master,
@@ -575,6 +580,21 @@ def build_parser() -> argparse.ArgumentParser:
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
     subparsers.add_parser("finance-audit")
+
+    data_quality = subparsers.add_parser("data-quality")
+    data_quality.add_argument("--expected-start-date", default="1990-12-01")
+    data_quality.add_argument("--start-date")
+    data_quality.add_argument("--end-date")
+    data_quality.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    data_quality.add_argument("--factor-names", type=parse_factor_names)
+    data_quality.add_argument("--calc-version", default="v1")
+    data_quality.add_argument("--min-label-dates", type=int, default=20)
+    data_quality.add_argument("--require-industry-membership", action="store_true")
+    data_quality.add_argument("--json", action="store_true")
 
     seed_trading_calendar = subparsers.add_parser("seed-trading-calendar")
     seed_trading_calendar.add_argument("--start-date", required=True)
@@ -1677,6 +1697,29 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "data-quality":
+        start_date = args.start_date
+        if start_date is None:
+            bounds = load_market_date_bounds()
+            start_date = bounds["start_date"]
+        report = run_data_quality(
+            expected_start_date=args.expected_start_date,
+            start_date=start_date,
+            end_date=args.end_date,
+            horizons=args.horizons,
+            factor_names=args.factor_names,
+            calc_version=args.calc_version,
+            min_label_dates=args.min_label_dates,
+            require_industry_membership=args.require_industry_membership,
+        )
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False))
+        else:
+            print(format_data_quality_summary_line(report))
+            for check in report["checks"]:
+                print(format_data_quality_check_line(check))
+        if report["overall_status"] == "blocked":
+            raise SystemExit(1)
     elif args.command == "seed-trading-calendar":
         count = seed_trading_calendar_from_bars(
             start_date=args.start_date,
