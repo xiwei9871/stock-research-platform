@@ -479,3 +479,25 @@ P1-1 明确禁止：
 - CLI 示例：`.venv/bin/stock-research report-delivery-openclaw-export --trade-date 2026-05-20 --manifest outputs/delivery/2026-05-20/manifest.json --output-dir outputs/openclaw/2026-05-20 --include-all --min-severity medium`
 - `--dry-run` 只影响结果状态和 manifest/log 记录，不阻止本地文件写出
 - 后续 live sender 要单独拆成另一个 adapter，不复用 export-only 命令的发送职责
+
+## OpenClaw Sender v0
+
+- 和 `OpenClaw Export Adapter` 的关系：`report-delivery-openclaw-export` 负责把本地 manifest 转成 `openclaw_manifest.json` / `openclaw_items.jsonl`，`report-delivery-openclaw-send` 负责读取这两个文件并把 payload 送出；两者是前后串联的两步，不是同一个职责
+- 默认行为：`report-delivery-openclaw-send` 默认 `--dry-run`，真实发送必须显式加 `--no-dry-run`
+- `send_preview.json`：dry-run 和 real-send 都要写预览文件，预览内容必须可复查，但不能包含 token
+- `send_log.jsonl`：记录一次发送的摘要结果，至少包含 `send_id`、`status`、`dry_run`、`item_count`、`sent_count`、`failed_count`、`skipped_count`、`preview_path`、`endpoint_host`
+- 环境变量：优先级为 CLI 参数高于环境变量高于默认值；当前支持 `OPENCLAW_ENDPOINT`、`OPENCLAW_TOKEN`、`OPENCLAW_TIMEOUT_SECONDS`
+- CLI 示例：
+
+```bash
+.venv/bin/stock-research report-delivery-openclaw-send \
+  --trade-date 2026-05-20 \
+  --manifest outputs/report_delivery/openclaw/2026-05-20/openclaw_manifest.json \
+  --items outputs/report_delivery/openclaw/2026-05-20/openclaw_items.jsonl \
+  --output-dir outputs/report_delivery/openclaw_send/2026-05-20 \
+  --dry-run
+```
+
+- 真实发送安全条件：`--no-dry-run` 时必须提供 `--endpoint`，并且同时满足 `--allow-live-send`、`--limit 1`、非空 `--route-allowlist`、`--severity-max` 在 smoke-test envelope 内、`--test-mode`
+- token 安全：token 不得打印到 stdout，不得写入 `send_preview.json`，不得写入 `send_log.jsonl`
+- 和未来 Feishu adapter 的关系：`OpenClaw Sender v0` 先把渠道发送边界和安全策略定住，后续 Feishu adapter 只需要沿用同一套 dry-run / logging / safety gate 约定，不需要重写发送框架

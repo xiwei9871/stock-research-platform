@@ -1070,6 +1070,190 @@ def test_report_delivery_openclaw_export_cli_prints_summary(monkeypatch, capsys)
     ]
 
 
+def test_cli_accepts_report_delivery_openclaw_send_command(monkeypatch):
+    monkeypatch.delenv("OPENCLAW_ENDPOINT", raising=False)
+    monkeypatch.delenv("OPENCLAW_TIMEOUT_SECONDS", raising=False)
+
+    args = build_parser().parse_args(
+        [
+            "report-delivery-openclaw-send",
+            "--trade-date",
+            "2026-05-21",
+            "--manifest",
+            "outputs/openclaw/openclaw_manifest.json",
+            "--items",
+            "outputs/openclaw/openclaw_items.jsonl",
+            "--output-dir",
+            "outputs/openclaw_send/2026-05-21",
+        ]
+    )
+
+    assert args.command == "report-delivery-openclaw-send"
+    assert args.trade_date == "2026-05-21"
+    assert args.manifest == "outputs/openclaw/openclaw_manifest.json"
+    assert args.items == "outputs/openclaw/openclaw_items.jsonl"
+    assert args.output_dir == "outputs/openclaw_send/2026-05-21"
+    assert args.dry_run is True
+    assert args.endpoint is None
+    assert args.timeout_seconds == 10.0
+    assert args.retry_count == 0
+    assert args.retry_backoff_seconds == 1.0
+    assert args.allow_live_send is False
+    assert args.limit is None
+    assert args.route_allowlist == []
+    assert args.severity_max is None
+    assert args.test_mode is False
+
+
+def test_report_delivery_openclaw_send_cli_dry_run_prints_summary(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    class FakeOpenClawSender:
+        def __init__(self, transport):
+            calls.append({"transport": transport.__class__.__name__})
+
+        def send_batch(self, *, manifest_path, items_path, config):
+            calls.append(
+                {
+                    "manifest_path": manifest_path,
+                    "items_path": items_path,
+                    "config": config,
+                }
+            )
+            assert config.dry_run is True
+            assert config.endpoint == "https://openclaw.example.test/send"
+            assert config.timeout_seconds == 12.5
+            assert config.retry_count == 2
+            assert config.retry_backoff_seconds == 0.75
+            assert config.outbox_dir == "outputs/openclaw_send/2026-05-21"
+            assert config.limit == 1
+            assert config.allow_live_send is True
+            assert config.route_allowlist == ["research_inbox"]
+            assert config.severity_max == "low"
+            assert config.test_mode is True
+            return SimpleNamespace(
+                send_id="openclaw-send:1:2026-05-21T09:00:00Z:outputs/openclaw/openclaw_manifest.json",
+                channel="openclaw",
+                status="dry_run",
+                dry_run=True,
+                item_count=1,
+                sent_count=0,
+                failed_count=0,
+                skipped_count=0,
+                preview_path="outputs/openclaw_send/2026-05-21/send_preview.json",
+                send_log_path="outputs/openclaw_send/2026-05-21/send_log.jsonl",
+            )
+
+    monkeypatch.setattr(cli, "OpenClawSender", FakeOpenClawSender)
+    monkeypatch.setenv("OPENCLAW_TOKEN", "secret-token")
+
+    cli.main_for_args(
+        [
+            "report-delivery-openclaw-send",
+            "--trade-date",
+            "2026-05-21",
+            "--manifest",
+            "outputs/openclaw/openclaw_manifest.json",
+            "--items",
+            "outputs/openclaw/openclaw_items.jsonl",
+            "--output-dir",
+            "outputs/openclaw_send/2026-05-21",
+            "--dry-run",
+            "--endpoint",
+            "https://openclaw.example.test/send",
+            "--timeout-seconds",
+            "12.5",
+            "--retry-count",
+            "2",
+            "--retry-backoff-seconds",
+            "0.75",
+            "--allow-live-send",
+            "--limit",
+            "1",
+            "--route-allowlist",
+            "research_inbox",
+            "--severity-max",
+            "low",
+            "--test-mode",
+        ]
+    )
+
+    assert calls[0] == {"transport": "DryRunOpenClawTransport"}
+    assert calls[1]["manifest_path"] == "outputs/openclaw/openclaw_manifest.json"
+    assert calls[1]["items_path"] == "outputs/openclaw/openclaw_items.jsonl"
+    assert isinstance(calls[1]["config"], cli.OpenClawSendConfig)
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery_openclaw_send|status|dry_run",
+        "report_delivery_openclaw_send|dry_run|True",
+        "report_delivery_openclaw_send|send_id|openclaw-send:1:2026-05-21T09:00:00Z:outputs/openclaw/openclaw_manifest.json",
+        "report_delivery_openclaw_send|item_count|1",
+        "report_delivery_openclaw_send|sent_count|0",
+        "report_delivery_openclaw_send|failed_count|0",
+        "report_delivery_openclaw_send|skipped_count|0",
+        "report_delivery_openclaw_send|preview|outputs/openclaw_send/2026-05-21/send_preview.json",
+        "report_delivery_openclaw_send|log|outputs/openclaw_send/2026-05-21/send_log.jsonl",
+    ]
+
+
+def test_report_delivery_openclaw_send_cli_no_dry_run_without_endpoint_fails_clearly(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("OPENCLAW_ENDPOINT", raising=False)
+    monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+    monkeypatch.delenv("OPENCLAW_TIMEOUT_SECONDS", raising=False)
+
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        """
+{
+  "generated_at": "2026-05-21T09:00:00Z",
+  "trade_date": "2026-05-21",
+  "channel": "openclaw",
+  "dry_run": true,
+  "source_manifest_path": "outputs/report_delivery/2026-05-21/manifest.json",
+  "item_count": 1,
+  "items": [],
+  "warnings": [],
+  "errors": []
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        """
+{"item_id":"openclaw:1","artifact_id":"daily_topn_report:2026-05-21:abc","report_type":"daily_topn_report","title":"Daily TopN","summary":"Daily TopN summary","severity":"info","requires_attention":false,"delivery_priority":10,"tags":["daily","topn"],"source_paths":["outputs/report_delivery/2026-05-21/artifacts/topn.md"],"evidence_paths":[],"run_card_path":null,"recommended_action":"review_topn_candidates","openclaw_route":"research_inbox","payload":{"title":"Daily TopN"}}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="endpoint is required when dry_run is False"):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                str(manifest_path),
+                "--items",
+                str(items_path),
+                "--output-dir",
+                str(tmp_path / "send"),
+                "--no-dry-run",
+                "--allow-live-send",
+                "--limit",
+                "1",
+                "--route-allowlist",
+                "research_inbox",
+                "--severity-max",
+                "low",
+                "--test-mode",
+            ]
+        )
+
+
 def test_report_delivery_openclaw_export_cli_rejects_trade_date_mismatch(monkeypatch):
     def fake_load_local_manifest(self, manifest_path):
         assert manifest_path == "outputs/delivery/manifest.json"

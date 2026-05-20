@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -151,6 +152,12 @@ from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.report_delivery import deliver_local_reports
 from stock_research.report_delivery_openclaw import OpenClawExportAdapter
+from stock_research.report_delivery_openclaw_sender import (
+    DryRunOpenClawTransport,
+    HttpOpenClawTransport,
+    OpenClawSendConfig,
+    OpenClawSender,
+)
 from stock_research.research_preflight import (
     check_factor_label_coverage,
     check_industry_membership_coverage,
@@ -889,6 +896,42 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["info", "low", "medium", "high", "critical"],
         default="info",
     )
+
+    report_delivery_openclaw_send = subparsers.add_parser("report-delivery-openclaw-send")
+    report_delivery_openclaw_send.add_argument("--trade-date", required=True)
+    report_delivery_openclaw_send.add_argument("--manifest", required=True)
+    report_delivery_openclaw_send.add_argument("--items", required=True)
+    report_delivery_openclaw_send.add_argument("--output-dir", required=True)
+    report_delivery_openclaw_send.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_openclaw_send.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_openclaw_send.add_argument("--endpoint", default=os.environ.get("OPENCLAW_ENDPOINT"))
+    report_delivery_openclaw_send.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=float(os.environ.get("OPENCLAW_TIMEOUT_SECONDS", "10")),
+    )
+    report_delivery_openclaw_send.add_argument("--retry-count", type=int, default=0)
+    report_delivery_openclaw_send.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=1.0,
+    )
+    report_delivery_openclaw_send.add_argument("--allow-live-send", action="store_true")
+    report_delivery_openclaw_send.add_argument("--limit", type=int)
+    report_delivery_openclaw_send.add_argument(
+        "--route-allowlist",
+        type=lambda value: parse_str_list(value, "--route-allowlist"),
+        default=[],
+    )
+    report_delivery_openclaw_send.add_argument(
+        "--severity-max",
+        choices=["info", "low", "medium", "high", "critical"],
+    )
+    report_delivery_openclaw_send.add_argument("--test-mode", action="store_true")
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
@@ -3242,6 +3285,37 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"report_delivery_openclaw|items|{result.openclaw_items_path}")
         print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
         print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")
+    elif args.command == "report-delivery-openclaw-send":
+        sender = OpenClawSender(
+            transport=DryRunOpenClawTransport() if args.dry_run else HttpOpenClawTransport()
+        )
+        result = sender.send_batch(
+            manifest_path=args.manifest,
+            items_path=args.items,
+            config=OpenClawSendConfig(
+                endpoint=args.endpoint,
+                token=os.environ.get("OPENCLAW_TOKEN"),
+                timeout_seconds=args.timeout_seconds,
+                dry_run=args.dry_run,
+                retry_count=args.retry_count,
+                retry_backoff_seconds=args.retry_backoff_seconds,
+                outbox_dir=args.output_dir,
+                limit=args.limit,
+                allow_live_send=args.allow_live_send,
+                route_allowlist=args.route_allowlist,
+                severity_max=args.severity_max,
+                test_mode=args.test_mode,
+            ),
+        )
+        print(f"report_delivery_openclaw_send|status|{result.status}")
+        print(f"report_delivery_openclaw_send|dry_run|{result.dry_run}")
+        print(f"report_delivery_openclaw_send|send_id|{result.send_id}")
+        print(f"report_delivery_openclaw_send|item_count|{result.item_count}")
+        print(f"report_delivery_openclaw_send|sent_count|{result.sent_count}")
+        print(f"report_delivery_openclaw_send|failed_count|{result.failed_count}")
+        print(f"report_delivery_openclaw_send|skipped_count|{result.skipped_count}")
+        print(f"report_delivery_openclaw_send|preview|{result.preview_path}")
+        print(f"report_delivery_openclaw_send|log|{result.send_log_path}")
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,
