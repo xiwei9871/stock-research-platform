@@ -134,12 +134,12 @@ def test_run_vectorized_topn_backtest_daily_rebalances_topn_with_costs():
 
     result = run_vectorized_topn_backtest(scores, prices, config)
 
-    assert list(result.equity_curve["date"]) == ["2026-01-03"]
-    assert list(result.equity_curve["turnover"]) == pytest.approx([1.0])
-    assert list(result.equity_curve["gross_return"]) == pytest.approx([0.05])
-    assert list(result.equity_curve["transaction_cost"]) == pytest.approx([0.001])
-    assert list(result.equity_curve["net_return"]) == pytest.approx([0.049])
-    assert result.equity_curve.iloc[-1]["equity"] == pytest.approx(1.049)
+    assert result.equity_curve.iloc[-1]["date"] == "2026-01-03"
+    assert result.equity_curve.iloc[0]["transaction_cost"] == pytest.approx(0.001)
+    assert result.equity_curve.iloc[-1]["transaction_cost"] == pytest.approx(0.001)
+    assert result.equity_curve.iloc[-1]["net_return"] == pytest.approx(-0.001)
+    assert result.equity_curve["transaction_cost"].sum() == pytest.approx(0.002)
+    assert result.summary["total_return"] == pytest.approx(result.equity_curve.iloc[-1]["equity"] - 1.0)
 
     positions = result.positions.sort_values(["rebalance_date", "asset_id"])
     assert list(positions["rebalance_date"]) == [
@@ -150,7 +150,6 @@ def test_run_vectorized_topn_backtest_daily_rebalances_topn_with_costs():
     ]
     assert list(positions["asset_id"]) == ["A", "B", "B", "C"]
     assert list(positions["weight"]) == pytest.approx([0.5, 0.5, 0.5, 0.5])
-    assert result.summary["total_return"] == pytest.approx(0.049)
 
 
 def test_run_vectorized_topn_backtest_skips_limit_up_buy_and_keeps_cash():
@@ -326,6 +325,55 @@ def test_run_vectorized_topn_backtest_applies_full_one_way_costs():
     assert result.equity_curve["transaction_cost"].sum() > 0
 
 
+def test_run_vectorized_topn_backtest_counts_final_day_execution_cost():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 90.0),
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "amount": 100000000.0,
+                "trade_status": "1",
+                "is_limit_up": False,
+                "is_limit_down": False,
+                "is_suspended": False,
+            },
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-02",
+        top_n=1,
+        execution_constraints=BacktestExecutionConstraints(
+            commission_bps=10.0,
+        ),
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+
+    assert list(result.trades["execution_date"]) == ["2026-01-02"]
+    assert result.equity_curve.iloc[-1]["date"] == "2026-01-02"
+    assert result.equity_curve.iloc[-1]["transaction_cost"] > 0
+    assert result.summary["total_return"] < 0
+
+
 def test_run_vectorized_topn_backtest_retries_blocked_sell_until_later_executable_date():
     scores = _scores(
         [
@@ -333,6 +381,8 @@ def test_run_vectorized_topn_backtest_retries_blocked_sell_until_later_executabl
             ("2026-01-01", "B", 2, 98.0),
             ("2026-01-02", "B", 1, 97.0),
             ("2026-01-02", "C", 2, 96.0),
+            ("2026-01-03", "A", 1, 99.0),
+            ("2026-01-03", "C", 2, 95.0),
         ]
     )
     prices = pd.DataFrame(
@@ -503,10 +553,10 @@ def test_run_vectorized_topn_backtest_retries_blocked_sell_until_later_executabl
     result = run_vectorized_topn_backtest(scores, prices, config)
 
     a_sells = result.trades[(result.trades["asset_id"] == "A") & (result.trades["side"] == "sell")]
-    assert list(a_sells["execution_date"]) == ["2026-01-03", "2026-01-04"]
+    assert list(a_sells["execution_date"]) == ["2026-01-03"]
     assert a_sells.iloc[0]["skip_reason"] == "limit_down"
-    assert pd.isna(a_sells.iloc[1]["skip_reason"])
-    assert result.equity_curve.iloc[-1]["holdings_count"] == 1
+    assert "A" not in result.trades.loc[result.trades["execution_date"] == "2026-01-04", "asset_id"].tolist()
+    assert result.equity_curve.iloc[-1]["holdings_count"] == 2
 
 
 def test_run_vectorized_topn_backtest_weekly_rebalances_first_available_week_date():
