@@ -67,11 +67,13 @@ class OpenClawExportAdapter:
         *,
         include_all: bool = False,
         min_severity: str = "info",
+        manifest_root: str | Path | None = None,
     ) -> list[dict[str, Any]]:
         selected, _ = self._select_openclaw_artifacts_with_warnings(
             manifest,
             include_all=include_all,
             min_severity=min_severity,
+            manifest_root=manifest_root,
         )
         return selected
 
@@ -81,6 +83,7 @@ class OpenClawExportAdapter:
         *,
         include_all: bool = False,
         min_severity: str = "info",
+        manifest_root: str | Path | None = None,
     ) -> tuple[list[dict[str, Any]], list[str]]:
         artifacts = manifest.get("artifacts", [])
         if not isinstance(artifacts, list):
@@ -89,6 +92,7 @@ class OpenClawExportAdapter:
         selected: list[dict[str, Any]] = []
         warnings: list[str] = []
         severity_threshold = self._severity_rank(min_severity)
+        resolved_manifest_root = self._resolved_manifest_root(manifest_root)
 
         for artifact in artifacts:
             if not isinstance(artifact, dict):
@@ -103,7 +107,10 @@ class OpenClawExportAdapter:
             if self._severity_rank(severity) < severity_threshold:
                 continue
 
-            sanitized_artifact, artifact_warnings = self._sanitize_artifact(artifact)
+            sanitized_artifact, artifact_warnings = self._sanitize_artifact(
+                artifact,
+                manifest_root=resolved_manifest_root,
+            )
             if artifact_warnings:
                 warnings.extend(artifact_warnings)
             if sanitized_artifact is None:
@@ -112,27 +119,35 @@ class OpenClawExportAdapter:
 
         return selected, list(dict.fromkeys(warnings))
 
-    def build_openclaw_item(self, artifact: dict[str, Any]) -> OpenClawExportItem:
+    def build_openclaw_item(
+        self,
+        artifact: dict[str, Any],
+        *,
+        manifest_root: str | Path | None = None,
+    ) -> OpenClawExportItem:
         report_type = str(artifact.get("report_type", "generic_report"))
         requires_attention = bool(artifact.get("requires_attention", False))
         recommended_action = self._recommended_action_for(report_type)
         openclaw_route = self._openclaw_route_for(report_type, requires_attention=requires_attention)
+        resolved_manifest_root = self._resolved_manifest_root(manifest_root)
         source_paths = self._existing_paths(
             [
                 artifact.get("markdown_path"),
                 artifact.get("json_path"),
                 *self._coerce_path_list(artifact.get("csv_paths")),
                 *self._metadata_paths(artifact.get("metadata"), "source_paths"),
-                artifact.get("metadata", {}).get("source_path") if isinstance(artifact.get("metadata"), dict) else None,
-            ]
+                self._metadata_path(artifact.get("metadata"), "source_path"),
+            ],
+            resolved_manifest_root,
         )
         evidence_paths = self._existing_paths(
             [
                 artifact.get("evidence_dir"),
                 *self._metadata_paths(artifact.get("metadata"), "evidence_paths"),
-            ]
+            ],
+            resolved_manifest_root,
         )
-        run_card_path = self._existing_path(artifact.get("run_card_path"))
+        run_card_path = self._existing_path(artifact.get("run_card_path"), resolved_manifest_root)
         payload = {
             "artifact_id": artifact.get("artifact_id", ""),
             "report_type": report_type,
@@ -186,8 +201,12 @@ class OpenClawExportAdapter:
             manifest,
             include_all=include_all,
             min_severity=min_severity,
+            manifest_root=resolved_manifest_path.parent,
         )
-        items = [self.build_openclaw_item(artifact) for artifact in artifacts]
+        items = [
+            self.build_openclaw_item(artifact, manifest_root=resolved_manifest_path.parent)
+            for artifact in artifacts
+        ]
         result = OpenClawExportResult(
             manifest_path=str(resolved_manifest_path),
             item_count=len(items),
@@ -214,7 +233,12 @@ class OpenClawExportAdapter:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n")
 
-    def _sanitize_artifact(self, artifact: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    def _sanitize_artifact(
+        self,
+        artifact: dict[str, Any],
+        *,
+        manifest_root: Path,
+    ) -> tuple[dict[str, Any] | None, list[str]]:
         warnings: list[str] = []
         sanitized = dict(artifact)
 
@@ -224,9 +248,10 @@ class OpenClawExportAdapter:
                 artifact.get("json_path"),
                 *self._coerce_path_list(artifact.get("csv_paths")),
                 *self._metadata_paths(artifact.get("metadata"), "source_paths"),
-                artifact.get("metadata", {}).get("source_path") if isinstance(artifact.get("metadata"), dict) else None,
+                self._metadata_path(artifact.get("metadata"), "source_path"),
             ],
             warnings,
+            manifest_root,
         )
         evidence_paths = self._sanitize_paths(
             [
@@ -234,8 +259,9 @@ class OpenClawExportAdapter:
                 *self._metadata_paths(artifact.get("metadata"), "evidence_paths"),
             ],
             warnings,
+            manifest_root,
         )
-        run_card_path = self._sanitize_path(artifact.get("run_card_path"), warnings)
+        run_card_path = self._sanitize_path(artifact.get("run_card_path"), warnings, manifest_root)
 
         sanitized["source_paths"] = source_paths
         sanitized["evidence_paths"] = evidence_paths
@@ -249,39 +275,44 @@ class OpenClawExportAdapter:
 
         return sanitized, warnings
 
-    def _sanitize_paths(self, values: list[Any], warnings: list[str]) -> list[str]:
+    def _sanitize_paths(
+        self,
+        values: list[Any],
+        warnings: list[str],
+        manifest_root: Path,
+    ) -> list[str]:
         sanitized: list[str] = []
         for value in values:
-            path = self._sanitize_path(value, warnings)
+            path = self._sanitize_path(value, warnings, manifest_root)
             if path is not None and path not in sanitized:
                 sanitized.append(path)
         return sanitized
 
-    def _sanitize_path(self, value: Any, warnings: list[str]) -> str | None:
+    def _sanitize_path(self, value: Any, warnings: list[str], manifest_root: Path) -> str | None:
         if value in (None, ""):
             return None
-        path = Path(value)
+        path = self._resolve_manifest_path(value, manifest_root)
         if path.exists():
             return str(path)
         warnings.append(f"missing_source_path:{path}")
         return None
 
-    def _existing_paths(self, values: list[Any]) -> list[str]:
+    def _existing_paths(self, values: list[Any], manifest_root: Path) -> list[str]:
         paths: list[str] = []
         for value in values:
             if value in (None, ""):
                 continue
-            path = Path(value)
+            path = self._resolve_manifest_path(value, manifest_root)
             if path.exists():
                 rendered = str(path)
                 if rendered not in paths:
                     paths.append(rendered)
         return paths
 
-    def _existing_path(self, value: Any) -> str | None:
+    def _existing_path(self, value: Any, manifest_root: Path) -> str | None:
         if value in (None, ""):
             return None
-        path = Path(value)
+        path = self._resolve_manifest_path(value, manifest_root)
         if path.exists():
             return str(path)
         return None
@@ -298,6 +329,12 @@ class OpenClawExportAdapter:
         if isinstance(value, list):
             return [str(item) for item in value if item not in (None, "")]
         return []
+
+    def _metadata_path(self, metadata: Any, key: str) -> Any:
+        if not isinstance(metadata, dict):
+            return None
+        value = metadata.get(key)
+        return value if value not in (None, "") else None
 
     def _recommended_action_for(self, report_type: str) -> str:
         if report_type == "run_card_bundle":
@@ -331,6 +368,17 @@ class OpenClawExportAdapter:
 
     def _severity_rank(self, severity: str) -> int:
         return SEVERITY_ORDER.get(str(severity).lower(), 0)
+
+    def _resolved_manifest_root(self, manifest_root: str | Path | None) -> Path:
+        if manifest_root is None:
+            return Path.cwd()
+        return Path(manifest_root).resolve()
+
+    def _resolve_manifest_path(self, value: Any, manifest_root: Path) -> Path:
+        path = Path(value)
+        if path.is_absolute():
+            return path
+        return (manifest_root / path).resolve()
 
     def _resolved_manifest_path(self, manifest_path: str | Path) -> Path:
         path = Path(manifest_path)

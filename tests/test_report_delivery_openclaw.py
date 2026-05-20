@@ -285,3 +285,73 @@ def test_export_item_preserves_source_evidence_and_run_card_references(tmp_path:
     assert item.payload["source_paths"] == item.source_paths
     assert item.payload["evidence_paths"] == item.evidence_paths
     assert item.payload["run_card_path"] == item.run_card_path
+
+
+def test_export_resolves_relative_paths_against_manifest_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_root = tmp_path / "manifest-root"
+    artifact_dir = manifest_root / "reports"
+    evidence_dir = manifest_root / "evidence"
+    manifest_root.mkdir()
+    artifact_dir.mkdir()
+    evidence_dir.mkdir()
+
+    (artifact_dir / "daily_topn.md").write_text("# Daily TopN\n", encoding="utf-8")
+    (artifact_dir / "daily_topn.json").write_text("{}\n", encoding="utf-8")
+    (artifact_dir / "daily_topn.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (manifest_root / "run_card.json").write_text("{}\n", encoding="utf-8")
+    (evidence_dir / "evidence.txt").write_text("evidence\n", encoding="utf-8")
+
+    manifest = {
+        "generated_at": "2026-05-21T08:10:00Z",
+        "trade_date": "2026-05-20",
+        "channel": "local",
+        "artifact_count": 1,
+        "report_types": ["daily_topn_report"],
+        "requires_attention_count": 0,
+        "high_severity_count": 0,
+        "artifacts": [
+            {
+                "artifact_id": "daily_topn_report:2026-05-20:abc123",
+                "report_type": "daily_topn_report",
+                "title": "Daily TopN",
+                "trade_date": "2026-05-20",
+                "generated_at": "2026-05-21T08:00:00Z",
+                "markdown_path": "reports/daily_topn.md",
+                "json_path": "reports/daily_topn.json",
+                "csv_paths": ["reports/daily_topn.csv"],
+                "run_card_path": "run_card.json",
+                "evidence_dir": "evidence",
+                "warnings": [],
+                "severity": "info",
+                "summary": "Daily TopN summary",
+                "tags": ["daily_topn_report"],
+                "recommended_channels": ["local", "openclaw"],
+                "requires_attention": False,
+                "delivery_priority": 10,
+                "metadata": {"source_path": "reports/daily_topn.md"},
+            }
+        ],
+        "warnings": [],
+        "errors": [],
+    }
+    manifest_path = manifest_root / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    assert result.item_count == 1
+    item = result.items[0]
+    assert item.source_paths == [
+        str(artifact_dir / "daily_topn.md"),
+        str(artifact_dir / "daily_topn.json"),
+        str(artifact_dir / "daily_topn.csv"),
+    ]
+    assert item.evidence_paths == [str(evidence_dir)]
+    assert item.run_card_path == str(manifest_root / "run_card.json")
+    assert item.payload["source_paths"] == item.source_paths
+    assert item.payload["evidence_paths"] == item.evidence_paths
+    assert item.payload["run_card_path"] == item.run_card_path
