@@ -15,9 +15,12 @@ def calc_ttm_from_cumulative_rows(
         if str(row["announcement_date"])[:10] <= trade_date
         and row.get(value_column) is not None
     ]
-    by_period = {
-        str(row["report_period"])[:10]: float(row[value_column]) for row in available
-    }
+    by_period: dict[str, float] = {}
+    for row in available:
+        period = str(row["report_period"])[:10]
+        if period in by_period:
+            continue
+        by_period[period] = float(row[value_column])
     if not by_period:
         return None
 

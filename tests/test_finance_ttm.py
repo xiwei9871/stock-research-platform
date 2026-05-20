@@ -164,3 +164,48 @@ def test_load_income_ttm_rows_derives_non_year_end_ttm_in_batch(monkeypatch):
     assert "announcement_date <= %s" in sql
     assert "ORDER BY asset_id, report_period DESC, announcement_date DESC" in sql
     assert params == [["CN:SH:600000", "CN:SZ:000001"], "2025-10-31"]
+
+
+def test_load_income_ttm_rows_prefers_latest_announcement_for_same_report_period(monkeypatch):
+    conn = FakeConnection(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "report_period": "2025-09-30",
+                "announcement_date": "2025-11-05",
+                "np_parent": 190.0,
+            },
+            {
+                "asset_id": "CN:SH:600000",
+                "report_period": "2025-09-30",
+                "announcement_date": "2025-10-30",
+                "np_parent": 180.0,
+            },
+            {
+                "asset_id": "CN:SH:600000",
+                "report_period": "2024-12-31",
+                "announcement_date": "2025-03-30",
+                "np_parent": 200.0,
+            },
+            {
+                "asset_id": "CN:SH:600000",
+                "report_period": "2024-09-30",
+                "announcement_date": "2024-10-30",
+                "np_parent": 120.0,
+            },
+        ]
+    )
+    monkeypatch.setattr(finance_ttm, "fetch_all", fake_fetch_all)
+
+    values = finance_ttm.load_income_ttm_rows(
+        conn,
+        ["CN:SH:600000"],
+        "2025-11-06",
+        value_columns=["np_parent"],
+    )
+
+    assert values == {
+        "CN:SH:600000": {
+            "np_parent_ttm": 270.0,
+        }
+    }
