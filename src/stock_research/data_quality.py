@@ -24,31 +24,41 @@ def run_data_quality(
     min_label_dates: int = 20,
     require_industry_membership: bool = False,
 ) -> dict[str, Any]:
-    if start_date is None:
-        return _build_blocked_window_report(
-            reason="missing_start_date",
-            horizons=horizons,
-            requested_end_date=end_date,
-            resolved_factor_names=factor_names or [],
-        )
-
-    if end_date is None:
-        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
-        end_date = _normalize_optional_date(latest.get("latest_common_date"))
-        if end_date is None:
-            return _build_blocked_window_report(
-                reason="missing_latest_common_date",
-                horizons=horizons,
-                requested_end_date=None,
-                latest=latest,
-                resolved_factor_names=factor_names or [],
-            )
-
     selected_factor_names = factor_names or candidate_factor_names()
     checks = [
         *_build_data_audit_checks(expected_start_date=expected_start_date),
         *_build_finance_audit_checks(),
-        *_build_research_preflight_checks(
+    ]
+
+    if start_date is None:
+        checks.extend(
+            _build_blocked_window_checks(
+                reason="missing_start_date",
+                horizons=horizons,
+                requested_end_date=end_date,
+                resolved_factor_names=selected_factor_names,
+            )
+        )
+        return _build_report(checks)
+
+    latest = None
+    if end_date is None:
+        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+        end_date = _normalize_optional_date(latest.get("latest_common_date"))
+        if end_date is None:
+            checks.extend(
+                _build_blocked_window_checks(
+                    reason="missing_latest_common_date",
+                    horizons=horizons,
+                    requested_end_date=None,
+                    latest=latest,
+                    resolved_factor_names=selected_factor_names,
+                )
+            )
+            return _build_report(checks)
+
+    checks.extend(
+        _build_research_preflight_checks(
             start_date=start_date,
             end_date=end_date,
             horizons=horizons,
@@ -56,8 +66,9 @@ def run_data_quality(
             calc_version=calc_version,
             min_label_dates=min_label_dates,
             require_industry_membership=require_industry_membership,
-        ),
-    ]
+            latest=latest,
+        )
+    )
     return _build_report(checks)
 
 
@@ -89,21 +100,21 @@ def iter_data_quality_lines(report: dict[str, Any]):
         yield format_data_quality_check_line(check)
 
 
-def _build_blocked_window_report(
+def _build_blocked_window_checks(
     *,
     reason: str,
     horizons: list[int],
     requested_end_date: str | None,
     latest: dict[str, Any] | None = None,
     resolved_factor_names: list[str],
-) -> dict[str, Any]:
+) -> list[dict[str, Any]]:
     latest_metrics = {
         "latest_common_date": _normalize_optional_date(latest.get("latest_common_date")) if latest else None,
         "date_count": int(latest.get("date_count") or 0) if latest else 0,
     }
     if requested_end_date is not None:
         latest_metrics["requested_end_date"] = requested_end_date
-    checks = [
+    return [
         _normalize_check(
             check_name="latest_common_label_date",
             status="blocked",
@@ -135,7 +146,6 @@ def _build_blocked_window_report(
             },
         ),
     ]
-    return _build_report(checks)
 
 
 def _build_data_audit_checks(*, expected_start_date: str) -> list[dict[str, Any]]:
@@ -158,15 +168,22 @@ def _build_research_preflight_checks(
     calc_version: str,
     min_label_dates: int,
     require_industry_membership: bool,
+    latest: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    try:
-        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
-    except ValueError as exc:
-        latest_check = _blocked_latest_common_label_date_check(
-            error=exc,
-            horizons=horizons,
-            requested_end_date=end_date,
-        )
+    if latest is None:
+        try:
+            latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+        except ValueError as exc:
+            latest_check = _blocked_latest_common_label_date_check(
+                error=exc,
+                horizons=horizons,
+                requested_end_date=end_date,
+            )
+        else:
+            latest_check = _normalize_latest_common_label_date_check(
+                latest,
+                requested_end_date=end_date,
+            )
     else:
         latest_check = _normalize_latest_common_label_date_check(
             latest,

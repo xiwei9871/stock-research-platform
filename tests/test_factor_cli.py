@@ -2265,61 +2265,60 @@ def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocke
 
 
 def test_data_quality_cli_blocks_when_market_start_missing(monkeypatch, capsys):
-    import json
     import sys
 
     import stock_research.cli as cli
+    import stock_research.data_quality as data_quality
 
+    calls = []
     monkeypatch.setattr(
         cli,
         "load_market_date_bounds",
         lambda: {"start_date": None, "end_date": "2026-05-08", "date_count": 8200},
     )
     monkeypatch.setattr(
-        cli,
-        "run_data_quality",
-        lambda **kwargs: {
-            "overall_status": "blocked",
-            "generated_at": "2026-05-20T12:00:00+08:00",
-            "checks": [
-                {
-                    "check_name": "latest_common_label_date",
-                    "status": "blocked",
-                    "kind": "research_preflight",
-                    "source": "research_preflight",
-                    "metrics": {"date_count": 0},
-                    "details": {"reasons": ["missing_start_date"]},
-                },
-                {
-                    "check_name": "factor_label_coverage",
-                    "status": "blocked",
-                    "kind": "research_preflight",
-                    "source": "research_preflight",
-                    "metrics": {
-                        "factor_date_count": 0,
-                        "complete_factor_date_count": 0,
-                    },
-                    "details": {"reasons": ["missing_start_date"]},
-                },
-            ],
-            "blocked_checks": [
-                "latest_common_label_date",
-                "factor_label_coverage",
-            ],
-            "warning_checks": [],
-        },
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
     )
-    monkeypatch.setattr(sys, "argv", ["stock-research", "data-quality", "--json"])
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "blocked", "rows": 2}],
+    )
+
+    def fail_find_latest_common_label_date(**kwargs):
+        raise AssertionError("find_latest_common_label_date should not be called")
+
+    monkeypatch.setattr(data_quality, "find_latest_common_label_date", fail_find_latest_common_label_date)
+    monkeypatch.setattr(sys, "argv", ["stock-research", "data-quality"])
 
     with pytest.raises(SystemExit) as excinfo:
         cli.main()
 
-    payload = json.loads(capsys.readouterr().out)
+    lines = capsys.readouterr().out.splitlines()
     assert excinfo.value.code == 1
-    assert payload["overall_status"] == "blocked"
-    assert payload["blocked_checks"] == [
-        "latest_common_label_date",
-        "factor_label_coverage",
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+    ]
+    assert lines == [
+        "data_quality|summary|blocked|checks|4|blocked|3|warning|0",
+        "data_quality|market_daily_bar|ok|kind|data_audit|rows|10|date_count|2|min_date|2024-01-01|max_date|2024-01-02",
+        "data_quality|missing_balance_sheet|blocked|kind|finance_audit|rows|2",
+        "data_quality|latest_common_label_date|blocked|kind|research_preflight|latest_common_date||date_count|0",
+        "data_quality|factor_label_coverage|blocked|kind|research_preflight|factor_date_count|0|complete_factor_date_count|0",
     ]
 
 
@@ -2328,39 +2327,39 @@ def test_data_quality_cli_blocks_when_latest_common_label_date_missing(monkeypat
     import sys
 
     import stock_research.cli as cli
+    import stock_research.data_quality as data_quality
 
+    calls = []
     monkeypatch.setattr(
-        cli,
-        "run_data_quality",
-        lambda **kwargs: {
-            "overall_status": "blocked",
-            "generated_at": "2026-05-20T12:00:00+08:00",
-            "checks": [
-                {
-                    "check_name": "latest_common_label_date",
-                    "status": "blocked",
-                    "kind": "research_preflight",
-                    "source": "research_preflight",
-                    "metrics": {"latest_common_date": None, "date_count": 0},
-                    "details": {"reasons": ["missing_latest_common_date"]},
-                },
-                {
-                    "check_name": "factor_label_coverage",
-                    "status": "blocked",
-                    "kind": "research_preflight",
-                    "source": "research_preflight",
-                    "metrics": {
-                        "factor_date_count": 0,
-                        "complete_factor_date_count": 0,
-                    },
-                    "details": {"reasons": ["missing_latest_common_date"]},
-                },
-            ],
-            "blocked_checks": [
-                "latest_common_label_date",
-                "factor_label_coverage",
-            ],
-            "warning_checks": [],
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "blocked", "rows": 2}],
+    )
+    latest_calls = []
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: latest_calls.append(kwargs)
+        or {
+            "latest_common_date": None,
+            "date_count": 0,
+            "horizons": kwargs["horizons"],
         },
     )
     monkeypatch.setattr(
@@ -2374,12 +2373,22 @@ def test_data_quality_cli_blocks_when_latest_common_label_date_missing(monkeypat
 
     payload = json.loads(capsys.readouterr().out)
     assert excinfo.value.code == 1
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+    ]
+    assert latest_calls == [{"start_date": "2024-01-01", "horizons": [5, 10, 20, 60]}]
     assert payload["overall_status"] == "blocked"
     assert payload["blocked_checks"] == [
+        "missing_balance_sheet",
         "latest_common_label_date",
         "factor_label_coverage",
     ]
+    assert payload["checks"][0]["check_name"] == "market_daily_bar"
+    assert payload["checks"][1]["check_name"] == "missing_balance_sheet"
     assert [check["check_name"] for check in payload["checks"]] == [
+        "market_daily_bar",
+        "missing_balance_sheet",
         "latest_common_label_date",
         "factor_label_coverage",
     ]

@@ -332,17 +332,32 @@ def test_run_data_quality_blocks_when_candidate_factors_are_empty(monkeypatch):
 
 
 def test_run_data_quality_blocks_when_start_date_missing(monkeypatch):
-    def fail_run_data_audit(**kwargs):
-        raise AssertionError("run_data_audit should not be called")
-
-    def fail_summarize_finance_coverage(**kwargs):
-        raise AssertionError("summarize_finance_coverage should not be called")
+    calls = []
+    monkeypatch.setattr(
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "blocked", "rows": 2}],
+    )
 
     def fail_find_latest_common_label_date(**kwargs):
         raise AssertionError("find_latest_common_label_date should not be called")
 
-    monkeypatch.setattr(data_quality, "run_data_audit", fail_run_data_audit)
-    monkeypatch.setattr(data_quality, "summarize_finance_coverage", fail_summarize_finance_coverage)
     monkeypatch.setattr(data_quality, "find_latest_common_label_date", fail_find_latest_common_label_date)
 
     report = data_quality.run_data_quality(
@@ -356,14 +371,21 @@ def test_run_data_quality_blocks_when_start_date_missing(monkeypatch):
         require_industry_membership=False,
     )
 
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+    ]
     assert report["overall_status"] == "blocked"
     assert report["generated_at"]
     assert report["blocked_checks"] == [
+        "missing_balance_sheet",
         "latest_common_label_date",
         "factor_label_coverage",
     ]
-    latest = report["checks"][0]
-    coverage = report["checks"][1]
+    assert report["checks"][0]["check_name"] == "market_daily_bar"
+    assert report["checks"][1]["check_name"] == "missing_balance_sheet"
+    latest = report["checks"][2]
+    coverage = report["checks"][3]
     assert latest["check_name"] == "latest_common_label_date"
     assert latest["status"] == "blocked"
     assert latest["kind"] == "research_preflight"
@@ -382,21 +404,38 @@ def test_run_data_quality_blocks_when_start_date_missing(monkeypatch):
 
 
 def test_run_data_quality_blocks_when_derived_end_date_missing(monkeypatch):
-    def fail_run_data_audit(**kwargs):
-        raise AssertionError("run_data_audit should not be called")
-
-    def fail_summarize_finance_coverage(**kwargs):
-        raise AssertionError("summarize_finance_coverage should not be called")
+    calls = []
+    monkeypatch.setattr(
+        data_quality,
+        "run_data_audit",
+        lambda **kwargs: calls.append(("data_audit", kwargs))
+        or [
+            {
+                "dataset": "market_daily_bar",
+                "status": "ok",
+                "rows": 10,
+                "date_count": 2,
+                "min_date": "2024-01-01",
+                "max_date": "2024-01-02",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "summarize_finance_coverage",
+        lambda **kwargs: calls.append(("finance_audit", kwargs))
+        or [{"check": "missing_balance_sheet", "status": "blocked", "rows": 2}],
+    )
 
     def fail_check_factor_label_coverage(**kwargs):
         raise AssertionError("check_factor_label_coverage should not be called")
 
-    monkeypatch.setattr(data_quality, "run_data_audit", fail_run_data_audit)
-    monkeypatch.setattr(data_quality, "summarize_finance_coverage", fail_summarize_finance_coverage)
+    latest_calls = []
     monkeypatch.setattr(
         data_quality,
         "find_latest_common_label_date",
-        lambda **kwargs: {
+        lambda **kwargs: latest_calls.append(kwargs)
+        or {
             "latest_common_date": None,
             "date_count": 0,
             "horizons": kwargs["horizons"],
@@ -415,20 +454,80 @@ def test_run_data_quality_blocks_when_derived_end_date_missing(monkeypatch):
         require_industry_membership=False,
     )
 
+    assert calls == [
+        ("data_audit", {"expected_start_date": "1990-12-01"}),
+        ("finance_audit", {}),
+    ]
+    assert latest_calls == [{"start_date": "2024-01-01", "horizons": [5, 10]}]
     assert report["overall_status"] == "blocked"
     assert report["generated_at"]
     assert report["blocked_checks"] == [
+        "missing_balance_sheet",
         "latest_common_label_date",
         "factor_label_coverage",
     ]
-    latest = report["checks"][0]
-    coverage = report["checks"][1]
+    assert report["checks"][0]["check_name"] == "market_daily_bar"
+    assert report["checks"][1]["check_name"] == "missing_balance_sheet"
+    latest = report["checks"][2]
+    coverage = report["checks"][3]
     assert latest["metrics"] == {
         "latest_common_date": None,
         "date_count": 0,
     }
     assert latest["details"]["reasons"] == ["missing_latest_common_date"]
     assert coverage["details"]["reasons"] == ["missing_latest_common_date"]
+
+
+def test_run_data_quality_reuses_derived_latest_snapshot(monkeypatch):
+    latest_calls = []
+    coverage_calls = []
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: latest_calls.append(kwargs)
+        or {
+            "latest_common_date": "2026-01-30",
+            "date_count": 80,
+            "horizons": [5, 10],
+        },
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "check_factor_label_coverage",
+        lambda **kwargs: coverage_calls.append(kwargs)
+        or {
+            "status": "ok",
+            "factor_date_count": 80,
+            "factor_complete_date_count": 80,
+            "missing_horizons": [],
+            "short_label_horizons": [],
+            "required_factor_names": ["ret_20"],
+            "unavailable_factor_names": [],
+            "reasons": [],
+        },
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date=None,
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    assert latest_calls == [{"start_date": "2024-01-01", "horizons": [5, 10]}]
+    assert coverage_calls[0]["end_date"] == "2026-01-30"
+    latest = next(item for item in report["checks"] if item["check_name"] == "latest_common_label_date")
+    assert latest["metrics"] == {
+        "latest_common_date": "2026-01-30",
+        "date_count": 80,
+        "requested_end_date": "2026-01-30",
+    }
 
 
 def test_formatters_emit_stable_summary_and_check_lines():
