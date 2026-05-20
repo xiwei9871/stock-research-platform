@@ -592,6 +592,27 @@ def test_collect_artifacts_falls_back_to_generic_report_for_unknown_file(tmp_pat
     assert artifact.recommended_channels == ["local"]
 
 
+def test_collect_artifacts_does_not_promote_plain_file_from_watchlists_directory(tmp_path):
+    source_dir = tmp_path / "watchlists"
+    source_dir.mkdir()
+    (source_dir / "notes.md").write_text("plain notes", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "generic_report"
+    assert artifact.severity == "info"
+
+
 def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
     source_dir = tmp_path / "reports"
     source_dir.mkdir()

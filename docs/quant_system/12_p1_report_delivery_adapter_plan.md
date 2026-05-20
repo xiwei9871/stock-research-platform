@@ -453,7 +453,7 @@ P1-1 明确禁止：
 
 - `Local Delivery Adapter` 已开始实现，当前基线已落在 `report_delivery.py` 与 CLI `report-delivery-local`。
 - 本地输出目录约定为 `OUTPUT_DIR/manifest.json`、`OUTPUT_DIR/delivery_log.jsonl`（非 dry-run）以及 `OUTPUT_DIR/artifacts/` 下的按 `artifact_id` 分组副本。
-- `manifest.json` 当前包含：`generated_at`、`trade_date`、`channel`、`artifact_count`、`report_types`、`requires_attention_count`、`high_severity_count`、`artifacts`、`warnings`、`errors`。其中 `artifacts` 记录 `artifact_id`、`report_type`、`title`、`trade_date`、`generated_at`、`markdown_path`、`json_path`、`csv_paths`、`run_card_path`、`evidence_dir`、`warnings`、`severity`、`summary`、`metadata`。
+- `manifest.json` 当前包含：`generated_at`、`trade_date`、`channel`、`artifact_count`、`report_types`、`requires_attention_count`、`high_severity_count`、`artifacts`、`warnings`、`errors`。其中 `artifacts` 记录 `artifact_id`、`report_type`、`title`、`trade_date`、`generated_at`、`markdown_path`、`json_path`、`csv_paths`、`run_card_path`、`evidence_dir`、`warnings`、`severity`、`summary`、`tags`、`recommended_channels`、`requires_attention`、`delivery_priority`、`metadata`。
 - `delivery_log.jsonl` 当前每条记录包含：`delivery_id`、`generated_at`、`channel`、`status`、`trade_date`、`artifact_count`、`manifest_path`、`error_message`。
 - CLI 示例：`.venv/bin/stock-research report-delivery-local --trade-date 2026-05-20 --input-dir outputs/reports/daily --output-dir outputs/report_delivery/2026-05-20 --no-dry-run`
 

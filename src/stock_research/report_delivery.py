@@ -301,7 +301,7 @@ class LocalDeliveryAdapter:
         if path.name == "manifest.json" and path.parent.name == "evidence":
             return "evidence_bundle"
 
-        text = " ".join([path.stem.lower(), *(part.lower() for part in path.parts)])
+        text = path.stem.lower()
         mapping = [
             ("topn", "topn"),
             ("watchlist", "watchlist"),
@@ -698,7 +698,6 @@ def _artifact_marker_text(artifact: ReportArtifact, *, primary_only: bool = Fals
     parts: list[str] = [artifact.report_type.lower(), artifact.title.lower()]
     paths = _artifact_primary_paths(artifact) if primary_only else _artifact_source_paths(artifact)
     for path in paths:
-        parts.extend(part.lower() for part in path.parts)
         parts.append(path.stem.lower())
         if path.suffix.lower() == ".md":
             h1 = _load_markdown_title(path)
