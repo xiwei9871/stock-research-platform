@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from hashlib import sha1
+import json
+import os
 from pathlib import Path
 import re
+import shutil
 from typing import Any
 
 RUN_CARD_FILENAMES = {
@@ -65,6 +69,7 @@ class LocalDeliveryAdapter:
         for root in input_dirs:
             path = Path(root)
             if not path.exists():
+                warnings.append(f"missing_input_dir:{path}")
                 continue
             self._collect_path(path, trade_date, artifacts_by_key, warnings)
 
@@ -90,6 +95,83 @@ class LocalDeliveryAdapter:
             self._collect_path(path, trade_date, artifacts_by_key, warnings)
 
         return list(artifacts_by_key.values()), warnings
+
+    def deliver_local(
+        self,
+        *,
+        trade_date: str,
+        input_dirs: list[str | Path],
+        report_dirs: list[str | Path],
+        run_card_dirs: list[str | Path],
+        artifact_paths: list[str | Path],
+        output_dir: str | Path,
+        dry_run: bool = True,
+    ) -> DeliveryResult:
+        generated_at = _generated_at()
+        output_path = Path(output_dir)
+        delivery_id = _delivery_id_for(trade_date=trade_date, output_dir=output_path, generated_at=generated_at)
+
+        artifacts, warnings = self.collect_artifacts(
+            trade_date=trade_date,
+            input_dirs=input_dirs,
+            report_dirs=report_dirs,
+            run_card_dirs=run_card_dirs,
+            artifact_paths=artifact_paths,
+        )
+        errors = [warning for warning in warnings if warning.startswith("missing_input_dir:")]
+
+        output_path.mkdir(parents=True, exist_ok=True)
+        manifest_path = output_path / "manifest.json"
+        delivery_log_path: Path | None = None
+
+        delivered_artifacts = artifacts
+        if not dry_run:
+            artifacts_dir = output_path / "artifacts"
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+            delivered_artifacts, copy_warnings = self._materialize_artifacts(artifacts, artifacts_dir)
+            warnings = [*warnings, *copy_warnings]
+            errors.extend(
+                warning for warning in copy_warnings if warning.startswith("missing_source_path:")
+            )
+
+        status = "error" if errors else ("dry_run" if dry_run else "completed")
+        manifest = build_manifest(
+            trade_date=trade_date,
+            artifacts=delivered_artifacts,
+            warnings=warnings,
+            errors=errors,
+            generated_at=generated_at,
+        )
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        if not dry_run:
+            delivery_log_path = output_path / "delivery_log.jsonl"
+            write_delivery_log(
+                delivery_log_path,
+                delivery_id=delivery_id,
+                generated_at=generated_at,
+                channel="local",
+                status=status,
+                trade_date=trade_date,
+                artifact_count=len(delivered_artifacts),
+                manifest_path=manifest_path,
+                error_message="; ".join(dict.fromkeys(errors)) if errors else "",
+            )
+
+        return DeliveryResult(
+            delivery_id=delivery_id,
+            channel="local",
+            status=status,
+            artifact_count=len(delivered_artifacts),
+            output_dir=str(output_path),
+            manifest_path=str(manifest_path),
+            delivery_log_path=str(delivery_log_path) if delivery_log_path is not None else None,
+            errors=list(dict.fromkeys(errors)),
+            generated_at=generated_at,
+        )
 
     def _collect_path(
         self,
@@ -277,3 +359,211 @@ class LocalDeliveryAdapter:
             return (2, name)
 
         return sorted(unique_paths, key=sort_key)
+
+    def _materialize_artifacts(
+        self,
+        artifacts: list[ReportArtifact],
+        artifacts_dir: Path,
+    ) -> tuple[list[ReportArtifact], list[str]]:
+        delivered_artifacts: list[ReportArtifact] = []
+        warnings: list[str] = []
+        for artifact in artifacts:
+            delivered_artifacts.append(
+                self._copy_artifact_to_dir(artifact=artifact, artifacts_dir=artifacts_dir, warnings=warnings)
+            )
+        return delivered_artifacts, warnings
+
+    def _copy_artifact_to_dir(
+        self,
+        *,
+        artifact: ReportArtifact,
+        artifacts_dir: Path,
+        warnings: list[str],
+    ) -> ReportArtifact:
+        destination_root = artifacts_dir / artifact.artifact_id.replace(":", "_")
+        destination_root.mkdir(parents=True, exist_ok=True)
+
+        bundle_dir_value = artifact.metadata.get("bundle_dir")
+        if isinstance(bundle_dir_value, str):
+            bundle_dir = Path(bundle_dir_value)
+            copied_bundle_root = destination_root / bundle_dir.name
+            copied_bundle_root.mkdir(parents=True, exist_ok=True)
+            if bundle_dir.exists():
+                for source_path in sorted(bundle_dir.rglob("*")):
+                    if not source_path.is_file():
+                        continue
+                    destination_path = copied_bundle_root / source_path.relative_to(bundle_dir)
+                    destination_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_path, destination_path)
+            else:
+                warnings.append(f"missing_source_path:{bundle_dir}")
+
+            return ReportArtifact(
+                artifact_id=artifact.artifact_id,
+                report_type=artifact.report_type,
+                title=artifact.title,
+                trade_date=artifact.trade_date,
+                generated_at=artifact.generated_at,
+                markdown_path=_copied_value(artifact.markdown_path, bundle_dir, copied_bundle_root),
+                json_path=_copied_value(artifact.json_path, bundle_dir, copied_bundle_root),
+                csv_paths=[
+                    _copied_value(path, bundle_dir, copied_bundle_root) or path
+                    for path in artifact.csv_paths
+                ],
+                run_card_path=_copied_value(artifact.run_card_path, bundle_dir, copied_bundle_root),
+                evidence_dir=_copied_dir_value(artifact.evidence_dir, bundle_dir, copied_bundle_root),
+                warnings=list(artifact.warnings),
+                severity=artifact.severity,
+                summary=artifact.summary,
+                metadata={**artifact.metadata, "delivered_path": str(copied_bundle_root)},
+            )
+
+        source_paths = self._artifact_source_paths(artifact)
+        source_root = self._common_source_root(source_paths)
+        copied_paths: dict[str, str] = {}
+        for source_path in source_paths:
+            if not source_path.exists():
+                warnings.append(f"missing_source_path:{source_path}")
+                continue
+            relative_path = source_path.relative_to(source_root)
+            destination_path = destination_root / relative_path
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination_path)
+            copied_paths[str(source_path)] = str(destination_path)
+
+        return ReportArtifact(
+            artifact_id=artifact.artifact_id,
+            report_type=artifact.report_type,
+            title=artifact.title,
+            trade_date=artifact.trade_date,
+            generated_at=artifact.generated_at,
+            markdown_path=copied_paths.get(artifact.markdown_path, artifact.markdown_path),
+            json_path=copied_paths.get(artifact.json_path, artifact.json_path),
+            csv_paths=[copied_paths.get(path, path) for path in artifact.csv_paths],
+            run_card_path=copied_paths.get(artifact.run_card_path, artifact.run_card_path),
+            evidence_dir=artifact.evidence_dir,
+            warnings=list(artifact.warnings),
+            severity=artifact.severity,
+            summary=artifact.summary,
+            metadata={**artifact.metadata, "delivered_path": str(destination_root)},
+        )
+
+    def _artifact_source_paths(self, artifact: ReportArtifact) -> list[Path]:
+        unique_paths: list[Path] = []
+        for path_value in [
+            artifact.markdown_path,
+            artifact.json_path,
+            artifact.run_card_path,
+            *artifact.csv_paths,
+        ]:
+            if path_value is None:
+                continue
+            path = Path(path_value)
+            if path not in unique_paths:
+                unique_paths.append(path)
+        return unique_paths
+
+    def _common_source_root(self, paths: list[Path]) -> Path:
+        if not paths:
+            return Path(".")
+        if len(paths) == 1:
+            return paths[0].parent
+        try:
+            common_path = Path(
+                os.path.commonpath([str(path.parent) for path in paths])
+            )
+        except ValueError:
+            return paths[0].parent
+        return common_path
+
+
+def build_manifest(
+    *,
+    trade_date: str,
+    artifacts: list[ReportArtifact],
+    warnings: list[str],
+    errors: list[str],
+    generated_at: str,
+) -> dict[str, Any]:
+    return {
+        "generated_at": generated_at,
+        "trade_date": trade_date,
+        "channel": "local",
+        "artifact_count": len(artifacts),
+        "artifacts": [asdict(artifact) for artifact in artifacts],
+        "warnings": list(dict.fromkeys(warnings)),
+        "errors": list(dict.fromkeys(errors)),
+    }
+
+
+def write_delivery_log(
+    log_path: str | Path,
+    *,
+    delivery_id: str,
+    generated_at: str,
+    channel: str,
+    status: str,
+    trade_date: str,
+    artifact_count: int,
+    manifest_path: str | Path,
+    error_message: str,
+) -> None:
+    payload = {
+        "delivery_id": delivery_id,
+        "generated_at": generated_at,
+        "channel": channel,
+        "status": status,
+        "trade_date": trade_date,
+        "artifact_count": artifact_count,
+        "manifest_path": str(manifest_path),
+        "error_message": error_message,
+    }
+    path = Path(log_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n")
+
+
+def deliver_local_reports(
+    *,
+    trade_date: str,
+    input_dirs: list[str | Path],
+    report_dirs: list[str | Path],
+    run_card_dirs: list[str | Path],
+    artifact_paths: list[str | Path],
+    output_dir: str | Path,
+    dry_run: bool = True,
+) -> DeliveryResult:
+    adapter = LocalDeliveryAdapter()
+    return adapter.deliver_local(
+        trade_date=trade_date,
+        input_dirs=input_dirs,
+        report_dirs=report_dirs,
+        run_card_dirs=run_card_dirs,
+        artifact_paths=artifact_paths,
+        output_dir=output_dir,
+        dry_run=dry_run,
+    )
+
+
+def _generated_at() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _delivery_id_for(*, trade_date: str, output_dir: Path, generated_at: str) -> str:
+    digest = sha1(f"{trade_date}:{output_dir}:{generated_at}".encode("utf-8")).hexdigest()[:12]
+    return f"local:{trade_date}:{digest}"
+
+
+def _copied_value(value: str | None, source_root: Path, destination_root: Path) -> str | None:
+    if value is None:
+        return None
+    path = Path(value)
+    return str(destination_root / path.relative_to(source_root))
+
+
+def _copied_dir_value(value: str | None, source_root: Path, destination_root: Path) -> str | None:
+    if value is None:
+        return None
+    path = Path(value)
+    return str(destination_root / path.relative_to(source_root))

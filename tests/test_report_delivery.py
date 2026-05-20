@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -133,3 +134,94 @@ def test_collect_artifacts_warns_for_missing_explicit_dirs(tmp_path):
         f"missing_report_dir:{missing_report_dir}",
         f"missing_run_card_dir:{missing_run_card_dir}",
     ]
+
+
+def test_collect_artifacts_warns_for_missing_explicit_path(tmp_path):
+    missing_input_dir = tmp_path / "missing-input"
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[missing_input_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    assert artifacts == []
+    assert warnings == [f"missing_input_dir:{missing_input_dir}"]
+
+
+def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text("# topn\n", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    result = adapter.deliver_local(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+        output_dir=tmp_path / "delivery",
+        dry_run=False,
+    )
+
+    manifest_path = Path(result.manifest_path)
+    delivery_log_path = Path(result.delivery_log_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    log_lines = delivery_log_path.read_text(encoding="utf-8").splitlines()
+    copied_artifacts = sorted((tmp_path / "delivery" / "artifacts").rglob("*"))
+
+    assert result.status == "completed"
+    assert result.channel == "local"
+    assert result.artifact_count == 1
+    assert manifest["channel"] == "local"
+    assert manifest["trade_date"] == "2026-05-20"
+    assert manifest["artifact_count"] == 1
+    assert len(log_lines) == 1
+    assert json.loads(log_lines[0])["status"] == "completed"
+    assert any(path.name == "daily_topn_2026-05-20_manual_v1.md" for path in copied_artifacts)
+
+
+def test_deliver_local_dry_run_does_not_write_delivery_log(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "watchlist_report_2026-05-20_core.md").write_text("# watchlist\n", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    result = adapter.deliver_local(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+        output_dir=tmp_path / "delivery",
+        dry_run=True,
+    )
+
+    assert result.status == "dry_run"
+    assert result.delivery_log_path is None
+    manifest = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
+    assert manifest["artifact_count"] == 1
+    assert not (tmp_path / "delivery" / "artifacts").exists()
+    assert not (tmp_path / "delivery" / "delivery_log.jsonl").exists()
+
+
+def test_deliver_local_reports_returns_clear_error_for_missing_input_dir(tmp_path):
+    missing_input_dir = tmp_path / "missing"
+
+    result = report_delivery.deliver_local_reports(
+        trade_date="2026-05-20",
+        input_dirs=[missing_input_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+        output_dir=tmp_path / "delivery",
+        dry_run=True,
+    )
+
+    assert result.status == "error"
+    assert result.artifact_count == 0
+    assert result.errors == [f"missing_input_dir:{missing_input_dir}"]
