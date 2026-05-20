@@ -502,49 +502,55 @@ def load_point_in_time_fundamentals_snapshot(
         .reset_index(drop=True)
         .copy()
     )
+    asset_ids = [str(asset_id) for asset_id in universe["asset_id"].tolist()]
     snapshot_rows: list[dict[str, Any]] = []
     with connect(service) as conn:
-        for asset_id, close in universe[["asset_id", "close"]].itertuples(index=False, name=None):
-            indicator = point_in_time_finance.get_latest_indicator(conn, str(asset_id), trade_date) or {}
-            income_statement = (
-                point_in_time_finance.get_latest_income_statement(conn, str(asset_id), trade_date) or {}
-            )
-            balance_sheet = (
-                point_in_time_finance.get_latest_balance_sheet(conn, str(asset_id), trade_date) or {}
-            )
-            cash_flow = point_in_time_finance.get_latest_cash_flow(conn, str(asset_id), trade_date) or {}
-            snapshot_rows.append(
-                {
-                    "asset_id": str(asset_id),
-                    "close": close,
-                    "roe": indicator.get("roe"),
-                    "roa": indicator.get("roa"),
-                    "gross_margin": indicator.get("gross_margin"),
-                    "net_margin": indicator.get("net_margin"),
-                    "debt_ratio": indicator.get("debt_ratio"),
-                    "ocf_to_np": _coalesce(indicator.get("ocf_to_np"), cash_flow.get("ocf_to_np")),
-                    "np_parent_ttm": _coalesce(
-                        income_statement.get("np_parent_ttm"),
-                        income_statement.get("np_parent"),
-                    ),
-                    "revenue_ttm": _coalesce(
-                        income_statement.get("revenue_ttm"),
-                        income_statement.get("revenue"),
-                    ),
-                    "equity_parent": _coalesce(
-                        balance_sheet.get("equity_parent"),
-                        balance_sheet.get("total_equity"),
-                    ),
-                    "total_share": _coalesce(
-                        indicator.get("total_share"),
-                        balance_sheet.get("total_share"),
-                    ),
-                    "float_share": _coalesce(
-                        indicator.get("float_share"),
-                        balance_sheet.get("float_share"),
-                    ),
-                }
-            )
+        indicators = point_in_time_finance.get_latest_indicator_rows(conn, asset_ids, trade_date) or {}
+        income_statements = (
+            point_in_time_finance.get_latest_income_statement_rows(conn, asset_ids, trade_date) or {}
+        )
+        balance_sheets = (
+            point_in_time_finance.get_latest_balance_sheet_rows(conn, asset_ids, trade_date) or {}
+        )
+        cash_flows = point_in_time_finance.get_latest_cash_flow_rows(conn, asset_ids, trade_date) or {}
+    for asset_id, close in universe[["asset_id", "close"]].itertuples(index=False, name=None):
+        normalized_asset_id = str(asset_id)
+        indicator = indicators.get(normalized_asset_id, {})
+        income_statement = income_statements.get(normalized_asset_id, {})
+        balance_sheet = balance_sheets.get(normalized_asset_id, {})
+        cash_flow = cash_flows.get(normalized_asset_id, {})
+        snapshot_rows.append(
+            {
+                "asset_id": normalized_asset_id,
+                "close": close,
+                "roe": indicator.get("roe"),
+                "roa": indicator.get("roa"),
+                "gross_margin": indicator.get("gross_margin"),
+                "net_margin": indicator.get("net_margin"),
+                "debt_ratio": indicator.get("debt_ratio"),
+                "ocf_to_np": _coalesce(indicator.get("ocf_to_np"), cash_flow.get("ocf_to_np")),
+                "np_parent_ttm": _coalesce(
+                    income_statement.get("np_parent_ttm"),
+                    income_statement.get("np_parent"),
+                ),
+                "revenue_ttm": _coalesce(
+                    income_statement.get("revenue_ttm"),
+                    income_statement.get("revenue"),
+                ),
+                "equity_parent": _coalesce(
+                    balance_sheet.get("equity_parent"),
+                    balance_sheet.get("total_equity"),
+                ),
+                "total_share": _coalesce(
+                    indicator.get("total_share"),
+                    balance_sheet.get("total_share"),
+                ),
+                "float_share": _coalesce(
+                    indicator.get("float_share"),
+                    balance_sheet.get("float_share"),
+                ),
+            }
+        )
     return pd.DataFrame(snapshot_rows, columns=columns)
 
 

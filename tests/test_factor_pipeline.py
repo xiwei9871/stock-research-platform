@@ -256,10 +256,12 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     class _Conn:
         pass
 
-    def fake_indicator(conn, asset_id, trade_date):
-        calls.append(("indicator", asset_id, trade_date))
-        if asset_id == "A":
-            return {
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_indicator_rows",
+        lambda conn, asset_ids, trade_date: calls.append(("indicator", list(asset_ids), trade_date)) or {
+            "A": {
                 "roe": 0.15,
                 "roa": 0.08,
                 "gross_margin": 0.4,
@@ -267,47 +269,29 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
                 "debt_ratio": 0.35,
                 "ocf_to_np": 1.2,
             }
-        return None
-
-    def fake_income(conn, asset_id, trade_date):
-        calls.append(("income", asset_id, trade_date))
-        if asset_id == "A":
-            return {
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_income_statement_rows",
+        lambda conn, asset_ids, trade_date: calls.append(("income", list(asset_ids), trade_date)) or {
+            "A": {
                 "np_parent": 100.0,
                 "revenue": 1000.0,
             }
-        return None
-
-    def fake_balance(conn, asset_id, trade_date):
-        calls.append(("balance", asset_id, trade_date))
-        if asset_id == "A":
-            return {"total_equity": 500.0, "total_share": 100.0, "float_share": 80.0}
-        return None
-
-    def fake_cash_flow(conn, asset_id, trade_date):
-        calls.append(("cash_flow", asset_id, trade_date))
-        return None
-
-    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
-    monkeypatch.setattr(
-        factor_pipeline.point_in_time_finance,
-        "get_latest_indicator",
-        fake_indicator,
+        },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_income_statement",
-        fake_income,
+        "get_latest_balance_sheet_rows",
+        lambda conn, asset_ids, trade_date: calls.append(("balance", list(asset_ids), trade_date)) or {
+            "A": {"total_equity": 500.0, "total_share": 100.0, "float_share": 80.0}
+        },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_balance_sheet",
-        fake_balance,
-    )
-    monkeypatch.setattr(
-        factor_pipeline.point_in_time_finance,
-        "get_latest_cash_flow",
-        fake_cash_flow,
+        "get_latest_cash_flow_rows",
+        lambda conn, asset_ids, trade_date: calls.append(("cash_flow", list(asset_ids), trade_date)) or {},
     )
 
     bars = pd.DataFrame(
@@ -342,14 +326,10 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     }
     assert snapshot.iloc[1].drop(labels=["asset_id", "close"]).isna().all()
     assert calls == [
-        ("indicator", "A", "2026-05-08"),
-        ("income", "A", "2026-05-08"),
-        ("balance", "A", "2026-05-08"),
-        ("cash_flow", "A", "2026-05-08"),
-        ("indicator", "B", "2026-05-08"),
-        ("income", "B", "2026-05-08"),
-        ("balance", "B", "2026-05-08"),
-        ("cash_flow", "B", "2026-05-08"),
+        ("indicator", ["A", "B"], "2026-05-08"),
+        ("income", ["A", "B"], "2026-05-08"),
+        ("balance", ["A", "B"], "2026-05-08"),
+        ("cash_flow", ["A", "B"], "2026-05-08"),
     ]
 
 
@@ -359,29 +339,27 @@ def test_load_point_in_time_fundamentals_snapshot_uses_only_trade_date_assets(mo
     class _Conn:
         pass
 
-    def fake_indicator(conn, asset_id, trade_date):
-        calls.append(asset_id)
-        return {"roe": 0.1}
-
     monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_indicator",
-        fake_indicator,
+        "get_latest_indicator_rows",
+        lambda conn, asset_ids, trade_date: calls.append(list(asset_ids)) or {
+            asset_id: {"roe": 0.1} for asset_id in asset_ids
+        },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_income_statement",
+        "get_latest_income_statement_rows",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_balance_sheet",
+        "get_latest_balance_sheet_rows",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_cash_flow",
+        "get_latest_cash_flow_rows",
         lambda *args, **kwargs: None,
     )
 
@@ -396,7 +374,7 @@ def test_load_point_in_time_fundamentals_snapshot_uses_only_trade_date_assets(mo
     snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(bars, "2026-05-08")
 
     assert list(snapshot["asset_id"]) == ["A", "B"]
-    assert "STALE" not in calls
+    assert calls == [["A", "B"]]
 
 
 def test_load_point_in_time_fundamentals_snapshot_coalesces_none_to_fallback_sources(monkeypatch):
@@ -406,32 +384,36 @@ def test_load_point_in_time_fundamentals_snapshot_coalesces_none_to_fallback_sou
     monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_indicator",
-        lambda conn, asset_id, trade_date: {
-            "roe": 0.15,
-            "ocf_to_np": None,
-            "total_share": None,
-            "float_share": None,
+        "get_latest_indicator_rows",
+        lambda conn, asset_ids, trade_date: {
+            "A": {
+                "roe": 0.15,
+                "ocf_to_np": None,
+                "total_share": None,
+                "float_share": None,
+            }
         },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_income_statement",
+        "get_latest_income_statement_rows",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_balance_sheet",
-        lambda conn, asset_id, trade_date: {
-            "total_equity": 500.0,
-            "total_share": 100.0,
-            "float_share": 80.0,
+        "get_latest_balance_sheet_rows",
+        lambda conn, asset_ids, trade_date: {
+            "A": {
+                "total_equity": 500.0,
+                "total_share": 100.0,
+                "float_share": 80.0,
+            }
         },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
-        "get_latest_cash_flow",
-        lambda conn, asset_id, trade_date: {"ocf_to_np": 1.2},
+        "get_latest_cash_flow_rows",
+        lambda conn, asset_ids, trade_date: {"A": {"ocf_to_np": 1.2}},
     )
 
     bars = pd.DataFrame([{"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0}])
@@ -593,6 +575,11 @@ def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
         factor_pipeline,
         "load_industry_bars_for_factor_date",
         lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_point_in_time_fundamentals_snapshot",
+        lambda *args, **kwargs: pd.DataFrame(columns=["asset_id", "close"]),
     )
     monkeypatch.setattr(
         factor_pipeline,
