@@ -531,6 +531,48 @@ class _FailingNonDryTransport:
         raise AssertionError("dry_run sender must not invoke non-dry transport")
 
 
+class _EndpointEchoFailingTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(
+        self,
+        payload: dict[str, object],
+        config: report_delivery_openclaw_sender.OpenClawSendConfig,
+    ) -> dict[str, object]:
+        self.calls += 1
+        raise RuntimeError(f"transport failed for {config.endpoint} while calling OpenClaw")
+
+
+class _FlakyTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("temporary transport failure")
+        item_results = [
+            {
+                "item_id": str(item.get("item_id", "")),
+                "status": "sent",
+            }
+            for item in payload.get("items", [])
+            if isinstance(item, dict)
+        ]
+        return {
+            "status": "sent",
+            "dry_run": False,
+            "sent_count": len(item_results),
+            "failed_count": 0,
+            "skipped_count": 0,
+            "warnings": [],
+            "errors": [],
+            "item_results": item_results,
+            "payload": payload,
+        }
+
+
 def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
     manifest_path, items_path = _write_export(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
@@ -757,6 +799,45 @@ def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
     assert "outputs/report_delivery/2026-05-20/manifest.json" not in send_log_text
 
 
+def test_live_send_redacts_endpoint_from_errors_and_log_output(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    endpoint = "https://tenant-123.openclaw.example.test/send?secret=abc"
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=endpoint,
+        token="super-secret-token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+    transport = _EndpointEchoFailingTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    send_log_text = Path(result.send_log_path).read_text(encoding="utf-8")
+    send_log_records = [json.loads(line) for line in send_log_text.splitlines() if line.strip()]
+
+    assert transport.calls == 1
+    assert endpoint not in result.errors[0]
+    assert "tenant-123.openclaw.example.test" in result.errors[0]
+    assert endpoint not in send_log_text
+    assert send_log_records[0]["error"] == "transport failed for tenant-123.openclaw.example.test while calling OpenClaw"
+    assert send_log_records[0]["error_context"] == send_log_records[0]["error"]
+    assert send_log_records[1]["error"] == "transport failed for tenant-123.openclaw.example.test while calling OpenClaw"
+    assert send_log_records[1]["error_context"] == send_log_records[1]["error"]
+
+
 def test_write_send_log_appends_records(tmp_path: Path) -> None:
     sender = report_delivery_openclaw_sender.OpenClawSender(
         transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
@@ -776,6 +857,45 @@ def test_write_send_log_appends_records(tmp_path: Path) -> None:
         {"send_id": "first", "status": "sent"},
         {"send_id": "second", "status": "failed"},
     ]
+
+
+def test_live_send_retries_and_honors_backoff(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    sleep_calls: list[float] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(report_delivery_openclaw_sender.time, "sleep", _fake_sleep)
+
+    transport = _FlakyTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=1,
+        retry_backoff_seconds=2.5,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert transport.calls == 2
+    assert sleep_calls == [2.5]
+    assert result.status == "sent"
+    assert result.sent_count == 1
+    assert result.failed_count == 0
 
 
 def test_non_dry_run_sender_writes_preview_and_log_when_transport_raises(

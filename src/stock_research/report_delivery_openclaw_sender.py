@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import time
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
@@ -399,9 +400,10 @@ class OpenClawSender:
         transport_error: Exception | None = None
         transport_result: dict[str, Any]
         try:
-            transport_result = self.transport.send(payload, config)
+            transport_result = self._send_with_retries(payload, config)
         except Exception as exc:  # pragma: no cover - exercised via focused tests
             transport_error = exc
+            redacted_error = self._redact_error_text(str(exc), config.endpoint)
             transport_result = {
                 "status": "failed",
                 "dry_run": False,
@@ -409,12 +411,12 @@ class OpenClawSender:
                 "failed_count": payload["item_count"],
                 "skipped_count": 0,
                 "warnings": [],
-                "errors": [str(exc)],
+                "errors": [redacted_error],
                 "item_results": [
                     {
                         "item_id": str(item.get("item_id", "")),
                         "status": "failed",
-                        "error": str(exc),
+                        "error": redacted_error,
                     }
                     for item in payload["items"]
                 ],
@@ -430,6 +432,10 @@ class OpenClawSender:
             error=transport_error,
         )
         self.write_send_log(send_log_path, send_log_records)
+        redacted_errors = [
+            self._redact_error_text(str(error), config.endpoint)
+            for error in transport_result.get("errors", [])
+        ]
         return OpenClawSendResult(
             send_id=send_id,
             channel="openclaw",
@@ -441,7 +447,7 @@ class OpenClawSender:
             skipped_count=int(transport_result.get("skipped_count", 0)),
             preview_path=str(preview_path),
             send_log_path=str(send_log_path),
-            errors=list(transport_result.get("errors", [])),
+            errors=redacted_errors,
             warnings=list(transport_result.get("warnings", [])),
             generated_at=generated_at,
         )
@@ -559,14 +565,14 @@ class OpenClawSender:
 
         errors = list(transport_result.get("errors", []))
         if error is not None:
-            error_text = str(error)
+            error_text = self._redact_error_text(str(error), endpoint)
             summary_record["error"] = error_text
             summary_record["error_context"] = error_text
             if error_text not in errors:
                 errors.append(error_text)
         elif errors:
-            summary_record["error"] = errors[0]
-            summary_record["error_context"] = errors[0]
+            summary_record["error"] = self._redact_error_text(str(errors[0]), endpoint)
+            summary_record["error_context"] = summary_record["error"]
 
         records = [summary_record]
         item_results = transport_result.get("item_results")
@@ -594,10 +600,11 @@ class OpenClawSender:
             }
             item_error = str(item_result.get("error", "")).strip()
             if item_status == "failed" and not item_error and error is not None:
-                item_error = str(error)
+                item_error = self._redact_error_text(str(error), endpoint)
             if item_error:
-                item_record["error"] = item_error
-                item_record["error_context"] = item_error
+                redacted_item_error = self._redact_error_text(item_error, endpoint)
+                item_record["error"] = redacted_item_error
+                item_record["error_context"] = redacted_item_error
             records.append(item_record)
 
         if error is not None and payload["items"] and not item_result_by_id:
@@ -605,10 +612,41 @@ class OpenClawSender:
             # producing per-item results.
             for item_record in records[1:]:
                 item_record["status"] = "failed"
-                item_record["error"] = str(error)
-                item_record["error_context"] = str(error)
+                redacted_error = self._redact_error_text(str(error), endpoint)
+                item_record["error"] = redacted_error
+                item_record["error_context"] = redacted_error
 
         return records
+
+    def _send_with_retries(
+        self,
+        payload: dict[str, Any],
+        config: OpenClawSendConfig,
+    ) -> dict[str, Any]:
+        attempts = max(0, int(config.retry_count)) + 1
+        last_exc: Exception | None = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.transport.send(payload, config)
+            except Exception as exc:  # pragma: no cover - exercised via focused tests
+                last_exc = exc
+                if attempt >= attempts:
+                    break
+                if config.retry_backoff_seconds > 0:
+                    time.sleep(float(config.retry_backoff_seconds))
+
+        assert last_exc is not None
+        raise last_exc
+
+    def _redact_error_text(self, error_text: str, endpoint: str | None) -> str:
+        if not endpoint:
+            return error_text
+
+        endpoint_identifier = _endpoint_identifier(endpoint)
+        if endpoint_identifier == endpoint:
+            return error_text
+        return error_text.replace(endpoint, endpoint_identifier)
 
 
 def _endpoint_host(endpoint: str | None) -> str | None:
@@ -622,3 +660,10 @@ def _endpoint_host(endpoint: str | None) -> str | None:
     if parsed.port is not None:
         return f"{host}:{parsed.port}"
     return host
+
+
+def _endpoint_identifier(endpoint: str | None) -> str:
+    host = _endpoint_host(endpoint)
+    if host:
+        return host
+    return "<redacted-endpoint>"
