@@ -3,7 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha1
 from pathlib import Path
+import re
 from typing import Any
+
+RUN_CARD_FILENAMES = {
+    "run_card.json",
+    "run_card.md",
+    "metrics.json",
+    "config_snapshot.json",
+    "warnings.md",
+    "data_coverage.json",
+}
+WATCHLIST_FILE_RE = re.compile(
+    r"^(watchlist_report|watchlist_signals|must_watch)_(\d{4}-\d{2}-\d{2})_(.+)\.(md|json|csv)$"
+)
 
 
 @dataclass(frozen=True)
@@ -118,10 +131,24 @@ class LocalDeliveryAdapter:
         if path.suffix.lower() not in {".md", ".json", ".csv"}:
             return None
 
+        bundle_root = self._run_card_bundle_dir(path)
         report_type = self._infer_report_type(path)
         title = path.stem.replace("_", " ")
-        artifact_id = self._artifact_id_for(path, report_type, trade_date)
         metadata: dict[str, Any] = {"path": str(path)}
+
+        if bundle_root is not None:
+            report_type = "run_card"
+            title = bundle_root.name.replace("_", " ")
+            metadata["bundle_dir"] = str(bundle_root)
+        else:
+            watchlist_identity = self._watchlist_identity(path)
+            if watchlist_identity is not None:
+                report_type = "watchlist"
+                title = f"watchlist {watchlist_identity[0]} {watchlist_identity[1]}"
+                metadata["watchlist_trade_date"] = watchlist_identity[0]
+                metadata["watchlist_id"] = watchlist_identity[1]
+
+        artifact_id = self._artifact_id_for(path, report_type, trade_date)
         kwargs: dict[str, Any] = {
             "artifact_id": artifact_id,
             "report_type": report_type,
@@ -133,19 +160,22 @@ class LocalDeliveryAdapter:
         if path.suffix.lower() == ".md":
             kwargs["markdown_path"] = str(path)
         elif path.suffix.lower() == ".json":
-            kwargs["json_path"] = str(path)
-            if path.name == "run_card.json":
+            if bundle_root is not None and path.name == "run_card.json":
                 kwargs["run_card_path"] = str(path)
-                kwargs["report_type"] = "run_card"
-            elif path.name == "manifest.json" and path.parent.name == "evidence":
-                kwargs["report_type"] = "evidence_bundle"
+            elif bundle_root is not None and path.name == "manifest.json" and path.parent.name == "evidence":
                 kwargs["evidence_dir"] = str(path.parent)
+            else:
+                kwargs["json_path"] = str(path)
         elif path.suffix.lower() == ".csv":
             kwargs["csv_paths"] = [str(path)]
 
         return ReportArtifact(**kwargs)
 
     def _infer_report_type(self, path: Path) -> str:
+        if self._run_card_bundle_dir(path) is not None:
+            return "run_card"
+        if self._watchlist_identity(path) is not None:
+            return "watchlist"
         if path.name == "run_card.json":
             return "run_card"
         if path.name == "manifest.json" and path.parent.name == "evidence":
@@ -186,7 +216,7 @@ class LocalDeliveryAdapter:
         json_path = current.json_path or artifact.json_path
         run_card_path = current.run_card_path or artifact.run_card_path
         evidence_dir = current.evidence_dir or artifact.evidence_dir
-        csv_paths = list(dict.fromkeys([*current.csv_paths, *artifact.csv_paths]))
+        csv_paths = self._sort_csv_paths([*current.csv_paths, *artifact.csv_paths])
         warnings = list(dict.fromkeys([*current.warnings, *artifact.warnings]))
         metadata = {**current.metadata, **artifact.metadata}
 
@@ -209,7 +239,41 @@ class LocalDeliveryAdapter:
 
     def _artifact_key_for_path(self, path: Path, report_type: str) -> tuple[str, str]:
         if report_type == "run_card":
-            return (report_type, str(path.parent))
+            bundle_dir = self._run_card_bundle_dir(path)
+            if bundle_dir is not None:
+                return (report_type, str(bundle_dir))
+        if report_type == "watchlist":
+            watchlist_identity = self._watchlist_identity(path)
+            if watchlist_identity is not None:
+                trade_date, watchlist_id = watchlist_identity
+                return (report_type, f"{path.parent}:{trade_date}:{watchlist_id}")
         if report_type == "evidence_bundle":
-            return (report_type, str(path.parent))
+            return ("run_card", str(path.parent.parent))
         return (report_type, str(path.with_suffix("")))
+
+    def _run_card_bundle_dir(self, path: Path) -> Path | None:
+        if path.name in RUN_CARD_FILENAMES and (path.parent / "run_card.json").exists():
+            return path.parent
+        if path.name == "manifest.json" and path.parent.name == "evidence":
+            bundle_dir = path.parent.parent
+            if (bundle_dir / "run_card.json").exists():
+                return bundle_dir
+        return None
+
+    def _watchlist_identity(self, path: Path) -> tuple[str, str] | None:
+        match = WATCHLIST_FILE_RE.match(path.name)
+        if match is None:
+            return None
+        return (match.group(2), match.group(3))
+
+    def _sort_csv_paths(self, csv_paths: list[str]) -> list[str]:
+        unique_paths = list(dict.fromkeys(csv_paths))
+        def sort_key(value: str) -> tuple[int, str]:
+            name = Path(value).name
+            if name.startswith("watchlist_signals_"):
+                return (0, name)
+            if name.startswith("must_watch_"):
+                return (1, name)
+            return (2, name)
+
+        return sorted(unique_paths, key=sort_key)
