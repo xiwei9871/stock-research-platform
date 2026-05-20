@@ -131,7 +131,7 @@ class HttpOpenClawTransport:
         if not isinstance(item, dict):
             raise ValueError("OpenClaw transport item must be a JSON object")
 
-        transport_payload = self._build_transport_payload(item)
+        transport_payload = self._build_transport_payload(item, config)
 
         body = json.dumps(transport_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
         headers: dict[str, str] = {
@@ -190,12 +190,19 @@ class HttpOpenClawTransport:
             f"{config.endpoint}: HTTP {response_status_text}"
         )
 
-    def _build_transport_payload(self, item: dict[str, Any]) -> dict[str, Any]:
+    def _build_transport_payload(
+        self,
+        item: dict[str, Any],
+        config: OpenClawSendConfig,
+    ) -> dict[str, Any]:
         nested_payload = item.get("payload")
         if isinstance(nested_payload, dict):
             payload = dict(nested_payload)
         else:
             payload = {}
+
+        if config.test_mode:
+            payload["metadata"] = _test_mode_payload_metadata()
 
         return {
             "route": str(item.get("route", item.get("openclaw_route", payload.get("route", "")))),
@@ -342,10 +349,8 @@ class OpenClawSender:
             )
         payload_metadata: dict[str, Any] = {}
         if config.test_mode:
-            payload_metadata = {
-                "source": "stock_research_openclaw_smoke_test",
-                "test_mode": True,
-            }
+            payload_metadata = _test_mode_payload_metadata()
+            items = self._annotate_test_mode_items(items, payload_metadata)
 
         return {
             "channel": "openclaw",
@@ -523,6 +528,24 @@ class OpenClawSender:
             copied["payload"] = dict(payload)
         return copied
 
+    def _annotate_test_mode_items(
+        self,
+        items: list[dict[str, Any]],
+        payload_metadata: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        annotated_items: list[dict[str, Any]] = []
+        for item in items:
+            copied = dict(item)
+            payload = copied.get("payload")
+            if isinstance(payload, dict):
+                copied_payload = dict(payload)
+            else:
+                copied_payload = {}
+            copied_payload["metadata"] = dict(payload_metadata)
+            copied["payload"] = copied_payload
+            annotated_items.append(copied)
+        return annotated_items
+
     def _severity_rank(self, severity: Any) -> int | None:
         normalized = str(severity).lower()
         if normalized not in SEVERITY_ORDER:
@@ -684,6 +707,13 @@ def _endpoint_host(endpoint: str | None) -> str | None:
     if parsed.port is not None:
         return f"{host}:{parsed.port}"
     return host
+
+
+def _test_mode_payload_metadata() -> dict[str, Any]:
+    return {
+        "source": "stock_research_openclaw_smoke_test",
+        "test_mode": True,
+    }
 
 
 def _endpoint_identifier(endpoint: str | None) -> str:

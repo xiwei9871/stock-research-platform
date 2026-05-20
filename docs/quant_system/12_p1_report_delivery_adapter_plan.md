@@ -476,7 +476,7 @@ P1-1 明确禁止：
 - 输出固定为 `openclaw_manifest.json`、`openclaw_items.jsonl`、`openclaw_delivery_log.jsonl`
 - `recommended_action` 由 `report_type` 决定，`run_card_bundle` / `daily_topn_report` / `watchlist_report` / `must_watch_report` / `risk_alert_report` / `factor_eval_report` / `backtest_report` 各自映射到稳定动作，其余回退到 `review_report`
 - `openclaw_route` 由 `requires_attention` 和 `report_type` 决定，注意力优先路由到 `research_alert`
-- CLI 示例：`.venv/bin/stock-research report-delivery-openclaw-export --trade-date 2026-05-20 --manifest outputs/delivery/2026-05-20/manifest.json --output-dir outputs/openclaw/2026-05-20 --include-all --min-severity medium`
+- CLI 示例：`.venv/bin/stock-research report-delivery-openclaw-export --trade-date 2026-05-20 --manifest outputs/delivery/2026-05-20/manifest.json --output-dir outputs/report_delivery/openclaw/2026-05-20 --include-all --min-severity medium`
 - `--dry-run` 只影响结果状态和 manifest/log 记录，不阻止本地文件写出
 - 后续 live sender 要单独拆成另一个 adapter，不复用 export-only 命令的发送职责
 

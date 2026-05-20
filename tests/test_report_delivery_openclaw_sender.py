@@ -1214,6 +1214,10 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
             "severity": "info",
             "tags": ["daily", "topn"],
             "openclaw_transport_result": "failure",
+            "metadata": {
+                "source": "stock_research_openclaw_smoke_test",
+                "test_mode": True,
+            },
         },
     }
     assert "item_count" not in body
@@ -1604,6 +1608,10 @@ def test_test_mode_marks_payload_metadata(tmp_path: Path) -> None:
     payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
 
     assert payload["payload"]["metadata"] == {
+        "source": "stock_research_openclaw_smoke_test",
+        "test_mode": True,
+    }
+    assert payload["items"][0]["payload"]["metadata"] == {
         "source": "stock_research_openclaw_smoke_test",
         "test_mode": True,
     }
