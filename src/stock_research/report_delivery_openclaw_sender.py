@@ -231,6 +231,13 @@ class OpenClawSender:
     def build_send_payload(self, export_data: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
         manifest = export_data["manifest"]
         items = self._filter_items(list(export_data["items"]), config)
+        if not config.dry_run and config.allow_live_send and len(items) != 1:
+            if len(items) == 0:
+                raise ValueError("live send requires at least one deliverable item after filtering")
+            raise ValueError(
+                "live send requires exactly one deliverable item after filtering; "
+                f"got {len(items)}"
+            )
         payload_metadata: dict[str, Any] = {}
         if config.test_mode:
             payload_metadata = {
@@ -398,7 +405,7 @@ class OpenClawSender:
                     continue
             filtered.append(self._copy_item(item))
 
-        if config.limit is not None:
+        if config.dry_run and config.limit is not None:
             filtered = filtered[: config.limit]
         return filtered
 
@@ -429,8 +436,8 @@ class OpenClawSender:
             problems.append("route_allowlist must be non-empty")
         if config.severity_max in (None, ""):
             problems.append("severity_max must be present")
-        elif str(config.severity_max).lower() not in {"info", "low", "medium", "high"}:
-            problems.append("severity_max must stay within the smoke-test envelope; critical is not allowed")
+        elif str(config.severity_max).lower() not in {"info", "low"}:
+            problems.append("severity_max must stay within the low-risk smoke-test envelope; use info or low")
         if not config.test_mode:
             problems.append("test_mode must be True")
 
