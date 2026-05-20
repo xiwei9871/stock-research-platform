@@ -250,6 +250,169 @@ def test_compute_technical_factor_rows_strict_mode_raises_for_missing_factor():
         raise AssertionError("Expected missing configured technical factor to raise")
 
 
+def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_rows(monkeypatch):
+    calls = []
+
+    class _Conn:
+        pass
+
+    def fake_indicator(conn, asset_id, trade_date):
+        calls.append(("indicator", asset_id, trade_date))
+        if asset_id == "A":
+            return {
+                "roe": 0.15,
+                "roa": 0.08,
+                "gross_margin": 0.4,
+                "net_margin": 0.1,
+                "debt_ratio": 0.35,
+                "ocf_to_np": 1.2,
+            }
+        return None
+
+    def fake_income(conn, asset_id, trade_date):
+        calls.append(("income", asset_id, trade_date))
+        if asset_id == "A":
+            return {
+                "np_parent": 100.0,
+                "revenue": 1000.0,
+            }
+        return None
+
+    def fake_balance(conn, asset_id, trade_date):
+        calls.append(("balance", asset_id, trade_date))
+        if asset_id == "A":
+            return {"total_equity": 500.0}
+        return None
+
+    def fake_cash_flow(conn, asset_id, trade_date):
+        calls.append(("cash_flow", asset_id, trade_date))
+        return None
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_indicator",
+        fake_indicator,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_income_statement",
+        fake_income,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_balance_sheet",
+        fake_balance,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_cash_flow",
+        fake_cash_flow,
+    )
+
+    bars = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0},
+            {"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0},
+            {"trade_date": "2026-05-08", "asset_id": "B", "close": 20.0},
+        ]
+    )
+
+    snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(
+        bars,
+        trade_date="2026-05-08",
+    )
+
+    assert list(snapshot["asset_id"]) == ["A", "B"]
+    assert list(snapshot["close"]) == [10.0, 20.0]
+    assert snapshot.iloc[0].to_dict() == {
+        "asset_id": "A",
+        "close": 10.0,
+        "roe": 0.15,
+        "roa": 0.08,
+        "gross_margin": 0.4,
+        "net_margin": 0.1,
+        "debt_ratio": 0.35,
+        "ocf_to_np": 1.2,
+        "np_parent_ttm": 100.0,
+        "revenue_ttm": 1000.0,
+        "equity_parent": 500.0,
+    }
+    assert snapshot.iloc[1].drop(labels=["asset_id", "close"]).isna().all()
+    assert calls == [
+        ("indicator", "A", "2026-05-08"),
+        ("income", "A", "2026-05-08"),
+        ("balance", "A", "2026-05-08"),
+        ("cash_flow", "A", "2026-05-08"),
+        ("indicator", "B", "2026-05-08"),
+        ("income", "B", "2026-05-08"),
+        ("balance", "B", "2026-05-08"),
+        ("cash_flow", "B", "2026-05-08"),
+    ]
+
+
+def test_build_quality_and_value_factor_rows_drop_missing_values():
+    snapshot = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "close": 10.0,
+                "roe": 0.15,
+                "roa": 0.08,
+                "gross_margin": 0.4,
+                "net_margin": 0.1,
+                "debt_ratio": 0.35,
+                "ocf_to_np": 1.2,
+                "np_parent_ttm": 100.0,
+                "revenue_ttm": 1000.0,
+                "equity_parent": 500.0,
+            },
+            {
+                "asset_id": "B",
+                "close": 20.0,
+                "roe": None,
+                "roa": None,
+                "gross_margin": None,
+                "net_margin": None,
+                "debt_ratio": None,
+                "ocf_to_np": None,
+                "np_parent_ttm": None,
+                "revenue_ttm": None,
+                "equity_parent": None,
+            },
+        ]
+    )
+
+    quality_rows = factor_pipeline.build_quality_factor_rows(
+        snapshot,
+        trade_date="2026-05-08",
+        calc_version="v1",
+        source_data_version="pit_finance_v1",
+    )
+    value_rows = factor_pipeline.build_value_factor_rows(
+        snapshot,
+        trade_date="2026-05-08",
+        calc_version="v1",
+        source_data_version="pit_finance_v1",
+    )
+
+    assert set(quality_rows["factor_name"]) == {
+        "roe",
+        "roa",
+        "gross_margin",
+        "net_margin",
+        "debt_ratio",
+        "ocf_to_np",
+    }
+    assert set(value_rows["factor_name"]) == {"pe_ttm", "ps_ttm", "pb"}
+    assert set(quality_rows["asset_id"]) == {"A"}
+    assert set(value_rows["asset_id"]) == {"A"}
+    assert set(quality_rows["source"]) == {"fundamental"}
+    assert set(value_rows["source_data_version"]) == {"pit_finance_v1"}
+    assert not quality_rows["factor_value"].isna().any()
+    assert not value_rows["factor_value"].isna().any()
+
+
 def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
     calls = []
     dates = pd.date_range("2026-01-01", periods=70, freq="D")
@@ -299,6 +462,134 @@ def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
 
     assert count > 0
     assert calls[0]["trade_date"].nunique() == 1
+
+
+def test_build_and_store_factor_daily_appends_quality_and_value_rows(monkeypatch):
+    stored = []
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_market_bars_for_factor_date",
+        lambda *args, **kwargs: bars,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "enrich_bars_with_industry",
+        lambda bars, **kwargs: bars.assign(industry_code="T", industry_name="Tech"),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_industry_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_point_in_time_fundamentals_snapshot",
+        lambda bars, trade_date, service="stock_research": pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "close": 70.0,
+                    "roe": 0.15,
+                    "roa": 0.08,
+                    "gross_margin": 0.4,
+                    "net_margin": 0.1,
+                    "debt_ratio": 0.35,
+                    "ocf_to_np": 1.2,
+                    "np_parent_ttm": 100.0,
+                    "revenue_ttm": 1000.0,
+                    "equity_parent": 500.0,
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "upsert_factor_daily",
+        lambda rows: stored.append(rows) or len(rows),
+        raising=False,
+    )
+
+    count = factor_pipeline.build_and_store_factor_daily("2026-03-11")
+
+    names = set(stored[0]["factor_name"])
+    assert "ret_20" in names
+    assert "roe" in names
+    assert "pb" in names
+    assert count == len(stored[0])
+
+
+def test_build_and_store_factor_daily_keeps_running_when_fundamentals_are_missing(monkeypatch):
+    stored = []
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_market_bars_for_factor_date",
+        lambda *args, **kwargs: bars,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "enrich_bars_with_industry",
+        lambda bars, **kwargs: bars.assign(industry_code="T", industry_name="Tech"),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_industry_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_point_in_time_fundamentals_snapshot",
+        lambda bars, trade_date, service="stock_research": pd.DataFrame(
+            [{"asset_id": "A", "close": 70.0}]
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "upsert_factor_daily",
+        lambda rows: stored.append(rows) or len(rows),
+        raising=False,
+    )
+
+    count = factor_pipeline.build_and_store_factor_daily("2026-03-11")
+
+    assert count > 0
+    assert "ret_20" in set(stored[0]["factor_name"])
+    assert "roe" not in set(stored[0]["factor_name"])
 
 
 def test_build_and_store_factor_daily_rejects_unknown_registry_factor(monkeypatch):

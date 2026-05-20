@@ -15,12 +15,15 @@ from stock_research.factors import (
     alpha101,
     gtja191,
     momentum,
+    quality,
     qlib_alpha,
     risk,
     sector,
     trend,
+    value,
     volume_price,
 )
+from stock_research.services import point_in_time_finance
 
 
 FACTOR_DAILY_COLUMNS = [
@@ -455,6 +458,159 @@ def _safe_ge(left: float, right: float) -> bool | float:
     return float(left) >= float(right)
 
 
+def load_point_in_time_fundamentals_snapshot(
+    bars: pd.DataFrame,
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    columns = [
+        "asset_id",
+        "close",
+        "roe",
+        "roa",
+        "gross_margin",
+        "net_margin",
+        "debt_ratio",
+        "ocf_to_np",
+        "np_parent_ttm",
+        "revenue_ttm",
+        "equity_parent",
+    ]
+    if bars.empty:
+        return pd.DataFrame(columns=columns)
+
+    universe = (
+        bars[["asset_id", "close"]]
+        .drop_duplicates(subset=["asset_id"], keep="last")
+        .reset_index(drop=True)
+        .copy()
+    )
+    snapshot_rows: list[dict[str, Any]] = []
+    with connect(service) as conn:
+        for asset_id, close in universe[["asset_id", "close"]].itertuples(index=False, name=None):
+            indicator = point_in_time_finance.get_latest_indicator(conn, str(asset_id), trade_date) or {}
+            income_statement = (
+                point_in_time_finance.get_latest_income_statement(conn, str(asset_id), trade_date) or {}
+            )
+            balance_sheet = (
+                point_in_time_finance.get_latest_balance_sheet(conn, str(asset_id), trade_date) or {}
+            )
+            cash_flow = point_in_time_finance.get_latest_cash_flow(conn, str(asset_id), trade_date) or {}
+            snapshot_rows.append(
+                {
+                    "asset_id": str(asset_id),
+                    "close": close,
+                    "roe": indicator.get("roe"),
+                    "roa": indicator.get("roa"),
+                    "gross_margin": indicator.get("gross_margin"),
+                    "net_margin": indicator.get("net_margin"),
+                    "debt_ratio": indicator.get("debt_ratio"),
+                    "ocf_to_np": indicator.get("ocf_to_np", cash_flow.get("ocf_to_np")),
+                    "np_parent_ttm": income_statement.get("np_parent_ttm", income_statement.get("np_parent")),
+                    "revenue_ttm": income_statement.get("revenue_ttm", income_statement.get("revenue")),
+                    "equity_parent": balance_sheet.get("equity_parent", balance_sheet.get("total_equity")),
+                }
+            )
+    return pd.DataFrame(snapshot_rows, columns=columns)
+
+
+def _melt_factor_frame(
+    frame: pd.DataFrame,
+    trade_date: str,
+    factor_group: str,
+    factor_names: list[str],
+    calc_version: str,
+    source_data_version: str,
+) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    available_names = [name for name in factor_names if name in frame.columns]
+    if not available_names:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    melted = frame.melt(
+        id_vars=["asset_id"],
+        value_vars=available_names,
+        var_name="factor_name",
+        value_name="factor_value",
+    )
+    melted["factor_value"] = pd.to_numeric(melted["factor_value"], errors="coerce")
+    melted = melted.dropna(subset=["factor_value"]).copy()
+    if melted.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    melted["trade_date"] = str(trade_date)[:10]
+    melted["factor_group"] = factor_group
+    melted["calc_version"] = calc_version
+    melted["source"] = "fundamental"
+    melted["source_data_version"] = source_data_version
+    return melted[FACTOR_DAILY_COLUMNS]
+
+
+def build_quality_factor_rows(
+    snapshot: pd.DataFrame,
+    trade_date: str,
+    calc_version: str,
+    source_data_version: str,
+) -> pd.DataFrame:
+    if snapshot.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+    quality_snapshot = snapshot.copy()
+    for column in ["roe", "roa", "gross_margin", "net_margin", "debt_ratio", "ocf_to_np"]:
+        if column not in quality_snapshot.columns:
+            quality_snapshot[column] = np.nan
+    factors = quality.compute_quality_factors(quality_snapshot)
+    return _melt_factor_frame(
+        factors,
+        trade_date=trade_date,
+        factor_group="quality",
+        factor_names=["roe", "roa", "gross_margin", "net_margin", "debt_ratio", "ocf_to_np"],
+        calc_version=calc_version,
+        source_data_version=source_data_version,
+    )
+
+
+def build_value_factor_rows(
+    snapshot: pd.DataFrame,
+    trade_date: str,
+    calc_version: str,
+    source_data_version: str,
+) -> pd.DataFrame:
+    if snapshot.empty:
+        return pd.DataFrame(columns=FACTOR_DAILY_COLUMNS)
+
+    value_snapshot = snapshot.copy()
+    for column in ["np_parent_ttm", "revenue_ttm", "equity_parent"]:
+        if column not in value_snapshot.columns:
+            value_snapshot[column] = np.nan
+
+    prices = value_snapshot[["asset_id", "close"]].copy()
+    finance = value_snapshot[["asset_id", "np_parent_ttm", "revenue_ttm", "equity_parent"]].copy()
+    shares = value_snapshot[["asset_id"]].copy()
+    total_share = (
+        value_snapshot["total_share"]
+        if "total_share" in value_snapshot.columns
+        else pd.Series(1.0, index=value_snapshot.index)
+    )
+    float_share = (
+        value_snapshot["float_share"]
+        if "float_share" in value_snapshot.columns
+        else pd.Series(1.0, index=value_snapshot.index)
+    )
+    shares["total_share"] = pd.to_numeric(total_share, errors="coerce").fillna(1.0)
+    shares["float_share"] = pd.to_numeric(float_share, errors="coerce").fillna(shares["total_share"])
+    factors = value.compute_value_factors(prices, finance, shares)
+    return _melt_factor_frame(
+        factors,
+        trade_date=trade_date,
+        factor_group="value",
+        factor_names=["pe_ttm", "ps_ttm", "pb"],
+        calc_version=calc_version,
+        source_data_version=source_data_version,
+    )
+
+
 def compute_sector_factor_rows(
     stock_bars: pd.DataFrame,
     industry_bars: pd.DataFrame,
@@ -594,8 +750,27 @@ def build_and_store_factor_daily(
         calc_version=config["calc_version"],
         source_data_version=config["source_data_version"],
     )
+    fundamentals = load_point_in_time_fundamentals_snapshot(bars, trade_date=trade_date)
+    quality_factors = build_quality_factor_rows(
+        fundamentals,
+        trade_date=trade_date,
+        calc_version=config["calc_version"],
+        source_data_version="pit_finance_v1",
+    )
+    value_factors = build_value_factor_rows(
+        fundamentals,
+        trade_date=trade_date,
+        calc_version=config["calc_version"],
+        source_data_version="pit_finance_v1",
+    )
     factors = pd.concat(
-        [technical_factors, sector_factors, external_factors],
+        [
+            technical_factors,
+            sector_factors,
+            external_factors,
+            quality_factors,
+            value_factors,
+        ],
         ignore_index=True,
     )
     return upsert_factor_daily(factors)
