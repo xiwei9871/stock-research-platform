@@ -316,6 +316,41 @@ def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
     assert Path(result.send_log_path).exists()
 
 
+def test_preview_does_not_retain_raw_endpoint_string(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    endpoint = "https://tenant-123.openclaw.example.test/send?secret=abc"
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=endpoint,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    preview_text = Path(result.preview_path).read_text(encoding="utf-8")
+    preview_record = json.loads(preview_text)
+
+    assert preview_record["endpoint_host"] == "tenant-123.openclaw.example.test"
+    assert "endpoint" not in preview_record
+    assert endpoint not in preview_text
+
+
 def test_openclaw_sender_dry_run_does_not_invoke_non_dry_transport(tmp_path: Path) -> None:
     manifest_path, items_path = _write_export(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
@@ -466,6 +501,34 @@ def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
     assert "endpoint" not in send_log_record
     assert "super-secret-token" not in send_log_text
     assert "Authorization" not in send_log_text
+
+
+def test_live_send_with_zero_deliverable_items_fails_clearly(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["research_validation"],
+        severity_max="info",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="at least one deliverable item after filtering"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
 
 
 def test_dry_run_transport_never_accesses_network(monkeypatch: pytest.MonkeyPatch) -> None:

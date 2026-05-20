@@ -162,7 +162,7 @@ class OpenClawSender:
         return {
             "channel": "openclaw",
             "dry_run": config.dry_run,
-            "endpoint": config.endpoint,
+            "endpoint_host": _endpoint_host(config.endpoint),
             "generated_at": self._generated_at(),
             "source_manifest_path": manifest.get("source_manifest_path", export_data["manifest_path"]),
             "item_count": len(items),
@@ -227,6 +227,8 @@ class OpenClawSender:
 
         self._validate_live_send_config(config)
         self._validate_live_send_items(payload["items"])
+        if payload["item_count"] == 0:
+            raise ValueError("live send requires at least one deliverable item after filtering")
 
         transport_result = self.transport.send(payload, config)
         self.write_send_preview(preview_path, payload)
