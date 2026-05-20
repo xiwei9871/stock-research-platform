@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from hashlib import sha1
+import csv
 import json
 import os
 from pathlib import Path
@@ -557,7 +558,7 @@ def detect_report_type(artifact: ReportArtifact) -> str:
             return report_type
         if report_type == "risk_alert_report" and _has_any_marker(primary_marker_text, ("risk_alert", "risk alerts", "risk-alert")):
             return report_type
-        if report_type == "must_watch_report" and _has_any_marker(primary_marker_text, ("must_watch", "must watch")):
+        if report_type == "must_watch_report" and _has_populated_must_watch_csv(artifact):
             return report_type
         if report_type == "watchlist_signal_report" and _has_any_marker(
             primary_marker_text, ("watchlist_signals", "watchlist_signal", "signal_watchlist")
@@ -722,6 +723,32 @@ def _has_run_card_bundle_marker(artifact: ReportArtifact, marker_text: str) -> b
 
 def _has_any_marker(marker_text: str, markers: tuple[str, ...]) -> bool:
     return any(marker in marker_text for marker in markers)
+
+
+def _has_populated_must_watch_csv(artifact: ReportArtifact) -> bool:
+    for path in artifact.csv_paths:
+        csv_path = Path(path)
+        if not csv_path.name.startswith("must_watch_") or csv_path.suffix.lower() != ".csv":
+            continue
+        if _csv_has_data_rows(csv_path):
+            return True
+    return False
+
+
+def _csv_has_data_rows(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            try:
+                next(reader)
+            except StopIteration:
+                return False
+            for row in reader:
+                if any(cell.strip() for cell in row):
+                    return True
+    except Exception:
+        return False
+    return False
 
 
 def _summary_from_markdown(artifact: ReportArtifact) -> str:

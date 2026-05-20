@@ -88,9 +88,9 @@ def test_collect_artifacts_aggregates_real_watchlist_outputs(tmp_path):
         artifact_paths=[],
     )
 
-    watchlist_artifact = next(item for item in artifacts if item.report_type == "watchlist_report")
+    watchlist_artifact = next(item for item in artifacts if item.report_type == "must_watch_report")
 
-    assert len([item for item in artifacts if item.report_type == "watchlist_report"]) == 1
+    assert len([item for item in artifacts if item.report_type == "must_watch_report"]) == 1
     assert watchlist_artifact.markdown_path == output["markdown_path"]
     assert watchlist_artifact.json_path == output["json_path"]
     assert watchlist_artifact.csv_paths == [
@@ -163,6 +163,10 @@ def test_collect_artifacts_classifies_primary_must_watch_artifact_as_must_watch_
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
     (source_dir / "must_watch_2026-05-20_core_a.md").write_text("# Must Watch\n", encoding="utf-8")
+    (source_dir / "must_watch_2026-05-20_core_a.csv").write_text(
+        "trade_date,watchlist_id,asset_id\n2026-05-20,core,A\n",
+        encoding="utf-8",
+    )
     (source_dir / "watchlist_signals_2026-05-20_core_b.md").write_text(
         "# Watchlist Signals\n",
         encoding="utf-8",
