@@ -601,9 +601,16 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
     resolved_type = report_type or detect_report_type(artifact)
 
     if resolved_type == "daily_topn_report":
-        daily_topn_summary = _summary_for_daily_topn(artifact)
-        if daily_topn_summary:
-            return daily_topn_summary
+        filename_summary = _summary_from_filename(artifact)
+        if filename_summary:
+            return filename_summary
+        markdown_summary = _summary_from_markdown(artifact)
+        if markdown_summary:
+            return markdown_summary
+        json_summary = _summary_from_json(artifact)
+        if json_summary:
+            return json_summary
+        return ""
 
     if resolved_type == "run_card_bundle":
         run_card_summary = _summary_from_run_card_bundle(artifact)
@@ -622,7 +629,7 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
     if cleaned_filename:
         return cleaned_filename
 
-    return resolved_type.replace("_", " ").title()
+    return ""
 
 
 def _artifact_source_paths(artifact: ReportArtifact) -> list[Path]:
@@ -722,15 +729,6 @@ def _summary_from_run_card_bundle(artifact: ReportArtifact) -> str:
                 if isinstance(first_warning, str) and not _summary_is_insufficient(first_warning):
                     return first_warning.strip()
     return ""
-
-
-def _summary_for_daily_topn(artifact: ReportArtifact) -> str:
-    markdown_summary = _summary_from_markdown(artifact)
-    if markdown_summary:
-        if markdown_summary.lower() in {"topn", "daily topn"}:
-            return "Daily TopN"
-        return markdown_summary
-    return _summary_from_filename(artifact) or "Daily TopN"
 
 
 def _summary_from_filename(artifact: ReportArtifact) -> str:
@@ -839,8 +837,22 @@ def _clean_filename(value: str) -> str:
     cleaned = value.replace("_", " ").replace("-", " ")
     cleaned = re.sub(r"\b\d{4}\b", "", cleaned)
     cleaned = re.sub(r"\b\d{2}\b", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned.title()
+    tokens = [
+        token
+        for token in cleaned.split()
+        if token.lower() not in {"manual", "final", "draft", "report", "v1", "v2", "v3"}
+    ]
+    normalized = " ".join(tokens).strip()
+    normalized = re.sub(r"\s+", " ", normalized)
+    if not normalized:
+        return ""
+    words = []
+    for token in normalized.split():
+        if token.lower() == "topn":
+            words.append("TopN")
+        else:
+            words.append(token.capitalize())
+    return " ".join(words)
 
 
 def build_manifest(
