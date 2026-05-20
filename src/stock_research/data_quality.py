@@ -24,7 +24,7 @@ def run_data_quality(
     min_label_dates: int = 20,
     require_industry_membership: bool = False,
 ) -> dict[str, Any]:
-    selected_factor_names = candidate_factor_names() if factor_names is None else factor_names
+    selected_factor_names = factor_names or candidate_factor_names()
     checks = [
         *_build_data_audit_checks(expected_start_date=expected_start_date),
         *_build_finance_audit_checks(),
@@ -173,7 +173,7 @@ def _normalize_factor_label_coverage_check(row: dict[str, Any]) -> dict[str, Any
         source="research_preflight",
         metrics={
             "factor_date_count": int(row.get("factor_date_count") or 0),
-            "factor_complete_date_count": int(row.get("factor_complete_date_count") or 0),
+            "complete_factor_date_count": int(row.get("factor_complete_date_count") or 0),
         },
         details={
             "missing_horizons": list(row.get("missing_horizons") or []),
