@@ -99,19 +99,46 @@ def _build_research_preflight_checks(
     min_label_dates: int,
     require_industry_membership: bool,
 ) -> list[dict[str, Any]]:
-    latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
-    coverage = check_factor_label_coverage(
-        factor_names=factor_names,
-        start_date=start_date,
-        end_date=end_date,
-        horizons=horizons,
-        calc_version=calc_version,
-        min_label_dates=min_label_dates,
-    )
-    checks = [
-        _normalize_latest_common_label_date_check(latest),
-        _normalize_factor_label_coverage_check(coverage),
-    ]
+    try:
+        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+    except ValueError as exc:
+        latest_check = _blocked_latest_common_label_date_check(
+            error=exc,
+            horizons=horizons,
+            requested_end_date=end_date,
+        )
+    else:
+        latest_check = _normalize_latest_common_label_date_check(
+            latest,
+            requested_end_date=end_date,
+        )
+
+    if not factor_names:
+        coverage_check = _blocked_factor_label_coverage_check(
+            error=ValueError("no usable factor names for preflight"),
+            factor_names=factor_names,
+            horizons=horizons,
+        )
+    else:
+        try:
+            coverage = check_factor_label_coverage(
+                factor_names=factor_names,
+                start_date=start_date,
+                end_date=end_date,
+                horizons=horizons,
+                calc_version=calc_version,
+                min_label_dates=min_label_dates,
+            )
+        except ValueError as exc:
+            coverage_check = _blocked_factor_label_coverage_check(
+                error=exc,
+                factor_names=factor_names,
+                horizons=horizons,
+            )
+        else:
+            coverage_check = _normalize_factor_label_coverage_check(coverage)
+
+    checks = [latest_check, coverage_check]
     if require_industry_membership:
         industry = check_industry_membership_coverage(
             start_date=start_date,
@@ -148,20 +175,35 @@ def _normalize_finance_audit_check(row: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _normalize_latest_common_label_date_check(row: dict[str, Any]) -> dict[str, Any]:
+def _normalize_latest_common_label_date_check(
+    row: dict[str, Any],
+    *,
+    requested_end_date: str | None,
+) -> dict[str, Any]:
     latest_common_date = _normalize_optional_date(row.get("latest_common_date"))
     date_count = int(row.get("date_count") or 0)
     status = "ok" if latest_common_date is not None and date_count > 0 else "blocked"
+    extends_beyond_requested_end_date = (
+        requested_end_date is not None
+        and latest_common_date is not None
+        and latest_common_date > requested_end_date
+    )
+    metrics = {
+        "latest_common_date": latest_common_date,
+        "date_count": date_count,
+    }
+    if requested_end_date is not None:
+        metrics["requested_end_date"] = requested_end_date
     return _normalize_check(
         check_name="latest_common_label_date",
         status=status,
         kind="research_preflight",
         source="research_preflight",
-        metrics={
-            "latest_common_date": latest_common_date,
-            "date_count": date_count,
+        metrics=metrics,
+        details={
+            "horizons": list(row.get("horizons") or []),
+            "extends_beyond_requested_end_date": extends_beyond_requested_end_date,
         },
-        details={"horizons": list(row.get("horizons") or [])},
     )
 
 
@@ -198,6 +240,60 @@ def _normalize_industry_membership_coverage_check(row: dict[str, Any]) -> dict[s
             "date_count": int(row.get("date_count") or 0),
         },
         details={},
+    )
+
+
+def _blocked_latest_common_label_date_check(
+    *,
+    error: ValueError,
+    horizons: list[int],
+    requested_end_date: str | None,
+) -> dict[str, Any]:
+    metrics = {
+        "latest_common_date": None,
+        "date_count": 0,
+    }
+    if requested_end_date is not None:
+        metrics["requested_end_date"] = requested_end_date
+    return _normalize_check(
+        check_name="latest_common_label_date",
+        status="blocked",
+        kind="research_preflight",
+        source="research_preflight",
+        metrics=metrics,
+        details={
+            "horizons": list(horizons),
+            "extends_beyond_requested_end_date": False,
+            "reasons": _preflight_error_reasons(error, factor_names=None, horizons=horizons),
+            "error": str(error),
+        },
+    )
+
+
+def _blocked_factor_label_coverage_check(
+    *,
+    error: ValueError,
+    factor_names: list[str],
+    horizons: list[int],
+) -> dict[str, Any]:
+    return _normalize_check(
+        check_name="factor_label_coverage",
+        status="blocked",
+        kind="research_preflight",
+        source="research_preflight",
+        metrics={
+            "factor_date_count": 0,
+            "complete_factor_date_count": 0,
+        },
+        details={
+            "missing_horizons": list(horizons),
+            "short_label_horizons": [],
+            "required_factor_names": [],
+            "unavailable_factor_names": [],
+            "resolved_factor_names": list(factor_names),
+            "reasons": _preflight_error_reasons(error, factor_names=factor_names, horizons=horizons),
+            "error": str(error),
+        },
     )
 
 
@@ -249,3 +345,25 @@ def _format_metric_value(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _preflight_error_reasons(
+    error: ValueError,
+    *,
+    factor_names: list[str] | None,
+    horizons: list[int],
+) -> list[str]:
+    reasons: list[str] = []
+    message = str(error)
+    if not horizons or "horizons" in message:
+        reasons.append("empty_horizons")
+    if factor_names is not None and (
+        not factor_names
+        or "no factor_names are available" in message
+        or "factor_names must not be empty" in message
+        or "no usable factor names" in message
+    ):
+        reasons.append("no_usable_factor_names")
+    if not reasons:
+        reasons.append("invalid_preflight_inputs")
+    return reasons

@@ -154,7 +154,11 @@ def test_run_data_quality_adds_preflight_and_optional_membership(monkeypatch):
     ]
     assert report["generated_at"]
     assert report["checks"][0]["status"] == "ok"
-    assert report["checks"][0]["metrics"] == {"latest_common_date": "2026-01-30", "date_count": 80}
+    assert report["checks"][0]["metrics"] == {
+        "latest_common_date": "2026-01-30",
+        "date_count": 80,
+        "requested_end_date": "2026-01-30",
+    }
     assert report["checks"][2]["metrics"] == {
         "market_rows": 100,
         "covered_rows": 70,
@@ -163,6 +167,53 @@ def test_run_data_quality_adds_preflight_and_optional_membership(monkeypatch):
     }
     assert report["checks"][2]["source"] == "research_preflight"
     assert "details" in report["checks"][2]
+
+
+def test_latest_common_label_date_exposes_requested_end_date_context(monkeypatch):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": "2026-01-30",
+            "date_count": 80,
+            "horizons": [5, 10],
+        },
+    )
+    monkeypatch.setattr(
+        data_quality,
+        "check_factor_label_coverage",
+        lambda **kwargs: {
+            "status": "ok",
+            "factor_date_count": 80,
+            "factor_complete_date_count": 80,
+            "missing_horizons": [],
+            "short_label_horizons": [],
+            "required_factor_names": ["ret_20"],
+            "unavailable_factor_names": [],
+            "reasons": [],
+        },
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date="2026-01-01",
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    check = next(item for item in report["checks"] if item["check_name"] == "latest_common_label_date")
+    assert check["metrics"] == {
+        "latest_common_date": "2026-01-30",
+        "date_count": 80,
+        "requested_end_date": "2026-01-01",
+    }
+    assert check["details"]["extends_beyond_requested_end_date"] is True
 
 
 def test_run_data_quality_uses_candidate_factors_for_falsy_factor_names(monkeypatch):
@@ -212,6 +263,72 @@ def test_run_data_quality_uses_candidate_factors_for_falsy_factor_names(monkeypa
     )
 
     assert calls == ["candidate_factor_names", ["ret_20"]]
+
+
+def test_run_data_quality_blocks_empty_horizons(monkeypatch):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "find_latest_common_label_date", lambda **kwargs: (_ for _ in ()).throw(ValueError("horizons must not be empty")))
+    monkeypatch.setattr(
+        data_quality,
+        "check_factor_label_coverage",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("horizons must not be empty")),
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date="2026-01-30",
+        horizons=[],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    latest = next(item for item in report["checks"] if item["check_name"] == "latest_common_label_date")
+    coverage = next(item for item in report["checks"] if item["check_name"] == "factor_label_coverage")
+    assert latest["status"] == "blocked"
+    assert "empty_horizons" in latest["details"]["reasons"]
+    assert latest["metrics"]["requested_end_date"] == "2026-01-30"
+    assert coverage["status"] == "blocked"
+    assert "empty_horizons" in coverage["details"]["reasons"]
+
+
+def test_run_data_quality_blocks_when_candidate_factors_are_empty(monkeypatch):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": "2026-01-30",
+            "date_count": 80,
+            "horizons": [5, 10],
+        },
+    )
+    monkeypatch.setattr(data_quality, "candidate_factor_names", lambda: [])
+    monkeypatch.setattr(
+        data_quality,
+        "check_factor_label_coverage",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("no factor names are available for the requested window")),
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date="2026-01-30",
+        horizons=[5, 10],
+        factor_names=[],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    coverage = next(item for item in report["checks"] if item["check_name"] == "factor_label_coverage")
+    assert coverage["status"] == "blocked"
+    assert "no_usable_factor_names" in coverage["details"]["reasons"]
+    assert coverage["details"]["resolved_factor_names"] == []
 
 
 def test_formatters_emit_stable_summary_and_check_lines():
