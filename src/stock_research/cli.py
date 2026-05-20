@@ -844,6 +844,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_delivery_local.add_argument("--artifact-path", action="append", default=[])
     report_delivery_local.add_argument("--output-dir", required=True)
     report_delivery_local.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_local.add_argument("--no-dry-run", dest="dry_run", action="store_false")
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)

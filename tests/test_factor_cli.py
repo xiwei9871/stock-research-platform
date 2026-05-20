@@ -105,6 +105,19 @@ def test_cli_accepts_report_delivery_local_command():
     assert args.output_dir == "outputs/delivery"
     assert args.dry_run is True
 
+    non_dry_run_args = build_parser().parse_args(
+        [
+            "report-delivery-local",
+            "--trade-date",
+            "2026-05-19",
+            "--output-dir",
+            "outputs/delivery",
+            "--no-dry-run",
+        ]
+    )
+
+    assert non_dry_run_args.dry_run is False
+
 
 def test_cli_accepts_backfill_technical_features_daily_command():
     args = build_parser().parse_args(
@@ -931,6 +944,51 @@ def test_report_delivery_local_cli_prints_manifest_summary(monkeypatch, capsys):
         "report_delivery|manifest|outputs/delivery/manifest.json",
         "report_delivery|output_dir|outputs/delivery",
         "report_delivery|delivery_log|outputs/delivery/delivery_log.jsonl",
+    ]
+
+
+def test_report_delivery_local_cli_allows_non_dry_run(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_deliver_local_reports(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="completed",
+            artifact_count=1,
+            manifest_path="outputs/delivery/manifest.json",
+            output_dir="outputs/delivery",
+            delivery_log_path=None,
+        )
+
+    monkeypatch.setattr(cli, "deliver_local_reports", fake_deliver_local_reports)
+
+    cli.main_for_args(
+        [
+            "report-delivery-local",
+            "--trade-date",
+            "2026-05-19",
+            "--output-dir",
+            "outputs/delivery",
+            "--no-dry-run",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-19",
+            "input_dirs": [],
+            "report_dirs": [],
+            "run_card_dirs": [],
+            "artifact_paths": [],
+            "output_dir": "outputs/delivery",
+            "dry_run": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery|status|completed",
+        "report_delivery|artifacts|1",
+        "report_delivery|manifest|outputs/delivery/manifest.json",
+        "report_delivery|output_dir|outputs/delivery",
     ]
 
 
