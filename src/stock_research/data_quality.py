@@ -48,18 +48,17 @@ def run_data_quality(
             latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
         except ValueError as exc:
             checks.extend(
-                [
-                    _blocked_latest_common_label_date_check(
-                        error=exc,
-                        horizons=horizons,
-                        requested_end_date=None,
-                    ),
-                    _blocked_factor_label_coverage_check(
-                        error=exc,
+                _build_blocked_window_checks(
+                    reason=_preflight_error_reasons(
+                        exc,
                         factor_names=selected_factor_names,
                         horizons=horizons,
-                    ),
-                ]
+                    )[0],
+                    horizons=horizons,
+                    requested_end_date=None,
+                    resolved_factor_names=selected_factor_names,
+                    require_industry_membership=require_industry_membership,
+                )
             )
             return _build_report(checks)
         end_date = _normalize_optional_date(latest.get("latest_common_date"))

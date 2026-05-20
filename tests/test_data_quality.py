@@ -688,6 +688,48 @@ def test_run_data_quality_blocks_when_derived_end_date_lookup_raises(monkeypatch
     assert coverage["details"]["reasons"] == ["empty_horizons"]
 
 
+def test_run_data_quality_blocks_industry_membership_when_derived_end_date_lookup_raises(
+    monkeypatch,
+):
+    monkeypatch.setattr(data_quality, "run_data_audit", lambda **kwargs: [])
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", lambda **kwargs: [])
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: (_ for _ in ()).throw(ValueError("horizons must not be empty")),
+    )
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date=None,
+        horizons=[],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=True,
+    )
+
+    check_names = [check["check_name"] for check in report["checks"]]
+    assert check_names == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+        "industry_membership_coverage",
+    ]
+    industry = report["checks"][2]
+    assert report["blocked_checks"] == check_names
+    assert industry["status"] == "blocked"
+    assert industry["kind"] == "research_preflight"
+    assert industry["source"] == "research_preflight"
+    assert industry["metrics"] == {
+        "market_rows": 0,
+        "covered_rows": 0,
+        "missing_rows": 0,
+        "date_count": 0,
+    }
+    assert industry["details"]["reasons"] == ["empty_horizons"]
+
+
 def test_formatters_emit_stable_summary_and_check_lines():
     report = {
         "overall_status": "warning",
