@@ -277,6 +277,9 @@ def run_vectorized_topn_backtest(
         trade_rows.extend(trade_rows_for_date)
 
     equity_curve = pd.DataFrame(equity_rows, columns=EQUITY_COLUMNS)
+    if not equity_curve.empty:
+        running_peak = equity_curve["equity"].cummax()
+        equity_curve["drawdown"] = equity_curve["equity"] / running_peak - 1.0
     positions = pd.DataFrame(position_rows, columns=POSITION_COLUMNS)
     trades = pd.DataFrame(trade_rows, columns=TRADE_COLUMNS)
     return VectorizedTopNResult(
