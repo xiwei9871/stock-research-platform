@@ -55,6 +55,25 @@ def test_manual_v1_config_is_derived_from_registry_maps():
     assert "ret_20_score" in config["weights"]
 
 
+def test_manual_v1_config_does_not_add_fundamental_weights():
+    config = factor_config.manual_v1_config()
+
+    for factor_name in (
+        "roe",
+        "roa",
+        "gross_margin",
+        "net_margin",
+        "debt_ratio",
+        "ocf_to_np",
+        "pe_ttm",
+        "ps_ttm",
+        "pb",
+    ):
+        assert factor_name in config["factor_groups"]
+        assert factor_name in config["factor_directions"]
+        assert f"{factor_name}_score" not in config["weights"]
+
+
 def test_factor_registry_availability_metadata_matches_candidates():
     candidates = factor_config.candidate_factor_names()
     availability = factor_config.factor_availability_metadata()

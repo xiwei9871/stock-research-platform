@@ -474,6 +474,8 @@ def test_build_quality_and_value_factor_rows_drop_missing_values():
         source_data_version="pit_finance_v1",
     )
 
+    assert list(quality_rows.columns) == factor_pipeline.FACTOR_DAILY_COLUMNS
+    assert list(value_rows.columns) == factor_pipeline.FACTOR_DAILY_COLUMNS
     assert set(quality_rows["factor_name"]) == {
         "roe",
         "roa",
@@ -486,6 +488,8 @@ def test_build_quality_and_value_factor_rows_drop_missing_values():
     assert set(quality_rows["asset_id"]) == {"A"}
     assert set(value_rows["asset_id"]) == {"A"}
     assert set(quality_rows["source"]) == {"fundamental"}
+    assert set(quality_rows["source_data_version"]) == {"pit_finance_v1"}
+    assert set(value_rows["source"]) == {"fundamental"}
     assert set(value_rows["source_data_version"]) == {"pit_finance_v1"}
     assert not quality_rows["factor_value"].isna().any()
     assert not value_rows["factor_value"].isna().any()
