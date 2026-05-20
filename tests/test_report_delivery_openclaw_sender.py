@@ -1177,7 +1177,25 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
                         "openclaw_transport_result": "failure",
                     },
                 }
-            ]
+            ],
+            "payload": {
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "payload": {
+                            "title": "Daily TopN",
+                            "openclaw_transport_result": "failure",
+                        },
+                    }
+                ],
+                "metadata": {
+                    "source": "stock_research_openclaw_smoke_test",
+                    "test_mode": True,
+                },
+            },
         },
         config,
     )
@@ -1188,7 +1206,26 @@ def test_http_transport_builds_request_and_accepts_http_2xx(
     headers = {str(key).lower(): str(value) for key, value in dict(captured["headers"]).items()}
     assert headers["authorization"] == "Bearer secret-token"
     body = json.loads(bytes(captured["data"]).decode("utf-8"))
-    assert body["items"][0]["item_id"] == "openclaw:1"
+    assert body == {
+        "items": [
+            {
+                "item_id": "openclaw:1",
+                "artifact_id": "daily_topn_report:2026-05-20:abc",
+                "report_type": "daily_topn_report",
+                "openclaw_route": "daily_research",
+                "payload": {
+                    "title": "Daily TopN",
+                    "openclaw_transport_result": "failure",
+                },
+            }
+        ],
+        "metadata": {
+            "source": "stock_research_openclaw_smoke_test",
+            "test_mode": True,
+        },
+    }
+    assert "item_count" not in body
+    assert "source_manifest_path" not in body
     assert captured["closed"] is True
     assert result["status"] == "sent"
     assert result["dry_run"] is False
@@ -1403,7 +1440,9 @@ def test_live_send_requires_limit_one(tmp_path: Path) -> None:
         )
 
 
-def test_live_send_rejects_multiple_deliverable_items_after_filtering(tmp_path: Path) -> None:
+def test_live_send_bounded_by_limit_one_even_with_multiple_deliverable_items(
+    tmp_path: Path,
+) -> None:
     manifest_path, items_path = _write_export_with_multiple_deliverable_items(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
         endpoint="https://openclaw.example.test/send",
@@ -1423,15 +1462,22 @@ def test_live_send_rejects_multiple_deliverable_items_after_filtering(tmp_path: 
         transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
     )
 
-    with pytest.raises(
-        ValueError,
-        match="exactly one deliverable item after filtering; got 2",
-    ):
-        sender.send_batch(
-            manifest_path=manifest_path,
-            items_path=items_path,
-            config=config,
-        )
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "sent"
+    assert result.item_count == 1
+    assert result.sent_count == 1
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["status"] == "sent"
 
 
 @pytest.mark.parametrize("severity_max", ["medium", "high", "critical"])

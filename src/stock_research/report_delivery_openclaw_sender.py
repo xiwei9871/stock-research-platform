@@ -123,7 +123,11 @@ class HttpOpenClawTransport:
         if not config.endpoint:
             raise ValueError("endpoint is required for live HTTP send")
 
-        body = json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
+        transport_payload = payload.get("payload")
+        if not isinstance(transport_payload, dict):
+            raise ValueError("OpenClaw transport payload must be a JSON object")
+
+        body = json.dumps(transport_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
         headers: dict[str, str] = {
             "Content-Type": "application/json",
         }
@@ -485,7 +489,7 @@ class OpenClawSender:
                     continue
             filtered.append(self._copy_item(item))
 
-        if config.dry_run and config.limit is not None:
+        if config.limit is not None:
             filtered = filtered[: config.limit]
         return filtered
 
