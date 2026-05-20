@@ -486,7 +486,7 @@ P1-1 明确禁止：
 - 默认行为：`report-delivery-openclaw-send` 默认 `--dry-run`，真实发送必须显式加 `--no-dry-run`
 - `send_preview.json`：dry-run 和 real-send 都要写预览文件，预览内容必须可复查，但不能包含 token
 - `send_log.jsonl`：记录一次发送的摘要结果，至少包含 `send_id`、`status`、`dry_run`、`item_count`、`sent_count`、`failed_count`、`skipped_count`、`preview_path`、`endpoint_host`
-- 环境变量：优先级为 CLI 参数高于环境变量高于默认值；当前支持 `OPENCLAW_ENDPOINT`、`OPENCLAW_TOKEN`、`OPENCLAW_TIMEOUT_SECONDS`
+- 环境变量：当前支持 `OPENCLAW_ENDPOINT`、`OPENCLAW_TOKEN`、`OPENCLAW_TIMEOUT_SECONDS`；`OPENCLAW_TOKEN` 仅走环境变量，不提供 CLI 覆盖参数，`OPENCLAW_ENDPOINT` 和 `OPENCLAW_TIMEOUT_SECONDS` 仍可通过 CLI 显式指定
 - CLI 示例：
 
 ```bash

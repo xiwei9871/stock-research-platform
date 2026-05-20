@@ -3289,6 +3289,13 @@ def main_for_args(argv: list[str] | None = None) -> None:
         sender = OpenClawSender(
             transport=DryRunOpenClawTransport() if args.dry_run else HttpOpenClawTransport()
         )
+        export_data = sender.load_export(args.manifest, args.items)
+        manifest_trade_date = str(export_data["manifest"].get("trade_date", ""))
+        if manifest_trade_date != args.trade_date:
+            raise ValueError(
+                "report-delivery-openclaw-send: "
+                f"trade-date {args.trade_date} does not match loaded manifest trade_date {manifest_trade_date}"
+            )
         result = sender.send_batch(
             manifest_path=args.manifest,
             items_path=args.items,

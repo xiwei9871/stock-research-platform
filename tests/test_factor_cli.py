@@ -1103,6 +1103,7 @@ def test_cli_accepts_report_delivery_openclaw_send_command(monkeypatch):
     assert args.route_allowlist == []
     assert args.severity_max is None
     assert args.test_mode is False
+    assert not hasattr(args, "token")
 
 
 def test_report_delivery_openclaw_send_cli_dry_run_prints_summary(monkeypatch, capsys):
@@ -1111,6 +1112,20 @@ def test_report_delivery_openclaw_send_cli_dry_run_prints_summary(monkeypatch, c
     class FakeOpenClawSender:
         def __init__(self, transport):
             calls.append({"transport": transport.__class__.__name__})
+
+        def load_export(self, manifest_path, items_path):
+            calls.append(
+                {
+                    "load_export_manifest_path": manifest_path,
+                    "load_export_items_path": items_path,
+                }
+            )
+            return {
+                "manifest": {"trade_date": "2026-05-21"},
+                "items": [],
+                "manifest_path": manifest_path,
+                "items_path": items_path,
+            }
 
         def send_batch(self, *, manifest_path, items_path, config):
             calls.append(
@@ -1179,9 +1194,13 @@ def test_report_delivery_openclaw_send_cli_dry_run_prints_summary(monkeypatch, c
     )
 
     assert calls[0] == {"transport": "DryRunOpenClawTransport"}
-    assert calls[1]["manifest_path"] == "outputs/openclaw/openclaw_manifest.json"
-    assert calls[1]["items_path"] == "outputs/openclaw/openclaw_items.jsonl"
-    assert isinstance(calls[1]["config"], cli.OpenClawSendConfig)
+    assert calls[1] == {
+        "load_export_manifest_path": "outputs/openclaw/openclaw_manifest.json",
+        "load_export_items_path": "outputs/openclaw/openclaw_items.jsonl",
+    }
+    assert calls[2]["manifest_path"] == "outputs/openclaw/openclaw_manifest.json"
+    assert calls[2]["items_path"] == "outputs/openclaw/openclaw_items.jsonl"
+    assert isinstance(calls[2]["config"], cli.OpenClawSendConfig)
     assert capsys.readouterr().out.splitlines() == [
         "report_delivery_openclaw_send|status|dry_run",
         "report_delivery_openclaw_send|dry_run|True",
@@ -1250,6 +1269,77 @@ def test_report_delivery_openclaw_send_cli_no_dry_run_without_endpoint_fails_cle
                 "--severity-max",
                 "low",
                 "--test-mode",
+            ]
+        )
+
+
+def test_report_delivery_openclaw_send_cli_rejects_trade_date_mismatch(
+    tmp_path, monkeypatch
+):
+    manifest_file = tmp_path / "openclaw_manifest.json"
+    items_file = tmp_path / "openclaw_items.jsonl"
+    manifest_file.write_text(
+        """
+{
+  "generated_at": "2026-05-21T09:00:00Z",
+  "trade_date": "2026-05-20",
+  "channel": "openclaw",
+  "dry_run": true,
+  "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+  "item_count": 1,
+  "items": [],
+  "warnings": [],
+  "errors": []
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    items_file.write_text(
+        """
+{"item_id":"openclaw:1","artifact_id":"daily_topn_report:2026-05-20:abc","report_type":"daily_topn_report","title":"Daily TopN","summary":"Daily TopN summary","severity":"info","requires_attention":false,"delivery_priority":10,"tags":["daily","topn"],"source_paths":["outputs/report_delivery/2026-05-20/artifacts/topn.md"],"evidence_paths":[],"run_card_path":null,"recommended_action":"review_topn_candidates","openclaw_route":"research_inbox","payload":{"title":"Daily TopN"}}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class FakeOpenClawSender:
+        def __init__(self, transport):
+            self.transport = transport
+
+        def load_export(self, manifest_path, items_path):
+            assert manifest_path == str(manifest_file)
+            assert items_path == str(items_file)
+            return {
+                "manifest": {"trade_date": "2026-05-20"},
+                "items": [],
+                "manifest_path": str(manifest_path),
+                "items_path": str(items_path),
+            }
+
+        def send_batch(self, **kwargs):
+            raise AssertionError("send_batch should not be called after a trade-date mismatch")
+
+    monkeypatch.setattr(cli, "OpenClawSender", FakeOpenClawSender)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"report-delivery-openclaw-send: trade-date 2026-05-21 "
+            r"does not match loaded manifest trade_date 2026-05-20"
+        ),
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                str(manifest_file),
+                "--items",
+                str(items_file),
+                "--output-dir",
+                str(tmp_path / "send"),
             ]
         )
 
