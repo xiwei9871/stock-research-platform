@@ -16,14 +16,34 @@ from stock_research.research_preflight import (
 def run_data_quality(
     *,
     expected_start_date: str = "1990-12-01",
-    start_date: str,
-    end_date: str,
+    start_date: str | None,
+    end_date: str | None,
     horizons: list[int],
     factor_names: list[str] | None = None,
     calc_version: str = "v1",
     min_label_dates: int = 20,
     require_industry_membership: bool = False,
 ) -> dict[str, Any]:
+    if start_date is None:
+        return _build_blocked_window_report(
+            reason="missing_start_date",
+            horizons=horizons,
+            requested_end_date=end_date,
+            resolved_factor_names=factor_names or [],
+        )
+
+    if end_date is None:
+        latest = find_latest_common_label_date(start_date=start_date, horizons=horizons)
+        end_date = _normalize_optional_date(latest.get("latest_common_date"))
+        if end_date is None:
+            return _build_blocked_window_report(
+                reason="missing_latest_common_date",
+                horizons=horizons,
+                requested_end_date=None,
+                latest=latest,
+                resolved_factor_names=factor_names or [],
+            )
+
     selected_factor_names = factor_names or candidate_factor_names()
     checks = [
         *_build_data_audit_checks(expected_start_date=expected_start_date),
@@ -38,16 +58,7 @@ def run_data_quality(
             require_industry_membership=require_industry_membership,
         ),
     ]
-    blocked_checks = [check["check_name"] for check in checks if check["status"] == "blocked"]
-    warning_checks = [check["check_name"] for check in checks if check["status"] == "warning"]
-    overall_status = "blocked" if blocked_checks else "warning" if warning_checks else "ok"
-    return {
-        "overall_status": overall_status,
-        "generated_at": datetime.now().astimezone().isoformat(),
-        "checks": checks,
-        "blocked_checks": blocked_checks,
-        "warning_checks": warning_checks,
-    }
+    return _build_report(checks)
 
 
 def format_data_quality_summary_line(report: dict[str, Any]) -> str:
@@ -76,6 +87,55 @@ def iter_data_quality_lines(report: dict[str, Any]):
     yield format_data_quality_summary_line(report)
     for check in report["checks"]:
         yield format_data_quality_check_line(check)
+
+
+def _build_blocked_window_report(
+    *,
+    reason: str,
+    horizons: list[int],
+    requested_end_date: str | None,
+    latest: dict[str, Any] | None = None,
+    resolved_factor_names: list[str],
+) -> dict[str, Any]:
+    latest_metrics = {
+        "latest_common_date": _normalize_optional_date(latest.get("latest_common_date")) if latest else None,
+        "date_count": int(latest.get("date_count") or 0) if latest else 0,
+    }
+    if requested_end_date is not None:
+        latest_metrics["requested_end_date"] = requested_end_date
+    checks = [
+        _normalize_check(
+            check_name="latest_common_label_date",
+            status="blocked",
+            kind="research_preflight",
+            source="research_preflight",
+            metrics=latest_metrics,
+            details={
+                "horizons": list(horizons),
+                "extends_beyond_requested_end_date": False,
+                "reasons": [reason],
+            },
+        ),
+        _normalize_check(
+            check_name="factor_label_coverage",
+            status="blocked",
+            kind="research_preflight",
+            source="research_preflight",
+            metrics={
+                "factor_date_count": 0,
+                "complete_factor_date_count": 0,
+            },
+            details={
+                "missing_horizons": list(horizons),
+                "short_label_horizons": [],
+                "required_factor_names": [],
+                "unavailable_factor_names": [],
+                "resolved_factor_names": list(resolved_factor_names),
+                "reasons": [reason],
+            },
+        ),
+    ]
+    return _build_report(checks)
 
 
 def _build_data_audit_checks(*, expected_start_date: str) -> list[dict[str, Any]]:
@@ -313,6 +373,19 @@ def _normalize_check(
         "source": source,
         "metrics": metrics,
         "details": details,
+    }
+
+
+def _build_report(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    blocked_checks = [check["check_name"] for check in checks if check["status"] == "blocked"]
+    warning_checks = [check["check_name"] for check in checks if check["status"] == "warning"]
+    overall_status = "blocked" if blocked_checks else "warning" if warning_checks else "ok"
+    return {
+        "overall_status": overall_status,
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "checks": checks,
+        "blocked_checks": blocked_checks,
+        "warning_checks": warning_checks,
     }
 
 

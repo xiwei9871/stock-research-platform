@@ -2189,15 +2189,6 @@ def test_data_quality_cli_text_mode_prints_summary_and_check(monkeypatch, capsys
     calls = []
     monkeypatch.setattr(
         cli,
-        "find_latest_common_label_date",
-        lambda **kwargs: {
-            "latest_common_date": "2026-01-30",
-            "date_count": 122,
-            "horizons": kwargs["horizons"],
-        },
-    )
-    monkeypatch.setattr(
-        cli,
         "run_data_quality",
         lambda **kwargs: calls.append(kwargs)
         or {
@@ -2230,7 +2221,7 @@ def test_data_quality_cli_text_mode_prints_summary_and_check(monkeypatch, capsys
 
     cli.main()
 
-    assert calls[0]["end_date"] == "2026-01-30"
+    assert calls[0]["end_date"] is None
     assert capsys.readouterr().out.splitlines() == [
         "data_quality|summary|ok|checks|1|blocked|0|warning|0",
         "data_quality|market_daily_bar|ok|kind|data_audit|rows|10|date_count|2",
@@ -2274,6 +2265,7 @@ def test_data_quality_cli_json_mode_prints_payload_and_exits_nonzero_when_blocke
 
 
 def test_data_quality_cli_blocks_when_market_start_missing(monkeypatch, capsys):
+    import json
     import sys
 
     import stock_research.cli as cli
@@ -2283,25 +2275,51 @@ def test_data_quality_cli_blocks_when_market_start_missing(monkeypatch, capsys):
         "load_market_date_bounds",
         lambda: {"start_date": None, "end_date": "2026-05-08", "date_count": 8200},
     )
-
-    def fail_find_latest_common_label_date(**kwargs):
-        raise AssertionError("find_latest_common_label_date should not be called")
-
-    def fail_run_data_quality(**kwargs):
-        raise AssertionError("run_data_quality should not be called")
-
-    monkeypatch.setattr(cli, "find_latest_common_label_date", fail_find_latest_common_label_date)
-    monkeypatch.setattr(cli, "run_data_quality", fail_run_data_quality)
-    monkeypatch.setattr(sys, "argv", ["stock-research", "data-quality"])
+    monkeypatch.setattr(
+        cli,
+        "run_data_quality",
+        lambda **kwargs: {
+            "overall_status": "blocked",
+            "generated_at": "2026-05-20T12:00:00+08:00",
+            "checks": [
+                {
+                    "check_name": "latest_common_label_date",
+                    "status": "blocked",
+                    "kind": "research_preflight",
+                    "source": "research_preflight",
+                    "metrics": {"date_count": 0},
+                    "details": {"reasons": ["missing_start_date"]},
+                },
+                {
+                    "check_name": "factor_label_coverage",
+                    "status": "blocked",
+                    "kind": "research_preflight",
+                    "source": "research_preflight",
+                    "metrics": {
+                        "factor_date_count": 0,
+                        "complete_factor_date_count": 0,
+                    },
+                    "details": {"reasons": ["missing_start_date"]},
+                },
+            ],
+            "blocked_checks": [
+                "latest_common_label_date",
+                "factor_label_coverage",
+            ],
+            "warning_checks": [],
+        },
+    )
+    monkeypatch.setattr(sys, "argv", ["stock-research", "data-quality", "--json"])
 
     with pytest.raises(SystemExit) as excinfo:
         cli.main()
 
+    payload = json.loads(capsys.readouterr().out)
     assert excinfo.value.code == 1
-    assert capsys.readouterr().out.splitlines() == [
-        "data_quality|summary|blocked|checks|2|blocked|2|warning|0",
-        "data_quality|latest_common_label_date|blocked|kind|research_preflight|date_count|0",
-        "data_quality|factor_label_coverage|blocked|kind|research_preflight|factor_date_count|0|complete_factor_date_count|0",
+    assert payload["overall_status"] == "blocked"
+    assert payload["blocked_checks"] == [
+        "latest_common_label_date",
+        "factor_label_coverage",
     ]
 
 
@@ -2313,18 +2331,38 @@ def test_data_quality_cli_blocks_when_latest_common_label_date_missing(monkeypat
 
     monkeypatch.setattr(
         cli,
-        "find_latest_common_label_date",
+        "run_data_quality",
         lambda **kwargs: {
-            "latest_common_date": None,
-            "date_count": 0,
-            "horizons": kwargs["horizons"],
+            "overall_status": "blocked",
+            "generated_at": "2026-05-20T12:00:00+08:00",
+            "checks": [
+                {
+                    "check_name": "latest_common_label_date",
+                    "status": "blocked",
+                    "kind": "research_preflight",
+                    "source": "research_preflight",
+                    "metrics": {"latest_common_date": None, "date_count": 0},
+                    "details": {"reasons": ["missing_latest_common_date"]},
+                },
+                {
+                    "check_name": "factor_label_coverage",
+                    "status": "blocked",
+                    "kind": "research_preflight",
+                    "source": "research_preflight",
+                    "metrics": {
+                        "factor_date_count": 0,
+                        "complete_factor_date_count": 0,
+                    },
+                    "details": {"reasons": ["missing_latest_common_date"]},
+                },
+            ],
+            "blocked_checks": [
+                "latest_common_label_date",
+                "factor_label_coverage",
+            ],
+            "warning_checks": [],
         },
     )
-
-    def fail_run_data_quality(**kwargs):
-        raise AssertionError("run_data_quality should not be called")
-
-    monkeypatch.setattr(cli, "run_data_quality", fail_run_data_quality)
     monkeypatch.setattr(
         sys,
         "argv",

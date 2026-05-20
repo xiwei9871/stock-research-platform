@@ -331,6 +331,106 @@ def test_run_data_quality_blocks_when_candidate_factors_are_empty(monkeypatch):
     assert coverage["details"]["resolved_factor_names"] == []
 
 
+def test_run_data_quality_blocks_when_start_date_missing(monkeypatch):
+    def fail_run_data_audit(**kwargs):
+        raise AssertionError("run_data_audit should not be called")
+
+    def fail_summarize_finance_coverage(**kwargs):
+        raise AssertionError("summarize_finance_coverage should not be called")
+
+    def fail_find_latest_common_label_date(**kwargs):
+        raise AssertionError("find_latest_common_label_date should not be called")
+
+    monkeypatch.setattr(data_quality, "run_data_audit", fail_run_data_audit)
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", fail_summarize_finance_coverage)
+    monkeypatch.setattr(data_quality, "find_latest_common_label_date", fail_find_latest_common_label_date)
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date=None,
+        end_date=None,
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    assert report["overall_status"] == "blocked"
+    assert report["generated_at"]
+    assert report["blocked_checks"] == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+    ]
+    latest = report["checks"][0]
+    coverage = report["checks"][1]
+    assert latest["check_name"] == "latest_common_label_date"
+    assert latest["status"] == "blocked"
+    assert latest["kind"] == "research_preflight"
+    assert latest["source"] == "research_preflight"
+    assert latest["metrics"]["date_count"] == 0
+    assert latest["details"]["reasons"] == ["missing_start_date"]
+    assert coverage["check_name"] == "factor_label_coverage"
+    assert coverage["status"] == "blocked"
+    assert coverage["kind"] == "research_preflight"
+    assert coverage["source"] == "research_preflight"
+    assert coverage["metrics"] == {
+        "factor_date_count": 0,
+        "complete_factor_date_count": 0,
+    }
+    assert coverage["details"]["reasons"] == ["missing_start_date"]
+
+
+def test_run_data_quality_blocks_when_derived_end_date_missing(monkeypatch):
+    def fail_run_data_audit(**kwargs):
+        raise AssertionError("run_data_audit should not be called")
+
+    def fail_summarize_finance_coverage(**kwargs):
+        raise AssertionError("summarize_finance_coverage should not be called")
+
+    def fail_check_factor_label_coverage(**kwargs):
+        raise AssertionError("check_factor_label_coverage should not be called")
+
+    monkeypatch.setattr(data_quality, "run_data_audit", fail_run_data_audit)
+    monkeypatch.setattr(data_quality, "summarize_finance_coverage", fail_summarize_finance_coverage)
+    monkeypatch.setattr(
+        data_quality,
+        "find_latest_common_label_date",
+        lambda **kwargs: {
+            "latest_common_date": None,
+            "date_count": 0,
+            "horizons": kwargs["horizons"],
+        },
+    )
+    monkeypatch.setattr(data_quality, "check_factor_label_coverage", fail_check_factor_label_coverage)
+
+    report = data_quality.run_data_quality(
+        expected_start_date="1990-12-01",
+        start_date="2024-01-01",
+        end_date=None,
+        horizons=[5, 10],
+        factor_names=["ret_20"],
+        calc_version="v1",
+        min_label_dates=20,
+        require_industry_membership=False,
+    )
+
+    assert report["overall_status"] == "blocked"
+    assert report["generated_at"]
+    assert report["blocked_checks"] == [
+        "latest_common_label_date",
+        "factor_label_coverage",
+    ]
+    latest = report["checks"][0]
+    coverage = report["checks"][1]
+    assert latest["metrics"] == {
+        "latest_common_date": None,
+        "date_count": 0,
+    }
+    assert latest["details"]["reasons"] == ["missing_latest_common_date"]
+    assert coverage["details"]["reasons"] == ["missing_latest_common_date"]
+
+
 def test_formatters_emit_stable_summary_and_check_lines():
     report = {
         "overall_status": "warning",
