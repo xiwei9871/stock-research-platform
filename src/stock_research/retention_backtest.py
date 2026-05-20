@@ -7,6 +7,7 @@ import pandas as pd
 
 from stock_research.backtest import (
     BacktestSelection,
+    LOW_LIQUIDITY_THRESHOLD,
     FEATURE_COLUMNS,
     REQUIRED_SCORE_FEATURES,
     load_backtest_bars,
@@ -149,16 +150,9 @@ def simulate_retention_config(
         universe_result,
     )
     trading_dates = _trading_dates(bars)
-    signal_dates = _trading_dates(features)
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
-    simulation_dates = sorted(
-        {
-            date
-            for date in [*trading_dates, *signal_dates]
-            if start_date <= date
-        }
-    )
+    simulation_dates = [date for date in trading_dates if start_date <= date]
 
     bars_by_date_asset = _bars_by_date_asset(bars)
     pending_buys: dict[str, list[dict[str, Any]]] = {}
@@ -288,20 +282,17 @@ def select_retention_candidates(
     bars = filtered_bars.copy()
     bars["trade_date"] = bars["trade_date"].map(_iso_date)
     bars = bars[bars["trade_date"] == normalized_date]
-    bars_by_asset = (
-        bars.drop_duplicates("asset_id").set_index("asset_id")
-        if not bars.empty
-        else None
-    )
+    if bars.empty:
+        return []
+    bars_by_asset = bars.drop_duplicates("asset_id").set_index("asset_id")
 
     scored: list[dict[str, Any]] = []
     for asset_id, features in matrix.items():
-        if bars_by_asset is not None:
-            if asset_id not in bars_by_asset.index:
-                continue
-            status = bars_by_asset.loc[asset_id]
-            if bool(status["is_st"]) is True or str(status["trade_status"]) != "1":
-                continue
+        if asset_id not in bars_by_asset.index:
+            continue
+        status = bars_by_asset.loc[asset_id]
+        if bool(status["is_st"]) is True or str(status["trade_status"]) != "1":
+            continue
         if any(_is_missing(features.get(name)) for name in REQUIRED_SCORE_FEATURES):
             continue
         amount_20d_avg = features.get("amount_20d_avg")
@@ -1321,6 +1312,17 @@ def _execute_pending_buy(
     if len(positions) >= config.max_positions:
         return cash, False
 
+    if _is_missing(selection.amount_20d_avg) or float(selection.amount_20d_avg) < LOW_LIQUIDITY_THRESHOLD:
+        trade_rows.append(
+            _skip_trade(
+                selection,
+                current_date,
+                config,
+                "low_liquidity",
+            )
+        )
+        return cash, True
+
     buy_bar = bars_by_date_asset.get((current_date, selection.asset_id))
     if buy_bar is None:
         trade_rows.append(
@@ -1331,6 +1333,14 @@ def _execute_pending_buy(
                 "suspended",
             )
         )
+        return cash, True
+
+    if _bool_value(buy_bar.get("is_st")):
+        trade_rows.append(_skip_trade(selection, current_date, config, "st"))
+        return cash, True
+
+    if _float_or_none(buy_bar.get("amount")) is not None and float(buy_bar["amount"]) < LOW_LIQUIDITY_THRESHOLD:
+        trade_rows.append(_skip_trade(selection, current_date, config, "low_liquidity"))
         return cash, True
 
     allowed, reason = can_open_long(buy_bar, config.execution_constraints)
@@ -1345,8 +1355,12 @@ def _execute_pending_buy(
         )
         return cash, True
 
-    if buy_bar.get("open") is None:
+    if buy_bar.get("open") is None or buy_bar.get("preclose") is None:
         trade_rows.append(_skip_trade(selection, current_date, config, "missing_price"))
+        return cash, True
+
+    if float(buy_bar["open"]) >= float(buy_bar["preclose"]) * 1.095:
+        trade_rows.append(_skip_trade(selection, current_date, config, "limit_up_open"))
         return cash, True
 
     equity = cash + _market_value(positions, bars_by_date_asset, current_date)

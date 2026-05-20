@@ -387,19 +387,19 @@ def test_retention_uses_target_equal_weight_integer_lots():
 def test_retention_skips_limit_up_buy_via_shared_constraints():
     feature_frame = pd.DataFrame(
         [
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
-            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-05", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
         ]
     )
     bar_frame = pd.DataFrame(
         [
-            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.0, "close": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": True, "is_limit_down": False, "is_suspended": False},
-            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.5, "close": 10.5, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.5, "close": 10.5, "preclose": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": True, "is_limit_down": False, "is_suspended": False},
         ]
     )
     config = RetentionConfig(
@@ -425,19 +425,21 @@ def test_retention_rolls_limit_down_sell_until_executable():
             {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
             {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
             {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_5d", "feature_value": 0.01},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_20d", "feature_value": 0.02},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ret_60d", "feature_value": 0.03},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "volatility_20d", "feature_value": 0.02},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "ma20_deviation", "feature_value": 0.01},
-            {"asset_id": "B", "trade_date": "2026-01-06", "feature_name": "max_drawdown_20d", "feature_value": -0.01},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "ret_5d", "feature_value": 0.01},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "ret_20d", "feature_value": 0.02},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "ret_60d", "feature_value": 0.03},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "ma20_deviation", "feature_value": 0.01},
+            {"asset_id": "B", "trade_date": "2026-01-05", "feature_name": "max_drawdown_20d", "feature_value": -0.01},
         ]
     )
     bar_frame = pd.DataFrame(
         [
-            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.0, "close": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": True, "is_suspended": False},
-            {"asset_id": "A", "trade_date": "2026-01-07", "open": 9.8, "close": 9.8, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-02", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.0, "close": 10.0, "preclose": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.0, "close": 10.0, "preclose": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": True, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-07", "open": 9.8, "close": 9.8, "preclose": 9.8, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
         ]
     )
     config = RetentionConfig(
@@ -451,6 +453,109 @@ def test_retention_rolls_limit_down_sell_until_executable():
 
     closed = result.trades[result.trades["status"] == "closed"].iloc[0]
     assert closed["sell_date"] == "2026-01-07"
+
+
+def test_retention_blocks_execution_day_st_buy_even_with_shared_constraints():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.5, "close": 10.5, "preclose": 10.4, "amount": 100000000.0, "trade_status": "1", "is_st": True, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-05",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+
+    result = simulate_retention_config(feature_frame, bar_frame, config)
+
+    skipped = result.trades[result.trades["skip_reason"] == "st"]
+    assert len(skipped) == 1
+
+
+def test_retention_applies_default_low_liquidity_buy_protection():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.5, "close": 10.5, "preclose": 10.4, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-05",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+    signal_cache = {
+        "2026-01-02": {
+            "selections": [
+                BacktestSelection("2026-01-02", "A", 1, 10.0, 0.15, 10000000.0)
+            ],
+            "feature_values": {"A": {"amount_20d_avg": 10000000.0}},
+            "market_allows_entry": True,
+            "entry_allowed_assets": None,
+        }
+    }
+
+    result = simulate_retention_config(feature_frame, bar_frame, config, signal_cache=signal_cache)
+
+    skipped = result.trades[result.trades["skip_reason"] == "low_liquidity"]
+    assert len(skipped) == 1
+
+
+def test_retention_ignores_non_trading_signal_dates_without_extra_equity_rows():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-03", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-06", "open": 10.2, "close": 10.2, "preclose": 10.0, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-03",
+        end_date="2026-01-06",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+
+    result = simulate_retention_config(feature_frame, bar_frame, config)
+
+    assert list(result.equity_curve["date"]) == ["2026-01-05", "2026-01-06"]
+    assert result.trades.empty
 
 
 def test_retention_v2_observes_one_day_outside_top20_before_exiting():
