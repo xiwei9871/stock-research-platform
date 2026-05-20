@@ -333,14 +333,9 @@ class LocalDeliveryAdapter:
         return [self._classify_artifact(artifact) for artifact in artifacts]
 
     def _classify_artifact(self, artifact: ReportArtifact) -> ReportArtifact:
-        path_value = artifact.metadata.get("path")
-        path = Path(path_value) if isinstance(path_value, str) else None
-        if (
-            artifact.report_type == "topn"
-            and path is not None
-            and path.suffix.lower() == ".md"
-            and path.name.startswith("daily_topn_")
-        ):
+        markdown_path_value = artifact.markdown_path
+        markdown_path = Path(markdown_path_value) if markdown_path_value is not None else None
+        if artifact.report_type == "topn" and markdown_path is not None and markdown_path.name.startswith("daily_topn_"):
             return replace(
                 artifact,
                 report_type="daily_topn_report",

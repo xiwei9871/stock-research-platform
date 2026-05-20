@@ -194,6 +194,33 @@ def test_collect_artifacts_classifies_daily_topn_markdown_artifact(tmp_path):
     assert artifact.delivery_priority == 10
 
 
+def test_collect_artifacts_classifies_merged_daily_topn_artifact(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text("# topn\n", encoding="utf-8")
+    (source_dir / "daily_topn_2026-05-20_manual_v1.json").write_text("{}", encoding="utf-8")
+
+    adapter = report_delivery.LocalDeliveryAdapter()
+    artifacts, warnings = adapter.collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    artifact = next(item for item in artifacts if item.markdown_path is not None)
+
+    assert warnings == []
+    assert artifact.report_type == "daily_topn_report"
+    assert artifact.severity == "info"
+    assert artifact.summary == "Daily TopN"
+    assert artifact.tags == ["daily", "topn"]
+    assert artifact.recommended_channels == ["local", "openclaw"]
+    assert artifact.requires_attention is False
+    assert artifact.delivery_priority == 10
+
+
 def test_deliver_local_writes_manifest_and_delivery_log(tmp_path):
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
