@@ -206,12 +206,12 @@ class LocalDeliveryAdapter:
         warnings: list[str],
     ) -> None:
         if path.is_dir():
-            found = self._scan_dir(path, trade_date, artifacts_by_key)
+            found = self._scan_dir(path, trade_date, artifacts_by_key, warnings)
             if not found:
                 warnings.append(f"no_artifacts_found:{path}")
             return
 
-        artifact = self._artifact_from_path(path, trade_date)
+        artifact = self._artifact_from_path(path, trade_date, warnings)
         if artifact is not None:
             self._merge_artifact(artifacts_by_key, artifact)
 
@@ -220,19 +220,25 @@ class LocalDeliveryAdapter:
         root: Path,
         trade_date: str,
         artifacts_by_key: dict[tuple[str, str], ReportArtifact],
+        warnings: list[str],
     ) -> bool:
         found = False
         for path in sorted(root.rglob("*")):
             if not path.is_file():
                 continue
-            artifact = self._artifact_from_path(path, trade_date)
+            artifact = self._artifact_from_path(path, trade_date, warnings)
             if artifact is None:
                 continue
             self._merge_artifact(artifacts_by_key, artifact)
             found = True
         return found
 
-    def _artifact_from_path(self, path: Path, trade_date: str) -> ReportArtifact | None:
+    def _artifact_from_path(
+        self,
+        path: Path,
+        trade_date: str,
+        warnings: list[str],
+    ) -> ReportArtifact | None:
         if not path.exists() or not path.is_file():
             return None
         if path.suffix.lower() not in {".md", ".json", ".csv"}:
@@ -254,6 +260,8 @@ class LocalDeliveryAdapter:
                 title = f"watchlist {watchlist_identity[0]} {watchlist_identity[1]}"
                 metadata["watchlist_trade_date"] = watchlist_identity[0]
                 metadata["watchlist_id"] = watchlist_identity[1]
+        if path.suffix.lower() == ".json":
+            _load_json_preview(path, warnings)
 
         artifact_id = self._artifact_id_for(path, report_type, trade_date)
         kwargs: dict[str, Any] = {
@@ -528,6 +536,11 @@ def classify_artifact(artifact: ReportArtifact) -> ReportArtifact:
     summary = extract_summary(artifact, report_type=report_type)
     recommended_channels = _recommended_channels_for(report_type)
     requires_attention = artifact.requires_attention or severity in {"high", "critical"}
+    metadata = build_artifact_metadata(
+        artifact,
+        detected_by=_detected_by_for_artifact(artifact, report_type=report_type),
+        warning_count=len(artifact.warnings),
+    )
 
     tags = list(artifact.tags)
     if report_type == "daily_topn_report":
@@ -547,6 +560,7 @@ def classify_artifact(artifact: ReportArtifact) -> ReportArtifact:
         tags=tags,
         recommended_channels=recommended_channels,
         requires_attention=requires_attention,
+        metadata=metadata,
     )
 
 
@@ -631,12 +645,12 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
         filename_summary = _summary_from_filename(artifact)
         if filename_summary:
             return filename_summary
-        markdown_summary = _summary_from_markdown(artifact)
-        if markdown_summary:
-            return markdown_summary
         json_summary = _summary_from_json(artifact)
         if json_summary:
             return json_summary
+        markdown_summary = _summary_from_markdown(artifact)
+        if markdown_summary:
+            return markdown_summary
         return ""
 
     if resolved_type == "run_card_bundle":
@@ -644,13 +658,13 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
         if run_card_summary:
             return run_card_summary
 
-    markdown_summary = _summary_from_markdown(artifact)
-    if markdown_summary:
-        return markdown_summary
-
     json_summary = _summary_from_json(artifact)
     if json_summary:
         return json_summary
+
+    markdown_summary = _summary_from_markdown(artifact)
+    if markdown_summary:
+        return markdown_summary
 
     cleaned_filename = _summary_from_filename(artifact)
     if cleaned_filename:
@@ -682,7 +696,7 @@ def _artifact_marker_text(artifact: ReportArtifact, *, primary_only: bool = Fals
         parts.extend(part.lower() for part in path.parts)
         parts.append(path.stem.lower())
         if path.suffix.lower() == ".md":
-            h1 = _markdown_h1(path)
+            h1 = _load_markdown_title(path)
             if h1:
                 parts.append(h1.lower())
         elif path.suffix.lower() == ".json":
@@ -758,7 +772,7 @@ def _summary_from_markdown(artifact: ReportArtifact) -> str:
     for path in _artifact_source_paths(artifact):
         if path.suffix.lower() != ".md":
             continue
-        h1 = _markdown_h1(path)
+        h1 = _load_markdown_title(path)
         if h1:
             return h1
     return ""
@@ -794,6 +808,31 @@ def _summary_from_run_card_bundle(artifact: ReportArtifact) -> str:
                 if isinstance(first_warning, str) and not _summary_is_insufficient(first_warning):
                     return first_warning.strip()
     return ""
+
+
+def build_artifact_metadata(
+    artifact: ReportArtifact,
+    *,
+    detected_by: list[str],
+    warning_count: int,
+) -> dict[str, Any]:
+    source_path = _primary_source_path(artifact)
+    metadata = dict(artifact.metadata)
+    metadata.update(
+        {
+            "source_path": source_path,
+            "source_kind": _source_kind_for(artifact),
+            "detected_by": list(dict.fromkeys(detected_by)),
+            "file_count": len(_artifact_source_paths(artifact)),
+            "has_markdown": artifact.markdown_path is not None,
+            "has_json": artifact.json_path is not None,
+            "has_csv": bool(artifact.csv_paths),
+            "has_run_card": artifact.run_card_path is not None,
+            "has_evidence_bundle": artifact.evidence_dir is not None,
+            "warning_count": warning_count,
+        }
+    )
+    return _json_safe_value(metadata)
 
 
 def _summary_from_filename(artifact: ReportArtifact) -> str:
@@ -845,23 +884,34 @@ def _recommended_channels_for(report_type: str) -> list[str]:
     return ["local"]
 
 
-def _markdown_h1(path: Path) -> str:
+def _load_markdown_title(path: Path, *, max_lines: int = 8) -> str:
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open("r", encoding="utf-8") as handle:
+            for _ in range(max_lines):
+                line = handle.readline()
+                if not line:
+                    break
+                match = re.match(r"^\s*#\s+(.+?)\s*$", line)
+                if match is not None:
+                    return match.group(1).strip()
     except Exception:
         return ""
-    for line in text.splitlines():
-        match = re.match(r"^\s*#\s+(.+?)\s*$", line)
-        if match is not None:
-            return match.group(1).strip()
     return ""
 
 
-def _safe_json_load(path: Path) -> Any:
+def _load_json_preview(path: Path, warnings: list[str] | None = None) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        if warnings is not None:
+            warnings.append(f"invalid_json:{path}")
+        return None
     except Exception:
         return None
+
+
+def _safe_json_load(path: Path) -> Any:
+    return _load_json_preview(path)
 
 
 def _severity_tokens_from_text(text: str) -> list[str]:
@@ -896,6 +946,64 @@ def _iter_json_values(value: Any) -> list[Any]:
             items.extend(_iter_json_values(item))
         return items
     return [value]
+
+
+def _detected_by_for_artifact(artifact: ReportArtifact, *, report_type: str) -> list[str]:
+    detected_by: list[str] = []
+    if isinstance(artifact.metadata.get("bundle_dir"), str):
+        detected_by.append("bundle_dir")
+    if artifact.run_card_path is not None:
+        detected_by.append("run_card")
+    if artifact.markdown_path is not None:
+        detected_by.append("markdown")
+        if _load_markdown_title(Path(artifact.markdown_path)):
+            detected_by.append("markdown_h1")
+    if artifact.json_path is not None:
+        detected_by.append("json")
+        payload = _safe_json_load(Path(artifact.json_path))
+        if isinstance(payload, dict) and any(
+            isinstance(payload.get(key), str) and str(payload.get(key)).strip()
+            for key in ("summary", "title", "report_type", "type", "name")
+        ):
+            detected_by.append("json_preview")
+    if artifact.csv_paths:
+        detected_by.append("csv")
+    if report_type == "generic_report" and not detected_by:
+        detected_by.append("path")
+    return list(dict.fromkeys(detected_by))
+
+
+def _primary_source_path(artifact: ReportArtifact) -> str:
+    for path_value in [artifact.markdown_path, artifact.json_path, artifact.run_card_path, *artifact.csv_paths]:
+        if path_value:
+            return str(path_value)
+    bundle_dir_value = artifact.metadata.get("bundle_dir")
+    if isinstance(bundle_dir_value, str) and bundle_dir_value:
+        return bundle_dir_value
+    path_value = artifact.metadata.get("path")
+    return str(path_value) if path_value is not None else ""
+
+
+def _source_kind_for(artifact: ReportArtifact) -> str:
+    if artifact.run_card_path is not None or isinstance(artifact.metadata.get("bundle_dir"), str):
+        return "bundle"
+    return "file"
+
+
+def _json_safe_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, set):
+        return [_json_safe_value(item) for item in sorted(value, key=str)]
+    if isinstance(value, Path):
+        return str(value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
 
 
 def _clean_filename(value: str) -> str:

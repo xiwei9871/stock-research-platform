@@ -311,6 +311,82 @@ def test_collect_artifacts_classifies_merged_daily_topn_artifact(tmp_path):
     assert artifact.delivery_priority == 10
 
 
+def test_metadata_flags_track_available_file_types(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text(
+        "# Daily TopN\n",
+        encoding="utf-8",
+    )
+    (source_dir / "daily_topn_2026-05-20_manual_v1.json").write_text(
+        json.dumps({"summary": "TopN summary"}, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    (source_dir / "daily_topn_2026-05-20_manual_v1.csv").write_text(
+        "stock_code\n000001.SZ\n",
+        encoding="utf-8",
+    )
+
+    artifacts, _ = report_delivery.LocalDeliveryAdapter().collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    metadata = artifacts[0].metadata
+    assert metadata["source_kind"] == "file"
+    assert metadata["has_markdown"] is True
+    assert metadata["has_json"] is True
+    assert metadata["has_csv"] is True
+    assert metadata["has_run_card"] is False
+    assert metadata["has_evidence_bundle"] is False
+    assert metadata["warning_count"] == 0
+
+
+def test_summary_prefers_json_summary_when_present(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    (source_dir / "factor_eval_2026-05-20.json").write_text(
+        json.dumps({"summary": "Factor gate passed on medium horizon"}, ensure_ascii=True),
+        encoding="utf-8",
+    )
+    (source_dir / "factor_eval_2026-05-20.md").write_text(
+        "# Factor Eval Markdown Title\n",
+        encoding="utf-8",
+    )
+
+    artifacts, _ = report_delivery.LocalDeliveryAdapter().collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    assert artifacts[0].summary == "Factor gate passed on medium horizon"
+
+
+def test_corrupt_json_adds_warning_without_crashing(tmp_path):
+    source_dir = tmp_path / "reports"
+    source_dir.mkdir()
+    bad_json = source_dir / "risk_alert_2026-05-20.json"
+    bad_json.write_text("{bad json", encoding="utf-8")
+
+    artifacts, warnings = report_delivery.LocalDeliveryAdapter().collect_artifacts(
+        trade_date="2026-05-20",
+        input_dirs=[source_dir],
+        report_dirs=[],
+        run_card_dirs=[],
+        artifact_paths=[],
+    )
+
+    assert len(artifacts) == 1
+    assert artifacts[0].report_type == "risk_alert_report"
+    assert any("invalid_json:" in warning for warning in warnings)
+
+
 def test_collect_artifacts_uses_run_card_metrics_when_title_and_warnings_are_insufficient(tmp_path):
     output = run_card.write_run_card(
         output_dir=tmp_path / "run-cards",
