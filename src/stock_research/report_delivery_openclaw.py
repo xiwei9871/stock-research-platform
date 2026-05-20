@@ -48,11 +48,18 @@ class OpenClawExportResult:
     manifest_path: str
     item_count: int
     items: list[OpenClawExportItem]
+    source_manifest_path: str = ""
+    export_id: str = ""
     channel: str = "openclaw"
     status: str = "dry_run"
     trade_date: str = ""
     generated_at: str = ""
+    output_dir: str = ""
+    openclaw_manifest_path: str = ""
+    openclaw_items_path: str = ""
+    openclaw_delivery_log_path: str = ""
     warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     log_path: str | None = None
 
 
@@ -193,10 +200,17 @@ class OpenClawExportAdapter:
         include_all: bool = False,
         min_severity: str = "info",
         dry_run: bool = True,
+        output_dir: str | Path | None = None,
         log_path: str | Path | None = None,
     ) -> OpenClawExportResult:
         resolved_manifest_path = self._resolved_manifest_path(manifest_path)
         manifest = self.load_local_manifest(resolved_manifest_path)
+        resolved_output_dir = self._resolved_output_dir(
+            output_dir=output_dir,
+            manifest_path=resolved_manifest_path,
+            trade_date=str(manifest.get("trade_date", "")),
+            log_path=log_path,
+        )
         artifacts, warnings = self._select_openclaw_artifacts_with_warnings(
             manifest,
             include_all=include_all,
@@ -207,24 +221,62 @@ class OpenClawExportAdapter:
             self.build_openclaw_item(artifact, manifest_root=resolved_manifest_path.parent)
             for artifact in artifacts
         ]
+        if not items and not warnings:
+            warnings.append("empty_match_set:no_openclaw_artifacts_selected")
+
+        export_id = self._export_id_for(
+            trade_date=str(manifest.get("trade_date", "")),
+            generated_at=str(manifest.get("generated_at", "")),
+            item_count=len(items),
+        )
+        openclaw_manifest_path = resolved_output_dir / "openclaw_manifest.json"
+        openclaw_items_path = resolved_output_dir / "openclaw_items.jsonl"
+        openclaw_delivery_log_path = (
+            Path(log_path)
+            if log_path is not None
+            else resolved_output_dir / "openclaw_delivery_log.jsonl"
+        )
         result = OpenClawExportResult(
             manifest_path=str(resolved_manifest_path),
+            source_manifest_path=str(resolved_manifest_path),
+            export_id=export_id,
             item_count=len(items),
             items=items,
             status="dry_run" if dry_run else "completed",
             trade_date=str(manifest.get("trade_date", "")),
             generated_at=str(manifest.get("generated_at", "")),
+            output_dir=str(resolved_output_dir),
+            openclaw_manifest_path=str(openclaw_manifest_path),
+            openclaw_items_path=str(openclaw_items_path),
+            openclaw_delivery_log_path=str(openclaw_delivery_log_path),
             warnings=list(dict.fromkeys(warnings)),
-            log_path=str(log_path) if log_path is not None else None,
+            errors=[],
+            log_path=str(openclaw_delivery_log_path),
         )
-        if log_path is not None:
-            self.write_openclaw_log(log_path, result)
+        self.write_openclaw_package(
+            openclaw_manifest_path=openclaw_manifest_path,
+            openclaw_items_path=openclaw_items_path,
+            openclaw_delivery_log_path=openclaw_delivery_log_path,
+            result=result,
+            source_manifest_path=resolved_manifest_path,
+            dry_run=dry_run,
+        )
         return result
 
     def write_openclaw_log(self, log_path: str | Path, result: OpenClawExportResult) -> None:
         path = Path(log_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {
+            "export_id": result.export_id,
+            "generated_at": result.generated_at,
+            "channel": result.channel,
+            "status": result.status,
+            "trade_date": result.trade_date,
+            "item_count": result.item_count,
+            "openclaw_manifest_path": result.openclaw_manifest_path,
+            "openclaw_items_path": result.openclaw_items_path,
+            "openclaw_delivery_log_path": result.openclaw_delivery_log_path,
+            "error_message": "; ".join(dict.fromkeys(result.errors)) if result.errors else "",
             "manifest_path": result.manifest_path,
             "item_count": result.item_count,
             "items": [asdict(item) for item in result.items],
@@ -232,6 +284,57 @@ class OpenClawExportAdapter:
         }
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n")
+
+    def write_openclaw_package(
+        self,
+        *,
+        openclaw_manifest_path: Path,
+        openclaw_items_path: Path,
+        openclaw_delivery_log_path: Path,
+        result: OpenClawExportResult,
+        source_manifest_path: Path,
+        dry_run: bool,
+    ) -> None:
+        openclaw_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        openclaw_items_path.parent.mkdir(parents=True, exist_ok=True)
+        openclaw_delivery_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._write_openclaw_manifest(
+            openclaw_manifest_path,
+            result=result,
+            source_manifest_path=source_manifest_path,
+            dry_run=dry_run,
+        )
+        self._write_openclaw_items(openclaw_items_path, result.items)
+        self.write_openclaw_log(openclaw_delivery_log_path, result)
+
+    def _write_openclaw_manifest(
+        self,
+        path: Path,
+        *,
+        result: OpenClawExportResult,
+        source_manifest_path: Path,
+        dry_run: bool,
+    ) -> None:
+        manifest = {
+            "generated_at": result.generated_at,
+            "trade_date": result.trade_date,
+            "channel": result.channel,
+            "dry_run": dry_run,
+            "source_manifest_path": str(source_manifest_path),
+            "item_count": result.item_count,
+            "items": [asdict(item) for item in result.items],
+            "warnings": list(result.warnings),
+            "errors": list(result.errors),
+        }
+        path.write_text(
+            json.dumps(manifest, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    def _write_openclaw_items(self, path: Path, items: list[OpenClawExportItem]) -> None:
+        lines = [json.dumps(asdict(item), ensure_ascii=True, sort_keys=True) for item in items]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
     def _sanitize_artifact(
         self,
@@ -373,6 +476,24 @@ class OpenClawExportAdapter:
         if manifest_root is None:
             return Path.cwd()
         return Path(manifest_root).resolve()
+
+    def _resolved_output_dir(
+        self,
+        *,
+        output_dir: str | Path | None,
+        manifest_path: Path,
+        trade_date: str,
+        log_path: str | Path | None,
+    ) -> Path:
+        if output_dir is not None:
+            return Path(output_dir).resolve()
+        if log_path is not None:
+            return Path(log_path).resolve().parent
+        date_part = trade_date or "unknown-date"
+        return (manifest_path.parent / "openclaw" / date_part).resolve()
+
+    def _export_id_for(self, *, trade_date: str, generated_at: str, item_count: int) -> str:
+        return f"openclaw:{trade_date or 'unknown'}:{generated_at or 'unknown'}:{item_count}"
 
     def _resolve_manifest_path(self, value: Any, manifest_root: Path) -> Path:
         path = Path(value)

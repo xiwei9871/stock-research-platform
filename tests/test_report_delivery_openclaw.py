@@ -217,6 +217,119 @@ def test_missing_source_paths_are_skipped_with_warning(tmp_path: Path) -> None:
     assert any(warning.startswith("missing_source_path:") for warning in result.warnings)
 
 
+def test_openclaw_export_writes_manifest_items_and_log(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="daily_topn",
+                report_type="daily_topn_report",
+                title="Daily TopN",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    manifest_file = Path(result.openclaw_manifest_path)
+    items_file = Path(result.openclaw_items_path)
+    log_file = Path(result.openclaw_delivery_log_path)
+
+    assert result.status == "dry_run"
+    assert result.item_count == 1
+    assert manifest_file.exists()
+    assert items_file.exists()
+    assert log_file.exists()
+
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert manifest["channel"] == "openclaw"
+    assert manifest["dry_run"] is True
+    assert manifest["source_manifest_path"] == str(manifest_path)
+    assert manifest["item_count"] == 1
+    assert [item["artifact_id"] for item in manifest["items"]] == ["daily_topn"]
+
+    item_lines = items_file.read_text(encoding="utf-8").splitlines()
+    assert len(item_lines) == 1
+    assert json.loads(item_lines[0])["artifact_id"] == "daily_topn"
+
+    log_lines = log_file.read_text(encoding="utf-8").splitlines()
+    assert len(log_lines) == 1
+    log_record = json.loads(log_lines[0])
+    assert log_record["status"] == "dry_run"
+    assert log_record["channel"] == "openclaw"
+    assert log_record["item_count"] == 1
+    assert log_record["openclaw_manifest_path"] == str(manifest_file)
+    assert log_record["openclaw_items_path"] == str(items_file)
+
+
+def test_openclaw_export_dry_run_writes_dry_run_log_status(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="risk_alert",
+                report_type="risk_alert_report",
+                title="Risk Alert",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+                requires_attention=True,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path, dry_run=True)
+
+    log_record = json.loads(Path(result.openclaw_delivery_log_path).read_text(encoding="utf-8").splitlines()[0])
+
+    assert result.status == "dry_run"
+    assert log_record["status"] == "dry_run"
+
+
+def test_openclaw_export_empty_match_set_does_not_crash(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path,
+        [
+            _artifact(
+                tmp_path,
+                artifact_id="broken_report",
+                report_type="generic_report",
+                title="Broken",
+                recommended_channels=["local", "openclaw"],
+                markdown_exists=False,
+                json_exists=False,
+                csv_exists=False,
+                run_card_exists=False,
+                evidence_exists=False,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    manifest_file = Path(result.openclaw_manifest_path)
+    items_file = Path(result.openclaw_items_path)
+    log_file = Path(result.openclaw_delivery_log_path)
+
+    assert result.item_count == 0
+    assert result.warnings
+    assert manifest_file.exists()
+    assert items_file.exists()
+    assert log_file.exists()
+
+    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert manifest["item_count"] == 0
+    assert manifest["items"] == []
+    assert any(warning.startswith("missing_source_path:") for warning in manifest["warnings"])
+    assert items_file.read_text(encoding="utf-8") == ""
+
+
 @pytest.mark.parametrize(
     ("report_type", "expected_action", "expected_route"),
     [
