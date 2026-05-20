@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ SEVERITY_ORDER = {
     "info": 0,
     "unknown": 0,
 }
+DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 @dataclass(frozen=True)
@@ -490,7 +492,12 @@ class OpenClawExportAdapter:
         if log_path is not None:
             return Path(log_path).resolve().parent
         date_part = trade_date or "unknown-date"
-        return (manifest_path.parent / "openclaw" / date_part).resolve()
+        base_dir = (
+            manifest_path.parent.parent
+            if DATE_DIR_RE.fullmatch(manifest_path.parent.name)
+            else manifest_path.parent
+        )
+        return (base_dir / "openclaw" / date_part).resolve()
 
     def _export_id_for(self, *, trade_date: str, generated_at: str, item_count: int) -> str:
         return f"openclaw:{trade_date or 'unknown'}:{generated_at or 'unknown'}:{item_count}"

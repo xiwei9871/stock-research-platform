@@ -330,6 +330,39 @@ def test_openclaw_export_empty_match_set_does_not_crash(tmp_path: Path) -> None:
     assert items_file.read_text(encoding="utf-8") == ""
 
 
+def test_openclaw_export_defaults_to_openclaw_output_root_sibling_of_trade_date_dir(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "outputs" / "report_delivery"
+    trade_date_dir = output_root / "2026-05-20"
+    trade_date_dir.mkdir(parents=True)
+    manifest_path = _write_manifest(
+        trade_date_dir,
+        [
+            _artifact(
+                trade_date_dir,
+                artifact_id="daily_topn",
+                report_type="daily_topn_report",
+                title="Daily TopN",
+                recommended_channels=["local", "openclaw"],
+                json_exists=True,
+            ),
+        ],
+    )
+
+    adapter = report_delivery_openclaw.OpenClawExportAdapter()
+    result = adapter.export(manifest_path)
+
+    expected_output_dir = output_root / "openclaw" / "2026-05-20"
+    assert result.output_dir == str(expected_output_dir.resolve())
+    assert Path(result.openclaw_manifest_path) == expected_output_dir / "openclaw_manifest.json"
+    assert Path(result.openclaw_items_path) == expected_output_dir / "openclaw_items.jsonl"
+    assert (
+        Path(result.openclaw_delivery_log_path)
+        == expected_output_dir / "openclaw_delivery_log.jsonl"
+    )
+
+
 @pytest.mark.parametrize(
     ("report_type", "expected_action", "expected_route"),
     [
