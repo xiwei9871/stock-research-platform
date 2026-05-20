@@ -600,6 +600,16 @@ def detect_severity(artifact: ReportArtifact, *, report_type: str | None = None)
 def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None) -> str:
     resolved_type = report_type or detect_report_type(artifact)
 
+    if resolved_type == "daily_topn_report":
+        daily_topn_summary = _summary_for_daily_topn(artifact)
+        if daily_topn_summary:
+            return daily_topn_summary
+
+    if resolved_type == "run_card_bundle":
+        run_card_summary = _summary_from_run_card_bundle(artifact)
+        if run_card_summary:
+            return run_card_summary
+
     markdown_summary = _summary_from_markdown(artifact)
     if markdown_summary:
         return markdown_summary
@@ -607,11 +617,6 @@ def extract_summary(artifact: ReportArtifact, *, report_type: str | None = None)
     json_summary = _summary_from_json(artifact)
     if json_summary:
         return json_summary
-
-    if resolved_type == "run_card_bundle":
-        run_card_summary = _summary_from_run_card_bundle(artifact)
-        if run_card_summary:
-            return run_card_summary
 
     cleaned_filename = _summary_from_filename(artifact)
     if cleaned_filename:
@@ -705,14 +710,27 @@ def _summary_from_run_card_bundle(artifact: ReportArtifact) -> str:
         payload = _safe_json_load(Path(artifact.run_card_path))
         if isinstance(payload, dict):
             title = payload.get("title")
-            if isinstance(title, str) and title.strip():
+            if isinstance(title, str) and not _summary_is_insufficient(title):
                 return title.strip()
+            metrics = payload.get("metrics")
+            metrics_summary = _summary_from_metrics(metrics)
+            if metrics_summary:
+                return metrics_summary
             warnings = payload.get("warnings")
             if isinstance(warnings, list) and warnings:
                 first_warning = warnings[0]
-                if isinstance(first_warning, str) and first_warning.strip():
+                if isinstance(first_warning, str) and not _summary_is_insufficient(first_warning):
                     return first_warning.strip()
     return ""
+
+
+def _summary_for_daily_topn(artifact: ReportArtifact) -> str:
+    markdown_summary = _summary_from_markdown(artifact)
+    if markdown_summary:
+        if markdown_summary.lower() in {"topn", "daily topn"}:
+            return "Daily TopN"
+        return markdown_summary
+    return _summary_from_filename(artifact) or "Daily TopN"
 
 
 def _summary_from_filename(artifact: ReportArtifact) -> str:
@@ -721,6 +739,39 @@ def _summary_from_filename(artifact: ReportArtifact) -> str:
         if candidate:
             return candidate
     return ""
+
+
+def _summary_from_metrics(metrics: Any) -> str:
+    if not isinstance(metrics, dict) or not metrics:
+        return ""
+
+    parts: list[str] = []
+    for key in sorted(metrics):
+        value = metrics.get(key)
+        rendered = _render_metric_value(value)
+        if rendered is None:
+            continue
+        parts.append(f"{key}={rendered}")
+        if len(parts) >= 2:
+            break
+    return ", ".join(parts)
+
+
+def _render_metric_value(value: Any) -> str | None:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _summary_is_insufficient(value: str) -> bool:
+    normalized = value.strip().lower()
+    return normalized in {"", "run card", "run_card", "topn"}
 
 
 def _recommended_channels_for(report_type: str) -> list[str]:
