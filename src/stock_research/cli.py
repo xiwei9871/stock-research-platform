@@ -149,6 +149,7 @@ from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
+from stock_research.report_delivery import deliver_local_reports
 from stock_research.research_preflight import (
     check_factor_label_coverage,
     check_industry_membership_coverage,
@@ -834,6 +835,15 @@ def build_parser() -> argparse.ArgumentParser:
     report = subparsers.add_parser("report")
     report.add_argument("--trade-date", required=True)
     report.add_argument("--log-path", required=True)
+
+    report_delivery_local = subparsers.add_parser("report-delivery-local")
+    report_delivery_local.add_argument("--trade-date", required=True)
+    report_delivery_local.add_argument("--input-dir", action="append", default=[])
+    report_delivery_local.add_argument("--report-dir", action="append", default=[])
+    report_delivery_local.add_argument("--run-card-dir", action="append", default=[])
+    report_delivery_local.add_argument("--artifact-path", action="append", default=[])
+    report_delivery_local.add_argument("--output-dir", required=True)
+    report_delivery_local.add_argument("--dry-run", action="store_true", default=True)
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
@@ -3156,6 +3166,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 args.log_path,
             )
         )
+    elif args.command == "report-delivery-local":
+        result = deliver_local_reports(
+            trade_date=args.trade_date,
+            input_dirs=args.input_dir,
+            report_dirs=args.report_dir,
+            run_card_dirs=args.run_card_dir,
+            artifact_paths=args.artifact_path,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+        )
+        print(f"report_delivery|status|{result.status}")
+        print(f"report_delivery|artifacts|{result.artifact_count}")
+        print(f"report_delivery|manifest|{result.manifest_path}")
+        print(f"report_delivery|output_dir|{result.output_dir}")
+        if result.delivery_log_path is not None:
+            print(f"report_delivery|delivery_log|{result.delivery_log_path}")
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,

@@ -1,7 +1,9 @@
 import importlib
+from types import SimpleNamespace
 
 import pytest
 
+import stock_research.cli as cli
 from stock_research.cli import build_parser
 import stock_research.technical_feature_store as technical_feature_store
 
@@ -71,6 +73,37 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.skip_complete is True
     assert args.progress_interval == 10
     assert args.exact_window is True
+
+
+def test_cli_accepts_report_delivery_local_command():
+    args = build_parser().parse_args(
+        [
+            "report-delivery-local",
+            "--trade-date",
+            "2026-05-19",
+            "--input-dir",
+            "inputs/a",
+            "--input-dir",
+            "inputs/b",
+            "--report-dir",
+            "reports/a",
+            "--run-card-dir",
+            "run_cards/a",
+            "--artifact-path",
+            "artifacts/a.json",
+            "--output-dir",
+            "outputs/delivery",
+        ]
+    )
+
+    assert args.command == "report-delivery-local"
+    assert args.trade_date == "2026-05-19"
+    assert args.input_dir == ["inputs/a", "inputs/b"]
+    assert args.report_dir == ["reports/a"]
+    assert args.run_card_dir == ["run_cards/a"]
+    assert args.artifact_path == ["artifacts/a.json"]
+    assert args.output_dir == "outputs/delivery"
+    assert args.dry_run is True
 
 
 def test_cli_accepts_backfill_technical_features_daily_command():
@@ -846,6 +879,59 @@ def test_build_factor_daily_cli_prints_count(monkeypatch, capsys):
     cli.main()
 
     assert capsys.readouterr().out.strip() == "factor_daily_stored|42"
+
+
+def test_report_delivery_local_cli_prints_manifest_summary(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_deliver_local_reports(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="dry_run",
+            artifact_count=3,
+            manifest_path="outputs/delivery/manifest.json",
+            output_dir="outputs/delivery",
+            delivery_log_path="outputs/delivery/delivery_log.jsonl",
+        )
+
+    monkeypatch.setattr(cli, "deliver_local_reports", fake_deliver_local_reports)
+
+    cli.main_for_args(
+        [
+            "report-delivery-local",
+            "--trade-date",
+            "2026-05-19",
+            "--input-dir",
+            "inputs/a",
+            "--report-dir",
+            "reports/a",
+            "--run-card-dir",
+            "run_cards/a",
+            "--artifact-path",
+            "artifacts/a.json",
+            "--output-dir",
+            "outputs/delivery",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-19",
+            "input_dirs": ["inputs/a"],
+            "report_dirs": ["reports/a"],
+            "run_card_dirs": ["run_cards/a"],
+            "artifact_paths": ["artifacts/a.json"],
+            "output_dir": "outputs/delivery",
+            "dry_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery|status|dry_run",
+        "report_delivery|artifacts|3",
+        "report_delivery|manifest|outputs/delivery/manifest.json",
+        "report_delivery|output_dir|outputs/delivery",
+        "report_delivery|delivery_log|outputs/delivery/delivery_log.jsonl",
+    ]
 
 
 def test_backfill_factor_daily_cli_prints_summary(monkeypatch, capsys):
