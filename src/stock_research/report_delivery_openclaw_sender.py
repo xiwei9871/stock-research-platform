@@ -130,6 +130,7 @@ class HttpOpenClawTransport:
             headers["Authorization"] = f"Bearer {config.token}"
 
         request = Request(config.endpoint, data=body, headers=headers, method="POST")
+        response = None
         try:
             response = urlopen(request, timeout=float(config.timeout_seconds))
         except URLError as exc:
@@ -141,18 +142,41 @@ class HttpOpenClawTransport:
                 f"OpenClaw HTTP send failed for {config.endpoint} after {config.timeout_seconds}s: {exc}"
             ) from exc
 
-        response_status = getattr(response, "status", getattr(response, "code", None))
-        if hasattr(response, "close"):
-            response.close()
+        try:
+            response_status = getattr(response, "status", getattr(response, "code", None))
+        finally:
+            if hasattr(response, "close"):
+                response.close()
 
         if isinstance(response_status, int) and response_status >= 400:
             raise RuntimeError(
                 f"OpenClaw HTTP send failed for {config.endpoint}: HTTP {response_status}"
             )
+        if isinstance(response_status, int) and 200 <= response_status < 300:
+            item_results = [
+                {
+                    "item_id": str(item.get("item_id", "")),
+                    "status": "sent",
+                }
+                for item in payload.get("items", [])
+                if isinstance(item, dict)
+            ]
+            return {
+                "status": "sent",
+                "dry_run": False,
+                "sent_count": len(item_results),
+                "failed_count": 0,
+                "skipped_count": 0,
+                "warnings": [],
+                "errors": [],
+                "item_results": item_results,
+                "http_status": response_status,
+            }
+
         response_status_text = str(response_status) if response_status is not None else "unknown"
         raise RuntimeError(
-            "OpenClaw HTTP transport is incomplete: "
-            f"received HTTP {response_status_text} from {config.endpoint} but no acceptance contract is implemented"
+            "OpenClaw HTTP transport received an unexpected response from "
+            f"{config.endpoint}: HTTP {response_status_text}"
         )
 
 
@@ -166,6 +190,7 @@ class OpenClawSender:
 
         manifest = self._read_json_file(resolved_manifest_path)
         items = self._read_items_file(resolved_items_path)
+        self._validate_export_bundle(manifest, items, resolved_manifest_path, resolved_items_path)
 
         return {
             "manifest_path": str(resolved_manifest_path),
@@ -193,6 +218,65 @@ class OpenClawSender:
                 f"OpenClaw sender manifest must contain a JSON object: {path}"
             )
         return payload
+
+    def _validate_export_bundle(
+        self,
+        manifest: dict[str, Any],
+        items: list[dict[str, Any]],
+        manifest_path: Path,
+        items_path: Path,
+    ) -> None:
+        manifest_items = manifest.get("items")
+        if not isinstance(manifest_items, list):
+            raise OpenClawSendInputError(
+                f"OpenClaw sender manifest items must be a JSON array: {manifest_path}"
+            )
+
+        manifest_item_count = manifest.get("item_count")
+        if not isinstance(manifest_item_count, int):
+            raise OpenClawSendInputError(
+                f"OpenClaw sender manifest item_count must be an integer: {manifest_path}"
+            )
+
+        if manifest_item_count != len(items):
+            raise OpenClawSendInputError(
+                "OpenClaw sender export bundle mismatch: "
+                f"manifest item_count={manifest_item_count}, "
+                f"items jsonl entries={len(items)} "
+                f"for {manifest_path} and {items_path}"
+            )
+
+        if not manifest_items:
+            return
+
+        if manifest_item_count != len(manifest_items):
+            raise OpenClawSendInputError(
+                "OpenClaw sender export bundle mismatch: "
+                f"manifest item_count={manifest_item_count}, "
+                f"manifest items={len(manifest_items)} "
+                f"for {manifest_path} and {items_path}"
+            )
+
+        for index, (manifest_item, item) in enumerate(zip(manifest_items, items), start=1):
+            if not isinstance(manifest_item, dict):
+                raise OpenClawSendInputError(
+                    "OpenClaw sender export bundle mismatch: "
+                    f"manifest item at index {index} is not a JSON object: {manifest_path}"
+                )
+
+            mismatches: list[str] = []
+            for field_name in ("item_id", "artifact_id", "report_type", "openclaw_route", "severity"):
+                manifest_value = str(manifest_item.get(field_name, ""))
+                item_value = str(item.get(field_name, ""))
+                if manifest_value != item_value:
+                    mismatches.append(
+                        f"{field_name} manifest={manifest_value!r} items={item_value!r}"
+                    )
+            if mismatches:
+                raise OpenClawSendInputError(
+                    "OpenClaw sender export bundle mismatch at index "
+                    f"{index}: " + "; ".join(mismatches)
+                )
 
     def _read_items_file(self, path: Path) -> list[dict[str, Any]]:
         try:

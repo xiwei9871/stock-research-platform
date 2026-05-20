@@ -224,6 +224,182 @@ def _write_export_with_multiple_deliverable_items(tmp_path: Path) -> tuple[Path,
     return manifest_path, items_path
 
 
+def _write_mismatched_export_bundle(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 2,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "openclaw_route": "research_validation",
+                        "severity": "high",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:3",
+                        "artifact_id": "risk_alert_report:2026-05-20:ghi",
+                        "report_type": "risk_alert_report",
+                        "title": "Risk Alert",
+                        "summary": "Risk alert summary",
+                        "severity": "critical",
+                        "requires_attention": True,
+                        "delivery_priority": 30,
+                        "tags": ["risk", "alert"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/risk.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_risk_alert",
+                        "openclaw_route": "research_alert",
+                        "payload": {"title": "Risk Alert"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_count_mismatched_export_bundle(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 1,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "openclaw_route": "research_validation",
+                        "severity": "high",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "title": "Factor Eval",
+                        "summary": "Factor eval summary",
+                        "severity": "high",
+                        "requires_attention": False,
+                        "delivery_priority": 20,
+                        "tags": ["factor", "eval"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/factor.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_factor_eval",
+                        "openclaw_route": "research_validation",
+                        "payload": {"title": "Factor Eval"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
 def _write_export_with_unknown_severity_item(tmp_path: Path) -> tuple[Path, Path]:
     manifest_path = tmp_path / "openclaw_manifest.json"
     items_path = tmp_path / "openclaw_items.jsonl"
@@ -777,7 +953,7 @@ def test_dry_run_transport_never_accesses_network(monkeypatch: pytest.MonkeyPatc
     assert result["status"] == "dry_run"
 
 
-def test_http_transport_builds_request_and_rejects_fake_success(
+def test_http_transport_builds_request_and_accepts_http_2xx(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -814,24 +990,23 @@ def test_http_transport_builds_request_and_rejects_fake_success(
         test_mode=True,
     )
 
-    with pytest.raises(RuntimeError, match="incomplete: received HTTP 202"):
-        transport.send(
-            {
-                "items": [
-                    {
-                        "item_id": "openclaw:1",
-                        "artifact_id": "daily_topn_report:2026-05-20:abc",
-                        "report_type": "daily_topn_report",
-                        "openclaw_route": "daily_research",
-                        "payload": {
-                            "title": "Daily TopN",
-                            "openclaw_transport_result": "failure",
-                        },
-                    }
-                ]
-            },
-            config,
-        )
+    result = transport.send(
+        {
+            "items": [
+                {
+                    "item_id": "openclaw:1",
+                    "artifact_id": "daily_topn_report:2026-05-20:abc",
+                    "report_type": "daily_topn_report",
+                    "openclaw_route": "daily_research",
+                    "payload": {
+                        "title": "Daily TopN",
+                        "openclaw_transport_result": "failure",
+                    },
+                }
+            ]
+        },
+        config,
+    )
 
     assert captured["url"] == "https://openclaw.example.test/send"
     assert captured["method"] == "POST"
@@ -841,6 +1016,38 @@ def test_http_transport_builds_request_and_rejects_fake_success(
     body = json.loads(bytes(captured["data"]).decode("utf-8"))
     assert body["items"][0]["item_id"] == "openclaw:1"
     assert captured["closed"] is True
+    assert result["status"] == "sent"
+    assert result["dry_run"] is False
+    assert result["sent_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["skipped_count"] == 0
+    assert result["item_results"] == [{"item_id": "openclaw:1", "status": "sent"}]
+
+
+def test_openclaw_sender_load_export_rejects_mismatched_bundle(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    manifest_path, items_path = _write_mismatched_export_bundle(tmp_path)
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="export bundle mismatch",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+
+def test_openclaw_sender_load_export_rejects_item_count_mismatch(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    manifest_path, items_path = _write_count_mismatched_export_bundle(tmp_path)
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match=r"manifest item_count=1, items jsonl entries=2",
+    ):
+        sender.load_export(manifest_path, items_path)
 
 
 def test_openclaw_sender_load_export_rejects_missing_or_malformed_inputs(
