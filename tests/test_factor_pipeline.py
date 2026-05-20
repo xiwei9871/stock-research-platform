@@ -353,6 +353,96 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     ]
 
 
+def test_load_point_in_time_fundamentals_snapshot_uses_only_trade_date_assets(monkeypatch):
+    calls = []
+
+    class _Conn:
+        pass
+
+    def fake_indicator(conn, asset_id, trade_date):
+        calls.append(asset_id)
+        return {"roe": 0.1}
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_indicator",
+        fake_indicator,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_income_statement",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_balance_sheet",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_cash_flow",
+        lambda *args, **kwargs: None,
+    )
+
+    bars = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-07", "asset_id": "STALE", "close": 9.0},
+            {"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0},
+            {"trade_date": "2026-05-08", "asset_id": "B", "close": 20.0},
+        ]
+    )
+
+    snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(bars, "2026-05-08")
+
+    assert list(snapshot["asset_id"]) == ["A", "B"]
+    assert "STALE" not in calls
+
+
+def test_load_point_in_time_fundamentals_snapshot_coalesces_none_to_fallback_sources(monkeypatch):
+    class _Conn:
+        pass
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_indicator",
+        lambda conn, asset_id, trade_date: {
+            "roe": 0.15,
+            "ocf_to_np": None,
+            "total_share": None,
+            "float_share": None,
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_income_statement",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_balance_sheet",
+        lambda conn, asset_id, trade_date: {
+            "total_equity": 500.0,
+            "total_share": 100.0,
+            "float_share": 80.0,
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_cash_flow",
+        lambda conn, asset_id, trade_date: {"ocf_to_np": 1.2},
+    )
+
+    bars = pd.DataFrame([{"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0}])
+
+    snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(bars, "2026-05-08")
+
+    assert snapshot.iloc[0]["ocf_to_np"] == pytest.approx(1.2)
+    assert snapshot.iloc[0]["total_share"] == pytest.approx(100.0)
+    assert snapshot.iloc[0]["float_share"] == pytest.approx(80.0)
+
+
 def test_build_quality_and_value_factor_rows_drop_missing_values():
     snapshot = pd.DataFrame(
         [
@@ -441,6 +531,32 @@ def test_build_value_factor_rows_drop_missing_values_without_share_inputs():
 
     assert value_rows.empty
     assert list(value_rows.columns) == factor_pipeline.FACTOR_DAILY_COLUMNS
+
+
+def test_build_value_factor_rows_drops_negative_value_ratios():
+    snapshot = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "close": 10.0,
+                "np_parent_ttm": -100.0,
+                "revenue_ttm": 1000.0,
+                "equity_parent": 500.0,
+                "total_share": 100.0,
+                "float_share": 80.0,
+            }
+        ]
+    )
+
+    value_rows = factor_pipeline.build_value_factor_rows(
+        snapshot,
+        trade_date="2026-05-08",
+        calc_version="v1",
+        source_data_version="pit_finance_v1",
+    )
+
+    assert "pe_ttm" not in set(value_rows["factor_name"])
+    assert set(value_rows["factor_name"]) == {"ps_ttm", "pb"}
 
 
 def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):

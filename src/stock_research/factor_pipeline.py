@@ -459,6 +459,13 @@ def _safe_ge(left: float, right: float) -> bool | float:
     return float(left) >= float(right)
 
 
+def _coalesce(*values: Any) -> Any:
+    for value in values:
+        if value is not None and not pd.isna(value):
+            return value
+    return None
+
+
 def load_point_in_time_fundamentals_snapshot(
     bars: pd.DataFrame,
     trade_date: str,
@@ -482,8 +489,15 @@ def load_point_in_time_fundamentals_snapshot(
     if bars.empty:
         return pd.DataFrame(columns=columns)
 
+    normalized_trade_date = str(trade_date)[:10]
+    current_day_bars = bars[
+        bars["trade_date"].astype(str).str[:10] == normalized_trade_date
+    ].copy()
+    if current_day_bars.empty:
+        return pd.DataFrame(columns=columns)
+
     universe = (
-        bars[["asset_id", "close"]]
+        current_day_bars[["asset_id", "close"]]
         .drop_duplicates(subset=["asset_id"], keep="last")
         .reset_index(drop=True)
         .copy()
@@ -508,12 +522,27 @@ def load_point_in_time_fundamentals_snapshot(
                     "gross_margin": indicator.get("gross_margin"),
                     "net_margin": indicator.get("net_margin"),
                     "debt_ratio": indicator.get("debt_ratio"),
-                    "ocf_to_np": indicator.get("ocf_to_np", cash_flow.get("ocf_to_np")),
-                    "np_parent_ttm": income_statement.get("np_parent_ttm", income_statement.get("np_parent")),
-                    "revenue_ttm": income_statement.get("revenue_ttm", income_statement.get("revenue")),
-                    "equity_parent": balance_sheet.get("equity_parent", balance_sheet.get("total_equity")),
-                    "total_share": indicator.get("total_share", balance_sheet.get("total_share")),
-                    "float_share": indicator.get("float_share", balance_sheet.get("float_share")),
+                    "ocf_to_np": _coalesce(indicator.get("ocf_to_np"), cash_flow.get("ocf_to_np")),
+                    "np_parent_ttm": _coalesce(
+                        income_statement.get("np_parent_ttm"),
+                        income_statement.get("np_parent"),
+                    ),
+                    "revenue_ttm": _coalesce(
+                        income_statement.get("revenue_ttm"),
+                        income_statement.get("revenue"),
+                    ),
+                    "equity_parent": _coalesce(
+                        balance_sheet.get("equity_parent"),
+                        balance_sheet.get("total_equity"),
+                    ),
+                    "total_share": _coalesce(
+                        indicator.get("total_share"),
+                        balance_sheet.get("total_share"),
+                    ),
+                    "float_share": _coalesce(
+                        indicator.get("float_share"),
+                        balance_sheet.get("float_share"),
+                    ),
                 }
             )
     return pd.DataFrame(snapshot_rows, columns=columns)
@@ -599,6 +628,9 @@ def build_value_factor_rows(
     shares["total_share"] = pd.to_numeric(shares["total_share"], errors="coerce")
     shares["float_share"] = pd.to_numeric(shares["float_share"], errors="coerce")
     factors = value.compute_value_factors(prices, finance, shares)
+    for column in ["pe_ttm", "ps_ttm", "pb"]:
+        if column in factors.columns:
+            factors.loc[pd.to_numeric(factors[column], errors="coerce") <= 0, column] = np.nan
     return _melt_factor_frame(
         factors,
         trade_date=trade_date,
