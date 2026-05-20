@@ -629,6 +629,7 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     source_dir = tmp_path / "reports"
     source_dir.mkdir()
     (source_dir / "daily_topn_2026-05-20_manual_v1.md").write_text("# topn\n", encoding="utf-8")
+    (source_dir / "risk_alert_2026-05-20_core.md").write_text("# Risk Alert\nHigh exposure\n", encoding="utf-8")
 
     result = report_delivery.deliver_local_reports(
         trade_date="2026-05-20",
@@ -646,10 +647,13 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     assert result.status == "dry_run"
     assert manifest["channel"] == "local"
     assert manifest["trade_date"] == "2026-05-20"
-    assert manifest["artifact_count"] == 1
+    assert manifest["artifact_count"] == 2
     assert manifest["warnings"] == []
     assert manifest["errors"] == []
-    assert len(manifest["artifacts"]) == 1
+    assert manifest["report_types"] == ["daily_topn_report", "risk_alert_report"]
+    assert manifest["requires_attention_count"] == 1
+    assert manifest["high_severity_count"] == 1
+    assert len(manifest["artifacts"]) == 2
     assert artifact["report_type"] == "daily_topn_report"
     assert artifact["severity"] == "info"
     assert artifact["summary"] == "topn"
@@ -657,6 +661,10 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     assert artifact["recommended_channels"] == ["local", "openclaw"]
     assert artifact["requires_attention"] is False
     assert artifact["delivery_priority"] == 10
+
+    risk_artifact = next(item for item in manifest["artifacts"] if item["report_type"] == "risk_alert_report")
+    assert risk_artifact["severity"] == "high"
+    assert risk_artifact["requires_attention"] is True
 
 
 def test_deliver_local_dry_run_does_not_write_delivery_log(tmp_path):

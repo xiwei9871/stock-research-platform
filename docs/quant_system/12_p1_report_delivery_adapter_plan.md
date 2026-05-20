@@ -456,3 +456,15 @@ P1-1 明确禁止：
 - `manifest.json` 当前包含：`generated_at`、`trade_date`、`channel`、`artifact_count`、`artifacts`、`warnings`、`errors`。其中 `artifacts` 记录 `artifact_id`、`report_type`、`title`、`trade_date`、`generated_at`、`markdown_path`、`json_path`、`csv_paths`、`run_card_path`、`evidence_dir`、`warnings`、`severity`、`summary`、`metadata`。
 - `delivery_log.jsonl` 当前每条记录包含：`delivery_id`、`generated_at`、`channel`、`status`、`trade_date`、`artifact_count`、`manifest_path`、`error_message`。
 - CLI 示例：`.venv/bin/stock-research report-delivery-local --trade-date 2026-05-20 --input-dir outputs/reports/daily --output-dir outputs/report_delivery/2026-05-20 --no-dry-run`
+
+## Artifact Classification
+
+当前 local adapter 的分类规则保持单一来源，后续 OpenClaw / Feishu adapter 直接复用这些字段即可，不再重复推断。
+
+- `report_type` 支持：`run_card_bundle`、`risk_alert_report`、`must_watch_report`、`watchlist_signal_report`、`watchlist_report`、`factor_eval_report`、`daily_topn_report`、`daily_market_report`、`backtest_report`、`generic_report`
+- `severity` 规则：非 `risk_alert_report` 默认 `info`；`risk_alert_report` 从 markdown / JSON 中提取 `critical`、`high`、`medium`、`low`、`info`，取最高级别
+- `summary` 提取规则：优先 JSON 摘要，其次 markdown 摘要，再回退到文件名；`daily_topn_report` 和 `run_card_bundle` 允许更专门的摘要逻辑
+- `recommended_channels` 规则：`run_card_bundle` 和 `daily_topn_report` 为 `["local", "openclaw"]`，其余当前默认 `["local"]`
+- `requires_attention` 规则：若 artifact 原本标记为 `requires_attention`，或 `severity` 为 `high` / `critical`，则为真
+- `delivery_priority` 映射：当前实现以较小数字表示更高优先级；默认值 `10`，后续可按渠道和报告类型细化
+- 与未来 adapter 的关系：OpenClaw / Feishu 只负责把已分类的 `ReportArtifact` 映射成各自 payload；它们不应重新定义 severity 或 attention 语义，只消费 manifest 中的结果字段

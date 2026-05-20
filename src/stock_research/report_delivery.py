@@ -1038,11 +1038,17 @@ def build_manifest(
     errors: list[str],
     generated_at: str,
 ) -> dict[str, Any]:
+    report_types = sorted({artifact.report_type for artifact in artifacts})
+    requires_attention_count = sum(1 for artifact in artifacts if artifact.requires_attention)
+    high_severity_count = sum(1 for artifact in artifacts if artifact.severity in {"high", "critical"})
     return {
         "generated_at": generated_at,
         "trade_date": trade_date,
         "channel": "local",
         "artifact_count": len(artifacts),
+        "report_types": report_types,
+        "requires_attention_count": requires_attention_count,
+        "high_severity_count": high_severity_count,
         "artifacts": [asdict(artifact) for artifact in artifacts],
         "warnings": list(dict.fromkeys(warnings)),
         "errors": list(dict.fromkeys(errors)),
