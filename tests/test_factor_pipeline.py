@@ -281,7 +281,7 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     def fake_balance(conn, asset_id, trade_date):
         calls.append(("balance", asset_id, trade_date))
         if asset_id == "A":
-            return {"total_equity": 500.0}
+            return {"total_equity": 500.0, "total_share": 100.0, "float_share": 80.0}
         return None
 
     def fake_cash_flow(conn, asset_id, trade_date):
@@ -337,6 +337,8 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
         "np_parent_ttm": 100.0,
         "revenue_ttm": 1000.0,
         "equity_parent": 500.0,
+        "total_share": 100.0,
+        "float_share": 80.0,
     }
     assert snapshot.iloc[1].drop(labels=["asset_id", "close"]).isna().all()
     assert calls == [
@@ -366,6 +368,8 @@ def test_build_quality_and_value_factor_rows_drop_missing_values():
                 "np_parent_ttm": 100.0,
                 "revenue_ttm": 1000.0,
                 "equity_parent": 500.0,
+                "total_share": 100.0,
+                "float_share": 80.0,
             },
             {
                 "asset_id": "B",
@@ -379,6 +383,8 @@ def test_build_quality_and_value_factor_rows_drop_missing_values():
                 "np_parent_ttm": None,
                 "revenue_ttm": None,
                 "equity_parent": None,
+                "total_share": None,
+                "float_share": None,
             },
         ]
     )
@@ -411,6 +417,30 @@ def test_build_quality_and_value_factor_rows_drop_missing_values():
     assert set(value_rows["source_data_version"]) == {"pit_finance_v1"}
     assert not quality_rows["factor_value"].isna().any()
     assert not value_rows["factor_value"].isna().any()
+
+
+def test_build_value_factor_rows_drop_missing_values_without_share_inputs():
+    snapshot = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "close": 10.0,
+                "np_parent_ttm": 100.0,
+                "revenue_ttm": 1000.0,
+                "equity_parent": 500.0,
+            }
+        ]
+    )
+
+    value_rows = factor_pipeline.build_value_factor_rows(
+        snapshot,
+        trade_date="2026-05-08",
+        calc_version="v1",
+        source_data_version="pit_finance_v1",
+    )
+
+    assert value_rows.empty
+    assert list(value_rows.columns) == factor_pipeline.FACTOR_DAILY_COLUMNS
 
 
 def test_build_and_store_factor_daily_loads_computes_and_upserts(monkeypatch):
@@ -516,6 +546,8 @@ def test_build_and_store_factor_daily_appends_quality_and_value_rows(monkeypatch
                     "np_parent_ttm": 100.0,
                     "revenue_ttm": 1000.0,
                     "equity_parent": 500.0,
+                    "total_share": 100.0,
+                    "float_share": 80.0,
                 }
             ]
         ),
@@ -626,6 +658,85 @@ def test_build_and_store_factor_daily_rejects_unknown_registry_factor(monkeypatc
             "2026-03-11",
             lookback_bars=130,
         )
+
+
+def test_build_and_store_factor_daily_rejects_emitted_fundamental_group_mismatch(monkeypatch):
+    calls = []
+    dates = pd.date_range("2026-01-01", periods=70, freq="D")
+    bars = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "asset_id": ["A"] * 70,
+            "open": range(1, 71),
+            "high": range(2, 72),
+            "low": range(1, 71),
+            "close": range(1, 71),
+            "preclose": [None] + list(range(1, 70)),
+            "volume": [1000.0 + index for index in range(70)],
+            "amount": [1000000.0 + index * 1000 for index in range(70)],
+            "turnover_rate": [1.0 + index / 100 for index in range(70)],
+            "trade_status": ["1"] * 70,
+            "is_st": [False] * 70,
+        }
+    )
+
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_market_bars_for_factor_date",
+        lambda *args, **kwargs: bars,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "enrich_bars_with_industry",
+        lambda bars, **kwargs: bars.assign(industry_code="T", industry_name="Tech"),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_industry_bars_for_factor_date",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "load_point_in_time_fundamentals_snapshot",
+        lambda bars, trade_date, service="stock_research": pd.DataFrame(
+            [{"asset_id": "A", "close": 70.0, "roe": 0.15}]
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "build_quality_factor_rows",
+        lambda *args, **kwargs: pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-03-11",
+                    "asset_id": "A",
+                    "factor_name": "roe",
+                    "factor_group": "value",
+                    "factor_value": 0.15,
+                    "calc_version": "v1",
+                    "source": "fundamental",
+                    "source_data_version": "pit_finance_v1",
+                }
+            ],
+            columns=factor_pipeline.FACTOR_DAILY_COLUMNS,
+        ),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "build_value_factor_rows",
+        lambda *args, **kwargs: pd.DataFrame(columns=factor_pipeline.FACTOR_DAILY_COLUMNS),
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "upsert_factor_daily",
+        lambda rows: calls.append(rows) or len(rows),
+        raising=False,
+    )
+
+    with pytest.raises(ValueError, match="expected group quality, got value"):
+        factor_pipeline.build_and_store_factor_daily("2026-03-11")
+
+    assert calls == []
 
 
 def test_compute_sector_factor_rows_returns_sector_factor_daily_rows():

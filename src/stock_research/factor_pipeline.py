@@ -7,6 +7,7 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.factor_config import manual_v1_config
 from stock_research.factor_registry import (
+    get_factor_metadata,
     validate_factor_direction_mapping,
     validate_factor_group_mapping,
 )
@@ -475,6 +476,8 @@ def load_point_in_time_fundamentals_snapshot(
         "np_parent_ttm",
         "revenue_ttm",
         "equity_parent",
+        "total_share",
+        "float_share",
     ]
     if bars.empty:
         return pd.DataFrame(columns=columns)
@@ -509,6 +512,8 @@ def load_point_in_time_fundamentals_snapshot(
                     "np_parent_ttm": income_statement.get("np_parent_ttm", income_statement.get("np_parent")),
                     "revenue_ttm": income_statement.get("revenue_ttm", income_statement.get("revenue")),
                     "equity_parent": balance_sheet.get("equity_parent", balance_sheet.get("total_equity")),
+                    "total_share": indicator.get("total_share", balance_sheet.get("total_share")),
+                    "float_share": indicator.get("float_share", balance_sheet.get("float_share")),
                 }
             )
     return pd.DataFrame(snapshot_rows, columns=columns)
@@ -584,22 +589,15 @@ def build_value_factor_rows(
     for column in ["np_parent_ttm", "revenue_ttm", "equity_parent"]:
         if column not in value_snapshot.columns:
             value_snapshot[column] = np.nan
+    for column in ["total_share", "float_share"]:
+        if column not in value_snapshot.columns:
+            value_snapshot[column] = np.nan
 
     prices = value_snapshot[["asset_id", "close"]].copy()
     finance = value_snapshot[["asset_id", "np_parent_ttm", "revenue_ttm", "equity_parent"]].copy()
-    shares = value_snapshot[["asset_id"]].copy()
-    total_share = (
-        value_snapshot["total_share"]
-        if "total_share" in value_snapshot.columns
-        else pd.Series(1.0, index=value_snapshot.index)
-    )
-    float_share = (
-        value_snapshot["float_share"]
-        if "float_share" in value_snapshot.columns
-        else pd.Series(1.0, index=value_snapshot.index)
-    )
-    shares["total_share"] = pd.to_numeric(total_share, errors="coerce").fillna(1.0)
-    shares["float_share"] = pd.to_numeric(float_share, errors="coerce").fillna(shares["total_share"])
+    shares = value_snapshot[["asset_id", "total_share", "float_share"]].copy()
+    shares["total_share"] = pd.to_numeric(shares["total_share"], errors="coerce")
+    shares["float_share"] = pd.to_numeric(shares["float_share"], errors="coerce")
     factors = value.compute_value_factors(prices, finance, shares)
     return _melt_factor_frame(
         factors,
@@ -708,6 +706,28 @@ def _external_factor_sources() -> dict[str, tuple[Any, str]]:
     }
 
 
+def _validate_emitted_factor_rows(factors: pd.DataFrame) -> None:
+    if list(factors.columns) != FACTOR_DAILY_COLUMNS:
+        raise ValueError(
+            f"factor daily rows must match FACTOR_DAILY_COLUMNS: {list(factors.columns)}"
+        )
+
+    if factors.empty:
+        return
+
+    mismatches: list[str] = []
+    for record in factors[["factor_name", "factor_group"]].drop_duplicates().to_dict("records"):
+        factor_name = str(record["factor_name"])
+        factor_group = str(record["factor_group"])
+        metadata = get_factor_metadata(factor_name)
+        if metadata.factor_group != factor_group:
+            mismatches.append(
+                f"{factor_name}: expected group {metadata.factor_group}, got {factor_group}"
+            )
+    if mismatches:
+        raise ValueError("emitted factor group mismatch: " + "; ".join(mismatches))
+
+
 def build_and_store_factor_daily(
     trade_date: str,
     lookback_bars: int = 130,
@@ -773,4 +793,5 @@ def build_and_store_factor_daily(
         ],
         ignore_index=True,
     )
+    _validate_emitted_factor_rows(factors)
     return upsert_factor_daily(factors)
