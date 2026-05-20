@@ -151,3 +151,44 @@ def test_batched_statement_helpers_query_standardized_finance_tables(monkeypatch
     assert any("FROM finance.income_statement" in sql for sql in queried_tables)
     assert any("FROM finance.balance_sheet" in sql for sql in queried_tables)
     assert any("FROM finance.cash_flow" in sql for sql in queried_tables)
+
+
+def test_get_latest_share_capital_event_rows_uses_pit_event_cutoffs(monkeypatch):
+    conn = FakeConnection(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "event_date": "2026-03-01",
+                "announcement_date": "2026-03-05",
+                "total_share": 100.0,
+                "float_share": 80.0,
+            },
+            {
+                "asset_id": "CN:SZ:000001",
+                "event_date": "2026-02-15",
+                "announcement_date": None,
+                "total_share": 200.0,
+                "float_share": 150.0,
+            },
+        ]
+    )
+    monkeypatch.setattr(point_in_time_finance, "fetch_all", fake_fetch_all)
+
+    rows = point_in_time_finance.get_latest_share_capital_event_rows(
+        conn,
+        ["CN:SH:600000", "CN:SZ:000001"],
+        "2026-04-01",
+    )
+
+    assert rows == {
+        "CN:SH:600000": conn.rows[0],
+        "CN:SZ:000001": conn.rows[1],
+    }
+    sql, params = conn.calls[0]
+    assert "FROM finance.share_capital_event" in sql
+    assert "DISTINCT ON (asset_id)" in sql
+    assert "asset_id = ANY(%s)" in sql
+    assert "event_date <= %s" in sql
+    assert "(announcement_date IS NULL OR announcement_date <= %s)" in sql
+    assert "ORDER BY asset_id, event_date DESC" in sql
+    assert params == [["CN:SH:600000", "CN:SZ:000001"], "2026-04-01", "2026-04-01"]

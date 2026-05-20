@@ -120,3 +120,23 @@ def get_latest_cash_flow_rows(
     trade_date: str,
 ) -> dict[str, dict[str, Any]]:
     return _latest_finance_rows(conn, "finance.cash_flow", asset_ids, trade_date)
+
+
+def get_latest_share_capital_event_rows(
+    conn: psycopg.Connection,
+    asset_ids: list[str],
+    trade_date: str,
+) -> dict[str, dict[str, Any]]:
+    if not asset_ids:
+        return {}
+
+    sql = """
+    SELECT DISTINCT ON (asset_id) *
+    FROM finance.share_capital_event
+    WHERE asset_id = ANY(%s)
+      AND event_date <= %s
+      AND (announcement_date IS NULL OR announcement_date <= %s)
+    ORDER BY asset_id, event_date DESC, announcement_date DESC NULLS LAST
+    """
+    rows = fetch_all(conn, sql, [asset_ids, trade_date, trade_date])
+    return {str(row["asset_id"]): row for row in rows}

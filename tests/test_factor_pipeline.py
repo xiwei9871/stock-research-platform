@@ -274,24 +274,48 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_income_statement_rows",
-        lambda conn, asset_ids, trade_date: calls.append(("income", list(asset_ids), trade_date)) or {
-            "A": {
-                "np_parent": 100.0,
-                "revenue": 1000.0,
-            }
-        },
+        lambda *args, **kwargs: pytest.fail("raw income_statement rows must not supply TTM inputs"),
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_balance_sheet_rows",
         lambda conn, asset_ids, trade_date: calls.append(("balance", list(asset_ids), trade_date)) or {
-            "A": {"total_equity": 500.0, "total_share": 100.0, "float_share": 80.0}
+            "A": {"total_equity": 500.0, "total_share": 999.0, "float_share": 888.0}
         },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_cash_flow_rows",
         lambda conn, asset_ids, trade_date: calls.append(("cash_flow", list(asset_ids), trade_date)) or {},
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_share_capital_event_rows",
+        lambda conn, asset_ids, trade_date: calls.append(("share_cap", list(asset_ids), trade_date)) or {
+            "A": {"total_share": 100.0, "float_share": 80.0}
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "finance_ttm",
+        type(
+            "_FinanceTtm",
+            (),
+            {
+                "load_income_ttm_rows": staticmethod(
+                    lambda conn, asset_ids, trade_date, value_columns: calls.append(
+                        ("ttm", list(asset_ids), trade_date, list(value_columns))
+                    )
+                    or {
+                        "A": {
+                            "np_parent_ttm": 110.0,
+                            "revenue_ttm": 1200.0,
+                        }
+                    }
+                )
+            },
+        ),
+        raising=False,
     )
 
     bars = pd.DataFrame(
@@ -318,8 +342,8 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
         "net_margin": 0.1,
         "debt_ratio": 0.35,
         "ocf_to_np": 1.2,
-        "np_parent_ttm": 100.0,
-        "revenue_ttm": 1000.0,
+        "np_parent_ttm": 110.0,
+        "revenue_ttm": 1200.0,
         "equity_parent": 500.0,
         "total_share": 100.0,
         "float_share": 80.0,
@@ -327,9 +351,10 @@ def test_load_point_in_time_fundamentals_snapshot_uses_market_assets_and_pit_row
     assert snapshot.iloc[1].drop(labels=["asset_id", "close"]).isna().all()
     assert calls == [
         ("indicator", ["A", "B"], "2026-05-08"),
-        ("income", ["A", "B"], "2026-05-08"),
         ("balance", ["A", "B"], "2026-05-08"),
         ("cash_flow", ["A", "B"], "2026-05-08"),
+        ("share_cap", ["A", "B"], "2026-05-08"),
+        ("ttm", ["A", "B"], "2026-05-08", ["np_parent", "revenue"]),
     ]
 
 
@@ -350,7 +375,7 @@ def test_load_point_in_time_fundamentals_snapshot_uses_only_trade_date_assets(mo
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_income_statement_rows",
-        lambda *args, **kwargs: None,
+        lambda *args, **kwargs: pytest.fail("raw income_statement rows must not be loaded"),
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
@@ -361,6 +386,21 @@ def test_load_point_in_time_fundamentals_snapshot_uses_only_trade_date_assets(mo
         factor_pipeline.point_in_time_finance,
         "get_latest_cash_flow_rows",
         lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_share_capital_event_rows",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "finance_ttm",
+        type(
+            "_FinanceTtm",
+            (),
+            {"load_income_ttm_rows": staticmethod(lambda *args, **kwargs: {})},
+        ),
+        raising=False,
     )
 
     bars = pd.DataFrame(
@@ -389,15 +429,71 @@ def test_load_point_in_time_fundamentals_snapshot_coalesces_none_to_fallback_sou
             "A": {
                 "roe": 0.15,
                 "ocf_to_np": None,
-                "total_share": None,
-                "float_share": None,
             }
         },
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_income_statement_rows",
-        lambda *args, **kwargs: None,
+        lambda *args, **kwargs: pytest.fail("raw income_statement rows must not be loaded"),
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_balance_sheet_rows",
+        lambda conn, asset_ids, trade_date: {
+            "A": {
+                "total_equity": 500.0,
+                "total_share": 999.0,
+                "float_share": 888.0,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_cash_flow_rows",
+        lambda conn, asset_ids, trade_date: {"A": {"ocf_to_np": 1.2}},
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_share_capital_event_rows",
+        lambda conn, asset_ids, trade_date: {"A": {"total_share": 100.0, "float_share": 80.0}},
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "finance_ttm",
+        type(
+            "_FinanceTtm",
+            (),
+            {"load_income_ttm_rows": staticmethod(lambda *args, **kwargs: {})},
+        ),
+        raising=False,
+    )
+
+    bars = pd.DataFrame([{"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0}])
+
+    snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(bars, "2026-05-08")
+
+    assert snapshot.iloc[0]["ocf_to_np"] == pytest.approx(1.2)
+    assert snapshot.iloc[0]["total_share"] == pytest.approx(100.0)
+    assert snapshot.iloc[0]["float_share"] == pytest.approx(80.0)
+
+
+def test_load_point_in_time_fundamentals_snapshot_drops_value_inputs_without_true_ttm_or_share_rows(
+    monkeypatch,
+):
+    class _Conn:
+        pass
+
+    monkeypatch.setattr(factor_pipeline, "connect", lambda service: _context(_Conn()))
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_indicator_rows",
+        lambda conn, asset_ids, trade_date: {"A": {"roe": 0.15}},
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_income_statement_rows",
+        lambda *args, **kwargs: pytest.fail("raw income_statement rows must not be loaded"),
     )
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
@@ -413,16 +509,50 @@ def test_load_point_in_time_fundamentals_snapshot_coalesces_none_to_fallback_sou
     monkeypatch.setattr(
         factor_pipeline.point_in_time_finance,
         "get_latest_cash_flow_rows",
-        lambda conn, asset_ids, trade_date: {"A": {"ocf_to_np": 1.2}},
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(
+        factor_pipeline.point_in_time_finance,
+        "get_latest_share_capital_event_rows",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(
+        factor_pipeline,
+        "finance_ttm",
+        type(
+            "_FinanceTtm",
+            (),
+            {
+                "load_income_ttm_rows": staticmethod(
+                    lambda conn, asset_ids, trade_date, value_columns: {
+                        "A": {
+                            "np_parent_ttm": None,
+                            "revenue_ttm": None,
+                        }
+                    }
+                )
+            },
+        ),
+        raising=False,
     )
 
     bars = pd.DataFrame([{"trade_date": "2026-05-08", "asset_id": "A", "close": 10.0}])
 
     snapshot = factor_pipeline.load_point_in_time_fundamentals_snapshot(bars, "2026-05-08")
+    value_rows = factor_pipeline.build_value_factor_rows(
+        snapshot,
+        trade_date="2026-05-08",
+        calc_version="v1",
+        source_data_version="pit_finance_v1",
+    )
 
-    assert snapshot.iloc[0]["ocf_to_np"] == pytest.approx(1.2)
-    assert snapshot.iloc[0]["total_share"] == pytest.approx(100.0)
-    assert snapshot.iloc[0]["float_share"] == pytest.approx(80.0)
+    assert pd.isna(snapshot.iloc[0]["np_parent_ttm"])
+    assert pd.isna(snapshot.iloc[0]["revenue_ttm"])
+    assert pd.isna(snapshot.iloc[0]["total_share"])
+    assert pd.isna(snapshot.iloc[0]["float_share"])
+    assert snapshot.iloc[0]["equity_parent"] == pytest.approx(500.0)
+    assert value_rows.empty
+    assert list(value_rows.columns) == factor_pipeline.FACTOR_DAILY_COLUMNS
 
 
 def test_build_quality_and_value_factor_rows_drop_missing_values():
