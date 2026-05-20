@@ -889,13 +889,10 @@ def _recommended_channels_for(report_type: str) -> list[str]:
     return ["local"]
 
 
-def _load_markdown_title(path: Path, *, max_lines: int = 32) -> str:
+def _load_markdown_title(path: Path) -> str:
     try:
         with path.open("r", encoding="utf-8") as handle:
-            for _ in range(max_lines):
-                line = handle.readline()
-                if not line:
-                    break
+            for line in handle:
                 match = re.match(r"^\s*#\s+(.+?)\s*$", line)
                 if match is not None:
                     return match.group(1).strip()
