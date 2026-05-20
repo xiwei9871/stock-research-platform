@@ -55,6 +55,48 @@ def test_technical_feature_adapter_status_and_frontier(monkeypatch):
     }
 
 
+def test_technical_feature_adapter_prioritizes_research_window_dates(monkeypatch):
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "load_trade_dates_for_backfill",
+        lambda **kwargs: [
+            "2013-12-31",
+            "2014-01-02",
+            "2023-12-29",
+            "2024-01-02",
+            "2024-01-03",
+        ],
+    )
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "load_complete_technical_feature_dates",
+        lambda **kwargs: set(),
+    )
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "_load_technical_feature_row_counts",
+        lambda **kwargs: {},
+    )
+
+    adapter = TechnicalFeatureBackfillAdapter(
+        start_date="1991-01-01",
+        end_date="2026-05-14",
+    )
+    rows = adapter.load_status_rows()
+
+    assert [row["trade_date"] for row in rows] == [
+        "2024-01-02",
+        "2024-01-03",
+        "2013-12-31",
+        "2014-01-02",
+        "2023-12-29",
+    ]
+    assert adapter.compute_frontier(rows) == {
+        "completed_through": None,
+        "currently_working_on": "2024-01-02",
+    }
+
+
 def test_technical_feature_adapter_run_once_uses_next_pending_batch(monkeypatch):
     adapter = TechnicalFeatureBackfillAdapter(
         start_date="1991-01-01",
@@ -121,6 +163,62 @@ def test_technical_feature_adapter_run_once_uses_next_pending_batch(monkeypatch)
     assert result["timed_out"] is False
     assert result["batch_size_days"] == 2
     assert result["worker_count"] == 2
+
+
+def test_technical_feature_adapter_run_once_prefers_research_window_pending_batch(
+    monkeypatch,
+):
+    adapter = TechnicalFeatureBackfillAdapter(
+        start_date="1991-01-01",
+        end_date="2026-05-14",
+        adjust_type="qfq",
+        source_data_version="market_daily_bar:qfq",
+    )
+    monkeypatch.setattr(
+        TechnicalFeatureBackfillAdapter,
+        "load_status_rows",
+        lambda self: [
+            {"trade_date": "2024-01-02", "status": "pending", "row_count": 0},
+            {"trade_date": "2024-01-03", "status": "pending", "row_count": 0},
+            {"trade_date": "2013-12-31", "status": "pending", "row_count": 0},
+            {"trade_date": "2014-01-02", "status": "pending", "row_count": 0},
+        ],
+    )
+    calls = []
+
+    class FakeFrame:
+        empty = False
+
+        def __len__(self):
+            return 2
+
+        def __getitem__(self, key):
+            assert key == "feature_rows"
+            return self
+
+        def sum(self):
+            return 250
+
+        attrs = {
+            "batch_size_days": 2,
+            "worker_count": 2,
+        }
+
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "backfill_technical_features_daily_range",
+        lambda **kwargs: calls.append(kwargs) or FakeFrame(),
+    )
+
+    adapter.run_once(
+        scope=adapter.load_scope(),
+        max_jobs=2,
+        workers=2,
+        run_timeout_seconds=1800,
+    )
+
+    assert calls[0]["start_date"] == "2024-01-02"
+    assert calls[0]["end_date"] == "2024-01-03"
 
 
 def test_technical_feature_adapter_run_once_passes_timeout_and_exposes_batch_metrics(

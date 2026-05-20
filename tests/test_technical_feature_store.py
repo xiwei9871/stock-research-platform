@@ -148,6 +148,7 @@ def test_build_stock_technical_features_daily_keeps_requested_trade_date(monkeyp
     result = technical_feature_store.build_stock_technical_features_daily(
         "2026-01-25",
         adjust_type="qfq",
+        build_strategy="legacy",
     )
 
     assert list(result.columns) == technical_feature_store.TECHNICAL_FEATURE_TABLE_COLUMNS
@@ -216,6 +217,7 @@ def test_build_stock_technical_features_daily_uses_requested_source_data_version
         "2026-01-25",
         adjust_type="qfq",
         source_data_version="market_daily_bar:qfq@v2",
+        build_strategy="legacy",
     )
 
     assert result["source_data_version"].tolist() == ["market_daily_bar:qfq@v2"]

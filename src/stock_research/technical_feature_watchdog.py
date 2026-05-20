@@ -8,6 +8,7 @@ from typing import Any
 from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_config import historical_research_start_date
 from stock_research.factor_backfill import load_trade_dates_for_backfill
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.technical_feature_backfill import (
@@ -53,6 +54,11 @@ class TechnicalFeatureBackfillAdapter:
             end_date=self.end_date,
             adjust_type=self.adjust_type,
         )
+        trade_dates = _prioritize_trade_dates_for_research_window(
+            trade_dates,
+            priority_start=historical_research_start_date(),
+            priority_end=self.end_date,
+        )
         complete_dates = load_complete_technical_feature_dates(
             start_date=self.start_date,
             end_date=self.end_date,
@@ -92,7 +98,7 @@ class TechnicalFeatureBackfillAdapter:
     def compute_frontier(self, rows: list[dict[str, Any]]) -> dict[str, str | None]:
         completed_through: str | None = None
         currently_working_on: str | None = None
-        for row in sorted(rows, key=lambda item: str(item["trade_date"])):
+        for row in rows:
             trade_date = str(row["trade_date"])
             if row["status"] == "success":
                 completed_through = trade_date
@@ -272,3 +278,20 @@ def _load_technical_feature_row_counts(
             ],
         )
     return {str(row["trade_date"])[:10]: int(row["rows"]) for row in rows}
+
+
+def _prioritize_trade_dates_for_research_window(
+    trade_dates: list[str],
+    *,
+    priority_start: str,
+    priority_end: str,
+) -> list[str]:
+    def _priority_key(raw_value: str) -> tuple[int, str]:
+        trade_date = str(raw_value)[:10]
+        if priority_start <= trade_date <= priority_end:
+            return (0, trade_date)
+        if trade_date < priority_start:
+            return (1, trade_date)
+        return (2, trade_date)
+
+    return sorted((str(value)[:10] for value in trade_dates), key=_priority_key)
