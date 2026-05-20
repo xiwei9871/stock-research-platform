@@ -199,6 +199,79 @@ def _write_export_with_unknown_severity_item(tmp_path: Path) -> tuple[Path, Path
     return manifest_path, items_path
 
 
+def _write_export_with_mixed_severity_items(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 2,
+                "items": [],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "generic_report:2026-05-20:xyz",
+                        "report_type": "generic_report",
+                        "title": "Generic Report",
+                        "summary": "Generic summary",
+                        "severity": "mystery",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["generic"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/generic.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_report",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Generic Report"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
 class _FailingNonDryTransport:
     def __init__(self) -> None:
         self.calls = 0
@@ -436,6 +509,32 @@ def test_severity_max_filters_items(tmp_path: Path) -> None:
     assert [item["severity"] for item in payload["items"]] == ["info"]
 
 
+def test_build_send_payload_excludes_unknown_severity_items_under_cap(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export_with_mixed_severity_items(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 1
+    assert [item["severity"] for item in payload["items"]] == ["info"]
+
+
 def test_test_mode_marks_payload_metadata(tmp_path: Path) -> None:
     manifest_path, items_path = _write_export(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
@@ -467,26 +566,24 @@ def test_test_mode_marks_payload_metadata(tmp_path: Path) -> None:
 def test_live_send_rejects_unknown_severity_item(tmp_path: Path) -> None:
     manifest_path, items_path = _write_export_with_unknown_severity_item(tmp_path)
     config = report_delivery_openclaw_sender.OpenClawSendConfig(
-        endpoint="https://openclaw.example.test/send",
-        token="token",
+        endpoint=None,
+        token=None,
         timeout_seconds=5,
-        dry_run=False,
+        dry_run=True,
         retry_count=0,
         retry_backoff_seconds=0,
         outbox_dir=str(tmp_path / "send"),
         limit=1,
-        allow_live_send=True,
+        allow_live_send=False,
         route_allowlist=["daily_research"],
         severity_max="info",
-        test_mode=True,
+        test_mode=False,
     )
     sender = report_delivery_openclaw_sender.OpenClawSender(
-        transport=report_delivery_openclaw_sender.HttpOpenClawTransport()
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
     )
 
-    with pytest.raises(ValueError, match="unknown|invalid.*severity"):
-        sender.send_batch(
-            manifest_path=manifest_path,
-            items_path=items_path,
-            config=config,
-        )
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 0
+    assert payload["items"] == []

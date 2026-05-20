@@ -239,8 +239,10 @@ class OpenClawSender:
         for item in items:
             if allowed_routes and str(item.get("openclaw_route", "")) not in allowed_routes:
                 continue
-            if severity_threshold is not None and self._severity_rank(item.get("severity", "unknown")) > severity_threshold:
-                continue
+            if severity_threshold is not None:
+                severity_rank = self._severity_rank(item.get("severity", "unknown"))
+                if severity_rank is None or severity_rank > severity_threshold:
+                    continue
             filtered.append(self._copy_item(item))
 
         if config.limit is not None:
@@ -254,8 +256,11 @@ class OpenClawSender:
             copied["payload"] = dict(payload)
         return copied
 
-    def _severity_rank(self, severity: Any) -> int:
-        return int(SEVERITY_ORDER.get(str(severity).lower(), 0))
+    def _severity_rank(self, severity: Any) -> int | None:
+        normalized = str(severity).lower()
+        if normalized not in SEVERITY_ORDER:
+            return None
+        return int(SEVERITY_ORDER[normalized])
 
     def _validate_live_send_config(self, config: OpenClawSendConfig) -> None:
         endpoint = config.endpoint
