@@ -246,6 +246,12 @@ def test_deliver_local_reports_dry_run_manifest_includes_classification_fields(t
     artifact = manifest["artifacts"][0]
 
     assert result.status == "dry_run"
+    assert manifest["channel"] == "local"
+    assert manifest["trade_date"] == "2026-05-20"
+    assert manifest["artifact_count"] == 1
+    assert manifest["warnings"] == []
+    assert manifest["errors"] == []
+    assert len(manifest["artifacts"]) == 1
     assert artifact["report_type"] == "daily_topn_report"
     assert artifact["severity"] == "info"
     assert artifact["summary"] == "Daily TopN"
