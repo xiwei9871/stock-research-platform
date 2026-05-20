@@ -156,6 +156,7 @@ from stock_research.report_delivery_openclaw_sender import (
     DryRunOpenClawTransport,
     HttpOpenClawTransport,
     OpenClawSendConfig,
+    OpenClawSendInputError,
     OpenClawSender,
 )
 from stock_research.research_preflight import (
@@ -3289,31 +3290,34 @@ def main_for_args(argv: list[str] | None = None) -> None:
         sender = OpenClawSender(
             transport=DryRunOpenClawTransport() if args.dry_run else HttpOpenClawTransport()
         )
-        export_data = sender.load_export(args.manifest, args.items)
-        manifest_trade_date = str(export_data["manifest"].get("trade_date", ""))
-        if manifest_trade_date != args.trade_date:
-            raise ValueError(
-                "report-delivery-openclaw-send: "
-                f"trade-date {args.trade_date} does not match loaded manifest trade_date {manifest_trade_date}"
+        try:
+            export_data = sender.load_export(args.manifest, args.items)
+            manifest_trade_date = str(export_data["manifest"].get("trade_date", ""))
+            if manifest_trade_date != args.trade_date:
+                raise ValueError(
+                    "report-delivery-openclaw-send: "
+                    f"trade-date {args.trade_date} does not match loaded manifest trade_date {manifest_trade_date}"
+                )
+            result = sender.send_batch(
+                manifest_path=args.manifest,
+                items_path=args.items,
+                config=OpenClawSendConfig(
+                    endpoint=args.endpoint,
+                    token=os.environ.get("OPENCLAW_TOKEN"),
+                    timeout_seconds=args.timeout_seconds,
+                    dry_run=args.dry_run,
+                    retry_count=args.retry_count,
+                    retry_backoff_seconds=args.retry_backoff_seconds,
+                    outbox_dir=args.output_dir,
+                    limit=args.limit,
+                    allow_live_send=args.allow_live_send,
+                    route_allowlist=args.route_allowlist,
+                    severity_max=args.severity_max,
+                    test_mode=args.test_mode,
+                ),
             )
-        result = sender.send_batch(
-            manifest_path=args.manifest,
-            items_path=args.items,
-            config=OpenClawSendConfig(
-                endpoint=args.endpoint,
-                token=os.environ.get("OPENCLAW_TOKEN"),
-                timeout_seconds=args.timeout_seconds,
-                dry_run=args.dry_run,
-                retry_count=args.retry_count,
-                retry_backoff_seconds=args.retry_backoff_seconds,
-                outbox_dir=args.output_dir,
-                limit=args.limit,
-                allow_live_send=args.allow_live_send,
-                route_allowlist=args.route_allowlist,
-                severity_max=args.severity_max,
-                test_mode=args.test_mode,
-            ),
-        )
+        except OpenClawSendInputError as exc:
+            raise ValueError(f"report-delivery-openclaw-send: {exc}") from exc
         print(f"report_delivery_openclaw_send|status|{result.status}")
         print(f"report_delivery_openclaw_send|dry_run|{result.dry_run}")
         print(f"report_delivery_openclaw_send|send_id|{result.send_id}")

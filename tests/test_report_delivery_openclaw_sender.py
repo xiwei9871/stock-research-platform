@@ -388,6 +388,8 @@ def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
     assert result.skipped_count == 0
     assert Path(result.preview_path).exists()
     assert Path(result.send_log_path).exists()
+    preview_record = json.loads(Path(result.preview_path).read_text(encoding="utf-8"))
+    assert preview_record["source_manifest_path"] == str(manifest_path)
 
 
 def test_preview_does_not_retain_raw_endpoint_string(tmp_path: Path) -> None:
@@ -575,6 +577,8 @@ def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
     assert "endpoint" not in send_log_records[0]
     assert "super-secret-token" not in send_log_text
     assert "Authorization" not in send_log_text
+    assert send_log_records[0]["source_manifest_path"] == str(manifest_path)
+    assert "outputs/report_delivery/2026-05-20/manifest.json" not in send_log_text
 
 
 def test_write_send_log_appends_records(tmp_path: Path) -> None:
@@ -773,18 +777,24 @@ def test_dry_run_transport_never_accesses_network(monkeypatch: pytest.MonkeyPatc
     assert result["status"] == "dry_run"
 
 
-def test_http_transport_builds_request_and_surfaces_http_failure(
+def test_http_transport_builds_request_and_rejects_fake_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
 
-    def _fake_urlopen(request: object, timeout: float) -> None:
+    class _FakeResponse:
+        status = 202
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeResponse:
         captured["url"] = getattr(request, "full_url", None)
         captured["method"] = getattr(request, "method", None)
         captured["headers"] = dict(getattr(request, "header_items", lambda: [])())
         captured["data"] = getattr(request, "data", None)
         captured["timeout"] = timeout
-        raise urllib.error.URLError("simulated connection failure")
+        return _FakeResponse()
 
     monkeypatch.setattr(report_delivery_openclaw_sender, "urlopen", _fake_urlopen)
 
@@ -804,7 +814,7 @@ def test_http_transport_builds_request_and_surfaces_http_failure(
         test_mode=True,
     )
 
-    with pytest.raises(RuntimeError, match="simulated connection failure"):
+    with pytest.raises(RuntimeError, match="incomplete: received HTTP 202"):
         transport.send(
             {
                 "items": [
@@ -813,7 +823,10 @@ def test_http_transport_builds_request_and_surfaces_http_failure(
                         "artifact_id": "daily_topn_report:2026-05-20:abc",
                         "report_type": "daily_topn_report",
                         "openclaw_route": "daily_research",
-                        "payload": {"title": "Daily TopN"},
+                        "payload": {
+                            "title": "Daily TopN",
+                            "openclaw_transport_result": "failure",
+                        },
                     }
                 ]
             },
@@ -827,6 +840,43 @@ def test_http_transport_builds_request_and_surfaces_http_failure(
     assert headers["authorization"] == "Bearer secret-token"
     body = json.loads(bytes(captured["data"]).decode("utf-8"))
     assert body["items"][0]["item_id"] == "openclaw:1"
+    assert captured["closed"] is True
+
+
+def test_openclaw_sender_load_export_rejects_missing_or_malformed_inputs(
+    tmp_path: Path,
+) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    missing_manifest = tmp_path / "missing_openclaw_manifest.json"
+    missing_items = tmp_path / "missing_openclaw_items.jsonl"
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="OpenClaw sender manifest not found",
+    ):
+        sender.load_export(missing_manifest, missing_items)
+
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text("{not-json}\n", encoding="utf-8")
+    items_path.write_text("not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="OpenClaw sender manifest is not valid JSON",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+    manifest_path.write_text(json.dumps({"trade_date": "2026-05-21"}, ensure_ascii=True) + "\n", encoding="utf-8")
+    items_path.write_text("[1]\n", encoding="utf-8")
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="must contain JSON objects",
+    ):
+        sender.load_export(manifest_path, items_path)
 
 
 def test_openclaw_sender_no_dry_run_without_endpoint_fails_clearly(tmp_path: Path) -> None:

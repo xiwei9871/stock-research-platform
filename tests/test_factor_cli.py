@@ -1273,6 +1273,36 @@ def test_report_delivery_openclaw_send_cli_no_dry_run_without_endpoint_fails_cle
         )
 
 
+def test_report_delivery_openclaw_send_cli_reports_missing_sender_inputs_clearly(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.delenv("OPENCLAW_ENDPOINT", raising=False)
+    monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    items_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"report-delivery-openclaw-send: OpenClaw sender manifest not found: .*openclaw_manifest\.json",
+    ):
+        cli.main_for_args(
+            [
+                "report-delivery-openclaw-send",
+                "--trade-date",
+                "2026-05-21",
+                "--manifest",
+                str(manifest_path),
+                "--items",
+                str(items_path),
+                "--output-dir",
+                str(tmp_path / "send"),
+            ]
+        )
+
+
 def test_report_delivery_openclaw_send_cli_fails_on_non_dry_run_send_failure(
     monkeypatch, capsys
 ):

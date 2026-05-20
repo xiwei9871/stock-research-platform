@@ -12,6 +12,10 @@ from urllib.request import Request, urlopen
 from stock_research.report_delivery_openclaw import SEVERITY_ORDER
 
 
+class OpenClawSendInputError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class OpenClawSendConfig:
     endpoint: str | None
@@ -145,65 +149,11 @@ class HttpOpenClawTransport:
             raise RuntimeError(
                 f"OpenClaw HTTP send failed for {config.endpoint}: HTTP {response_status}"
             )
-
-        items = list(payload.get("items", []))
-        item_results = [self._item_result(item) for item in items]
-        sent_count = sum(1 for item_result in item_results if item_result["status"] == "sent")
-        failed_count = sum(1 for item_result in item_results if item_result["status"] == "failed")
-        skipped_count = sum(1 for item_result in item_results if item_result["status"] == "skipped")
-
-        if failed_count and sent_count:
-            status = "partial_failure"
-        elif failed_count:
-            status = "failed"
-        elif skipped_count and not sent_count:
-            status = "skipped"
-        else:
-            status = "sent"
-
-        result: dict[str, Any] = {
-            "status": status,
-            "dry_run": False,
-            "sent_count": sent_count,
-            "failed_count": failed_count,
-            "skipped_count": skipped_count,
-            "warnings": [],
-            "errors": [],
-            "item_results": item_results,
-            "endpoint_host": _endpoint_host(config.endpoint),
-            "request_path": request.full_url,
-            "request_method": request.get_method(),
-            "request_timeout_seconds": float(config.timeout_seconds),
-            "payload": payload,
-        }
-        if response_status is not None:
-            result["response_status"] = response_status
-        return result
-
-    def _item_result(self, item: dict[str, Any]) -> dict[str, Any]:
-        payload = item.get("payload")
-        transport_result = ""
-        transport_error = ""
-        if isinstance(payload, dict):
-            transport_result = str(payload.get("openclaw_transport_result", "")).lower()
-            transport_error = str(payload.get("openclaw_transport_error", "")).strip()
-
-        item_id = str(item.get("item_id", ""))
-        if transport_result in {"failed", "failure", "error"}:
-            return {
-                "item_id": item_id,
-                "status": "failed",
-                "error": transport_error or "simulated failure",
-            }
-        if transport_result in {"skipped", "skip"}:
-            return {
-                "item_id": item_id,
-                "status": "skipped",
-            }
-        return {
-            "item_id": item_id,
-            "status": "sent",
-        }
+        response_status_text = str(response_status) if response_status is not None else "unknown"
+        raise RuntimeError(
+            "OpenClaw HTTP transport is incomplete: "
+            f"received HTTP {response_status_text} from {config.endpoint} but no acceptance contract is implemented"
+        )
 
 
 class OpenClawSender:
@@ -214,12 +164,8 @@ class OpenClawSender:
         resolved_manifest_path = Path(manifest_path)
         resolved_items_path = Path(items_path)
 
-        manifest = json.loads(resolved_manifest_path.read_text(encoding="utf-8"))
-        items: list[dict[str, Any]] = []
-        for line in resolved_items_path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            items.append(json.loads(line))
+        manifest = self._read_json_file(resolved_manifest_path)
+        items = self._read_items_file(resolved_items_path)
 
         return {
             "manifest_path": str(resolved_manifest_path),
@@ -227,6 +173,53 @@ class OpenClawSender:
             "manifest": manifest,
             "items": items,
         }
+
+    def _read_json_file(self, path: Path) -> dict[str, Any]:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise OpenClawSendInputError(f"OpenClaw sender manifest not found: {path}") from exc
+        except json.JSONDecodeError as exc:
+            raise OpenClawSendInputError(
+                f"OpenClaw sender manifest is not valid JSON: {path}"
+            ) from exc
+        except OSError as exc:
+            raise OpenClawSendInputError(
+                f"OpenClaw sender manifest is not readable: {path}"
+            ) from exc
+
+        if not isinstance(payload, dict):
+            raise OpenClawSendInputError(
+                f"OpenClaw sender manifest must contain a JSON object: {path}"
+            )
+        return payload
+
+    def _read_items_file(self, path: Path) -> list[dict[str, Any]]:
+        try:
+            raw_text = path.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise OpenClawSendInputError(f"OpenClaw sender items not found: {path}") from exc
+        except OSError as exc:
+            raise OpenClawSendInputError(f"OpenClaw sender items are not readable: {path}") from exc
+
+        items: list[dict[str, Any]] = []
+        for line_number, line in enumerate(raw_text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                parsed_item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise OpenClawSendInputError(
+                    "OpenClaw sender items file is not valid JSON "
+                    f"on line {line_number}: {path}"
+                ) from exc
+            if not isinstance(parsed_item, dict):
+                raise OpenClawSendInputError(
+                    "OpenClaw sender items file must contain JSON objects, "
+                    f"found {type(parsed_item).__name__} on line {line_number}: {path}"
+                )
+            items.append(parsed_item)
+        return items
 
     def build_send_payload(self, export_data: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
         manifest = export_data["manifest"]
@@ -250,7 +243,7 @@ class OpenClawSender:
             "dry_run": config.dry_run,
             "endpoint_host": _endpoint_host(config.endpoint),
             "generated_at": self._generated_at(),
-            "source_manifest_path": manifest.get("source_manifest_path", export_data["manifest_path"]),
+            "source_manifest_path": export_data["manifest_path"],
             "item_count": len(items),
             "items": items,
             "manifest": manifest,
