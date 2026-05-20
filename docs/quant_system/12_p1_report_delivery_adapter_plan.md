@@ -468,3 +468,14 @@ P1-1 明确禁止：
 - `requires_attention` 规则：若 artifact 原本标记为 `requires_attention`，或 `severity` 为 `high` / `critical`，则为真
 - `delivery_priority` 映射：当前实现以较小数字表示更高优先级；默认值 `10`，后续可按渠道和报告类型细化
 - 与未来 adapter 的关系：OpenClaw / Feishu 只负责把已分类的 `ReportArtifact` 映射成各自 payload；它们不应重新定义 severity 或 attention 语义，只消费 manifest 中的结果字段
+
+## OpenClaw Export Adapter
+
+- 第一阶段只做 export-only，不直接发送到 OpenClaw
+- 输入使用本地 `manifest.json`，由 CLI 显式传入
+- 输出固定为 `openclaw_manifest.json`、`openclaw_items.jsonl`、`openclaw_delivery_log.jsonl`
+- `recommended_action` 由 `report_type` 决定，`run_card_bundle` / `daily_topn_report` / `watchlist_report` / `must_watch_report` / `risk_alert_report` / `factor_eval_report` / `backtest_report` 各自映射到稳定动作，其余回退到 `review_report`
+- `openclaw_route` 由 `requires_attention` 和 `report_type` 决定，注意力优先路由到 `research_alert`
+- CLI 示例：`.venv/bin/stock-research report-delivery-openclaw-export --trade-date 2026-05-20 --manifest outputs/delivery/2026-05-20/manifest.json --output-dir outputs/openclaw/2026-05-20 --include-all --min-severity medium`
+- `--dry-run` 只影响结果状态和 manifest/log 记录，不阻止本地文件写出
+- 后续 live sender 要单独拆成另一个 adapter，不复用 export-only 命令的发送职责

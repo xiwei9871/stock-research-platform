@@ -150,6 +150,7 @@ from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.report_delivery import deliver_local_reports
+from stock_research.report_delivery_openclaw import OpenClawExportAdapter
 from stock_research.research_preflight import (
     check_factor_label_coverage,
     check_industry_membership_coverage,
@@ -304,6 +305,26 @@ def build_universe_artifacts(
     output_dir: str,
 ) -> object:
     return write_universe_artifacts(result, output_dir)
+
+
+def openclaw_export(
+    *,
+    trade_date: str,
+    manifest_path: str,
+    output_dir: str,
+    include_all: bool,
+    min_severity: str,
+    dry_run: bool,
+):
+    del trade_date
+    adapter = OpenClawExportAdapter()
+    return adapter.export(
+        manifest_path,
+        include_all=include_all,
+        min_severity=min_severity,
+        dry_run=dry_run,
+        output_dir=output_dir,
+    )
 
 
 def universe_member_to_json(member: UniverseMember) -> str:
@@ -845,6 +866,23 @@ def build_parser() -> argparse.ArgumentParser:
     report_delivery_local.add_argument("--output-dir", required=True)
     report_delivery_local.add_argument("--dry-run", action="store_true", default=True)
     report_delivery_local.add_argument("--no-dry-run", dest="dry_run", action="store_false")
+
+    report_delivery_openclaw_export = subparsers.add_parser("report-delivery-openclaw-export")
+    report_delivery_openclaw_export.add_argument("--trade-date", required=True)
+    report_delivery_openclaw_export.add_argument("--manifest", required=True)
+    report_delivery_openclaw_export.add_argument("--output-dir", required=True)
+    report_delivery_openclaw_export.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_openclaw_export.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_openclaw_export.add_argument("--include-all", action="store_true")
+    report_delivery_openclaw_export.add_argument(
+        "--min-severity",
+        choices=["info", "low", "medium", "high", "critical"],
+        default="info",
+    )
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
@@ -3183,6 +3221,21 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"report_delivery|output_dir|{result.output_dir}")
         if result.delivery_log_path is not None:
             print(f"report_delivery|delivery_log|{result.delivery_log_path}")
+    elif args.command == "report-delivery-openclaw-export":
+        result = openclaw_export(
+            trade_date=args.trade_date,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+            include_all=args.include_all,
+            min_severity=args.min_severity,
+            dry_run=args.dry_run,
+        )
+        print(f"report_delivery_openclaw|status|{result.status}")
+        print(f"report_delivery_openclaw|item_count|{result.item_count}")
+        print(f"report_delivery_openclaw|manifest|{result.manifest_path}")
+        print(f"report_delivery_openclaw|items|{result.openclaw_items_path}")
+        print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
+        print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,

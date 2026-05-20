@@ -119,6 +119,32 @@ def test_cli_accepts_report_delivery_local_command():
     assert non_dry_run_args.dry_run is False
 
 
+def test_cli_accepts_report_delivery_openclaw_export_command():
+    args = build_parser().parse_args(
+        [
+            "report-delivery-openclaw-export",
+            "--trade-date",
+            "2026-05-20",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/openclaw",
+            "--include-all",
+            "--min-severity",
+            "medium",
+            "--no-dry-run",
+        ]
+    )
+
+    assert args.command == "report-delivery-openclaw-export"
+    assert args.trade_date == "2026-05-20"
+    assert args.manifest == "outputs/delivery/manifest.json"
+    assert args.output_dir == "outputs/openclaw"
+    assert args.include_all is True
+    assert args.min_severity == "medium"
+    assert args.dry_run is False
+
+
 def test_cli_accepts_backfill_technical_features_daily_command():
     args = build_parser().parse_args(
         [
@@ -989,6 +1015,57 @@ def test_report_delivery_local_cli_allows_non_dry_run(monkeypatch, capsys):
         "report_delivery|artifacts|1",
         "report_delivery|manifest|outputs/delivery/manifest.json",
         "report_delivery|output_dir|outputs/delivery",
+    ]
+
+
+def test_report_delivery_openclaw_export_cli_prints_summary(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_export(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="dry_run",
+            item_count=2,
+            manifest_path="outputs/openclaw/manifest.json",
+            openclaw_items_path="outputs/openclaw/items.jsonl",
+            output_dir="outputs/openclaw",
+            openclaw_delivery_log_path="outputs/openclaw/delivery_log.jsonl",
+        )
+
+    monkeypatch.setattr(cli, "openclaw_export", fake_export)
+
+    cli.main_for_args(
+        [
+            "report-delivery-openclaw-export",
+            "--trade-date",
+            "2026-05-20",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/openclaw",
+            "--include-all",
+            "--min-severity",
+            "medium",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-20",
+            "manifest_path": "outputs/delivery/manifest.json",
+            "output_dir": "outputs/openclaw",
+            "include_all": True,
+            "min_severity": "medium",
+            "dry_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery_openclaw|status|dry_run",
+        "report_delivery_openclaw|item_count|2",
+        "report_delivery_openclaw|manifest|outputs/openclaw/manifest.json",
+        "report_delivery_openclaw|items|outputs/openclaw/items.jsonl",
+        "report_delivery_openclaw|output_dir|outputs/openclaw",
+        "report_delivery_openclaw|log|outputs/openclaw/delivery_log.jsonl",
     ]
 
 
