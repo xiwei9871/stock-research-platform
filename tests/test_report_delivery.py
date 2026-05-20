@@ -88,9 +88,9 @@ def test_collect_artifacts_aggregates_real_watchlist_outputs(tmp_path):
         artifact_paths=[],
     )
 
-    watchlist_artifact = next(item for item in artifacts if item.report_type == "must_watch_report")
+    watchlist_artifact = next(item for item in artifacts if item.report_type == "watchlist_report")
 
-    assert len([item for item in artifacts if item.report_type == "must_watch_report"]) == 1
+    assert len([item for item in artifacts if item.report_type == "watchlist_report"]) == 1
     assert watchlist_artifact.markdown_path == output["markdown_path"]
     assert watchlist_artifact.json_path == output["json_path"]
     assert watchlist_artifact.csv_paths == [
@@ -100,35 +100,63 @@ def test_collect_artifacts_aggregates_real_watchlist_outputs(tmp_path):
     assert warnings == []
 
 
-def test_collect_artifacts_prioritizes_must_watch_over_other_watchlist_markers(tmp_path):
-    source_dir = tmp_path / "reports"
-    source_dir.mkdir()
-    (source_dir / "watchlist_report_2026-05-20_core_a.json").write_text(
-        json.dumps({"title": "must watch report"}),
-        encoding="utf-8",
+def test_collect_artifacts_keeps_real_watchlist_bundle_as_watchlist_report_when_no_must_watch_rows(tmp_path):
+    signal_rows = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-20",
+                "watchlist_id": "core",
+                "asset_id": "A",
+                "stock_code": "000001.SZ",
+                "stock_name": "Ping An Bank",
+                "priority": 1,
+                "signal_score": Decimal("9.5"),
+                "primary_signal": "breakout",
+                "signal_tags": ["breakout", "volume"],
+                "risk_tags": [],
+                "reason_json": {"thesis": "momentum"},
+                "must_watch": False,
+            },
+            {
+                "trade_date": "2026-05-20",
+                "watchlist_id": "core",
+                "asset_id": "B",
+                "stock_code": "000002.SZ",
+                "stock_name": "Vanke",
+                "priority": 2,
+                "signal_score": Decimal("7.1"),
+                "primary_signal": "pullback",
+                "signal_tags": ["pullback"],
+                "risk_tags": ["risk_excluded"],
+                "reason_json": {"thesis": "mean_reversion"},
+                "must_watch": False,
+            },
+        ]
     )
-    (source_dir / "watchlist_signals_2026-05-20_core_b.json").write_text(
-        json.dumps({"title": "must watch signal"}),
-        encoding="utf-8",
-    )
-    (source_dir / "must_watch_2026-05-20_core_c.json").write_text(
-        json.dumps({"title": "watchlist report"}),
-        encoding="utf-8",
+    output = watchlist_report.write_watchlist_report(
+        signal_rows,
+        output_dir=tmp_path / "watchlists",
     )
 
     adapter = report_delivery.LocalDeliveryAdapter()
     artifacts, warnings = adapter.collect_artifacts(
         trade_date="2026-05-20",
-        input_dirs=[source_dir],
+        input_dirs=[tmp_path / "watchlists"],
         report_dirs=[],
         run_card_dirs=[],
         artifact_paths=[],
     )
 
-    report_types = sorted(item.report_type for item in artifacts if item.json_path is not None)
+    watchlist_artifact = next(item for item in artifacts if item.json_path is not None)
 
     assert warnings == []
-    assert report_types == ["must_watch_report", "must_watch_report", "must_watch_report"]
+    assert watchlist_artifact.report_type == "watchlist_report"
+    assert watchlist_artifact.markdown_path == output["markdown_path"]
+    assert watchlist_artifact.json_path == output["json_path"]
+    assert watchlist_artifact.csv_paths == [
+        output["signals_csv_path"],
+        output["must_watch_csv_path"],
+    ]
 
 
 def test_collect_artifacts_returns_warning_for_empty_input_dir(tmp_path):

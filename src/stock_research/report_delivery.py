@@ -551,9 +551,34 @@ def classify_artifact(artifact: ReportArtifact) -> ReportArtifact:
 
 def detect_report_type(artifact: ReportArtifact) -> str:
     marker_text = _artifact_marker_text(artifact)
+    primary_marker_text = _artifact_marker_text(artifact, primary_only=True)
     for report_type in REPORT_TYPE_PRIORITY:
         if report_type == "run_card_bundle" and _has_run_card_bundle_marker(artifact, marker_text):
             return report_type
+        if report_type == "risk_alert_report" and _has_any_marker(primary_marker_text, ("risk_alert", "risk alerts", "risk-alert")):
+            return report_type
+        if report_type == "must_watch_report" and _has_any_marker(primary_marker_text, ("must_watch", "must watch")):
+            return report_type
+        if report_type == "watchlist_signal_report" and _has_any_marker(
+            primary_marker_text, ("watchlist_signals", "watchlist_signal", "signal_watchlist")
+        ):
+            return report_type
+        if report_type == "watchlist_report" and _has_any_marker(
+            primary_marker_text, ("watchlist_report", "watchlist report", "watchlist")
+        ):
+            return report_type
+        if report_type == "factor_eval_report" and _has_any_marker(primary_marker_text, ("factor_eval", "factor eval")):
+            return report_type
+        if report_type == "daily_topn_report" and _has_any_marker(primary_marker_text, ("daily_topn", "topn")):
+            return report_type
+        if report_type == "daily_market_report" and _has_any_marker(
+            primary_marker_text,
+            ("daily_market", "market_state", "market_regime", "market_summary", "market_report"),
+        ):
+            return report_type
+        if report_type == "backtest_report" and _has_any_marker(primary_marker_text, ("backtest",)):
+            return report_type
+    for report_type in REPORT_TYPE_PRIORITY:
         if report_type == "risk_alert_report" and _has_any_marker(marker_text, ("risk_alert", "risk alerts", "risk-alert")):
             return report_type
         if report_type == "must_watch_report" and _has_any_marker(marker_text, ("must_watch", "must watch")):
@@ -648,9 +673,10 @@ def _artifact_source_paths(artifact: ReportArtifact) -> list[Path]:
     return unique_paths
 
 
-def _artifact_marker_text(artifact: ReportArtifact) -> str:
+def _artifact_marker_text(artifact: ReportArtifact, *, primary_only: bool = False) -> str:
     parts: list[str] = [artifact.report_type.lower(), artifact.title.lower()]
-    for path in _artifact_source_paths(artifact):
+    paths = _artifact_primary_paths(artifact) if primary_only else _artifact_source_paths(artifact)
+    for path in paths:
         parts.extend(part.lower() for part in path.parts)
         parts.append(path.stem.lower())
         if path.suffix.lower() == ".md":
@@ -672,6 +698,17 @@ def _artifact_marker_text(artifact: ReportArtifact) -> str:
         parts.append(bundle_dir.name.lower())
 
     return " ".join(parts)
+
+
+def _artifact_primary_paths(artifact: ReportArtifact) -> list[Path]:
+    paths: list[Path] = []
+    for path_value in [artifact.markdown_path, artifact.json_path, artifact.run_card_path]:
+        if path_value is None:
+            continue
+        path = Path(path_value)
+        if path not in paths:
+            paths.append(path)
+    return paths
 
 
 def _has_run_card_bundle_marker(artifact: ReportArtifact, marker_text: str) -> bool:
