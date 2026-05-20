@@ -527,6 +527,47 @@ def test_retention_applies_default_low_liquidity_buy_protection():
     assert len(skipped) == 1
 
 
+def test_retention_skips_missing_execution_day_amount_as_low_liquidity():
+    feature_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_5d", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_20d", "feature_value": 0.15},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ret_60d", "feature_value": 0.10},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "amount_20d_avg", "feature_value": 100000000.0},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "volatility_20d", "feature_value": 0.02},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "ma20_deviation", "feature_value": 0.05},
+            {"asset_id": "A", "trade_date": "2026-01-02", "feature_name": "max_drawdown_20d", "feature_value": -0.03},
+        ]
+    )
+    bar_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-01-02", "open": 10.0, "close": 10.0, "preclose": 9.7, "amount": 100000000.0, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+            {"asset_id": "A", "trade_date": "2026-01-05", "open": 10.5, "close": 10.5, "preclose": 10.4, "amount": None, "trade_status": "1", "is_st": False, "is_limit_up": False, "is_limit_down": False, "is_suspended": False},
+        ]
+    )
+    config = RetentionConfig(
+        start_date="2026-01-02",
+        end_date="2026-01-05",
+        max_positions=1,
+        execution_constraints=BacktestExecutionConstraints(),
+    )
+    signal_cache = {
+        "2026-01-02": {
+            "selections": [
+                BacktestSelection("2026-01-02", "A", 1, 10.0, 0.15, 100000000.0)
+            ],
+            "feature_values": {"A": {"amount_20d_avg": 100000000.0}},
+            "market_allows_entry": True,
+            "entry_allowed_assets": None,
+        }
+    }
+
+    result = simulate_retention_config(feature_frame, bar_frame, config, signal_cache=signal_cache)
+
+    skipped = result.trades[result.trades["skip_reason"] == "low_liquidity"]
+    assert len(skipped) == 1
+
+
 def test_retention_ignores_non_trading_signal_dates_without_extra_equity_rows():
     feature_frame = pd.DataFrame(
         [

@@ -1339,7 +1339,8 @@ def _execute_pending_buy(
         trade_rows.append(_skip_trade(selection, current_date, config, "st"))
         return cash, True
 
-    if _float_or_none(buy_bar.get("amount")) is not None and float(buy_bar["amount"]) < LOW_LIQUIDITY_THRESHOLD:
+    buy_amount = _float_or_none(buy_bar.get("amount"))
+    if buy_amount is None or buy_amount < LOW_LIQUIDITY_THRESHOLD:
         trade_rows.append(_skip_trade(selection, current_date, config, "low_liquidity"))
         return cash, True
 
