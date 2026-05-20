@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from stock_research.report_delivery_openclaw import SEVERITY_ORDER
+
 
 @dataclass(frozen=True)
 class OpenClawSendConfig:
@@ -98,9 +100,13 @@ class OpenClawSender:
 
     def build_send_payload(self, export_data: dict[str, Any], config: OpenClawSendConfig) -> dict[str, Any]:
         manifest = export_data["manifest"]
-        items = list(export_data["items"])
-        if config.limit is not None:
-            items = items[: config.limit]
+        items = self._filter_items(list(export_data["items"]), config)
+        payload_metadata: dict[str, Any] = {}
+        if config.test_mode:
+            payload_metadata = {
+                "source": "stock_research_openclaw_smoke_test",
+                "test_mode": True,
+            }
 
         return {
             "channel": "openclaw",
@@ -111,6 +117,10 @@ class OpenClawSender:
             "item_count": len(items),
             "items": items,
             "manifest": manifest,
+            "payload": {
+                "items": items,
+                "metadata": payload_metadata,
+            },
         }
 
     def send_batch(
@@ -163,9 +173,7 @@ class OpenClawSender:
                 generated_at=generated_at,
             )
 
-        endpoint = config.endpoint
-        if not endpoint:
-            raise ValueError("endpoint is required when dry_run is False")
+        self._validate_live_send_config(config)
 
         transport_result = self.transport.send(payload, config)
         self.write_send_preview(preview_path, payload)
@@ -221,3 +229,49 @@ class OpenClawSender:
         item_count = int(payload.get("item_count", 0))
         generated_at = str(payload.get("generated_at", ""))
         return f"openclaw-send:{item_count}:{generated_at}:{source_manifest_path}"
+
+    def _filter_items(self, items: list[dict[str, Any]], config: OpenClawSendConfig) -> list[dict[str, Any]]:
+        filtered: list[dict[str, Any]] = []
+        allowed_routes = {str(route) for route in config.route_allowlist if str(route)}
+        severity_threshold = self._severity_rank(config.severity_max) if config.severity_max else None
+
+        for item in items:
+            if allowed_routes and str(item.get("openclaw_route", "")) not in allowed_routes:
+                continue
+            if severity_threshold is not None and self._severity_rank(item.get("severity", "unknown")) > severity_threshold:
+                continue
+            filtered.append(self._copy_item(item))
+
+        if config.limit is not None:
+            filtered = filtered[: config.limit]
+        return filtered
+
+    def _copy_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        copied = dict(item)
+        payload = copied.get("payload")
+        if isinstance(payload, dict):
+            copied["payload"] = dict(payload)
+        return copied
+
+    def _severity_rank(self, severity: Any) -> int:
+        return int(SEVERITY_ORDER.get(str(severity).lower(), 0))
+
+    def _validate_live_send_config(self, config: OpenClawSendConfig) -> None:
+        endpoint = config.endpoint
+        if not endpoint:
+            raise ValueError("endpoint is required when dry_run is False")
+
+        problems: list[str] = []
+        if not config.allow_live_send:
+            problems.append("allow_live_send must be True")
+        if config.limit != 1:
+            problems.append("limit == 1")
+        if not config.route_allowlist:
+            problems.append("route_allowlist must be non-empty")
+        if config.severity_max in (None, ""):
+            problems.append("severity_max must be present")
+        if not config.test_mode:
+            problems.append("test_mode must be True")
+
+        if problems:
+            raise ValueError("live send requires " + ", ".join(problems))
