@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from stock_research.backfill_watchdog import BackfillSummary, format_watchdog_message, run_watchdog_once
+from stock_research.backfill_watchdog import (
+    BackfillSummary,
+    format_watchdog_message,
+    run_watchdog_once,
+    should_send_watchdog_message,
+)
 from stock_research.feishu_notify import send_openclaw_feishu_message
 from stock_research.minute_backfill import summarize_backfill_status
 from stock_research.minute_backfill_adapter import MinuteBackfillAdapter, _reconcile_timeout_run_result
 
 
-WATCHDOG_ACTION_HEALTHY = "healthy"
 WATCHDOG_ACTION_RESTARTED = "restarted"
 WATCHDOG_ACTION_STALLED = "stalled_needs_manual_attention"
 
@@ -77,7 +81,7 @@ def run_minute_backfill_watchdog(
             status=result["status"],
             extra_lines=extra_lines,
         )
-    if _should_send_watchdog_message(result["status"]):
+    if should_send_watchdog_message(result["status"]):
         send_openclaw_feishu_message(
             message=message,
             target=report_target,
@@ -156,10 +160,3 @@ def _count_statuses(rows: list[dict[str, Any]]) -> dict[str, int]:
         row_status = str(row.get("status"))
         counts[row_status] = counts.get(row_status, 0) + 1
     return counts
-
-
-def _should_send_watchdog_message(status: Any) -> bool:
-    return bool(
-        status.work_remaining
-        or status.watchdog_action != WATCHDOG_ACTION_HEALTHY
-    )

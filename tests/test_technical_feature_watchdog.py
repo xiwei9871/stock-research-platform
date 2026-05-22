@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 
 import pandas as pd
 
-from stock_research.backfill_watchdog import BackfillSummary
+from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
 from stock_research import technical_feature_watchdog
 from stock_research.technical_feature_watchdog import TechnicalFeatureBackfillAdapter
 
@@ -153,6 +153,7 @@ def test_technical_feature_adapter_run_once_uses_next_pending_batch(monkeypatch)
             "workers": 2,
             "skip_complete": True,
             "run_timeout_seconds": 1800,
+            "explicit_trade_dates": ["1991-01-03", "1991-01-04"],
         }
     ]
     assert result["attempted"] == 2
@@ -165,7 +166,7 @@ def test_technical_feature_adapter_run_once_uses_next_pending_batch(monkeypatch)
     assert result["worker_count"] == 2
 
 
-def test_technical_feature_adapter_run_once_prefers_research_window_pending_batch(
+def test_technical_feature_adapter_run_once_passes_explicit_pending_batch(
     monkeypatch,
 ):
     adapter = TechnicalFeatureBackfillAdapter(
@@ -174,14 +175,13 @@ def test_technical_feature_adapter_run_once_prefers_research_window_pending_batc
         adjust_type="qfq",
         source_data_version="market_daily_bar:qfq",
     )
+    pending_dates = ["2026-04-27", "2013-12-04"]
     monkeypatch.setattr(
         TechnicalFeatureBackfillAdapter,
         "load_status_rows",
         lambda self: [
-            {"trade_date": "2024-01-02", "status": "pending", "row_count": 0},
-            {"trade_date": "2024-01-03", "status": "pending", "row_count": 0},
-            {"trade_date": "2013-12-31", "status": "pending", "row_count": 0},
-            {"trade_date": "2014-01-02", "status": "pending", "row_count": 0},
+            {"trade_date": pending_dates[0], "status": "pending", "row_count": 0},
+            {"trade_date": pending_dates[1], "status": "pending", "row_count": 0},
         ],
     )
     calls = []
@@ -210,15 +210,19 @@ def test_technical_feature_adapter_run_once_prefers_research_window_pending_batc
         lambda **kwargs: calls.append(kwargs) or FakeFrame(),
     )
 
-    adapter.run_once(
+    result = adapter.run_once(
         scope=adapter.load_scope(),
         max_jobs=2,
         workers=2,
         run_timeout_seconds=1800,
     )
 
-    assert calls[0]["start_date"] == "2024-01-02"
-    assert calls[0]["end_date"] == "2024-01-03"
+    assert calls[0]["start_date"] == "2013-12-04"
+    assert calls[0]["end_date"] == "2026-04-27"
+    assert calls[0]["explicit_trade_dates"] == pending_dates
+    assert result["attempted"] == 2
+    assert result["success"] == 2
+    assert result["rows"] == 250
 
 
 def test_technical_feature_adapter_run_once_passes_timeout_and_exposes_batch_metrics(
@@ -287,6 +291,7 @@ def test_technical_feature_adapter_run_once_passes_timeout_and_exposes_batch_met
             "workers": 3,
             "skip_complete": True,
             "run_timeout_seconds": 1200,
+            "explicit_trade_dates": ["1991-01-03", "1991-01-04"],
         }
     ]
     assert result["timed_out"] is True
@@ -350,6 +355,61 @@ def test_run_technical_feature_backfill_watchdog_respects_sleep_between_runs_sec
     assert result["message"] == "watchdog message"
     assert send_calls[0]["message"] == "watchdog message"
     assert sleep_calls == [12.5]
+
+
+def test_run_technical_feature_backfill_watchdog_skips_feishu_when_complete_and_healthy(
+    monkeypatch,
+):
+    send_calls = []
+    status = BackfillWatchdogStatus(
+        watchdog_action="healthy",
+        progress_advanced=False,
+        work_remaining=False,
+        stale_tasks_reset=0,
+        timed_out=False,
+        previous_frontier={
+            "completed_through": "2026-05-14",
+            "currently_working_on": None,
+        },
+        current_frontier={
+            "completed_through": "2026-05-14",
+            "currently_working_on": None,
+        },
+    )
+
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "run_watchdog_once",
+        lambda **kwargs: {
+            "message": "watchdog message",
+            "status": status,
+            "pre_summary": BackfillSummary(1, 0, 0, 1, 0, 0, 100),
+            "post_summary": BackfillSummary(1, 0, 0, 1, 0, 0, 100),
+            "run_result": {
+                "attempted": 0,
+                "success": 0,
+                "failed": 0,
+                "rows": 0,
+                "status": "completed",
+                "timed_out": False,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        technical_feature_watchdog,
+        "send_openclaw_feishu_message",
+        lambda **kwargs: send_calls.append(kwargs),
+    )
+
+    result = technical_feature_watchdog.run_technical_feature_backfill_watchdog(
+        start_date="1991-01-01",
+        end_date="2026-05-14",
+        report_target="chat:test",
+        report_dry_run=True,
+    )
+
+    assert result["status"].work_remaining is False
+    assert send_calls == []
 
 
 def test_cron_jobs_include_technical_feature_backfill_watchdog():

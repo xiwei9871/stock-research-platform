@@ -454,6 +454,8 @@ def run_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
     print(f"minute_backfill_watchdog|action|{result['status']['watchdog_action']}")
     print(f"minute_backfill_watchdog|delta_success|{delta_success}")
     print(f"minute_backfill_watchdog|delta_rows|{result['run_result']['rows']}")
+    if "work_remaining" in result["status"]:
+        print(f"minute_backfill_watchdog|work_remaining|{result['status']['work_remaining']}")
 
 
 def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
@@ -501,6 +503,7 @@ def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
     print(f"technical_feature_watchdog|action|{result['status'].watchdog_action}")
     print(f"technical_feature_watchdog|delta_success|{delta_success}")
     print(f"technical_feature_watchdog|delta_rows|{max(0, delta_rows)}")
+    print(f"technical_feature_watchdog|work_remaining|{result['status'].work_remaining}")
     for key in (
         "batch_start_date",
         "batch_end_date",

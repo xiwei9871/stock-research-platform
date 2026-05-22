@@ -25,6 +25,7 @@ from watchdog_runner.backfill import (  # noqa: E402
     build_watchdog_status,
     format_watchdog_message,
     run_watchdog_once,
+    should_send_watchdog_message,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "build_watchdog_status",
     "format_watchdog_message",
     "run_watchdog_once",
+    "should_send_watchdog_message",
 ]

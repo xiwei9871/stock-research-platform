@@ -19,7 +19,7 @@ from stock_research.technical_feature_store import (
     TECHNICAL_FEATURE_CALC_VERSION,
     TECHNICAL_FEATURE_SOURCE,
 )
-from stock_research.backfill_watchdog import run_watchdog_once
+from stock_research.backfill_watchdog import run_watchdog_once, should_send_watchdog_message
 
 
 @dataclass(frozen=True)
@@ -138,8 +138,8 @@ class TechnicalFeatureBackfillAdapter:
                 "timed_out": False,
             }
         result = backfill_technical_features_daily_range(
-            start_date=pending_dates[0],
-            end_date=pending_dates[-1],
+            start_date=min(pending_dates),
+            end_date=max(pending_dates),
             lookback_bars=self.lookback_bars,
             adjust_type=self.adjust_type,
             source_data_version=self.source_data_version,
@@ -147,11 +147,13 @@ class TechnicalFeatureBackfillAdapter:
             workers=workers,
             skip_complete=True,
             run_timeout_seconds=run_timeout_seconds,
+            explicit_trade_dates=pending_dates,
         )
         result_attrs = getattr(result, "attrs", {})
         rows = int(result["feature_rows"].sum()) if not result.empty else 0
+        attempted = int(result_attrs.get("batch_size_days", len(pending_dates)) or 0)
         return {
-            "attempted": len(pending_dates),
+            "attempted": attempted,
             "success": len(result),
             "failed": 0,
             "rows": rows,
@@ -232,17 +234,17 @@ def run_technical_feature_backfill_watchdog(
         workers=workers,
         send_message=None,
     )
-    send_openclaw_feishu_message(
-        message=result["message"],
-        target=report_target,
-        account=report_account,
-        openclaw_bin=openclaw_bin,
-        dry_run=report_dry_run,
-    )
+    if should_send_watchdog_message(result["status"]):
+        send_openclaw_feishu_message(
+            message=result["message"],
+            target=report_target,
+            account=report_account,
+            openclaw_bin=openclaw_bin,
+            dry_run=report_dry_run,
+        )
     if sleep_between_runs_seconds > 0:
         sleep(float(sleep_between_runs_seconds))
     return result
-
 
 def _load_technical_feature_row_counts(
     *,

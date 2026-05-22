@@ -152,22 +152,27 @@ def backfill_technical_features_daily_range(
     progress: Callable[[dict], None] | None = None,
     clock: Callable[[], float] = time.perf_counter,
     run_timeout_seconds: float | None = None,
+    explicit_trade_dates: list[str] | None = None,
 ) -> pd.DataFrame:
     batch_started_at: float | None = None
     rows = []
     trade_dates = (
-        load_trade_dates_for_backfill(
-            start_date=start_date,
-            end_date=end_date,
-            adjust_type=adjust_type,
+        [str(trade_date)[:10] for trade_date in explicit_trade_dates]
+        if explicit_trade_dates is not None
+        else (
+            load_trade_dates_for_backfill(
+                start_date=start_date,
+                end_date=end_date,
+                adjust_type=adjust_type,
+            )
+            if trading_days_only
+            else build_trade_date_range(start_date, end_date)
         )
-        if trading_days_only
-        else build_trade_date_range(start_date, end_date)
     )
-    if skip_complete:
+    if skip_complete and trade_dates:
         complete_dates = load_complete_technical_feature_dates(
-            start_date=start_date,
-            end_date=end_date,
+            start_date=min(trade_dates),
+            end_date=max(trade_dates),
             adjust_type=adjust_type,
             source_data_version=source_data_version,
         )
