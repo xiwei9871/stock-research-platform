@@ -115,6 +115,33 @@ P2-1 is ready for review when:
 - Tests cover the module and CLI.
 - `.venv/bin/pytest -q` passes.
 
+## P2-1 Implementation Status
+
+Status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p2.artifact_rollup.build_p2_artifact_rollup`
+- `stock_research.p2.artifact_rollup.write_p2_artifact_rollup`
+- CLI command:
+  - `p2-artifact-rollup`
+- Module tests:
+  - `tests/test_p2_artifact_rollup.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p2_artifact_rollup`
+
+Verification:
+
+```text
+.venv/bin/pytest tests/test_p2_artifact_rollup.py tests/test_factor_cli.py -q -k "p2_artifact_rollup"
+5 passed, 118 deselected, 2 warnings
+
+.venv/bin/pytest -q
+1161 passed, 2 warnings
+```
+
+The warnings are existing dependency deprecation warnings from `py_mini_racer`.
+
 ## Safety Rules
 
 - Every P2 artifact must preserve source paths.
