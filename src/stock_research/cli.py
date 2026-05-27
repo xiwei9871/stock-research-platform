@@ -152,6 +152,10 @@ from stock_research.minute_backfill import (
 from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
+from stock_research.p2.artifact_rollup import (
+    build_p2_artifact_rollup,
+    write_p2_artifact_rollup,
+)
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
@@ -1417,6 +1421,10 @@ def build_parser() -> argparse.ArgumentParser:
     technical_feature_performance_review.add_argument("--min-speedup-ratio", type=float, default=1.0)
     technical_feature_performance_review.add_argument("--output-dir", required=True)
 
+    p2_artifact_rollup = subparsers.add_parser("p2-artifact-rollup")
+    p2_artifact_rollup.add_argument("--manifest", required=True)
+    p2_artifact_rollup.add_argument("--output-dir", required=True)
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2524,6 +2532,13 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"technical_feature_performance_review|json|{paths['json_path']}")
         print(f"technical_feature_performance_review|markdown|{paths['markdown_path']}")
         print(f"technical_feature_performance_review|metrics_csv|{paths['metrics_csv_path']}")
+    elif args.command == "p2-artifact-rollup":
+        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        rollup = build_p2_artifact_rollup(manifest)
+        paths = write_p2_artifact_rollup(rollup, output_dir=args.output_dir)
+        print(f"p2_artifact_rollup|status|{rollup['status']}")
+        print(f"p2_artifact_rollup|json|{paths['json_path']}")
+        print(f"p2_artifact_rollup|markdown|{paths['markdown_path']}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

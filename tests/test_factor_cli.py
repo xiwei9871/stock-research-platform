@@ -317,6 +317,22 @@ def test_cli_accepts_technical_feature_performance_review_command():
     assert args.output_dir == "outputs/technical_performance"
 
 
+def test_cli_accepts_p2_artifact_rollup_command():
+    args = build_parser().parse_args(
+        [
+            "p2-artifact-rollup",
+            "--manifest",
+            "outputs/p2/input_manifest.json",
+            "--output-dir",
+            "outputs/p2",
+        ]
+    )
+
+    assert args.command == "p2-artifact-rollup"
+    assert args.manifest == "outputs/p2/input_manifest.json"
+    assert args.output_dir == "outputs/p2"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1658,6 +1674,44 @@ def test_technical_feature_performance_review_cli_prints_artifact_paths(monkeypa
         f"technical_feature_performance_review|markdown|{tmp_path / 'technical' / 'technical_feature_performance_review.md'}",
         f"technical_feature_performance_review|metrics_csv|{tmp_path / 'technical' / 'technical_feature_performance_metrics.csv'}",
     ]
+
+
+def test_p2_artifact_rollup_cli_prints_paths(capsys, tmp_path):
+    artifact_path = tmp_path / "agent_report.json"
+    artifact_path.write_text('{"status": "written"}', encoding="utf-8")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-05-28",
+                "run_id": "p2-rollup-2026-05-28",
+                "artifacts": [
+                    {
+                        "group": "agent",
+                        "name": "agent_report",
+                        "path": str(artifact_path),
+                        "required": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli.main_for_args(
+        [
+            "p2-artifact-rollup",
+            "--manifest",
+            str(manifest_path),
+            "--output-dir",
+            str(tmp_path / "rollup"),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p2_artifact_rollup|status|ready"
+    assert lines[1].startswith("p2_artifact_rollup|json|")
+    assert lines[2].startswith("p2_artifact_rollup|markdown|")
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):
