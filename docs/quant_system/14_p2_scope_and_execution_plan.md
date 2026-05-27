@@ -95,6 +95,28 @@ Boundary:
 
 - No Web dashboard until the report contract is stable.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p2.aggregate_review.load_aggregate_artifact_payloads`
+- `stock_research.p2.aggregate_review.build_p2_aggregate_review`
+- `stock_research.p2.aggregate_review.write_p2_aggregate_review`
+- CLI command:
+  - `p2-aggregate-review`
+- Module tests:
+  - `tests/test_p2_aggregate_review.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p2_aggregate_review`
+
+Review boundary:
+
+- Consumes the P2 artifact rollup JSON.
+- Reads JSON artifact payloads when available and preserves source paths.
+- Writes one aggregate JSON report and one operator-facing Markdown report.
+- Surfaces missing required artifacts and blocked source sections at the top.
+- Keeps `auto_trade_enabled = false` and `human_confirmation_required = true`.
+
 ### P2-4 Durable Storage Decision
 
 Goal: decide which P2 artifacts deserve durable tables.

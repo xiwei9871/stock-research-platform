@@ -363,6 +363,25 @@ def test_cli_accepts_p2_simulation_review_command():
     assert args.output_dir == "outputs/p2/simulation"
 
 
+def test_cli_accepts_p2_aggregate_review_command():
+    args = build_parser().parse_args(
+        [
+            "p2-aggregate-review",
+            "--trade-date",
+            "2026-05-28",
+            "--rollup",
+            "outputs/p2/p2_artifact_rollup.json",
+            "--output-dir",
+            "outputs/p2/aggregate",
+        ]
+    )
+
+    assert args.command == "p2-aggregate-review"
+    assert args.trade_date == "2026-05-28"
+    assert args.rollup == "outputs/p2/p2_artifact_rollup.json"
+    assert args.output_dir == "outputs/p2/aggregate"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1803,6 +1822,57 @@ def test_p2_simulation_review_cli_prints_paths(capsys, tmp_path):
     assert lines[2].startswith("p2_simulation_review|markdown|")
     assert lines[3].startswith("p2_simulation_review|history_csv|")
     assert lines[4].startswith("p2_simulation_review|positions_csv|")
+
+
+def test_p2_aggregate_review_cli_prints_paths(capsys, tmp_path):
+    simulation_path = tmp_path / "virtual_portfolio_review.json"
+    simulation_path.write_text(
+        json.dumps(
+            {
+                "status": "manual_review_required",
+                "risk_summary": {"latest_risk_level": "normal", "max_drawdown": -0.04},
+                "advice_summary": {"issue_count": 0, "advice_count": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    rollup_path = tmp_path / "rollup.json"
+    rollup_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-05-28",
+                "run_id": "p2-rollup-2026-05-28",
+                "status": "ready",
+                "artifacts": [
+                    {
+                        "group": "simulation",
+                        "name": "virtual_portfolio",
+                        "path": str(simulation_path),
+                        "required": True,
+                        "exists": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cli.main_for_args(
+        [
+            "p2-aggregate-review",
+            "--trade-date",
+            "2026-05-28",
+            "--rollup",
+            str(rollup_path),
+            "--output-dir",
+            str(tmp_path / "aggregate"),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p2_aggregate_review|status|review_required"
+    assert lines[1].startswith("p2_aggregate_review|json|")
+    assert lines[2].startswith("p2_aggregate_review|markdown|")
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):

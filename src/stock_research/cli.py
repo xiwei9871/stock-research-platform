@@ -156,6 +156,11 @@ from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
 )
+from stock_research.p2.aggregate_review import (
+    build_p2_aggregate_review,
+    load_aggregate_artifact_payloads,
+    write_p2_aggregate_review,
+)
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.simulation.virtual_portfolio import (
     build_virtual_portfolio_review,
@@ -1441,6 +1446,11 @@ def build_parser() -> argparse.ArgumentParser:
     p2_simulation_review.add_argument("--trade-advice")
     p2_simulation_review.add_argument("--output-dir", required=True)
 
+    p2_aggregate_review = subparsers.add_parser("p2-aggregate-review")
+    p2_aggregate_review.add_argument("--trade-date", required=True)
+    p2_aggregate_review.add_argument("--rollup", required=True)
+    p2_aggregate_review.add_argument("--output-dir", required=True)
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2572,6 +2582,18 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p2_simulation_review|markdown|{paths['markdown_path']}")
         print(f"p2_simulation_review|history_csv|{paths['history_csv_path']}")
         print(f"p2_simulation_review|positions_csv|{paths['positions_csv_path']}")
+    elif args.command == "p2-aggregate-review":
+        rollup = json.loads(Path(args.rollup).read_text(encoding="utf-8"))
+        payloads = load_aggregate_artifact_payloads(rollup)
+        review = build_p2_aggregate_review(
+            trade_date=args.trade_date,
+            rollup=rollup,
+            artifact_payloads=payloads,
+        )
+        paths = write_p2_aggregate_review(review, output_dir=args.output_dir)
+        print(f"p2_aggregate_review|status|{review['status']}")
+        print(f"p2_aggregate_review|json|{paths['json_path']}")
+        print(f"p2_aggregate_review|markdown|{paths['markdown_path']}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()
