@@ -157,6 +157,11 @@ from stock_research.p2.artifact_rollup import (
     write_p2_artifact_rollup,
 )
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
+from stock_research.simulation.virtual_portfolio import (
+    build_virtual_portfolio_review,
+    load_simulation_states,
+    write_virtual_portfolio_review,
+)
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.report_delivery import deliver_local_reports
@@ -1425,6 +1430,17 @@ def build_parser() -> argparse.ArgumentParser:
     p2_artifact_rollup.add_argument("--manifest", required=True)
     p2_artifact_rollup.add_argument("--output-dir", required=True)
 
+    p2_simulation_review = subparsers.add_parser("p2-simulation-review")
+    p2_simulation_review.add_argument("--trade-date", required=True)
+    p2_simulation_review.add_argument("--portfolio-id", required=True)
+    p2_simulation_review.add_argument(
+        "--simulation-state",
+        action="append",
+        required=True,
+    )
+    p2_simulation_review.add_argument("--trade-advice")
+    p2_simulation_review.add_argument("--output-dir", required=True)
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2539,6 +2555,23 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p2_artifact_rollup|status|{rollup['status']}")
         print(f"p2_artifact_rollup|json|{paths['json_path']}")
         print(f"p2_artifact_rollup|markdown|{paths['markdown_path']}")
+    elif args.command == "p2-simulation-review":
+        import pandas as pd
+
+        states = load_simulation_states(args.simulation_state)
+        advice = pd.read_csv(args.trade_advice) if args.trade_advice else None
+        review = build_virtual_portfolio_review(
+            trade_date=args.trade_date,
+            portfolio_id=args.portfolio_id,
+            states=states,
+            advice=advice,
+        )
+        paths = write_virtual_portfolio_review(review, output_dir=args.output_dir)
+        print(f"p2_simulation_review|status|{review['status']}")
+        print(f"p2_simulation_review|json|{paths['json_path']}")
+        print(f"p2_simulation_review|markdown|{paths['markdown_path']}")
+        print(f"p2_simulation_review|history_csv|{paths['history_csv_path']}")
+        print(f"p2_simulation_review|positions_csv|{paths['positions_csv_path']}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

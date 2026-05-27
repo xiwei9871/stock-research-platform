@@ -60,6 +60,27 @@ Boundary:
 - Still no broker connection.
 - Still no automatic order generation.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.simulation.virtual_portfolio.load_simulation_states`
+- `stock_research.simulation.virtual_portfolio.build_virtual_portfolio_review`
+- `stock_research.simulation.virtual_portfolio.write_virtual_portfolio_review`
+- CLI command:
+  - `p2-simulation-review`
+- Module tests:
+  - `tests/test_virtual_portfolio_review.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p2_simulation_review`
+
+Review boundary:
+
+- Consumes P1 simulation review/state JSON and optional trade advice CSV.
+- Writes file-based JSON, Markdown, rolling history CSV, and latest positions CSV.
+- Keeps `status = manual_review_required`.
+- Keeps `auto_trade_enabled = false`.
+
 ### P2-3 Aggregate Review Report
 
 Goal: produce one operator-facing daily review report.

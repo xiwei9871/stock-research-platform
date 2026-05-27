@@ -333,6 +333,36 @@ def test_cli_accepts_p2_artifact_rollup_command():
     assert args.output_dir == "outputs/p2"
 
 
+def test_cli_accepts_p2_simulation_review_command():
+    args = build_parser().parse_args(
+        [
+            "p2-simulation-review",
+            "--trade-date",
+            "2026-05-28",
+            "--portfolio-id",
+            "demo",
+            "--simulation-state",
+            "outputs/simulation/state_1.json",
+            "--simulation-state",
+            "outputs/simulation/state_2.json",
+            "--trade-advice",
+            "outputs/advice/trade_advice.csv",
+            "--output-dir",
+            "outputs/p2/simulation",
+        ]
+    )
+
+    assert args.command == "p2-simulation-review"
+    assert args.trade_date == "2026-05-28"
+    assert args.portfolio_id == "demo"
+    assert args.simulation_state == [
+        "outputs/simulation/state_1.json",
+        "outputs/simulation/state_2.json",
+    ]
+    assert args.trade_advice == "outputs/advice/trade_advice.csv"
+    assert args.output_dir == "outputs/p2/simulation"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1712,6 +1742,67 @@ def test_p2_artifact_rollup_cli_prints_paths(capsys, tmp_path):
     assert lines[0] == "p2_artifact_rollup|status|ready"
     assert lines[1].startswith("p2_artifact_rollup|json|")
     assert lines[2].startswith("p2_artifact_rollup|markdown|")
+
+
+def test_p2_simulation_review_cli_prints_paths(capsys, tmp_path):
+    state_path = tmp_path / "portfolio_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-05-28",
+                "strategy_id": "portfolio:test",
+                "cash": 40000.0,
+                "market_value": 60000.0,
+                "equity": 100000.0,
+                "drawdown": -0.08,
+                "exposure_pct": 0.60,
+                "open_position_count": 1,
+                "risk_level": "normal",
+                "positions": [
+                    {
+                        "asset_id": "CN:SH:600001",
+                        "buy_value": 60000.0,
+                        "position_weight": 0.60,
+                        "status": "open",
+                    }
+                ],
+                "auto_trade_enabled": False,
+                "human_confirmation_required": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    advice_path = tmp_path / "trade_advice.csv"
+    advice_path.write_text(
+        "trade_date,asset_id,action,target_weight,target_value,advice_status,execution_status,"
+        "requires_human_confirmation,auto_trade_enabled,evidence_artifact_id\n"
+        "2026-05-28,CN:SH:600001,consider_buy,0.08,8000,pending_human_review,"
+        "not_executed,True,False,agent:alpha\n",
+        encoding="utf-8",
+    )
+
+    cli.main_for_args(
+        [
+            "p2-simulation-review",
+            "--trade-date",
+            "2026-05-28",
+            "--portfolio-id",
+            "demo",
+            "--simulation-state",
+            str(state_path),
+            "--trade-advice",
+            str(advice_path),
+            "--output-dir",
+            str(tmp_path / "review"),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p2_simulation_review|status|manual_review_required"
+    assert lines[1].startswith("p2_simulation_review|json|")
+    assert lines[2].startswith("p2_simulation_review|markdown|")
+    assert lines[3].startswith("p2_simulation_review|history_csv|")
+    assert lines[4].startswith("p2_simulation_review|positions_csv|")
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):
