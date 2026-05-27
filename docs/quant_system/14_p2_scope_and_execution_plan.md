@@ -4,7 +4,7 @@ Date: 2026-05-28
 
 ## Status
 
-P2 can start.
+P2 first scoped pass completed.
 
 P1 was completed in:
 
@@ -129,6 +129,21 @@ Deliver:
 Boundary:
 
 - Do not add tables before the file contracts prove useful.
+
+Implementation status: decision completed and ready for review.
+
+Delivered:
+
+- Durable storage decision:
+  - `docs/quant_system/15_p2_durable_storage_decision.md`
+
+Decision summary:
+
+- Do not add new P2 database tables in P2-4.
+- Keep P2-1 through P2-3 artifacts as the source of truth for the rest of P2.
+- Use existing `report.report_run` only as an optional report-path index if needed.
+- Promote selected aggregate review and virtual portfolio metadata into future tables
+  only after repeated daily runs prove the file contracts stable.
 
 ## Out Of Scope For P2
 
