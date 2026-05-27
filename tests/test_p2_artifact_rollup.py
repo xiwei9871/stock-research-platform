@@ -1,4 +1,8 @@
+import json
+from pathlib import Path
+
 from stock_research.p2.artifact_rollup import build_p2_artifact_rollup
+from stock_research.p2.artifact_rollup import write_p2_artifact_rollup
 
 
 def test_build_p2_artifact_rollup_marks_ready_when_required_artifacts_exist(tmp_path):
@@ -51,3 +55,38 @@ def test_build_p2_artifact_rollup_blocks_when_required_artifact_missing(tmp_path
     assert rollup["artifacts"][0]["name"] == "portfolio_simulation"
     assert rollup["artifacts"][0]["required"] is True
     assert rollup["artifacts"][0]["exists"] is False
+
+
+def test_write_p2_artifact_rollup_outputs_json_and_markdown(tmp_path):
+    artifact_path = tmp_path / "simulation.json"
+    artifact_path.write_text('{"status": "written"}', encoding="utf-8")
+    rollup = build_p2_artifact_rollup(
+        {
+            "trade_date": "2026-05-28",
+            "run_id": "p2-rollup-2026-05-28",
+            "artifacts": [
+                {
+                    "group": "delivery",
+                    "name": "feishu_preview",
+                    "path": str(artifact_path),
+                    "required": True,
+                },
+                {
+                    "group": "simulation",
+                    "name": "portfolio_simulation",
+                    "path": str(artifact_path),
+                    "required": True,
+                },
+            ],
+        }
+    )
+
+    paths = write_p2_artifact_rollup(rollup, output_dir=tmp_path / "out")
+
+    payload = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
+    markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+    assert payload["status"] == "ready"
+    assert "P2 Artifact Rollup" in markdown
+    assert "delivery" in markdown
+    assert "simulation" in markdown
+    assert "ready" in markdown
