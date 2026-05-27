@@ -387,7 +387,7 @@ def test_score_stored_factor_daily_loads_config_and_scores(monkeypatch):
     assert calls[0][1]["calc_version"] == "v1"
 
 
-def test_score_stored_factor_daily_can_require_approved_factors(monkeypatch):
+def test_score_stored_factor_daily_manual_v1_ignores_approval_gate(monkeypatch):
     load_calls = []
     factors = pd.DataFrame(
         [
@@ -413,8 +413,38 @@ def test_score_stored_factor_daily_can_require_approved_factors(monkeypatch):
     )
 
     assert count == 1
-    assert load_calls[0]["approved_only"] is True
+    assert load_calls[0]["approved_only"] is False
     assert load_calls[0]["score_version"] == "manual_v1"
+
+
+def test_score_stored_factor_daily_non_manual_score_can_require_approved_factors(monkeypatch):
+    load_calls = []
+    factors = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-08", "asset_id": "A", "factor_name": "ret_20", "factor_value": 1.0},
+        ]
+    )
+
+    def fake_load_factor_daily(**kwargs):
+        load_calls.append(kwargs)
+        return factors
+
+    monkeypatch.setattr(factor_store, "load_factor_daily", fake_load_factor_daily)
+    monkeypatch.setattr(
+        factor_store,
+        "score_and_store_factor_daily",
+        lambda factor_daily, **kwargs: len(factor_daily),
+    )
+
+    count = factor_store.score_stored_factor_daily(
+        "2026-05-08",
+        score_version="gate_v1",
+        approved_only=True,
+    )
+
+    assert count == 1
+    assert load_calls[0]["approved_only"] is True
+    assert load_calls[0]["score_version"] == "gate_v1"
 
 
 class _context:

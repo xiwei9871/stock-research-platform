@@ -61,6 +61,49 @@ def write_watchlist_report(
     }
 
 
+def write_watchlist_diagnostics_report(
+    *,
+    full_rows: pd.DataFrame,
+    must_watch_rows: pd.DataFrame,
+    output_dir: str | Path,
+    output_version: str = "v1",
+    trade_date: str | None = None,
+    watchlist_id: str | None = None,
+) -> dict[str, str]:
+    path = Path(output_dir)
+    path.mkdir(parents=True, exist_ok=True)
+
+    trade_date, watchlist_id = _resolve_diagnostics_identity(
+        full_rows=full_rows,
+        must_watch_rows=must_watch_rows,
+        trade_date=trade_date,
+        watchlist_id=watchlist_id,
+    )
+    base = f"watchlist_diagnostics_{trade_date}_{watchlist_id}_{output_version}"
+
+    full_csv_path = path / f"{base}.csv"
+    markdown_path = path / f"{base}.md"
+    must_watch_csv_path = path / f"watchlist_diagnostics_must_watch_{trade_date}_{watchlist_id}_{output_version}.csv"
+
+    full_rows.to_csv(full_csv_path, index=False)
+    must_watch_rows.to_csv(must_watch_csv_path, index=False)
+    markdown_path.write_text(
+        _watchlist_diagnostics_markdown(
+            full_rows,
+            must_watch_rows,
+            trade_date=trade_date,
+            watchlist_id=watchlist_id,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "markdown_path": str(markdown_path),
+        "full_csv_path": str(full_csv_path),
+        "must_watch_csv_path": str(must_watch_csv_path),
+    }
+
+
 def _watchlist_markdown(signal_rows: pd.DataFrame) -> str:
     if signal_rows.empty:
         raise ValueError("watchlist report requires at least one row")
@@ -98,14 +141,70 @@ def _watchlist_markdown(signal_rows: pd.DataFrame) -> str:
                 "| "
                 + " | ".join(
                     [
-                        _string_value(row.get("asset_id")),
-                        _string_value(row.get("stock_code")),
-                        _string_value(row.get("stock_name")),
-                        _string_value(row.get("priority")),
-                        _format_score(row.get("signal_score")),
-                        _string_value(row.get("primary_signal")),
-                        _format_list(row.get("signal_tags")),
-                        _format_list(row.get("risk_tags")),
+                        _markdown_cell(row.get("asset_id")),
+                        _markdown_cell(row.get("stock_code")),
+                        _markdown_cell(row.get("stock_name")),
+                        _markdown_cell(row.get("priority")),
+                        _markdown_cell(_format_score(row.get("signal_score"))),
+                        _markdown_cell(row.get("primary_signal")),
+                        _markdown_cell(_format_list(row.get("signal_tags"))),
+                        _markdown_cell(_format_list(row.get("risk_tags"))),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _watchlist_diagnostics_markdown(
+    diagnostics_rows: pd.DataFrame,
+    must_watch_rows: pd.DataFrame,
+    *,
+    trade_date: str,
+    watchlist_id: str,
+) -> str:
+    lines = [
+        f"# Watchlist Diagnostics {trade_date}",
+        "",
+        f"- Watchlist: `{watchlist_id}`",
+        f"- Trade date: `{trade_date}`",
+        "",
+    ]
+
+    grouped_rows = {
+        "Risk Watch": [],
+        "Opportunity Watch": [],
+    }
+    for row in must_watch_rows.to_dict("records"):
+        grouped_rows[_diagnostic_group(row)].append(row)
+
+    for title in ("Risk Watch", "Opportunity Watch"):
+        rows = grouped_rows[title]
+        lines.extend([f"## {title}", ""])
+        if not rows:
+            lines.append("No rows.")
+            lines.append("")
+            continue
+        lines.append("| Asset | Name | Priority | Structure | Dragon | Case | LHB | Regime | Industry | Reason | Risk | Opportunity |")
+        lines.append("| --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        for row in rows:
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        _markdown_cell(row.get("asset_id")),
+                        _markdown_cell(row.get("stock_name") or row.get("asset_id")),
+                        _markdown_cell(row.get("watch_priority")),
+                        _markdown_cell(row.get("event_structure")),
+                        _markdown_cell(_format_dragon_context(row)),
+                        _markdown_cell(_format_case_context(row)),
+                        _markdown_cell(_format_lhb_context(row)),
+                        _markdown_cell(_format_regime_context(row)),
+                        _markdown_cell(_format_industry_context(row)),
+                        _markdown_cell(row.get("diagnostic_reason")),
+                        _markdown_cell(row.get("risk_note")),
+                        _markdown_cell(row.get("opportunity_note")),
                     ]
                 )
                 + " |"
@@ -121,6 +220,95 @@ def _report_group(row: dict[str, Any]) -> str:
     if "risk_excluded" in risk_tags:
         return "Risk Excluded"
     return "Candidate"
+
+
+def _diagnostic_group(row: dict[str, Any]) -> str:
+    if row.get("watch_group") == "opportunity_watch":
+        return "Opportunity Watch"
+    return "Risk Watch"
+
+
+def _format_dragon_context(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if row.get("dragon_trade_date"):
+        parts.append(_display_date(row.get("dragon_trade_date")))
+    if row.get("entry_window_v2"):
+        parts.append(_string_value(row.get("entry_window_v2")))
+    elif row.get("entry_window"):
+        parts.append(_string_value(row.get("entry_window")))
+    return " / ".join(parts)
+
+
+def _format_case_context(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if row.get("case_event_date"):
+        parts.append(_display_date(row.get("case_event_date")))
+    if row.get("case_event_type"):
+        parts.append(_string_value(row.get("case_event_type")))
+    return " / ".join(parts)
+
+
+def _format_lhb_context(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if row.get("lhb_event_date"):
+        parts.append(_display_date(row.get("lhb_event_date")))
+    if row.get("lhb_risk_level"):
+        parts.append(_string_value(row.get("lhb_risk_level")))
+    return " / ".join(parts)
+
+
+def _format_regime_context(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if row.get("market_regime"):
+        parts.append(_string_value(row.get("market_regime")))
+    if row.get("market_risk_level"):
+        parts.append(_string_value(row.get("market_risk_level")))
+    return " / ".join(parts)
+
+
+def _format_industry_context(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if row.get("industry_name"):
+        parts.append(_string_value(row.get("industry_name")))
+    if row.get("mainline_flag") in {True, False}:
+        parts.append("mainline" if bool(row.get("mainline_flag")) else "non-mainline")
+    return " / ".join(parts)
+
+
+def _validate_matching_report_identity(diagnostics_rows: pd.DataFrame, must_watch_rows: pd.DataFrame) -> None:
+    if must_watch_rows.empty:
+        return
+    mismatches: list[str] = []
+    for column in ("trade_date", "watchlist_id"):
+        diagnostics_values = _report_identity_values(diagnostics_rows, column, keep_missing=True)
+        must_watch_values = _report_identity_values(must_watch_rows, column, keep_missing=True)
+        if diagnostics_values != must_watch_values:
+            mismatches.append(
+                f"{column}: diagnostics={diagnostics_values or ['<missing>']} "
+                f"must_watch={must_watch_values or ['<missing>']}"
+            )
+    if mismatches:
+        raise ValueError(
+            "watchlist diagnostics report requires matching trade_date and watchlist_id; "
+            + "; ".join(mismatches)
+        )
+
+
+def _resolve_diagnostics_identity(
+    *,
+    full_rows: pd.DataFrame,
+    must_watch_rows: pd.DataFrame,
+    trade_date: str | None,
+    watchlist_id: str | None,
+) -> tuple[str, str]:
+    if not full_rows.empty:
+        _validate_matching_report_identity(full_rows, must_watch_rows)
+        return _report_value(full_rows, "trade_date"), _report_value(full_rows, "watchlist_id")
+    if not trade_date or not watchlist_id:
+        raise ValueError(
+            "watchlist diagnostics report requires non-empty full_rows or explicit trade_date and watchlist_id"
+        )
+    return trade_date, watchlist_id
 
 
 def _primary_signal(row: dict[str, Any]) -> str:
@@ -148,10 +336,37 @@ def _format_score(value: Any) -> str:
 def _string_value(value: Any) -> str:
     if value is None:
         return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
     return str(value)
 
 
+def _display_date(value: Any) -> str:
+    try:
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
+    if value is None:
+        return ""
+    try:
+        return pd.Timestamp(value).date().isoformat()
+    except Exception:
+        return _string_value(value)
+
+
+def _markdown_cell(value: Any) -> str:
+    return _string_value(value).replace("|", r"\|").replace("\n", "<br>")
+
+
 def _report_value(frame: pd.DataFrame, column: str) -> str:
+    if frame.empty or column not in frame.columns:
+        raise ValueError(f"watchlist report requires a non-empty {column}")
+    if any(not _identity_string(value) for value in frame[column].tolist()):
+        raise ValueError(f"watchlist report requires a non-empty {column}")
     values = _report_identity_values(frame, column)
     if not values:
         raise ValueError(f"watchlist report requires a non-empty {column}")
@@ -160,14 +375,17 @@ def _report_value(frame: pd.DataFrame, column: str) -> str:
     return values[0]
 
 
-def _report_identity_values(frame: pd.DataFrame, column: str) -> list[str]:
+def _report_identity_values(frame: pd.DataFrame, column: str, *, keep_missing: bool = False) -> list[str]:
     if frame.empty or column not in frame.columns:
         return []
     values: list[str] = []
     for value in frame[column].tolist():
         normalized = _identity_string(value)
-        if normalized and normalized not in values:
-            values.append(normalized)
+        token = normalized if normalized else ("<missing>" if keep_missing else "")
+        if not token:
+            continue
+        if token not in values:
+            values.append(token)
     return values
 
 
@@ -214,4 +432,10 @@ def _identity_string(value: Any) -> str:
     normalized = _json_safe_value(value)
     if normalized is None:
         return ""
+    if isinstance(normalized, pd.Timestamp):
+        return normalized.date().isoformat()
+    if isinstance(normalized, datetime):
+        return normalized.date().isoformat()
+    if isinstance(normalized, date):
+        return normalized.isoformat()
     return str(normalized)

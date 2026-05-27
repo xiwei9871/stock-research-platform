@@ -42,6 +42,14 @@ def default_research_horizons() -> list[int]:
     return [5, 10, 20, 60]
 
 
+def short_term_research_factor_names() -> list[str]:
+    return [
+        "amount_vs_20d",
+        "volatility_5d",
+        "high_to_close_drawdown",
+    ]
+
+
 def candidate_factor_names() -> list[str]:
     return list_factor_names()
 

@@ -6,6 +6,14 @@ def test_historical_research_defaults_define_window_and_horizons():
     assert factor_config.default_research_horizons() == [5, 10, 20, 60]
 
 
+def test_short_term_research_factor_names_cover_current_watchlist_subset():
+    assert factor_config.short_term_research_factor_names() == [
+        "amount_vs_20d",
+        "volatility_5d",
+        "high_to_close_drawdown",
+    ]
+
+
 def test_candidate_factor_names_include_current_pipeline_outputs():
     names = factor_config.candidate_factor_names()
 

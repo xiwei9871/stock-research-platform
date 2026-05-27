@@ -1,4 +1,5 @@
 import importlib
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -143,6 +144,208 @@ def test_cli_accepts_report_delivery_openclaw_export_command():
     assert args.include_all is True
     assert args.min_severity == "medium"
     assert args.dry_run is False
+
+
+def test_cli_accepts_report_delivery_feishu_command():
+    args = build_parser().parse_args(
+        [
+            "report-delivery-feishu",
+            "--trade-date",
+            "2026-05-25",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/feishu",
+            "--include-all",
+            "--min-severity",
+            "medium",
+        ]
+    )
+
+    assert args.command == "report-delivery-feishu"
+    assert args.trade_date == "2026-05-25"
+    assert args.manifest == "outputs/delivery/manifest.json"
+    assert args.output_dir == "outputs/feishu"
+    assert args.include_all is True
+    assert args.min_severity == "medium"
+
+
+def test_cli_accepts_report_delivery_feishu_send_command(monkeypatch):
+    monkeypatch.delenv("FEISHU_WEBHOOK_URL", raising=False)
+
+    args = build_parser().parse_args(
+        [
+            "report-delivery-feishu-send",
+            "--trade-date",
+            "2026-05-28",
+            "--preview",
+            "outputs/feishu/feishu_preview.json",
+            "--output-dir",
+            "outputs/feishu_send/2026-05-28",
+            "--limit",
+            "1",
+            "--severity-max",
+            "info",
+            "--allow-live-send",
+            "--test-mode",
+        ]
+    )
+
+    assert args.command == "report-delivery-feishu-send"
+    assert args.trade_date == "2026-05-28"
+    assert args.preview == "outputs/feishu/feishu_preview.json"
+    assert args.output_dir == "outputs/feishu_send/2026-05-28"
+    assert args.dry_run is True
+    assert args.webhook_url is None
+    assert args.limit == 1
+    assert args.severity_max == "info"
+    assert args.allow_live_send is True
+    assert args.test_mode is True
+
+
+def test_cli_accepts_agent_report_command():
+    args = build_parser().parse_args(
+        [
+            "agent-report",
+            "--trade-date",
+            "2026-05-28",
+            "--mode",
+            "topn",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/agent/2026-05-28",
+        ]
+    )
+
+    assert args.command == "agent-report"
+    assert args.trade_date == "2026-05-28"
+    assert args.mode == "topn"
+    assert args.manifest == "outputs/delivery/manifest.json"
+    assert args.output_dir == "outputs/agent/2026-05-28"
+
+
+def test_cli_accepts_simulate_portfolio_command():
+    args = build_parser().parse_args(
+        [
+            "simulate-portfolio",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-28",
+            "--initial-cash",
+            "100000",
+            "--top-ks",
+            "5",
+            "--holding-days",
+            "5,10",
+            "--reports-dir",
+            "outputs/portfolio",
+            "--output-dir",
+            "outputs/simulation",
+        ]
+    )
+
+    assert args.command == "simulate-portfolio"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-28"
+    assert args.initial_cash == 100000.0
+    assert args.top_ks == [5]
+    assert args.holding_days == [5, 10]
+    assert args.reports_dir == "outputs/portfolio"
+    assert args.output_dir == "outputs/simulation"
+
+
+def test_cli_accepts_factor_validation_review_command():
+    args = build_parser().parse_args(
+        [
+            "factor-validation-review",
+            "--factor-name",
+            "demo_factor",
+            "--factors",
+            "outputs/factors.csv",
+            "--returns",
+            "outputs/returns.csv",
+            "--segments",
+            "outputs/segments.csv",
+            "--segment-col",
+            "market_state",
+            "--split-date",
+            "2026-02-01",
+            "--horizons",
+            "5,10",
+            "--primary-horizon",
+            "5",
+            "--output-dir",
+            "outputs/factor_validation",
+        ]
+    )
+
+    assert args.command == "factor-validation-review"
+    assert args.factor_name == "demo_factor"
+    assert args.factors == "outputs/factors.csv"
+    assert args.returns == "outputs/returns.csv"
+    assert args.segments == "outputs/segments.csv"
+    assert args.segment_col == "market_state"
+    assert args.horizons == [5, 10]
+    assert args.primary_horizon == 5
+    assert args.output_dir == "outputs/factor_validation"
+
+
+def test_cli_accepts_technical_feature_performance_review_command():
+    args = build_parser().parse_args(
+        [
+            "technical-feature-performance-review",
+            "--asset-count",
+            "8",
+            "--bar-count",
+            "120",
+            "--repeat",
+            "2",
+            "--min-speedup-ratio",
+            "1.5",
+            "--output-dir",
+            "outputs/technical_performance",
+        ]
+    )
+
+    assert args.command == "technical-feature-performance-review"
+    assert args.asset_count == 8
+    assert args.bar_count == 120
+    assert args.repeat == 2
+    assert args.min_speedup_ratio == 1.5
+    assert args.output_dir == "outputs/technical_performance"
+
+
+def test_cli_accepts_generate_trade_advice_command():
+    args = build_parser().parse_args(
+        [
+            "generate-trade-advice",
+            "--trade-date",
+            "2026-05-28",
+            "--simulation-state",
+            "outputs/simulation/state.json",
+            "--candidates",
+            "outputs/agent/candidates.csv",
+            "--output-dir",
+            "outputs/advice",
+            "--max-single-position-pct",
+            "0.08",
+            "--max-industry-position-pct",
+            "0.20",
+            "--target-total-exposure-pct",
+            "0.50",
+        ]
+    )
+
+    assert args.command == "generate-trade-advice"
+    assert args.trade_date == "2026-05-28"
+    assert args.simulation_state == "outputs/simulation/state.json"
+    assert args.candidates == "outputs/agent/candidates.csv"
+    assert args.output_dir == "outputs/advice"
+    assert args.max_single_position_pct == 0.08
+    assert args.max_industry_position_pct == 0.20
+    assert args.target_total_exposure_pct == 0.50
 
 
 def test_cli_accepts_backfill_technical_features_daily_command():
@@ -1068,6 +1271,426 @@ def test_report_delivery_openclaw_export_cli_prints_summary(monkeypatch, capsys)
         "report_delivery_openclaw|output_dir|outputs/openclaw",
         "report_delivery_openclaw|log|outputs/openclaw/delivery_log.jsonl",
     ]
+
+
+def test_report_delivery_feishu_cli_prints_summary(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_feishu_preview(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="dry_run",
+            item_count=3,
+            preview_path="outputs/feishu/feishu_preview.json",
+            output_dir="outputs/feishu",
+            delivery_log_path="outputs/feishu/feishu_delivery_log.jsonl",
+        )
+
+    monkeypatch.setattr(cli, "feishu_preview", fake_feishu_preview)
+
+    cli.main_for_args(
+        [
+            "report-delivery-feishu",
+            "--trade-date",
+            "2026-05-25",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/feishu",
+            "--include-all",
+            "--min-severity",
+            "medium",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-25",
+            "manifest_path": "outputs/delivery/manifest.json",
+            "output_dir": "outputs/feishu",
+            "include_all": True,
+            "min_severity": "medium",
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery_feishu|status|dry_run",
+        "report_delivery_feishu|item_count|3",
+        "report_delivery_feishu|preview|outputs/feishu/feishu_preview.json",
+        "report_delivery_feishu|output_dir|outputs/feishu",
+        "report_delivery_feishu|log|outputs/feishu/feishu_delivery_log.jsonl",
+    ]
+
+
+def test_report_delivery_feishu_send_cli_dry_run_prints_summary(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_feishu_send(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="dry_run",
+            dry_run=True,
+            send_id="feishu-send:1",
+            item_count=1,
+            sent_count=0,
+            failed_count=0,
+            skipped_count=0,
+            send_preview_path="outputs/feishu_send/feishu_send_preview.json",
+            send_log_path="outputs/feishu_send/feishu_send_log.jsonl",
+        )
+
+    monkeypatch.setattr(cli, "feishu_send", fake_feishu_send)
+
+    cli.main_for_args(
+        [
+            "report-delivery-feishu-send",
+            "--trade-date",
+            "2026-05-28",
+            "--preview",
+            "outputs/feishu/feishu_preview.json",
+            "--output-dir",
+            "outputs/feishu_send",
+            "--limit",
+            "1",
+            "--severity-max",
+            "info",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-28",
+            "preview_path": "outputs/feishu/feishu_preview.json",
+            "output_dir": "outputs/feishu_send",
+            "webhook_url": None,
+            "dry_run": True,
+            "limit": 1,
+            "allow_live_send": False,
+            "severity_max": "info",
+            "test_mode": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "report_delivery_feishu_send|status|dry_run",
+        "report_delivery_feishu_send|dry_run|True",
+        "report_delivery_feishu_send|send_id|feishu-send:1",
+        "report_delivery_feishu_send|item_count|1",
+        "report_delivery_feishu_send|sent_count|0",
+        "report_delivery_feishu_send|failed_count|0",
+        "report_delivery_feishu_send|skipped_count|0",
+        "report_delivery_feishu_send|preview|outputs/feishu_send/feishu_send_preview.json",
+        "report_delivery_feishu_send|log|outputs/feishu_send/feishu_send_log.jsonl",
+    ]
+
+
+def test_agent_report_cli_prints_reviewed_artifact_paths(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_build_agent_research_report(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="written",
+            review_status="passed",
+            observation_count=2,
+            blocker_count=0,
+            markdown_path="outputs/agent/agent_research_report_2026-05-28_topn.md",
+            json_path="outputs/agent/agent_research_report_2026-05-28_topn.json",
+            review_path="outputs/agent/agent_research_review_2026-05-28_topn.json",
+        )
+
+    monkeypatch.setattr(cli, "build_agent_research_report", fake_build_agent_research_report)
+
+    cli.main_for_args(
+        [
+            "agent-report",
+            "--trade-date",
+            "2026-05-28",
+            "--mode",
+            "topn",
+            "--manifest",
+            "outputs/delivery/manifest.json",
+            "--output-dir",
+            "outputs/agent",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-05-28",
+            "mode": "topn",
+            "manifest_path": "outputs/delivery/manifest.json",
+            "output_dir": "outputs/agent",
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "agent_report|status|written",
+        "agent_report|review_status|passed",
+        "agent_report|observations|2",
+        "agent_report|blockers|0",
+        "agent_report|markdown|outputs/agent/agent_research_report_2026-05-28_topn.md",
+        "agent_report|json|outputs/agent/agent_research_report_2026-05-28_topn.json",
+        "agent_report|review|outputs/agent/agent_research_review_2026-05-28_topn.json",
+    ]
+
+
+def test_simulate_portfolio_cli_prints_review_paths(monkeypatch, capsys):
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_run_portfolio_backtest(*args, **kwargs):
+        calls.append(("backtest", {"args": args, **kwargs}))
+        return {"results": [], "run_card": {"run_card_json_path": "outputs/run_card.json"}}
+
+    def fake_write_portfolio_simulation_review(backtest_result, **kwargs):
+        calls.append(("review", {"backtest_result": backtest_result, **kwargs}))
+        return {
+            "json_path": "outputs/simulation/portfolio_simulation_review.json",
+            "states_csv_path": "outputs/simulation/portfolio_simulation_states.csv",
+            "markdown_path": "outputs/simulation/portfolio_simulation_review.md",
+        }
+
+    monkeypatch.setattr(cli, "run_portfolio_backtest", fake_run_portfolio_backtest)
+    monkeypatch.setattr(
+        cli,
+        "write_portfolio_simulation_review",
+        fake_write_portfolio_simulation_review,
+    )
+
+    cli.main_for_args(
+        [
+            "simulate-portfolio",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-28",
+            "--initial-cash",
+            "100000",
+            "--top-ks",
+            "5",
+            "--holding-days",
+            "5,10",
+            "--reports-dir",
+            "outputs/portfolio",
+            "--output-dir",
+            "outputs/simulation",
+        ]
+    )
+
+    assert calls[0] == (
+        "backtest",
+        {
+            "args": ("2026-05-01", "2026-05-28"),
+            "initial_cash": 100000.0,
+            "top_ks": [5],
+            "holding_days": [5, 10],
+            "reports_dir": "outputs/portfolio",
+        },
+    )
+    assert calls[1][0] == "review"
+    assert calls[1][1]["output_dir"] == "outputs/simulation"
+    assert capsys.readouterr().out.splitlines() == [
+        "simulate_portfolio|json|outputs/simulation/portfolio_simulation_review.json",
+        "simulate_portfolio|states_csv|outputs/simulation/portfolio_simulation_states.csv",
+        "simulate_portfolio|markdown|outputs/simulation/portfolio_simulation_review.md",
+    ]
+
+
+def test_factor_validation_review_cli_prints_artifact_paths(capsys, tmp_path):
+    factor_path = tmp_path / "factors.csv"
+    return_path = tmp_path / "returns.csv"
+    segment_path = tmp_path / "segments.csv"
+    factor_path.write_text(
+        "trade_date,asset_id,factor_value\n"
+        "2026-01-01,A,1\n"
+        "2026-01-01,B,2\n"
+        "2026-01-01,C,3\n"
+        "2026-01-02,A,1\n"
+        "2026-01-02,B,2\n"
+        "2026-01-02,C,3\n"
+        "2026-02-01,A,1\n"
+        "2026-02-01,B,2\n"
+        "2026-02-01,C,3\n"
+        "2026-02-02,A,1\n"
+        "2026-02-02,B,2\n"
+        "2026-02-02,C,3\n",
+        encoding="utf-8",
+    )
+    return_path.write_text(
+        "trade_date,asset_id,forward_return_5d\n"
+        "2026-01-01,A,0.01\n"
+        "2026-01-01,B,0.02\n"
+        "2026-01-01,C,0.03\n"
+        "2026-01-02,A,0.01\n"
+        "2026-01-02,B,0.02\n"
+        "2026-01-02,C,0.03\n"
+        "2026-02-01,A,0.01\n"
+        "2026-02-01,B,0.02\n"
+        "2026-02-01,C,0.03\n"
+        "2026-02-02,A,0.01\n"
+        "2026-02-02,B,0.02\n"
+        "2026-02-02,C,0.03\n",
+        encoding="utf-8",
+    )
+    segment_path.write_text(
+        "trade_date,asset_id,market_state\n"
+        "2026-01-01,A,weak\n"
+        "2026-01-01,B,neutral\n"
+        "2026-01-01,C,strong\n"
+        "2026-01-02,A,weak\n"
+        "2026-01-02,B,neutral\n"
+        "2026-01-02,C,strong\n"
+        "2026-02-01,A,weak\n"
+        "2026-02-01,B,neutral\n"
+        "2026-02-01,C,strong\n"
+        "2026-02-02,A,weak\n"
+        "2026-02-02,B,neutral\n"
+        "2026-02-02,C,strong\n",
+        encoding="utf-8",
+    )
+
+    cli.main_for_args(
+        [
+            "factor-validation-review",
+            "--factor-name",
+            "demo_factor",
+            "--factors",
+            str(factor_path),
+            "--returns",
+            str(return_path),
+            "--segments",
+            str(segment_path),
+            "--segment-col",
+            "market_state",
+            "--split-date",
+            "2026-02-01",
+            "--horizons",
+            "5",
+            "--primary-horizon",
+            "5",
+            "--min-abs-mean-ic",
+            "0.5",
+            "--min-icir",
+            "0",
+            "--min-ic-count",
+            "2",
+            "--output-dir",
+            str(tmp_path / "review"),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("factor_validation_review|status|approved_candidate")
+    assert lines[1].startswith("factor_validation_review|json|")
+    assert lines[2].startswith("factor_validation_review|markdown|")
+    assert lines[3].startswith("factor_validation_review|decay_csv|")
+
+
+def test_technical_feature_performance_review_cli_prints_artifact_paths(monkeypatch, capsys, tmp_path):
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_compare_benchmark",
+        lambda **kwargs: calls.append(("compare", kwargs))
+        or {
+            "asset_count": kwargs["asset_count"],
+            "bar_count": kwargs["bar_count"],
+            "repeat": kwargs["repeat"],
+            "legacy_total_seconds": 8.0,
+            "fast_total_seconds": 2.0,
+            "legacy_rows_per_second": 4.0,
+            "fast_rows_per_second": 16.0,
+            "speedup_ratio": 4.0,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_store_compare_benchmark",
+        lambda **kwargs: calls.append(("store", kwargs))
+        or {
+            "asset_count": kwargs["asset_count"],
+            "bar_count": kwargs["bar_count"],
+            "legacy_total_seconds": 9.0,
+            "batch_frame_total_seconds": 4.5,
+            "latest_only_total_seconds": 3.0,
+            "speedup_ratio": 2.0,
+            "latest_only_speedup_ratio": 3.0,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_technical_feature_fast_regression",
+        lambda **kwargs: calls.append(("regression", kwargs))
+        or {
+            "asset_count": kwargs["asset_count"],
+            "bar_count": kwargs["bar_count"],
+            "column_count": 34,
+            "scenario_count": 5,
+            "max_abs_diff": 0.0,
+            "mean_abs_diff": 0.0,
+            "nan_mismatch_count": 0,
+            "gate": {"passed": True, "thresholds": {}},
+        },
+    )
+
+    cli.main_for_args(
+        [
+            "technical-feature-performance-review",
+            "--asset-count",
+            "8",
+            "--bar-count",
+            "120",
+            "--repeat",
+            "2",
+            "--min-speedup-ratio",
+            "1.5",
+            "--output-dir",
+            str(tmp_path / "technical"),
+        ]
+    )
+
+    assert calls == [
+        ("compare", {"asset_count": 8, "bar_count": 120, "repeat": 2}),
+        ("store", {"asset_count": 8, "bar_count": 120}),
+        ("regression", {"asset_count": 8, "bar_count": 120}),
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "technical_feature_performance_review|status|passed",
+        f"technical_feature_performance_review|json|{tmp_path / 'technical' / 'technical_feature_performance_review.json'}",
+        f"technical_feature_performance_review|markdown|{tmp_path / 'technical' / 'technical_feature_performance_review.md'}",
+        f"technical_feature_performance_review|metrics_csv|{tmp_path / 'technical' / 'technical_feature_performance_metrics.csv'}",
+    ]
+
+
+def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps({"trade_date": "2026-05-28", "equity": 100000, "risk_level": "normal"}),
+        encoding="utf-8",
+    )
+    candidates_path = tmp_path / "candidates.csv"
+    candidates_path.write_text(
+        "asset_id,stock_code,stock_name,industry,decision_label,score,evidence_artifact_id\n"
+        "CN:SH:600001,600001.SH,Alpha,bank,候选,0.9,agent:alpha\n",
+        encoding="utf-8",
+    )
+
+    cli.main_for_args(
+        [
+            "generate-trade-advice",
+            "--trade-date",
+            "2026-05-28",
+            "--simulation-state",
+            str(state_path),
+            "--candidates",
+            str(candidates_path),
+            "--output-dir",
+            str(tmp_path / "advice"),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("trade_advice|csv|")
+    assert lines[1].startswith("trade_advice|json|")
+    assert lines[2].startswith("trade_advice|markdown|")
 
 
 def test_cli_accepts_report_delivery_openclaw_send_command(monkeypatch):
@@ -3226,7 +3849,12 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
 
     import stock_research.cli as cli
 
-    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20", "qlib_ret_5"])
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "default_research_factor_names",
+        lambda: ["amount_vs_20d", "volatility_5d", "high_to_close_drawdown"],
+    )
     monkeypatch.setattr(
         cli,
         "find_latest_common_label_date",
@@ -3239,7 +3867,8 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
     monkeypatch.setattr(
         cli,
         "check_factor_label_coverage",
-        lambda **kwargs: {
+        lambda **kwargs: calls.append(kwargs)
+        or {
             "status": "ok",
             "reasons": [],
             "factor_date_count": 122,
@@ -3256,6 +3885,11 @@ def test_research_preflight_cli_prints_latest_date_and_coverage(monkeypatch, cap
 
     cli.main()
 
+    assert calls[0]["factor_names"] == [
+        "amount_vs_20d",
+        "volatility_5d",
+        "high_to_close_drawdown",
+    ]
     assert capsys.readouterr().out.splitlines() == [
         "research_preflight|latest_common_label_date|2026-01-30|122",
         "research_preflight|coverage|ok|factor_dates|122|complete_factor_dates|122",
@@ -3270,7 +3904,11 @@ def test_research_preflight_cli_uses_market_start_when_start_omitted(monkeypatch
     import stock_research.cli as cli
 
     calls = []
-    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20"])
+    monkeypatch.setattr(
+        cli,
+        "default_research_factor_names",
+        lambda: ["amount_vs_20d", "volatility_5d", "high_to_close_drawdown"],
+    )
     monkeypatch.setattr(
         cli,
         "load_market_date_bounds",
@@ -3315,7 +3953,11 @@ def test_research_preflight_cli_blocks_when_latest_label_date_missing(monkeypatc
 
     import stock_research.cli as cli
 
-    monkeypatch.setattr(cli, "candidate_factor_names", lambda: ["ret_20", "qlib_ret_5"])
+    monkeypatch.setattr(
+        cli,
+        "default_research_factor_names",
+        lambda: ["amount_vs_20d", "volatility_5d", "high_to_close_drawdown"],
+    )
     monkeypatch.setattr(
         cli,
         "find_latest_common_label_date",

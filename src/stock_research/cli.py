@@ -69,12 +69,15 @@ from stock_research.factor_backfill import (
     derive_factor_backfill_window,
 )
 from stock_research.approved_scoring_workflow import score_approved_factors_range
-from stock_research.factor_config import candidate_factor_names
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.factor_eval.gate import decide_factor_gate
 from stock_research.factor_eval.multi_horizon import generate_multi_horizon_report
 from stock_research.factor_eval.report import generate_factor_eval_report
+from stock_research.factor_eval.validation_review import (
+    build_factor_validation_review,
+    write_factor_validation_review,
+)
 from stock_research.factor_eval_store import (
     load_factor_eval_inputs,
     load_multi_horizon_factor_eval_inputs,
@@ -149,9 +152,17 @@ from stock_research.minute_backfill import (
 from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
+from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.report_delivery import deliver_local_reports
+from stock_research.report_delivery_feishu import (
+    FeishuDryRunAdapter,
+    FeishuSendConfig,
+    FeishuSender,
+    FakeFeishuTransport,
+    HttpFeishuTransport,
+)
 from stock_research.report_delivery_openclaw import OpenClawExportAdapter
 from stock_research.report_delivery_openclaw_sender import (
     DryRunOpenClawTransport,
@@ -164,10 +175,16 @@ from stock_research.research_preflight import (
     check_factor_label_coverage,
     check_industry_membership_coverage,
     find_latest_common_label_date,
+    default_research_factor_names,
 )
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
-from stock_research.reports.watchlist_report import _json_safe_value, write_watchlist_report
+from stock_research.reports.agent_research_report import build_agent_research_report
+from stock_research.reports.watchlist_report import (
+    _json_safe_value,
+    write_watchlist_diagnostics_report,
+    write_watchlist_report,
+)
 from stock_research.backtest_constraints import BacktestExecutionConstraints
 from stock_research.retention_backtest import run_retention_backtest
 from stock_research.research_snapshot_export import export_research_snapshot
@@ -182,13 +199,27 @@ from stock_research.trend_candidate_enrichment import (
 )
 from stock_research.trend_factor_profile import run_mid_trend_factor_profile_report
 from stock_research.trend_lifecycle import run_trend_lifecycle_v1_report
+from stock_research.trade_advice.advice import (
+    TradeAdvicePolicy,
+    generate_trade_advice,
+    write_trade_advice,
+)
 from stock_research.technical_feature_store import (
     TECHNICAL_FEATURE_CALC_VERSION,
     build_and_store_stock_technical_features_daily,
 )
+from stock_research.technical_feature_benchmark import (
+    run_technical_feature_compare_benchmark,
+    run_technical_feature_store_compare_benchmark,
+)
+from stock_research.technical_feature_performance_review import (
+    build_technical_feature_performance_review,
+    write_technical_feature_performance_review,
+)
 from stock_research.technical_feature_promotion_audit import (
     run_technical_feature_promotion_audit,
 )
+from stock_research.technical_feature_regression import run_technical_feature_fast_regression
 from stock_research.technical_feature_backfill import (
     backfill_technical_features_daily_range,
     derive_technical_feature_backfill_window,
@@ -211,7 +242,14 @@ from stock_research.services.universe_service import (
     write_universe_artifacts,
 )
 from stock_research.v31_cache import build_v31_cache
-from stock_research.watchlist.workflow import build_watchlist_snapshot, explain_watchlist_asset
+from stock_research.watchlist.workflow import (
+    build_watchlist_diagnostics_snapshot,
+    build_watchlist_snapshot,
+    explain_watchlist_asset,
+)
+from stock_research.watchlist.effectiveness import (
+    run_watchlist_diagnostics_effectiveness_review,
+)
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -357,6 +395,66 @@ def openclaw_export(
         min_severity=min_severity,
         dry_run=dry_run,
         output_dir=output_dir,
+    )
+
+
+def feishu_preview(
+    *,
+    trade_date: str,
+    manifest_path: str,
+    output_dir: str,
+    include_all: bool,
+    min_severity: str,
+):
+    adapter = FeishuDryRunAdapter()
+    manifest = adapter.load_local_manifest(manifest_path)
+    source_trade_date = str(manifest.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-feishu: "
+            f"trade-date {trade_date} does not match manifest trade_date {source_trade_date}"
+        )
+    return adapter.render_preview(
+        manifest_path,
+        output_dir=output_dir,
+        include_all=include_all,
+        min_severity=min_severity,
+    )
+
+
+def feishu_send(
+    *,
+    trade_date: str,
+    preview_path: str,
+    output_dir: str,
+    webhook_url: str | None,
+    dry_run: bool,
+    limit: int | None,
+    allow_live_send: bool,
+    severity_max: str | None,
+    test_mode: bool,
+):
+    sender = FeishuSender(
+        transport=FakeFeishuTransport() if dry_run else HttpFeishuTransport()
+    )
+    preview = sender.load_preview(preview_path)
+    source_trade_date = str(preview.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-feishu-send: "
+            f"trade-date {trade_date} does not match preview trade_date {source_trade_date}"
+        )
+    return sender.send_preview(
+        preview_path=preview_path,
+        config=FeishuSendConfig(
+            webhook_url=webhook_url,
+            dry_run=dry_run,
+            outbox_dir=output_dir,
+            limit=limit,
+            allow_live_send=allow_live_send,
+            severity_max=severity_max,
+            test_mode=test_mode,
+        ),
     )
 
 
@@ -920,6 +1018,42 @@ def build_parser() -> argparse.ArgumentParser:
         default="info",
     )
 
+    report_delivery_feishu = subparsers.add_parser("report-delivery-feishu")
+    report_delivery_feishu.add_argument("--trade-date", required=True)
+    report_delivery_feishu.add_argument("--manifest", required=True)
+    report_delivery_feishu.add_argument("--output-dir", required=True)
+    report_delivery_feishu.add_argument("--include-all", action="store_true")
+    report_delivery_feishu.add_argument(
+        "--min-severity",
+        choices=["info", "low", "medium", "high", "critical"],
+        default="info",
+    )
+
+    report_delivery_feishu_send = subparsers.add_parser("report-delivery-feishu-send")
+    report_delivery_feishu_send.add_argument("--trade-date", required=True)
+    report_delivery_feishu_send.add_argument("--preview", required=True)
+    report_delivery_feishu_send.add_argument("--output-dir", required=True)
+    report_delivery_feishu_send.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_feishu_send.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_feishu_send.add_argument("--webhook-url", default=os.environ.get("FEISHU_WEBHOOK_URL"))
+    report_delivery_feishu_send.add_argument("--limit", type=int)
+    report_delivery_feishu_send.add_argument("--allow-live-send", action="store_true")
+    report_delivery_feishu_send.add_argument(
+        "--severity-max",
+        choices=["info", "low", "medium", "high", "critical"],
+    )
+    report_delivery_feishu_send.add_argument("--test-mode", action="store_true")
+
+    agent_report = subparsers.add_parser("agent-report")
+    agent_report.add_argument("--trade-date", required=True)
+    agent_report.add_argument("--mode", choices=["topn", "watchlist"], required=True)
+    agent_report.add_argument("--manifest", required=True)
+    agent_report.add_argument("--output-dir", required=True)
+
     report_delivery_openclaw_send = subparsers.add_parser("report-delivery-openclaw-send")
     report_delivery_openclaw_send.add_argument("--trade-date", required=True)
     report_delivery_openclaw_send.add_argument("--manifest", required=True)
@@ -983,6 +1117,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--reports-dir",
         default="/Users/xiwei/stock_research/reports",
     )
+
+    simulate_portfolio = subparsers.add_parser("simulate-portfolio")
+    simulate_portfolio.add_argument("--start-date", required=True)
+    simulate_portfolio.add_argument("--end-date", required=True)
+    simulate_portfolio.add_argument("--initial-cash", type=float, default=500000.0)
+    simulate_portfolio.add_argument(
+        "--top-ks",
+        type=parse_top_ks,
+        default="5,10",
+    )
+    simulate_portfolio.add_argument(
+        "--holding-days",
+        type=parse_holding_days,
+        default="5,10,15,20,30",
+    )
+    simulate_portfolio.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    simulate_portfolio.add_argument("--output-dir", required=True)
+
+    generate_advice = subparsers.add_parser("generate-trade-advice")
+    generate_advice.add_argument("--trade-date", required=True)
+    generate_advice.add_argument("--simulation-state", required=True)
+    generate_advice.add_argument("--candidates", required=True)
+    generate_advice.add_argument("--output-dir", required=True)
+    generate_advice.add_argument("--max-single-position-pct", type=float, default=0.10)
+    generate_advice.add_argument("--max-industry-position-pct", type=float, default=0.30)
+    generate_advice.add_argument("--target-total-exposure-pct", type=float, default=0.60)
+    generate_advice.add_argument("--drawdown-defensive-threshold", type=float, default=-0.10)
+    generate_advice.add_argument("--defensive-exposure-multiplier", type=float, default=0.50)
 
     retention_backtest = subparsers.add_parser("retention-backtest")
     retention_backtest.add_argument("--start-date", required=True)
@@ -1128,6 +1293,25 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_factor_gate_batch.add_argument("--quantiles", type=int, default=5)
     evaluate_factor_gate_batch.add_argument("--top-n", type=int, default=30)
 
+    factor_validation_review = subparsers.add_parser("factor-validation-review")
+    factor_validation_review.add_argument("--factor-name", required=True)
+    factor_validation_review.add_argument("--factors", required=True)
+    factor_validation_review.add_argument("--returns", required=True)
+    factor_validation_review.add_argument("--segments")
+    factor_validation_review.add_argument("--segment-col")
+    factor_validation_review.add_argument("--split-date", required=True)
+    factor_validation_review.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    factor_validation_review.add_argument("--primary-horizon", type=int, default=5)
+    factor_validation_review.add_argument("--factor-col", default="factor_value")
+    factor_validation_review.add_argument("--min-abs-mean-ic", type=float, default=0.02)
+    factor_validation_review.add_argument("--min-icir", type=float, default=0.3)
+    factor_validation_review.add_argument("--min-ic-count", type=int, default=20)
+    factor_validation_review.add_argument("--output-dir", required=True)
+
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
     daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
@@ -1223,6 +1407,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="technical_table",
     )
     technical_feature_promotion_audit.add_argument("--output-dir", required=True)
+
+    technical_feature_performance_review = subparsers.add_parser(
+        "technical-feature-performance-review"
+    )
+    technical_feature_performance_review.add_argument("--asset-count", type=int, default=16)
+    technical_feature_performance_review.add_argument("--bar-count", type=int, default=260)
+    technical_feature_performance_review.add_argument("--repeat", type=int, default=1)
+    technical_feature_performance_review.add_argument("--min-speedup-ratio", type=float, default=1.0)
+    technical_feature_performance_review.add_argument("--output-dir", required=True)
 
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
@@ -1784,6 +1977,20 @@ def build_parser() -> argparse.ArgumentParser:
     watchlist_build.add_argument("--top-n", type=int, default=30)
     watchlist_build.add_argument("--output-dir", required=True)
 
+    build_watchlist_diagnostics = subparsers.add_parser("build-watchlist-diagnostics")
+    build_watchlist_diagnostics.add_argument("--trade-date", required=True)
+    build_watchlist_diagnostics.add_argument("--score-version", default="manual_v1")
+    build_watchlist_diagnostics.add_argument("--top-n", type=int, default=50)
+    build_watchlist_diagnostics.add_argument("--risk-watch-n", type=int, default=10)
+    build_watchlist_diagnostics.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
+
+    review_watchlist_diagnostics = subparsers.add_parser("review-watchlist-diagnostics")
+    review_watchlist_diagnostics.add_argument("--diagnostics-dir", default="outputs/research")
+    review_watchlist_diagnostics.add_argument("--start-date")
+    review_watchlist_diagnostics.add_argument("--end-date")
+    review_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
+
     watchlist_report = subparsers.add_parser("watchlist-report")
     watchlist_report.add_argument("--trade-date", required=True)
     watchlist_report.add_argument("--watchlist-id", required=True)
@@ -1962,7 +2169,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
             )
             print("research_preflight|short_label_horizons|")
             return
-        factors = args.factor_names if args.factor_names else candidate_factor_names()
+        factors = args.factor_names if args.factor_names else default_research_factor_names()
         coverage = check_factor_label_coverage(
             factor_names=factors,
             start_date=start_date,
@@ -2160,6 +2367,33 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"{row['factor_name']}|{row['status']}|{row['reason']}|"
                 f"{row['primary_horizon']}|{row['eval_run_id']}"
             )
+    elif args.command == "factor-validation-review":
+        import pandas as pd
+
+        factors = pd.read_csv(args.factors, low_memory=False)
+        returns = pd.read_csv(args.returns, low_memory=False)
+        segments = pd.read_csv(args.segments, low_memory=False) if args.segments else None
+        review = build_factor_validation_review(
+            factors=factors,
+            returns=returns,
+            factor_name=args.factor_name,
+            horizons=args.horizons,
+            split_date=args.split_date,
+            primary_horizon=args.primary_horizon,
+            segments=segments,
+            segment_col=args.segment_col,
+            factor_col=args.factor_col,
+            min_abs_mean_ic=args.min_abs_mean_ic,
+            min_icir=args.min_icir,
+            min_ic_count=args.min_ic_count,
+        )
+        paths = write_factor_validation_review(review, output_dir=args.output_dir)
+        print(f"factor_validation_review|status|{review['approval']['status']}")
+        print(f"factor_validation_review|json|{paths['json_path']}")
+        print(f"factor_validation_review|markdown|{paths['markdown_path']}")
+        print(f"factor_validation_review|decay_csv|{paths['decay_csv_path']}")
+        if "segment_csv_path" in paths:
+            print(f"factor_validation_review|segment_csv|{paths['segment_csv_path']}")
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,
@@ -2262,6 +2496,34 @@ def main_for_args(argv: list[str] | None = None) -> None:
             f"dates={int(summary.get('dates') or 0)}|"
             f"dates_with_gaps={int(summary.get('dates_with_gaps') or 0)}"
         )
+    elif args.command == "technical-feature-performance-review":
+        compare_benchmark = run_technical_feature_compare_benchmark(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+            repeat=args.repeat,
+        )
+        store_benchmark = run_technical_feature_store_compare_benchmark(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+        )
+        regression = run_technical_feature_fast_regression(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+        )
+        review = build_technical_feature_performance_review(
+            compare_benchmark=compare_benchmark,
+            store_benchmark=store_benchmark,
+            regression=regression,
+            min_speedup_ratio=args.min_speedup_ratio,
+        )
+        paths = write_technical_feature_performance_review(
+            review,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_feature_performance_review|status|{review['gate']['status']}")
+        print(f"technical_feature_performance_review|json|{paths['json_path']}")
+        print(f"technical_feature_performance_review|markdown|{paths['markdown_path']}")
+        print(f"technical_feature_performance_review|metrics_csv|{paths['metrics_csv_path']}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()
@@ -3307,6 +3569,60 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"report_delivery_openclaw|items|{result.openclaw_items_path}")
         print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
         print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")
+    elif args.command == "report-delivery-feishu":
+        result = feishu_preview(
+            trade_date=args.trade_date,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+            include_all=args.include_all,
+            min_severity=args.min_severity,
+        )
+        print(f"report_delivery_feishu|status|{result.status}")
+        print(f"report_delivery_feishu|item_count|{result.item_count}")
+        print(f"report_delivery_feishu|preview|{result.preview_path}")
+        print(f"report_delivery_feishu|output_dir|{result.output_dir}")
+        print(f"report_delivery_feishu|log|{result.delivery_log_path}")
+    elif args.command == "report-delivery-feishu-send":
+        result = feishu_send(
+            trade_date=args.trade_date,
+            preview_path=args.preview,
+            output_dir=args.output_dir,
+            webhook_url=args.webhook_url,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            allow_live_send=args.allow_live_send,
+            severity_max=args.severity_max,
+            test_mode=args.test_mode,
+        )
+        print(f"report_delivery_feishu_send|status|{result.status}")
+        print(f"report_delivery_feishu_send|dry_run|{result.dry_run}")
+        print(f"report_delivery_feishu_send|send_id|{result.send_id}")
+        print(f"report_delivery_feishu_send|item_count|{result.item_count}")
+        print(f"report_delivery_feishu_send|sent_count|{result.sent_count}")
+        print(f"report_delivery_feishu_send|failed_count|{result.failed_count}")
+        print(f"report_delivery_feishu_send|skipped_count|{result.skipped_count}")
+        print(f"report_delivery_feishu_send|preview|{result.send_preview_path}")
+        print(f"report_delivery_feishu_send|log|{result.send_log_path}")
+        if not result.dry_run and result.status != "sent":
+            raise RuntimeError(
+                "report-delivery-feishu-send: "
+                f"non-dry-run send failed with status {result.status}; "
+                f"artifacts preserved at {result.send_log_path}"
+            )
+    elif args.command == "agent-report":
+        result = build_agent_research_report(
+            trade_date=args.trade_date,
+            mode=args.mode,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+        )
+        print(f"agent_report|status|{result.status}")
+        print(f"agent_report|review_status|{result.review_status}")
+        print(f"agent_report|observations|{result.observation_count}")
+        print(f"agent_report|blockers|{result.blocker_count}")
+        print(f"agent_report|markdown|{result.markdown_path}")
+        print(f"agent_report|json|{result.json_path}")
+        print(f"agent_report|review|{result.review_path}")
     elif args.command == "report-delivery-openclaw-send":
         timeout_seconds = parse_openclaw_timeout_seconds(args.timeout_seconds)
         sender = OpenClawSender(
@@ -3380,6 +3696,47 @@ def main_for_args(argv: list[str] | None = None) -> None:
             f"portfolio_backtest_summary|{result['report_paths']['summary_path']}"
         )
         print(f"portfolio_backtest_configs|{len(result['summary'])}")
+    elif args.command == "simulate-portfolio":
+        result = run_portfolio_backtest(
+            args.start_date,
+            args.end_date,
+            initial_cash=args.initial_cash,
+            top_ks=args.top_ks,
+            holding_days=args.holding_days,
+            reports_dir=args.reports_dir,
+        )
+        review_paths = write_portfolio_simulation_review(
+            result,
+            output_dir=args.output_dir,
+        )
+        print(f"simulate_portfolio|json|{review_paths['json_path']}")
+        print(f"simulate_portfolio|states_csv|{review_paths['states_csv_path']}")
+        print(f"simulate_portfolio|markdown|{review_paths['markdown_path']}")
+    elif args.command == "generate-trade-advice":
+        import pandas as pd
+
+        simulation_state = json.loads(Path(args.simulation_state).read_text(encoding="utf-8"))
+        candidates = pd.read_csv(args.candidates)
+        advice = generate_trade_advice(
+            trade_date=args.trade_date,
+            simulation_state=simulation_state,
+            candidates=candidates,
+            policy=TradeAdvicePolicy(
+                max_single_position_pct=args.max_single_position_pct,
+                max_industry_position_pct=args.max_industry_position_pct,
+                target_total_exposure_pct=args.target_total_exposure_pct,
+                drawdown_defensive_threshold=args.drawdown_defensive_threshold,
+                defensive_exposure_multiplier=args.defensive_exposure_multiplier,
+            ),
+        )
+        advice_paths = write_trade_advice(
+            trade_date=args.trade_date,
+            advice=advice,
+            output_dir=args.output_dir,
+        )
+        print(f"trade_advice|csv|{advice_paths['csv_path']}")
+        print(f"trade_advice|json|{advice_paths['json_path']}")
+        print(f"trade_advice|markdown|{advice_paths['markdown_path']}")
     elif args.command == "retention-backtest":
         execution_constraints = BacktestExecutionConstraints(
             commission_bps=args.commission_bps,
@@ -3467,6 +3824,35 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"watchlist_build|must_watch|{int(rows['must_watch'].sum()) if not rows.empty else 0}")
         print(f"watchlist_build|report|{report_paths['markdown_path']}")
         print(f"watchlist_build|run_card|{run_card['run_card_json_path']}")
+    elif args.command == "build-watchlist-diagnostics":
+        diagnostics = build_watchlist_diagnostics_snapshot(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            risk_watch_n=args.risk_watch_n,
+            opportunity_watch_n=args.opportunity_watch_n,
+        )
+        report_paths = write_watchlist_diagnostics_report(
+            full_rows=diagnostics["full"],
+            must_watch_rows=diagnostics["must_watch"],
+            output_dir=args.output_dir,
+            output_version="v1",
+            trade_date=args.trade_date,
+            watchlist_id="diagnostics",
+        )
+        print(f"watchlist_diagnostics|full_csv|{report_paths['full_csv_path']}")
+        print(f"watchlist_diagnostics|must_watch_csv|{report_paths['must_watch_csv_path']}")
+        print(f"watchlist_diagnostics|markdown|{report_paths['markdown_path']}")
+    elif args.command == "review-watchlist-diagnostics":
+        review_paths = run_watchlist_diagnostics_effectiveness_review(
+            diagnostics_dir=args.diagnostics_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"watchlist_effectiveness|detail_csv|{review_paths['detail_csv_path']}")
+        print(f"watchlist_effectiveness|summary_csv|{review_paths['summary_csv_path']}")
+        print(f"watchlist_effectiveness|markdown|{review_paths['markdown_path']}")
     elif args.command == "watchlist-report":
         rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
         report_paths = write_watchlist_report(rows, output_dir=args.output_dir)

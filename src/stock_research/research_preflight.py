@@ -1,6 +1,6 @@
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
-from stock_research.factor_config import factor_availability_metadata
+from stock_research.factor_config import factor_availability_metadata, short_term_research_factor_names
 
 
 def _available_factor_names_for_window(
@@ -205,3 +205,7 @@ def check_industry_membership_coverage(
         "missing_rows": missing_rows,
         "date_count": int(row.get("date_count") or 0),
     }
+
+
+def default_research_factor_names() -> list[str]:
+    return short_term_research_factor_names()

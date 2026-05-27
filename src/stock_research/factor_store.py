@@ -257,10 +257,11 @@ def score_stored_factor_daily(
     service: str = SETTINGS.research_service,
 ) -> int:
     config = manual_v1_config()
+    resolved_approved_only = approved_only and score_version != "manual_v1"
     factors = load_factor_daily(
         trade_date=trade_date,
         calc_version=calc_version,
-        approved_only=approved_only,
+        approved_only=resolved_approved_only,
         score_version=score_version,
         service=service,
     )
