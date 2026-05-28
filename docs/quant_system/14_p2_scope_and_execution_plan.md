@@ -6,6 +6,10 @@ Date: 2026-05-28
 
 P2 first scoped pass completed.
 
+Completion review:
+
+- `docs/quant_system/16_p2_completion_review.md`
+
 P1 was completed in:
 
 - `27084bd feat: complete p1 research platform layers`
