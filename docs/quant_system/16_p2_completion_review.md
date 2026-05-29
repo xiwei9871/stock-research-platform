@@ -148,6 +148,10 @@ passed
 
 The warnings are existing `py_mini_racer` deprecation warnings from dependencies.
 
+Operational smoke:
+
+- `docs/quant_system/17_p2_daily_runbook_and_smoke_report.md`
+
 ## Remaining Boundary For P3
 
 P3 should start only after review of the P2 artifact contracts. Good P3 entry points:
