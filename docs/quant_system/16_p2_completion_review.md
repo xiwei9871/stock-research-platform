@@ -162,6 +162,10 @@ P3 should start only after review of the P2 artifact contracts. Good P3 entry po
   artifact fields.
 - Consider scheduler integration once P2 commands are stable in manual runs.
 
+P3 scope freeze:
+
+- `docs/quant_system/18_p3_scope_freeze.md`
+
 Still out of scope until a separate safety design is approved:
 
 - live trading
