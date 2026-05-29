@@ -2,6 +2,7 @@ import importlib
 import json
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 import stock_research.cli as cli
@@ -2304,6 +2305,93 @@ def test_p7_import_decision_journal_cli_prints_summary(monkeypatch, capsys, tmp_
         "p7_decision_journal_import|events|2",
         "p7_decision_journal_import|session_id|morning-review",
     ]
+
+
+def test_p8_decision_outcome_review_cli_writes_artifacts(monkeypatch, capsys, tmp_path):
+    captured = {}
+
+    def fake_load_inputs(**kwargs):
+        captured.update(kwargs)
+        return (
+            pd.DataFrame(
+                [
+                    {
+                        "event_id": "operator_decision:p8:0:aaa",
+                        "review_session_id": "morning-review",
+                        "review_date": "2026-05-30",
+                        "asset_id": "CN:SH:600001",
+                        "stock_code": "600001.SH",
+                        "stock_name": "Alpha",
+                        "decision_label": "candidate",
+                        "evidence_artifact_id": "dashboard:topn:2026-05-30",
+                        "evidence_path": "outputs/p6/topn.json",
+                        "source_context": "dashboard_topn",
+                        "requires_follow_up": True,
+                        "manual_review_required": True,
+                        "auto_trade_enabled": False,
+                    }
+                ]
+            ),
+            pd.DataFrame(
+                [
+                    {
+                        "asset_id": "CN:SH:600001",
+                        "trade_date": "2026-05-30",
+                        "close": 10.0,
+                        "high": 11.0,
+                        "low": 9.0,
+                    },
+                    {
+                        "asset_id": "CN:SH:600001",
+                        "trade_date": "2026-05-31",
+                        "close": 11.0,
+                        "high": 12.0,
+                        "low": 10.0,
+                    },
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(cli, "_load_p8_decision_outcome_inputs", fake_load_inputs)
+
+    cli.main_for_args(
+        [
+            "p8-decision-outcome-review",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-30",
+            "--review-session-id",
+            "morning-review",
+            "--output-dir",
+            str(tmp_path),
+            "--horizon",
+            "1",
+        ]
+    )
+
+    assert captured == {
+        "start_date": "2026-05-01",
+        "end_date": "2026-05-30",
+        "review_session_id": "morning-review",
+        "decision_events_csv": None,
+        "bars_csv": None,
+        "service": "stock_research",
+        "adjust_type": "qfq",
+        "max_horizon": 1,
+    }
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p8_decision_outcome_review|status|review_ready"
+    assert lines[1] == "p8_decision_outcome_review|outcomes|1"
+    assert lines[2].startswith("p8_decision_outcome_review|json|")
+    assert lines[3].startswith("p8_decision_outcome_review|details_csv|")
+    assert lines[4].startswith("p8_decision_outcome_review|summary_csv|")
+    assert lines[5].startswith("p8_decision_outcome_review|markdown|")
+
+    payload = json.loads((tmp_path / "operator_decision_outcome_review_2026-05-01_2026-05-30.json").read_text())
+    assert payload["manual_review_required"] is True
+    assert payload["auto_trade_enabled"] is False
+    assert payload["outcomes"][0]["forward_1d_return"] == pytest.approx(0.1)
 
 
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):

@@ -172,6 +172,10 @@ from stock_research.operator_decision.journal import (
     build_decision_journal,
     write_decision_journal,
 )
+from stock_research.operator_decision.outcome import (
+    build_decision_outcome_review,
+    write_decision_outcome_review,
+)
 from stock_research.operator_decision.read_model import import_decision_journal
 from stock_research.p4.scheduler import (
     check_read_model_freshness,
@@ -768,6 +772,88 @@ def summarize_multi_horizon_report(report: dict) -> dict:
         "horizons": report.get("horizons", []),
         "reports": summaries,
     }
+
+
+def _load_p8_decision_outcome_inputs(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    decision_events_csv: str | None,
+    bars_csv: str | None,
+    service: str,
+    adjust_type: str,
+    max_horizon: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if decision_events_csv:
+        decision_events = pd.read_csv(decision_events_csv)
+    else:
+        decision_events = _load_p8_decision_events_from_db(
+            start_date=start_date,
+            end_date=end_date,
+            review_session_id=review_session_id,
+            service=service,
+        )
+
+    if bars_csv:
+        bars = pd.read_csv(bars_csv)
+    else:
+        bars = _load_p8_market_bars_from_db(
+            start_date=start_date,
+            end_date=end_date,
+            service=service,
+            adjust_type=adjust_type,
+            max_horizon=max_horizon,
+        )
+    return decision_events, bars
+
+
+def _load_p8_decision_events_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    service: str,
+) -> pd.DataFrame:
+    params: list[object] = [start_date, end_date]
+    session_filter = ""
+    if review_session_id:
+        session_filter = "AND review_session_id = %s"
+        params.append(review_session_id)
+    sql = f"""
+        SELECT
+            event_id, review_session_id, review_date, asset_id, stock_code,
+            stock_name, decision_label, evidence_artifact_id, evidence_path,
+            source_context, requires_follow_up, follow_up_note, notes,
+            manual_review_required, auto_trade_enabled, source_artifact_path
+        FROM ops.operator_decision_event
+        WHERE review_date BETWEEN %s AND %s
+        {session_filter}
+        ORDER BY review_date, review_session_id, event_id
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, params))
+
+
+def _load_p8_market_bars_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    service: str,
+    adjust_type: str,
+    max_horizon: int,
+) -> pd.DataFrame:
+    lookahead_days = max(1, int(max_horizon)) * 3
+    extended_end_date = str((pd.Timestamp(end_date) + pd.Timedelta(days=lookahead_days)).date())
+    sql = """
+        SELECT asset_id, trade_date, close, high, low
+        FROM market_daily_bar
+        WHERE trade_date BETWEEN %s AND %s
+          AND adjust_type = %s
+        ORDER BY asset_id, trade_date
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, [start_date, extended_end_date, adjust_type]))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1518,6 +1604,17 @@ def build_parser() -> argparse.ArgumentParser:
     p7_import_decision_journal = subparsers.add_parser("p7-import-decision-journal")
     p7_import_decision_journal.add_argument("--path", required=True)
     p7_import_decision_journal.add_argument("--service", default="stock_research")
+
+    p8_decision_outcome_review = subparsers.add_parser("p8-decision-outcome-review")
+    p8_decision_outcome_review.add_argument("--start-date", required=True)
+    p8_decision_outcome_review.add_argument("--end-date", required=True)
+    p8_decision_outcome_review.add_argument("--review-session-id")
+    p8_decision_outcome_review.add_argument("--decision-events-csv")
+    p8_decision_outcome_review.add_argument("--bars-csv")
+    p8_decision_outcome_review.add_argument("--output-dir", required=True)
+    p8_decision_outcome_review.add_argument("--service", default="stock_research")
+    p8_decision_outcome_review.add_argument("--adjust-type", default="qfq")
+    p8_decision_outcome_review.add_argument("--horizon", dest="horizons", action="append", type=int)
 
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
@@ -2838,6 +2935,33 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p7_decision_journal_import|events|{result['event_count']}")
         for session_id in result["session_ids"]:
             print(f"p7_decision_journal_import|session_id|{session_id}")
+    elif args.command == "p8-decision-outcome-review":
+        horizons = args.horizons or None
+        max_horizon = max(horizons) if horizons else 60
+        decision_events, bars = _load_p8_decision_outcome_inputs(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            review_session_id=args.review_session_id,
+            decision_events_csv=args.decision_events_csv,
+            bars_csv=args.bars_csv,
+            service=args.service,
+            adjust_type=args.adjust_type,
+            max_horizon=max_horizon,
+        )
+        review = build_decision_outcome_review(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            decision_events=decision_events,
+            bars=bars,
+            horizons=horizons,
+        )
+        paths = write_decision_outcome_review(review, args.output_dir)
+        print(f"p8_decision_outcome_review|status|{review['status']}")
+        print(f"p8_decision_outcome_review|outcomes|{review['outcome_count']}")
+        print(f"p8_decision_outcome_review|json|{paths['json_path']}")
+        print(f"p8_decision_outcome_review|details_csv|{paths['details_csv_path']}")
+        print(f"p8_decision_outcome_review|summary_csv|{paths['summary_csv_path']}")
+        print(f"p8_decision_outcome_review|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

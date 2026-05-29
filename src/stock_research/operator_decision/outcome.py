@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -70,6 +72,164 @@ def summarize_decision_outcomes(outcomes: pd.DataFrame) -> pd.DataFrame:
         ),
     ]
     return pd.concat(frames, ignore_index=True)
+
+
+def build_decision_outcome_review(
+    *,
+    start_date: str,
+    end_date: str,
+    decision_events: pd.DataFrame,
+    bars: pd.DataFrame,
+    horizons: list[int] | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    selected_horizons = sorted({int(value) for value in (horizons or OUTCOME_HORIZONS) if int(value) > 0})
+    outcomes = build_decision_outcomes_from_frames(
+        decision_events=decision_events,
+        bars=bars,
+        horizons=selected_horizons,
+    )
+    summary = summarize_decision_outcomes(outcomes)
+    status = "review_ready" if not outcomes.empty else "no_decisions_recorded"
+    return {
+        "run_id": run_id or f"p8-outcome-{start_date}-{end_date}",
+        "review_start_date": str(start_date),
+        "review_end_date": str(end_date),
+        "status": status,
+        "manual_review_required": True,
+        "auto_trade_enabled": False,
+        "horizons": selected_horizons,
+        "outcome_count": int(len(outcomes)),
+        "summary_count": int(len(summary)),
+        "outcomes": _records(outcomes),
+        "summary": _records(summary),
+    }
+
+
+def write_decision_outcome_review(review: dict[str, Any], output_dir: str | Path) -> dict[str, str]:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    start_date = _safe_path_part(review.get("review_start_date", "unknown-start"))
+    end_date = _safe_path_part(review.get("review_end_date", "unknown-end"))
+    stem = f"operator_decision_outcome_review_{start_date}_{end_date}"
+
+    json_path = output_path / f"{stem}.json"
+    details_csv_path = output_path / f"{stem}_details.csv"
+    summary_csv_path = output_path / f"{stem}_summary.csv"
+    markdown_path = output_path / f"{stem}.md"
+
+    payload = _json_safe(review)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    pd.DataFrame(payload.get("outcomes", [])).to_csv(details_csv_path, index=False)
+    pd.DataFrame(payload.get("summary", [])).to_csv(summary_csv_path, index=False)
+    markdown_path.write_text(_render_review_markdown(payload), encoding="utf-8")
+    return {
+        "json_path": str(json_path),
+        "details_csv_path": str(details_csv_path),
+        "summary_csv_path": str(summary_csv_path),
+        "markdown_path": str(markdown_path),
+    }
+
+
+def _records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    return [_json_safe(record) for record in frame.to_dict("records")]
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if value is pd.NA:
+        return None
+    if isinstance(value, pd.Timestamp):
+        return str(value.date())
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+def _render_review_markdown(review: dict[str, Any]) -> str:
+    lines = [
+        "# P8 Decision Outcome Review",
+        "",
+        f"- run_id: {_markdown_cell(review.get('run_id'))}",
+        f"- review_start_date: {_markdown_cell(review.get('review_start_date'))}",
+        f"- review_end_date: {_markdown_cell(review.get('review_end_date'))}",
+        f"- status: {_markdown_cell(review.get('status'))}",
+        "- manual_review_required: true",
+        "- auto_trade_enabled: false",
+        "",
+        "Review-only outcome diagnostics. No broker, order, or execution state is modified.",
+        "",
+        "## Summary",
+        "",
+        f"- outcome_count: {int(review.get('outcome_count') or 0)}",
+        f"- summary_count: {int(review.get('summary_count') or 0)}",
+        "",
+        "## Outcome Details",
+        "",
+    ]
+    outcomes = review.get("outcomes") or []
+    if not outcomes:
+        lines.append("No decision outcomes recorded.")
+        return "\n".join(lines) + "\n"
+
+    lines.extend(
+        [
+            "| Event | Asset | Label | Status | Future Bars | Forward 1D | Forward 5D | Forward 20D |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in outcomes:
+        lines.append(
+            " | ".join(
+                [
+                    f"| {_markdown_cell(row.get('event_id'))}",
+                    _markdown_cell(row.get("stock_code") or row.get("asset_id")),
+                    _markdown_cell(row.get("decision_label")),
+                    _markdown_cell(row.get("outcome_status")),
+                    str(row.get("available_future_bars") or 0),
+                    _format_metric(row.get("forward_1d_return")),
+                    _format_metric(row.get("forward_5d_return")),
+                    f"{_format_metric(row.get('forward_20d_return'))} |",
+                ]
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _format_metric(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    try:
+        return f"{float(value):.6f}"
+    except (TypeError, ValueError):
+        return _markdown_cell(value)
+
+
+def _markdown_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    return text.replace("|", "\\|").replace("\n", "<br>")
+
+
+def _safe_path_part(value: Any) -> str:
+    text = str(value or "")
+    return "".join(character if character.isalnum() or character in {"-", "_"} else "_" for character in text)
 
 
 def _normalize_events(events: pd.DataFrame) -> pd.DataFrame:

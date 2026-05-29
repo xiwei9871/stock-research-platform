@@ -1,9 +1,14 @@
+import json
+from pathlib import Path
+
 import pandas as pd
 
 from stock_research.operator_decision.outcome import (
     OUTCOME_HORIZONS,
+    build_decision_outcome_review,
     build_decision_outcomes_from_frames,
     summarize_decision_outcomes,
+    write_decision_outcome_review,
 )
 
 
@@ -143,3 +148,82 @@ def test_summarize_decision_outcomes_groups_by_label_and_source_context():
     ].iloc[0]
     assert by_context["decision_label"] == ""
     assert by_context["sample_count"] == 1
+
+
+def test_build_decision_outcome_review_preserves_review_only_artifact_contract():
+    review = build_decision_outcome_review(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        decision_events=_decision_events(),
+        bars=_bars(),
+        horizons=[1, 5, 20],
+        run_id="p8-smoke",
+    )
+
+    assert review["run_id"] == "p8-smoke"
+    assert review["review_start_date"] == "2026-01-01"
+    assert review["review_end_date"] == "2026-01-31"
+    assert review["status"] == "review_ready"
+    assert review["manual_review_required"] is True
+    assert review["auto_trade_enabled"] is False
+    assert review["outcome_count"] == 2
+    assert review["summary_count"] == 4
+    assert review["horizons"] == [1, 5, 20]
+
+    first = review["outcomes"][0]
+    assert first["event_id"] == "operator_decision:p8-smoke:0:aaa"
+    assert first["evidence_artifact_id"] == "dashboard:topn:2026-01-01"
+    assert first["manual_review_required"] is True
+    assert first["auto_trade_enabled"] is False
+    assert first["forward_20d_return"] == 2.0
+
+
+def test_write_decision_outcome_review_outputs_json_csv_and_markdown(tmp_path):
+    review = build_decision_outcome_review(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        decision_events=_decision_events().iloc[:1],
+        bars=_bars()[lambda frame: frame["trade_date"].le("2026-01-05")],
+        horizons=[1, 10],
+        run_id="p8-short",
+    )
+
+    paths = write_decision_outcome_review(review, tmp_path)
+
+    assert set(paths) == {"json_path", "details_csv_path", "summary_csv_path", "markdown_path"}
+    assert Path(paths["json_path"]).name == "operator_decision_outcome_review_2026-01-01_2026-01-31.json"
+    payload = json.loads(Path(paths["json_path"]).read_text(encoding="utf-8"))
+    assert payload["auto_trade_enabled"] is False
+    assert payload["manual_review_required"] is True
+    assert payload["outcomes"][0]["forward_10d_return"] is None
+
+    details = pd.read_csv(paths["details_csv_path"])
+    assert details.loc[0, "outcome_status"] == "insufficient_data"
+    assert pd.isna(details.loc[0, "forward_10d_return"])
+
+    summary = pd.read_csv(paths["summary_csv_path"])
+    assert set(summary["summary_level"]) == {"decision_label", "source_context"}
+
+    markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+    assert "P8 Decision Outcome Review" in markdown
+    assert "manual_review_required: true" in markdown
+    assert "auto_trade_enabled: false" in markdown
+    assert "operator_decision:p8-smoke:0:aaa" in markdown
+
+
+def test_build_decision_outcome_review_handles_empty_decision_set():
+    review = build_decision_outcome_review(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        decision_events=pd.DataFrame(),
+        bars=_bars(),
+        horizons=[1, 5],
+    )
+
+    assert review["status"] == "no_decisions_recorded"
+    assert review["manual_review_required"] is True
+    assert review["auto_trade_enabled"] is False
+    assert review["outcome_count"] == 0
+    assert review["summary_count"] == 0
+    assert review["outcomes"] == []
+    assert review["summary"] == []
