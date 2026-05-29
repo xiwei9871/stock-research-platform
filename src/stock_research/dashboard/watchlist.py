@@ -73,11 +73,27 @@ def _signal_row(row: dict[str, Any]) -> WatchlistSignalRow:
         priority=int(row["priority"]),
         signal_score=_float_or_none(row.get("signal_score")),
         primary_signal=str(row["primary_signal"]),
-        signal_tags=list(row.get("signal_tags") or []),
-        risk_tags=list(row.get("risk_tags") or []),
+        signal_tags=_json_list(row.get("signal_tags"), "signal_tags"),
+        risk_tags=_json_list(row.get("risk_tags"), "risk_tags"),
         must_watch=bool(row["must_watch"]),
-        reason_json=dict(row.get("reason_json") or {}),
+        reason_json=_json_dict(row.get("reason_json"), "reason_json"),
     )
+
+
+def _json_list(value: Any, field_name: str) -> list[Any]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a JSON array")
+    return value
+
+
+def _json_dict(value: Any, field_name: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be a JSON object")
+    return value
 
 
 def _float_or_none(value: Any) -> float | None:
