@@ -13,6 +13,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest",
+  "fastapi",
+  "uvicorn",
+  "httpx2",
 ]
 dashboard = [
   "fastapi",

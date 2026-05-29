@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
 
 
@@ -63,3 +64,26 @@ def test_minute_bars_route_passes_source(monkeypatch):
         "tushare",
     ]
     assert response.json()["items"] == [{"time": "2026-05-29 09:35:00"}]
+
+
+def test_dashboard_api_cli_parser_accepts_host_and_port():
+    args = cli.build_parser().parse_args(
+        ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]
+    )
+
+    assert args.command == "dashboard-api"
+    assert args.host == "0.0.0.0"
+    assert args.port == 9999
+
+
+def test_dashboard_api_cli_dispatches_to_runner(monkeypatch):
+    captured = {}
+
+    def fake_run_dashboard_api(host, port):
+        captured["call"] = {"host": host, "port": port}
+
+    monkeypatch.setattr(cli, "run_dashboard_api", fake_run_dashboard_api)
+
+    cli.main_for_args(["dashboard-api", "--host", "0.0.0.0", "--port", "9999"])
+
+    assert captured["call"] == {"host": "0.0.0.0", "port": 9999}
