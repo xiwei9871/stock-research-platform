@@ -149,6 +149,60 @@ describe('dashboard app shell', () => {
     });
   });
 
+  it('shows loading states while overview and selected asset data are pending', async () => {
+    const overview = createDeferred<DashboardOverview>();
+    const bars = createDeferred<BarPoint[]>();
+    const score = createDeferred<ScoreRow | null>();
+    const signals = createDeferred<WatchlistSignalRow[]>();
+
+    apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
+    apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
+    apiMocks.fetchAssetScore.mockReturnValueOnce(score.promise);
+    apiMocks.fetchAssetSignals.mockReturnValueOnce(signals.promise);
+
+    render(<App />);
+
+    expect(screen.getByText('Loading TopN...')).toBeVisible();
+    expect(screen.getByText('Loading watchlist...')).toBeVisible();
+    expect(screen.getByText('Loading reports...')).toBeVisible();
+    expect(screen.getByText('Loading asset review...')).toBeVisible();
+
+    await act(async () => {
+      overview.resolve(makeOverview());
+      bars.resolve(makeBars(1));
+      score.resolve(makeScore());
+      signals.resolve(makeSignals());
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading TopN...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading watchlist...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading reports...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading asset review...')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows empty states for dashboard lists and reports', async () => {
+    apiMocks.fetchOverview.mockResolvedValueOnce(
+      makeOverview({
+        top_scores: [],
+        watchlist_signals: [],
+        reports: []
+      })
+    );
+    apiMocks.fetchDailyBars.mockResolvedValueOnce([]);
+    apiMocks.fetchAssetScore.mockResolvedValueOnce(null);
+    apiMocks.fetchAssetSignals.mockResolvedValueOnce([]);
+
+    render(<App />);
+
+    expect(await screen.findByText('No TopN rows for selected date.')).toBeVisible();
+    expect(screen.getByText('No watchlist signals for selected date.')).toBeVisible();
+    expect(screen.getByText('No reports for selected date.')).toBeVisible();
+    expect(screen.getByText('No score for selected date.')).toBeVisible();
+    expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+  });
+
   it('selects an asset from the watchlist', async () => {
     render(<App />);
 

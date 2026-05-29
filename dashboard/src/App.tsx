@@ -28,12 +28,15 @@ export function App() {
   const [score, setScore] = useState<ScoreRow | null>(null);
   const [signals, setSignals] = useState<WatchlistSignalRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [assetLoading, setAssetLoading] = useState(false);
 
   const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
   useEffect(() => {
     let ignore = false;
     setError(null);
+    setOverviewLoading(true);
     fetchOverview({
       tradeDate,
       scoreVersion: 'manual_v1',
@@ -43,11 +46,13 @@ export function App() {
       .then((overviewRows) => {
         if (!ignore) {
           setOverview(overviewRows);
+          setOverviewLoading(false);
         }
       })
       .catch((err: unknown) => {
         if (!ignore) {
           setError(err instanceof Error ? err.message : String(err));
+          setOverviewLoading(false);
         }
       });
 
@@ -59,6 +64,7 @@ export function App() {
   useEffect(() => {
     let ignore = false;
     setError(null);
+    setAssetLoading(true);
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
       fetchAssetScore(selectedAssetId, tradeDate),
@@ -69,11 +75,13 @@ export function App() {
           setBars(barRows);
           setScore(scoreRow);
           setSignals(signalRows);
+          setAssetLoading(false);
         }
       })
       .catch((err: unknown) => {
         if (!ignore) {
           setError(err instanceof Error ? err.message : String(err));
+          setAssetLoading(false);
         }
       });
 
@@ -90,11 +98,13 @@ export function App() {
           rows={overview?.top_scores ?? []}
           selectedAssetId={selectedAssetId}
           onSelectAsset={setSelectedAssetId}
+          isLoading={overviewLoading}
         />
         <WatchlistList
           rows={overview?.watchlist_signals ?? []}
           selectedAssetId={selectedAssetId}
           onSelectAsset={setSelectedAssetId}
+          isLoading={overviewLoading}
         />
       </aside>
       <section className="workspace">
@@ -113,12 +123,18 @@ export function App() {
           {error ? <span className="error-text">{error}</span> : null}
         </header>
         <section className="chart-panel">
-          <AssetChart bars={bars} />
+          {assetLoading ? (
+            <p className="muted">Loading asset review...</p>
+          ) : bars.length > 0 ? (
+            <AssetChart bars={bars} />
+          ) : (
+            <p className="muted">No chart bars for selected range.</p>
+          )}
         </section>
       </section>
       <aside className="inspector">
         <ScorePanel score={score} signals={signals} />
-        <ReportPanel reports={overview?.reports ?? []} />
+        <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>
   );

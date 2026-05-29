@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('dashboard shell renders with mocked API responses', async ({ page }) => {
+async function mockDashboardApi(page: Page) {
   await page.route('/api/dashboard/overview**', async (route) => {
     await route.fulfill({
       json: {
@@ -93,6 +93,10 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
       }
     });
   });
+}
+
+test('dashboard shell renders with mocked API responses', async ({ page }) => {
+  await mockDashboardApi(page);
 
   await page.goto('/');
 
@@ -107,4 +111,20 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
+
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(horizontalOverflow).toBe(false);
+});
+
+test('dashboard shell stacks without horizontal overflow on mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockDashboardApi(page);
+
+  await page.goto('/');
+
+  await expect(page.getByText('Stock Research')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(horizontalOverflow).toBe(false);
 });
