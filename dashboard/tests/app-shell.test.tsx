@@ -104,6 +104,7 @@ describe('dashboard app shell', () => {
 
     expect(await screen.findByText('000001.SZ')).toBeVisible();
     expect(screen.getAllByText('91.2')).toHaveLength(2);
+    expect(screen.getByText('必看')).toBeVisible();
     expect(screen.getByText('Daily Review')).toBeVisible();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({

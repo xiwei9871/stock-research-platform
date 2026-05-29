@@ -18,7 +18,7 @@ export function WatchlistList({ rows, selectedAssetId, onSelectAsset }: Watchlis
             type="button"
             onClick={() => onSelectAsset(row.asset_id)}
           >
-            <span>{row.must_watch ? 'Must' : row.priority}</span>
+            <span>{row.must_watch ? '必看' : row.priority}</span>
             <strong>{row.stock_name || row.asset_id}</strong>
             <span>{row.primary_signal}</span>
           </button>
