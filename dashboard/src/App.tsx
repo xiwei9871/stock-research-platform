@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAssetScore, fetchAssetSignals, fetchDailyBars, fetchOverview } from './api/client';
-import type { BarPoint, DashboardOverview, ScoreRow, WatchlistSignalRow } from './api/types';
+import { fetchAssetDecisions, fetchAssetScore, fetchAssetSignals, fetchDailyBars, fetchOverview } from './api/client';
+import type { BarPoint, DashboardOverview, DecisionEventRow, ScoreRow, WatchlistSignalRow } from './api/types';
 import { AssetChart } from './charts/AssetChart';
+import { DecisionHistoryPanel } from './components/DecisionHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { TopNList } from './components/TopNList';
@@ -27,6 +28,7 @@ export function App() {
   const [bars, setBars] = useState<BarPoint[]>([]);
   const [score, setScore] = useState<ScoreRow | null>(null);
   const [signals, setSignals] = useState<WatchlistSignalRow[]>([]);
+  const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -68,13 +70,15 @@ export function App() {
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
       fetchAssetScore(selectedAssetId, tradeDate),
-      fetchAssetSignals(selectedAssetId, tradeDate)
+      fetchAssetSignals(selectedAssetId, tradeDate),
+      fetchAssetDecisions(selectedAssetId, startDate, tradeDate)
     ])
-      .then(([barRows, scoreRow, signalRows]) => {
+      .then(([barRows, scoreRow, signalRows, decisionRows]) => {
         if (!ignore) {
           setBars(barRows);
           setScore(scoreRow);
           setSignals(signalRows);
+          setDecisions(decisionRows);
           setAssetLoading(false);
         }
       })
@@ -134,6 +138,7 @@ export function App() {
       </section>
       <aside className="inspector">
         <ScorePanel score={score} signals={signals} />
+        <DecisionHistoryPanel decisions={decisions} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>

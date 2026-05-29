@@ -49,6 +49,24 @@ export type ReportLink = {
   trade_date: string | null;
 };
 
+export type DecisionEventRow = {
+  review_date: string;
+  review_session_id: string;
+  event_id: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  decision_label: string;
+  evidence_artifact_id: string;
+  evidence_path: string;
+  source_context: string;
+  requires_follow_up: boolean;
+  follow_up_note: string;
+  notes: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

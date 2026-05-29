@@ -66,6 +66,47 @@ def test_minute_bars_route_passes_source(monkeypatch):
     assert response.json()["items"] == [{"time": "2026-05-29 09:35:00"}]
 
 
+def test_asset_decisions_route_returns_read_only_history(monkeypatch):
+    captured = {}
+
+    def fake_load_decision_history(asset_id, start_date, end_date, limit):
+        captured["args"] = [asset_id, start_date, end_date, limit]
+        return [
+            {
+                "review_date": "2026-05-30",
+                "review_session_id": "morning-review",
+                "event_id": "operator_decision:morning-review:0:abc",
+                "asset_id": asset_id,
+                "stock_code": "000001.SZ",
+                "stock_name": "Alpha",
+                "decision_label": "candidate",
+                "evidence_artifact_id": "dashboard:topn:2026-05-30",
+                "evidence_path": "outputs/p6/topn.json",
+                "source_context": "dashboard_topn",
+                "requires_follow_up": True,
+                "follow_up_note": "check next close strength",
+                "notes": "strong score",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(dashboard_app, "load_asset_decision_history", fake_load_decision_history)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/000001.SZ/decisions"
+        "?start_date=2026-05-01"
+        "&end_date=2026-05-30"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["000001.SZ", "2026-05-01", "2026-05-30", 10]
+    assert response.json()["items"][0]["decision_label"] == "candidate"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

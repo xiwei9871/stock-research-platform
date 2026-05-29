@@ -2,13 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import type { BarPoint, DashboardOverview, ScoreRow, WatchlistSignalRow } from '../src/api/types';
+import type { BarPoint, DashboardOverview, DecisionEventRow, ScoreRow, WatchlistSignalRow } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
   fetchOverview: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetScore: vi.fn(),
-  fetchAssetSignals: vi.fn()
+  fetchAssetSignals: vi.fn(),
+  fetchAssetDecisions: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -113,6 +114,28 @@ function makeBars(count: number): BarPoint[] {
   }));
 }
 
+function makeDecisions(assetId = '000001.SZ'): DecisionEventRow[] {
+  return [
+    {
+      review_date: '2026-05-30',
+      review_session_id: 'morning-review',
+      event_id: 'operator_decision:morning-review:0:abc',
+      asset_id: assetId,
+      stock_code: assetId,
+      stock_name: 'Ping An Bank',
+      decision_label: 'candidate',
+      evidence_artifact_id: 'dashboard:topn:2026-05-30',
+      evidence_path: 'outputs/p6/topn.json',
+      source_context: 'dashboard_topn',
+      requires_follow_up: true,
+      follow_up_note: 'check next close strength',
+      notes: 'strong score',
+      manual_review_required: true,
+      auto_trade_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -120,6 +143,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
     apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
+    apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
   });
 
   afterEach(() => {
@@ -140,6 +164,8 @@ describe('dashboard app shell', () => {
     expect(screen.getAllByText('91.2')).toHaveLength(2);
     expect(screen.getByText('必看')).toBeVisible();
     expect(screen.getByText('Daily Review')).toBeVisible();
+    expect(screen.getByText('Decision History')).toBeVisible();
+    expect(screen.getByText('candidate')).toBeVisible();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-05-29',
@@ -154,11 +180,13 @@ describe('dashboard app shell', () => {
     const bars = createDeferred<BarPoint[]>();
     const score = createDeferred<ScoreRow | null>();
     const signals = createDeferred<WatchlistSignalRow[]>();
+    const decisions = createDeferred<DecisionEventRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
     apiMocks.fetchAssetScore.mockReturnValueOnce(score.promise);
     apiMocks.fetchAssetSignals.mockReturnValueOnce(signals.promise);
+    apiMocks.fetchAssetDecisions.mockReturnValueOnce(decisions.promise);
 
     render(<App />);
 
@@ -172,6 +200,7 @@ describe('dashboard app shell', () => {
       bars.resolve(makeBars(1));
       score.resolve(makeScore());
       signals.resolve(makeSignals());
+      decisions.resolve(makeDecisions());
     });
 
     await waitFor(() => {
@@ -193,6 +222,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchDailyBars.mockResolvedValueOnce([]);
     apiMocks.fetchAssetScore.mockResolvedValueOnce(null);
     apiMocks.fetchAssetSignals.mockResolvedValueOnce([]);
+    apiMocks.fetchAssetDecisions.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -200,6 +230,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No watchlist signals for selected date.')).toBeVisible();
     expect(screen.getByText('No reports for selected date.')).toBeVisible();
     expect(screen.getByText('No score for selected date.')).toBeVisible();
+    expect(screen.getByText('No decision history for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
   });
 
@@ -210,6 +241,7 @@ describe('dashboard app shell', () => {
 
     await waitFor(() => {
       expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
+      expect(apiMocks.fetchAssetDecisions).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
     });
   });
 
@@ -227,13 +259,18 @@ describe('dashboard app shell', () => {
     const firstBars = createDeferred<BarPoint[]>();
     const firstScore = createDeferred<ScoreRow | null>();
     const firstSignals = createDeferred<WatchlistSignalRow[]>();
+    const firstDecisions = createDeferred<DecisionEventRow[]>();
     const secondBars = createDeferred<BarPoint[]>();
     const secondScore = createDeferred<ScoreRow | null>();
     const secondSignals = createDeferred<WatchlistSignalRow[]>();
+    const secondDecisions = createDeferred<DecisionEventRow[]>();
 
     apiMocks.fetchDailyBars.mockReturnValueOnce(firstBars.promise).mockReturnValueOnce(secondBars.promise);
     apiMocks.fetchAssetScore.mockReturnValueOnce(firstScore.promise).mockReturnValueOnce(secondScore.promise);
     apiMocks.fetchAssetSignals.mockReturnValueOnce(firstSignals.promise).mockReturnValueOnce(secondSignals.promise);
+    apiMocks.fetchAssetDecisions
+      .mockReturnValueOnce(firstDecisions.promise)
+      .mockReturnValueOnce(secondDecisions.promise);
 
     render(<App />);
 
@@ -243,6 +280,7 @@ describe('dashboard app shell', () => {
       secondBars.resolve(makeBars(2));
       secondScore.resolve(makeScore('000002.SZ'));
       secondSignals.resolve(makeSignals('000002.SZ'));
+      secondDecisions.resolve(makeDecisions('000002.SZ'));
     });
     await waitFor(() => expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars'));
 
@@ -250,6 +288,7 @@ describe('dashboard app shell', () => {
       firstBars.resolve(makeBars(1));
       firstScore.resolve(makeScore('000001.SZ'));
       firstSignals.resolve(makeSignals('000001.SZ'));
+      firstDecisions.resolve(makeDecisions('000001.SZ'));
     });
 
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');

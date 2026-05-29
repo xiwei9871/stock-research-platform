@@ -93,6 +93,32 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/assets/*/decisions**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            review_date: '2026-05-30',
+            review_session_id: 'morning-review',
+            event_id: 'operator_decision:morning-review:0:abc',
+            asset_id: '000001.SZ',
+            stock_code: '000001',
+            stock_name: 'Ping An Bank',
+            decision_label: 'candidate',
+            evidence_artifact_id: 'dashboard:topn:2026-05-30',
+            evidence_path: 'outputs/p6/topn.json',
+            source_context: 'dashboard_topn',
+            requires_follow_up: true,
+            follow_up_note: 'check next close strength',
+            notes: 'strong score',
+            manual_review_required: true,
+            auto_trade_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -109,6 +135,8 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
       .filter({ has: page.getByRole('heading', { name: 'Asset Review' }) })
       .getByText('Score')
   ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
+  await expect(page.getByText('candidate')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 
