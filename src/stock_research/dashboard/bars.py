@@ -38,6 +38,7 @@ def load_minute_bars(
     end_time: str,
     freq: str = "5min",
     adjust_type: str = "qfq",
+    source: str = "baostock",
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
     sql = """
@@ -54,10 +55,15 @@ def load_minute_bars(
       AND trade_time BETWEEN %s AND %s
       AND freq = %s
       AND adjust_type = %s
+      AND source = %s
     ORDER BY trade_time
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [asset_id, start_time, end_time, freq, adjust_type])
+        rows = fetch_all(
+            conn,
+            sql,
+            [asset_id, start_time, end_time, freq, adjust_type, source],
+        )
     return [_bar_point(row).to_dict() for row in rows]
 
 

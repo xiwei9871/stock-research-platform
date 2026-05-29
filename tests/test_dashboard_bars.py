@@ -67,11 +67,13 @@ def test_load_minute_bars_uses_partitioned_minute_table(monkeypatch):
     )
 
     assert "FROM market.stock_minute_bar" in captured["sql"]
+    assert "AND source = %s" in captured["sql"]
     assert captured["params"] == [
         "000001.SZ",
         "2026-05-29T09:30:00",
         "2026-05-29T15:00:00",
         "5min",
         "qfq",
+        "baostock",
     ]
     assert result == []
