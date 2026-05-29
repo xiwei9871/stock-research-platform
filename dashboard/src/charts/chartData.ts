@@ -1,7 +1,11 @@
+import type { Time, UTCTimestamp } from 'lightweight-charts';
 import type { BarPoint } from '../api/types';
 
+const DAILY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_WITHOUT_ZONE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
 export type CandlePoint = {
-  time: string;
+  time: Time;
   open: number;
   high: number;
   low: number;
@@ -9,29 +13,62 @@ export type CandlePoint = {
 };
 
 export type VolumePoint = {
-  time: string;
+  time: Time;
   value: number;
   color: string;
 };
 
+function normalizeTime(input: string): Time | null {
+  if (DAILY_DATE_PATTERN.test(input)) {
+    return input;
+  }
+
+  const normalized = input.replace(' ', 'T');
+  // Backend intraday bars without a timezone are China exchange local time.
+  const parseTarget = TIME_WITHOUT_ZONE_PATTERN.test(normalized) ? `${normalized}+08:00` : normalized;
+  const milliseconds = Date.parse(parseTarget);
+
+  if (Number.isNaN(milliseconds)) {
+    return null;
+  }
+
+  return Math.floor(milliseconds / 1000) as UTCTimestamp;
+}
+
 export function toCandlestickData(points: BarPoint[]): CandlePoint[] {
   return points
-    .filter((point) => point.open !== null && point.high !== null && point.low !== null && point.close !== null)
-    .map((point) => ({
-      time: point.time,
-      open: point.open as number,
-      high: point.high as number,
-      low: point.low as number,
-      close: point.close as number
-    }));
+    .map((point) => {
+      const time = normalizeTime(point.time);
+
+      if (time === null || point.open === null || point.high === null || point.low === null || point.close === null) {
+        return null;
+      }
+
+      return {
+        time,
+        open: point.open,
+        high: point.high,
+        low: point.low,
+        close: point.close
+      };
+    })
+    .filter((point): point is CandlePoint => point !== null);
 }
 
 export function toVolumeData(points: BarPoint[]): VolumePoint[] {
   return points
-    .filter((point) => point.volume !== null && point.open !== null && point.close !== null)
-    .map((point) => ({
-      time: point.time,
-      value: point.volume as number,
-      color: (point.close as number) >= (point.open as number) ? '#1f9d55' : '#d64545'
-    }));
+    .map((point) => {
+      const time = normalizeTime(point.time);
+
+      if (time === null || point.volume === null || point.open === null || point.close === null) {
+        return null;
+      }
+
+      return {
+        time,
+        value: point.volume,
+        color: point.close >= point.open ? '#1f9d55' : '#d64545'
+      };
+    })
+    .filter((point): point is VolumePoint => point !== null);
 }
