@@ -25,6 +25,10 @@ env/
 /output/
 /outputs/
 /.worktrees/
+/dashboard/node_modules/
+/dashboard/dist/
+/dashboard/test-results/
+/dashboard/playwright-report/
 
 # Local environment and secrets
 .env
