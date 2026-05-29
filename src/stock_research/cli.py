@@ -34,6 +34,7 @@ from stock_research.data_quality import (
     format_data_quality_summary_line,
     run_data_quality,
 )
+from stock_research.dashboard.api import run_dashboard_api
 from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
@@ -767,6 +768,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("apply-research-schema")
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
+
+    dashboard_api = subparsers.add_parser("dashboard-api")
+    dashboard_api.add_argument("--host", default="127.0.0.1")
+    dashboard_api.add_argument("--port", type=int, default=8765)
 
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
@@ -2200,6 +2205,8 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "sync-core-assets":
         sync_core_asset_master_for_service()
         print("core_asset_master_synced")
+    elif args.command == "dashboard-api":
+        run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))

@@ -12,6 +12,12 @@ Daily research command:
 /Users/xiwei/stock_research/scripts/run_daily_research.sh
 ```
 
+## Dashboard Workbench
+
+The dashboard workbench is a read-only UI for charting, TopN review, watchlist review, and report navigation.
+
+See `docs/dashboard-workbench-runbook.md`.
+
 ## Daily Factor Pipeline
 
 See `docs/daily-factor-pipeline-runbook.md` for the current operator workflow.

@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -20,7 +21,7 @@ def test_run_p5_notify_p4_smoke_script_writes_notification_and_feishu_preview(
 
     completed = subprocess.run(
         [
-            ".venv/bin/python",
+            sys.executable,
             "scripts/run_p5_notify_p4_smoke.py",
             "--smoke-log",
             str(smoke_log),
