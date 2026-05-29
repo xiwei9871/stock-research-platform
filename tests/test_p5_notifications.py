@@ -5,7 +5,10 @@ import pytest
 
 from stock_research.p5.notifications import (
     P5NotificationError,
+    P5FeishuSendConfig,
+    P5FeishuSender,
     parse_p4_smoke_notification,
+    write_p4_smoke_feishu_preview,
     write_p4_smoke_notification_artifacts,
 )
 
@@ -134,3 +137,151 @@ def test_write_p4_smoke_notification_artifacts_are_dry_run_and_traceable(
             "preview_path": result["preview_path"],
         }
     ]
+
+
+def test_write_p4_smoke_feishu_preview_maps_notification_to_single_text_payload(
+    tmp_path: Path,
+) -> None:
+    notification_result = write_p4_smoke_notification_artifacts(
+        [
+            "p4_read_model_smoke|status|warning|trade_date|2026-05-29|blockers|0|warnings|1",
+            "p4_read_model_smoke_check|operator_export_row_counts|warning|zero_count_datasets|review_runs",
+        ],
+        output_dir=tmp_path / "p5",
+    )
+
+    result = write_p4_smoke_feishu_preview(
+        notification_result["preview_path"],
+        output_dir=tmp_path / "feishu",
+    )
+
+    preview = json.loads(Path(result["preview_path"]).read_text(encoding="utf-8"))
+    item = preview["items"][0]
+
+    assert result["status"] == "dry_run"
+    assert result["item_count"] == 1
+    assert preview["channel"] == "feishu"
+    assert preview["source_preview_path"] == notification_result["preview_path"]
+    assert item["artifact_id"] == "p5_p4_smoke_notification:2026-05-29"
+    assert item["report_type"] == "p4_smoke_notification"
+    assert item["severity"] == "warning"
+    assert item["operational_severity"] == "warning"
+    assert item["requires_attention"] is True
+    assert item["feishu_payload"]["msg_type"] == "text"
+    assert "operator_export_row_counts: warning" in item["feishu_payload"]["content"]["text"]
+
+
+class _FailingTransport:
+    def send(self, payload, config):
+        raise AssertionError("dry-run P5 sender must not invoke live transport")
+
+
+def test_p5_feishu_sender_dry_run_writes_outbox_without_transport(tmp_path: Path) -> None:
+    notification_result = write_p4_smoke_notification_artifacts(
+        ["p4_read_model_smoke|status|pass|trade_date|2026-05-29|blockers|0|warnings|0"],
+        output_dir=tmp_path / "p5",
+    )
+    feishu_result = write_p4_smoke_feishu_preview(
+        notification_result["preview_path"],
+        output_dir=tmp_path / "feishu",
+    )
+
+    result = P5FeishuSender(transport=_FailingTransport()).send_preview(
+        preview_path=feishu_result["preview_path"],
+        config=P5FeishuSendConfig(
+            webhook_url=None,
+            dry_run=True,
+            outbox_dir=str(tmp_path / "outbox"),
+            allow_live_send=False,
+            limit=None,
+            test_mode=False,
+        ),
+    )
+
+    send_preview = json.loads(Path(result["send_preview_path"]).read_text(encoding="utf-8"))
+    send_log = json.loads(Path(result["send_log_path"]).read_text(encoding="utf-8").splitlines()[0])
+
+    assert result["status"] == "dry_run"
+    assert result["sent_count"] == 0
+    assert send_preview["dry_run"] is True
+    assert send_preview["item_count"] == 1
+    assert send_log["status"] == "dry_run"
+    assert send_log["webhook_host"] == ""
+
+
+class _RecordingTransport:
+    def __init__(self) -> None:
+        self.payloads = []
+
+    def send(self, payload, config):
+        self.payloads.append((payload, config))
+        return {
+            "status": "sent",
+            "sent_count": 1,
+            "failed_count": 0,
+            "skipped_count": 0,
+            "warnings": [],
+            "errors": [],
+        }
+
+
+def test_p5_feishu_sender_requires_live_safety_gates(tmp_path: Path) -> None:
+    notification_result = write_p4_smoke_notification_artifacts(
+        ["p4_read_model_smoke|status|blocked|trade_date|2026-05-29|blockers|1|warnings|0"],
+        output_dir=tmp_path / "p5",
+    )
+    feishu_result = write_p4_smoke_feishu_preview(
+        notification_result["preview_path"],
+        output_dir=tmp_path / "feishu",
+    )
+    sender = P5FeishuSender(transport=_RecordingTransport())
+
+    with pytest.raises(ValueError, match="allow_live_send must be True"):
+        sender.send_preview(
+            preview_path=feishu_result["preview_path"],
+            config=P5FeishuSendConfig(
+                webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/super-secret",
+                dry_run=False,
+                outbox_dir=str(tmp_path / "outbox"),
+                allow_live_send=False,
+                limit=1,
+                test_mode=True,
+            ),
+        )
+
+
+def test_p5_feishu_sender_can_send_single_live_test_message(tmp_path: Path) -> None:
+    notification_result = write_p4_smoke_notification_artifacts(
+        ["p4_read_model_smoke|status|blocked|trade_date|2026-05-29|blockers|1|warnings|0"],
+        output_dir=tmp_path / "p5",
+    )
+    feishu_result = write_p4_smoke_feishu_preview(
+        notification_result["preview_path"],
+        output_dir=tmp_path / "feishu",
+    )
+    transport = _RecordingTransport()
+
+    result = P5FeishuSender(transport=transport).send_preview(
+        preview_path=feishu_result["preview_path"],
+        config=P5FeishuSendConfig(
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/super-secret",
+            dry_run=False,
+            outbox_dir=str(tmp_path / "outbox"),
+            allow_live_send=True,
+            limit=1,
+            test_mode=True,
+        ),
+    )
+
+    send_log = [
+        json.loads(line)
+        for line in Path(result["send_log_path"]).read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert result["status"] == "sent"
+    assert result["sent_count"] == 1
+    assert len(transport.payloads) == 1
+    assert transport.payloads[0][0]["webhook_host"] == "open.feishu.cn"
+    assert transport.payloads[0][0]["items"][0]["severity"] == "critical"
+    assert send_log[0]["status"] == "sent"
+    assert send_log[0]["webhook_host"] == "open.feishu.cn"
