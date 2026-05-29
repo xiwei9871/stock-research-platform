@@ -499,6 +499,40 @@ def test_cli_accepts_p4_read_model_smoke_command():
     assert args.service == "stock_research_test"
 
 
+def test_cli_accepts_p4_scheduler_cron_entry_command():
+    args = build_parser().parse_args(
+        [
+            "p4-scheduler-cron-entry",
+            "--project-dir",
+            "/Users/xiwei/stock_research",
+            "--trade-date-expr",
+            "$(date +%F)",
+            "--hour",
+            "19",
+            "--minute",
+            "15",
+            "--weekdays",
+            "1-5",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+            "--log-path",
+            "logs/p4_scheduler_daily.log",
+        ]
+    )
+
+    assert args.command == "p4-scheduler-cron-entry"
+    assert args.project_dir == "/Users/xiwei/stock_research"
+    assert args.trade_date_expr == "$(date +%F)"
+    assert args.hour == 19
+    assert args.minute == 15
+    assert args.weekdays == "1-5"
+    assert args.portfolio_id == "p2_smoke_demo"
+    assert args.service == "stock_research_test"
+    assert args.log_path == "logs/p4_scheduler_daily.log"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -2205,6 +2239,46 @@ def test_p4_read_model_smoke_cli_prints_summary(monkeypatch, capsys, tmp_path):
 
     assert capsys.readouterr().out.splitlines() == [
         "p4_read_model_smoke|status|pass|trade_date|2026-05-29|blockers|0|warnings|0"
+    ]
+
+
+def test_p4_scheduler_cron_entry_cli_prints_entry(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "build_p4_scheduler_cron_entry",
+        lambda **kwargs: (
+            "15 19 * * 1-5 cd /Users/xiwei/stock_research && "
+            "TRADE_DATE=$(date +%F) scripts/run_p4_scheduler_daily.sh "
+            ">> logs/p4_scheduler_daily.log 2>&1"
+        ),
+    )
+
+    cli.main_for_args(
+        [
+            "p4-scheduler-cron-entry",
+            "--project-dir",
+            "/Users/xiwei/stock_research",
+            "--trade-date-expr",
+            "$(date +%F)",
+            "--hour",
+            "19",
+            "--minute",
+            "15",
+            "--weekdays",
+            "1-5",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+            "--log-path",
+            "logs/p4_scheduler_daily.log",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "15 19 * * 1-5 cd /Users/xiwei/stock_research && "
+        "TRADE_DATE=$(date +%F) scripts/run_p4_scheduler_daily.sh "
+        ">> logs/p4_scheduler_daily.log 2>&1"
     ]
 
 

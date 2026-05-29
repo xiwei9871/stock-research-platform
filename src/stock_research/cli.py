@@ -173,6 +173,7 @@ from stock_research.p4.scheduler import (
     format_read_model_freshness_lines,
     run_daily_orchestration,
 )
+from stock_research.p4.scheduler_wrapper import build_p4_scheduler_cron_entry
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.simulation.virtual_portfolio import (
     build_virtual_portfolio_review,
@@ -1502,6 +1503,22 @@ def build_parser() -> argparse.ArgumentParser:
     p4_read_model_smoke.add_argument("--portfolio-id")
     p4_read_model_smoke.add_argument("--service", default="stock_research")
 
+    p4_scheduler_cron_entry = subparsers.add_parser("p4-scheduler-cron-entry")
+    p4_scheduler_cron_entry.add_argument(
+        "--project-dir",
+        default="/Users/xiwei/stock_research",
+    )
+    p4_scheduler_cron_entry.add_argument("--trade-date-expr", default="$(date +%F)")
+    p4_scheduler_cron_entry.add_argument("--hour", type=int, default=19)
+    p4_scheduler_cron_entry.add_argument("--minute", type=int, default=15)
+    p4_scheduler_cron_entry.add_argument("--weekdays", default="1-5")
+    p4_scheduler_cron_entry.add_argument("--portfolio-id", default="p2_smoke_demo")
+    p4_scheduler_cron_entry.add_argument("--service", default="stock_research")
+    p4_scheduler_cron_entry.add_argument(
+        "--log-path",
+        default="logs/p4_scheduler_daily.log",
+    )
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2733,6 +2750,19 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         for line in format_read_model_freshness_lines(result):
             print(line)
+    elif args.command == "p4-scheduler-cron-entry":
+        print(
+            build_p4_scheduler_cron_entry(
+                project_dir=args.project_dir,
+                trade_date_expr=args.trade_date_expr,
+                hour=args.hour,
+                minute=args.minute,
+                weekdays=args.weekdays,
+                portfolio_id=args.portfolio_id,
+                service=args.service,
+                log_path=args.log_path,
+            )
+        )
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

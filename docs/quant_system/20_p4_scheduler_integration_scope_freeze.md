@@ -169,6 +169,25 @@ Boundary:
 - Do not send notifications in P4 unless reusing an existing dry-run-safe
   notification path for smoke output only.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- Scheduler-safe wrapper:
+  - `scripts/run_p4_scheduler_daily.sh`
+- Dry-run behavior:
+  - `DRY_RUN=1 scripts/run_p4_scheduler_daily.sh`
+- Manual cron entry helper:
+  - `stock_research.p4.scheduler_wrapper.build_p4_scheduler_cron_entry`
+- CLI command:
+  - `p4-scheduler-cron-entry`
+- Runbook:
+  - `docs/quant_system/21_p4_scheduler_runbook.md`
+- Module tests:
+  - `tests/test_p4_scheduler_wrapper.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p4_scheduler_cron_entry`
+
 ## Out Of Scope For P4
 
 - Web dashboard UI.
