@@ -177,6 +177,30 @@ Boundary:
 - This is not a Web dashboard.
 - Output is a stable API-like export for future dashboard consumption.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p3.operator_export.export_operator_review`
+- CLI command:
+  - `p3-export-operator-review`
+- Dashboard-ready files:
+  - `review_runs.csv` / `review_runs.json`
+  - `review_sections.csv` / `review_sections.json`
+  - `portfolio_risk.csv` / `portfolio_risk.json`
+  - `latest_status_by_trade_date.csv` / `latest_status_by_trade_date.json`
+  - `manifest.json`
+- Filters:
+  - `--start-date`
+  - `--end-date`
+  - `--status`
+  - `--section-group`
+  - `--portfolio-id`
+- Module tests:
+  - `tests/test_p3_operator_export.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p3_export_operator_review`
+
 ## Out Of Scope For P3
 
 - Live trading.

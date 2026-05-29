@@ -414,6 +414,37 @@ def test_cli_accepts_p3_import_virtual_portfolio_review_command():
     assert args.service == "stock_research_test"
 
 
+def test_cli_accepts_p3_export_operator_review_command():
+    args = build_parser().parse_args(
+        [
+            "p3-export-operator-review",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-29",
+            "--output-dir",
+            "outputs/p3/operator/2026-05-29",
+            "--status",
+            "manual_review_required",
+            "--section-group",
+            "simulation",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p3-export-operator-review"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-29"
+    assert args.output_dir == "outputs/p3/operator/2026-05-29"
+    assert args.status == "manual_review_required"
+    assert args.section_group == "simulation"
+    assert args.portfolio_id == "p2_smoke_demo"
+    assert args.service == "stock_research_test"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1964,6 +1995,73 @@ def test_p3_import_virtual_portfolio_review_cli_prints_summary(monkeypatch, caps
     assert lines[1] == "p3_virtual_portfolio_import|states|2"
     assert lines[2] == "p3_virtual_portfolio_import|positions|1"
     assert lines[3] == "p3_virtual_portfolio_import|portfolio_id|demo"
+
+
+def test_p3_export_operator_review_cli_prints_manifest_and_counts(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    output_dir = tmp_path / "operator"
+
+    def fake_export(**kwargs):
+        assert kwargs == {
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-29",
+            "output_dir": output_dir,
+            "status": "manual_review_required",
+            "section_group": "simulation",
+            "portfolio_id": "p2_smoke_demo",
+            "service": "stock_research_test",
+        }
+        return {
+            "manifest_path": str(output_dir / "manifest.json"),
+            "row_counts": {
+                "review_runs": 2,
+                "review_sections": 4,
+                "portfolio_risk": 3,
+                "latest_status_by_trade_date": 2,
+            },
+            "files": {
+                "review_runs": str(output_dir / "review_runs.csv"),
+                "review_sections": str(output_dir / "review_sections.csv"),
+                "portfolio_risk": str(output_dir / "portfolio_risk.csv"),
+                "latest_status_by_trade_date": str(
+                    output_dir / "latest_status_by_trade_date.csv"
+                ),
+            },
+        }
+
+    monkeypatch.setattr(cli, "export_operator_review", fake_export)
+
+    cli.main_for_args(
+        [
+            "p3-export-operator-review",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-29",
+            "--output-dir",
+            str(output_dir),
+            "--status",
+            "manual_review_required",
+            "--section-group",
+            "simulation",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"p3_operator_export|manifest|{output_dir / 'manifest.json'}",
+        f"p3_operator_export_dataset|review_runs|rows|2|{output_dir / 'review_runs.csv'}",
+        f"p3_operator_export_dataset|review_sections|rows|4|{output_dir / 'review_sections.csv'}",
+        f"p3_operator_export_dataset|portfolio_risk|rows|3|{output_dir / 'portfolio_risk.csv'}",
+        "p3_operator_export_dataset|latest_status_by_trade_date|rows|2|"
+        f"{output_dir / 'latest_status_by_trade_date.csv'}",
+    ]
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):

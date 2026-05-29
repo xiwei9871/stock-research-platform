@@ -166,6 +166,7 @@ from stock_research.p2.aggregate_review import (
     write_p2_aggregate_review,
 )
 from stock_research.p2.review_read_model import import_p2_aggregate_review
+from stock_research.p3.operator_export import export_operator_review
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.simulation.virtual_portfolio import (
     build_virtual_portfolio_review,
@@ -1470,6 +1471,15 @@ def build_parser() -> argparse.ArgumentParser:
     p3_import_virtual_portfolio_review.add_argument("--path", required=True)
     p3_import_virtual_portfolio_review.add_argument("--service", default="stock_research")
 
+    p3_export_operator_review = subparsers.add_parser("p3-export-operator-review")
+    p3_export_operator_review.add_argument("--start-date", required=True)
+    p3_export_operator_review.add_argument("--end-date", required=True)
+    p3_export_operator_review.add_argument("--output-dir", required=True)
+    p3_export_operator_review.add_argument("--status")
+    p3_export_operator_review.add_argument("--section-group")
+    p3_export_operator_review.add_argument("--portfolio-id")
+    p3_export_operator_review.add_argument("--service", default="stock_research")
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2663,6 +2673,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p3_virtual_portfolio_import|positions|{result['position_count']}")
         for portfolio_id in result["portfolio_ids"]:
             print(f"p3_virtual_portfolio_import|portfolio_id|{portfolio_id}")
+    elif args.command == "p3-export-operator-review":
+        result = export_operator_review(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=Path(args.output_dir),
+            status=args.status,
+            section_group=args.section_group,
+            portfolio_id=args.portfolio_id,
+            service=args.service,
+        )
+        print(f"p3_operator_export|manifest|{result['manifest_path']}")
+        for dataset_name, rows in result["row_counts"].items():
+            print(
+                "p3_operator_export_dataset|"
+                f"{dataset_name}|rows|{rows}|{result['files'][dataset_name]}"
+            )
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()
