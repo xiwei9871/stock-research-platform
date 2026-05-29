@@ -8,7 +8,7 @@
     "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "playwright test tests/e2e-smoke.spec.ts"
+    "test:e2e": "playwright test tests/app-smoke.spec.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
