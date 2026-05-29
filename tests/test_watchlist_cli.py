@@ -333,6 +333,79 @@ def test_review_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, cap
     }
 
 
+def test_build_watchlist_diagnostics_range_skips_matching_cached_outputs(tmp_path, monkeypatch, capsys):
+    existing = tmp_path / "watchlist_diagnostics_2026-05-19_diagnostics_v1.csv"
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-19",
+                "asset_id": "A",
+                "diagnostics_rule_version": "watchlist_diagnostics_v2_3",
+            }
+        ]
+    ).to_csv(existing, index=False)
+    calls = []
+
+    monkeypatch.setattr(
+        "stock_research.cli._load_trade_dates_for_watchlist_diagnostics_range",
+        lambda start_date, end_date: ["2026-05-19", "2026-05-20"],
+    )
+
+    def fake_build_watchlist_diagnostics_snapshot(**kwargs):
+        calls.append(kwargs)
+        return {
+            "full": pd.DataFrame(
+                [
+                    {
+                        "trade_date": kwargs["trade_date"],
+                        "watchlist_id": "diagnostics",
+                        "asset_id": "B",
+                        "diagnostics_rule_version": "watchlist_diagnostics_v2_3",
+                    }
+                ]
+            ),
+            "must_watch": pd.DataFrame(),
+        }
+
+    monkeypatch.setattr(
+        "stock_research.cli.build_watchlist_diagnostics_snapshot",
+        fake_build_watchlist_diagnostics_snapshot,
+    )
+    monkeypatch.setattr(
+        "stock_research.cli.write_watchlist_diagnostics_report",
+        lambda **kwargs: {
+            "full_csv_path": str(tmp_path / f"full_{kwargs['trade_date']}.csv"),
+            "must_watch_csv_path": str(tmp_path / f"must_{kwargs['trade_date']}.csv"),
+            "markdown_path": str(tmp_path / f"md_{kwargs['trade_date']}.md"),
+        },
+    )
+
+    cli.main_for_args(
+        [
+            "build-watchlist-diagnostics-range",
+            "--start-date",
+            "2026-05-19",
+            "--end-date",
+            "2026-05-20",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert calls == [
+        {
+            "trade_date": "2026-05-20",
+            "score_version": "manual_v1",
+            "top_n": 50,
+            "risk_watch_n": 10,
+            "opportunity_watch_n": 10,
+        }
+    ]
+    assert "watchlist_diagnostics_range|skipped|2026-05-19" in lines
+    assert "watchlist_diagnostics_range|built|2026-05-20" in lines
+
+
 def test_watchlist_explain_cli_delegates_to_workflow(monkeypatch, capsys):
     calls = {}
 

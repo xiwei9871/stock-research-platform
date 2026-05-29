@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+import pandas as pd
+
 from stock_research.assets import sync_asset_master
+from stock_research.config import SETTINGS
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
     backfill_status_for_service,
@@ -31,6 +34,7 @@ from stock_research.data_quality import (
     format_data_quality_summary_line,
     run_data_quality,
 )
+from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
     sync_asset_lifecycle_from_master,
@@ -262,6 +266,7 @@ from stock_research.watchlist.workflow import (
     build_watchlist_snapshot,
     explain_watchlist_asset,
 )
+from stock_research.watchlist.diagnostics import DIAGNOSTICS_RULE_VERSION
 from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
@@ -2024,6 +2029,16 @@ def build_parser() -> argparse.ArgumentParser:
     build_watchlist_diagnostics.add_argument("--opportunity-watch-n", type=int, default=10)
     build_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
 
+    build_watchlist_diagnostics_range = subparsers.add_parser("build-watchlist-diagnostics-range")
+    build_watchlist_diagnostics_range.add_argument("--start-date", required=True)
+    build_watchlist_diagnostics_range.add_argument("--end-date", required=True)
+    build_watchlist_diagnostics_range.add_argument("--score-version", default="manual_v1")
+    build_watchlist_diagnostics_range.add_argument("--top-n", type=int, default=50)
+    build_watchlist_diagnostics_range.add_argument("--risk-watch-n", type=int, default=10)
+    build_watchlist_diagnostics_range.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics_range.add_argument("--output-dir", default="outputs/research")
+    build_watchlist_diagnostics_range.add_argument("--force", action="store_true")
+
     review_watchlist_diagnostics = subparsers.add_parser("review-watchlist-diagnostics")
     review_watchlist_diagnostics.add_argument("--diagnostics-dir", default="outputs/research")
     review_watchlist_diagnostics.add_argument("--start-date")
@@ -2041,6 +2056,34 @@ def build_parser() -> argparse.ArgumentParser:
     watchlist_explain.add_argument("--asset-id", required=True)
 
     return parser
+
+
+def _load_trade_dates_for_watchlist_diagnostics_range(start_date: str, end_date: str) -> list[str]:
+    sql = """
+        SELECT trade_date::text AS trade_date
+        FROM market_daily_bar
+        WHERE adjust_type = 'qfq'
+          AND trade_date BETWEEN %s AND %s
+        GROUP BY trade_date
+        ORDER BY trade_date
+    """
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date])
+    return [str(row["trade_date"]) for row in rows]
+
+
+def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_date: str) -> bool:
+    path = Path(output_dir) / f"watchlist_diagnostics_{trade_date}_diagnostics_v1.csv"
+    if not path.exists():
+        return False
+    try:
+        frame = pd.read_csv(path, usecols=["diagnostics_rule_version"])
+    except (ValueError, OSError, pd.errors.EmptyDataError):
+        return False
+    if frame.empty:
+        return False
+    versions = {str(value) for value in frame["diagnostics_rule_version"].dropna().unique()}
+    return versions == {DIAGNOSTICS_RULE_VERSION}
 
 
 def main_for_args(argv: list[str] | None = None) -> None:
@@ -3923,6 +3966,42 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"watchlist_diagnostics|full_csv|{report_paths['full_csv_path']}")
         print(f"watchlist_diagnostics|must_watch_csv|{report_paths['must_watch_csv_path']}")
         print(f"watchlist_diagnostics|markdown|{report_paths['markdown_path']}")
+    elif args.command == "build-watchlist-diagnostics-range":
+        dates = _load_trade_dates_for_watchlist_diagnostics_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        built = 0
+        skipped = 0
+        for trade_date in dates:
+            if not args.force and _has_matching_watchlist_diagnostics_cache(
+                output_dir=args.output_dir,
+                trade_date=trade_date,
+            ):
+                skipped += 1
+                print(f"watchlist_diagnostics_range|skipped|{trade_date}")
+                continue
+            diagnostics = build_watchlist_diagnostics_snapshot(
+                trade_date=trade_date,
+                score_version=args.score_version,
+                top_n=args.top_n,
+                risk_watch_n=args.risk_watch_n,
+                opportunity_watch_n=args.opportunity_watch_n,
+            )
+            write_watchlist_diagnostics_report(
+                full_rows=diagnostics["full"],
+                must_watch_rows=diagnostics["must_watch"],
+                output_dir=args.output_dir,
+                output_version="v1",
+                trade_date=trade_date,
+                watchlist_id="diagnostics",
+            )
+            built += 1
+            print(f"watchlist_diagnostics_range|built|{trade_date}")
+        print(
+            "watchlist_diagnostics_range|summary|"
+            f"dates|{len(dates)}|built|{built}|skipped|{skipped}|rule_version|{DIAGNOSTICS_RULE_VERSION}"
+        )
     elif args.command == "review-watchlist-diagnostics":
         review_paths = run_watchlist_diagnostics_effectiveness_review(
             diagnostics_dir=args.diagnostics_dir,

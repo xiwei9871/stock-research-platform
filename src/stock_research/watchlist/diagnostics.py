@@ -13,6 +13,7 @@ ALLOWED_OPPORTUNITY_STRUCTURES = {
 }
 
 TREND_CONTINUATION_MAX_SCORE_RANK = 20
+DIAGNOSTICS_RULE_VERSION = "watchlist_diagnostics_v2_3"
 
 EXCLUDED_FAILURE_STRUCTURES = {
     "a_kill_failure",
@@ -70,6 +71,7 @@ def build_watchlist_diagnostics(
     frame["risk_note"] = frame.apply(_risk_note, axis=1)
     frame["opportunity_note"] = frame.apply(_opportunity_note, axis=1)
     frame["opportunity_flag"] = frame["watch_group"].eq("opportunity_watch")
+    frame["diagnostics_rule_version"] = DIAGNOSTICS_RULE_VERSION
 
     risk_rows = frame[frame["watch_group"] == "risk_watch"].sort_values(
         by=["watch_priority", "score_rank", "asset_id"]
