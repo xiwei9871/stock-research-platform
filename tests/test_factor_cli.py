@@ -459,6 +459,8 @@ def test_cli_accepts_p4_daily_orchestration_command():
             "outputs/p4/operator/2026-05-29",
             "--portfolio-id",
             "p2_smoke_demo",
+            "--apply-daily-run-schema",
+            "--record-run",
             "--service",
             "stock_research_test",
         ]
@@ -470,6 +472,8 @@ def test_cli_accepts_p4_daily_orchestration_command():
     assert args.virtual_portfolio == "outputs/p2/simulation/virtual_portfolio_review_2026-05-29_demo.json"
     assert args.output_dir == "outputs/p4/operator/2026-05-29"
     assert args.portfolio_id == "p2_smoke_demo"
+    assert args.apply_daily_run_schema is True
+    assert args.record_run is True
     assert args.service == "stock_research_test"
 
 
@@ -2127,6 +2131,8 @@ def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path
             "output_dir": output_dir,
             "portfolio_id": "p2_smoke_demo",
             "service": "stock_research_test",
+            "apply_daily_run_schema": True,
+            "record_run": True,
         }
         return {"status": "ok"}
 
@@ -2150,6 +2156,8 @@ def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path
             str(output_dir),
             "--portfolio-id",
             "p2_smoke_demo",
+            "--apply-daily-run-schema",
+            "--record-run",
             "--service",
             "stock_research_test",
         ]

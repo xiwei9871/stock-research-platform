@@ -1492,6 +1492,8 @@ def build_parser() -> argparse.ArgumentParser:
     p4_daily_orchestration.add_argument("--virtual-portfolio", required=True)
     p4_daily_orchestration.add_argument("--output-dir", required=True)
     p4_daily_orchestration.add_argument("--portfolio-id")
+    p4_daily_orchestration.add_argument("--apply-daily-run-schema", action="store_true")
+    p4_daily_orchestration.add_argument("--record-run", action="store_true")
     p4_daily_orchestration.add_argument("--service", default="stock_research")
 
     p4_read_model_smoke = subparsers.add_parser("p4-read-model-smoke")
@@ -2716,6 +2718,8 @@ def main_for_args(argv: list[str] | None = None) -> None:
             virtual_portfolio_path=Path(args.virtual_portfolio),
             output_dir=Path(args.output_dir),
             portfolio_id=args.portfolio_id,
+            apply_daily_run_schema=args.apply_daily_run_schema,
+            record_run=args.record_run,
             service=args.service,
         )
         for line in format_daily_orchestration_lines(result):

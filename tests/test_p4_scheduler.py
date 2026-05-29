@@ -79,6 +79,177 @@ def test_run_daily_orchestration_imports_read_models_and_writes_operator_export(
     assert calls[2][1]["portfolio_id"] == "p2_smoke_demo"
 
 
+def test_run_daily_orchestration_records_successful_run(tmp_path, monkeypatch):
+    records = []
+    aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
+    virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
+    output_dir = tmp_path / "operator"
+    aggregate_path.write_text("{}", encoding="utf-8")
+    virtual_path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(
+        scheduler,
+        "import_p2_aggregate_review",
+        lambda path, *, service: {"imported_count": 1, "run_ids": ["p2-smoke"]},
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "import_virtual_portfolio_review",
+        lambda path, *, service: {
+            "imported_count": 1,
+            "state_count": 2,
+            "position_count": 1,
+            "portfolio_ids": ["p2_smoke_demo"],
+        },
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "export_operator_review",
+        lambda **kwargs: {
+            "manifest_path": str(output_dir / "manifest.json"),
+            "row_counts": {"review_runs": 1},
+        },
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "record_daily_job_run",
+        lambda **kwargs: records.append(kwargs) or "daily-job-success",
+    )
+
+    result = scheduler.run_daily_orchestration(
+        trade_date="2026-05-29",
+        aggregate_review_path=aggregate_path,
+        virtual_portfolio_path=virtual_path,
+        output_dir=output_dir,
+        portfolio_id="p2_smoke_demo",
+        service="stock_research_test",
+        record_run=True,
+    )
+
+    assert result["daily_job_run_id"] == "daily-job-success"
+    assert records[0]["trade_date"] == "2026-05-29"
+    assert records[0]["step"] == "p4_daily_orchestration"
+    assert records[0]["status"] == "success"
+    assert records[0]["service"] == "stock_research_test"
+    assert records[0]["metadata"]["operator_export"]["manifest_path"].endswith(
+        "manifest.json"
+    )
+    assert records[0]["metadata"]["virtual_portfolio_import"]["state_count"] == 2
+
+
+def test_run_daily_orchestration_records_failed_run_before_reraising(
+    tmp_path,
+    monkeypatch,
+):
+    records = []
+    aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
+    virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
+    aggregate_path.write_text("{}", encoding="utf-8")
+    virtual_path.write_text("{}", encoding="utf-8")
+
+    def fail_import(path, *, service):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(scheduler, "import_p2_aggregate_review", fail_import)
+    monkeypatch.setattr(
+        scheduler,
+        "record_daily_job_run",
+        lambda **kwargs: records.append(kwargs) or "daily-job-failed",
+    )
+
+    try:
+        scheduler.run_daily_orchestration(
+            trade_date="2026-05-29",
+            aggregate_review_path=aggregate_path,
+            virtual_portfolio_path=virtual_path,
+            output_dir=tmp_path / "operator",
+            service="stock_research_test",
+            record_run=True,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "database unavailable"
+    else:
+        raise AssertionError("expected RuntimeError")
+
+    assert records[0]["status"] == "failed"
+    assert records[0]["error_message"] == "database unavailable"
+    assert records[0]["metadata"]["error_type"] == "RuntimeError"
+    assert records[0]["metadata"]["aggregate_review_path"] == str(aggregate_path)
+
+
+def test_run_daily_orchestration_records_blocked_missing_artifacts(tmp_path, monkeypatch):
+    records = []
+    missing_aggregate = tmp_path / "missing_aggregate.json"
+    missing_virtual = tmp_path / "missing_virtual.json"
+    monkeypatch.setattr(
+        scheduler,
+        "record_daily_job_run",
+        lambda **kwargs: records.append(kwargs) or "daily-job-blocked",
+    )
+
+    result = scheduler.run_daily_orchestration(
+        trade_date="2026-05-29",
+        aggregate_review_path=missing_aggregate,
+        virtual_portfolio_path=missing_virtual,
+        output_dir=tmp_path / "operator",
+        service="stock_research_test",
+        record_run=True,
+    )
+
+    assert result["status"] == "blocked"
+    assert result["daily_job_run_id"] == "daily-job-blocked"
+    assert records[0]["status"] == "blocked"
+    assert records[0]["error_message"].startswith("missing artifacts:")
+    assert records[0]["metadata"]["missing_artifacts"] == [
+        str(missing_aggregate),
+        str(missing_virtual),
+    ]
+
+
+def test_run_daily_orchestration_can_apply_daily_run_schema(tmp_path, monkeypatch):
+    calls = []
+    aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
+    virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
+    aggregate_path.write_text("{}", encoding="utf-8")
+    virtual_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        scheduler,
+        "apply_daily_job_run_schema",
+        lambda service: calls.append(("schema", service)),
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "import_p2_aggregate_review",
+        lambda path, *, service: {"imported_count": 1, "run_ids": []},
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "import_virtual_portfolio_review",
+        lambda path, *, service: {
+            "imported_count": 1,
+            "state_count": 0,
+            "position_count": 0,
+            "portfolio_ids": [],
+        },
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "export_operator_review",
+        lambda **kwargs: {"manifest_path": "manifest.json", "row_counts": {}},
+    )
+
+    scheduler.run_daily_orchestration(
+        trade_date="2026-05-29",
+        aggregate_review_path=aggregate_path,
+        virtual_portfolio_path=virtual_path,
+        output_dir=tmp_path / "operator",
+        service="stock_research_test",
+        apply_daily_run_schema=True,
+    )
+
+    assert calls == [("schema", "stock_research_test")]
+
+
 def test_run_daily_orchestration_reports_missing_artifacts_without_importing(
     tmp_path,
     monkeypatch,
@@ -129,10 +300,12 @@ def test_format_daily_orchestration_lines_is_machine_readable(tmp_path):
             "manifest_path": str(tmp_path / "manifest.json"),
             "row_counts": {"review_runs": 1, "portfolio_risk": 2},
         },
+        "daily_job_run_id": "daily-job-success",
     }
 
     assert scheduler.format_daily_orchestration_lines(result) == [
         "p4_daily_orchestration|status|ok|trade_date|2026-05-29|blockers|0",
+        "p4_daily_orchestration|daily_job_run_id|daily-job-success",
         "p4_daily_orchestration|p2_review_import|imported|1",
         "p4_daily_orchestration|virtual_portfolio_import|imported|1|states|2|positions|1",
         f"p4_daily_orchestration|operator_export|manifest|{tmp_path / 'manifest.json'}",

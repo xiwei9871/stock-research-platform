@@ -119,6 +119,32 @@ Boundary:
 - Do not create broad scheduler-specific schemas.
 - Do not store credentials, webhook URLs, or machine-local secrets.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `p4-daily-orchestration --apply-daily-run-schema`
+- `p4-daily-orchestration --record-run`
+- Records step:
+  - `p4_daily_orchestration`
+- Records statuses:
+  - `success`
+  - `blocked`
+  - `failed`
+- Preserves metadata:
+  - import counts
+  - output manifest path
+  - output row counts
+  - missing artifact paths
+  - failure type and message
+- Reuses existing:
+  - `stock_research.daily_job_run_store.apply_daily_job_run_schema`
+  - `stock_research.daily_job_run_store.record_daily_job_run`
+- Module tests:
+  - `tests/test_p4_scheduler.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p4_daily_orchestration`
+
 ### P4-4 Scheduler Wrapper And Runbook
 
 Goal: document and package a scheduler-safe command sequence for local operation.
