@@ -107,6 +107,54 @@ def test_asset_decisions_route_returns_read_only_history(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_asset_outcomes_route_returns_read_only_history(monkeypatch):
+    captured = {}
+
+    def fake_load_outcome_history(asset_id, start_date, end_date, review_session_id, limit):
+        captured["args"] = [asset_id, start_date, end_date, review_session_id, limit]
+        return [
+            {
+                "outcome_event_id": "operator_decision_outcome:p8:abc",
+                "run_id": "p8-outcome-2026-05-01-2026-05-30",
+                "decision_event_id": "operator_decision:morning-review:0:abc",
+                "review_session_id": "morning-review",
+                "review_date": "2026-05-30",
+                "asset_id": asset_id,
+                "stock_code": "000001.SZ",
+                "stock_name": "Alpha",
+                "decision_label": "candidate",
+                "source_context": "dashboard_topn",
+                "outcome_status": "complete",
+                "available_future_bars": 20,
+                "base_trade_date": "2026-05-30",
+                "base_close": 10.0,
+                "forward_returns": {"1": 0.1, "5": 0.2},
+                "max_high_returns": {"1": 0.12, "5": 0.25},
+                "max_low_drawdowns": {"1": 0.0, "5": -0.04},
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "source_artifact_path": "outputs/p7/operator_decision_journal.json",
+                "outcome_artifact_path": "outputs/p8/operator_decision_outcome_review.json",
+            }
+        ]
+
+    monkeypatch.setattr(dashboard_app, "load_asset_outcome_history", fake_load_outcome_history)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/000001.SZ/outcomes"
+        "?start_date=2026-05-01"
+        "&end_date=2026-05-30"
+        "&review_session_id=morning-review"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["000001.SZ", "2026-05-01", "2026-05-30", "morning-review", 10]
+    assert response.json()["items"][0]["outcome_status"] == "complete"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

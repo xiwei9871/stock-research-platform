@@ -119,6 +119,38 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/assets/*/outcomes**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            outcome_event_id: 'operator_decision_outcome:p8:abc',
+            run_id: 'p8-outcome-2026-05-01-2026-05-30',
+            decision_event_id: 'operator_decision:morning-review:0:abc',
+            review_session_id: 'morning-review',
+            review_date: '2026-05-30',
+            asset_id: '000001.SZ',
+            stock_code: '000001',
+            stock_name: 'Ping An Bank',
+            decision_label: 'candidate',
+            source_context: 'dashboard_topn',
+            outcome_status: 'complete',
+            available_future_bars: 20,
+            base_trade_date: '2026-05-30',
+            base_close: 10,
+            forward_returns: { '1': 0.1, '5': 0.2 },
+            max_high_returns: { '1': 0.12, '5': 0.25 },
+            max_low_drawdowns: { '1': 0, '5': -0.04 },
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            source_artifact_path: 'outputs/p7/operator_decision_journal.json',
+            outcome_artifact_path: 'outputs/p8/operator_decision_outcome_review.json'
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -136,7 +168,9 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
       .getByText('Score')
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
-  await expect(page.getByText('candidate')).toBeVisible();
+  await expect(page.getByText('candidate')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
+  await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 

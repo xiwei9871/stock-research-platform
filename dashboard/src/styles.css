@@ -180,6 +180,22 @@ body {
   overflow-wrap: anywhere;
 }
 
+.outcome-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.outcome-metrics span {
+  min-width: 0;
+  border-radius: 4px;
+  background: #f0f6f3;
+  color: #155b36;
+  padding: 3px 4px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
 .report-list a {
   display: grid;
   gap: 2px;

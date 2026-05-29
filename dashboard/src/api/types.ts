@@ -67,6 +67,30 @@ export type DecisionEventRow = {
   auto_trade_enabled: boolean;
 };
 
+export type DecisionOutcomeRow = {
+  outcome_event_id: string;
+  run_id: string;
+  decision_event_id: string;
+  review_session_id: string;
+  review_date: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  decision_label: string;
+  source_context: string;
+  outcome_status: string;
+  available_future_bars: number;
+  base_trade_date: string;
+  base_close: number | null;
+  forward_returns: Record<string, number | null>;
+  max_high_returns: Record<string, number | null>;
+  max_low_drawdowns: Record<string, number | null>;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  source_artifact_path: string;
+  outcome_artifact_path: string;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

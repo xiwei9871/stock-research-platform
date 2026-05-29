@@ -1,4 +1,11 @@
-import type { BarPoint, DashboardOverview, DecisionEventRow, ScoreRow, WatchlistSignalRow } from './types';
+import type {
+  BarPoint,
+  DashboardOverview,
+  DecisionEventRow,
+  DecisionOutcomeRow,
+  ScoreRow,
+  WatchlistSignalRow
+} from './types';
 
 type OverviewParams = {
   tradeDate: string;
@@ -57,6 +64,23 @@ export async function fetchAssetDecisions(
   const payload = await getJson<{ items: DecisionEventRow[] }>(
     `/api/assets/${encodeURIComponent(assetId)}/decisions?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}`
+  );
+  return payload.items;
+}
+
+export async function fetchAssetOutcomes(
+  assetId: string,
+  startDate: string,
+  endDate: string,
+  options: { reviewSessionId?: string; limit?: number } = {}
+): Promise<DecisionOutcomeRow[]> {
+  const limit = options.limit ?? 20;
+  const reviewSession = options.reviewSessionId
+    ? `&review_session_id=${encodeURIComponent(options.reviewSessionId)}`
+    : '';
+  const payload = await getJson<{ items: DecisionOutcomeRow[] }>(
+    `/api/assets/${encodeURIComponent(assetId)}/outcomes?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${reviewSession}`
   );
   return payload.items;
 }

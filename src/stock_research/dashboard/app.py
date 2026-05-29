@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.overview import build_dashboard_overview
+from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.scores import (
     load_asset_detail,
@@ -98,6 +99,25 @@ def create_app() -> FastAPI:
         return {
             "asset_id": asset_id,
             "items": load_asset_decision_history(asset_id, start_date, end_date, limit),
+        }
+
+    @app.get("/api/assets/{asset_id}/outcomes")
+    def asset_outcomes(
+        asset_id: str,
+        start_date: str,
+        end_date: str,
+        review_session_id: str | None = None,
+        limit: int = 20,
+    ):
+        return {
+            "asset_id": asset_id,
+            "items": load_asset_outcome_history(
+                asset_id,
+                start_date,
+                end_date,
+                review_session_id,
+                limit,
+            ),
         }
 
     @app.get("/api/topn")

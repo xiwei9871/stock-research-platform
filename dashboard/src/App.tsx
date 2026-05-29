@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchAssetDecisions, fetchAssetScore, fetchAssetSignals, fetchDailyBars, fetchOverview } from './api/client';
-import type { BarPoint, DashboardOverview, DecisionEventRow, ScoreRow, WatchlistSignalRow } from './api/types';
+import {
+  fetchAssetDecisions,
+  fetchAssetOutcomes,
+  fetchAssetScore,
+  fetchAssetSignals,
+  fetchDailyBars,
+  fetchOverview
+} from './api/client';
+import type {
+  BarPoint,
+  DashboardOverview,
+  DecisionEventRow,
+  DecisionOutcomeRow,
+  ScoreRow,
+  WatchlistSignalRow
+} from './api/types';
 import { AssetChart } from './charts/AssetChart';
 import { DecisionHistoryPanel } from './components/DecisionHistoryPanel';
+import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { TopNList } from './components/TopNList';
@@ -29,6 +44,7 @@ export function App() {
   const [score, setScore] = useState<ScoreRow | null>(null);
   const [signals, setSignals] = useState<WatchlistSignalRow[]>([]);
   const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
+  const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -71,14 +87,16 @@ export function App() {
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
       fetchAssetScore(selectedAssetId, tradeDate),
       fetchAssetSignals(selectedAssetId, tradeDate),
-      fetchAssetDecisions(selectedAssetId, startDate, tradeDate)
+      fetchAssetDecisions(selectedAssetId, startDate, tradeDate),
+      fetchAssetOutcomes(selectedAssetId, startDate, tradeDate)
     ])
-      .then(([barRows, scoreRow, signalRows, decisionRows]) => {
+      .then(([barRows, scoreRow, signalRows, decisionRows, outcomeRows]) => {
         if (!ignore) {
           setBars(barRows);
           setScore(scoreRow);
           setSignals(signalRows);
           setDecisions(decisionRows);
+          setOutcomes(outcomeRows);
           setAssetLoading(false);
         }
       })
@@ -139,6 +157,7 @@ export function App() {
       <aside className="inspector">
         <ScorePanel score={score} signals={signals} />
         <DecisionHistoryPanel decisions={decisions} />
+        <OutcomeHistoryPanel outcomes={outcomes} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>
