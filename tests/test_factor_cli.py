@@ -445,6 +445,34 @@ def test_cli_accepts_p3_export_operator_review_command():
     assert args.service == "stock_research_test"
 
 
+def test_cli_accepts_p7_decision_journal_command():
+    args = build_parser().parse_args(
+        [
+            "p7-decision-journal",
+            "--review-date",
+            "2026-05-30",
+            "--review-session-id",
+            "morning-review",
+            "--reviewer-id",
+            "operator",
+            "--source-artifact-root",
+            "outputs",
+            "--input-csv",
+            "outputs/p7/decision_input.csv",
+            "--output-dir",
+            "outputs/p7/decision_journal",
+        ]
+    )
+
+    assert args.command == "p7-decision-journal"
+    assert args.review_date == "2026-05-30"
+    assert args.review_session_id == "morning-review"
+    assert args.reviewer_id == "operator"
+    assert args.source_artifact_root == "outputs"
+    assert args.input_csv == "outputs/p7/decision_input.csv"
+    assert args.output_dir == "outputs/p7/decision_journal"
+
+
 def test_cli_accepts_p4_daily_orchestration_command():
     args = build_parser().parse_args(
         [
@@ -2150,6 +2178,84 @@ def test_p3_export_operator_review_cli_prints_manifest_and_counts(
         "p3_operator_export_dataset|latest_status_by_trade_date|rows|2|"
         f"{output_dir / 'latest_status_by_trade_date.csv'}",
     ]
+
+
+def test_p7_decision_journal_cli_writes_artifacts(capsys, tmp_path):
+    input_csv = tmp_path / "decision_input.csv"
+    input_csv.write_text(
+        "review_date,review_session_id,reviewer_id,asset_id,stock_code,stock_name,"
+        "decision_label,evidence_artifact_id,evidence_path,source_context,"
+        "requires_follow_up,follow_up_note,manual_review_required,auto_trade_enabled,notes\n"
+        "2026-05-30,morning-review,operator,CN:SH:600001,600001.SH,Alpha,"
+        "candidate,dashboard:topn:2026-05-30,outputs/p6/topn.json,dashboard_topn,"
+        "True,check next close strength,True,False,strong score\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "journal"
+
+    cli.main_for_args(
+        [
+            "p7-decision-journal",
+            "--review-date",
+            "2026-05-30",
+            "--review-session-id",
+            "morning-review",
+            "--reviewer-id",
+            "operator",
+            "--source-artifact-root",
+            "outputs",
+            "--input-csv",
+            str(input_csv),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p7_decision_journal|status|review_recorded"
+    assert lines[1].startswith("p7_decision_journal|json|")
+    assert lines[2].startswith("p7_decision_journal|csv|")
+    assert lines[3].startswith("p7_decision_journal|markdown|")
+
+    payload = json.loads((output_dir / "operator_decision_journal_2026-05-30_morning-review.json").read_text())
+    assert payload["decision_count"] == 1
+    assert payload["items"][0]["decision_label"] == "candidate"
+
+
+def test_p7_decision_journal_cli_exits_nonzero_for_invalid_input(capsys, tmp_path):
+    input_csv = tmp_path / "decision_input.csv"
+    input_csv.write_text(
+        "review_date,review_session_id,reviewer_id,asset_id,decision_label,"
+        "evidence_artifact_id,evidence_path,requires_follow_up,manual_review_required,"
+        "auto_trade_enabled\n"
+        "2026-05-30,morning-review,operator,CN:SH:600001,buy,"
+        "dashboard:topn:2026-05-30,outputs/p6/topn.json,False,True,False\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main_for_args(
+            [
+                "p7-decision-journal",
+                "--review-date",
+                "2026-05-30",
+                "--review-session-id",
+                "morning-review",
+                "--reviewer-id",
+                "operator",
+                "--source-artifact-root",
+                "outputs",
+                "--input-csv",
+                str(input_csv),
+                "--output-dir",
+                str(tmp_path / "journal"),
+            ]
+        )
+
+    assert exc.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "p7_decision_journal|error|" in stderr
+    assert "invalid_decision_label" in stderr
 
 
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):

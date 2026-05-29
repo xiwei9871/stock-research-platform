@@ -168,6 +168,10 @@ from stock_research.p2.aggregate_review import (
 )
 from stock_research.p2.review_read_model import import_p2_aggregate_review
 from stock_research.p3.operator_export import export_operator_review
+from stock_research.operator_decision.journal import (
+    build_decision_journal,
+    write_decision_journal,
+)
 from stock_research.p4.scheduler import (
     check_read_model_freshness,
     format_daily_orchestration_lines,
@@ -1497,6 +1501,14 @@ def build_parser() -> argparse.ArgumentParser:
     p3_export_operator_review.add_argument("--portfolio-id")
     p3_export_operator_review.add_argument("--service", default="stock_research")
 
+    p7_decision_journal = subparsers.add_parser("p7-decision-journal")
+    p7_decision_journal.add_argument("--review-date", required=True)
+    p7_decision_journal.add_argument("--review-session-id", required=True)
+    p7_decision_journal.add_argument("--reviewer-id", required=True)
+    p7_decision_journal.add_argument("--source-artifact-root", required=True)
+    p7_decision_journal.add_argument("--input-csv", required=True)
+    p7_decision_journal.add_argument("--output-dir", required=True)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -2777,6 +2789,26 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 "p3_operator_export_dataset|"
                 f"{dataset_name}|rows|{rows}|{result['files'][dataset_name]}"
             )
+    elif args.command == "p7-decision-journal":
+        import pandas as pd
+
+        events = pd.read_csv(args.input_csv)
+        try:
+            journal = build_decision_journal(
+                review_date=args.review_date,
+                review_session_id=args.review_session_id,
+                reviewer_id=args.reviewer_id,
+                source_artifact_root=args.source_artifact_root,
+                events=events,
+            )
+        except ValueError as exc:
+            print(f"p7_decision_journal|error|{exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        paths = write_decision_journal(journal, output_dir=args.output_dir)
+        print(f"p7_decision_journal|status|{journal['status']}")
+        print(f"p7_decision_journal|json|{paths['json_path']}")
+        print(f"p7_decision_journal|csv|{paths['csv_path']}")
+        print(f"p7_decision_journal|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
