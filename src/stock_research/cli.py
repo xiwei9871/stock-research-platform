@@ -285,6 +285,7 @@ from stock_research.watchlist.diagnostics import DIAGNOSTICS_RULE_VERSION
 from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
+from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -2134,6 +2135,15 @@ def build_parser() -> argparse.ArgumentParser:
     review_watchlist_diagnostics.add_argument("--start-date")
     review_watchlist_diagnostics.add_argument("--end-date")
     review_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_miss_analysis = subparsers.add_parser("analyze-strong-winner-misses")
+    strong_winner_miss_analysis.add_argument("--start-date", required=True)
+    strong_winner_miss_analysis.add_argument("--end-date", required=True)
+    strong_winner_miss_analysis.add_argument("--adjust-type", default="qfq")
+    strong_winner_miss_analysis.add_argument("--window-days", type=int, default=60)
+    strong_winner_miss_analysis.add_argument("--threshold", type=float, default=1.0)
+    strong_winner_miss_analysis.add_argument("--diagnostics-dir", default="outputs/research")
+    strong_winner_miss_analysis.add_argument("--output-dir", default="outputs/research")
 
     watchlist_report = subparsers.add_parser("watchlist-report")
     watchlist_report.add_argument("--trade-date", required=True)
@@ -4201,6 +4211,21 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"watchlist_effectiveness|detail_csv|{review_paths['detail_csv_path']}")
         print(f"watchlist_effectiveness|summary_csv|{review_paths['summary_csv_path']}")
         print(f"watchlist_effectiveness|markdown|{review_paths['markdown_path']}")
+    elif args.command == "analyze-strong-winner-misses":
+        result = run_strong_winner_miss_analysis(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            window_days=args.window_days,
+            threshold=args.threshold,
+            diagnostics_dir=args.diagnostics_dir,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_miss_analysis|strong_winners|{result['paths']['strong_winners']}")
+        print(f"strong_winner_miss_analysis|miss_analysis|{result['paths']['miss_analysis']}")
+        print(f"strong_winner_miss_analysis|summary|{result['paths']['summary']}")
+        print(f"strong_winner_miss_analysis|report|{result['paths']['report']}")
+        print(f"strong_winner_miss_analysis|rows|{len(result['miss_analysis'])}")
     elif args.command == "watchlist-report":
         rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
         report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
