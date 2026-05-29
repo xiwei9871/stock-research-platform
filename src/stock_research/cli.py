@@ -167,6 +167,12 @@ from stock_research.p2.aggregate_review import (
 )
 from stock_research.p2.review_read_model import import_p2_aggregate_review
 from stock_research.p3.operator_export import export_operator_review
+from stock_research.p4.scheduler import (
+    check_read_model_freshness,
+    format_daily_orchestration_lines,
+    format_read_model_freshness_lines,
+    run_daily_orchestration,
+)
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.simulation.virtual_portfolio import (
     build_virtual_portfolio_review,
@@ -1480,6 +1486,20 @@ def build_parser() -> argparse.ArgumentParser:
     p3_export_operator_review.add_argument("--portfolio-id")
     p3_export_operator_review.add_argument("--service", default="stock_research")
 
+    p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
+    p4_daily_orchestration.add_argument("--trade-date", required=True)
+    p4_daily_orchestration.add_argument("--aggregate-review", required=True)
+    p4_daily_orchestration.add_argument("--virtual-portfolio", required=True)
+    p4_daily_orchestration.add_argument("--output-dir", required=True)
+    p4_daily_orchestration.add_argument("--portfolio-id")
+    p4_daily_orchestration.add_argument("--service", default="stock_research")
+
+    p4_read_model_smoke = subparsers.add_parser("p4-read-model-smoke")
+    p4_read_model_smoke.add_argument("--trade-date", required=True)
+    p4_read_model_smoke.add_argument("--operator-manifest", required=True)
+    p4_read_model_smoke.add_argument("--portfolio-id")
+    p4_read_model_smoke.add_argument("--service", default="stock_research")
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2689,6 +2709,26 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 "p3_operator_export_dataset|"
                 f"{dataset_name}|rows|{rows}|{result['files'][dataset_name]}"
             )
+    elif args.command == "p4-daily-orchestration":
+        result = run_daily_orchestration(
+            trade_date=args.trade_date,
+            aggregate_review_path=Path(args.aggregate_review),
+            virtual_portfolio_path=Path(args.virtual_portfolio),
+            output_dir=Path(args.output_dir),
+            portfolio_id=args.portfolio_id,
+            service=args.service,
+        )
+        for line in format_daily_orchestration_lines(result):
+            print(line)
+    elif args.command == "p4-read-model-smoke":
+        result = check_read_model_freshness(
+            trade_date=args.trade_date,
+            operator_manifest_path=Path(args.operator_manifest),
+            portfolio_id=args.portfolio_id,
+            service=args.service,
+        )
+        for line in format_read_model_freshness_lines(result):
+            print(line)
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

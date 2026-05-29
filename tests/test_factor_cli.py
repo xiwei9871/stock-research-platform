@@ -445,6 +445,56 @@ def test_cli_accepts_p3_export_operator_review_command():
     assert args.service == "stock_research_test"
 
 
+def test_cli_accepts_p4_daily_orchestration_command():
+    args = build_parser().parse_args(
+        [
+            "p4-daily-orchestration",
+            "--trade-date",
+            "2026-05-29",
+            "--aggregate-review",
+            "outputs/p2/aggregate/p2_aggregate_review_2026-05-29.json",
+            "--virtual-portfolio",
+            "outputs/p2/simulation/virtual_portfolio_review_2026-05-29_demo.json",
+            "--output-dir",
+            "outputs/p4/operator/2026-05-29",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p4-daily-orchestration"
+    assert args.trade_date == "2026-05-29"
+    assert args.aggregate_review == "outputs/p2/aggregate/p2_aggregate_review_2026-05-29.json"
+    assert args.virtual_portfolio == "outputs/p2/simulation/virtual_portfolio_review_2026-05-29_demo.json"
+    assert args.output_dir == "outputs/p4/operator/2026-05-29"
+    assert args.portfolio_id == "p2_smoke_demo"
+    assert args.service == "stock_research_test"
+
+
+def test_cli_accepts_p4_read_model_smoke_command():
+    args = build_parser().parse_args(
+        [
+            "p4-read-model-smoke",
+            "--trade-date",
+            "2026-05-29",
+            "--operator-manifest",
+            "outputs/p4/operator/2026-05-29/manifest.json",
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p4-read-model-smoke"
+    assert args.trade_date == "2026-05-29"
+    assert args.operator_manifest == "outputs/p4/operator/2026-05-29/manifest.json"
+    assert args.portfolio_id == "p2_smoke_demo"
+    assert args.service == "stock_research_test"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -2061,6 +2111,92 @@ def test_p3_export_operator_review_cli_prints_manifest_and_counts(
         f"p3_operator_export_dataset|portfolio_risk|rows|3|{output_dir / 'portfolio_risk.csv'}",
         "p3_operator_export_dataset|latest_status_by_trade_date|rows|2|"
         f"{output_dir / 'latest_status_by_trade_date.csv'}",
+    ]
+
+
+def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
+    virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
+    output_dir = tmp_path / "operator"
+
+    def fake_run(**kwargs):
+        assert kwargs == {
+            "trade_date": "2026-05-29",
+            "aggregate_review_path": aggregate_path,
+            "virtual_portfolio_path": virtual_path,
+            "output_dir": output_dir,
+            "portfolio_id": "p2_smoke_demo",
+            "service": "stock_research_test",
+        }
+        return {"status": "ok"}
+
+    monkeypatch.setattr(cli, "run_daily_orchestration", fake_run)
+    monkeypatch.setattr(
+        cli,
+        "format_daily_orchestration_lines",
+        lambda result: ["p4_daily_orchestration|status|ok|trade_date|2026-05-29|blockers|0"],
+    )
+
+    cli.main_for_args(
+        [
+            "p4-daily-orchestration",
+            "--trade-date",
+            "2026-05-29",
+            "--aggregate-review",
+            str(aggregate_path),
+            "--virtual-portfolio",
+            str(virtual_path),
+            "--output-dir",
+            str(output_dir),
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p4_daily_orchestration|status|ok|trade_date|2026-05-29|blockers|0"
+    ]
+
+
+def test_p4_read_model_smoke_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    manifest_path = tmp_path / "manifest.json"
+
+    def fake_check(**kwargs):
+        assert kwargs == {
+            "trade_date": "2026-05-29",
+            "operator_manifest_path": manifest_path,
+            "portfolio_id": "p2_smoke_demo",
+            "service": "stock_research_test",
+        }
+        return {"status": "pass"}
+
+    monkeypatch.setattr(cli, "check_read_model_freshness", fake_check)
+    monkeypatch.setattr(
+        cli,
+        "format_read_model_freshness_lines",
+        lambda result: [
+            "p4_read_model_smoke|status|pass|trade_date|2026-05-29|blockers|0|warnings|0"
+        ],
+    )
+
+    cli.main_for_args(
+        [
+            "p4-read-model-smoke",
+            "--trade-date",
+            "2026-05-29",
+            "--operator-manifest",
+            str(manifest_path),
+            "--portfolio-id",
+            "p2_smoke_demo",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p4_read_model_smoke|status|pass|trade_date|2026-05-29|blockers|0|warnings|0"
     ]
 
 

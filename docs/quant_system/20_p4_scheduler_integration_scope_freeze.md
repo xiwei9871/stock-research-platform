@@ -51,6 +51,19 @@ Boundary:
   run evidence.
 - Do not mutate generated P2 artifacts.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p4.scheduler.run_daily_orchestration`
+- `stock_research.p4.scheduler.format_daily_orchestration_lines`
+- CLI command:
+  - `p4-daily-orchestration`
+- Module tests:
+  - `tests/test_p4_scheduler.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p4_daily_orchestration`
+
 ### P4-2 Read Model Freshness Smoke
 
 Goal: verify that the scheduled/imported read models are fresh enough for operator
@@ -70,6 +83,24 @@ Boundary:
 - Do not infer market data freshness from read-model freshness.
 - Do not page or notify directly; return structured output that a later notifier
   can consume.
+
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p4.scheduler.check_read_model_freshness`
+- `stock_research.p4.scheduler.format_read_model_freshness_lines`
+- CLI command:
+  - `p4-read-model-smoke`
+- Freshness checks:
+  - latest `ops.p2_review_run`
+  - latest `simulation.virtual_portfolio_state_daily`
+  - operator export file existence
+  - operator export row counts
+- Module tests:
+  - `tests/test_p4_scheduler.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p4_read_model_smoke`
 
 ### P4-3 Daily Run Recording
 
