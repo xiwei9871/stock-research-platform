@@ -382,6 +382,22 @@ def test_cli_accepts_p2_aggregate_review_command():
     assert args.output_dir == "outputs/p2/aggregate"
 
 
+def test_cli_accepts_p3_import_p2_aggregate_review_command():
+    args = build_parser().parse_args(
+        [
+            "p3-import-p2-aggregate-review",
+            "--path",
+            "outputs/p2/aggregate/p2_aggregate_review_2026-05-29.json",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p3-import-p2-aggregate-review"
+    assert args.path == "outputs/p2/aggregate/p2_aggregate_review_2026-05-29.json"
+    assert args.service == "stock_research_test"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1873,6 +1889,32 @@ def test_p2_aggregate_review_cli_prints_paths(capsys, tmp_path):
     assert lines[0] == "p2_aggregate_review|status|review_required"
     assert lines[1].startswith("p2_aggregate_review|json|")
     assert lines[2].startswith("p2_aggregate_review|markdown|")
+
+
+def test_p3_import_p2_aggregate_review_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {"imported_count": 1, "run_ids": ["p2-smoke-2026-05-29"]}
+
+    monkeypatch.setattr(cli, "import_p2_aggregate_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p3-import-p2-aggregate-review",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p3_p2_review_import|imported|1"
+    assert lines[1] == "p3_p2_review_import|run_id|p2-smoke-2026-05-29"
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):

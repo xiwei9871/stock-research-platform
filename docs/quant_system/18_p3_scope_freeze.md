@@ -54,6 +54,15 @@ Boundary:
 - Keep generated P2 JSON/Markdown artifacts as the audit source.
 - Do not store webhook URLs, credentials, tokens, or broker/account data.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `ops.p2_review_run`
+- `ops.p2_review_section`
+- Schema tests:
+  - `tests/test_schema.py::test_research_extension_includes_p2_review_read_model_tables`
+
 ### P3-2 P2 Review Import / Backfill CLI
 
 Goal: import existing P2 aggregate review JSON files into the read model.
@@ -70,6 +79,19 @@ Boundary:
 - Do not require a scheduler.
 - Do not require a Web app.
 - Do not mutate the original generated artifacts.
+
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.p2.review_read_model.load_p2_aggregate_review_rows`
+- `stock_research.p2.review_read_model.import_p2_aggregate_review`
+- CLI command:
+  - `p3-import-p2-aggregate-review`
+- Module tests:
+  - `tests/test_p2_review_read_model.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p3_import_p2_aggregate_review`
 
 ### P3-3 Virtual Portfolio Read Model Schema
 

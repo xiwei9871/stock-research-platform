@@ -36,6 +36,7 @@ CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
+CREATE SCHEMA IF NOT EXISTS ops;
 """
 
 
@@ -240,6 +241,7 @@ CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
+CREATE SCHEMA IF NOT EXISTS ops;
 
 CREATE TABLE IF NOT EXISTS core.asset_master (
     asset_id text PRIMARY KEY,
@@ -644,6 +646,34 @@ CREATE TABLE IF NOT EXISTS ingest.backfill_task (
     UNIQUE (run_id, partition_key)
 );
 
+CREATE TABLE IF NOT EXISTS ops.p2_review_run (
+    run_id text PRIMARY KEY,
+    trade_date date NOT NULL,
+    status text NOT NULL,
+    source_rollup_status text,
+    artifact_count integer NOT NULL DEFAULT 0,
+    blocker_count integer NOT NULL DEFAULT 0,
+    warning_count integer NOT NULL DEFAULT 0,
+    json_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ops.p2_review_section (
+    run_id text NOT NULL REFERENCES ops.p2_review_run(run_id),
+    section_group text NOT NULL,
+    section_name text NOT NULL,
+    status text NOT NULL,
+    required boolean NOT NULL,
+    exists boolean NOT NULL,
+    source_artifact_path text NOT NULL,
+    summary jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, section_group, section_name)
+);
+
 CREATE SCHEMA IF NOT EXISTS watchlist;
 
 CREATE TABLE IF NOT EXISTS watchlist.watchlist_item (
@@ -942,6 +972,15 @@ CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_status
 
 CREATE INDEX IF NOT EXISTS idx_ingest_backfill_task_run_status
     ON ingest.backfill_task (run_id, status, start_date);
+
+CREATE INDEX IF NOT EXISTS idx_ops_p2_review_run_trade_date
+    ON ops.p2_review_run (trade_date, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_p2_review_run_status_date
+    ON ops.p2_review_run (status, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_p2_review_section_group_status
+    ON ops.p2_review_section (section_group, status);
 
 CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
     ON factor.factor_daily (trade_date, factor_name, calc_version);

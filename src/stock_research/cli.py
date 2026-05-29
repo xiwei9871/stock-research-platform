@@ -161,6 +161,7 @@ from stock_research.p2.aggregate_review import (
     load_aggregate_artifact_payloads,
     write_p2_aggregate_review,
 )
+from stock_research.p2.review_read_model import import_p2_aggregate_review
 from stock_research.simulation.portfolio import write_portfolio_simulation_review
 from stock_research.simulation.virtual_portfolio import (
     build_virtual_portfolio_review,
@@ -1451,6 +1452,10 @@ def build_parser() -> argparse.ArgumentParser:
     p2_aggregate_review.add_argument("--rollup", required=True)
     p2_aggregate_review.add_argument("--output-dir", required=True)
 
+    p3_import_p2_aggregate_review = subparsers.add_parser("p3-import-p2-aggregate-review")
+    p3_import_p2_aggregate_review.add_argument("--path", required=True)
+    p3_import_p2_aggregate_review.add_argument("--service", default="stock_research")
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2594,6 +2599,11 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p2_aggregate_review|status|{review['status']}")
         print(f"p2_aggregate_review|json|{paths['json_path']}")
         print(f"p2_aggregate_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p3-import-p2-aggregate-review":
+        result = import_p2_aggregate_review(Path(args.path), service=args.service)
+        print(f"p3_p2_review_import|imported|{result['imported_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p3_p2_review_import|run_id|{run_id}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

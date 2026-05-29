@@ -207,6 +207,17 @@ def test_research_extension_includes_lhb_tables_and_event_features():
     assert "institution_net_buy" in sql
 
 
+def test_research_extension_includes_p2_review_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE SCHEMA IF NOT EXISTS ops" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.p2_review_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.p2_review_section" in sql
+    assert "PRIMARY KEY (run_id, section_group, section_name)" in sql
+    assert "idx_ops_p2_review_run_trade_date" in sql
+    assert "idx_ops_p2_review_run_status_date" in sql
+    assert "idx_ops_p2_review_section_group_status" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"
