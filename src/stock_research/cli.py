@@ -261,6 +261,10 @@ from stock_research.technical_feature_audit import (
 from stock_research.technical_feature_watchdog import (
     run_technical_feature_backfill_watchdog,
 )
+from stock_research.alpha191_pilot_validation import (
+    run_validate_alpha191_expanded,
+    run_validate_alpha191_pilot,
+)
 from stock_research.technical_method_validation import run_validate_technical_methods
 from stock_research.run_card import write_run_card
 from stock_research.services.universe_service import (
@@ -1853,6 +1857,34 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/outputs/research",
     )
 
+    validate_alpha191_pilot = subparsers.add_parser("validate-alpha191-pilot")
+    validate_alpha191_pilot.add_argument("--start-date", required=True)
+    validate_alpha191_pilot.add_argument("--end-date", required=True)
+    validate_alpha191_pilot.add_argument("--adjust-type", default="qfq")
+    validate_alpha191_pilot.add_argument("--sample-size", type=int)
+    validate_alpha191_pilot.add_argument("--asset-id")
+    validate_alpha191_pilot.add_argument("--ts-code")
+    validate_alpha191_pilot.add_argument("--strong-start-date", default="2025-01-01")
+    validate_alpha191_pilot.add_argument("--strong-end-date", default="2025-05-01")
+    validate_alpha191_pilot.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    validate_alpha191_expanded = subparsers.add_parser("validate-alpha191-expanded")
+    validate_alpha191_expanded.add_argument("--start-date", required=True)
+    validate_alpha191_expanded.add_argument("--end-date", required=True)
+    validate_alpha191_expanded.add_argument("--adjust-type", default="qfq")
+    validate_alpha191_expanded.add_argument("--sample-size", type=int)
+    validate_alpha191_expanded.add_argument("--asset-id")
+    validate_alpha191_expanded.add_argument("--ts-code")
+    validate_alpha191_expanded.add_argument("--strong-start-date", default="2025-01-01")
+    validate_alpha191_expanded.add_argument("--strong-end-date", default="2025-05-01")
+    validate_alpha191_expanded.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
     lhb_risk_diagnostics_after_failure_rule_v21 = subparsers.add_parser(
         "lhb-risk-diagnostics-after-failure-rule-v2-1"
     )
@@ -3254,6 +3286,47 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"technical_method_validation|recommendation|{result['paths']['recommendation']}")
         print(f"technical_method_validation|report|{result['paths']['report']}")
         print(f"technical_method_validation|rows|{len(result['dataset'])}")
+    elif args.command == "validate-alpha191-pilot":
+        result = run_validate_alpha191_pilot(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            strong_start_date=args.strong_start_date,
+            strong_end_date=args.strong_end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"alpha191_pilot_validation|factor_effectiveness|{result['paths']['factor_effectiveness']}")
+        print(f"alpha191_pilot_validation|strong_winner_explanation|{result['paths']['strong_winner_explanation']}")
+        print(f"alpha191_pilot_validation|trend_overlay|{result['paths']['trend_overlay']}")
+        print(f"alpha191_pilot_validation|high_volatility_risk_split|{result['paths']['high_volatility_risk_split']}")
+        print(f"alpha191_pilot_validation|recommendation|{result['paths']['recommendation']}")
+        print(f"alpha191_pilot_validation|report|{result['paths']['report']}")
+        print(f"alpha191_pilot_validation|rows|{len(result['dataset'])}")
+    elif args.command == "validate-alpha191-expanded":
+        result = run_validate_alpha191_expanded(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            strong_start_date=args.strong_start_date,
+            strong_end_date=args.strong_end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"alpha191_expanded_validation|factor_effectiveness|{result['paths']['factor_effectiveness']}")
+        print(f"alpha191_expanded_validation|factor_bucket_effectiveness|{result['paths']['factor_bucket_effectiveness']}")
+        print(f"alpha191_expanded_validation|strong_winner_explanation|{result['paths']['strong_winner_explanation']}")
+        print(f"alpha191_expanded_validation|drawdown_risk_effectiveness|{result['paths']['drawdown_risk_effectiveness']}")
+        print(f"alpha191_expanded_validation|redundancy_report|{result['paths']['redundancy_report']}")
+        print(f"alpha191_expanded_validation|candidate_factors|{result['paths']['candidate_factors']}")
+        print(f"alpha191_expanded_validation|trend_overlay|{result['paths']['trend_overlay']}")
+        print(f"alpha191_expanded_validation|high_volatility_risk_split|{result['paths']['high_volatility_risk_split']}")
+        print(f"alpha191_expanded_validation|report|{result['paths']['report']}")
+        print(f"alpha191_expanded_validation|rows|{len(result['dataset'])}")
     elif args.command == "technical-feature-promotion-audit":
         result = run_technical_feature_promotion_audit(
             start_date=args.start_date,
