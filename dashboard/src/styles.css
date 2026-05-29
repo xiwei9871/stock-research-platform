@@ -38,7 +38,9 @@ body {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
   padding: 12px;
   border-bottom: 1px solid #d9dee7;
   background: #ffffff;
@@ -59,6 +61,116 @@ body {
 .panel-title {
   font-size: 13px;
   font-weight: 700;
+}
+
+.list-section,
+.inspector-section {
+  margin-top: 18px;
+}
+
+.list-section h2,
+.inspector-section h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+.dense-list {
+  display: grid;
+  gap: 4px;
+}
+
+.list-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #202936;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-row:hover,
+.list-row.active {
+  border-color: #9ab3d5;
+  background: #edf4ff;
+}
+
+.list-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-row strong,
+.report-list strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.tag-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.risk-tag {
+  max-width: 100%;
+  border-radius: 999px;
+  background: #fff1f0;
+  color: #b42318;
+  padding: 3px 8px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.report-list {
+  display: grid;
+  gap: 8px;
+}
+
+.report-list a {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #205493;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.muted,
+.error-text {
+  color: #667085;
+  font-size: 12px;
+}
+
+.error-text {
+  min-width: 180px;
+  flex: 1;
+  color: #b42318;
+  overflow-wrap: anywhere;
+}
+
+.asset-chart {
+  width: 100%;
+  min-height: 460px;
 }
 
 @media (max-width: 900px) {
