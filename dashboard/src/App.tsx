@@ -10,6 +10,16 @@ import { WatchlistList } from './components/WatchlistList';
 const DEFAULT_TRADE_DATE = '2026-05-29';
 const DEFAULT_ASSET_ID = '000001.SZ';
 
+function dateNDaysBefore(dateText: string, days: number) {
+  const [year, month, day] = dateText.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - days);
+  const utcYear = date.getUTCFullYear();
+  const utcMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const utcDay = String(date.getUTCDate()).padStart(2, '0');
+  return `${utcYear}-${utcMonth}-${utcDay}`;
+}
+
 export function App() {
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [selectedAssetId, setSelectedAssetId] = useState(DEFAULT_ASSET_ID);
@@ -19,13 +29,10 @@ export function App() {
   const [signals, setSignals] = useState<WatchlistSignalRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const startDate = useMemo(() => {
-    const date = new Date(`${tradeDate}T00:00:00`);
-    date.setDate(date.getDate() - 180);
-    return date.toISOString().slice(0, 10);
-  }, [tradeDate]);
+  const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
   useEffect(() => {
+    let ignore = false;
     setError(null);
     fetchOverview({
       tradeDate,
@@ -33,11 +40,24 @@ export function App() {
       watchlistId: 'default',
       topN: 30
     })
-      .then(setOverview)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+      .then((overviewRows) => {
+        if (!ignore) {
+          setOverview(overviewRows);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [tradeDate]);
 
   useEffect(() => {
+    let ignore = false;
     setError(null);
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
@@ -45,11 +65,21 @@ export function App() {
       fetchAssetSignals(selectedAssetId, tradeDate)
     ])
       .then(([barRows, scoreRow, signalRows]) => {
-        setBars(barRows);
-        setScore(scoreRow);
-        setSignals(signalRows);
+        if (!ignore) {
+          setBars(barRows);
+          setScore(scoreRow);
+          setSignals(signalRows);
+        }
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [selectedAssetId, startDate, tradeDate]);
 
   return (

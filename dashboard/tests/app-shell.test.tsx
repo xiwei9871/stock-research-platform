@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import type { BarPoint, DashboardOverview, ScoreRow, WatchlistSignalRow } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
   fetchOverview: vi.fn(),
@@ -16,76 +17,109 @@ vi.mock('../src/charts/AssetChart', () => ({
   AssetChart: ({ bars }: { bars: unknown[] }) => <div data-testid="asset-chart">{bars.length} bars</div>
 }));
 
-describe('dashboard app shell', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    apiMocks.fetchOverview.mockResolvedValue({
-      trade_date: '2026-05-29',
-      score_version: 'manual_v1',
-      watchlist_id: 'default',
-      top_scores: [
-        {
-          trade_date: '2026-05-29',
-          asset_id: '000001.SZ',
-          rank: 1,
-          score_total: 91.2,
-          score_version: 'manual_v1',
-          score_components: {}
-        }
-      ],
-      watchlist_signals: [
-        {
-          watchlist_id: 'default',
-          trade_date: '2026-05-29',
-          asset_id: '000002.SZ',
-          stock_code: '000002',
-          stock_name: 'Vanke',
-          priority: 5,
-          signal_score: 72,
-          primary_signal: 'observe',
-          signal_tags: ['trend_ok'],
-          risk_tags: ['high_volatility'],
-          must_watch: true,
-          reason_json: {}
-        }
-      ],
-      reports: [
-        {
-          report_type: 'daily',
-          title: 'Daily Review',
-          path: '/reports/daily.html',
-          format: 'html',
-          trade_date: '2026-05-29'
-        }
-      ]
-    });
-    apiMocks.fetchDailyBars.mockResolvedValue([
-      { time: '2026-05-29', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }
-    ]);
-    apiMocks.fetchAssetScore.mockResolvedValue({
-      trade_date: '2026-05-29',
-      asset_id: '000001.SZ',
-      rank: 1,
-      score_total: 91.2,
-      score_version: 'manual_v1',
-      score_components: {}
-    });
-    apiMocks.fetchAssetSignals.mockResolvedValue([
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function makeOverview(overrides: Partial<DashboardOverview> = {}): DashboardOverview {
+  return {
+    trade_date: '2026-05-29',
+    score_version: 'manual_v1',
+    watchlist_id: 'default',
+    top_scores: [
+      {
+        trade_date: '2026-05-29',
+        asset_id: '000001.SZ',
+        rank: 1,
+        score_total: 91.2,
+        score_version: 'manual_v1',
+        score_components: {}
+      }
+    ],
+    watchlist_signals: [
       {
         watchlist_id: 'default',
         trade_date: '2026-05-29',
-        asset_id: '000001.SZ',
-        stock_code: '000001',
-        stock_name: 'Ping An Bank',
-        priority: 10,
-        signal_score: 80,
-        primary_signal: 'watch',
-        signal_tags: [],
-        risk_tags: ['gap_risk'],
-        must_watch: false,
+        asset_id: '000002.SZ',
+        stock_code: '000002',
+        stock_name: 'Vanke',
+        priority: 5,
+        signal_score: 72,
+        primary_signal: 'observe',
+        signal_tags: ['trend_ok'],
+        risk_tags: ['high_volatility'],
+        must_watch: true,
         reason_json: {}
       }
-    ]);
+    ],
+    reports: [
+      {
+        report_type: 'daily',
+        title: 'Daily Review',
+        path: '/reports/daily.html',
+        format: 'html',
+        trade_date: '2026-05-29'
+      }
+    ],
+    ...overrides
+  };
+}
+
+function makeScore(assetId = '000001.SZ'): ScoreRow {
+  return {
+    trade_date: '2026-05-29',
+    asset_id: assetId,
+    rank: 1,
+    score_total: 91.2,
+    score_version: 'manual_v1',
+    score_components: {}
+  };
+}
+
+function makeSignals(assetId = '000001.SZ'): WatchlistSignalRow[] {
+  return [
+    {
+      watchlist_id: 'default',
+      trade_date: '2026-05-29',
+      asset_id: assetId,
+      stock_code: assetId.slice(0, 6),
+      stock_name: 'Ping An Bank',
+      priority: 10,
+      signal_score: 80,
+      primary_signal: 'watch',
+      signal_tags: [],
+      risk_tags: ['gap_risk'],
+      must_watch: false,
+      reason_json: {}
+    }
+  ];
+}
+
+function makeBars(count: number): BarPoint[] {
+  return Array.from({ length: count }, (_, index) => ({
+    time: `2026-05-${String(29 - index).padStart(2, '0')}`,
+    open: 10,
+    high: 11,
+    low: 9,
+    close: 10.5,
+    volume: 100,
+    amount: 1000
+  }));
+}
+
+describe('dashboard app shell', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMocks.fetchOverview.mockResolvedValue(makeOverview());
+    apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
+    apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
+    apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
   });
 
   afterEach(() => {
@@ -123,5 +157,72 @@ describe('dashboard app shell', () => {
     await waitFor(() => {
       expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
     });
+  });
+
+  it('uses timezone-stable calendar math for the chart start date', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
+
+    await waitFor(() => {
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-09-02', '2026-03-01');
+    });
+  });
+
+  it('ignores stale selected asset responses that resolve after a newer selection', async () => {
+    const firstBars = createDeferred<BarPoint[]>();
+    const firstScore = createDeferred<ScoreRow | null>();
+    const firstSignals = createDeferred<WatchlistSignalRow[]>();
+    const secondBars = createDeferred<BarPoint[]>();
+    const secondScore = createDeferred<ScoreRow | null>();
+    const secondSignals = createDeferred<WatchlistSignalRow[]>();
+
+    apiMocks.fetchDailyBars.mockReturnValueOnce(firstBars.promise).mockReturnValueOnce(secondBars.promise);
+    apiMocks.fetchAssetScore.mockReturnValueOnce(firstScore.promise).mockReturnValueOnce(secondScore.promise);
+    apiMocks.fetchAssetSignals.mockReturnValueOnce(firstSignals.promise).mockReturnValueOnce(secondSignals.promise);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByText('Vanke'));
+
+    await act(async () => {
+      secondBars.resolve(makeBars(2));
+      secondScore.resolve(makeScore('000002.SZ'));
+      secondSignals.resolve(makeSignals('000002.SZ'));
+    });
+    await waitFor(() => expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars'));
+
+    await act(async () => {
+      firstBars.resolve(makeBars(1));
+      firstScore.resolve(makeScore('000001.SZ'));
+      firstSignals.resolve(makeSignals('000001.SZ'));
+    });
+
+    expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
+  });
+
+  it('ignores stale overview errors after the trade date changes', async () => {
+    const firstOverview = createDeferred<DashboardOverview>();
+    apiMocks.fetchOverview
+      .mockReturnValueOnce(firstOverview.promise)
+      .mockResolvedValueOnce(makeOverview({ trade_date: '2026-03-01' }));
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
+    await waitFor(() => {
+      expect(apiMocks.fetchOverview).toHaveBeenLastCalledWith({
+        tradeDate: '2026-03-01',
+        scoreVersion: 'manual_v1',
+        watchlistId: 'default',
+        topN: 30
+      });
+    });
+
+    await act(async () => {
+      firstOverview.reject(new Error('stale overview failed'));
+    });
+
+    expect(screen.queryByText('stale overview failed')).not.toBeInTheDocument();
   });
 });
