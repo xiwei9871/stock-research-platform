@@ -37,6 +37,7 @@ CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS simulation;
 """
 
 
@@ -242,6 +243,7 @@ CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS simulation;
 
 CREATE TABLE IF NOT EXISTS core.asset_master (
     asset_id text PRIMARY KEY,
@@ -674,6 +676,44 @@ CREATE TABLE IF NOT EXISTS ops.p2_review_section (
     PRIMARY KEY (run_id, section_group, section_name)
 );
 
+CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
+    portfolio_id text NOT NULL,
+    trade_date date NOT NULL,
+    strategy_id text NOT NULL,
+    review_status text NOT NULL,
+    cash numeric,
+    market_value numeric,
+    equity numeric,
+    drawdown numeric,
+    exposure_pct numeric,
+    open_position_count integer NOT NULL DEFAULT 0,
+    risk_level text,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    human_confirmation_required boolean NOT NULL DEFAULT true,
+    source_artifact_path text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (portfolio_id, trade_date, strategy_id)
+);
+
+CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_position_daily (
+    portfolio_id text NOT NULL,
+    trade_date date NOT NULL,
+    strategy_id text NOT NULL,
+    asset_id text,
+    stock_code text NOT NULL,
+    stock_name text,
+    quantity numeric,
+    market_value numeric,
+    weight numeric,
+    cost_basis numeric,
+    unrealized_pnl numeric,
+    source_artifact_path text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (portfolio_id, trade_date, strategy_id, stock_code)
+);
+
 CREATE SCHEMA IF NOT EXISTS watchlist;
 
 CREATE TABLE IF NOT EXISTS watchlist.watchlist_item (
@@ -981,6 +1021,18 @@ CREATE INDEX IF NOT EXISTS idx_ops_p2_review_run_status_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_p2_review_section_group_status
     ON ops.p2_review_section (section_group, status);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
+    ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_risk_date
+    ON simulation.virtual_portfolio_state_daily (risk_level, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_position_stock_date
+    ON simulation.virtual_portfolio_position_daily (stock_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_position_portfolio_date
+    ON simulation.virtual_portfolio_position_daily (portfolio_id, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_factor_daily_lookup
     ON factor.factor_daily (trade_date, factor_name, calc_version);

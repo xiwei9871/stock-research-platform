@@ -115,6 +115,15 @@ Boundary:
 - Do not add broker orders, executions, account balances, or live position tables.
 - Do not infer real holdings from virtual portfolio output.
 
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `simulation.virtual_portfolio_state_daily`
+- `simulation.virtual_portfolio_position_daily`
+- Schema tests:
+  - `tests/test_schema.py::test_research_extension_includes_virtual_portfolio_read_model_tables`
+
 ### P3-4 Virtual Portfolio Import / Backfill CLI
 
 Goal: import P2 virtual portfolio review JSON and CSV artifacts into the read model.
@@ -132,6 +141,19 @@ Boundary:
 - Keep `manual_review_required` semantics intact.
 - Keep `auto_trade_enabled = false` in every trading-adjacent output.
 - Do not create advice execution or order lifecycle tables.
+
+Implementation status: implemented and ready for review.
+
+Delivered:
+
+- `stock_research.simulation.virtual_portfolio_read_model.load_virtual_portfolio_read_model_rows`
+- `stock_research.simulation.virtual_portfolio_read_model.import_virtual_portfolio_review`
+- CLI command:
+  - `p3-import-virtual-portfolio-review`
+- Module tests:
+  - `tests/test_virtual_portfolio_read_model.py`
+- CLI tests:
+  - `tests/test_factor_cli.py -k p3_import_virtual_portfolio_review`
 
 ### P3-5 Operator Query Export
 

@@ -172,6 +172,9 @@ from stock_research.simulation.virtual_portfolio import (
     load_simulation_states,
     write_virtual_portfolio_review,
 )
+from stock_research.simulation.virtual_portfolio_read_model import (
+    import_virtual_portfolio_review,
+)
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
 from stock_research.report_delivery import deliver_local_reports
@@ -1461,6 +1464,12 @@ def build_parser() -> argparse.ArgumentParser:
     p3_import_p2_aggregate_review.add_argument("--path", required=True)
     p3_import_p2_aggregate_review.add_argument("--service", default="stock_research")
 
+    p3_import_virtual_portfolio_review = subparsers.add_parser(
+        "p3-import-virtual-portfolio-review"
+    )
+    p3_import_virtual_portfolio_review.add_argument("--path", required=True)
+    p3_import_virtual_portfolio_review.add_argument("--service", default="stock_research")
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -2647,6 +2656,13 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p3_p2_review_import|imported|{result['imported_count']}")
         for run_id in result["run_ids"]:
             print(f"p3_p2_review_import|run_id|{run_id}")
+    elif args.command == "p3-import-virtual-portfolio-review":
+        result = import_virtual_portfolio_review(Path(args.path), service=args.service)
+        print(f"p3_virtual_portfolio_import|imported|{result['imported_count']}")
+        print(f"p3_virtual_portfolio_import|states|{result['state_count']}")
+        print(f"p3_virtual_portfolio_import|positions|{result['position_count']}")
+        for portfolio_id in result["portfolio_ids"]:
+            print(f"p3_virtual_portfolio_import|portfolio_id|{portfolio_id}")
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()

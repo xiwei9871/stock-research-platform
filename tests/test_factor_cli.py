@@ -398,6 +398,22 @@ def test_cli_accepts_p3_import_p2_aggregate_review_command():
     assert args.service == "stock_research_test"
 
 
+def test_cli_accepts_p3_import_virtual_portfolio_review_command():
+    args = build_parser().parse_args(
+        [
+            "p3-import-virtual-portfolio-review",
+            "--path",
+            "outputs/p2/simulation/virtual_portfolio_review_2026-05-29_demo.json",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p3-import-virtual-portfolio-review"
+    assert args.path == "outputs/p2/simulation/virtual_portfolio_review_2026-05-29_demo.json"
+    assert args.service == "stock_research_test"
+
+
 def test_cli_accepts_generate_trade_advice_command():
     args = build_parser().parse_args(
         [
@@ -1915,6 +1931,39 @@ def test_p3_import_p2_aggregate_review_cli_prints_summary(monkeypatch, capsys, t
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "p3_p2_review_import|imported|1"
     assert lines[1] == "p3_p2_review_import|run_id|p2-smoke-2026-05-29"
+
+
+def test_p3_import_virtual_portfolio_review_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "state_count": 2,
+            "position_count": 1,
+            "portfolio_ids": ["demo"],
+        }
+
+    monkeypatch.setattr(cli, "import_virtual_portfolio_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p3-import-virtual-portfolio-review",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p3_virtual_portfolio_import|imported|1"
+    assert lines[1] == "p3_virtual_portfolio_import|states|2"
+    assert lines[2] == "p3_virtual_portfolio_import|positions|1"
+    assert lines[3] == "p3_virtual_portfolio_import|portfolio_id|demo"
 
 
 def test_generate_trade_advice_cli_prints_paths(monkeypatch, capsys, tmp_path):

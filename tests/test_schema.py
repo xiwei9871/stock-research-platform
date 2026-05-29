@@ -218,6 +218,18 @@ def test_research_extension_includes_p2_review_read_model_tables():
     assert "idx_ops_p2_review_section_group_status" in sql
 
 
+def test_research_extension_includes_virtual_portfolio_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql
+    assert "CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily" in sql
+    assert "CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_position_daily" in sql
+    assert "PRIMARY KEY (portfolio_id, trade_date, strategy_id)" in sql
+    assert "PRIMARY KEY (portfolio_id, trade_date, strategy_id, stock_code)" in sql
+    assert "idx_simulation_virtual_portfolio_state_portfolio_date" in sql
+    assert "idx_simulation_virtual_portfolio_state_risk_date" in sql
+    assert "idx_simulation_virtual_portfolio_position_stock_date" in sql
+
+
 def test_cli_accepts_apply_research_schema_command():
     args = build_parser().parse_args(["apply-research-schema"])
     assert args.command == "apply-research-schema"
