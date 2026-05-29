@@ -176,6 +176,7 @@ from stock_research.operator_decision.outcome import (
     build_decision_outcome_review,
     write_decision_outcome_review,
 )
+from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
 from stock_research.p4.scheduler import (
     check_read_model_freshness,
@@ -1616,6 +1617,10 @@ def build_parser() -> argparse.ArgumentParser:
     p8_decision_outcome_review.add_argument("--adjust-type", default="qfq")
     p8_decision_outcome_review.add_argument("--horizon", dest="horizons", action="append", type=int)
 
+    p8_import_decision_outcome_review = subparsers.add_parser("p8-import-decision-outcome-review")
+    p8_import_decision_outcome_review.add_argument("--path", required=True)
+    p8_import_decision_outcome_review.add_argument("--service", default="stock_research")
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -2962,6 +2967,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p8_decision_outcome_review|details_csv|{paths['details_csv_path']}")
         print(f"p8_decision_outcome_review|summary_csv|{paths['summary_csv_path']}")
         print(f"p8_decision_outcome_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p8-import-decision-outcome-review":
+        result = import_decision_outcome_review(Path(args.path), service=args.service)
+        print(f"p8_decision_outcome_review_import|imported|{result['imported_count']}")
+        print(f"p8_decision_outcome_review_import|events|{result['event_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p8_decision_outcome_review_import|run_id|{run_id}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

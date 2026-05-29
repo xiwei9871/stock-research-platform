@@ -230,6 +230,18 @@ def test_research_extension_includes_operator_decision_read_model_tables():
     assert "idx_ops_operator_decision_event_label_date" in sql
 
 
+def test_research_extension_includes_operator_decision_outcome_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_event" in sql
+    assert "PRIMARY KEY (run_id)" in sql
+    assert "PRIMARY KEY (outcome_event_id)" in sql
+    assert "decision_event_id text NOT NULL" in sql
+    assert "forward_returns jsonb NOT NULL DEFAULT '{}'::jsonb" in sql
+    assert "idx_ops_operator_decision_outcome_run_date" in sql
+    assert "idx_ops_operator_decision_outcome_event_asset_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql

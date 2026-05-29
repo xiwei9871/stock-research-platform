@@ -717,6 +717,53 @@ CREATE TABLE IF NOT EXISTS ops.operator_decision_event (
     PRIMARY KEY (event_id)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_run (
+    run_id text NOT NULL,
+    review_start_date date NOT NULL,
+    review_end_date date NOT NULL,
+    status text NOT NULL,
+    outcome_count integer NOT NULL DEFAULT 0,
+    summary_count integer NOT NULL DEFAULT 0,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    details_csv_path text NOT NULL,
+    summary_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_event (
+    outcome_event_id text NOT NULL,
+    run_id text NOT NULL REFERENCES ops.operator_decision_outcome_run(run_id),
+    decision_event_id text NOT NULL,
+    review_session_id text NOT NULL,
+    review_date date,
+    asset_id text NOT NULL,
+    stock_code text,
+    stock_name text,
+    decision_label text NOT NULL,
+    source_context text,
+    outcome_status text NOT NULL,
+    available_future_bars integer NOT NULL DEFAULT 0,
+    base_trade_date date,
+    base_close numeric,
+    forward_returns jsonb NOT NULL DEFAULT '{}'::jsonb,
+    max_high_returns jsonb NOT NULL DEFAULT '{}'::jsonb,
+    max_low_drawdowns jsonb NOT NULL DEFAULT '{}'::jsonb,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    source_artifact_path text NOT NULL,
+    outcome_artifact_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (outcome_event_id)
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1071,6 +1118,15 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_event_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_event_label_date
     ON ops.operator_decision_event (decision_label, review_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_run_date
+    ON ops.operator_decision_outcome_run (review_end_date DESC, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_event_asset_date
+    ON ops.operator_decision_outcome_event (asset_id, review_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_event_decision
+    ON ops.operator_decision_outcome_event (decision_event_id);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);
