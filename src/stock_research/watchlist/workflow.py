@@ -265,7 +265,11 @@ def _load_watchlist_factor_frame(
 
     factor_daily = load_factor_daily(trade_date=trade_date)
     if factor_daily.empty:
-        return pd.DataFrame(columns=columns)
+        return _load_stock_technical_watchlist_factor_frame(
+            trade_date=trade_date,
+            asset_ids=asset_ids,
+            columns=columns,
+        )
 
     factor_frame = factor_daily.copy()
     factor_frame["asset_id"] = factor_frame["asset_id"].astype(str)
@@ -274,7 +278,47 @@ def _load_watchlist_factor_frame(
         factor_frame["asset_id"].isin({str(asset_id) for asset_id in asset_ids})
         & factor_frame["factor_name"].isin({"amount_vs_20d", "high_to_close_drawdown", "volatility_5d"})
     ].rename(columns={"factor_name": "feature_name", "factor_value": "feature_value"})
-    return _pivot_watchlist_feature_frame(factor_frame, columns)
+    result = _pivot_watchlist_feature_frame(factor_frame, columns)
+    if not result.empty:
+        return result
+
+    return _load_stock_technical_watchlist_factor_frame(
+        trade_date=trade_date,
+        asset_ids=asset_ids,
+        columns=columns,
+    )
+
+
+def _load_stock_technical_watchlist_factor_frame(
+    *,
+    trade_date: str,
+    asset_ids: list[str],
+    columns: list[str],
+) -> pd.DataFrame:
+    if not asset_ids:
+        return pd.DataFrame(columns=columns)
+    placeholders = ", ".join(["%s"] * len(asset_ids))
+    sql = f"""
+        SELECT
+            asset_id,
+            amount_vs_20d,
+            high_to_close_drawdown,
+            volatility_5d
+        FROM factor.stock_technical_features_daily
+        WHERE trade_date = %s
+          AND adjust_type = 'qfq'
+          AND source = 'technical_features'
+          AND source_data_version = 'market_daily_bar:qfq'
+          AND calc_version = 'v1'
+          AND asset_id IN ({placeholders})
+        ORDER BY asset_id
+    """
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, sql, [trade_date, *asset_ids])
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    return _ensure_frame_columns(frame, columns).loc[:, columns].reset_index(drop=True)
 
 
 def _load_dragon_frame(*, trade_date: str, asset_ids: list[str]) -> pd.DataFrame:

@@ -174,12 +174,13 @@ def _watchlist_diagnostics_markdown(
 
     grouped_rows = {
         "Risk Watch": [],
+        "High Odds Burst": [],
         "Opportunity Watch": [],
     }
     for row in must_watch_rows.to_dict("records"):
         grouped_rows[_diagnostic_group(row)].append(row)
 
-    for title in ("Risk Watch", "Opportunity Watch"):
+    for title in ("Risk Watch", "High Odds Burst", "Opportunity Watch"):
         rows = grouped_rows[title]
         lines.extend([f"## {title}", ""])
         if not rows:
@@ -223,6 +224,8 @@ def _report_group(row: dict[str, Any]) -> str:
 
 
 def _diagnostic_group(row: dict[str, Any]) -> str:
+    if row.get("watch_group") == "high_odds_burst_watch":
+        return "High Odds Burst"
     if row.get("watch_group") == "opportunity_watch":
         return "Opportunity Watch"
     return "Risk Watch"

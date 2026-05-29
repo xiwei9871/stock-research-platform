@@ -178,7 +178,11 @@ def _summary_frame(detail: pd.DataFrame, *, group_columns: list[str], summary_le
 
 def _load_diagnostics_rows(diagnostics_dir: str | Path) -> pd.DataFrame:
     path = Path(diagnostics_dir)
-    files = sorted(path.glob("watchlist_diagnostics_*_diagnostics_v1.csv"))
+    files = sorted(
+        file
+        for file in path.glob("watchlist_diagnostics_*_diagnostics_v1.csv")
+        if not file.name.startswith("watchlist_diagnostics_must_watch_")
+    )
     if not files:
         raise ValueError(f"no watchlist diagnostics CSV files found in {path}")
     frames = [pd.read_csv(file) for file in files]

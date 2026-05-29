@@ -340,7 +340,7 @@ def test_build_watchlist_diagnostics_range_skips_matching_cached_outputs(tmp_pat
             {
                 "trade_date": "2026-05-19",
                 "asset_id": "A",
-                "diagnostics_rule_version": "watchlist_diagnostics_v2_3",
+                "diagnostics_rule_version": "watchlist_diagnostics_v2_5",
             }
         ]
     ).to_csv(existing, index=False)
@@ -360,7 +360,7 @@ def test_build_watchlist_diagnostics_range_skips_matching_cached_outputs(tmp_pat
                         "trade_date": kwargs["trade_date"],
                         "watchlist_id": "diagnostics",
                         "asset_id": "B",
-                        "diagnostics_rule_version": "watchlist_diagnostics_v2_3",
+                        "diagnostics_rule_version": "watchlist_diagnostics_v2_5",
                     }
                 ]
             ),

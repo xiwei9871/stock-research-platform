@@ -163,3 +163,46 @@ def test_run_watchlist_diagnostics_effectiveness_review_filters_date_window(tmp_
 
     detail = pd.read_csv(result["detail_csv_path"])
     assert detail["asset_id"].tolist() == ["B"]
+
+
+def test_run_watchlist_diagnostics_effectiveness_review_ignores_must_watch_csv_inputs(tmp_path, monkeypatch):
+    diagnostics_dir = tmp_path / "diag"
+    diagnostics_dir.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-19",
+                "asset_id": "A",
+                "watch_group": "candidate",
+                "event_structure": "",
+            }
+        ]
+    ).to_csv(diagnostics_dir / "watchlist_diagnostics_2026-05-19_diagnostics_v1.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-19",
+                "asset_id": "A",
+                "watch_group": "candidate",
+                "event_structure": "",
+            }
+        ]
+    ).to_csv(diagnostics_dir / "watchlist_diagnostics_must_watch_2026-05-19_diagnostics_v1.csv", index=False)
+    bars = pd.DataFrame(
+        [
+            {"asset_id": "A", "trade_date": "2026-05-19", "close": 10.0, "low": 9.9},
+            {"asset_id": "A", "trade_date": "2026-05-20", "close": 10.2, "low": 10.0},
+        ]
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.effectiveness._load_market_bars_for_effectiveness",
+        lambda **kwargs: bars.copy(),
+    )
+
+    result = run_watchlist_diagnostics_effectiveness_review(
+        diagnostics_dir=diagnostics_dir,
+        output_dir=tmp_path,
+    )
+
+    detail = pd.read_csv(result["detail_csv_path"])
+    assert len(detail) == 1

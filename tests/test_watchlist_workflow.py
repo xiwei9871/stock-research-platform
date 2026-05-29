@@ -170,6 +170,46 @@ def test_build_watchlist_diagnostics_snapshot_returns_empty_outputs_for_empty_sc
     assert result["must_watch"].empty
 
 
+def test_load_watchlist_factor_frame_falls_back_to_stock_technical_features(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_feature_snapshot",
+        lambda **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_factor_daily",
+        lambda **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr("stock_research.watchlist.workflow.connect", lambda service: _Context(object()))
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "asset_id": "A",
+                "amount_vs_20d": 2.5,
+                "high_to_close_drawdown": 0.03,
+                "volatility_5d": 0.06,
+            }
+        ]
+
+    monkeypatch.setattr("stock_research.watchlist.workflow.fetch_all", fake_fetch_all)
+
+    frame = _load_watchlist_factor_frame(
+        trade_date="2025-02-07",
+        asset_ids=["A", "B"],
+    )
+
+    assert "factor.stock_technical_features_daily" in captured["sql"]
+    assert captured["params"] == ["2025-02-07", "A", "B"]
+    row = frame.set_index("asset_id").loc["A"]
+    assert row["amount_vs_20d"] == 2.5
+    assert row["high_to_close_drawdown"] == 0.03
+    assert row["volatility_5d"] == 0.06
+
+
 def test_build_watchlist_diagnostics_snapshot_sets_watchlist_identity(monkeypatch):
     monkeypatch.setattr(
         "stock_research.watchlist.workflow.load_top_scores",
@@ -229,6 +269,7 @@ def test_build_watchlist_diagnostics_snapshot_maps_asset_identity_into_diagnosti
         "stock_research.watchlist.workflow.load_feature_snapshot",
         lambda **kwargs: pd.DataFrame(),
     )
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_watchlist_factor_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_lhb_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_event_frame", lambda **kwargs: pd.DataFrame())
@@ -313,6 +354,7 @@ def test_build_watchlist_diagnostics_snapshot_selects_latest_recent_event_for_di
         "stock_research.watchlist.workflow.load_feature_snapshot",
         lambda **kwargs: pd.DataFrame(),
     )
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_watchlist_factor_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow.pd.read_csv", fake_read_csv)
     monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_market_frame", lambda **kwargs: pd.DataFrame())
@@ -395,6 +437,7 @@ def test_build_watchlist_diagnostics_snapshot_selects_latest_recent_lhb_event_fo
         "stock_research.watchlist.workflow.load_feature_snapshot",
         lambda **kwargs: pd.DataFrame(),
     )
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_watchlist_factor_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow.pd.read_csv", fake_read_csv)
     monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_market_frame", lambda **kwargs: pd.DataFrame())

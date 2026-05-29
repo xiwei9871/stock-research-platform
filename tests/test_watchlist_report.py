@@ -299,6 +299,37 @@ def test_write_watchlist_diagnostics_report_escapes_markdown_cells(tmp_path):
     assert "risk\\|flag<br>warn" in markdown
 
 
+def test_write_watchlist_diagnostics_report_groups_high_odds_burst_separately(tmp_path):
+    full_frame = pd.DataFrame(
+        [
+            {
+                "watchlist_id": "diagnostics",
+                "trade_date": "2026-05-20",
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "watch_group": "high_odds_burst_watch",
+                "watch_priority": 50,
+                "event_structure": "trend_continuation_candidate",
+                "diagnostic_reason": "high_odds_burst_watch:trend_continuation_candidate",
+                "risk_note": "high_odds_burst",
+                "opportunity_note": "",
+            }
+        ]
+    )
+
+    paths = write_watchlist_diagnostics_report(
+        full_rows=full_frame,
+        must_watch_rows=full_frame.copy(),
+        output_dir=tmp_path,
+    )
+
+    markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+    high_odds_section = markdown.split("## High Odds Burst")[1].split("## Opportunity Watch")[0]
+    risk_section = markdown.split("## Risk Watch")[1].split("## High Odds Burst")[0]
+    assert "Alpha" in high_odds_section
+    assert "Alpha" not in risk_section
+
+
 def test_write_watchlist_diagnostics_report_validates_matching_identity_fields(tmp_path):
     diagnostics_frame = pd.DataFrame(
         [

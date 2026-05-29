@@ -13,7 +13,8 @@ ALLOWED_OPPORTUNITY_STRUCTURES = {
 }
 
 TREND_CONTINUATION_MAX_SCORE_RANK = 20
-DIAGNOSTICS_RULE_VERSION = "watchlist_diagnostics_v2_3"
+HIGH_ODDS_MAX_SCORE_RANK = 20
+DIAGNOSTICS_RULE_VERSION = "watchlist_diagnostics_v2_5"
 
 EXCLUDED_FAILURE_STRUCTURES = {
     "a_kill_failure",
@@ -35,6 +36,7 @@ def build_watchlist_diagnostics(
     market_frame: pd.DataFrame | None = None,
     risk_watch_n: int,
     opportunity_watch_n: int,
+    high_odds_watch_n: int = 10,
 ) -> dict[str, pd.DataFrame]:
     frame = _ensure_asset_frame(top_scores).copy()
     frame = frame.rename(columns={"rank": "score_rank"})
@@ -76,10 +78,13 @@ def build_watchlist_diagnostics(
     risk_rows = frame[frame["watch_group"] == "risk_watch"].sort_values(
         by=["watch_priority", "score_rank", "asset_id"]
     ).head(risk_watch_n)
+    high_odds_rows = frame[frame["watch_group"] == "high_odds_burst_watch"].sort_values(
+        by=["watch_priority", "score_rank", "asset_id"]
+    ).head(high_odds_watch_n)
     opportunity_rows = frame[frame["watch_group"] == "opportunity_watch"].sort_values(
         by=["watch_priority", "score_rank", "asset_id"]
     ).head(opportunity_watch_n)
-    must_watch = pd.concat([risk_rows, opportunity_rows], ignore_index=True)
+    must_watch = pd.concat([risk_rows, high_odds_rows, opportunity_rows], ignore_index=True)
 
     return {
         "full": frame.sort_values(by=["score_rank", "asset_id"]).reset_index(drop=True),
@@ -115,26 +120,11 @@ def _merge_ready_frame(frame: pd.DataFrame | None, *, defaults: dict[str, Any] |
 
 def _classify_watch_group(row: pd.Series) -> str:
     structure = _normalize_text(row.get("event_structure"))
-    dragon_risk = _coerce_float(row.get("dragon_risk_score"))
-    lhb_risk = _coerce_float(row.get("lhb_risk_score"))
-    amount_vs_20d = _coerce_float(row.get("amount_vs_20d"))
-    high_to_close_drawdown = _coerce_float(row.get("high_to_close_drawdown"))
 
-    if structure in EXCLUDED_FAILURE_STRUCTURES or _coerce_bool(row.get("failure_flag")):
+    if structure in EXCLUDED_FAILURE_STRUCTURES or _coerce_bool(row.get("failure_flag")) or _has_hard_risk(row):
         return "risk_watch"
-    if dragon_risk >= 0.7 or lhb_risk >= 0.7:
-        return "risk_watch"
-    if _coerce_bool(row.get("lhb_high_pump_risk")):
-        return "risk_watch"
-    if _coerce_bool(row.get("lhb_after_event_attention")) and (
-        _coerce_bool(row.get("lhb_negative_net_buy"))
-        or _coerce_bool(row.get("lhb_institution_selling"))
-    ):
-        return "risk_watch"
-    if _risk_confirmation_count(row) >= 2:
-        return "risk_watch"
-    if amount_vs_20d >= 4.0 or high_to_close_drawdown >= 0.08:
-        return "risk_watch"
+    if _is_high_odds_burst(row):
+        return "high_odds_burst_watch"
     if structure in ALLOWED_OPPORTUNITY_STRUCTURES:
         return "opportunity_watch"
     return "candidate"
@@ -144,6 +134,8 @@ def _priority_value(row: pd.Series) -> int:
     watch_group = row.get("watch_group")
     if watch_group == "risk_watch":
         return _risk_priority_value(row)
+    if watch_group == "high_odds_burst_watch":
+        return _high_odds_priority_value(row)
     if watch_group == "opportunity_watch":
         return _opportunity_priority_value(row)
     return 999
@@ -160,6 +152,8 @@ def _risk_note(row: pd.Series) -> str:
         notes.append("dragon_risk_high")
     if _coerce_float(row.get("lhb_risk_score")) >= 0.7:
         notes.append("lhb_risk_high")
+    if _has_dragon_lhb_risk_confluence(row):
+        notes.append("dragon_lhb_risk_confluence")
     if _coerce_bool(row.get("overheat_avoid")):
         notes.append("overheat_avoid")
     if _coerce_bool(row.get("crowded_late_entry")):
@@ -176,6 +170,8 @@ def _risk_note(row: pd.Series) -> str:
         notes.append("extreme_amount")
     if _coerce_float(row.get("high_to_close_drawdown")) >= 0.08:
         notes.append("intraday_fade")
+    if row.get("watch_group") == "high_odds_burst_watch":
+        notes.append("high_odds_burst")
     return ",".join(notes)
 
 
@@ -239,6 +235,50 @@ def _risk_confirmation_count(row: pd.Series) -> int:
     )
 
 
+def _has_hard_risk(row: pd.Series) -> bool:
+    if _has_negative_lhb_signal(row):
+        return True
+    if _has_dragon_lhb_risk_confluence(row):
+        return True
+    return _coerce_float(row.get("high_to_close_drawdown")) >= 0.08
+
+
+def _has_negative_lhb_signal(row: pd.Series) -> bool:
+    if (
+        _coerce_bool(row.get("lhb_negative_net_buy"))
+        or _coerce_bool(row.get("lhb_institution_selling"))
+        or _coerce_bool(row.get("lhb_high_pump_risk"))
+    ):
+        return True
+    return _coerce_bool(row.get("lhb_after_event_attention")) and (
+        _coerce_bool(row.get("lhb_negative_net_buy"))
+        or _coerce_bool(row.get("lhb_institution_selling"))
+    )
+
+
+def _has_dragon_lhb_risk_confluence(row: pd.Series) -> bool:
+    return _coerce_float(row.get("dragon_risk_score")) >= 0.7 and _coerce_float(row.get("lhb_risk_score")) >= 0.7
+
+
+def _is_high_odds_burst(row: pd.Series) -> bool:
+    score_rank = _coerce_float(row.get("score_rank"))
+    entry_window_v2 = _normalize_text(row.get("entry_window_v2"))
+    dragon_risk = _coerce_float(row.get("dragon_risk_score"))
+    lhb_risk = _coerce_float(row.get("lhb_risk_score"))
+    amount_vs_20d = _coerce_float(row.get("amount_vs_20d"))
+    volatility_5d = _coerce_float(row.get("volatility_5d"))
+    high_to_close_drawdown = _coerce_float(row.get("high_to_close_drawdown"))
+    if not (0 < score_rank <= HIGH_ODDS_MAX_SCORE_RANK):
+        return False
+    if entry_window_v2 not in {"breakout_entry", "acceleration_entry", "overheat_avoid"}:
+        return False
+    if _has_hard_risk(row):
+        return False
+    if lhb_risk >= 0.7:
+        return False
+    return amount_vs_20d >= 2.5 or volatility_5d >= 0.05
+
+
 def _dragon_defaults() -> dict[str, Any]:
     return {
         "dragon_risk_score": 0.0,
@@ -290,13 +330,11 @@ def _risk_priority_value(row: pd.Series) -> int:
     }
     if structure in failure_priority:
         return failure_priority[structure]
-    if _coerce_float(row.get("dragon_risk_score")) >= 0.7 or _coerce_float(row.get("lhb_risk_score")) >= 0.7:
+    if _has_dragon_lhb_risk_confluence(row):
         return 10
-    if _risk_confirmation_count(row) >= 2:
+    if _has_negative_lhb_signal(row):
         return 20
-    if _coerce_bool(row.get("lhb_high_pump_risk")) or _coerce_bool(row.get("lhb_after_event_attention")):
-        return 30
-    if _coerce_float(row.get("amount_vs_20d")) >= 4.0 or _coerce_float(row.get("high_to_close_drawdown")) >= 0.08:
+    if _coerce_float(row.get("high_to_close_drawdown")) >= 0.08:
         return 40
     return 90
 
@@ -304,14 +342,25 @@ def _risk_priority_value(row: pd.Series) -> int:
 def _opportunity_priority_value(row: pd.Series) -> int:
     structure = _normalize_text(row.get("event_structure"))
     structure_priority = {
+        "trend_continuation_candidate": 90,
         "weak_to_strong_candidate": 100,
         "break_then_reversal_candidate": 110,
         "second_wave_candidate": 120,
-        "trend_continuation_candidate": 130,
     }
     base = structure_priority.get(structure, 190)
     risk_penalty = int(round(min(_coerce_float(row.get("dragon_risk_score")), 0.99) * 10))
     return base + risk_penalty
+
+
+def _high_odds_priority_value(row: pd.Series) -> int:
+    amount_vs_20d = _coerce_float(row.get("amount_vs_20d"))
+    volatility_5d = _coerce_float(row.get("volatility_5d"))
+    burst_bonus = 0
+    if amount_vs_20d >= 4.0:
+        burst_bonus -= 5
+    if volatility_5d >= 0.08:
+        burst_bonus -= 3
+    return 50 + max(burst_bonus, -8)
 
 
 def _resolved_event_structure(row: pd.Series) -> str:
