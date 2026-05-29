@@ -331,17 +331,19 @@ def test_build_watchlist_diagnostics_infers_opportunity_structure_from_dragon_wi
     assert full.loc["CN:SZ:001211", "watch_group"] == "opportunity_watch"
 
 
-def test_build_watchlist_diagnostics_infers_weak_to_strong_and_break_then_reversal_from_windows():
+def test_build_watchlist_diagnostics_filters_acceleration_trend_and_keeps_breakout_narrow():
     top_scores = pd.DataFrame(
         [
             {"trade_date": "2026-05-20", "asset_id": "A", "rank": 1, "score_total": 90.0},
             {"trade_date": "2026-05-20", "asset_id": "B", "rank": 2, "score_total": 88.0},
+            {"trade_date": "2026-05-20", "asset_id": "C", "rank": 3, "score_total": 84.0},
         ]
     )
     factor_frame = pd.DataFrame(
         [
             {"asset_id": "A", "amount_vs_20d": 1.3, "high_to_close_drawdown": 0.012, "volatility_5d": 0.028},
             {"asset_id": "B", "amount_vs_20d": 1.4, "high_to_close_drawdown": 0.010, "volatility_5d": 0.020},
+            {"asset_id": "C", "amount_vs_20d": 1.2, "high_to_close_drawdown": 0.010, "volatility_5d": 0.020},
         ]
     )
     dragon_frame = pd.DataFrame(
@@ -352,7 +354,7 @@ def test_build_watchlist_diagnostics_infers_weak_to_strong_and_break_then_revers
                 "overheat_avoid": False,
                 "crowded_late_entry": False,
                 "entry_window": "early_setup",
-                "entry_window_v2": "acceleration_entry",
+                "entry_window_v2": "breakout_entry",
             },
             {
                 "asset_id": "B",
@@ -360,7 +362,15 @@ def test_build_watchlist_diagnostics_infers_weak_to_strong_and_break_then_revers
                 "overheat_avoid": False,
                 "crowded_late_entry": False,
                 "entry_window": "early_setup",
-                "entry_window_v2": "breakout_entry",
+                "entry_window_v2": "early_setup",
+            },
+            {
+                "asset_id": "C",
+                "dragon_risk_score": 0.05,
+                "overheat_avoid": False,
+                "crowded_late_entry": False,
+                "entry_window": "early_setup",
+                "entry_window_v2": "acceleration_entry",
             },
         ]
     )
@@ -378,8 +388,10 @@ def test_build_watchlist_diagnostics_infers_weak_to_strong_and_break_then_revers
     )
 
     full = result["full"].set_index("asset_id")
-    assert full.loc["A", "event_structure"] == "weak_to_strong_candidate"
-    assert full.loc["B", "event_structure"] == "break_then_reversal_candidate"
+    assert full.loc["A", "event_structure"] == "trend_continuation_candidate"
+    assert full.loc["B", "event_structure"] == "weak_to_strong_candidate"
+    assert full.loc["C", "event_structure"] == ""
+    assert full.loc["C", "watch_group"] == "candidate"
 
 
 def test_build_watchlist_diagnostics_prioritizes_failure_risk_ahead_of_generic_risk():
@@ -427,7 +439,7 @@ def test_build_watchlist_diagnostics_prioritizes_failure_risk_ahead_of_generic_r
     assert risk_ids == ["A", "C", "B"]
 
 
-def test_build_watchlist_diagnostics_prioritizes_second_wave_over_trend_continuation():
+def test_build_watchlist_diagnostics_prioritizes_weak_to_strong_then_break_then_reversal():
     top_scores = pd.DataFrame(
         [
             {"trade_date": "2026-05-20", "asset_id": "A", "rank": 2, "score_total": 85.0},
@@ -467,4 +479,48 @@ def test_build_watchlist_diagnostics_prioritizes_second_wave_over_trend_continua
 
     must_watch = result["must_watch"]
     opp_ids = must_watch[must_watch["watch_group"] == "opportunity_watch"]["asset_id"].tolist()
-    assert opp_ids == ["A", "B", "C", "D"]
+    assert opp_ids == ["C", "B", "A"]
+
+
+def test_build_watchlist_diagnostics_only_keeps_top_ranked_breakout_trend_candidates():
+    top_scores = pd.DataFrame(
+        [
+            {"trade_date": "2026-05-20", "asset_id": "A", "rank": 5, "score_total": 90.0},
+            {"trade_date": "2026-05-20", "asset_id": "B", "rank": 10, "score_total": 88.0},
+            {"trade_date": "2026-05-20", "asset_id": "C", "rank": 25, "score_total": 82.0},
+        ]
+    )
+    factor_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "amount_vs_20d": 1.1, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+            {"asset_id": "B", "amount_vs_20d": 1.1, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+            {"asset_id": "C", "amount_vs_20d": 1.1, "high_to_close_drawdown": 0.01, "volatility_5d": 0.02},
+        ]
+    )
+    dragon_frame = pd.DataFrame(
+        [
+            {"asset_id": "A", "dragon_risk_score": 0.10, "entry_window_v2": "early_setup"},
+            {"asset_id": "B", "dragon_risk_score": 0.10, "entry_window_v2": "breakout_entry"},
+            {"asset_id": "C", "dragon_risk_score": 0.10, "entry_window_v2": "breakout_entry"},
+        ]
+    )
+
+    result = build_watchlist_diagnostics(
+        trade_date="2026-05-20",
+        top_scores=top_scores,
+        factor_frame=factor_frame,
+        dragon_frame=dragon_frame,
+        lhb_frame=pd.DataFrame(),
+        event_frame=pd.DataFrame(),
+        market_frame=pd.DataFrame(),
+        risk_watch_n=10,
+        opportunity_watch_n=10,
+    )
+
+    full = result["full"].set_index("asset_id")
+    assert full.loc["A", "event_structure"] == "weak_to_strong_candidate"
+    assert full.loc["A", "watch_group"] == "opportunity_watch"
+    assert full.loc["B", "event_structure"] == "trend_continuation_candidate"
+    assert full.loc["B", "watch_group"] == "opportunity_watch"
+    assert full.loc["C", "event_structure"] == ""
+    assert full.loc["C", "watch_group"] == "candidate"

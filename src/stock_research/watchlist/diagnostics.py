@@ -12,6 +12,8 @@ ALLOWED_OPPORTUNITY_STRUCTURES = {
     "trend_continuation_candidate",
 }
 
+TREND_CONTINUATION_MAX_SCORE_RANK = 20
+
 EXCLUDED_FAILURE_STRUCTURES = {
     "a_kill_failure",
     "failed_second_wave",
@@ -300,9 +302,9 @@ def _risk_priority_value(row: pd.Series) -> int:
 def _opportunity_priority_value(row: pd.Series) -> int:
     structure = _normalize_text(row.get("event_structure"))
     structure_priority = {
-        "second_wave_candidate": 100,
+        "weak_to_strong_candidate": 100,
         "break_then_reversal_candidate": 110,
-        "weak_to_strong_candidate": 120,
+        "second_wave_candidate": 120,
         "trend_continuation_candidate": 130,
     }
     base = structure_priority.get(structure, 190)
@@ -321,6 +323,7 @@ def _resolved_event_structure(row: pd.Series) -> str:
 def _infer_opportunity_structure(row: pd.Series) -> str:
     entry_window_v2 = _normalize_text(row.get("entry_window_v2"))
     entry_window = _normalize_text(row.get("entry_window"))
+    score_rank = _coerce_float(row.get("score_rank"))
     dragon_risk = _coerce_float(row.get("dragon_risk_score"))
     amount_vs_20d = _coerce_float(row.get("amount_vs_20d"))
     volatility_5d = _coerce_float(row.get("volatility_5d"))
@@ -338,19 +341,9 @@ def _infer_opportunity_structure(row: pd.Series) -> str:
         and high_to_close_drawdown <= 0.015
     ):
         return "break_then_reversal_candidate"
-    if (
-        entry_window == "early_setup"
-        and entry_window_v2 in {"breakout_entry", "acceleration_entry"}
-        and dragon_risk < 0.20
-        and 0.9 <= amount_vs_20d <= 1.8
-        and high_to_close_drawdown <= 0.020
-    ):
+    if entry_window_v2 == "early_setup":
         return "weak_to_strong_candidate"
-    if entry_window_v2 in {"breakout_entry", "acceleration_entry"}:
-        return "trend_continuation_candidate"
-    if entry_window_v2 == "early_setup" or entry_window == "early_setup":
-        return "weak_to_strong_candidate"
-    if entry_window in {"breakout_entry", "acceleration_entry"}:
+    if entry_window_v2 == "breakout_entry" and 0 < score_rank <= TREND_CONTINUATION_MAX_SCORE_RANK:
         return "trend_continuation_candidate"
     return ""
 
