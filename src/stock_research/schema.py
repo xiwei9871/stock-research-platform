@@ -676,6 +676,47 @@ CREATE TABLE IF NOT EXISTS ops.p2_review_section (
     PRIMARY KEY (run_id, section_group, section_name)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_review_session (
+    review_session_id text NOT NULL,
+    review_date date NOT NULL,
+    reviewer_id text NOT NULL,
+    status text NOT NULL,
+    decision_count integer NOT NULL DEFAULT 0,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    source_artifact_root text NOT NULL,
+    json_path text NOT NULL,
+    csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (review_session_id)
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_decision_event (
+    event_id text NOT NULL,
+    review_session_id text NOT NULL REFERENCES ops.operator_review_session(review_session_id),
+    review_date date NOT NULL,
+    event_index integer NOT NULL,
+    asset_id text NOT NULL,
+    stock_code text,
+    stock_name text,
+    decision_label text NOT NULL,
+    evidence_artifact_id text NOT NULL,
+    evidence_path text NOT NULL,
+    source_context text,
+    requires_follow_up boolean NOT NULL DEFAULT false,
+    follow_up_note text,
+    notes text,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    source_artifact_path text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (event_id)
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1021,6 +1062,15 @@ CREATE INDEX IF NOT EXISTS idx_ops_p2_review_run_status_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_p2_review_section_group_status
     ON ops.p2_review_section (section_group, status);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_review_session_date
+    ON ops.operator_review_session (review_date DESC, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_event_asset_date
+    ON ops.operator_decision_event (asset_id, review_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_event_label_date
+    ON ops.operator_decision_event (decision_label, review_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);

@@ -172,6 +172,7 @@ from stock_research.operator_decision.journal import (
     build_decision_journal,
     write_decision_journal,
 )
+from stock_research.operator_decision.read_model import import_decision_journal
 from stock_research.p4.scheduler import (
     check_read_model_freshness,
     format_daily_orchestration_lines,
@@ -291,6 +292,7 @@ from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
 from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
+from stock_research.strong_winner_topn_attribution import run_strong_winner_topn_attribution
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -316,6 +318,10 @@ def parse_holding_days(value: str) -> list[int]:
 
 def parse_top_ks(value: str) -> list[int]:
     return parse_int_list(value, "--top-ks")
+
+
+def parse_topn_thresholds(value: str) -> list[int]:
+    return parse_int_list(value, "--topn-thresholds")
 
 
 def parse_research_horizons(value: str) -> list[int]:
@@ -1509,6 +1515,10 @@ def build_parser() -> argparse.ArgumentParser:
     p7_decision_journal.add_argument("--input-csv", required=True)
     p7_decision_journal.add_argument("--output-dir", required=True)
 
+    p7_import_decision_journal = subparsers.add_parser("p7-import-decision-journal")
+    p7_import_decision_journal.add_argument("--path", required=True)
+    p7_import_decision_journal.add_argument("--service", default="stock_research")
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -2162,6 +2172,19 @@ def build_parser() -> argparse.ArgumentParser:
     strong_winner_miss_analysis.add_argument("--diagnostics-dir", default="outputs/research")
     strong_winner_miss_analysis.add_argument("--output-dir", default="outputs/research")
 
+    strong_winner_topn_source = subparsers.add_parser("analyze-strong-winner-topn-source")
+    strong_winner_topn_source.add_argument(
+        "--miss-analysis-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    strong_winner_topn_source.add_argument("--score-version", default="manual_v1")
+    strong_winner_topn_source.add_argument(
+        "--topn-thresholds",
+        type=parse_topn_thresholds,
+        default=[50, 100, 200, 500],
+    )
+    strong_winner_topn_source.add_argument("--output-dir", default="outputs/research")
+
     watchlist_report = subparsers.add_parser("watchlist-report")
     watchlist_report.add_argument("--trade-date", required=True)
     watchlist_report.add_argument("--watchlist-id", required=True)
@@ -2809,6 +2832,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p7_decision_journal|json|{paths['json_path']}")
         print(f"p7_decision_journal|csv|{paths['csv_path']}")
         print(f"p7_decision_journal|markdown|{paths['markdown_path']}")
+    elif args.command == "p7-import-decision-journal":
+        result = import_decision_journal(Path(args.path), service=args.service)
+        print(f"p7_decision_journal_import|imported|{result['imported_count']}")
+        print(f"p7_decision_journal_import|events|{result['event_count']}")
+        for session_id in result["session_ids"]:
+            print(f"p7_decision_journal_import|session_id|{session_id}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
@@ -4265,6 +4294,21 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"strong_winner_miss_analysis|summary|{result['paths']['summary']}")
         print(f"strong_winner_miss_analysis|report|{result['paths']['report']}")
         print(f"strong_winner_miss_analysis|rows|{len(result['miss_analysis'])}")
+    elif args.command == "analyze-strong-winner-topn-source":
+        result = run_strong_winner_topn_attribution(
+            miss_analysis_path=args.miss_analysis_path,
+            score_version=args.score_version,
+            topn_thresholds=args.topn_thresholds,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_topn_source|attribution|{result['paths']['attribution']}")
+        print(
+            "strong_winner_topn_source|threshold_sensitivity|"
+            f"{result['paths']['threshold_sensitivity']}"
+        )
+        print(f"strong_winner_topn_source|component_gap|{result['paths']['component_gap']}")
+        print(f"strong_winner_topn_source|report|{result['paths']['report']}")
+        print(f"strong_winner_topn_source|rows|{len(result['attribution'])}")
     elif args.command == "watchlist-report":
         rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
         report_paths = write_watchlist_report(rows, output_dir=args.output_dir)

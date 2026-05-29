@@ -473,6 +473,22 @@ def test_cli_accepts_p7_decision_journal_command():
     assert args.output_dir == "outputs/p7/decision_journal"
 
 
+def test_cli_accepts_p7_import_decision_journal_command():
+    args = build_parser().parse_args(
+        [
+            "p7-import-decision-journal",
+            "--path",
+            "outputs/p7/operator_decision_journal_2026-05-30_morning-review.json",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert args.command == "p7-import-decision-journal"
+    assert args.path == "outputs/p7/operator_decision_journal_2026-05-30_morning-review.json"
+    assert args.service == "stock_research_test"
+
+
 def test_cli_accepts_p4_daily_orchestration_command():
     args = build_parser().parse_args(
         [
@@ -2256,6 +2272,38 @@ def test_p7_decision_journal_cli_exits_nonzero_for_invalid_input(capsys, tmp_pat
     stderr = capsys.readouterr().err
     assert "p7_decision_journal|error|" in stderr
     assert "invalid_decision_label" in stderr
+
+
+def test_p7_import_decision_journal_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_decision_journal_2026-05-30_morning-review.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "event_count": 2,
+            "session_ids": ["morning-review"],
+        }
+
+    monkeypatch.setattr(cli, "import_decision_journal", fake_import)
+
+    cli.main_for_args(
+        [
+            "p7-import-decision-journal",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p7_decision_journal_import|imported|1",
+        "p7_decision_journal_import|events|2",
+        "p7_decision_journal_import|session_id|morning-review",
+    ]
 
 
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):

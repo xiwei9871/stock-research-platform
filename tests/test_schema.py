@@ -218,6 +218,18 @@ def test_research_extension_includes_p2_review_read_model_tables():
     assert "idx_ops_p2_review_section_group_status" in sql
 
 
+def test_research_extension_includes_operator_decision_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE SCHEMA IF NOT EXISTS ops" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_review_session" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_event" in sql
+    assert "PRIMARY KEY (review_session_id)" in sql
+    assert "PRIMARY KEY (event_id)" in sql
+    assert "idx_ops_operator_review_session_date" in sql
+    assert "idx_ops_operator_decision_event_asset_date" in sql
+    assert "idx_ops_operator_decision_event_label_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql
