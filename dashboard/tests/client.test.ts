@@ -5,7 +5,8 @@ import {
   fetchExperimentProposals,
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
-  fetchOverview
+  fetchOverview,
+  fetchShadowWatchlist
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
@@ -118,5 +119,24 @@ describe('dashboard API client', () => {
         '&limit=12&status=passed_offline_replay'
     );
     expect(result[0].replay_result_id).toBe('p11-replay:001');
+  });
+
+  it('fetches shadow watchlist summary with optional status and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ shadow_candidate_id: 'p12-shadow:001', status: 'shadow_ready' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchShadowWatchlist('2026-06-01', '2026-06-30', {
+      status: 'shadow_ready',
+      limit: 12
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/shadow-watchlist?start_date=2026-06-01&end_date=2026-06-30' +
+        '&limit=12&status=shadow_ready'
+    );
+    expect(result[0].shadow_candidate_id).toBe('p12-shadow:001');
   });
 });

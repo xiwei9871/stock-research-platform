@@ -160,6 +160,31 @@ export type ExperimentReplayRow = {
   production_write_enabled: boolean;
 };
 
+export type ShadowWatchlistRow = {
+  shadow_candidate_id: string;
+  run_id: string;
+  replay_result_id: string;
+  source_p11_replay_run_id: string;
+  source_p10_proposal_run_id: string;
+  source_p9_analytics_run_id: string;
+  candidate_date: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  shadow_layer: string;
+  candidate_reason: string;
+  evidence_artifact_paths: string[];
+  metric_summary: Record<string, number | string | boolean | null>;
+  reviewer_id: string;
+  status: string;
+  review_notes: string;
+  shadow_artifact_path: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_watchlist_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

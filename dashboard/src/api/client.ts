@@ -7,6 +7,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowWatchlistRow,
   WatchlistSignalRow
 } from './types';
 
@@ -127,6 +128,20 @@ export async function fetchExperimentReplay(
   const status = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
   const payload = await getJson<{ items: ExperimentReplayRow[] }>(
     `/api/experiment-replay?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${status}`
+  );
+  return payload.items;
+}
+
+export async function fetchShadowWatchlist(
+  startDate: string,
+  endDate: string,
+  options: { status?: string; limit?: number } = {}
+): Promise<ShadowWatchlistRow[]> {
+  const limit = options.limit ?? 20;
+  const status = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
+  const payload = await getJson<{ items: ShadowWatchlistRow[] }>(
+    `/api/shadow-watchlist?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${status}`
   );
   return payload.items;

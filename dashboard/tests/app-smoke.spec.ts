@@ -240,6 +240,39 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-watchlist**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            shadow_candidate_id: 'p12-shadow:001',
+            run_id: 'p12-shadow-watchlist-2026-06-30',
+            replay_result_id: 'p11-replay:001',
+            source_p11_replay_run_id: 'p11-replay-run-2026-06-30',
+            source_p10_proposal_run_id: 'p10-proposals-2026-06-30',
+            source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+            candidate_date: '2026-06-30',
+            asset_id: '000001.SZ',
+            stock_code: '000001',
+            stock_name: 'Ping An Bank',
+            shadow_layer: 'trend_shadow',
+            candidate_reason: 'Passed replay with acceptable drawdown.',
+            evidence_artifact_paths: ['outputs/p11/replay.json'],
+            metric_summary: { win_rate: 0.75 },
+            reviewer_id: 'reviewer-a',
+            status: 'shadow_ready',
+            review_notes: 'Observe only.',
+            shadow_artifact_path: 'outputs/p12/operator_shadow_watchlist_2026-06-30.json',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -271,6 +304,8 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
   await expect(page.getByText('passed_offline_replay')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Watchlist' })).toBeVisible();
+  await expect(page.getByText('shadow_ready')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 
