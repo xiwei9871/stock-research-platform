@@ -2551,6 +2551,120 @@ def test_p9_import_outcome_analytics_cli_prints_summary(monkeypatch, capsys, tmp
     ]
 
 
+def test_cli_accepts_p10_experiment_proposals_command():
+    args = build_parser().parse_args(
+        [
+            "p10-experiment-proposals",
+            "--input-csv",
+            "inputs/p10/proposals.csv",
+            "--review-date",
+            "2026-05-31",
+            "--run-id",
+            "p10-proposals-2026-05-31",
+            "--output-dir",
+            "outputs/p10/2026-05-31",
+        ]
+    )
+
+    assert args.command == "p10-experiment-proposals"
+    assert args.input_csv == "inputs/p10/proposals.csv"
+    assert args.review_date == "2026-05-31"
+    assert args.run_id == "p10-proposals-2026-05-31"
+    assert args.output_dir == "outputs/p10/2026-05-31"
+
+
+def test_p10_experiment_proposals_cli_outputs_review_only_artifacts(capsys, tmp_path):
+    input_csv = tmp_path / "proposals.csv"
+    pd.DataFrame(
+        [
+            {
+                "proposal_id": "p10-proposal:001",
+                "proposal_title": "Replay dashboard top-N",
+                "hypothesis": "Dashboard top-N candidates should be replayed offline.",
+                "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+                "source_analytics_group_ids": json.dumps(["decision_label:candidate"]),
+                "source_diagnostic_refs": json.dumps([]),
+                "source_artifact_paths": json.dumps(["outputs/p9/analytics.json"]),
+                "expected_validation_method": "offline replay",
+                "risk_notes": "No production scoring change in P10.",
+                "reviewer_id": "reviewer-a",
+                "status": "draft",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+            }
+        ]
+    ).to_csv(input_csv, index=False)
+
+    cli.main_for_args(
+        [
+            "p10-experiment-proposals",
+            "--input-csv",
+            str(input_csv),
+            "--review-date",
+            "2026-05-31",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p10_experiment_proposals|status|proposal_review_ready"
+    assert lines[1] == "p10_experiment_proposals|proposals|1"
+    assert lines[2].startswith("p10_experiment_proposals|json|")
+    assert lines[3].startswith("p10_experiment_proposals|proposals_csv|")
+    assert lines[4].startswith("p10_experiment_proposals|markdown|")
+
+    payload = json.loads((tmp_path / "operator_experiment_proposals_2026-05-31.json").read_text())
+    assert payload["manual_review_required"] is True
+    assert payload["auto_trade_enabled"] is False
+    assert payload["promotion_enabled"] is False
+    assert payload["proposal_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "error"),
+    [
+        ("source_analytics_group_ids", json.dumps([]), "source_evidence_required"),
+        ("status", "promoted_to_production", "invalid_proposal_status"),
+        ("auto_trade_enabled", True, "auto_trade_not_allowed"),
+    ],
+)
+def test_p10_experiment_proposals_cli_rejects_invalid_inputs(tmp_path, column, value, error):
+    row = {
+        "proposal_id": "p10-proposal:001",
+        "proposal_title": "Replay dashboard top-N",
+        "hypothesis": "Dashboard top-N candidates should be replayed offline.",
+        "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+        "source_analytics_group_ids": json.dumps(["decision_label:candidate"]),
+        "source_diagnostic_refs": json.dumps([]),
+        "source_artifact_paths": json.dumps(["outputs/p9/analytics.json"]),
+        "expected_validation_method": "offline replay",
+        "risk_notes": "No production scoring change in P10.",
+        "reviewer_id": "reviewer-a",
+        "status": "draft",
+        "manual_review_required": True,
+        "auto_trade_enabled": False,
+    }
+    row[column] = value
+    if column == "source_analytics_group_ids":
+        row["source_diagnostic_refs"] = json.dumps([])
+    input_csv = tmp_path / "invalid_proposals.csv"
+    pd.DataFrame([row]).to_csv(input_csv, index=False)
+
+    with pytest.raises(ValueError, match=error):
+        cli.main_for_args(
+            [
+                "p10-experiment-proposals",
+                "--input-csv",
+                str(input_csv),
+                "--review-date",
+                "2026-05-31",
+                "--output-dir",
+                str(tmp_path),
+            ]
+        )
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
