@@ -279,6 +279,17 @@ def test_research_extension_includes_operator_experiment_replay_read_model_table
     assert "idx_ops_operator_experiment_replay_status_date" in sql
 
 
+def test_research_extension_includes_operator_shadow_watchlist_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_candidate" in sql
+    assert "PRIMARY KEY (shadow_candidate_id)" in sql
+    assert "source_p11_replay_run_id text NOT NULL" in sql
+    assert "production_watchlist_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_ops_operator_shadow_watchlist_run_date" in sql
+    assert "idx_ops_operator_shadow_watchlist_status_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql

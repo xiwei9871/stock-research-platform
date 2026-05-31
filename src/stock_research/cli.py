@@ -194,6 +194,7 @@ from stock_research.operator_decision.shadow_watchlist import (
     build_shadow_watchlist_review,
     write_shadow_watchlist_review,
 )
+from stock_research.operator_decision.shadow_watchlist_read_model import import_shadow_watchlist_review
 from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
@@ -1757,6 +1758,10 @@ def build_parser() -> argparse.ArgumentParser:
     p12_shadow_watchlist.add_argument("--run-id")
     p12_shadow_watchlist.add_argument("--output-dir", required=True)
 
+    p12_import_shadow_watchlist = subparsers.add_parser("p12-import-shadow-watchlist")
+    p12_import_shadow_watchlist.add_argument("--path", required=True)
+    p12_import_shadow_watchlist.add_argument("--service", default="stock_research")
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3201,6 +3206,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p12_shadow_watchlist|json|{paths['json_path']}")
         print(f"p12_shadow_watchlist|candidates_csv|{paths['candidates_csv_path']}")
         print(f"p12_shadow_watchlist|markdown|{paths['markdown_path']}")
+    elif args.command == "p12-import-shadow-watchlist":
+        result = import_shadow_watchlist_review(Path(args.path), service=args.service)
+        print(f"p12_shadow_watchlist_import|imported|{result['imported_count']}")
+        print(f"p12_shadow_watchlist_import|candidates|{result['candidate_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p12_shadow_watchlist_import|run_id|{run_id}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

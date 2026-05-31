@@ -2995,6 +2995,38 @@ def test_p12_shadow_watchlist_cli_outputs_review_only_artifacts(capsys, tmp_path
     assert payload["production_write_enabled"] is False
 
 
+def test_p12_import_shadow_watchlist_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_shadow_watchlist_2026-06-30.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "candidate_count": 2,
+            "run_ids": ["p12-shadow-watchlist-2026-06-30"],
+        }
+
+    monkeypatch.setattr(cli, "import_shadow_watchlist_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p12-import-shadow-watchlist",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p12_shadow_watchlist_import|imported|1",
+        "p12_shadow_watchlist_import|candidates|2",
+        "p12_shadow_watchlist_import|run_id|p12-shadow-watchlist-2026-06-30",
+    ]
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
