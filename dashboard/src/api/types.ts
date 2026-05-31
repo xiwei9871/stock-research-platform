@@ -91,6 +91,32 @@ export type DecisionOutcomeRow = {
   outcome_artifact_path: string;
 };
 
+export type OutcomeAnalyticsRow = {
+  run_id: string;
+  review_start_date: string;
+  review_end_date: string;
+  analytics_level: 'decision_label' | 'source_context' | string;
+  group_value: string;
+  sample_count: number;
+  complete_count: number;
+  insufficient_data_count: number;
+  follow_up_required_rate: number | null;
+  horizon_metrics: Record<
+    string,
+    {
+      forward_return_mean?: number | null;
+      forward_return_median?: number | null;
+      forward_win_rate?: number | null;
+      max_high_return_mean?: number | null;
+      max_low_drawdown_mean?: number | null;
+      max_low_drawdown_worst?: number | null;
+    }
+  >;
+  analytics_artifact_path: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchAssetDecisions, fetchAssetOutcomes, fetchOverview } from '../src/api/client';
+import { fetchAssetDecisions, fetchAssetOutcomes, fetchOutcomeAnalytics, fetchOverview } from '../src/api/client';
 
 describe('dashboard API client', () => {
   it('fetches overview with query params', async () => {
@@ -54,5 +54,24 @@ describe('dashboard API client', () => {
         '&limit=10&review_session_id=morning-review'
     );
     expect(result[0].outcome_status).toBe('complete');
+  });
+
+  it('fetches outcome analytics summary with optional review session and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ analytics_level: 'decision_label', group_value: 'candidate' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOutcomeAnalytics('2026-05-01', '2026-06-30', {
+      reviewSessionId: 'morning-review',
+      limit: 12
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/outcome-analytics?start_date=2026-05-01&end_date=2026-06-30' +
+        '&limit=12&review_session_id=morning-review'
+    );
+    expect(result[0].group_value).toBe('candidate');
   });
 });

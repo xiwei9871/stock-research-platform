@@ -5,6 +5,7 @@ import {
   fetchAssetScore,
   fetchAssetSignals,
   fetchDailyBars,
+  fetchOutcomeAnalytics,
   fetchOverview
 } from './api/client';
 import type {
@@ -12,11 +13,13 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
 } from './api/types';
 import { AssetChart } from './charts/AssetChart';
 import { DecisionHistoryPanel } from './components/DecisionHistoryPanel';
+import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
@@ -45,6 +48,7 @@ export function App() {
   const [signals, setSignals] = useState<WatchlistSignalRow[]>([]);
   const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
   const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
+  const [outcomeAnalytics, setOutcomeAnalytics] = useState<OutcomeAnalyticsRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -78,6 +82,27 @@ export function App() {
       ignore = true;
     };
   }, [tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    fetchOutcomeAnalytics(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setOutcomeAnalytics(rows);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setOutcomeAnalytics([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
 
   useEffect(() => {
     let ignore = false;
@@ -158,6 +183,7 @@ export function App() {
         <ScorePanel score={score} signals={signals} />
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />
+        <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>

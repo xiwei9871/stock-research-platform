@@ -7,6 +7,7 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
 } from '../src/api/types';
@@ -17,7 +18,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
   fetchAssetDecisions: vi.fn(),
-  fetchAssetOutcomes: vi.fn()
+  fetchAssetOutcomes: vi.fn(),
+  fetchOutcomeAnalytics: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -172,6 +174,35 @@ function makeOutcomes(assetId = '000001.SZ'): DecisionOutcomeRow[] {
   ];
 }
 
+function makeOutcomeAnalytics(): OutcomeAnalyticsRow[] {
+  return [
+    {
+      run_id: 'p9-outcome-analytics-2026-05-01-2026-06-30',
+      review_start_date: '2026-05-01',
+      review_end_date: '2026-06-30',
+      analytics_level: 'decision_label',
+      group_value: 'candidate',
+      sample_count: 2,
+      complete_count: 2,
+      insufficient_data_count: 0,
+      follow_up_required_rate: 0.5,
+      horizon_metrics: {
+        '5': {
+          forward_return_mean: 0.15,
+          forward_return_median: 0.15,
+          forward_win_rate: 1,
+          max_high_return_mean: 0.2,
+          max_low_drawdown_mean: -0.06,
+          max_low_drawdown_worst: -0.08
+        }
+      },
+      analytics_artifact_path: 'outputs/p9/operator_decision_outcome_analytics.json',
+      manual_review_required: true,
+      auto_trade_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -181,6 +212,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
     apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
     apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
+    apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
   });
 
   afterEach(() => {
@@ -202,9 +234,11 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('必看')).toBeVisible();
     expect(screen.getByText('Daily Review')).toBeVisible();
     expect(screen.getByText('Decision History')).toBeVisible();
-    expect(screen.getAllByText('candidate')).toHaveLength(2);
+    expect(screen.getAllByText('candidate')).toHaveLength(3);
     expect(screen.getByText('Outcome History')).toBeVisible();
     expect(screen.getByText(/5D\s+\+20.0%/)).toBeVisible();
+    expect(screen.getByText('Outcome Analytics')).toBeVisible();
+    expect(screen.getByText(/5D\s+\+15.0%/)).toBeVisible();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-05-29',
@@ -221,6 +255,7 @@ describe('dashboard app shell', () => {
     const signals = createDeferred<WatchlistSignalRow[]>();
     const decisions = createDeferred<DecisionEventRow[]>();
     const outcomes = createDeferred<DecisionOutcomeRow[]>();
+    const analytics = createDeferred<OutcomeAnalyticsRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -228,6 +263,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetSignals.mockReturnValueOnce(signals.promise);
     apiMocks.fetchAssetDecisions.mockReturnValueOnce(decisions.promise);
     apiMocks.fetchAssetOutcomes.mockReturnValueOnce(outcomes.promise);
+    apiMocks.fetchOutcomeAnalytics.mockReturnValueOnce(analytics.promise);
 
     render(<App />);
 
@@ -243,6 +279,7 @@ describe('dashboard app shell', () => {
       signals.resolve(makeSignals());
       decisions.resolve(makeDecisions());
       outcomes.resolve(makeOutcomes());
+      analytics.resolve(makeOutcomeAnalytics());
     });
 
     await waitFor(() => {
@@ -266,6 +303,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetSignals.mockResolvedValueOnce([]);
     apiMocks.fetchAssetDecisions.mockResolvedValueOnce([]);
     apiMocks.fetchAssetOutcomes.mockResolvedValueOnce([]);
+    apiMocks.fetchOutcomeAnalytics.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -275,6 +313,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No score for selected date.')).toBeVisible();
     expect(screen.getByText('No decision history for selected range.')).toBeVisible();
     expect(screen.getByText('No outcome history for selected range.')).toBeVisible();
+    expect(screen.getByText('No outcome analytics for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
   });
 

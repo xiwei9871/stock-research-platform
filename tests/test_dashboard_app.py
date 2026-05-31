@@ -155,6 +155,46 @@ def test_asset_outcomes_route_returns_read_only_history(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_outcome_analytics_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_analytics(start_date, end_date, review_session_id, limit):
+        captured["args"] = [start_date, end_date, review_session_id, limit]
+        return [
+            {
+                "run_id": "p9-outcome-analytics-2026-05-01-2026-06-30",
+                "review_start_date": "2026-05-01",
+                "review_end_date": "2026-06-30",
+                "analytics_level": "decision_label",
+                "group_value": "candidate",
+                "sample_count": 2,
+                "complete_count": 2,
+                "insufficient_data_count": 0,
+                "follow_up_required_rate": 0.5,
+                "horizon_metrics": {"5": {"forward_return_mean": 0.15, "forward_win_rate": 1.0}},
+                "analytics_artifact_path": "outputs/p9/operator_decision_outcome_analytics.json",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(dashboard_app, "load_outcome_analytics_summary", fake_load_analytics)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/outcome-analytics"
+        "?start_date=2026-05-01"
+        "&end_date=2026-06-30"
+        "&review_session_id=morning-review"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-05-01", "2026-06-30", "morning-review", 10]
+    assert response.json()["items"][0]["analytics_level"] == "decision_label"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

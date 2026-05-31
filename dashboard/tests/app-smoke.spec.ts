@@ -151,6 +151,36 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/outcome-analytics**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            run_id: 'p9-outcome-analytics-2026-05-01-2026-06-30',
+            review_start_date: '2026-05-01',
+            review_end_date: '2026-06-30',
+            analytics_level: 'decision_label',
+            group_value: 'candidate',
+            sample_count: 2,
+            complete_count: 2,
+            insufficient_data_count: 0,
+            follow_up_required_rate: 0.5,
+            horizon_metrics: {
+              '5': {
+                forward_return_mean: 0.15,
+                forward_win_rate: 1.0,
+                max_low_drawdown_worst: -0.08
+              }
+            },
+            analytics_artifact_path: 'outputs/p9/operator_decision_outcome_analytics.json',
+            manual_review_required: true,
+            auto_trade_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -168,9 +198,11 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
       .getByText('Score')
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
-  await expect(page.getByText('candidate')).toHaveCount(2);
+  await expect(page.getByText('candidate')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
   await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Outcome Analytics' })).toBeVisible();
+  await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 

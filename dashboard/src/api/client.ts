@@ -3,6 +3,7 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
 } from './types';
@@ -80,6 +81,22 @@ export async function fetchAssetOutcomes(
     : '';
   const payload = await getJson<{ items: DecisionOutcomeRow[] }>(
     `/api/assets/${encodeURIComponent(assetId)}/outcomes?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${reviewSession}`
+  );
+  return payload.items;
+}
+
+export async function fetchOutcomeAnalytics(
+  startDate: string,
+  endDate: string,
+  options: { reviewSessionId?: string; limit?: number } = {}
+): Promise<OutcomeAnalyticsRow[]> {
+  const limit = options.limit ?? 20;
+  const reviewSession = options.reviewSessionId
+    ? `&review_session_id=${encodeURIComponent(options.reviewSessionId)}`
+    : '';
+  const payload = await getJson<{ items: OutcomeAnalyticsRow[] }>(
+    `/api/outcome-analytics?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${reviewSession}`
   );
   return payload.items;
