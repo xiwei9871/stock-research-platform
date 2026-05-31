@@ -2697,6 +2697,167 @@ def test_p10_import_experiment_proposals_cli_prints_summary(monkeypatch, capsys,
     ]
 
 
+def _write_p11_proposals_json(path):
+    payload = {
+        "run_id": "p10-proposals-2026-06-30",
+        "review_date": "2026-06-30",
+        "manual_review_required": True,
+        "auto_trade_enabled": False,
+        "promotion_enabled": False,
+        "proposals": [
+            {
+                "proposal_id": "p10-proposal:001",
+                "run_id": "p10-proposals-2026-06-30",
+                "proposal_title": "Replay dashboard top-N",
+                "hypothesis": "Dashboard top-N candidates should be replayed offline.",
+                "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+                "source_analytics_group_ids": ["decision_label:candidate"],
+                "source_diagnostic_refs": ["top_forward_return:5:decision_label:candidate"],
+                "source_artifact_paths": ["outputs/p9/analytics.json"],
+                "expected_validation_method": "offline replay",
+                "reviewer_id": "reviewer-a",
+                "status": "approved_for_experiment",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "promotion_enabled": False,
+            }
+        ],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_p11_metrics_csv(path, **overrides):
+    row = {
+        "replay_result_id": "p11-replay:001",
+        "proposal_id": "p10-proposal:001",
+        "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+        "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+        "replay_start_date": "2026-01-01",
+        "replay_end_date": "2026-05-31",
+        "replay_input_artifact_paths": json.dumps(["inputs/p11/replay_candidates.csv"]),
+        "validation_method": "offline replay",
+        "replay_status": "passed_offline_replay",
+        "sample_count": 24,
+        "passed_count": 18,
+        "failed_count": 6,
+        "metric_summary": json.dumps({"forward_5d_return_mean": 0.08, "win_rate": 0.75}),
+        "failure_reason": "",
+        "defer_reason": "",
+        "manual_review_required": True,
+        "auto_trade_enabled": False,
+        "production_write_enabled": False,
+    }
+    row.update(overrides)
+    pd.DataFrame([row]).to_csv(path, index=False)
+
+
+def test_cli_accepts_p11_experiment_replay_command():
+    args = build_parser().parse_args(
+        [
+            "p11-experiment-replay",
+            "--proposals-json",
+            "outputs/p10/proposals.json",
+            "--metrics-csv",
+            "inputs/p11/replay_metrics.csv",
+            "--run-id",
+            "p11-replay-run-2026-06-30",
+            "--replay-start-date",
+            "2026-01-01",
+            "--replay-end-date",
+            "2026-05-31",
+            "--output-dir",
+            "outputs/p11/2026-06-30",
+        ]
+    )
+
+    assert args.command == "p11-experiment-replay"
+    assert args.proposals_json == "outputs/p10/proposals.json"
+    assert args.metrics_csv == "inputs/p11/replay_metrics.csv"
+    assert args.run_id == "p11-replay-run-2026-06-30"
+    assert args.replay_start_date == "2026-01-01"
+    assert args.replay_end_date == "2026-05-31"
+    assert args.output_dir == "outputs/p11/2026-06-30"
+
+
+def test_p11_experiment_replay_cli_outputs_review_only_artifacts(capsys, tmp_path):
+    proposals_json = tmp_path / "operator_experiment_proposals_2026-06-30.json"
+    metrics_csv = tmp_path / "replay_metrics.csv"
+    _write_p11_proposals_json(proposals_json)
+    _write_p11_metrics_csv(metrics_csv)
+
+    cli.main_for_args(
+        [
+            "p11-experiment-replay",
+            "--proposals-json",
+            str(proposals_json),
+            "--metrics-csv",
+            str(metrics_csv),
+            "--run-id",
+            "p11-replay-run-2026-06-30",
+            "--replay-start-date",
+            "2026-01-01",
+            "--replay-end-date",
+            "2026-05-31",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p11_experiment_replay|status|replay_review_ready"
+    assert lines[1] == "p11_experiment_replay|results|1"
+    assert lines[2].startswith("p11_experiment_replay|json|")
+    assert lines[3].startswith("p11_experiment_replay|results_csv|")
+    assert lines[4].startswith("p11_experiment_replay|markdown|")
+
+    payload = json.loads((tmp_path / "operator_experiment_replay_2026-01-01_2026-05-31.json").read_text())
+    assert payload["manual_review_required"] is True
+    assert payload["auto_trade_enabled"] is False
+    assert payload["production_write_enabled"] is False
+    assert payload["result_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("metrics_override", "proposal_status", "error"),
+    [
+        ({}, "needs_more_data", "proposal_not_approved_for_experiment"),
+        ({"replay_input_artifact_paths": json.dumps([])}, "approved_for_experiment", "replay_input_artifact_required"),
+        ({"replay_status": "promoted_to_shadow_watchlist"}, "approved_for_experiment", "invalid_replay_status"),
+        ({"production_write_enabled": True}, "approved_for_experiment", "production_write_not_allowed"),
+    ],
+)
+def test_p11_experiment_replay_cli_rejects_invalid_inputs(
+    tmp_path,
+    metrics_override,
+    proposal_status,
+    error,
+):
+    proposals_json = tmp_path / "operator_experiment_proposals_2026-06-30.json"
+    metrics_csv = tmp_path / "replay_metrics.csv"
+    _write_p11_proposals_json(proposals_json)
+    payload = json.loads(proposals_json.read_text(encoding="utf-8"))
+    payload["proposals"][0]["status"] = proposal_status
+    proposals_json.write_text(json.dumps(payload), encoding="utf-8")
+    _write_p11_metrics_csv(metrics_csv, **metrics_override)
+
+    with pytest.raises(ValueError, match=error):
+        cli.main_for_args(
+            [
+                "p11-experiment-replay",
+                "--proposals-json",
+                str(proposals_json),
+                "--metrics-csv",
+                str(metrics_csv),
+                "--replay-start-date",
+                "2026-01-01",
+                "--replay-end-date",
+                "2026-05-31",
+                "--output-dir",
+                str(tmp_path),
+            ]
+        )
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

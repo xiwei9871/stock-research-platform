@@ -185,6 +185,10 @@ from stock_research.operator_decision.experiment_proposals import (
     write_experiment_proposal_review,
 )
 from stock_research.operator_decision.experiment_proposals_read_model import import_experiment_proposal_review
+from stock_research.operator_decision.experiment_replay import (
+    build_experiment_replay_review,
+    write_experiment_replay_review,
+)
 from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
@@ -1729,6 +1733,14 @@ def build_parser() -> argparse.ArgumentParser:
     p10_import_experiment_proposals.add_argument("--path", required=True)
     p10_import_experiment_proposals.add_argument("--service", default="stock_research")
 
+    p11_experiment_replay = subparsers.add_parser("p11-experiment-replay")
+    p11_experiment_replay.add_argument("--proposals-json", required=True)
+    p11_experiment_replay.add_argument("--metrics-csv", required=True)
+    p11_experiment_replay.add_argument("--run-id")
+    p11_experiment_replay.add_argument("--replay-start-date", required=True)
+    p11_experiment_replay.add_argument("--replay-end-date", required=True)
+    p11_experiment_replay.add_argument("--output-dir", required=True)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3130,6 +3142,25 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p10_experiment_proposals_import|proposals|{result['proposal_count']}")
         for run_id in result["run_ids"]:
             print(f"p10_experiment_proposals_import|run_id|{run_id}")
+    elif args.command == "p11-experiment-replay":
+        import pandas as pd
+
+        proposal_payload = json.loads(Path(args.proposals_json).read_text(encoding="utf-8"))
+        proposals = pd.DataFrame(proposal_payload.get("proposals", []))
+        replay_events = pd.read_csv(args.metrics_csv)
+        review = build_experiment_replay_review(
+            proposals=proposals,
+            replay_events=replay_events,
+            run_id=args.run_id,
+            replay_start_date=args.replay_start_date,
+            replay_end_date=args.replay_end_date,
+        )
+        paths = write_experiment_replay_review(review, args.output_dir)
+        print(f"p11_experiment_replay|status|{review['status']}")
+        print(f"p11_experiment_replay|results|{review['result_count']}")
+        print(f"p11_experiment_replay|json|{paths['json_path']}")
+        print(f"p11_experiment_replay|results_csv|{paths['results_csv_path']}")
+        print(f"p11_experiment_replay|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
