@@ -2697,6 +2697,38 @@ def test_p10_import_experiment_proposals_cli_prints_summary(monkeypatch, capsys,
     ]
 
 
+def test_p11_import_experiment_replay_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_experiment_replay_2026-01-01_2026-05-31.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "result_count": 2,
+            "run_ids": ["p11-replay-run-2026-06-30"],
+        }
+
+    monkeypatch.setattr(cli, "import_experiment_replay_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p11-import-experiment-replay",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p11_experiment_replay_import|imported|1",
+        "p11_experiment_replay_import|results|2",
+        "p11_experiment_replay_import|run_id|p11-replay-run-2026-06-30",
+    ]
+
+
 def _write_p11_proposals_json(path):
     payload = {
         "run_id": "p10-proposals-2026-06-30",

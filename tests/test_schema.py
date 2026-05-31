@@ -265,6 +265,20 @@ def test_research_extension_includes_operator_experiment_proposal_read_model_tab
     assert "idx_ops_operator_experiment_proposal_status_date" in sql
 
 
+def test_research_extension_includes_operator_experiment_replay_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_experiment_replay_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_experiment_replay_result" in sql
+    assert "PRIMARY KEY (replay_result_id)" in sql
+    assert "source_p10_proposal_run_id text NOT NULL" in sql
+    assert "source_p9_analytics_run_id text NOT NULL" in sql
+    assert "replay_input_artifact_paths jsonb NOT NULL DEFAULT '[]'::jsonb" in sql
+    assert "metric_summary jsonb NOT NULL DEFAULT '{}'::jsonb" in sql
+    assert "production_write_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_ops_operator_experiment_replay_run_date" in sql
+    assert "idx_ops_operator_experiment_replay_status_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql

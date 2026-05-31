@@ -849,6 +849,52 @@ CREATE TABLE IF NOT EXISTS ops.operator_experiment_proposal (
     PRIMARY KEY (proposal_id)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_experiment_replay_run (
+    run_id text NOT NULL,
+    replay_start_date date NOT NULL,
+    replay_end_date date NOT NULL,
+    status text NOT NULL,
+    result_count integer NOT NULL DEFAULT 0,
+    status_counts jsonb NOT NULL DEFAULT '{}'::jsonb,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    results_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_experiment_replay_result (
+    replay_result_id text NOT NULL,
+    run_id text NOT NULL REFERENCES ops.operator_experiment_replay_run(run_id),
+    proposal_id text NOT NULL,
+    source_p10_proposal_run_id text NOT NULL,
+    source_p9_analytics_run_id text NOT NULL,
+    replay_start_date date NOT NULL,
+    replay_end_date date NOT NULL,
+    replay_input_artifact_paths jsonb NOT NULL DEFAULT '[]'::jsonb,
+    validation_method text NOT NULL,
+    replay_status text NOT NULL,
+    sample_count integer NOT NULL DEFAULT 0,
+    passed_count integer NOT NULL DEFAULT 0,
+    failed_count integer NOT NULL DEFAULT 0,
+    metric_summary jsonb NOT NULL DEFAULT '{}'::jsonb,
+    failure_reason text NOT NULL,
+    defer_reason text NOT NULL,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    replay_artifact_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (replay_result_id)
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1230,6 +1276,18 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_proposal_status_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_proposal_source_run
     ON ops.operator_experiment_proposal (source_p9_analytics_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_replay_run_date
+    ON ops.operator_experiment_replay_run (replay_end_date DESC, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_replay_status_date
+    ON ops.operator_experiment_replay_result (replay_status, replay_end_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_replay_source_proposal
+    ON ops.operator_experiment_replay_result (proposal_id, source_p10_proposal_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_replay_source_p9
+    ON ops.operator_experiment_replay_result (source_p9_analytics_run_id);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);
