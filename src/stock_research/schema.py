@@ -764,6 +764,49 @@ CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_event (
     PRIMARY KEY (outcome_event_id)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_run (
+    run_id text NOT NULL,
+    review_start_date date NOT NULL,
+    review_end_date date NOT NULL,
+    status text NOT NULL,
+    source_outcome_count integer NOT NULL DEFAULT 0,
+    group_count integer NOT NULL DEFAULT 0,
+    diagnostic_count integer NOT NULL DEFAULT 0,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    groups_csv_path text NOT NULL,
+    diagnostics_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_group (
+    analytics_group_id text NOT NULL,
+    run_id text NOT NULL REFERENCES ops.operator_decision_outcome_analytics_run(run_id),
+    review_start_date date NOT NULL,
+    review_end_date date NOT NULL,
+    analytics_level text NOT NULL,
+    group_value text NOT NULL,
+    decision_label text,
+    source_context text,
+    review_session_id text,
+    asset_id text,
+    sample_count integer NOT NULL DEFAULT 0,
+    complete_count integer NOT NULL DEFAULT 0,
+    insufficient_data_count integer NOT NULL DEFAULT 0,
+    follow_up_required_rate numeric,
+    horizon_metrics jsonb NOT NULL DEFAULT '{}'::jsonb,
+    analytics_artifact_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (analytics_group_id)
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1127,6 +1170,15 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_event_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_event_decision
     ON ops.operator_decision_outcome_event (decision_event_id);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_analytics_run_date
+    ON ops.operator_decision_outcome_analytics_run (review_end_date DESC, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_analytics_group_level_date
+    ON ops.operator_decision_outcome_analytics_group (analytics_level, review_end_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_analytics_group_run
+    ON ops.operator_decision_outcome_analytics_group (run_id);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);

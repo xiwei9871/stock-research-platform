@@ -242,6 +242,17 @@ def test_research_extension_includes_operator_decision_outcome_read_model_tables
     assert "idx_ops_operator_decision_outcome_event_asset_date" in sql
 
 
+def test_research_extension_includes_operator_decision_outcome_analytics_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_group" in sql
+    assert "PRIMARY KEY (analytics_group_id)" in sql
+    assert "analytics_artifact_path text NOT NULL" in sql
+    assert "horizon_metrics jsonb NOT NULL DEFAULT '{}'::jsonb" in sql
+    assert "idx_ops_operator_decision_outcome_analytics_run_date" in sql
+    assert "idx_ops_operator_decision_outcome_analytics_group_level_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql

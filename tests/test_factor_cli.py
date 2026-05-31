@@ -2519,6 +2519,38 @@ def test_p9_outcome_analytics_cli_writes_artifacts(monkeypatch, capsys, tmp_path
     assert payload["diagnostic_count"] > 0
 
 
+def test_p9_import_outcome_analytics_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_decision_outcome_analytics_2026-05-01_2026-06-30.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "group_count": 2,
+            "run_ids": ["p9-outcome-analytics-2026-05-01-2026-06-30"],
+        }
+
+    monkeypatch.setattr(cli, "import_decision_outcome_analytics", fake_import)
+
+    cli.main_for_args(
+        [
+            "p9-import-outcome-analytics",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p9_outcome_analytics_import|imported|1",
+        "p9_outcome_analytics_import|groups|2",
+        "p9_outcome_analytics_import|run_id|p9-outcome-analytics-2026-05-01-2026-06-30",
+    ]
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
