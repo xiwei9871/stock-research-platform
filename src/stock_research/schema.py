@@ -807,6 +807,48 @@ CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_group (
     PRIMARY KEY (analytics_group_id)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_experiment_proposal_run (
+    run_id text NOT NULL,
+    review_date date NOT NULL,
+    status text NOT NULL,
+    proposal_count integer NOT NULL DEFAULT 0,
+    status_counts jsonb NOT NULL DEFAULT '{}'::jsonb,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    promotion_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    proposals_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id)
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_experiment_proposal (
+    proposal_id text NOT NULL,
+    run_id text NOT NULL REFERENCES ops.operator_experiment_proposal_run(run_id),
+    review_date date NOT NULL,
+    proposal_title text NOT NULL,
+    hypothesis text NOT NULL,
+    source_p9_analytics_run_id text NOT NULL,
+    source_analytics_group_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+    source_diagnostic_refs jsonb NOT NULL DEFAULT '[]'::jsonb,
+    source_artifact_paths jsonb NOT NULL DEFAULT '[]'::jsonb,
+    expected_validation_method text NOT NULL,
+    risk_notes text NOT NULL,
+    reviewer_id text NOT NULL,
+    status text NOT NULL,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    promotion_enabled boolean NOT NULL DEFAULT false,
+    proposal_artifact_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (proposal_id)
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1179,6 +1221,15 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_analytics_group_lev
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_decision_outcome_analytics_group_run
     ON ops.operator_decision_outcome_analytics_group (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_proposal_run_date
+    ON ops.operator_experiment_proposal_run (review_date DESC, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_proposal_status_date
+    ON ops.operator_experiment_proposal (status, review_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ops_operator_experiment_proposal_source_run
+    ON ops.operator_experiment_proposal (source_p9_analytics_run_id);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);

@@ -253,6 +253,18 @@ def test_research_extension_includes_operator_decision_outcome_analytics_read_mo
     assert "idx_ops_operator_decision_outcome_analytics_group_level_date" in sql
 
 
+def test_research_extension_includes_operator_experiment_proposal_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_experiment_proposal_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_experiment_proposal" in sql
+    assert "PRIMARY KEY (proposal_id)" in sql
+    assert "source_p9_analytics_run_id text NOT NULL" in sql
+    assert "source_analytics_group_ids jsonb NOT NULL DEFAULT '[]'::jsonb" in sql
+    assert "promotion_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_ops_operator_experiment_proposal_run_date" in sql
+    assert "idx_ops_operator_experiment_proposal_status_date" in sql
+
+
 def test_research_extension_includes_virtual_portfolio_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS simulation" in sql

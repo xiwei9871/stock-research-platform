@@ -2665,6 +2665,38 @@ def test_p10_experiment_proposals_cli_rejects_invalid_inputs(tmp_path, column, v
         )
 
 
+def test_p10_import_experiment_proposals_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_experiment_proposals_2026-05-31.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "proposal_count": 2,
+            "run_ids": ["p10-proposals-2026-05-31"],
+        }
+
+    monkeypatch.setattr(cli, "import_experiment_proposal_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p10-import-experiment-proposals",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p10_experiment_proposals_import|imported|1",
+        "p10_experiment_proposals_import|proposals|2",
+        "p10_experiment_proposals_import|run_id|p10-proposals-2026-05-31",
+    ]
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

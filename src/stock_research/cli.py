@@ -184,6 +184,7 @@ from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
     write_experiment_proposal_review,
 )
+from stock_research.operator_decision.experiment_proposals_read_model import import_experiment_proposal_review
 from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
@@ -1724,6 +1725,10 @@ def build_parser() -> argparse.ArgumentParser:
     p10_experiment_proposals.add_argument("--run-id")
     p10_experiment_proposals.add_argument("--output-dir", required=True)
 
+    p10_import_experiment_proposals = subparsers.add_parser("p10-import-experiment-proposals")
+    p10_import_experiment_proposals.add_argument("--path", required=True)
+    p10_import_experiment_proposals.add_argument("--service", default="stock_research")
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3119,6 +3124,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p10_experiment_proposals|json|{paths['json_path']}")
         print(f"p10_experiment_proposals|proposals_csv|{paths['proposals_csv_path']}")
         print(f"p10_experiment_proposals|markdown|{paths['markdown_path']}")
+    elif args.command == "p10-import-experiment-proposals":
+        result = import_experiment_proposal_review(Path(args.path), service=args.service)
+        print(f"p10_experiment_proposals_import|imported|{result['imported_count']}")
+        print(f"p10_experiment_proposals_import|proposals|{result['proposal_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p10_experiment_proposals_import|run_id|{run_id}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
