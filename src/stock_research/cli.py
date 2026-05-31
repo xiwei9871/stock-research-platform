@@ -190,6 +190,10 @@ from stock_research.operator_decision.experiment_replay import (
     write_experiment_replay_review,
 )
 from stock_research.operator_decision.experiment_replay_read_model import import_experiment_replay_review
+from stock_research.operator_decision.shadow_watchlist import (
+    build_shadow_watchlist_review,
+    write_shadow_watchlist_review,
+)
 from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
@@ -1746,6 +1750,13 @@ def build_parser() -> argparse.ArgumentParser:
     p11_import_experiment_replay.add_argument("--path", required=True)
     p11_import_experiment_replay.add_argument("--service", default="stock_research")
 
+    p12_shadow_watchlist = subparsers.add_parser("p12-shadow-watchlist")
+    p12_shadow_watchlist.add_argument("--replay-json", required=True)
+    p12_shadow_watchlist.add_argument("--candidates-csv", required=True)
+    p12_shadow_watchlist.add_argument("--review-date", required=True)
+    p12_shadow_watchlist.add_argument("--run-id")
+    p12_shadow_watchlist.add_argument("--output-dir", required=True)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3172,6 +3183,24 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p11_experiment_replay_import|results|{result['result_count']}")
         for run_id in result["run_ids"]:
             print(f"p11_experiment_replay_import|run_id|{run_id}")
+    elif args.command == "p12-shadow-watchlist":
+        import pandas as pd
+
+        replay_payload = json.loads(Path(args.replay_json).read_text(encoding="utf-8"))
+        replay_results = pd.DataFrame(replay_payload.get("results", []))
+        candidate_events = pd.read_csv(args.candidates_csv)
+        review = build_shadow_watchlist_review(
+            replay_results=replay_results,
+            candidate_events=candidate_events,
+            run_id=args.run_id,
+            review_date=args.review_date,
+        )
+        paths = write_shadow_watchlist_review(review, args.output_dir)
+        print(f"p12_shadow_watchlist|status|{review['status']}")
+        print(f"p12_shadow_watchlist|candidates|{review['candidate_count']}")
+        print(f"p12_shadow_watchlist|json|{paths['json_path']}")
+        print(f"p12_shadow_watchlist|candidates_csv|{paths['candidates_csv_path']}")
+        print(f"p12_shadow_watchlist|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
