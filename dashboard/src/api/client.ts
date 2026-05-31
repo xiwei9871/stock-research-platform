@@ -4,6 +4,7 @@ import type {
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
+  ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
@@ -112,6 +113,20 @@ export async function fetchExperimentProposals(
   const status = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
   const payload = await getJson<{ items: ExperimentProposalRow[] }>(
     `/api/experiment-proposals?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${status}`
+  );
+  return payload.items;
+}
+
+export async function fetchExperimentReplay(
+  startDate: string,
+  endDate: string,
+  options: { status?: string; limit?: number } = {}
+): Promise<ExperimentReplayRow[]> {
+  const limit = options.limit ?? 20;
+  const status = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
+  const payload = await getJson<{ items: ExperimentReplayRow[] }>(
+    `/api/experiment-replay?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${status}`
   );
   return payload.items;

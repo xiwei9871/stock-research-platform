@@ -6,6 +6,7 @@ import {
   fetchAssetSignals,
   fetchDailyBars,
   fetchExperimentProposals,
+  fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview
 } from './api/client';
@@ -15,6 +16,7 @@ import type {
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
+  ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
@@ -22,6 +24,7 @@ import type {
 import { AssetChart } from './charts/AssetChart';
 import { DecisionHistoryPanel } from './components/DecisionHistoryPanel';
 import { ExperimentProposalsPanel } from './components/ExperimentProposalsPanel';
+import { ExperimentReplayPanel } from './components/ExperimentReplayPanel';
 import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
@@ -53,9 +56,11 @@ export function App() {
   const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
   const [outcomeAnalytics, setOutcomeAnalytics] = useState<OutcomeAnalyticsRow[]>([]);
   const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
+  const [experimentReplay, setExperimentReplay] = useState<ExperimentReplayRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
+  const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
 
   const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
@@ -121,6 +126,30 @@ export function App() {
         if (!ignore) {
           setError(err instanceof Error ? err.message : String(err));
           setExperimentProposals([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    setExperimentReplayLoading(true);
+    fetchExperimentReplay(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setExperimentReplay(rows);
+          setExperimentReplayLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setExperimentReplay([]);
+          setExperimentReplayLoading(false);
         }
       });
 
@@ -210,6 +239,7 @@ export function App() {
         <OutcomeHistoryPanel outcomes={outcomes} />
         <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
         <ExperimentProposalsPanel rows={experimentProposals} />
+        <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>

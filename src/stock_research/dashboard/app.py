@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
+from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
@@ -151,6 +152,24 @@ def create_app() -> FastAPI:
             "start_date": start_date,
             "end_date": end_date,
             "items": load_experiment_proposals_summary(
+                start_date,
+                end_date,
+                status,
+                limit,
+            ),
+        }
+
+    @app.get("/api/experiment-replay")
+    def experiment_replay(
+        start_date: str,
+        end_date: str,
+        status: str | None = None,
+        limit: int = 20,
+    ):
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "items": load_experiment_replay_summary(
                 start_date,
                 end_date,
                 status,

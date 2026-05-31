@@ -3,6 +3,7 @@ import {
   fetchAssetDecisions,
   fetchAssetOutcomes,
   fetchExperimentProposals,
+  fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview
 } from '../src/api/client';
@@ -98,5 +99,24 @@ describe('dashboard API client', () => {
         '&limit=12&status=approved_for_experiment'
     );
     expect(result[0].proposal_id).toBe('p10-proposal:001');
+  });
+
+  it('fetches experiment replay summary with optional status and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ replay_result_id: 'p11-replay:001', replay_status: 'passed_offline_replay' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchExperimentReplay('2026-01-01', '2026-06-30', {
+      status: 'passed_offline_replay',
+      limit: 12
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/experiment-replay?start_date=2026-01-01&end_date=2026-06-30' +
+        '&limit=12&status=passed_offline_replay'
+    );
+    expect(result[0].replay_result_id).toBe('p11-replay:001');
   });
 });

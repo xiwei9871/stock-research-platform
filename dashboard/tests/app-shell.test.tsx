@@ -8,6 +8,7 @@ import type {
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
+  ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
@@ -21,6 +22,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetDecisions: vi.fn(),
   fetchAssetOutcomes: vi.fn(),
   fetchExperimentProposals: vi.fn(),
+  fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn()
 }));
 
@@ -229,6 +231,33 @@ function makeExperimentProposals(): ExperimentProposalRow[] {
   ];
 }
 
+function makeExperimentReplay(): ExperimentReplayRow[] {
+  return [
+    {
+      replay_result_id: 'p11-replay:001',
+      run_id: 'p11-replay-run-2026-06-30',
+      proposal_id: 'p10-proposal:001',
+      source_p10_proposal_run_id: 'p10-proposals-2026-06-30',
+      source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+      replay_start_date: '2026-01-01',
+      replay_end_date: '2026-05-31',
+      replay_input_artifact_paths: ['inputs/p11/replay_candidates.csv'],
+      validation_method: 'offline replay',
+      replay_status: 'passed_offline_replay',
+      sample_count: 24,
+      passed_count: 18,
+      failed_count: 6,
+      metric_summary: { win_rate: 0.75 },
+      failure_reason: '',
+      defer_reason: '',
+      replay_artifact_path: 'outputs/p11/operator_experiment_replay_2026-01-01_2026-05-31.json',
+      manual_review_required: true,
+      auto_trade_enabled: false,
+      production_write_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -240,6 +269,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
     apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
+    apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
   });
 
   afterEach(() => {
@@ -268,7 +298,10 @@ describe('dashboard app shell', () => {
     expect(screen.getByText(/5D\s+\+15.0%/)).toBeVisible();
     expect(screen.getByText('Experiment Proposals')).toBeVisible();
     expect(screen.getByText('Replay dashboard top-N')).toBeVisible();
+    expect(screen.getByText('Experiment Replay')).toBeVisible();
+    expect(screen.getByText('passed_offline_replay')).toBeVisible();
     expect(screen.queryByText(/promote/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/trade/i)).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-05-29',
@@ -287,6 +320,7 @@ describe('dashboard app shell', () => {
     const outcomes = createDeferred<DecisionOutcomeRow[]>();
     const analytics = createDeferred<OutcomeAnalyticsRow[]>();
     const proposals = createDeferred<ExperimentProposalRow[]>();
+    const replay = createDeferred<ExperimentReplayRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -296,6 +330,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetOutcomes.mockReturnValueOnce(outcomes.promise);
     apiMocks.fetchOutcomeAnalytics.mockReturnValueOnce(analytics.promise);
     apiMocks.fetchExperimentProposals.mockReturnValueOnce(proposals.promise);
+    apiMocks.fetchExperimentReplay.mockReturnValueOnce(replay.promise);
 
     render(<App />);
 
@@ -303,6 +338,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading watchlist...')).toBeVisible();
     expect(screen.getByText('Loading reports...')).toBeVisible();
     expect(screen.getByText('Loading asset review...')).toBeVisible();
+    expect(screen.getByText('Loading experiment replay...')).toBeVisible();
 
     await act(async () => {
       overview.resolve(makeOverview());
@@ -313,6 +349,7 @@ describe('dashboard app shell', () => {
       outcomes.resolve(makeOutcomes());
       analytics.resolve(makeOutcomeAnalytics());
       proposals.resolve(makeExperimentProposals());
+      replay.resolve(makeExperimentReplay());
     });
 
     await waitFor(() => {
@@ -320,6 +357,7 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading watchlist...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading reports...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading asset review...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading experiment replay...')).not.toBeInTheDocument();
     });
   });
 
@@ -338,6 +376,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetOutcomes.mockResolvedValueOnce([]);
     apiMocks.fetchOutcomeAnalytics.mockResolvedValueOnce([]);
     apiMocks.fetchExperimentProposals.mockResolvedValueOnce([]);
+    apiMocks.fetchExperimentReplay.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -349,6 +388,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No outcome history for selected range.')).toBeVisible();
     expect(screen.getByText('No outcome analytics for selected range.')).toBeVisible();
     expect(screen.getByText('No experiment proposals for selected range.')).toBeVisible();
+    expect(screen.getByText('No experiment replay results for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
   });
 

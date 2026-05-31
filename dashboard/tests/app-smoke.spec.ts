@@ -209,6 +209,37 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/experiment-replay**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            replay_result_id: 'p11-replay:001',
+            run_id: 'p11-replay-run-2026-06-30',
+            proposal_id: 'p10-proposal:001',
+            source_p10_proposal_run_id: 'p10-proposals-2026-06-30',
+            source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+            replay_start_date: '2026-01-01',
+            replay_end_date: '2026-05-31',
+            replay_input_artifact_paths: ['inputs/p11/replay_candidates.csv'],
+            validation_method: 'offline replay',
+            replay_status: 'passed_offline_replay',
+            sample_count: 24,
+            passed_count: 18,
+            failed_count: 6,
+            metric_summary: { win_rate: 0.75 },
+            failure_reason: '',
+            defer_reason: '',
+            replay_artifact_path: 'outputs/p11/operator_experiment_replay_2026-01-01_2026-05-31.json',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -238,6 +269,8 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Experiment Proposals' })).toBeVisible();
   await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
+  await expect(page.getByText('passed_offline_replay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 

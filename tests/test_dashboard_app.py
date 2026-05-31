@@ -239,6 +239,54 @@ def test_experiment_proposals_route_returns_read_only_summary(monkeypatch):
     assert response.json()["items"][0]["promotion_enabled"] is False
 
 
+def test_experiment_replay_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_replay(start_date, end_date, status, limit):
+        captured["args"] = [start_date, end_date, status, limit]
+        return [
+            {
+                "replay_result_id": "p11-replay:001",
+                "run_id": "p11-replay-run-2026-06-30",
+                "proposal_id": "p10-proposal:001",
+                "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+                "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+                "replay_start_date": "2026-01-01",
+                "replay_end_date": "2026-05-31",
+                "replay_input_artifact_paths": ["inputs/p11/replay_candidates.csv"],
+                "validation_method": "offline replay",
+                "replay_status": "passed_offline_replay",
+                "sample_count": 24,
+                "passed_count": 18,
+                "failed_count": 6,
+                "metric_summary": {"win_rate": 0.75},
+                "failure_reason": "",
+                "defer_reason": "",
+                "replay_artifact_path": "outputs/p11/operator_experiment_replay_2026-01-01_2026-05-31.json",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_write_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(dashboard_app, "load_experiment_replay_summary", fake_load_replay)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/experiment-replay"
+        "?start_date=2026-01-01"
+        "&end_date=2026-06-30"
+        "&status=passed_offline_replay"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-01-01", "2026-06-30", "passed_offline_replay", 10]
+    assert response.json()["items"][0]["replay_result_id"] == "p11-replay:001"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+    assert response.json()["items"][0]["production_write_enabled"] is False
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

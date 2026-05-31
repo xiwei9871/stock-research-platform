@@ -137,6 +137,29 @@ export type ExperimentProposalRow = {
   promotion_enabled: boolean;
 };
 
+export type ExperimentReplayRow = {
+  replay_result_id: string;
+  run_id: string;
+  proposal_id: string;
+  source_p10_proposal_run_id: string;
+  source_p9_analytics_run_id: string;
+  replay_start_date: string;
+  replay_end_date: string;
+  replay_input_artifact_paths: string[];
+  validation_method: string;
+  replay_status: string;
+  sample_count: number;
+  passed_count: number;
+  failed_count: number;
+  metric_summary: Record<string, number | string | boolean | null>;
+  failure_reason: string;
+  defer_reason: string;
+  replay_artifact_path: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;
