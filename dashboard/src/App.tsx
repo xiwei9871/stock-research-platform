@@ -5,6 +5,7 @@ import {
   fetchAssetScore,
   fetchAssetSignals,
   fetchDailyBars,
+  fetchExperimentProposals,
   fetchOutcomeAnalytics,
   fetchOverview
 } from './api/client';
@@ -13,12 +14,14 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  ExperimentProposalRow,
   OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
 } from './api/types';
 import { AssetChart } from './charts/AssetChart';
 import { DecisionHistoryPanel } from './components/DecisionHistoryPanel';
+import { ExperimentProposalsPanel } from './components/ExperimentProposalsPanel';
 import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
@@ -49,6 +52,7 @@ export function App() {
   const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
   const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
   const [outcomeAnalytics, setOutcomeAnalytics] = useState<OutcomeAnalyticsRow[]>([]);
+  const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -96,6 +100,27 @@ export function App() {
         if (!ignore) {
           setError(err instanceof Error ? err.message : String(err));
           setOutcomeAnalytics([]);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    fetchExperimentProposals(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setExperimentProposals(rows);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setExperimentProposals([]);
         }
       });
 
@@ -184,6 +209,7 @@ export function App() {
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />
         <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
+        <ExperimentProposalsPanel rows={experimentProposals} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>

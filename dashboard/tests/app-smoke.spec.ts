@@ -181,6 +181,34 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/experiment-proposals**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            proposal_id: 'p10-proposal:001',
+            run_id: 'p10-proposals-2026-05-31',
+            review_date: '2026-05-31',
+            proposal_title: 'Replay dashboard top-N',
+            hypothesis: 'Dashboard top-N candidates should be replayed offline.',
+            source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+            source_analytics_group_ids: ['decision_label:candidate'],
+            source_diagnostic_refs: ['top_forward_return:5:decision_label:candidate'],
+            source_artifact_paths: ['outputs/p9/analytics.json'],
+            expected_validation_method: 'offline replay',
+            risk_notes: 'No production scoring change in P10.',
+            reviewer_id: 'reviewer-a',
+            status: 'approved_for_experiment',
+            proposal_artifact_path: 'outputs/p10/operator_experiment_proposals_2026-05-31.json',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            promotion_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -198,11 +226,18 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
       .getByText('Score')
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
-  await expect(page.getByText('candidate')).toHaveCount(3);
+  await expect(
+    page
+      .locator('.inspector-section')
+      .filter({ has: page.getByRole('heading', { name: 'Decision History' }) })
+      .getByText('candidate')
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
   await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Outcome Analytics' })).toBeVisible();
   await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Experiment Proposals' })).toBeVisible();
+  await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 

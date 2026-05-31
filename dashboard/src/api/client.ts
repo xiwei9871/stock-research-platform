@@ -3,6 +3,7 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  ExperimentProposalRow,
   OutcomeAnalyticsRow,
   ScoreRow,
   WatchlistSignalRow
@@ -98,6 +99,20 @@ export async function fetchOutcomeAnalytics(
   const payload = await getJson<{ items: OutcomeAnalyticsRow[] }>(
     `/api/outcome-analytics?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${reviewSession}`
+  );
+  return payload.items;
+}
+
+export async function fetchExperimentProposals(
+  startDate: string,
+  endDate: string,
+  options: { status?: string; limit?: number } = {}
+): Promise<ExperimentProposalRow[]> {
+  const limit = options.limit ?? 20;
+  const status = options.status ? `&status=${encodeURIComponent(options.status)}` : '';
+  const payload = await getJson<{ items: ExperimentProposalRow[] }>(
+    `/api/experiment-proposals?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}${status}`
   );
   return payload.items;
 }

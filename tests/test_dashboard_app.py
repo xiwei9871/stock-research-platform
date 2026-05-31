@@ -195,6 +195,50 @@ def test_outcome_analytics_route_returns_read_only_summary(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_experiment_proposals_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_proposals(start_date, end_date, status, limit):
+        captured["args"] = [start_date, end_date, status, limit]
+        return [
+            {
+                "proposal_id": "p10-proposal:001",
+                "run_id": "p10-proposals-2026-05-31",
+                "review_date": "2026-05-31",
+                "proposal_title": "Replay dashboard top-N",
+                "hypothesis": "Dashboard top-N candidates should be replayed offline.",
+                "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+                "source_analytics_group_ids": ["decision_label:candidate"],
+                "source_diagnostic_refs": ["top_forward_return:5:decision_label:candidate"],
+                "source_artifact_paths": ["outputs/p9/analytics.json"],
+                "expected_validation_method": "offline replay",
+                "risk_notes": "No production scoring change in P10.",
+                "reviewer_id": "reviewer-a",
+                "status": "approved_for_experiment",
+                "proposal_artifact_path": "outputs/p10/operator_experiment_proposals_2026-05-31.json",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "promotion_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(dashboard_app, "load_experiment_proposals_summary", fake_load_proposals)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/experiment-proposals"
+        "?start_date=2026-05-01"
+        "&end_date=2026-06-30"
+        "&status=approved_for_experiment"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-05-01", "2026-06-30", "approved_for_experiment", 10]
+    assert response.json()["items"][0]["proposal_id"] == "p10-proposal:001"
+    assert response.json()["items"][0]["promotion_enabled"] is False
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

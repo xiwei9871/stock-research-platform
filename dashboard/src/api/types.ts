@@ -117,6 +117,26 @@ export type OutcomeAnalyticsRow = {
   auto_trade_enabled: boolean;
 };
 
+export type ExperimentProposalRow = {
+  proposal_id: string;
+  run_id: string;
+  review_date: string;
+  proposal_title: string;
+  hypothesis: string;
+  source_p9_analytics_run_id: string;
+  source_analytics_group_ids: string[];
+  source_diagnostic_refs: string[];
+  source_artifact_paths: string[];
+  expected_validation_method: string;
+  risk_notes: string;
+  reviewer_id: string;
+  status: string;
+  proposal_artifact_path: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  promotion_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

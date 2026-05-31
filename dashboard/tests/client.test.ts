@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchAssetDecisions, fetchAssetOutcomes, fetchOutcomeAnalytics, fetchOverview } from '../src/api/client';
+import {
+  fetchAssetDecisions,
+  fetchAssetOutcomes,
+  fetchExperimentProposals,
+  fetchOutcomeAnalytics,
+  fetchOverview
+} from '../src/api/client';
 
 describe('dashboard API client', () => {
   it('fetches overview with query params', async () => {
@@ -73,5 +79,24 @@ describe('dashboard API client', () => {
         '&limit=12&review_session_id=morning-review'
     );
     expect(result[0].group_value).toBe('candidate');
+  });
+
+  it('fetches experiment proposal summary with optional status and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ proposal_id: 'p10-proposal:001', status: 'approved_for_experiment' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchExperimentProposals('2026-05-01', '2026-06-30', {
+      status: 'approved_for_experiment',
+      limit: 12
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/experiment-proposals?start_date=2026-05-01&end_date=2026-06-30' +
+        '&limit=12&status=approved_for_experiment'
+    );
+    expect(result[0].proposal_id).toBe('p10-proposal:001');
   });
 });
