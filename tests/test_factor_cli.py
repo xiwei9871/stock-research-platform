@@ -2426,6 +2426,99 @@ def test_p8_import_decision_outcome_review_cli_prints_summary(monkeypatch, capsy
     ]
 
 
+def test_p9_outcome_analytics_cli_writes_artifacts(monkeypatch, capsys, tmp_path):
+    captured = {}
+
+    def fake_load_inputs(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame(
+            [
+                {
+                    "outcome_event_id": "outcome:1",
+                    "run_id": "p8-run",
+                    "decision_event_id": "decision:1",
+                    "review_session_id": "morning-review",
+                    "review_date": "2026-05-30",
+                    "asset_id": "CN:SH:600001",
+                    "stock_code": "600001.SH",
+                    "stock_name": "Alpha",
+                    "decision_label": "candidate",
+                    "source_context": "dashboard_topn",
+                    "outcome_status": "complete",
+                    "available_future_bars": 20,
+                    "forward_returns": {"1": 0.10, "5": 0.20},
+                    "max_high_returns": {"1": 0.12, "5": 0.25},
+                    "max_low_drawdowns": {"1": 0.00, "5": -0.04},
+                    "manual_review_required": True,
+                    "auto_trade_enabled": False,
+                    "metadata": {"requires_follow_up": True},
+                },
+                {
+                    "outcome_event_id": "outcome:2",
+                    "run_id": "p8-run",
+                    "decision_event_id": "decision:2",
+                    "review_session_id": "morning-review",
+                    "review_date": "2026-05-30",
+                    "asset_id": "CN:SH:600002",
+                    "stock_code": "600002.SH",
+                    "stock_name": "Beta",
+                    "decision_label": "candidate",
+                    "source_context": "dashboard_topn",
+                    "outcome_status": "complete",
+                    "available_future_bars": 20,
+                    "forward_returns": {"1": -0.02, "5": 0.10},
+                    "max_high_returns": {"1": 0.01, "5": 0.15},
+                    "max_low_drawdowns": {"1": -0.03, "5": -0.08},
+                    "manual_review_required": True,
+                    "auto_trade_enabled": False,
+                    "metadata": {"requires_follow_up": False},
+                },
+            ]
+        )
+
+    monkeypatch.setattr(cli, "_load_p9_outcome_analytics_inputs", fake_load_inputs)
+
+    cli.main_for_args(
+        [
+            "p9-outcome-analytics",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-06-30",
+            "--review-session-id",
+            "morning-review",
+            "--output-dir",
+            str(tmp_path),
+            "--horizon",
+            "1",
+            "--horizon",
+            "5",
+        ]
+    )
+
+    assert captured == {
+        "start_date": "2026-05-01",
+        "end_date": "2026-06-30",
+        "review_session_id": "morning-review",
+        "outcome_events_csv": None,
+        "service": "stock_research",
+        "limit": 1000,
+    }
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "p9_outcome_analytics|status|analytics_ready"
+    assert lines[1] == "p9_outcome_analytics|groups|5"
+    assert lines[2].startswith("p9_outcome_analytics|json|")
+    assert lines[3].startswith("p9_outcome_analytics|groups_csv|")
+    assert lines[4].startswith("p9_outcome_analytics|diagnostics_csv|")
+    assert lines[5].startswith("p9_outcome_analytics|markdown|")
+
+    payload = json.loads((tmp_path / "operator_decision_outcome_analytics_2026-05-01_2026-06-30.json").read_text())
+    assert payload["manual_review_required"] is True
+    assert payload["auto_trade_enabled"] is False
+    assert payload["source_outcome_count"] == 2
+    assert payload["diagnostic_count"] > 0
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

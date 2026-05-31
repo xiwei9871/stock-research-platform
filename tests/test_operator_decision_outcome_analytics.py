@@ -1,9 +1,13 @@
+import json
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from stock_research.operator_decision.outcome_analytics import (
     build_decision_outcome_analytics,
     build_decision_outcome_analytics_from_frames,
+    write_decision_outcome_analytics,
 )
 
 
@@ -168,3 +172,59 @@ def test_build_decision_outcome_analytics_preserves_run_metadata_and_safety_fiel
     assert analytics["source_outcome_count"] == 3
     assert analytics["group_count"] == 9
     assert analytics["groups"][0]["analytics_level"] == "decision_label"
+
+
+def test_write_decision_outcome_analytics_outputs_review_only_artifacts(tmp_path):
+    analytics = build_decision_outcome_analytics(
+        start_date="2026-05-01",
+        end_date="2026-06-30",
+        outcome_events=_outcome_rows(),
+        horizons=[1, 5],
+        run_id="p9-analytics-artifacts",
+    )
+
+    paths = write_decision_outcome_analytics(analytics, tmp_path)
+
+    assert set(paths) == {"json_path", "groups_csv_path", "diagnostics_csv_path", "markdown_path"}
+    payload = json.loads(Path(paths["json_path"]).read_text())
+    assert payload["manual_review_required"] is True
+    assert payload["auto_trade_enabled"] is False
+    assert payload["diagnostic_count"] > 0
+
+    groups = pd.read_csv(paths["groups_csv_path"])
+    diagnostics = pd.read_csv(paths["diagnostics_csv_path"])
+    assert set(groups["analytics_level"]) == {
+        "decision_label",
+        "source_context",
+        "review_session_id",
+        "asset_id",
+    }
+    assert {"diagnostic_type", "horizon", "analytics_level", "group_value", "metric_value"}.issubset(
+        diagnostics.columns
+    )
+    assert diagnostics["diagnostic_type"].tolist()[:2] == [
+        "top_forward_return",
+        "bottom_forward_return",
+    ]
+    markdown = Path(paths["markdown_path"]).read_text(encoding="utf-8")
+    assert "manual_review_required: true" in markdown
+    assert "auto_trade_enabled: false" in markdown
+
+
+def test_write_decision_outcome_analytics_handles_empty_outcome_set(tmp_path):
+    analytics = build_decision_outcome_analytics(
+        start_date="2026-05-01",
+        end_date="2026-06-30",
+        outcome_events=pd.DataFrame(),
+        horizons=[1, 5],
+        run_id="p9-empty",
+    )
+
+    paths = write_decision_outcome_analytics(analytics, tmp_path)
+
+    payload = json.loads(Path(paths["json_path"]).read_text())
+    assert payload["status"] == "no_outcomes_recorded"
+    assert payload["diagnostic_count"] == 0
+    assert pd.read_csv(paths["groups_csv_path"]).empty
+    assert pd.read_csv(paths["diagnostics_csv_path"]).empty
+    assert "No outcome groups recorded." in Path(paths["markdown_path"]).read_text(encoding="utf-8")

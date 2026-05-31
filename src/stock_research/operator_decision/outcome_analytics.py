@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -49,6 +51,8 @@ def build_decision_outcome_analytics(
         outcome_events=outcome_events,
         horizons=selected_horizons,
     )
+    group_records = _records(groups)
+    diagnostics = _diagnostic_rows(group_records, selected_horizons)
     source_count = int(len(outcome_events))
     return {
         "run_id": run_id or f"p9-outcome-analytics-{start_date}-{end_date}",
@@ -60,7 +64,41 @@ def build_decision_outcome_analytics(
         "horizons": selected_horizons,
         "source_outcome_count": source_count,
         "group_count": int(len(groups)),
-        "groups": _records(groups),
+        "diagnostic_count": len(diagnostics),
+        "groups": group_records,
+        "diagnostics": diagnostics,
+    }
+
+
+def write_decision_outcome_analytics(analytics: dict[str, Any], output_dir: str | Path) -> dict[str, str]:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    start_date = _safe_path_part(analytics.get("review_start_date", "unknown-start"))
+    end_date = _safe_path_part(analytics.get("review_end_date", "unknown-end"))
+    stem = f"operator_decision_outcome_analytics_{start_date}_{end_date}"
+
+    json_path = output_path / f"{stem}.json"
+    groups_csv_path = output_path / f"{stem}_groups.csv"
+    diagnostics_csv_path = output_path / f"{stem}_diagnostics.csv"
+    markdown_path = output_path / f"{stem}.md"
+
+    payload = _json_safe(analytics)
+    horizons = [int(value) for value in payload.get("horizons", [])]
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    pd.DataFrame(payload.get("groups", []), columns=_analytics_columns(horizons)).to_csv(
+        groups_csv_path,
+        index=False,
+    )
+    pd.DataFrame(payload.get("diagnostics", []), columns=_diagnostic_columns()).to_csv(
+        diagnostics_csv_path,
+        index=False,
+    )
+    markdown_path.write_text(_render_analytics_markdown(payload), encoding="utf-8")
+    return {
+        "json_path": str(json_path),
+        "groups_csv_path": str(groups_csv_path),
+        "diagnostics_csv_path": str(diagnostics_csv_path),
+        "markdown_path": str(markdown_path),
     }
 
 
@@ -223,6 +261,9 @@ def _selected_horizons(horizons: list[int] | None) -> list[int]:
 
 def _requires_follow_up(row: pd.Series) -> bool:
     if "requires_follow_up" in row and pd.notna(row.get("requires_follow_up")):
+        parsed = _bool_value(row.get("requires_follow_up"))
+        if parsed is not None:
+            return parsed
         return bool(row.get("requires_follow_up"))
     metadata = row.get("metadata")
     if isinstance(metadata, dict):
@@ -260,6 +301,173 @@ def _json_safe(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def _diagnostic_rows(groups: list[dict[str, Any]], horizons: list[int]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for horizon in horizons:
+        forward_column = f"forward_{horizon}d_return_mean"
+        drawdown_column = f"max_low_drawdown_{horizon}d_worst"
+        complete_groups = [
+            group
+            for group in groups
+            if int(group.get("complete_count") or 0) > 0 and group.get(forward_column) is not None
+        ]
+        if complete_groups:
+            top = max(complete_groups, key=lambda group: float(group[forward_column]))
+            bottom = min(complete_groups, key=lambda group: float(group[forward_column]))
+            rows.append(_diagnostic_row("top_forward_return", horizon, top, forward_column))
+            rows.append(_diagnostic_row("bottom_forward_return", horizon, bottom, forward_column))
+
+        drawdown_groups = [
+            group
+            for group in groups
+            if int(group.get("complete_count") or 0) > 0 and group.get(drawdown_column) is not None
+        ]
+        if drawdown_groups:
+            worst_drawdown = min(drawdown_groups, key=lambda group: float(group[drawdown_column]))
+            rows.append(_diagnostic_row("worst_drawdown", horizon, worst_drawdown, drawdown_column))
+    return rows
+
+
+def _diagnostic_row(
+    diagnostic_type: str,
+    horizon: int,
+    group: dict[str, Any],
+    metric_column: str,
+) -> dict[str, Any]:
+    analytics_level = str(group.get("analytics_level") or "")
+    return {
+        "diagnostic_type": diagnostic_type,
+        "horizon": horizon,
+        "analytics_level": analytics_level,
+        "group_value": str(group.get(analytics_level) or ""),
+        "metric_column": metric_column,
+        "metric_value": group.get(metric_column),
+        "sample_count": group.get("sample_count"),
+        "complete_count": group.get("complete_count"),
+        "insufficient_data_count": group.get("insufficient_data_count"),
+        "follow_up_required_rate": group.get("follow_up_required_rate"),
+    }
+
+
+def _diagnostic_columns() -> list[str]:
+    return [
+        "diagnostic_type",
+        "horizon",
+        "analytics_level",
+        "group_value",
+        "metric_column",
+        "metric_value",
+        "sample_count",
+        "complete_count",
+        "insufficient_data_count",
+        "follow_up_required_rate",
+    ]
+
+
+def _render_analytics_markdown(analytics: dict[str, Any]) -> str:
+    lines = [
+        "# P9 Outcome Analytics",
+        "",
+        f"- run_id: {_markdown_cell(analytics.get('run_id'))}",
+        f"- review_start_date: {_markdown_cell(analytics.get('review_start_date'))}",
+        f"- review_end_date: {_markdown_cell(analytics.get('review_end_date'))}",
+        f"- status: {_markdown_cell(analytics.get('status'))}",
+        "- manual_review_required: true",
+        "- auto_trade_enabled: false",
+        "",
+        "Review-only grouped outcome analytics. No broker, order, or execution state is modified.",
+        "",
+        "## Summary",
+        "",
+        f"- source_outcome_count: {int(analytics.get('source_outcome_count') or 0)}",
+        f"- group_count: {int(analytics.get('group_count') or 0)}",
+        f"- diagnostic_count: {int(analytics.get('diagnostic_count') or 0)}",
+        "",
+        "## Diagnostics",
+        "",
+    ]
+    diagnostics = analytics.get("diagnostics") or []
+    if diagnostics:
+        lines.extend(
+            [
+                "| Type | Horizon | Level | Group | Metric | Value |",
+                "| --- | ---: | --- | --- | --- | ---: |",
+            ]
+        )
+        for row in diagnostics[:20]:
+            lines.append(
+                " | ".join(
+                    [
+                        f"| {_markdown_cell(row.get('diagnostic_type'))}",
+                        str(row.get("horizon") or ""),
+                        _markdown_cell(row.get("analytics_level")),
+                        _markdown_cell(row.get("group_value")),
+                        _markdown_cell(row.get("metric_column")),
+                        f"{_format_metric(row.get('metric_value'))} |",
+                    ]
+                )
+            )
+    else:
+        lines.append("No diagnostic rows recorded.")
+
+    lines.extend(["", "## Groups", ""])
+    groups = analytics.get("groups") or []
+    if not groups:
+        lines.append("No outcome groups recorded.")
+        return "\n".join(lines) + "\n"
+
+    first_horizon = (analytics.get("horizons") or [None])[0]
+    forward_column = f"forward_{first_horizon}d_return_mean" if first_horizon else ""
+    lines.extend(
+        [
+            "| Level | Group | Samples | Complete | Insufficient | Follow-up Rate | Forward Mean |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in groups[:50]:
+        analytics_level = str(row.get("analytics_level") or "")
+        lines.append(
+            " | ".join(
+                [
+                    f"| {_markdown_cell(analytics_level)}",
+                    _markdown_cell(row.get(analytics_level)),
+                    str(row.get("sample_count") or 0),
+                    str(row.get("complete_count") or 0),
+                    str(row.get("insufficient_data_count") or 0),
+                    _format_metric(row.get("follow_up_required_rate")),
+                    f"{_format_metric(row.get(forward_column))} |",
+                ]
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _format_metric(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    try:
+        return f"{float(value):.6f}"
+    except (TypeError, ValueError):
+        return _markdown_cell(value)
+
+
+def _markdown_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    return text.replace("|", "\\|").replace("\n", "<br>")
+
+
+def _safe_path_part(value: Any) -> str:
+    text = str(value or "")
+    return "".join(character if character.isalnum() or character in {"-", "_"} else "_" for character in text)
 
 
 def _bool_value(value: Any) -> bool | None:

@@ -176,6 +176,10 @@ from stock_research.operator_decision.outcome import (
     build_decision_outcome_review,
     write_decision_outcome_review,
 )
+from stock_research.operator_decision.outcome_analytics import (
+    build_decision_outcome_analytics,
+    write_decision_outcome_analytics,
+)
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
 from stock_research.p4.scheduler import (
@@ -855,6 +859,80 @@ def _load_p8_market_bars_from_db(
     """
     with connect(service) as conn:
         return pd.DataFrame(fetch_all(conn, sql, [start_date, extended_end_date, adjust_type]))
+
+
+def _load_p9_outcome_analytics_inputs(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    outcome_events_csv: str | None,
+    service: str,
+    limit: int,
+) -> pd.DataFrame:
+    if outcome_events_csv:
+        events = pd.read_csv(outcome_events_csv)
+        return _parse_p9_outcome_event_maps(events)
+    return _load_p9_outcome_events_from_db(
+        start_date=start_date,
+        end_date=end_date,
+        review_session_id=review_session_id,
+        service=service,
+        limit=limit,
+    )
+
+
+def _load_p9_outcome_events_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    service: str,
+    limit: int,
+) -> pd.DataFrame:
+    params: list[object] = [start_date, end_date]
+    session_filter = ""
+    if review_session_id:
+        session_filter = "AND review_session_id = %s"
+        params.append(review_session_id)
+    params.append(max(1, int(limit)))
+    sql = f"""
+        SELECT
+            outcome_event_id, run_id, decision_event_id, review_session_id,
+            review_date, asset_id, stock_code, stock_name, decision_label,
+            source_context, outcome_status, available_future_bars,
+            forward_returns, max_high_returns, max_low_drawdowns,
+            manual_review_required, auto_trade_enabled, metadata
+        FROM ops.operator_decision_outcome_event
+        WHERE review_date BETWEEN %s AND %s
+        {session_filter}
+        ORDER BY review_date, review_session_id, outcome_event_id
+        LIMIT %s
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, params))
+
+
+def _parse_p9_outcome_event_maps(events: pd.DataFrame) -> pd.DataFrame:
+    parsed = events.copy()
+    for column in ["forward_returns", "max_high_returns", "max_low_drawdowns", "metadata"]:
+        if column in parsed.columns:
+            parsed[column] = parsed[column].map(_parse_json_cell)
+    return parsed
+
+
+def _parse_json_cell(value):
+    if isinstance(value, (dict, list)):
+        return value
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return value
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1620,6 +1698,16 @@ def build_parser() -> argparse.ArgumentParser:
     p8_import_decision_outcome_review = subparsers.add_parser("p8-import-decision-outcome-review")
     p8_import_decision_outcome_review.add_argument("--path", required=True)
     p8_import_decision_outcome_review.add_argument("--service", default="stock_research")
+
+    p9_outcome_analytics = subparsers.add_parser("p9-outcome-analytics")
+    p9_outcome_analytics.add_argument("--start-date", required=True)
+    p9_outcome_analytics.add_argument("--end-date", required=True)
+    p9_outcome_analytics.add_argument("--review-session-id")
+    p9_outcome_analytics.add_argument("--outcome-events-csv")
+    p9_outcome_analytics.add_argument("--output-dir", required=True)
+    p9_outcome_analytics.add_argument("--service", default="stock_research")
+    p9_outcome_analytics.add_argument("--limit", type=int, default=1000)
+    p9_outcome_analytics.add_argument("--horizon", dest="horizons", action="append", type=int)
 
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
@@ -2973,6 +3061,28 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p8_decision_outcome_review_import|events|{result['event_count']}")
         for run_id in result["run_ids"]:
             print(f"p8_decision_outcome_review_import|run_id|{run_id}")
+    elif args.command == "p9-outcome-analytics":
+        outcome_events = _load_p9_outcome_analytics_inputs(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            review_session_id=args.review_session_id,
+            outcome_events_csv=args.outcome_events_csv,
+            service=args.service,
+            limit=args.limit,
+        )
+        analytics = build_decision_outcome_analytics(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            outcome_events=outcome_events,
+            horizons=args.horizons or None,
+        )
+        paths = write_decision_outcome_analytics(analytics, args.output_dir)
+        print(f"p9_outcome_analytics|status|{analytics['status']}")
+        print(f"p9_outcome_analytics|groups|{analytics['group_count']}")
+        print(f"p9_outcome_analytics|json|{paths['json_path']}")
+        print(f"p9_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
+        print(f"p9_outcome_analytics|diagnostics_csv|{paths['diagnostics_csv_path']}")
+        print(f"p9_outcome_analytics|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
