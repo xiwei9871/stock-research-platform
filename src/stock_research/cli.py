@@ -205,6 +205,9 @@ from stock_research.operator_decision.shadow_analytics_review_read_model import 
 from stock_research.operator_decision.shadow_review_decisions_read_model import (
     import_shadow_review_decisions,
 )
+from stock_research.operator_decision.shadow_follow_up_queue_read_model import (
+    import_shadow_follow_up_queue,
+)
 from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
     write_experiment_proposal_review,
@@ -1849,6 +1852,10 @@ def build_parser() -> argparse.ArgumentParser:
     p16_import_shadow_review_decisions.add_argument("--path", required=True)
     p16_import_shadow_review_decisions.add_argument("--service", default=SETTINGS.research_service)
 
+    p17_import_shadow_follow_up_queue = subparsers.add_parser("p17-import-shadow-follow-up-queue")
+    p17_import_shadow_follow_up_queue.add_argument("--path", required=True)
+    p17_import_shadow_follow_up_queue.add_argument("--service", default=SETTINGS.research_service)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3399,6 +3406,11 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p16_import_shadow_review_decisions|imported|{result['imported_count']}")
         print(f"p16_import_shadow_review_decisions|groups|{result['group_count']}")
         print(f"p16_import_shadow_review_decisions|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p17-import-shadow-follow-up-queue":
+        result = import_shadow_follow_up_queue(args.path, service=args.service)
+        print(f"p17_import_shadow_follow_up_queue|imported|{result['imported_count']}")
+        print(f"p17_import_shadow_follow_up_queue|items|{result['item_count']}")
+        print(f"p17_import_shadow_follow_up_queue|runs|{','.join(result['run_ids'])}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

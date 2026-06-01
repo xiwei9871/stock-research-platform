@@ -282,6 +282,15 @@ def test_p16_shadow_review_decision_tables_exist():
     assert "idx_operator_shadow_review_decision_group_status" in ddl
 
 
+def test_p17_shadow_follow_up_queue_tables_exist():
+    ddl = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_follow_up_run" in ddl
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_follow_up_item" in ddl
+    assert "idx_operator_shadow_follow_up_item_date" in ddl
+    assert "idx_operator_shadow_follow_up_item_status" in ddl
+
+
 def test_research_extension_includes_operator_decision_outcome_analytics_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_run" in sql
