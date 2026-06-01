@@ -184,6 +184,9 @@ from stock_research.operator_decision.shadow_outcome_analytics import (
     build_shadow_outcome_analytics,
     write_shadow_outcome_analytics,
 )
+from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
+    import_shadow_outcome_analytics,
+)
 from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
     write_experiment_proposal_review,
@@ -1795,6 +1798,10 @@ def build_parser() -> argparse.ArgumentParser:
     p14_shadow_outcome_analytics.add_argument("--review-end-date", required=True)
     p14_shadow_outcome_analytics.add_argument("--output-dir", required=True)
 
+    p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
+    p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
+    p14_import_shadow_outcome_analytics.add_argument("--service", default=SETTINGS.research_service)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3287,6 +3294,11 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p14_shadow_outcome_analytics|json|{paths['json_path']}")
         print(f"p14_shadow_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
         print(f"p14_shadow_outcome_analytics|markdown|{paths['markdown_path']}")
+    elif args.command == "p14-import-shadow-outcome-analytics":
+        result = import_shadow_outcome_analytics(args.path, service=args.service)
+        print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
+        print(f"p14_import_shadow_outcome_analytics|groups|{result['group_count']}")
+        print(f"p14_import_shadow_outcome_analytics|runs|{','.join(result['run_ids'])}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
