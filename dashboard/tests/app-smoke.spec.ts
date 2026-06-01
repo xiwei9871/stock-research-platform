@@ -382,6 +382,43 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-review-decisions**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            decision_group_id: 'operator_shadow_review_decision:trend-ready',
+            run_id: 'p16-shadow-review-decisions-2026-08-31',
+            decision_date: '2026-08-31',
+            source_p15_review_group_id: 'operator_shadow_analytics_review:trend-ready',
+            source_p15_review_run_id: 'p15-shadow-analytics-review-2026-08-31',
+            source_p14_analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
+            source_p14_analytics_run_id: 'p14-shadow-outcome-analytics-2026-06-01-2026-08-31',
+            group_key: 'trend_shadow|shadow_ready',
+            shadow_layer: 'trend_shadow',
+            shadow_status: 'shadow_ready',
+            sample_count: 4,
+            complete_count: 3,
+            insufficient_data_count: 1,
+            review_status: 'research_follow_up_candidate',
+            review_bucket: 'needs_more_evidence',
+            decision_status: 'open_research_follow_up',
+            decision_bucket: 'research_follow_up',
+            decision_reason: 'P15 status maps to follow-up.',
+            required_next_action: 'Create a separately scoped research follow-up.',
+            evidence_summary: 'Positive 20D mean with incomplete samples.',
+            risk_notes: 'Observe only until a larger sample is available.',
+            next_research_question: 'Can drawdown improve under stricter filters?',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -435,6 +472,12 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
     .locator('.inspector-section')
     .filter({ has: page.getByRole('heading', { name: 'Shadow Analytics Review' }) });
   await expect(shadowAnalyticsReviewPanel.getByText('research_follow_up_candidate')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
+  const shadowReviewDecisionsPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Review Decisions' }) });
+  await expect(shadowReviewDecisionsPanel.getByText('open_research_follow_up')).toBeVisible();
+  await expect(shadowReviewDecisionsPanel.getByText('Create a separately scoped research follow-up.')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
@@ -456,6 +499,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
 });
