@@ -11,6 +11,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
   WatchlistSignalRow
@@ -26,6 +27,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
   fetchShadowWatchlist: vi.fn()
 }));
@@ -333,6 +335,38 @@ function makeShadowOutcomesWithInvalidMetrics(): ShadowOutcomeRow[] {
   ];
 }
 
+function makeShadowOutcomeAnalytics(): ShadowOutcomeAnalyticsRow[] {
+  return [
+    {
+      run_id: 'p14-shadow-outcome-analytics-2026-06-30-2026-08-29',
+      review_start_date: '2026-06-30',
+      review_end_date: '2026-08-29',
+      group_key: 'trend_shadow|shadow_ready',
+      shadow_layer: 'trend_shadow',
+      shadow_status: 'shadow_ready',
+      sample_count: 2,
+      complete_count: 2,
+      insufficient_data_count: 0,
+      source_p12_shadow_run_count: 1,
+      source_p11_replay_run_count: 1,
+      source_p10_proposal_run_count: 1,
+      source_p9_analytics_run_count: 1,
+      horizon_metrics: {
+        '20': {
+          forward_return_mean: 0.12,
+          forward_win_rate: 1,
+          max_low_drawdown_worst: -0.2
+        }
+      },
+      analytics_artifact_path: 'outputs/p14/operator_shadow_outcome_analytics.json',
+      manual_review_required: true,
+      auto_trade_enabled: false,
+      production_watchlist_enabled: false,
+      production_write_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -347,6 +381,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
     apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
+    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
   });
 
   afterEach(() => {
@@ -378,15 +413,16 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Experiment Replay')).toBeVisible();
     expect(screen.getByText('passed_offline_replay')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
-    expect(screen.getAllByText('shadow_ready')).toHaveLength(2);
+    expect(screen.getAllByText('shadow_ready')).toHaveLength(3);
     expect(screen.getByText('Shadow Outcomes')).toBeVisible();
     expect(screen.getByText('complete')).toBeVisible();
     expect(screen.getByText(/5D\s+\+50.0%/)).toBeVisible();
+    expect(screen.getByText('Shadow Outcome Analytics')).toBeVisible();
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(3);
+    expect(screen.getByText(/20D\s+\+12.0%/)).toBeVisible();
     expect(screen.getByText('p12-shadow-watchlist-2026-06-30')).toBeVisible();
     expect(screen.getAllByText('p11-replay-run-2026-06-30')).toHaveLength(2);
-    expect(screen.queryByText(/promote/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/trade/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/write/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /promote|trade|write watchlist/i })).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-05-29',
@@ -408,6 +444,7 @@ describe('dashboard app shell', () => {
     const replay = createDeferred<ExperimentReplayRow[]>();
     const shadow = createDeferred<ShadowWatchlistRow[]>();
     const shadowOutcomes = createDeferred<ShadowOutcomeRow[]>();
+    const shadowOutcomeAnalytics = createDeferred<ShadowOutcomeAnalyticsRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -420,6 +457,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentReplay.mockReturnValueOnce(replay.promise);
     apiMocks.fetchShadowWatchlist.mockReturnValueOnce(shadow.promise);
     apiMocks.fetchShadowOutcomes.mockReturnValueOnce(shadowOutcomes.promise);
+    apiMocks.fetchShadowOutcomeAnalytics.mockReturnValueOnce(shadowOutcomeAnalytics.promise);
 
     render(<App />);
 
@@ -430,6 +468,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading experiment replay...')).toBeVisible();
     expect(screen.getByText('Loading shadow watchlist...')).toBeVisible();
     expect(screen.getByText('Loading shadow outcomes...')).toBeVisible();
+    expect(screen.getByText('Loading shadow outcome analytics...')).toBeVisible();
 
     await act(async () => {
       overview.resolve(makeOverview());
@@ -443,6 +482,7 @@ describe('dashboard app shell', () => {
       replay.resolve(makeExperimentReplay());
       shadow.resolve(makeShadowWatchlist());
       shadowOutcomes.resolve(makeShadowOutcomes());
+      shadowOutcomeAnalytics.resolve(makeShadowOutcomeAnalytics());
     });
 
     await waitFor(() => {
@@ -453,6 +493,7 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading experiment replay...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow watchlist...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow outcomes...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading shadow outcome analytics...')).not.toBeInTheDocument();
     });
   });
 
@@ -474,6 +515,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentReplay.mockResolvedValueOnce([]);
     apiMocks.fetchShadowWatchlist.mockResolvedValueOnce([]);
     apiMocks.fetchShadowOutcomes.mockResolvedValueOnce([]);
+    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -488,7 +530,31 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No experiment replay results for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow watchlist candidates for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow outcomes for selected range.')).toBeVisible();
+    expect(screen.getByText('No shadow outcome analytics for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+  });
+
+  it('renders invalid shadow outcome analytics metrics as n/a instead of NaN%', async () => {
+    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([
+      {
+        ...makeShadowOutcomeAnalytics()[0],
+        horizon_metrics: {
+          '20': {
+            forward_return_mean: Number.NaN,
+            forward_win_rate: null,
+            max_low_drawdown_worst: Number.POSITIVE_INFINITY
+          }
+        }
+      }
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('Shadow Outcome Analytics')).toBeVisible();
+    const panel = screen.getByText('Shadow Outcome Analytics').closest('section');
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(3);
+    expect(within(panel as HTMLElement).queryByText(/NaN%/)).not.toBeInTheDocument();
   });
 
   it('renders invalid shadow outcome metrics as n/a instead of NaN%', async () => {
