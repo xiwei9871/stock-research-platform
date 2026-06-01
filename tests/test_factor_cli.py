@@ -3304,6 +3304,7 @@ def test_p15_shadow_analytics_review_dispatches_to_builder(monkeypatch, tmp_path
     ]
     assert captured["build"]["run_id"] == "p15-run"
     assert captured["build"]["reviewer_id"] == "operator-a"
+    assert captured["build"]["p14_analytics"] == {"groups": []}
 
 
 def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
