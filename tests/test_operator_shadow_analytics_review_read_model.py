@@ -142,6 +142,16 @@ def test_load_shadow_analytics_review_read_model_rows_rejects_production_write_e
         load_shadow_analytics_review_read_model_rows(json_path)
 
 
+def test_load_shadow_analytics_review_read_model_rows_rejects_group_production_write_enabled(tmp_path):
+    payload = _payload()
+    payload["groups"][0]["production_write_enabled"] = True
+    json_path = tmp_path / "operator_shadow_analytics_review_2026-06-30_2026-08-29.json"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="production_write_not_allowed"):
+        load_shadow_analytics_review_read_model_rows(json_path)
+
+
 def test_import_shadow_analytics_review_upserts_run_and_group(monkeypatch, tmp_path):
     from stock_research.operator_decision import shadow_analytics_review_read_model
 
@@ -166,3 +176,24 @@ def test_import_shadow_analytics_review_upserts_run_and_group(monkeypatch, tmp_p
     assert "ON CONFLICT (review_group_id)" in group_sql
     assert group_params["review_status"] == "research_follow_up_candidate"
     assert isinstance(group_params["horizon_metrics"], str)
+
+
+def test_import_shadow_analytics_review_directory_imports_sorted_artifacts(monkeypatch, tmp_path):
+    from stock_research.operator_decision import shadow_analytics_review_read_model
+
+    later_path = tmp_path / "operator_shadow_analytics_review_2026-09-01_2026-09-30.json"
+    earlier_path = tmp_path / "operator_shadow_analytics_review_2026-06-30_2026-08-29.json"
+    ignored_path = tmp_path / "not_a_p15_review.json"
+    later_path.write_text(json.dumps(_payload("p15-later")), encoding="utf-8")
+    earlier_path.write_text(json.dumps(_payload("p15-earlier")), encoding="utf-8")
+    ignored_path.write_text(json.dumps(_payload("ignored")), encoding="utf-8")
+    conn = _Connection()
+    monkeypatch.setattr(shadow_analytics_review_read_model, "connect", lambda service: _Context(conn))
+
+    result = import_shadow_analytics_review(tmp_path, service="stock_research_test")
+
+    assert result["imported_count"] == 2
+    assert result["group_count"] == 2
+    assert result["run_ids"] == ["p15-earlier", "p15-later"]
+    run_params = [params for _sql, params in conn.cursor_obj.calls[::2]]
+    assert [params["run_id"] for params in run_params] == ["p15-earlier", "p15-later"]
