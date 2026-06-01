@@ -185,6 +185,34 @@ export type ShadowWatchlistRow = {
   production_write_enabled: boolean;
 };
 
+export type ShadowOutcomeRow = {
+  shadow_outcome_id: string;
+  run_id: string;
+  shadow_candidate_id: string;
+  source_p12_shadow_run_id: string;
+  replay_result_id: string;
+  source_p11_replay_run_id: string;
+  source_p10_proposal_run_id: string;
+  source_p9_analytics_run_id: string;
+  candidate_date: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  shadow_layer: string;
+  shadow_status: string;
+  outcome_status: string;
+  available_future_bars: number;
+  base_trade_date: string;
+  base_close: number | null;
+  forward_returns: Record<string, number | null>;
+  max_high_returns: Record<string, number | null>;
+  max_low_drawdowns: Record<string, number | null>;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_watchlist_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;
