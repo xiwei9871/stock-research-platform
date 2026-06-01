@@ -413,6 +413,49 @@ def test_shadow_outcomes_route_returns_empty_items_when_table_missing(monkeypatc
     assert response.json()["items"] == []
 
 
+def test_shadow_outcome_analytics_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+    rows = [
+        {
+            "analytics_group_id": "operator_shadow_outcome_analytics:trend-ready",
+            "run_id": "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
+            "review_start_date": "2026-06-30",
+            "review_end_date": "2026-08-29",
+            "group_key": "trend_shadow|shadow_ready",
+            "shadow_layer": "trend_shadow",
+            "shadow_status": "shadow_ready",
+            "sample_count": 2,
+            "complete_count": 2,
+            "insufficient_data_count": 0,
+            "source_p12_shadow_run_count": 1,
+            "source_p11_replay_run_count": 1,
+            "source_p10_proposal_run_count": 1,
+            "source_p9_analytics_run_count": 1,
+            "horizon_metrics": {"20": {"forward_return_mean": 0.12}},
+            "analytics_artifact_path": "outputs/p14/analytics.json",
+            "manual_review_required": True,
+            "auto_trade_enabled": False,
+            "production_watchlist_enabled": False,
+            "production_write_enabled": False,
+        }
+    ]
+
+    def fake_load_analytics(start_date, end_date, limit):
+        captured["args"] = [start_date, end_date, limit]
+        return rows
+
+    monkeypatch.setattr(dashboard_app, "load_shadow_outcome_analytics_summary", fake_load_analytics)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/shadow-outcome-analytics?start_date=2026-06-01&end_date=2026-08-31&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-06-01", "2026-08-31", 10]
+    assert response.json() == {"items": rows}
+
+
 def test_dashboard_api_cli_parser_accepts_host_and_port():
     args = cli.build_parser().parse_args(
         ["dashboard-api", "--host", "0.0.0.0", "--port", "9999"]

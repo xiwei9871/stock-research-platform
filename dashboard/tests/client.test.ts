@@ -6,6 +6,7 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
   fetchShadowWatchlist
 } from '../src/api/client';
@@ -158,5 +159,20 @@ describe('dashboard API client', () => {
         '&limit=12&outcome_status=complete'
     );
     expect(result[0].shadow_candidate_id).toBe('p12-shadow:001');
+  });
+
+  it('fetches shadow outcome analytics summary with limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ group_key: 'trend_shadow|shadow_ready' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchShadowOutcomeAnalytics('2026-06-01', '2026-08-31', { limit: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/shadow-outcome-analytics?start_date=2026-06-01&end_date=2026-08-31&limit=20'
+    );
+    expect(result[0].group_key).toBe('trend_shadow|shadow_ready');
   });
 });

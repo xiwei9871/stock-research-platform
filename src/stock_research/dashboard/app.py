@@ -15,6 +15,7 @@ from stock_research.dashboard.scores import (
     search_assets,
 )
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
+from stock_research.dashboard.shadow_outcome_analytics import load_shadow_outcome_analytics_summary
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
 from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
@@ -211,6 +212,20 @@ def create_app() -> FastAPI:
                 start_date,
                 end_date,
                 outcome_status,
+                limit,
+            ),
+        }
+
+    @app.get("/api/shadow-outcome-analytics")
+    def shadow_outcome_analytics(
+        start_date: str,
+        end_date: str,
+        limit: int = 20,
+    ):
+        return {
+            "items": load_shadow_outcome_analytics_summary(
+                start_date,
+                end_date,
                 limit,
             ),
         }

@@ -213,6 +213,29 @@ export type ShadowOutcomeRow = {
   production_write_enabled: boolean;
 };
 
+export type ShadowOutcomeAnalyticsRow = {
+  analytics_group_id: string;
+  run_id: string;
+  review_start_date: string;
+  review_end_date: string;
+  group_key: string;
+  shadow_layer: string;
+  shadow_status: string;
+  sample_count: number;
+  complete_count: number;
+  insufficient_data_count: number;
+  source_p12_shadow_run_count: number;
+  source_p11_replay_run_count: number;
+  source_p10_proposal_run_count: number;
+  source_p9_analytics_run_count: number;
+  horizon_metrics: Record<string, Record<string, number | null>>;
+  analytics_artifact_path: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_watchlist_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

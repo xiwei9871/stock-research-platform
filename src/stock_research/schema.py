@@ -996,6 +996,52 @@ CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_outcome_candidate (
     PRIMARY KEY (shadow_outcome_id)
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_outcome_analytics_run (
+    run_id text PRIMARY KEY,
+    review_start_date date NOT NULL,
+    review_end_date date NOT NULL,
+    status text NOT NULL,
+    group_by jsonb NOT NULL DEFAULT '[]'::jsonb,
+    source_outcome_count integer NOT NULL DEFAULT 0,
+    group_count integer NOT NULL DEFAULT 0,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_watchlist_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    groups_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_outcome_analytics_group (
+    analytics_group_id text PRIMARY KEY,
+    run_id text NOT NULL REFERENCES ops.operator_shadow_watchlist_outcome_analytics_run(run_id) ON DELETE CASCADE,
+    review_start_date date NOT NULL,
+    review_end_date date NOT NULL,
+    group_key text NOT NULL,
+    shadow_layer text NOT NULL,
+    shadow_status text NOT NULL,
+    sample_count integer NOT NULL DEFAULT 0,
+    complete_count integer NOT NULL DEFAULT 0,
+    insufficient_data_count integer NOT NULL DEFAULT 0,
+    source_p12_shadow_run_count integer NOT NULL DEFAULT 0,
+    source_p11_replay_run_count integer NOT NULL DEFAULT 0,
+    source_p10_proposal_run_count integer NOT NULL DEFAULT 0,
+    source_p9_analytics_run_count integer NOT NULL DEFAULT 0,
+    horizon_metrics jsonb NOT NULL DEFAULT '{}'::jsonb,
+    analytics_artifact_path text NOT NULL,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_watchlist_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1413,6 +1459,12 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_outcome_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_outcome_source_candidate
     ON ops.operator_shadow_watchlist_outcome_candidate (shadow_candidate_id, source_p12_shadow_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_operator_shadow_watchlist_outcome_analytics_group_date
+    ON ops.operator_shadow_watchlist_outcome_analytics_group (review_end_date DESC, sample_count DESC);
+
+CREATE INDEX IF NOT EXISTS idx_operator_shadow_watchlist_outcome_analytics_group_key
+    ON ops.operator_shadow_watchlist_outcome_analytics_group (group_key, review_end_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);

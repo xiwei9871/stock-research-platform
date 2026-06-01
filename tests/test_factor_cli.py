@@ -3133,6 +3133,217 @@ def test_p13_import_shadow_outcomes_cli_prints_summary(monkeypatch, capsys, tmp_
     ]
 
 
+def test_p14_shadow_outcome_analytics_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            "outputs/p13/operator_shadow_outcomes_2026-08-29.json",
+            "--run-id",
+            "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            "outputs/p14",
+        ]
+    )
+
+    assert args.command == "p14-shadow-outcome-analytics"
+    assert args.shadow_outcomes_json == "outputs/p13/operator_shadow_outcomes_2026-08-29.json"
+    assert args.run_id == "p14-shadow-outcome-analytics-2026-06-30-2026-08-29"
+    assert args.review_start_date == "2026-06-30"
+    assert args.review_end_date == "2026-08-29"
+    assert args.output_dir == "outputs/p14"
+
+
+def test_p14_shadow_outcome_analytics_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
+    json_path.write_text(
+        '{"run_id":"p13","review_date":"2026-08-29","outcome_count":0,"outcomes":[]}',
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_load_shadow_outcome_read_model_rows(path):
+        captured["loaded_path"] = str(path)
+        return {"candidates": []}
+
+    def fake_build_shadow_outcome_analytics(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "review_start_date": kwargs["review_start_date"],
+            "review_end_date": kwargs["review_end_date"],
+            "status": "no_shadow_outcomes_recorded",
+            "source_outcome_count": 0,
+            "group_count": 0,
+            "manual_review_required": True,
+            "auto_trade_enabled": False,
+            "production_watchlist_enabled": False,
+            "production_write_enabled": False,
+            "groups": [],
+        }
+
+    def fake_write_shadow_outcome_analytics(analytics, output_dir):
+        captured["written"] = {"analytics": analytics, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p14.json"),
+            "groups_csv_path": str(tmp_path / "p14_groups.csv"),
+            "markdown_path": str(tmp_path / "p14.md"),
+        }
+
+    monkeypatch.setattr(cli, "load_shadow_outcome_read_model_rows", fake_load_shadow_outcome_read_model_rows)
+    monkeypatch.setattr(cli, "build_shadow_outcome_analytics", fake_build_shadow_outcome_analytics)
+    monkeypatch.setattr(cli, "write_shadow_outcome_analytics", fake_write_shadow_outcome_analytics)
+
+    cli.main_for_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            str(json_path),
+            "--run-id",
+            "p14-run",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p14_shadow_outcome_analytics|status|" in output
+    assert "p14_shadow_outcome_analytics|source_outcomes|" in output
+    assert "p14_shadow_outcome_analytics|groups|" in output
+    assert "p14_shadow_outcome_analytics|json|" in output
+    assert "p14_shadow_outcome_analytics|groups_csv|" in output
+    assert "p14_shadow_outcome_analytics|markdown|" in output
+    assert captured["loaded_path"] == str(json_path)
+    assert captured["build"]["run_id"] == "p14-run"
+
+
+def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
+    p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
+    p13_json.write_text(
+        json.dumps(
+            {
+                "run_id": "p13-shadow-outcomes-2026-08-29",
+                "review_date": "2026-08-29",
+                "status": "shadow_outcome_review_ready",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+                "horizons": [5],
+                "outcome_count": 1,
+                "outcomes": [
+                    {
+                        "shadow_outcome_id": "operator_shadow_outcome:p13-shadow-outcomes-2026-08-29:001",
+                        "run_id": "p13-shadow-outcomes-2026-08-29",
+                        "shadow_candidate_id": "p12-shadow:001",
+                        "source_p12_shadow_run_id": "p12-shadow-watchlist-2026-06-30",
+                        "replay_result_id": "p11-replay:001",
+                        "source_p11_replay_run_id": "p11-replay-2026-06-30",
+                        "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+                        "source_p9_analytics_run_id": "p9-analytics-2026-05-30-2026-06-30",
+                        "candidate_date": "2026-06-30",
+                        "asset_id": "000001.SZ",
+                        "stock_code": "000001",
+                        "stock_name": "Ping An Bank",
+                        "shadow_layer": "trend_shadow",
+                        "shadow_status": "shadow_ready",
+                        "outcome_status": "complete",
+                        "available_future_bars": 60,
+                        "base_trade_date": "2026-06-30",
+                        "base_close": 10.0,
+                        "forward_5d_return": 0.12,
+                        "max_high_return_5d": 0.18,
+                        "max_low_drawdown_5d": -0.04,
+                        "manual_review_required": True,
+                        "auto_trade_enabled": False,
+                        "production_watchlist_enabled": False,
+                        "production_write_enabled": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "p14"
+
+    cli.main_for_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            str(p13_json),
+            "--run-id",
+            "p14-run",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    output_lines = capsys.readouterr().out.splitlines()
+    assert output_lines[:3] == [
+        "p14_shadow_outcome_analytics|status|shadow_outcome_analytics_ready",
+        "p14_shadow_outcome_analytics|source_outcomes|1",
+        "p14_shadow_outcome_analytics|groups|1",
+    ]
+    payload = json.loads(
+        (output_dir / "operator_shadow_outcome_analytics_2026-06-30_2026-08-29.json").read_text()
+    )
+    group = payload["groups"][0]
+    assert group["group_key"] == "trend_shadow|shadow_ready"
+    assert group["forward_5d_return_mean"] == 0.12
+    assert group["max_high_return_5d_mean"] == 0.18
+    assert group["max_low_drawdown_5d_worst"] == -0.04
+    groups = pd.read_csv(output_dir / "operator_shadow_outcome_analytics_2026-06-30_2026-08-29_groups.csv")
+    assert groups.loc[0, "forward_5d_return_mean"] == 0.12
+
+
+def test_p14_import_shadow_outcome_analytics_parser_accepts_path():
+    args = cli.build_parser().parse_args(
+        ["p14-import-shadow-outcome-analytics", "--path", "outputs/p14"]
+    )
+
+    assert args.command == "p14-import-shadow-outcome-analytics"
+    assert args.path == "outputs/p14"
+
+
+def test_p14_import_shadow_outcome_analytics_dispatches(monkeypatch, capsys):
+    captured = {}
+
+    def fake_import_shadow_outcome_analytics(path, service):
+        captured["path"] = path
+        captured["service"] = service
+        return {"imported_count": 2, "group_count": 3, "run_ids": ["p14-a", "p14-b"]}
+
+    monkeypatch.setattr(cli, "import_shadow_outcome_analytics", fake_import_shadow_outcome_analytics)
+
+    cli.main_for_args(
+        [
+            "p14-import-shadow-outcome-analytics",
+            "--path",
+            "outputs/p14",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p14_import_shadow_outcome_analytics|imported|2" in output
+    assert "p14_import_shadow_outcome_analytics|groups|3" in output
+    assert "p14_import_shadow_outcome_analytics|runs|p14-a,p14-b" in output
+    assert captured == {"path": "outputs/p14", "service": "stock_research_test"}
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

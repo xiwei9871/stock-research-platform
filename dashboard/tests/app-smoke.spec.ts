@@ -309,6 +309,43 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-outcome-analytics**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
+            run_id: 'p14-shadow-outcome-analytics-2026-06-30-2026-08-29',
+            review_start_date: '2026-06-30',
+            review_end_date: '2026-08-29',
+            group_key: 'trend_shadow|shadow_ready',
+            shadow_layer: 'trend_shadow',
+            shadow_status: 'shadow_ready',
+            sample_count: 2,
+            complete_count: 2,
+            insufficient_data_count: 0,
+            source_p12_shadow_run_count: 1,
+            source_p11_replay_run_count: 1,
+            source_p10_proposal_run_count: 1,
+            source_p9_analytics_run_count: 1,
+            horizon_metrics: {
+              '20': {
+                forward_return_mean: 0.12,
+                forward_win_rate: 1,
+                max_low_drawdown_worst: -0.2
+              }
+            },
+            analytics_artifact_path: 'outputs/p14/operator_shadow_outcome_analytics.json',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -334,20 +371,29 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
   await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outcome Analytics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Outcome Analytics', exact: true })).toBeVisible();
   await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Experiment Proposals' })).toBeVisible();
   await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
   await expect(page.getByText('passed_offline_replay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Watchlist' })).toBeVisible();
-  await expect(page.getByText('shadow_ready')).toHaveCount(2);
+  const shadowWatchlistPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Watchlist' }) });
+  await expect(shadowWatchlistPanel.getByText('shadow_ready')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Outcomes' })).toBeVisible();
   const shadowOutcomesPanel = page
     .locator('.inspector-section')
     .filter({ has: page.getByRole('heading', { name: 'Shadow Outcomes' }) });
   await expect(shadowOutcomesPanel.getByText('complete', { exact: true })).toBeVisible();
   await expect(shadowOutcomesPanel.getByText(/5D\s+\+50.0%/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
+  const shadowOutcomeAnalyticsPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcome Analytics' }) });
+  await expect(shadowOutcomeAnalyticsPanel.getByText('trend_shadow')).toBeVisible();
+  await expect(shadowOutcomeAnalyticsPanel.getByText(/20D\s+\+12.0%/)).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
@@ -367,6 +413,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
 });
