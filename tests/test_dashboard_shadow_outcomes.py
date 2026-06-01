@@ -1,3 +1,5 @@
+from psycopg import errors as psycopg_errors
+
 from stock_research.dashboard import shadow_outcomes
 
 
@@ -120,3 +122,22 @@ def test_load_shadow_outcomes_summary_normalizes_json_metric_maps(monkeypatch):
     assert result[0]["forward_returns"] == {"5": 0.5, "20": None, "60": None}
     assert result[0]["max_high_returns"] == {"5": 0.6, "20": None}
     assert result[0]["max_low_drawdowns"] == {}
+
+
+def test_load_shadow_outcomes_summary_returns_empty_when_table_missing(monkeypatch):
+    def fake_connect(service):
+        return FakeConnect()
+
+    def fake_fetch_all(conn, sql, params):
+        raise psycopg_errors.UndefinedTable("missing P13 outcome table")
+
+    monkeypatch.setattr(shadow_outcomes, "connect", fake_connect)
+    monkeypatch.setattr(shadow_outcomes, "fetch_all", fake_fetch_all)
+
+    assert (
+        shadow_outcomes.load_shadow_outcomes_summary(
+            start_date="2026-06-01",
+            end_date="2026-07-31",
+        )
+        == []
+    )

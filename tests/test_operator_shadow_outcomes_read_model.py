@@ -168,6 +168,19 @@ def test_load_shadow_outcome_rows_preserves_safe_run_scoped_artifact_ids(tmp_pat
     )
 
 
+def test_load_shadow_outcome_rows_normalizes_mismatched_run_scoped_artifact_ids(tmp_path):
+    payload = _payload()
+    payload["outcomes"][0]["shadow_outcome_id"] = "operator_shadow_outcome:other-run:collides"
+    json_path = tmp_path / "operator_shadow_outcomes_2026-07-31.json"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    rows = load_shadow_outcome_read_model_rows(json_path)
+
+    shadow_outcome_id = rows["candidates"][0]["shadow_outcome_id"]
+    assert shadow_outcome_id != "operator_shadow_outcome:other-run:collides"
+    assert shadow_outcome_id.startswith("operator_shadow_outcome:p13-shadow-outcomes-2026-07-31:")
+
+
 def test_load_shadow_outcome_rows_normalizes_legacy_candidate_only_ids_by_run(tmp_path):
     first = _payload()
     second = _payload()

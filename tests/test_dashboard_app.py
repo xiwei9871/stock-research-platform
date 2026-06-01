@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
+from psycopg import errors as psycopg_errors
 
 from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
+from stock_research.dashboard import shadow_outcomes
 
 
 def test_overview_route_returns_payload(monkeypatch):
@@ -385,6 +387,30 @@ def test_shadow_outcomes_route_returns_read_only_summary(monkeypatch):
     assert captured["args"] == ["2026-06-01", "2026-07-31", "complete", 10]
     assert response.json()["items"][0]["shadow_candidate_id"] == "p12-shadow:001"
     assert response.json()["items"][0]["production_watchlist_enabled"] is False
+
+
+def test_shadow_outcomes_route_returns_empty_items_when_table_missing(monkeypatch):
+    class FakeConnect:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_connect(service):
+        return FakeConnect()
+
+    def fake_fetch_all(conn, sql, params):
+        raise psycopg_errors.UndefinedTable("missing P13 outcome table")
+
+    monkeypatch.setattr(shadow_outcomes, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(shadow_outcomes, "connect", fake_connect)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/shadow-outcomes?start_date=2026-06-01&end_date=2026-07-31")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
 
 
 def test_dashboard_api_cli_parser_accepts_host_and_port():

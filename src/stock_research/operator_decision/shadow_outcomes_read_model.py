@@ -305,8 +305,8 @@ def _metadata(item: dict[str, Any]) -> dict[str, Any]:
 
 def _resolved_shadow_outcome_id(value: Any, *, run_id: str, shadow_candidate_id: str) -> str:
     artifact_id = str(value or "")
-    legacy_id = f"p13-shadow-outcome:{shadow_candidate_id}"
-    if artifact_id and artifact_id != legacy_id:
+    run_scoped_prefix = f"operator_shadow_outcome:{run_id}:"
+    if artifact_id.startswith(run_scoped_prefix):
         return artifact_id
     return _shadow_outcome_id(run_id=run_id, shadow_candidate_id=shadow_candidate_id)
 

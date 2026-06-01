@@ -118,7 +118,7 @@ RED: .venv/bin/pytest tests/test_p13_shadow_outcomes_smoke.py -q
 Result: failed during collection with ModuleNotFoundError: No module named 'stock_research.operator_decision.p13_smoke'
 
 GREEN: .venv/bin/pytest tests/test_p13_shadow_outcomes_smoke.py tests/test_p12_shadow_watchlist_smoke.py -q
-Result: 2 passed in 0.37s
+Result: 3 passed in 0.36s
 ```
 
 Smoke result:
@@ -173,7 +173,7 @@ pnpm test:e2e
 Results:
 
 ```text
-Python: 38 passed, 195 deselected, 3 warnings
+Python: 42 passed, 195 deselected, 3 warnings
 Vitest: 21 passed
 Vite build: passed
 Playwright: 2 passed
@@ -182,6 +182,29 @@ Playwright: 2 passed
 The Python warnings are existing `py_mini_racer` deprecation warnings and an
 existing FastAPI/Starlette `httpx` compatibility warning. The Playwright run
 emits existing `NO_COLOR` / `FORCE_COLOR` environment warnings.
+
+## Final Review Fixes
+
+Final code review identified two blocking issues, both fixed before P13
+completion:
+
+- The dashboard shadow outcome loader now returns an empty read-only summary
+  when the P13 `ops` schema/table has not been initialized yet, instead of
+  surfacing a 500 from `/api/shadow-outcomes`.
+- The P13 read-model loader now preserves only current-run-scoped
+  `shadow_outcome_id` values. Legacy or mismatched artifact IDs are normalized
+  to the current run, preventing cross-run primary-key collisions and misleading
+  lineage.
+
+Regression evidence:
+
+```text
+.venv/bin/pytest tests/test_dashboard_shadow_outcomes.py tests/test_dashboard_app.py -k 'shadow_outcomes and table_missing' -q
+Result: 2 passed, 14 deselected, 3 warnings
+
+.venv/bin/pytest tests/test_operator_shadow_outcomes_read_model.py -k 'mismatched_run_scoped or preserves_safe_run_scoped or normalizes_legacy' -q
+Result: 3 passed, 11 deselected
+```
 
 ## Safety Review
 

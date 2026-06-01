@@ -4,6 +4,8 @@ import json
 import math
 from typing import Any
 
+from psycopg import errors as psycopg_errors
+
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
@@ -54,8 +56,11 @@ def load_shadow_outcomes_summary(
     ORDER BY candidate_date DESC, outcome_status, shadow_outcome_id
     LIMIT %s
     """
-    with connect(service) as conn:
-        rows = fetch_all(conn, sql, params)
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(conn, sql, params)
+    except (psycopg_errors.UndefinedTable, psycopg_errors.InvalidSchemaName):
+        rows = []
     return [_shadow_outcome_row(row) for row in rows]
 
 
