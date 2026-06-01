@@ -194,7 +194,14 @@ from stock_research.operator_decision.shadow_watchlist import (
     build_shadow_watchlist_review,
     write_shadow_watchlist_review,
 )
-from stock_research.operator_decision.shadow_watchlist_read_model import import_shadow_watchlist_review
+from stock_research.operator_decision.shadow_outcomes import (
+    build_shadow_outcome_review,
+    write_shadow_outcome_review,
+)
+from stock_research.operator_decision.shadow_watchlist_read_model import (
+    import_shadow_watchlist_review,
+    load_shadow_watchlist_read_model_rows,
+)
 from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
 from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
 from stock_research.operator_decision.read_model import import_decision_journal
@@ -1762,6 +1769,13 @@ def build_parser() -> argparse.ArgumentParser:
     p12_import_shadow_watchlist.add_argument("--path", required=True)
     p12_import_shadow_watchlist.add_argument("--service", default="stock_research")
 
+    p13_shadow_outcome_review = subparsers.add_parser("p13-shadow-outcome-review")
+    p13_shadow_outcome_review.add_argument("--shadow-json", required=True)
+    p13_shadow_outcome_review.add_argument("--bars-csv", required=True)
+    p13_shadow_outcome_review.add_argument("--review-date", required=True)
+    p13_shadow_outcome_review.add_argument("--run-id")
+    p13_shadow_outcome_review.add_argument("--output-dir", required=True)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3212,6 +3226,24 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p12_shadow_watchlist_import|candidates|{result['candidate_count']}")
         for run_id in result["run_ids"]:
             print(f"p12_shadow_watchlist_import|run_id|{run_id}")
+    elif args.command == "p13-shadow-outcome-review":
+        import pandas as pd
+
+        shadow_rows = load_shadow_watchlist_read_model_rows(args.shadow_json)
+        shadow_candidates = pd.DataFrame(shadow_rows["candidates"])
+        bars = pd.read_csv(args.bars_csv)
+        review = build_shadow_outcome_review(
+            review_date=args.review_date,
+            shadow_candidates=shadow_candidates,
+            bars=bars,
+            run_id=args.run_id,
+        )
+        paths = write_shadow_outcome_review(review, args.output_dir)
+        print(f"p13_shadow_outcome|status|{review['status']}")
+        print(f"p13_shadow_outcome|outcomes|{review['outcome_count']}")
+        print(f"p13_shadow_outcome|json|{paths['json_path']}")
+        print(f"p13_shadow_outcome|details_csv|{paths['details_csv_path']}")
+        print(f"p13_shadow_outcome|markdown|{paths['markdown_path']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
