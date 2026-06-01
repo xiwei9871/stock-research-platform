@@ -419,6 +419,49 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-follow-up-queue**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            follow_up_item_id: 'operator_shadow_follow_up:trend-ready',
+            run_id: 'p17-shadow-follow-up-queue-2026-08-31',
+            follow_up_date: '2026-08-31',
+            source_p16_decision_group_id: 'operator_shadow_review_decision:trend-ready',
+            source_p16_decision_run_id: 'p16-shadow-review-decisions-2026-08-31',
+            source_p15_review_group_id: 'operator_shadow_analytics_review:trend-ready',
+            source_p15_review_run_id: 'p15-shadow-analytics-review-2026-08-31',
+            source_p14_analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
+            source_p14_analytics_run_id: 'p14-shadow-outcome-analytics-2026-06-01-2026-08-31',
+            group_key: 'trend_shadow|shadow_ready',
+            shadow_layer: 'trend_shadow',
+            shadow_status: 'shadow_ready',
+            sample_count: 4,
+            complete_count: 3,
+            insufficient_data_count: 1,
+            review_status: 'needs_more_data',
+            review_bucket: 'data_needed',
+            decision_status: 'request_more_data',
+            decision_bucket: 'data_needed',
+            follow_up_status: 'collect_more_evidence',
+            priority_bucket: 'high',
+            required_input: 'Additional outcome or data-quality evidence',
+            follow_up_reason: 'P16 status maps to evidence collection.',
+            decision_reason: 'P15 status maps to more data.',
+            required_next_action: 'Collect additional evidence.',
+            evidence_summary: 'Single sample is not enough.',
+            risk_notes: 'Data coverage may be incomplete.',
+            next_research_question: 'Does the group remain stable with more samples?',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -478,6 +521,12 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
     .filter({ has: page.getByRole('heading', { name: 'Shadow Review Decisions' }) });
   await expect(shadowReviewDecisionsPanel.getByText('open_research_follow_up')).toBeVisible();
   await expect(shadowReviewDecisionsPanel.getByText('Create a separately scoped research follow-up.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Queue' })).toBeVisible();
+  const shadowFollowUpPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Follow-up Queue' }) });
+  await expect(shadowFollowUpPanel.getByText('collect_more_evidence')).toBeVisible();
+  await expect(shadowFollowUpPanel.getByText('Additional outcome or data-quality evidence')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);

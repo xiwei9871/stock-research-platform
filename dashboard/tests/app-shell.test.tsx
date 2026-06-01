@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
+import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import type {
   BarPoint,
@@ -15,6 +16,7 @@ import type {
   OutcomeAnalyticsRow,
   ScoreRow,
   ShadowAnalyticsReviewRow,
+  ShadowFollowUpRow,
   ShadowReviewDecisionRow,
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
@@ -33,6 +35,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
   fetchShadowAnalyticsReview: vi.fn(),
+  fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowReviewDecisions: vi.fn(),
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
@@ -440,6 +443,45 @@ function makeShadowReviewDecisions(): ShadowReviewDecisionRow[] {
   ];
 }
 
+function makeShadowFollowUpQueue(): ShadowFollowUpRow[] {
+  return [
+    {
+      follow_up_item_id: 'operator_shadow_follow_up:trend-ready',
+      run_id: 'p17-shadow-follow-up-queue-2026-08-31',
+      follow_up_date: '2026-08-31',
+      source_p16_decision_group_id: 'operator_shadow_review_decision:trend-ready',
+      source_p16_decision_run_id: 'p16-shadow-review-decisions-2026-08-31',
+      source_p15_review_group_id: 'operator_shadow_analytics_review:trend-ready',
+      source_p15_review_run_id: 'p15-shadow-analytics-review-2026-08-31',
+      source_p14_analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
+      source_p14_analytics_run_id: 'p14-shadow-outcome-analytics-2026-06-01-2026-08-31',
+      group_key: 'trend_shadow|shadow_ready',
+      shadow_layer: 'trend_shadow',
+      shadow_status: 'shadow_ready',
+      sample_count: 4,
+      complete_count: 3,
+      insufficient_data_count: 1,
+      review_status: 'needs_more_data',
+      review_bucket: 'data_needed',
+      decision_status: 'request_more_data',
+      decision_bucket: 'data_needed',
+      follow_up_status: 'collect_more_evidence',
+      priority_bucket: 'high',
+      required_input: 'Additional outcome or data-quality evidence',
+      follow_up_reason: 'P16 status maps to evidence collection.',
+      decision_reason: 'P15 status maps to more data.',
+      required_next_action: 'Collect additional evidence.',
+      evidence_summary: 'Single sample is not enough.',
+      risk_notes: 'Data coverage may be incomplete.',
+      next_research_question: 'Does the group remain stable with more samples?',
+      manual_review_required: true,
+      auto_trade_enabled: false,
+      production_watchlist_enabled: false,
+      production_write_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -457,6 +499,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
     apiMocks.fetchShadowAnalyticsReview.mockResolvedValue(makeShadowAnalyticsReview());
     apiMocks.fetchShadowReviewDecisions.mockResolvedValue(makeShadowReviewDecisions());
+    apiMocks.fetchShadowFollowUpQueue.mockResolvedValue(makeShadowFollowUpQueue());
   });
 
   afterEach(() => {
@@ -488,12 +531,12 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Experiment Replay')).toBeVisible();
     expect(screen.getByText('passed_offline_replay')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
-    expect(screen.getAllByText('shadow_ready')).toHaveLength(5);
+    expect(screen.getAllByText('shadow_ready')).toHaveLength(6);
     expect(screen.getByText('Shadow Outcomes')).toBeVisible();
     expect(screen.getByText('complete')).toBeVisible();
     expect(screen.getByText(/5D\s+\+50.0%/)).toBeVisible();
     expect(screen.getByText('Shadow Outcome Analytics')).toBeVisible();
-    expect(screen.getAllByText('trend_shadow')).toHaveLength(5);
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(6);
     expect(screen.getByText(/20D\s+\+12.0%/)).toBeVisible();
     expect(screen.getByText('Shadow Analytics Review')).toBeVisible();
     const shadowAnalyticsReviewPanel = screen.getByText('Shadow Analytics Review').closest('section');
@@ -505,6 +548,11 @@ describe('dashboard app shell', () => {
     expect(shadowReviewDecisionsPanel).not.toBeNull();
     expect(within(shadowReviewDecisionsPanel as HTMLElement).getByText('open_research_follow_up')).toBeVisible();
     expect(within(shadowReviewDecisionsPanel as HTMLElement).getByText('Create a separately scoped research follow-up.')).toBeVisible();
+    expect(screen.getByText('Shadow Follow-up Queue')).toBeVisible();
+    const shadowFollowUpPanel = screen.getByText('Shadow Follow-up Queue').closest('section');
+    expect(shadowFollowUpPanel).not.toBeNull();
+    expect(within(shadowFollowUpPanel as HTMLElement).getByText('collect_more_evidence')).toBeVisible();
+    expect(within(shadowFollowUpPanel as HTMLElement).getByText('Additional outcome or data-quality evidence')).toBeVisible();
     expect(screen.getByText('p12-shadow-watchlist-2026-06-30')).toBeVisible();
     expect(screen.getAllByText('p11-replay-run-2026-06-30')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /promote|trade|write watchlist|scheduler/i })).not.toBeInTheDocument();
@@ -532,6 +580,7 @@ describe('dashboard app shell', () => {
     const shadowOutcomeAnalytics = createDeferred<ShadowOutcomeAnalyticsRow[]>();
     const shadowAnalyticsReview = createDeferred<ShadowAnalyticsReviewRow[]>();
     const shadowReviewDecisions = createDeferred<ShadowReviewDecisionRow[]>();
+    const shadowFollowUpQueue = createDeferred<ShadowFollowUpRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -547,6 +596,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowOutcomeAnalytics.mockReturnValueOnce(shadowOutcomeAnalytics.promise);
     apiMocks.fetchShadowAnalyticsReview.mockReturnValueOnce(shadowAnalyticsReview.promise);
     apiMocks.fetchShadowReviewDecisions.mockReturnValueOnce(shadowReviewDecisions.promise);
+    apiMocks.fetchShadowFollowUpQueue.mockReturnValueOnce(shadowFollowUpQueue.promise);
 
     render(<App />);
 
@@ -560,6 +610,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading shadow outcome analytics...')).toBeVisible();
     expect(screen.getByText('Loading shadow analytics review...')).toBeVisible();
     expect(screen.getByText('Loading shadow review decisions...')).toBeVisible();
+    expect(screen.getByText('Loading shadow follow-up queue...')).toBeVisible();
 
     await act(async () => {
       overview.resolve(makeOverview());
@@ -576,6 +627,7 @@ describe('dashboard app shell', () => {
       shadowOutcomeAnalytics.resolve(makeShadowOutcomeAnalytics());
       shadowAnalyticsReview.resolve(makeShadowAnalyticsReview());
       shadowReviewDecisions.resolve(makeShadowReviewDecisions());
+      shadowFollowUpQueue.resolve(makeShadowFollowUpQueue());
     });
 
     await waitFor(() => {
@@ -589,6 +641,7 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading shadow outcome analytics...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow analytics review...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow review decisions...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading shadow follow-up queue...')).not.toBeInTheDocument();
     });
   });
 
@@ -613,6 +666,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([]);
     apiMocks.fetchShadowAnalyticsReview.mockResolvedValueOnce([]);
     apiMocks.fetchShadowReviewDecisions.mockResolvedValueOnce([]);
+    apiMocks.fetchShadowFollowUpQueue.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -630,6 +684,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No shadow outcome analytics for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow analytics review rows for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow review decisions for selected range.')).toBeVisible();
+    expect(screen.getByText('No shadow follow-up queue items for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
   });
 
@@ -698,6 +753,31 @@ describe('dashboard app shell', () => {
 
     expect(screen.getAllByText('trend_shadow')).toHaveLength(2);
     expect(screen.getAllByText('open_research_follow_up')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /promote|trade|write watchlist|scheduler/i })).not.toBeInTheDocument();
+    const messages = consoleError.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(messages).not.toContain('Encountered two children with the same key');
+    consoleError.mockRestore();
+  });
+
+  it('renders repeated shadow follow-up queue items with item-scoped keys', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const rows = [
+      {
+        ...makeShadowFollowUpQueue()[0],
+        follow_up_item_id: 'operator_shadow_follow_up:run-a-trend-ready'
+      },
+      {
+        ...makeShadowFollowUpQueue()[0],
+        follow_up_item_id: 'operator_shadow_follow_up:run-b-trend-ready',
+        run_id: 'p17-shadow-follow-up-queue-2026-09-30',
+        follow_up_date: '2026-09-30'
+      }
+    ] as ShadowFollowUpRow[];
+
+    render(<ShadowFollowUpQueuePanel rows={rows} />);
+
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(2);
+    expect(screen.getAllByText('collect_more_evidence')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /promote|trade|write watchlist|scheduler/i })).not.toBeInTheDocument();
     const messages = consoleError.mock.calls.map((call) => call.join(' ')).join('\n');
     expect(messages).not.toContain('Encountered two children with the same key');

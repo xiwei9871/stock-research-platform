@@ -259,6 +259,51 @@ def test_shadow_review_decisions_route_returns_read_only_summary(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_shadow_follow_up_queue_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_follow_up(start_date, end_date, limit):
+        captured["args"] = [start_date, end_date, limit]
+        return [
+            {
+                "follow_up_item_id": "operator_shadow_follow_up:trend-ready",
+                "run_id": "p17-shadow-follow-up-queue-2026-08-31",
+                "follow_up_date": "2026-08-31",
+                "group_key": "trend_shadow|shadow_ready",
+                "shadow_layer": "trend_shadow",
+                "shadow_status": "shadow_ready",
+                "decision_status": "request_more_data",
+                "follow_up_status": "collect_more_evidence",
+                "priority_bucket": "high",
+                "required_input": "Additional outcome or data-quality evidence",
+                "follow_up_reason": "P16 status maps to evidence collection.",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_shadow_follow_up_queue_summary",
+        fake_load_follow_up,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/shadow-follow-up-queue"
+        "?start_date=2026-06-01"
+        "&end_date=2026-08-31"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-06-01", "2026-08-31", 10]
+    assert response.json()["items"][0]["follow_up_status"] == "collect_more_evidence"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_outcome_analytics_route_returns_read_only_summary(monkeypatch):
     captured = {}
 

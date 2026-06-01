@@ -10,6 +10,7 @@ import {
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchShadowAnalyticsReview,
+  fetchShadowFollowUpQueue,
   fetchShadowReviewDecisions,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
@@ -25,6 +26,7 @@ import type {
   OutcomeAnalyticsRow,
   ScoreRow,
   ShadowAnalyticsReviewRow,
+  ShadowFollowUpRow,
   ShadowReviewDecisionRow,
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
@@ -41,6 +43,7 @@ import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { ShadowOutcomesPanel } from './components/ShadowOutcomesPanel';
 import { ShadowAnalyticsReviewPanel } from './components/ShadowAnalyticsReviewPanel';
+import { ShadowFollowUpQueuePanel } from './components/ShadowFollowUpQueuePanel';
 import { ShadowReviewDecisionsPanel } from './components/ShadowReviewDecisionsPanel';
 import { ShadowOutcomeAnalyticsPanel } from './components/ShadowOutcomeAnalyticsPanel';
 import { ShadowWatchlistPanel } from './components/ShadowWatchlistPanel';
@@ -77,6 +80,7 @@ export function App() {
   const [shadowOutcomeAnalytics, setShadowOutcomeAnalytics] = useState<ShadowOutcomeAnalyticsRow[]>([]);
   const [shadowAnalyticsReview, setShadowAnalyticsReview] = useState<ShadowAnalyticsReviewRow[]>([]);
   const [shadowReviewDecisions, setShadowReviewDecisions] = useState<ShadowReviewDecisionRow[]>([]);
+  const [shadowFollowUpQueue, setShadowFollowUpQueue] = useState<ShadowFollowUpRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -86,6 +90,7 @@ export function App() {
   const [shadowOutcomeAnalyticsLoading, setShadowOutcomeAnalyticsLoading] = useState(false);
   const [shadowAnalyticsReviewLoading, setShadowAnalyticsReviewLoading] = useState(false);
   const [shadowReviewDecisionsLoading, setShadowReviewDecisionsLoading] = useState(false);
+  const [shadowFollowUpQueueLoading, setShadowFollowUpQueueLoading] = useState(false);
 
   const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
@@ -306,6 +311,30 @@ export function App() {
   useEffect(() => {
     let ignore = false;
     setError(null);
+    setShadowFollowUpQueueLoading(true);
+    fetchShadowFollowUpQueue(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setShadowFollowUpQueue(rows);
+          setShadowFollowUpQueueLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setShadowFollowUpQueue([]);
+          setShadowFollowUpQueueLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
     setAssetLoading(true);
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
@@ -398,6 +427,10 @@ export function App() {
         <ShadowReviewDecisionsPanel
           rows={shadowReviewDecisions}
           isLoading={shadowReviewDecisionsLoading}
+        />
+        <ShadowFollowUpQueuePanel
+          rows={shadowFollowUpQueue}
+          isLoading={shadowFollowUpQueueLoading}
         />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
