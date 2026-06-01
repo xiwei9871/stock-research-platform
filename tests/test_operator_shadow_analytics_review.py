@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from stock_research.operator_decision.shadow_analytics_review import (
@@ -10,6 +11,7 @@ from stock_research.operator_decision.shadow_analytics_review import (
     build_shadow_analytics_review_from_rows,
     write_shadow_analytics_review,
 )
+from stock_research.operator_decision.shadow_outcome_analytics import build_shadow_outcome_analytics
 
 
 def _group(**overrides):
@@ -133,6 +135,62 @@ def test_build_shadow_analytics_review_preserves_run_metadata_and_writes_artifac
     assert "research_follow_up_candidate" in Path(paths["markdown_path"]).read_text(encoding="utf-8")
 
 
+def test_build_shadow_analytics_review_accepts_raw_p14_artifact_shape():
+    p14_analytics = build_shadow_outcome_analytics(
+        review_start_date="2026-06-30",
+        review_end_date="2026-08-29",
+        run_id="p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
+        horizons=[20],
+        shadow_outcomes=pd.DataFrame(
+            [
+                {
+                    "shadow_outcome_id": f"operator_shadow_outcome:p13:{index}",
+                    "run_id": "p13-shadow-outcomes-2026-08-29",
+                    "shadow_candidate_id": f"p12-shadow:{index}",
+                    "source_p12_shadow_run_id": "p12-shadow-watchlist-2026-06-30",
+                    "replay_result_id": f"p11-replay:{index}",
+                    "source_p11_replay_run_id": "p11-replay-2026-06-30",
+                    "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+                    "source_p9_analytics_run_id": "p9-analytics-2026-05-30-2026-06-30",
+                    "candidate_date": "2026-06-30",
+                    "asset_id": f"00000{index}.SZ",
+                    "shadow_layer": "trend_shadow",
+                    "shadow_status": "shadow_ready",
+                    "outcome_status": "complete",
+                    "available_future_bars": 20,
+                    "forward_20d_return": 0.06,
+                    "max_high_return_20d": 0.11,
+                    "max_low_drawdown_20d": -0.08,
+                    "manual_review_required": True,
+                    "auto_trade_enabled": False,
+                    "production_watchlist_enabled": False,
+                    "production_write_enabled": False,
+                }
+                for index in range(10)
+            ]
+        ),
+    )
+
+    review = build_shadow_analytics_review(
+        p14_analytics=p14_analytics,
+        run_id="p15-shadow-analytics-review-2026-06-30-2026-08-29",
+        review_start_date="2026-06-30",
+        review_end_date="2026-08-29",
+        reviewer_id="operator",
+    )
+
+    assert review["source_p14_analytics_run_ids"] == [
+        "p14-shadow-outcome-analytics-2026-06-30-2026-08-29"
+    ]
+    assert review["groups"][0]["source_p14_analytics_group_id"].startswith(
+        "operator_shadow_outcome_analytics:p14-shadow-outcome-analytics-2026-06-30-2026-08-29:"
+    )
+    assert review["groups"][0]["source_p14_analytics_run_id"] == (
+        "p14-shadow-outcome-analytics-2026-06-30-2026-08-29"
+    )
+    assert review["groups"][0]["review_status"] == "research_follow_up_candidate"
+
+
 def test_build_shadow_analytics_review_rejects_production_enabled_group():
     row = _group(production_watchlist_enabled=True)
 
@@ -150,6 +208,19 @@ def test_build_shadow_analytics_review_rejects_unsafe_execution_fields():
     row = _group(order_id="order-001")
 
     with pytest.raises(ValueError, match="unsafe_execution_field.*order_id"):
+        build_shadow_analytics_review_from_rows(
+            [row],
+            run_id="p15-shadow-analytics-review-2026-06-30-2026-08-29",
+            review_start_date="2026-06-30",
+            review_end_date="2026-08-29",
+            reviewer_id="operator",
+        )
+
+
+def test_build_shadow_analytics_review_rejects_expanded_execution_fields():
+    row = _group(limit_price="10.00")
+
+    with pytest.raises(ValueError, match="unsafe_execution_field.*limit_price"):
         build_shadow_analytics_review_from_rows(
             [row],
             run_id="p15-shadow-analytics-review-2026-06-30-2026-08-29",

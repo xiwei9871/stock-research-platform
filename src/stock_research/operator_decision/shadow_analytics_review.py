@@ -29,14 +29,19 @@ DEFAULT_SHADOW_ANALYTICS_REVIEW_THRESHOLDS = {
 UNSAFE_EXECUTION_FIELDS = {
     "account_id",
     "broker",
+    "broker_id",
     "cash",
     "execution_id",
     "fill_id",
+    "limit_price",
     "order_id",
+    "order_side",
     "position_id",
     "price",
     "quantity",
     "shares",
+    "side",
+    "stop_price",
     "trade_id",
     "notional",
 }
@@ -110,8 +115,9 @@ def build_shadow_analytics_review(
     """Return a P15 review artifact from the P14 analytics groups."""
     _reject_unsafe_execution_fields(p14_analytics)
     _validate_safety_fields(p14_analytics)
+    rows = _p14_artifact_rows(p14_analytics)
     return build_shadow_analytics_review_from_rows(
-        list(p14_analytics.get("groups") or []),
+        rows,
         run_id=run_id,
         review_start_date=review_start_date,
         review_end_date=review_end_date,
@@ -134,13 +140,42 @@ def write_shadow_analytics_review(review: dict[str, Any], output_dir: str | Path
 
     payload = _json_safe(review)
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    pd.DataFrame(payload.get("groups", []), columns=_group_columns()).to_csv(groups_csv_path, index=False)
+    pd.DataFrame(_csv_safe_rows(payload.get("groups", [])), columns=_group_columns()).to_csv(
+        groups_csv_path,
+        index=False,
+    )
     markdown_path.write_text(_render_shadow_analytics_review_markdown(payload), encoding="utf-8")
     return {
         "json_path": str(json_path),
         "groups_csv_path": str(groups_csv_path),
         "markdown_path": str(markdown_path),
     }
+
+
+def _p14_artifact_rows(p14_analytics: dict[str, Any]) -> list[dict[str, Any]]:
+    p14_run_id = _text_or_empty(p14_analytics.get("run_id"))
+    artifact_path = _text_or_empty(
+        p14_analytics.get("analytics_artifact_path")
+        or p14_analytics.get("artifact_path")
+        or p14_analytics.get("json_path")
+    )
+    rows = []
+    for item in p14_analytics.get("groups") or []:
+        if not isinstance(item, dict):
+            raise ValueError("invalid_p14_analytics_group")
+        row = dict(item)
+        row_run_id = _text_or_empty(row.get("run_id")) or p14_run_id
+        if row_run_id:
+            row["run_id"] = row_run_id
+        if _is_missing(row.get("analytics_group_id")) or str(row.get("analytics_group_id")).strip() == "":
+            group_key = _required_text(row, "group_key")
+            if not row_run_id:
+                raise ValueError("required_field_missing: run_id")
+            row["analytics_group_id"] = _p14_analytics_group_id(run_id=row_run_id, group_key=group_key)
+        if artifact_path and (_is_missing(row.get("analytics_artifact_path")) or str(row.get("analytics_artifact_path")).strip() == ""):
+            row["analytics_artifact_path"] = artifact_path
+        rows.append(row)
+    return rows
 
 
 def _normalize_group_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -327,6 +362,12 @@ def _reject_unsafe_execution_fields(payload: dict[str, Any]) -> None:
             raise ValueError(f"unsafe_execution_field: {key}")
 
 
+def _p14_analytics_group_id(*, run_id: str, group_key: str) -> str:
+    raw = "|".join([run_id, group_key])
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return f"operator_shadow_outcome_analytics:{run_id}:{digest}"
+
+
 def _evidence_summary(
     row: dict[str, Any],
     review_status: str,
@@ -493,6 +534,22 @@ def _json_safe(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def _csv_safe_rows(rows: Any) -> list[dict[str, Any]]:
+    csv_rows = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        csv_rows.append(
+            {
+                key: json.dumps(value, ensure_ascii=False, sort_keys=True)
+                if isinstance(value, (dict, list))
+                else value
+                for key, value in row.items()
+            }
+        )
+    return csv_rows
 
 
 def _format_metric(value: Any) -> str:
