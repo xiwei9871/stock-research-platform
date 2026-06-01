@@ -3225,6 +3225,87 @@ def test_p14_shadow_outcome_analytics_dispatches_to_builder(monkeypatch, tmp_pat
     assert captured["build"]["run_id"] == "p14-run"
 
 
+def test_p15_shadow_analytics_review_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p15-shadow-analytics-review",
+            "--p14-analytics-json",
+            "outputs/p14/operator_shadow_outcome_analytics_2026-06-30_2026-08-29.json",
+            "--run-id",
+            "p15-shadow-analytics-review-2026-06-30-2026-08-29",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--reviewer-id",
+            "operator-a",
+            "--output-dir",
+            "outputs/p15",
+        ]
+    )
+
+    assert args.command == "p15-shadow-analytics-review"
+    assert args.p14_analytics_json.endswith(".json")
+    assert args.reviewer_id == "operator-a"
+
+
+def test_p15_shadow_analytics_review_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_outcome_analytics_2026-06-30_2026-08-29.json"
+    json_path.write_text('{"groups": []}', encoding="utf-8")
+    captured = {}
+
+    def fake_build_shadow_analytics_review(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "review_start_date": kwargs["review_start_date"],
+            "review_end_date": kwargs["review_end_date"],
+            "reviewer_id": kwargs["reviewer_id"],
+            "status": "shadow_analytics_review_ready",
+            "group_count": 1,
+            "groups": [{"group_id": "group-a"}],
+        }
+
+    def fake_write_shadow_analytics_review(review, output_dir):
+        captured["written"] = {"review": review, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p15.json"),
+            "groups_csv_path": str(tmp_path / "p15_groups.csv"),
+            "markdown_path": str(tmp_path / "p15.md"),
+        }
+
+    monkeypatch.setattr(cli, "build_shadow_analytics_review", fake_build_shadow_analytics_review)
+    monkeypatch.setattr(cli, "write_shadow_analytics_review", fake_write_shadow_analytics_review)
+
+    cli.main_for_args(
+        [
+            "p15-shadow-analytics-review",
+            "--p14-analytics-json",
+            str(json_path),
+            "--run-id",
+            "p15-run",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--reviewer-id",
+            "operator-a",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p15_shadow_analytics_review|status|shadow_analytics_review_ready",
+        "p15_shadow_analytics_review|groups|1",
+        f"p15_shadow_analytics_review|json|{tmp_path / 'p15.json'}",
+        f"p15_shadow_analytics_review|groups_csv|{tmp_path / 'p15_groups.csv'}",
+        f"p15_shadow_analytics_review|markdown|{tmp_path / 'p15.md'}",
+    ]
+    assert captured["build"]["run_id"] == "p15-run"
+    assert captured["build"]["reviewer_id"] == "operator-a"
+
+
 def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
     p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
     p13_json.write_text(

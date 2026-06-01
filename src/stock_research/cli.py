@@ -184,6 +184,10 @@ from stock_research.operator_decision.shadow_outcome_analytics import (
     build_shadow_outcome_analytics,
     write_shadow_outcome_analytics,
 )
+from stock_research.operator_decision.shadow_analytics_review import (
+    build_shadow_analytics_review,
+    write_shadow_analytics_review,
+)
 from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
     import_shadow_outcome_analytics,
 )
@@ -335,7 +339,6 @@ from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
 from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
-from stock_research.strong_winner_topn_attribution import run_strong_winner_topn_attribution
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -1797,6 +1800,14 @@ def build_parser() -> argparse.ArgumentParser:
     p14_shadow_outcome_analytics.add_argument("--review-start-date", required=True)
     p14_shadow_outcome_analytics.add_argument("--review-end-date", required=True)
     p14_shadow_outcome_analytics.add_argument("--output-dir", required=True)
+
+    p15_shadow_analytics_review = subparsers.add_parser("p15-shadow-analytics-review")
+    p15_shadow_analytics_review.add_argument("--p14-analytics-json", required=True)
+    p15_shadow_analytics_review.add_argument("--run-id", required=True)
+    p15_shadow_analytics_review.add_argument("--review-start-date", required=True)
+    p15_shadow_analytics_review.add_argument("--review-end-date", required=True)
+    p15_shadow_analytics_review.add_argument("--reviewer-id", required=True)
+    p15_shadow_analytics_review.add_argument("--output-dir", required=True)
 
     p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
     p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
@@ -3294,6 +3305,21 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p14_shadow_outcome_analytics|json|{paths['json_path']}")
         print(f"p14_shadow_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
         print(f"p14_shadow_outcome_analytics|markdown|{paths['markdown_path']}")
+    elif args.command == "p15-shadow-analytics-review":
+        p14_payload = json.loads(Path(args.p14_analytics_json).read_text(encoding="utf-8"))
+        review = build_shadow_analytics_review(
+            p14_analytics=p14_payload,
+            run_id=args.run_id,
+            review_start_date=args.review_start_date,
+            review_end_date=args.review_end_date,
+            reviewer_id=args.reviewer_id,
+        )
+        paths = write_shadow_analytics_review(review, args.output_dir)
+        print(f"p15_shadow_analytics_review|status|{review['status']}")
+        print(f"p15_shadow_analytics_review|groups|{review['group_count']}")
+        print(f"p15_shadow_analytics_review|json|{paths['json_path']}")
+        print(f"p15_shadow_analytics_review|groups_csv|{paths['groups_csv_path']}")
+        print(f"p15_shadow_analytics_review|markdown|{paths['markdown_path']}")
     elif args.command == "p14-import-shadow-outcome-analytics":
         result = import_shadow_outcome_analytics(args.path, service=args.service)
         print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
@@ -4756,6 +4782,10 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"strong_winner_miss_analysis|report|{result['paths']['report']}")
         print(f"strong_winner_miss_analysis|rows|{len(result['miss_analysis'])}")
     elif args.command == "analyze-strong-winner-topn-source":
+        from stock_research.strong_winner_topn_attribution import (
+            run_strong_winner_topn_attribution,
+        )
+
         result = run_strong_winner_topn_attribution(
             miss_analysis_path=args.miss_analysis_path,
             score_version=args.score_version,
