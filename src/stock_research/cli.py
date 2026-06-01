@@ -180,6 +180,10 @@ from stock_research.operator_decision.outcome_analytics import (
     build_decision_outcome_analytics,
     write_decision_outcome_analytics,
 )
+from stock_research.operator_decision.shadow_outcome_analytics import (
+    build_shadow_outcome_analytics,
+    write_shadow_outcome_analytics,
+)
 from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
     write_experiment_proposal_review,
@@ -198,7 +202,10 @@ from stock_research.operator_decision.shadow_outcomes import (
     build_shadow_outcome_review,
     write_shadow_outcome_review,
 )
-from stock_research.operator_decision.shadow_outcomes_read_model import import_shadow_outcome_review
+from stock_research.operator_decision.shadow_outcomes_read_model import (
+    import_shadow_outcome_review,
+    load_shadow_outcome_read_model_rows,
+)
 from stock_research.operator_decision.shadow_watchlist_read_model import (
     import_shadow_watchlist_review,
     load_shadow_watchlist_read_model_rows,
@@ -1781,6 +1788,13 @@ def build_parser() -> argparse.ArgumentParser:
     p13_import_shadow_outcomes.add_argument("--path", required=True)
     p13_import_shadow_outcomes.add_argument("--service", default="stock_research")
 
+    p14_shadow_outcome_analytics = subparsers.add_parser("p14-shadow-outcome-analytics")
+    p14_shadow_outcome_analytics.add_argument("--shadow-outcomes-json", required=True)
+    p14_shadow_outcome_analytics.add_argument("--run-id", required=True)
+    p14_shadow_outcome_analytics.add_argument("--review-start-date", required=True)
+    p14_shadow_outcome_analytics.add_argument("--review-end-date", required=True)
+    p14_shadow_outcome_analytics.add_argument("--output-dir", required=True)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3255,6 +3269,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p13_shadow_outcome_import|candidates|{result['candidate_count']}")
         for run_id in result["run_ids"]:
             print(f"p13_shadow_outcome_import|run_id|{run_id}")
+    elif args.command == "p14-shadow-outcome-analytics":
+        import pandas as pd
+
+        rows = load_shadow_outcome_read_model_rows(args.shadow_outcomes_json)
+        shadow_outcomes = pd.DataFrame(rows["candidates"])
+        analytics = build_shadow_outcome_analytics(
+            review_start_date=args.review_start_date,
+            review_end_date=args.review_end_date,
+            shadow_outcomes=shadow_outcomes,
+            run_id=args.run_id,
+        )
+        paths = write_shadow_outcome_analytics(analytics, args.output_dir)
+        print(f"p14_shadow_outcome_analytics|json|{paths['json_path']}")
+        print(f"p14_shadow_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
+        print(f"p14_shadow_outcome_analytics|markdown|{paths['markdown_path']}")
+        print(f"p14_shadow_outcome_analytics|group_count|{analytics['group_count']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

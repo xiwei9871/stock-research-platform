@@ -3133,6 +3133,94 @@ def test_p13_import_shadow_outcomes_cli_prints_summary(monkeypatch, capsys, tmp_
     ]
 
 
+def test_p14_shadow_outcome_analytics_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            "outputs/p13/operator_shadow_outcomes_2026-08-29.json",
+            "--run-id",
+            "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            "outputs/p14",
+        ]
+    )
+
+    assert args.command == "p14-shadow-outcome-analytics"
+    assert args.shadow_outcomes_json == "outputs/p13/operator_shadow_outcomes_2026-08-29.json"
+    assert args.run_id == "p14-shadow-outcome-analytics-2026-06-30-2026-08-29"
+    assert args.review_start_date == "2026-06-30"
+    assert args.review_end_date == "2026-08-29"
+    assert args.output_dir == "outputs/p14"
+
+
+def test_p14_shadow_outcome_analytics_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
+    json_path.write_text(
+        '{"run_id":"p13","review_date":"2026-08-29","outcome_count":0,"outcomes":[]}',
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_load_shadow_outcome_read_model_rows(path):
+        captured["loaded_path"] = str(path)
+        return {"candidates": []}
+
+    def fake_build_shadow_outcome_analytics(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "review_start_date": kwargs["review_start_date"],
+            "review_end_date": kwargs["review_end_date"],
+            "group_count": 0,
+            "manual_review_required": True,
+            "auto_trade_enabled": False,
+            "production_watchlist_enabled": False,
+            "production_write_enabled": False,
+            "groups": [],
+        }
+
+    def fake_write_shadow_outcome_analytics(analytics, output_dir):
+        captured["written"] = {"analytics": analytics, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p14.json"),
+            "groups_csv_path": str(tmp_path / "p14_groups.csv"),
+            "markdown_path": str(tmp_path / "p14.md"),
+        }
+
+    monkeypatch.setattr(cli, "load_shadow_outcome_read_model_rows", fake_load_shadow_outcome_read_model_rows)
+    monkeypatch.setattr(cli, "build_shadow_outcome_analytics", fake_build_shadow_outcome_analytics)
+    monkeypatch.setattr(cli, "write_shadow_outcome_analytics", fake_write_shadow_outcome_analytics)
+
+    cli.main_for_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            str(json_path),
+            "--run-id",
+            "p14-run",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p14_shadow_outcome_analytics|json|" in output
+    assert "p14_shadow_outcome_analytics|groups_csv|" in output
+    assert "p14_shadow_outcome_analytics|markdown|" in output
+    assert "p14_shadow_outcome_analytics|group_count|0" in output
+    assert captured["loaded_path"] == str(json_path)
+    assert captured["build"]["run_id"] == "p14-run"
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
