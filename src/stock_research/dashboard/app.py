@@ -15,6 +15,7 @@ from stock_research.dashboard.scores import (
     search_assets,
 )
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
+from stock_research.dashboard.shadow_analytics_review import load_shadow_analytics_review_summary
 from stock_research.dashboard.shadow_outcome_analytics import load_shadow_outcome_analytics_summary
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
 from stock_research.dashboard.watchlist import (
@@ -224,6 +225,20 @@ def create_app() -> FastAPI:
     ):
         return {
             "items": load_shadow_outcome_analytics_summary(
+                start_date,
+                end_date,
+                limit,
+            ),
+        }
+
+    @app.get("/api/shadow-analytics-review")
+    def shadow_analytics_review(
+        start_date: str,
+        end_date: str,
+        limit: int = 20,
+    ):
+        return {
+            "items": load_shadow_analytics_review_summary(
                 start_date,
                 end_date,
                 limit,

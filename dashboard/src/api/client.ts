@@ -7,6 +7,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowAnalyticsReviewRow,
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
@@ -171,6 +172,19 @@ export async function fetchShadowOutcomeAnalytics(
   const limit = options.limit ?? 20;
   const payload = await getJson<{ items: ShadowOutcomeAnalyticsRow[] }>(
     `/api/shadow-outcome-analytics?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&limit=${limit}`
+  );
+  return payload.items;
+}
+
+export async function fetchShadowAnalyticsReview(
+  startDate: string,
+  endDate: string,
+  options: { limit?: number } = {}
+): Promise<ShadowAnalyticsReviewRow[]> {
+  const limit = options.limit ?? 20;
+  const payload = await getJson<{ items: ShadowAnalyticsReviewRow[] }>(
+    `/api/shadow-analytics-review?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}`
   );
   return payload.items;

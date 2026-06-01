@@ -157,6 +157,56 @@ def test_asset_outcomes_route_returns_read_only_history(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_shadow_analytics_review_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_review(start_date, end_date, limit):
+        captured["args"] = [start_date, end_date, limit]
+        return [
+            {
+                "review_group_id": "operator_shadow_analytics_review:trend-ready",
+                "run_id": "p15-shadow-analytics-review-2026-08-31",
+                "review_start_date": "2026-06-01",
+                "review_end_date": "2026-08-31",
+                "group_key": "trend_shadow|shadow_ready",
+                "shadow_layer": "trend_shadow",
+                "shadow_status": "shadow_ready",
+                "sample_count": 4,
+                "complete_count": 3,
+                "insufficient_data_count": 1,
+                "horizon_metrics": {"20": {"forward_return_mean": 0.12}},
+                "review_status": "research_follow_up_candidate",
+                "review_bucket": "needs_more_evidence",
+                "evidence_summary": "Positive 20D mean with incomplete samples.",
+                "risk_notes": "Observe only.",
+                "next_research_question": "Can drawdown improve under stricter filters?",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_shadow_analytics_review_summary",
+        fake_load_review,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/shadow-analytics-review"
+        "?start_date=2026-06-01"
+        "&end_date=2026-08-31"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-06-01", "2026-08-31", 10]
+    assert response.json()["items"][0]["review_status"] == "research_follow_up_candidate"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_outcome_analytics_route_returns_read_only_summary(monkeypatch):
     captured = {}
 
