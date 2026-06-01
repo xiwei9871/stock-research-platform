@@ -3307,6 +3307,83 @@ def test_p15_shadow_analytics_review_dispatches_to_builder(monkeypatch, tmp_path
     assert captured["build"]["p14_analytics"] == {"groups": []}
 
 
+def test_p16_shadow_review_decisions_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p16-shadow-review-decisions",
+            "--p15-review-json",
+            "outputs/p15/operator_shadow_analytics_review_2026-06-30_2026-08-29.json",
+            "--run-id",
+            "p16-shadow-review-decisions-2026-08-29",
+            "--decision-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            "outputs/p16",
+        ]
+    )
+
+    assert args.command == "p16-shadow-review-decisions"
+    assert args.p15_review_json.endswith(".json")
+    assert args.operator_id == "operator-a"
+
+
+def test_p16_shadow_review_decisions_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_analytics_review_2026-06-30_2026-08-29.json"
+    json_path.write_text('{"groups": []}', encoding="utf-8")
+    captured = {}
+
+    def fake_build_shadow_review_decisions(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "decision_date": kwargs["decision_date"],
+            "operator_id": kwargs["operator_id"],
+            "status": "shadow_review_decisions_ready",
+            "group_count": 1,
+            "groups": [{"decision_group_id": "group-a"}],
+        }
+
+    def fake_write_shadow_review_decisions(decisions, output_dir):
+        captured["written"] = {"decisions": decisions, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p16.json"),
+            "groups_csv_path": str(tmp_path / "p16_groups.csv"),
+            "markdown_path": str(tmp_path / "p16.md"),
+        }
+
+    monkeypatch.setattr(cli, "build_shadow_review_decisions", fake_build_shadow_review_decisions)
+    monkeypatch.setattr(cli, "write_shadow_review_decisions", fake_write_shadow_review_decisions)
+
+    cli.main_for_args(
+        [
+            "p16-shadow-review-decisions",
+            "--p15-review-json",
+            str(json_path),
+            "--run-id",
+            "p16-run",
+            "--decision-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p16_shadow_review_decisions|status|shadow_review_decisions_ready",
+        "p16_shadow_review_decisions|groups|1",
+        f"p16_shadow_review_decisions|json|{tmp_path / 'p16.json'}",
+        f"p16_shadow_review_decisions|groups_csv|{tmp_path / 'p16_groups.csv'}",
+        f"p16_shadow_review_decisions|markdown|{tmp_path / 'p16.md'}",
+    ]
+    assert captured["build"]["run_id"] == "p16-run"
+    assert captured["build"]["operator_id"] == "operator-a"
+    assert captured["build"]["p15_review"] == {"groups": []}
+
+
 def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
     p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
     p13_json.write_text(

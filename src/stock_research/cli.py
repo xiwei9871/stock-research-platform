@@ -188,6 +188,10 @@ from stock_research.operator_decision.shadow_analytics_review import (
     build_shadow_analytics_review,
     write_shadow_analytics_review,
 )
+from stock_research.operator_decision.shadow_review_decisions import (
+    build_shadow_review_decisions,
+    write_shadow_review_decisions,
+)
 from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
     import_shadow_outcome_analytics,
 )
@@ -1812,6 +1816,13 @@ def build_parser() -> argparse.ArgumentParser:
     p15_shadow_analytics_review.add_argument("--reviewer-id", required=True)
     p15_shadow_analytics_review.add_argument("--output-dir", required=True)
 
+    p16_shadow_review_decisions = subparsers.add_parser("p16-shadow-review-decisions")
+    p16_shadow_review_decisions.add_argument("--p15-review-json", required=True)
+    p16_shadow_review_decisions.add_argument("--run-id", required=True)
+    p16_shadow_review_decisions.add_argument("--decision-date", required=True)
+    p16_shadow_review_decisions.add_argument("--operator-id", required=True)
+    p16_shadow_review_decisions.add_argument("--output-dir", required=True)
+
     p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
     p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
     p14_import_shadow_outcome_analytics.add_argument("--service", default=SETTINGS.research_service)
@@ -3327,6 +3338,20 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p15_shadow_analytics_review|json|{paths['json_path']}")
         print(f"p15_shadow_analytics_review|groups_csv|{paths['groups_csv_path']}")
         print(f"p15_shadow_analytics_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p16-shadow-review-decisions":
+        p15_payload = json.loads(Path(args.p15_review_json).read_text(encoding="utf-8"))
+        decisions = build_shadow_review_decisions(
+            p15_review=p15_payload,
+            run_id=args.run_id,
+            decision_date=args.decision_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_review_decisions(decisions, args.output_dir)
+        print(f"p16_shadow_review_decisions|status|{decisions['status']}")
+        print(f"p16_shadow_review_decisions|groups|{decisions['group_count']}")
+        print(f"p16_shadow_review_decisions|json|{paths['json_path']}")
+        print(f"p16_shadow_review_decisions|groups_csv|{paths['groups_csv_path']}")
+        print(f"p16_shadow_review_decisions|markdown|{paths['markdown_path']}")
     elif args.command == "p14-import-shadow-outcome-analytics":
         result = import_shadow_outcome_analytics(args.path, service=args.service)
         print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
