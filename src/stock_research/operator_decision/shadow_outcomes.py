@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -209,9 +210,13 @@ def _outcome_row(
 def _base_outcome_row(candidate: dict[str, Any], *, run_id: str | None) -> dict[str, Any]:
     candidate_date = candidate.get("candidate_date")
     shadow_candidate_id = str(candidate.get("shadow_candidate_id") or "")
+    outcome_run_id = str(run_id or "")
     return {
-        "shadow_outcome_id": f"p13-shadow-outcome:{shadow_candidate_id}",
-        "run_id": str(run_id or ""),
+        "shadow_outcome_id": _shadow_outcome_id(
+            run_id=outcome_run_id,
+            shadow_candidate_id=shadow_candidate_id,
+        ),
+        "run_id": outcome_run_id,
         "shadow_candidate_id": shadow_candidate_id,
         "source_p12_shadow_run_id": str(candidate.get("run_id") or ""),
         "replay_result_id": str(candidate.get("replay_result_id") or ""),
@@ -452,6 +457,12 @@ def _safe_path_part(value: Any) -> str:
 def _float_or_none(value: Any) -> float | None:
     number = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     return float(number) if pd.notna(number) else None
+
+
+def _shadow_outcome_id(*, run_id: str, shadow_candidate_id: str) -> str:
+    raw = "|".join([run_id, shadow_candidate_id])
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    return f"operator_shadow_outcome:{run_id}:{digest}"
 
 
 def _bool_value(value: Any) -> bool | None:

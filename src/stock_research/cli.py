@@ -198,6 +198,7 @@ from stock_research.operator_decision.shadow_outcomes import (
     build_shadow_outcome_review,
     write_shadow_outcome_review,
 )
+from stock_research.operator_decision.shadow_outcomes_read_model import import_shadow_outcome_review
 from stock_research.operator_decision.shadow_watchlist_read_model import (
     import_shadow_watchlist_review,
     load_shadow_watchlist_read_model_rows,
@@ -1776,6 +1777,10 @@ def build_parser() -> argparse.ArgumentParser:
     p13_shadow_outcome_review.add_argument("--run-id")
     p13_shadow_outcome_review.add_argument("--output-dir", required=True)
 
+    p13_import_shadow_outcomes = subparsers.add_parser("p13-import-shadow-outcomes")
+    p13_import_shadow_outcomes.add_argument("--path", required=True)
+    p13_import_shadow_outcomes.add_argument("--service", default="stock_research")
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3244,6 +3249,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p13_shadow_outcome|json|{paths['json_path']}")
         print(f"p13_shadow_outcome|details_csv|{paths['details_csv_path']}")
         print(f"p13_shadow_outcome|markdown|{paths['markdown_path']}")
+    elif args.command == "p13-import-shadow-outcomes":
+        result = import_shadow_outcome_review(Path(args.path), service=args.service)
+        print(f"p13_shadow_outcome_import|imported|{result['imported_count']}")
+        print(f"p13_shadow_outcome_import|candidates|{result['candidate_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p13_shadow_outcome_import|run_id|{run_id}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

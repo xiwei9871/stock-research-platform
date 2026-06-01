@@ -166,6 +166,30 @@ def test_build_shadow_outcome_review_preserves_review_only_artifact_contract():
     assert review["outcomes"][0]["source_p12_shadow_run_id"] == "p12-shadow-watchlist-2026-06-30"
 
 
+def test_build_shadow_outcome_review_scopes_outcome_ids_by_p13_run_id():
+    first = build_shadow_outcome_review(
+        review_date="2026-07-31",
+        shadow_candidates=_shadow_candidates().iloc[:1],
+        bars=_bars(),
+        horizons=[1],
+        run_id="p13-shadow-outcomes-2026-07-31",
+    )
+    second = build_shadow_outcome_review(
+        review_date="2026-08-01",
+        shadow_candidates=_shadow_candidates().iloc[:1],
+        bars=_bars(),
+        horizons=[1],
+        run_id="p13-shadow-outcomes-2026-08-01",
+    )
+
+    first_id = first["outcomes"][0]["shadow_outcome_id"]
+    second_id = second["outcomes"][0]["shadow_outcome_id"]
+    assert first["outcomes"][0]["shadow_candidate_id"] == second["outcomes"][0]["shadow_candidate_id"]
+    assert first_id != second_id
+    assert first_id.startswith("operator_shadow_outcome:p13-shadow-outcomes-2026-07-31:")
+    assert second_id.startswith("operator_shadow_outcome:p13-shadow-outcomes-2026-08-01:")
+
+
 def test_write_shadow_outcome_review_outputs_json_csv_and_markdown(tmp_path):
     review = build_shadow_outcome_review(
         review_date="2026-07-31",
