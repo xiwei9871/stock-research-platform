@@ -7,6 +7,7 @@ import {
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchShadowAnalyticsReview,
+  fetchShadowReviewDecisions,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
   fetchShadowWatchlist
@@ -190,5 +191,20 @@ describe('dashboard API client', () => {
       '/api/shadow-analytics-review?start_date=2026-06-01&end_date=2026-08-31&limit=20'
     );
     expect(result[0].review_status).toBe('research_follow_up_candidate');
+  });
+
+  it('fetches shadow review decisions summary with limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ decision_status: 'open_research_follow_up' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchShadowReviewDecisions('2026-06-01', '2026-08-31', { limit: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/shadow-review-decisions?start_date=2026-06-01&end_date=2026-08-31&limit=20'
+    );
+    expect(result[0].decision_status).toBe('open_research_follow_up');
   });
 });

@@ -259,6 +259,35 @@ export type ShadowAnalyticsReviewRow = {
   production_write_enabled: boolean;
 };
 
+export type ShadowReviewDecisionRow = {
+  decision_group_id: string;
+  run_id: string;
+  decision_date: string;
+  source_p15_review_group_id: string;
+  source_p15_review_run_id: string;
+  source_p14_analytics_group_id: string;
+  source_p14_analytics_run_id: string;
+  group_key: string;
+  shadow_layer: string;
+  shadow_status: string;
+  sample_count: number;
+  complete_count: number;
+  insufficient_data_count: number;
+  review_status: string;
+  review_bucket: string;
+  decision_status: string;
+  decision_bucket: string;
+  decision_reason: string;
+  required_next_action: string;
+  evidence_summary: string;
+  risk_notes: string;
+  next_research_question: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_watchlist_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;
