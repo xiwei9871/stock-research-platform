@@ -74,7 +74,7 @@ stock-research dashboard-api --host 127.0.0.1 --port 8765
 Read-only endpoint:
 
 ```text
-GET /api/shadow-outcome-analytics
+GET /api/shadow-outcome-analytics?start_date=2026-06-01&end_date=2026-08-31&limit=20
 ```
 
 Start the frontend:
