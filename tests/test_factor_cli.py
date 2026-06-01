@@ -3176,6 +3176,8 @@ def test_p14_shadow_outcome_analytics_dispatches_to_builder(monkeypatch, tmp_pat
             "run_id": kwargs["run_id"],
             "review_start_date": kwargs["review_start_date"],
             "review_end_date": kwargs["review_end_date"],
+            "status": "no_shadow_outcomes_recorded",
+            "source_outcome_count": 0,
             "group_count": 0,
             "manual_review_required": True,
             "auto_trade_enabled": False,
@@ -3213,12 +3215,97 @@ def test_p14_shadow_outcome_analytics_dispatches_to_builder(monkeypatch, tmp_pat
     )
 
     output = capsys.readouterr().out
+    assert "p14_shadow_outcome_analytics|status|" in output
+    assert "p14_shadow_outcome_analytics|source_outcomes|" in output
+    assert "p14_shadow_outcome_analytics|groups|" in output
     assert "p14_shadow_outcome_analytics|json|" in output
     assert "p14_shadow_outcome_analytics|groups_csv|" in output
     assert "p14_shadow_outcome_analytics|markdown|" in output
-    assert "p14_shadow_outcome_analytics|group_count|0" in output
     assert captured["loaded_path"] == str(json_path)
     assert captured["build"]["run_id"] == "p14-run"
+
+
+def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
+    p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
+    p13_json.write_text(
+        json.dumps(
+            {
+                "run_id": "p13-shadow-outcomes-2026-08-29",
+                "review_date": "2026-08-29",
+                "status": "shadow_outcome_review_ready",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+                "horizons": [5],
+                "outcome_count": 1,
+                "outcomes": [
+                    {
+                        "shadow_outcome_id": "operator_shadow_outcome:p13-shadow-outcomes-2026-08-29:001",
+                        "run_id": "p13-shadow-outcomes-2026-08-29",
+                        "shadow_candidate_id": "p12-shadow:001",
+                        "source_p12_shadow_run_id": "p12-shadow-watchlist-2026-06-30",
+                        "replay_result_id": "p11-replay:001",
+                        "source_p11_replay_run_id": "p11-replay-2026-06-30",
+                        "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+                        "source_p9_analytics_run_id": "p9-analytics-2026-05-30-2026-06-30",
+                        "candidate_date": "2026-06-30",
+                        "asset_id": "000001.SZ",
+                        "stock_code": "000001",
+                        "stock_name": "Ping An Bank",
+                        "shadow_layer": "trend_shadow",
+                        "shadow_status": "shadow_ready",
+                        "outcome_status": "complete",
+                        "available_future_bars": 60,
+                        "base_trade_date": "2026-06-30",
+                        "base_close": 10.0,
+                        "forward_5d_return": 0.12,
+                        "max_high_return_5d": 0.18,
+                        "max_low_drawdown_5d": -0.04,
+                        "manual_review_required": True,
+                        "auto_trade_enabled": False,
+                        "production_watchlist_enabled": False,
+                        "production_write_enabled": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "p14"
+
+    cli.main_for_args(
+        [
+            "p14-shadow-outcome-analytics",
+            "--shadow-outcomes-json",
+            str(p13_json),
+            "--run-id",
+            "p14-run",
+            "--review-start-date",
+            "2026-06-30",
+            "--review-end-date",
+            "2026-08-29",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    output_lines = capsys.readouterr().out.splitlines()
+    assert output_lines[:3] == [
+        "p14_shadow_outcome_analytics|status|shadow_outcome_analytics_ready",
+        "p14_shadow_outcome_analytics|source_outcomes|1",
+        "p14_shadow_outcome_analytics|groups|1",
+    ]
+    payload = json.loads(
+        (output_dir / "operator_shadow_outcome_analytics_2026-06-30_2026-08-29.json").read_text()
+    )
+    group = payload["groups"][0]
+    assert group["group_key"] == "trend_shadow|shadow_ready"
+    assert group["forward_5d_return_mean"] == 0.12
+    assert group["max_high_return_5d_mean"] == 0.18
+    assert group["max_low_drawdown_5d_worst"] == -0.04
+    groups = pd.read_csv(output_dir / "operator_shadow_outcome_analytics_2026-06-30_2026-08-29_groups.csv")
+    assert groups.loc[0, "forward_5d_return_mean"] == 0.12
 
 
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):

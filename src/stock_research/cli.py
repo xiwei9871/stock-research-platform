@@ -3281,10 +3281,12 @@ def main_for_args(argv: list[str] | None = None) -> None:
             run_id=args.run_id,
         )
         paths = write_shadow_outcome_analytics(analytics, args.output_dir)
+        print(f"p14_shadow_outcome_analytics|status|{analytics['status']}")
+        print(f"p14_shadow_outcome_analytics|source_outcomes|{analytics['source_outcome_count']}")
+        print(f"p14_shadow_outcome_analytics|groups|{analytics['group_count']}")
         print(f"p14_shadow_outcome_analytics|json|{paths['json_path']}")
         print(f"p14_shadow_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
         print(f"p14_shadow_outcome_analytics|markdown|{paths['markdown_path']}")
-        print(f"p14_shadow_outcome_analytics|group_count|{analytics['group_count']}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,

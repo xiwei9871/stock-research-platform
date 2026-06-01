@@ -153,6 +153,31 @@ def test_build_shadow_outcome_analytics_rejects_production_enabled_rows():
         build_shadow_outcome_analytics_from_frames(shadow_outcomes=outcomes)
 
 
+def test_build_shadow_outcome_analytics_reads_p13_read_model_metric_maps():
+    outcomes = _outcomes().drop(
+        columns=[
+            "forward_5d_return",
+            "forward_20d_return",
+            "max_high_return_20d",
+            "max_low_drawdown_20d",
+        ]
+    )
+    outcomes["forward_returns"] = [{"5": 0.10, "20": 0.20}, {"5": -0.02, "20": 0.04}, {}]
+    outcomes["max_high_returns"] = [{"20": 0.30}, {"20": 0.08}, {}]
+    outcomes["max_low_drawdowns"] = [{"20": -0.05}, {"20": -0.12}, {}]
+
+    result = build_shadow_outcome_analytics_from_frames(
+        shadow_outcomes=outcomes,
+        horizons=[5, 20],
+    )
+
+    trend_ready = result.set_index("group_key").loc["trend_shadow|shadow_ready"]
+    assert round(float(trend_ready["forward_5d_return_mean"]), 6) == 0.04
+    assert round(float(trend_ready["forward_20d_return_median"]), 6) == 0.12
+    assert round(float(trend_ready["max_high_return_20d_mean"]), 6) == 0.19
+    assert round(float(trend_ready["max_low_drawdown_20d_worst"]), 6) == -0.12
+
+
 def test_build_shadow_outcome_analytics_rejects_missing_lineage():
     outcomes = _outcomes()
     outcomes.loc[0, "source_p10_proposal_run_id"] = ""

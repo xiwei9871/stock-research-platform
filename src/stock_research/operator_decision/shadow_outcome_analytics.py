@@ -188,6 +188,16 @@ def _normalize_shadow_outcomes(outcomes: pd.DataFrame, horizons: list[int]) -> p
 
     for horizon in horizons:
         for column in _source_metric_columns(horizon):
+            metric_map = _metric_map_column(column)
+            normalized[column] = normalized.apply(
+                lambda row, metric_column=column, map_column=metric_map, metric_horizon=horizon: _metric_value(
+                    row,
+                    metric_column=metric_column,
+                    map_column=map_column,
+                    horizon=metric_horizon,
+                ),
+                axis=1,
+            )
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
             normalized.loc[~normalized["is_complete"], column] = pd.NA
     return normalized
@@ -330,6 +340,24 @@ def _source_metric_columns(horizon: int) -> list[str]:
         f"max_high_return_{horizon}d",
         f"max_low_drawdown_{horizon}d",
     ]
+
+
+def _metric_map_column(metric_column: str) -> str:
+    if metric_column.startswith("forward_"):
+        return "forward_returns"
+    if metric_column.startswith("max_high_return_"):
+        return "max_high_returns"
+    return "max_low_drawdowns"
+
+
+def _metric_value(row: pd.Series, *, metric_column: str, map_column: str, horizon: int) -> Any:
+    value = row.get(metric_column)
+    if not _is_missing(value):
+        return value
+    metric_map = row.get(map_column)
+    if isinstance(metric_map, dict):
+        return metric_map.get(str(horizon), metric_map.get(horizon, pd.NA))
+    return pd.NA
 
 
 def _base_columns() -> list[str]:
