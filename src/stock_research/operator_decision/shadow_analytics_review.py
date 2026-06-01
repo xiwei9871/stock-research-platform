@@ -198,7 +198,7 @@ def _review_group(
 ) -> dict[str, Any]:
     review_status = _review_status(row, thresholds=thresholds, primary_horizon=primary_horizon)
     source_group_id = _required_text(row, "analytics_group_id")
-    digest = hashlib.sha256(f"{source_group_id}|{review_status}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(f"{run_id}|{source_group_id}|{review_status}".encode("utf-8")).hexdigest()[:16]
     metrics = _primary_horizon_metrics(row, primary_horizon)
     insufficient_rate = _insufficient_data_rate(row)
     group = {

@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from stock_research.operator_decision.shadow_analytics_review import (
     write_shadow_analytics_review,
 )
 from stock_research.operator_decision.shadow_outcome_analytics import build_shadow_outcome_analytics
+from stock_research.operator_decision.shadow_analytics_review_read_model import (
+    load_shadow_analytics_review_read_model_rows,
+)
 
 
 def _group(**overrides):
@@ -133,6 +137,28 @@ def test_build_shadow_analytics_review_preserves_run_metadata_and_writes_artifac
     assert Path(paths["groups_csv_path"]).exists()
     assert Path(paths["markdown_path"]).exists()
     assert "research_follow_up_candidate" in Path(paths["markdown_path"]).read_text(encoding="utf-8")
+
+
+def test_build_shadow_analytics_review_group_id_matches_read_model_derivation(tmp_path):
+    run_id = "p15-shadow-analytics-review-2026-06-30-2026-08-29"
+    source_group_id = "operator_shadow_outcome_analytics:p14:001"
+    review = build_shadow_analytics_review_from_rows(
+        [_group(analytics_group_id=source_group_id)],
+        run_id=run_id,
+        review_start_date="2026-06-30",
+        review_end_date="2026-08-29",
+        reviewer_id="operator",
+    )
+
+    digest = hashlib.sha256(f"{run_id}|{source_group_id}|research_follow_up_candidate".encode("utf-8")).hexdigest()[
+        :16
+    ]
+    expected_id = f"operator_shadow_analytics_review:{run_id}:{digest}"
+    assert review["groups"][0]["review_group_id"] == expected_id
+
+    paths = write_shadow_analytics_review(review, tmp_path)
+    rows = load_shadow_analytics_review_read_model_rows(paths["json_path"])
+    assert rows["groups"][0]["review_group_id"] == expected_id
 
 
 def test_build_shadow_analytics_review_accepts_raw_p14_artifact_shape():
