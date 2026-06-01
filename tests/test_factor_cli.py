@@ -3426,6 +3426,43 @@ def test_p14_import_shadow_outcome_analytics_dispatches(monkeypatch, capsys):
     assert captured == {"path": "outputs/p14", "service": "stock_research_test"}
 
 
+def test_p15_import_shadow_analytics_review_parser_accepts_path():
+    args = cli.build_parser().parse_args(
+        ["p15-import-shadow-analytics-review", "--path", "outputs/p15"]
+    )
+
+    assert args.command == "p15-import-shadow-analytics-review"
+    assert args.path == "outputs/p15"
+    assert args.service == "stock_research"
+
+
+def test_p15_import_shadow_analytics_review_dispatches(monkeypatch, capsys):
+    captured = {}
+
+    def fake_import_shadow_analytics_review(path, service):
+        captured["path"] = path
+        captured["service"] = service
+        return {"imported_count": 2, "group_count": 3, "run_ids": ["p15-a", "p15-b"]}
+
+    monkeypatch.setattr(cli, "import_shadow_analytics_review", fake_import_shadow_analytics_review)
+
+    cli.main_for_args(
+        [
+            "p15-import-shadow-analytics-review",
+            "--path",
+            "outputs/p15",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p15_import_shadow_analytics_review|imported|2" in output
+    assert "p15_import_shadow_analytics_review|groups|3" in output
+    assert "p15_import_shadow_analytics_review|runs|p15-a,p15-b" in output
+    assert captured == {"path": "outputs/p15", "service": "stock_research_test"}
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"
