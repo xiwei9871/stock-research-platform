@@ -3384,6 +3384,83 @@ def test_p16_shadow_review_decisions_dispatches_to_builder(monkeypatch, tmp_path
     assert captured["build"]["p15_review"] == {"groups": []}
 
 
+def test_p17_shadow_follow_up_queue_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p17-shadow-follow-up-queue",
+            "--p16-decisions-json",
+            "outputs/p16/operator_shadow_review_decisions_2026-08-29.json",
+            "--run-id",
+            "p17-shadow-follow-up-queue-2026-08-29",
+            "--follow-up-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            "outputs/p17",
+        ]
+    )
+
+    assert args.command == "p17-shadow-follow-up-queue"
+    assert args.p16_decisions_json.endswith(".json")
+    assert args.operator_id == "operator-a"
+
+
+def test_p17_shadow_follow_up_queue_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_review_decisions_2026-08-29.json"
+    json_path.write_text('{"groups": []}', encoding="utf-8")
+    captured = {}
+
+    def fake_build_shadow_follow_up_queue(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "follow_up_date": kwargs["follow_up_date"],
+            "operator_id": kwargs["operator_id"],
+            "status": "shadow_follow_up_queue_ready",
+            "item_count": 1,
+            "items": [{"follow_up_item_id": "item-a"}],
+        }
+
+    def fake_write_shadow_follow_up_queue(queue, output_dir):
+        captured["written"] = {"queue": queue, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p17.json"),
+            "items_csv_path": str(tmp_path / "p17_items.csv"),
+            "markdown_path": str(tmp_path / "p17.md"),
+        }
+
+    monkeypatch.setattr(cli, "build_shadow_follow_up_queue", fake_build_shadow_follow_up_queue)
+    monkeypatch.setattr(cli, "write_shadow_follow_up_queue", fake_write_shadow_follow_up_queue)
+
+    cli.main_for_args(
+        [
+            "p17-shadow-follow-up-queue",
+            "--p16-decisions-json",
+            str(json_path),
+            "--run-id",
+            "p17-run",
+            "--follow-up-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p17_shadow_follow_up_queue|status|shadow_follow_up_queue_ready",
+        "p17_shadow_follow_up_queue|items|1",
+        f"p17_shadow_follow_up_queue|json|{tmp_path / 'p17.json'}",
+        f"p17_shadow_follow_up_queue|items_csv|{tmp_path / 'p17_items.csv'}",
+        f"p17_shadow_follow_up_queue|markdown|{tmp_path / 'p17.md'}",
+    ]
+    assert captured["build"]["run_id"] == "p17-run"
+    assert captured["build"]["operator_id"] == "operator-a"
+    assert captured["build"]["p16_decisions"] == {"groups": []}
+
+
 def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
     p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
     p13_json.write_text(
