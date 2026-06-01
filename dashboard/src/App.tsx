@@ -9,6 +9,7 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchShadowAnalyticsReview,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
   fetchShadowWatchlist
@@ -22,6 +23,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowAnalyticsReviewRow,
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
@@ -36,6 +38,7 @@ import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { ShadowOutcomesPanel } from './components/ShadowOutcomesPanel';
+import { ShadowAnalyticsReviewPanel } from './components/ShadowAnalyticsReviewPanel';
 import { ShadowOutcomeAnalyticsPanel } from './components/ShadowOutcomeAnalyticsPanel';
 import { ShadowWatchlistPanel } from './components/ShadowWatchlistPanel';
 import { TopNList } from './components/TopNList';
@@ -69,6 +72,7 @@ export function App() {
   const [shadowWatchlist, setShadowWatchlist] = useState<ShadowWatchlistRow[]>([]);
   const [shadowOutcomes, setShadowOutcomes] = useState<ShadowOutcomeRow[]>([]);
   const [shadowOutcomeAnalytics, setShadowOutcomeAnalytics] = useState<ShadowOutcomeAnalyticsRow[]>([]);
+  const [shadowAnalyticsReview, setShadowAnalyticsReview] = useState<ShadowAnalyticsReviewRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
@@ -76,6 +80,7 @@ export function App() {
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
   const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
   const [shadowOutcomeAnalyticsLoading, setShadowOutcomeAnalyticsLoading] = useState(false);
+  const [shadowAnalyticsReviewLoading, setShadowAnalyticsReviewLoading] = useState(false);
 
   const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
@@ -248,6 +253,30 @@ export function App() {
   useEffect(() => {
     let ignore = false;
     setError(null);
+    setShadowAnalyticsReviewLoading(true);
+    fetchShadowAnalyticsReview(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setShadowAnalyticsReview(rows);
+          setShadowAnalyticsReviewLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setShadowAnalyticsReview([]);
+          setShadowAnalyticsReviewLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
     setAssetLoading(true);
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
@@ -332,6 +361,10 @@ export function App() {
         <ShadowOutcomeAnalyticsPanel
           rows={shadowOutcomeAnalytics}
           isLoading={shadowOutcomeAnalyticsLoading}
+        />
+        <ShadowAnalyticsReviewPanel
+          rows={shadowAnalyticsReview}
+          isLoading={shadowAnalyticsReviewLoading}
         />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>

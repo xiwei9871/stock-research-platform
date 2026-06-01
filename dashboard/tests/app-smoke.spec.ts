@@ -346,6 +346,42 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-analytics-review**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            review_group_id: 'operator_shadow_analytics_review:trend-ready',
+            run_id: 'p15-shadow-analytics-review-2026-08-31',
+            review_start_date: '2026-06-01',
+            review_end_date: '2026-08-31',
+            group_key: 'trend_shadow|shadow_ready',
+            shadow_layer: 'trend_shadow',
+            shadow_status: 'shadow_ready',
+            sample_count: 4,
+            complete_count: 3,
+            insufficient_data_count: 1,
+            horizon_metrics: {
+              '20': {
+                forward_return_mean: 0.08,
+                max_low_drawdown_worst: -0.15
+              }
+            },
+            review_status: 'research_follow_up_candidate',
+            review_bucket: 'needs_more_evidence',
+            evidence_summary: 'Positive 20D mean with incomplete samples.',
+            risk_notes: 'Observe only until a larger sample is available.',
+            next_research_question: 'Can drawdown improve under stricter filters?',
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -394,6 +430,11 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
     .filter({ has: page.getByRole('heading', { name: 'Shadow Outcome Analytics' }) });
   await expect(shadowOutcomeAnalyticsPanel.getByText('trend_shadow')).toBeVisible();
   await expect(shadowOutcomeAnalyticsPanel.getByText(/20D\s+\+12.0%/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
+  const shadowAnalyticsReviewPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Analytics Review' }) });
+  await expect(shadowAnalyticsReviewPanel.getByText('research_follow_up_candidate')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
@@ -414,6 +455,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
 });

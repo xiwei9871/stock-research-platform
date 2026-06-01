@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import type {
   BarPoint,
@@ -12,6 +13,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowAnalyticsReviewRow,
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
@@ -28,6 +30,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchShadowAnalyticsReview: vi.fn(),
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
   fetchShadowWatchlist: vi.fn()
@@ -369,6 +372,38 @@ function makeShadowOutcomeAnalytics(): ShadowOutcomeAnalyticsRow[] {
   ];
 }
 
+function makeShadowAnalyticsReview(): ShadowAnalyticsReviewRow[] {
+  return [
+    {
+      review_group_id: 'operator_shadow_analytics_review:trend-ready',
+      run_id: 'p15-shadow-analytics-review-2026-08-31',
+      review_start_date: '2026-06-01',
+      review_end_date: '2026-08-31',
+      group_key: 'trend_shadow|shadow_ready',
+      shadow_layer: 'trend_shadow',
+      shadow_status: 'shadow_ready',
+      sample_count: 4,
+      complete_count: 3,
+      insufficient_data_count: 1,
+      horizon_metrics: {
+        '20': {
+          forward_return_mean: 0.08,
+          max_low_drawdown_worst: -0.15
+        }
+      },
+      review_status: 'research_follow_up_candidate',
+      review_bucket: 'needs_more_evidence',
+      evidence_summary: 'Positive 20D mean with incomplete samples.',
+      risk_notes: 'Observe only until a larger sample is available.',
+      next_research_question: 'Can drawdown improve under stricter filters?',
+      manual_review_required: true,
+      auto_trade_enabled: false,
+      production_watchlist_enabled: false,
+      production_write_enabled: false
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -384,6 +419,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
     apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
+    apiMocks.fetchShadowAnalyticsReview.mockResolvedValue(makeShadowAnalyticsReview());
   });
 
   afterEach(() => {
@@ -415,16 +451,19 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Experiment Replay')).toBeVisible();
     expect(screen.getByText('passed_offline_replay')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
-    expect(screen.getAllByText('shadow_ready')).toHaveLength(3);
+    expect(screen.getAllByText('shadow_ready')).toHaveLength(4);
     expect(screen.getByText('Shadow Outcomes')).toBeVisible();
     expect(screen.getByText('complete')).toBeVisible();
     expect(screen.getByText(/5D\s+\+50.0%/)).toBeVisible();
     expect(screen.getByText('Shadow Outcome Analytics')).toBeVisible();
-    expect(screen.getAllByText('trend_shadow')).toHaveLength(3);
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(4);
     expect(screen.getByText(/20D\s+\+12.0%/)).toBeVisible();
+    expect(screen.getByText('Shadow Analytics Review')).toBeVisible();
+    expect(screen.getByText('research_follow_up_candidate')).toBeVisible();
+    expect(screen.getByText('needs_more_evidence')).toBeVisible();
     expect(screen.getByText('p12-shadow-watchlist-2026-06-30')).toBeVisible();
     expect(screen.getAllByText('p11-replay-run-2026-06-30')).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /promote|trade|write watchlist/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /promote|trade|write watchlist|scheduler/i })).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('1 bars');
     expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-05-29',
@@ -447,6 +486,7 @@ describe('dashboard app shell', () => {
     const shadow = createDeferred<ShadowWatchlistRow[]>();
     const shadowOutcomes = createDeferred<ShadowOutcomeRow[]>();
     const shadowOutcomeAnalytics = createDeferred<ShadowOutcomeAnalyticsRow[]>();
+    const shadowAnalyticsReview = createDeferred<ShadowAnalyticsReviewRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -460,6 +500,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowWatchlist.mockReturnValueOnce(shadow.promise);
     apiMocks.fetchShadowOutcomes.mockReturnValueOnce(shadowOutcomes.promise);
     apiMocks.fetchShadowOutcomeAnalytics.mockReturnValueOnce(shadowOutcomeAnalytics.promise);
+    apiMocks.fetchShadowAnalyticsReview.mockReturnValueOnce(shadowAnalyticsReview.promise);
 
     render(<App />);
 
@@ -471,6 +512,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading shadow watchlist...')).toBeVisible();
     expect(screen.getByText('Loading shadow outcomes...')).toBeVisible();
     expect(screen.getByText('Loading shadow outcome analytics...')).toBeVisible();
+    expect(screen.getByText('Loading shadow analytics review...')).toBeVisible();
 
     await act(async () => {
       overview.resolve(makeOverview());
@@ -485,6 +527,7 @@ describe('dashboard app shell', () => {
       shadow.resolve(makeShadowWatchlist());
       shadowOutcomes.resolve(makeShadowOutcomes());
       shadowOutcomeAnalytics.resolve(makeShadowOutcomeAnalytics());
+      shadowAnalyticsReview.resolve(makeShadowAnalyticsReview());
     });
 
     await waitFor(() => {
@@ -496,6 +539,7 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading shadow watchlist...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow outcomes...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow outcome analytics...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading shadow analytics review...')).not.toBeInTheDocument();
     });
   });
 
@@ -518,6 +562,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowWatchlist.mockResolvedValueOnce([]);
     apiMocks.fetchShadowOutcomes.mockResolvedValueOnce([]);
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValueOnce([]);
+    apiMocks.fetchShadowAnalyticsReview.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -533,7 +578,54 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No shadow watchlist candidates for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow outcomes for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow outcome analytics for selected range.')).toBeVisible();
+    expect(screen.getByText('No shadow analytics review rows for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+  });
+
+  it('renders invalid shadow analytics review metrics as n/a instead of NaN%', async () => {
+    apiMocks.fetchShadowAnalyticsReview.mockResolvedValueOnce([
+      {
+        ...makeShadowAnalyticsReview()[0],
+        horizon_metrics: {
+          '20': {
+            forward_return_mean: Number.NaN,
+            max_low_drawdown_worst: Number.POSITIVE_INFINITY
+          }
+        }
+      }
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText('Shadow Analytics Review')).toBeVisible();
+    const panel = screen.getByText('Shadow Analytics Review').closest('section');
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(2);
+    expect(within(panel as HTMLElement).queryByText(/NaN%/)).not.toBeInTheDocument();
+  });
+
+  it('renders repeated shadow analytics review groups with review-scoped keys', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const rows = [
+      {
+        ...makeShadowAnalyticsReview()[0],
+        review_group_id: 'operator_shadow_analytics_review:run-a-trend-ready'
+      },
+      {
+        ...makeShadowAnalyticsReview()[0],
+        review_group_id: 'operator_shadow_analytics_review:run-b-trend-ready',
+        run_id: 'p15-shadow-analytics-review-2026-09-30',
+        review_start_date: '2026-07-31',
+        review_end_date: '2026-09-30'
+      }
+    ] as ShadowAnalyticsReviewRow[];
+
+    render(<ShadowAnalyticsReviewPanel rows={rows} />);
+
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(2);
+    const messages = consoleError.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(messages).not.toContain('Encountered two children with the same key');
+    consoleError.mockRestore();
   });
 
   it('renders invalid shadow outcome analytics metrics as n/a instead of NaN%', async () => {
