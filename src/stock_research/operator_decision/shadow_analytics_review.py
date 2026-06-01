@@ -26,7 +26,7 @@ DEFAULT_SHADOW_ANALYTICS_REVIEW_THRESHOLDS = {
     "primary_horizon": "20",
 }
 
-UNSAFE_EXECUTION_FIELDS = {
+_UNSAFE_EXECUTION_FIELDS = {
     "account_id",
     "broker",
     "broker_id",
@@ -46,7 +46,7 @@ UNSAFE_EXECUTION_FIELDS = {
     "notional",
 }
 
-REVIEW_BUCKETS = {
+_REVIEW_BUCKETS = {
     "continue_observing": "observe",
     "needs_more_data": "data_needed",
     "investigate_data_quality": "data_quality",
@@ -54,7 +54,7 @@ REVIEW_BUCKETS = {
     "research_follow_up_candidate": "follow_up",
 }
 
-SAFETY_FIELDS = [
+_SAFETY_FIELDS = [
     "manual_review_required",
     "auto_trade_enabled",
     "production_watchlist_enabled",
@@ -164,7 +164,7 @@ def _p14_artifact_rows(p14_analytics: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             raise ValueError("invalid_p14_analytics_group")
         row = dict(item)
-        row_run_id = _text_or_empty(row.get("run_id")) or p14_run_id
+        row_run_id = p14_run_id or _text_or_empty(row.get("run_id"))
         if row_run_id:
             row["run_id"] = row_run_id
         if _is_missing(row.get("analytics_group_id")) or str(row.get("analytics_group_id")).strip() == "":
@@ -206,7 +206,7 @@ def _review_group(
         "source_p14_analytics_group_id": source_group_id,
         "source_p14_analytics_run_id": _required_text(row, "run_id"),
         "review_status": review_status,
-        "review_bucket": REVIEW_BUCKETS[review_status],
+        "review_bucket": _REVIEW_BUCKETS[review_status],
         "group_key": _text_or_empty(row.get("group_key")),
         "shadow_layer": _text_or_empty(row.get("shadow_layer")),
         "shadow_status": _text_or_empty(row.get("shadow_status")),
@@ -358,7 +358,7 @@ def _parse_safety_value(value: Any, *, column: str, default: bool) -> bool:
 def _reject_unsafe_execution_fields(payload: dict[str, Any]) -> None:
     for key, value in payload.items():
         normalized_key = str(key).strip().lower()
-        if normalized_key in UNSAFE_EXECUTION_FIELDS and not _is_missing(value) and str(value).strip() != "":
+        if normalized_key in _UNSAFE_EXECUTION_FIELDS and not _is_missing(value) and str(value).strip() != "":
             raise ValueError(f"unsafe_execution_field: {key}")
 
 
@@ -428,7 +428,7 @@ def _group_columns() -> list[str]:
         "evidence_summary",
         "risk_notes",
         "next_research_question",
-        *SAFETY_FIELDS,
+        *_SAFETY_FIELDS,
     ]
 
 

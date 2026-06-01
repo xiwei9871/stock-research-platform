@@ -191,6 +191,31 @@ def test_build_shadow_analytics_review_accepts_raw_p14_artifact_shape():
     assert review["groups"][0]["review_status"] == "research_follow_up_candidate"
 
 
+def test_build_shadow_analytics_review_prefers_p14_artifact_run_id_over_group_run_id():
+    p14_analytics = {
+        "run_id": "p14-top-level-run",
+        "manual_review_required": True,
+        "auto_trade_enabled": False,
+        "production_watchlist_enabled": False,
+        "production_write_enabled": False,
+        "groups": [_group(run_id="group-row-run", analytics_group_id="")],
+    }
+
+    review = build_shadow_analytics_review(
+        p14_analytics=p14_analytics,
+        run_id="p15-shadow-analytics-review-2026-06-30-2026-08-29",
+        review_start_date="2026-06-30",
+        review_end_date="2026-08-29",
+        reviewer_id="operator",
+    )
+
+    assert review["source_p14_analytics_run_ids"] == ["p14-top-level-run"]
+    assert review["groups"][0]["source_p14_analytics_run_id"] == "p14-top-level-run"
+    assert review["groups"][0]["source_p14_analytics_group_id"].startswith(
+        "operator_shadow_outcome_analytics:p14-top-level-run:"
+    )
+
+
 def test_build_shadow_analytics_review_rejects_production_enabled_group():
     row = _group(production_watchlist_enabled=True)
 
