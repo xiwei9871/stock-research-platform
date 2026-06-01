@@ -27,6 +27,7 @@ def test_load_shadow_outcome_analytics_summary_returns_read_only_rows(monkeypatc
         captured["params"] = params
         return [
             {
+                "analytics_group_id": "operator_shadow_outcome_analytics:trend-ready",
                 "run_id": "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
                 "review_start_date": "2026-06-30",
                 "review_end_date": "2026-08-29",
@@ -64,6 +65,7 @@ def test_load_shadow_outcome_analytics_summary_returns_read_only_rows(monkeypatc
     assert "ORDER BY review_end_date DESC, sample_count DESC, group_key" in captured["sql"]
     assert captured["params"] == ["2026-06-01", "2026-08-31", 10]
     assert captured["service"] == "stock_research_test"
+    assert result[0]["analytics_group_id"] == "operator_shadow_outcome_analytics:trend-ready"
     assert result[0]["group_key"] == "trend_shadow|shadow_ready"
     assert result[0]["horizon_metrics"]["20"]["forward_return_mean"] == 0.12
     assert result[0]["manual_review_required"] is True
@@ -76,6 +78,7 @@ def test_load_shadow_outcome_analytics_summary_normalizes_json_metrics(monkeypat
     def fake_fetch_all(conn, sql, params):
         return [
             {
+                "analytics_group_id": "operator_shadow_outcome_analytics:risk-observe",
                 "run_id": "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
                 "review_start_date": "2026-06-30",
                 "review_end_date": "2026-08-29",

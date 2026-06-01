@@ -214,6 +214,7 @@ export type ShadowOutcomeRow = {
 };
 
 export type ShadowOutcomeAnalyticsRow = {
+  analytics_group_id: string;
   run_id: string;
   review_start_date: string;
   review_end_date: string;

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import type {
   BarPoint,
   DashboardOverview,
@@ -338,6 +339,7 @@ function makeShadowOutcomesWithInvalidMetrics(): ShadowOutcomeRow[] {
 function makeShadowOutcomeAnalytics(): ShadowOutcomeAnalyticsRow[] {
   return [
     {
+      analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
       run_id: 'p14-shadow-outcome-analytics-2026-06-30-2026-08-29',
       review_start_date: '2026-06-30',
       review_end_date: '2026-08-29',
@@ -555,6 +557,30 @@ describe('dashboard app shell', () => {
     expect(panel).not.toBeNull();
     expect(within(panel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(3);
     expect(within(panel as HTMLElement).queryByText(/NaN%/)).not.toBeInTheDocument();
+  });
+
+  it('renders repeated shadow outcome analytics groups with run-scoped keys', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const rows = [
+      {
+        ...makeShadowOutcomeAnalytics()[0],
+        analytics_group_id: 'operator_shadow_outcome_analytics:run-a-trend-ready'
+      },
+      {
+        ...makeShadowOutcomeAnalytics()[0],
+        analytics_group_id: 'operator_shadow_outcome_analytics:run-b-trend-ready',
+        run_id: 'p14-shadow-outcome-analytics-2026-07-31-2026-09-30',
+        review_start_date: '2026-07-31',
+        review_end_date: '2026-09-30'
+      }
+    ] as ShadowOutcomeAnalyticsRow[];
+
+    render(<ShadowOutcomeAnalyticsPanel rows={rows} />);
+
+    expect(screen.getAllByText('trend_shadow')).toHaveLength(2);
+    const messages = consoleError.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(messages).not.toContain('Encountered two children with the same key');
+    consoleError.mockRestore();
   });
 
   it('renders invalid shadow outcome metrics as n/a instead of NaN%', async () => {

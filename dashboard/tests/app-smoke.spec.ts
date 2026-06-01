@@ -315,6 +315,7 @@ async function mockDashboardApi(page: Page) {
       json: {
         items: [
           {
+            analytics_group_id: 'operator_shadow_outcome_analytics:trend-ready',
             run_id: 'p14-shadow-outcome-analytics-2026-06-30-2026-08-29',
             review_start_date: '2026-06-30',
             review_end_date: '2026-08-29',

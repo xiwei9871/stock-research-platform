@@ -417,6 +417,7 @@ def test_shadow_outcome_analytics_route_returns_read_only_summary(monkeypatch):
     captured = {}
     rows = [
         {
+            "analytics_group_id": "operator_shadow_outcome_analytics:trend-ready",
             "run_id": "p14-shadow-outcome-analytics-2026-06-30-2026-08-29",
             "review_start_date": "2026-06-30",
             "review_end_date": "2026-08-29",

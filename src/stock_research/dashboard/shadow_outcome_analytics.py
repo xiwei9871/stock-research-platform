@@ -20,6 +20,7 @@ def load_shadow_outcome_analytics_summary(
     """Return read-only P14 analytics dashboard rows."""
     sql = """
     SELECT
+        analytics_group_id,
         run_id,
         review_start_date::text AS review_start_date,
         review_end_date::text AS review_end_date,
@@ -54,6 +55,7 @@ def load_shadow_outcome_analytics_summary(
 
 def _analytics_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
+        "analytics_group_id": str(row["analytics_group_id"]),
         "run_id": str(row["run_id"]),
         "review_start_date": str(row.get("review_start_date") or ""),
         "review_end_date": str(row.get("review_end_date") or ""),

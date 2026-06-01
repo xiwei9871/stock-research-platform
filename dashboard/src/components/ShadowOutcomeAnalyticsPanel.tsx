@@ -18,7 +18,7 @@ export function ShadowOutcomeAnalyticsPanel({ rows, isLoading = false }: ShadowO
           {rows.map((row) => {
             const twentyDay = row.horizon_metrics['20'] ?? {};
             return (
-              <article className="decision-row analytics-row" key={row.group_key}>
+              <article className="decision-row analytics-row" key={row.analytics_group_id}>
                 <div>
                   <strong>{row.shadow_layer}</strong>
                   <span>{row.shadow_status}</span>
