@@ -9,6 +9,7 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchShadowOutcomes,
   fetchShadowWatchlist
 } from './api/client';
 import type {
@@ -20,6 +21,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowOutcomeRow,
   ShadowWatchlistRow,
   WatchlistSignalRow
 } from './api/types';
@@ -31,6 +33,7 @@ import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
+import { ShadowOutcomesPanel } from './components/ShadowOutcomesPanel';
 import { ShadowWatchlistPanel } from './components/ShadowWatchlistPanel';
 import { TopNList } from './components/TopNList';
 import { WatchlistList } from './components/WatchlistList';
@@ -61,11 +64,13 @@ export function App() {
   const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
   const [experimentReplay, setExperimentReplay] = useState<ExperimentReplayRow[]>([]);
   const [shadowWatchlist, setShadowWatchlist] = useState<ShadowWatchlistRow[]>([]);
+  const [shadowOutcomes, setShadowOutcomes] = useState<ShadowOutcomeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
   const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
+  const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
 
   const startDate = useMemo(() => dateNDaysBefore(tradeDate, 180), [tradeDate]);
 
@@ -190,6 +195,30 @@ export function App() {
   useEffect(() => {
     let ignore = false;
     setError(null);
+    setShadowOutcomesLoading(true);
+    fetchShadowOutcomes(startDate, tradeDate, { limit: 20 })
+      .then((rows) => {
+        if (!ignore) {
+          setShadowOutcomes(rows);
+          setShadowOutcomesLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setShadowOutcomes([]);
+          setShadowOutcomesLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
     setAssetLoading(true);
     Promise.all([
       fetchDailyBars(selectedAssetId, startDate, tradeDate),
@@ -270,6 +299,7 @@ export function App() {
         <ExperimentProposalsPanel rows={experimentProposals} />
         <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
         <ShadowWatchlistPanel rows={shadowWatchlist} isLoading={shadowWatchlistLoading} />
+        <ShadowOutcomesPanel rows={shadowOutcomes} isLoading={shadowOutcomesLoading} />
         <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
       </aside>
     </main>

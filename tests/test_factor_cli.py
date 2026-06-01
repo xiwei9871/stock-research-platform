@@ -3027,6 +3027,112 @@ def test_p12_import_shadow_watchlist_cli_prints_summary(monkeypatch, capsys, tmp
     ]
 
 
+def test_p13_shadow_outcome_review_cli_writes_artifacts(tmp_path):
+    shadow_json = tmp_path / "operator_shadow_watchlist_2026-06-30.json"
+    shadow_json.write_text(
+        json.dumps(
+            {
+                "run_id": "p12-shadow-watchlist-2026-06-30",
+                "review_date": "2026-06-30",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+                "candidates": [
+                    {
+                        "shadow_candidate_id": "p12-shadow:001",
+                        "replay_result_id": "p11-replay:001",
+                        "source_p11_replay_run_id": "p11-replay-run-2026-06-30",
+                        "source_p10_proposal_run_id": "p10-proposals-2026-06-30",
+                        "source_p9_analytics_run_id": "p9-outcome-analytics-2026-05-01-2026-05-31",
+                        "candidate_date": "2026-06-30",
+                        "asset_id": "000001.SZ",
+                        "stock_code": "000001",
+                        "stock_name": "Ping An Bank",
+                        "shadow_layer": "trend_shadow",
+                        "candidate_reason": "Passed replay with acceptable drawdown.",
+                        "reviewer_id": "reviewer-a",
+                        "status": "shadow_ready",
+                        "review_notes": "Observe only.",
+                        "manual_review_required": True,
+                        "auto_trade_enabled": False,
+                        "production_watchlist_enabled": False,
+                        "production_write_enabled": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    bars_csv = tmp_path / "bars.csv"
+    rows = []
+    for offset in range(0, 11):
+        rows.append(
+            {
+                "asset_id": "000001.SZ",
+                "trade_date": (pd.Timestamp("2026-06-30") + pd.Timedelta(days=offset)).strftime("%Y-%m-%d"),
+                "close": 10.0 + offset,
+                "high": 11.0 + offset,
+                "low": 9.0 + offset,
+            }
+        )
+    pd.DataFrame(rows).to_csv(bars_csv, index=False)
+    output_dir = tmp_path / "out"
+
+    cli.main_for_args(
+        [
+            "p13-shadow-outcome-review",
+            "--shadow-json",
+            str(shadow_json),
+            "--bars-csv",
+            str(bars_csv),
+            "--review-date",
+            "2026-07-31",
+            "--run-id",
+            "p13-shadow-outcomes-2026-07-31",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    payload = json.loads((output_dir / "operator_shadow_outcomes_2026-07-31.json").read_text())
+    assert payload["run_id"] == "p13-shadow-outcomes-2026-07-31"
+    assert payload["outcome_count"] == 1
+    assert payload["production_watchlist_enabled"] is False
+
+
+def test_p13_import_shadow_outcomes_cli_prints_summary(monkeypatch, capsys, tmp_path):
+    import_path = tmp_path / "operator_shadow_outcomes_2026-07-31.json"
+    import_path.write_text("{}", encoding="utf-8")
+
+    def fake_import(path, *, service):
+        assert path == import_path
+        assert service == "stock_research_test"
+        return {
+            "imported_count": 1,
+            "candidate_count": 2,
+            "run_ids": ["p13-shadow-outcomes-2026-07-31"],
+        }
+
+    monkeypatch.setattr(cli, "import_shadow_outcome_review", fake_import)
+
+    cli.main_for_args(
+        [
+            "p13-import-shadow-outcomes",
+            "--path",
+            str(import_path),
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p13_shadow_outcome_import|imported|1",
+        "p13_shadow_outcome_import|candidates|2",
+        "p13_shadow_outcome_import|run_id|p13-shadow-outcomes-2026-07-31",
+    ]
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

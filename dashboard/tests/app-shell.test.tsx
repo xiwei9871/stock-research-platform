@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import type {
@@ -11,6 +11,7 @@ import type {
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
   ScoreRow,
+  ShadowOutcomeRow,
   ShadowWatchlistRow,
   WatchlistSignalRow
 } from '../src/api/types';
@@ -25,6 +26,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchShadowOutcomes: vi.fn(),
   fetchShadowWatchlist: vi.fn()
 }));
 
@@ -289,6 +291,48 @@ function makeShadowWatchlist(): ShadowWatchlistRow[] {
   ];
 }
 
+function makeShadowOutcomes(): ShadowOutcomeRow[] {
+  return [
+    {
+      shadow_outcome_id: 'operator_shadow_outcome:p13:001',
+      run_id: 'p13-shadow-outcomes-2026-07-31',
+      shadow_candidate_id: 'p12-shadow:001',
+      source_p12_shadow_run_id: 'p12-shadow-watchlist-2026-06-30',
+      replay_result_id: 'p11-replay:001',
+      source_p11_replay_run_id: 'p11-replay-run-2026-06-30',
+      source_p10_proposal_run_id: 'p10-proposals-2026-06-30',
+      source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+      candidate_date: '2026-06-30',
+      asset_id: '000001.SZ',
+      stock_code: '000001',
+      stock_name: 'Ping An Bank',
+      shadow_layer: 'trend_shadow',
+      shadow_status: 'shadow_ready',
+      outcome_status: 'complete',
+      available_future_bars: 20,
+      base_trade_date: '2026-06-30',
+      base_close: 10,
+      forward_returns: { '5': 0.5, '20': 1.1 },
+      max_high_returns: { '5': 0.6, '20': 1.2 },
+      max_low_drawdowns: { '5': -0.1, '20': -0.2 },
+      manual_review_required: true,
+      auto_trade_enabled: false,
+      production_watchlist_enabled: false,
+      production_write_enabled: false
+    }
+  ];
+}
+
+function makeShadowOutcomesWithInvalidMetrics(): ShadowOutcomeRow[] {
+  return [
+    {
+      ...makeShadowOutcomes()[0],
+      forward_returns: { '5': 'bad', '20': null } as unknown as Record<string, number | null>,
+      max_low_drawdowns: { '20': 'bad' } as unknown as Record<string, number | null>
+    }
+  ];
+}
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -302,6 +346,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
+    apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
   });
 
   afterEach(() => {
@@ -333,7 +378,12 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Experiment Replay')).toBeVisible();
     expect(screen.getByText('passed_offline_replay')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
-    expect(screen.getByText('shadow_ready')).toBeVisible();
+    expect(screen.getAllByText('shadow_ready')).toHaveLength(2);
+    expect(screen.getByText('Shadow Outcomes')).toBeVisible();
+    expect(screen.getByText('complete')).toBeVisible();
+    expect(screen.getByText(/5D\s+\+50.0%/)).toBeVisible();
+    expect(screen.getByText('p12-shadow-watchlist-2026-06-30')).toBeVisible();
+    expect(screen.getAllByText('p11-replay-run-2026-06-30')).toHaveLength(2);
     expect(screen.queryByText(/promote/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/trade/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/write/i)).not.toBeInTheDocument();
@@ -357,6 +407,7 @@ describe('dashboard app shell', () => {
     const proposals = createDeferred<ExperimentProposalRow[]>();
     const replay = createDeferred<ExperimentReplayRow[]>();
     const shadow = createDeferred<ShadowWatchlistRow[]>();
+    const shadowOutcomes = createDeferred<ShadowOutcomeRow[]>();
 
     apiMocks.fetchOverview.mockReturnValueOnce(overview.promise);
     apiMocks.fetchDailyBars.mockReturnValueOnce(bars.promise);
@@ -368,6 +419,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentProposals.mockReturnValueOnce(proposals.promise);
     apiMocks.fetchExperimentReplay.mockReturnValueOnce(replay.promise);
     apiMocks.fetchShadowWatchlist.mockReturnValueOnce(shadow.promise);
+    apiMocks.fetchShadowOutcomes.mockReturnValueOnce(shadowOutcomes.promise);
 
     render(<App />);
 
@@ -377,6 +429,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading asset review...')).toBeVisible();
     expect(screen.getByText('Loading experiment replay...')).toBeVisible();
     expect(screen.getByText('Loading shadow watchlist...')).toBeVisible();
+    expect(screen.getByText('Loading shadow outcomes...')).toBeVisible();
 
     await act(async () => {
       overview.resolve(makeOverview());
@@ -389,6 +442,7 @@ describe('dashboard app shell', () => {
       proposals.resolve(makeExperimentProposals());
       replay.resolve(makeExperimentReplay());
       shadow.resolve(makeShadowWatchlist());
+      shadowOutcomes.resolve(makeShadowOutcomes());
     });
 
     await waitFor(() => {
@@ -398,6 +452,7 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading asset review...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading experiment replay...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow watchlist...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading shadow outcomes...')).not.toBeInTheDocument();
     });
   });
 
@@ -418,6 +473,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentProposals.mockResolvedValueOnce([]);
     apiMocks.fetchExperimentReplay.mockResolvedValueOnce([]);
     apiMocks.fetchShadowWatchlist.mockResolvedValueOnce([]);
+    apiMocks.fetchShadowOutcomes.mockResolvedValueOnce([]);
 
     render(<App />);
 
@@ -431,7 +487,20 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No experiment proposals for selected range.')).toBeVisible();
     expect(screen.getByText('No experiment replay results for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow watchlist candidates for selected range.')).toBeVisible();
+    expect(screen.getByText('No shadow outcomes for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+  });
+
+  it('renders invalid shadow outcome metrics as n/a instead of NaN%', async () => {
+    apiMocks.fetchShadowOutcomes.mockResolvedValueOnce(makeShadowOutcomesWithInvalidMetrics());
+
+    render(<App />);
+
+    expect(await screen.findByText('Shadow Outcomes')).toBeVisible();
+    const shadowOutcomesPanel = screen.getByText('Shadow Outcomes').closest('section');
+    expect(shadowOutcomesPanel).not.toBeNull();
+    expect(within(shadowOutcomesPanel as HTMLElement).getAllByText(/n\/a/)).toHaveLength(3);
+    expect(within(shadowOutcomesPanel as HTMLElement).queryByText(/NaN%/)).not.toBeInTheDocument();
   });
 
   it('selects an asset from the watchlist', async () => {

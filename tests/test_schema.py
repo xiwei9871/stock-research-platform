@@ -242,6 +242,19 @@ def test_research_extension_includes_operator_decision_outcome_read_model_tables
     assert "idx_ops_operator_decision_outcome_event_asset_date" in sql
 
 
+def test_research_extension_includes_operator_shadow_outcome_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_outcome_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.operator_shadow_watchlist_outcome_candidate" in sql
+    assert "PRIMARY KEY (shadow_outcome_id)" in sql
+    assert "source_p12_shadow_run_id text NOT NULL" in sql
+    assert "production_watchlist_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_ops_operator_shadow_outcome_run_date" in sql
+    assert "idx_ops_operator_shadow_outcome_status_date" in sql
+    assert "idx_ops_operator_shadow_outcome_asset_date" in sql
+    assert "idx_ops_operator_shadow_outcome_source_candidate" in sql
+
+
 def test_research_extension_includes_operator_decision_outcome_analytics_read_model_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS ops.operator_decision_outcome_analytics_run" in sql

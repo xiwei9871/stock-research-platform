@@ -273,6 +273,42 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('/api/shadow-outcomes**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            shadow_outcome_id: 'operator_shadow_outcome:p13:001',
+            run_id: 'p13-shadow-outcomes-2026-07-31',
+            shadow_candidate_id: 'p12-shadow:001',
+            source_p12_shadow_run_id: 'p12-shadow-watchlist-2026-06-30',
+            replay_result_id: 'p11-replay:001',
+            source_p11_replay_run_id: 'p11-replay-run-2026-06-30',
+            source_p10_proposal_run_id: 'p10-proposals-2026-06-30',
+            source_p9_analytics_run_id: 'p9-outcome-analytics-2026-05-01-2026-05-31',
+            candidate_date: '2026-06-30',
+            asset_id: '000001.SZ',
+            stock_code: '000001',
+            stock_name: 'Ping An Bank',
+            shadow_layer: 'trend_shadow',
+            shadow_status: 'shadow_ready',
+            outcome_status: 'complete',
+            available_future_bars: 20,
+            base_trade_date: '2026-06-30',
+            base_close: 10,
+            forward_returns: { '5': 0.5, '20': 1.1 },
+            max_high_returns: { '5': 0.6, '20': 1.2 },
+            max_low_drawdowns: { '5': -0.1, '20': -0.2 },
+            manual_review_required: true,
+            auto_trade_enabled: false,
+            production_watchlist_enabled: false,
+            production_write_enabled: false
+          }
+        ]
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -305,7 +341,16 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
   await expect(page.getByText('passed_offline_replay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Watchlist' })).toBeVisible();
-  await expect(page.getByText('shadow_ready')).toBeVisible();
+  await expect(page.getByText('shadow_ready')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Shadow Outcomes' })).toBeVisible();
+  const shadowOutcomesPanel = page
+    .locator('.inspector-section')
+    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcomes' }) });
+  await expect(shadowOutcomesPanel.getByText('complete', { exact: true })).toBeVisible();
+  await expect(shadowOutcomesPanel.getByText(/5D\s+\+50.0%/)).toBeVisible();
+  await expect(page.getByText(/promote/i)).toHaveCount(0);
+  await expect(page.getByText(/trade/i)).toHaveCount(0);
+  await expect(page.getByText(/write/i)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 
