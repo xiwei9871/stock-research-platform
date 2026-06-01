@@ -223,8 +223,6 @@ def create_app() -> FastAPI:
         limit: int = 20,
     ):
         return {
-            "start_date": start_date,
-            "end_date": end_date,
             "items": load_shadow_outcome_analytics_summary(
                 start_date,
                 end_date,
