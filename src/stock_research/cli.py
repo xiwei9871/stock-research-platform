@@ -192,6 +192,10 @@ from stock_research.operator_decision.shadow_review_decisions import (
     build_shadow_review_decisions,
     write_shadow_review_decisions,
 )
+from stock_research.operator_decision.shadow_follow_up_queue import (
+    build_shadow_follow_up_queue,
+    write_shadow_follow_up_queue,
+)
 from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
     import_shadow_outcome_analytics,
 )
@@ -200,6 +204,9 @@ from stock_research.operator_decision.shadow_analytics_review_read_model import 
 )
 from stock_research.operator_decision.shadow_review_decisions_read_model import (
     import_shadow_review_decisions,
+)
+from stock_research.operator_decision.shadow_follow_up_queue_read_model import (
+    import_shadow_follow_up_queue,
 )
 from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
@@ -1826,6 +1833,13 @@ def build_parser() -> argparse.ArgumentParser:
     p16_shadow_review_decisions.add_argument("--operator-id", required=True)
     p16_shadow_review_decisions.add_argument("--output-dir", required=True)
 
+    p17_shadow_follow_up_queue = subparsers.add_parser("p17-shadow-follow-up-queue")
+    p17_shadow_follow_up_queue.add_argument("--p16-decisions-json", required=True)
+    p17_shadow_follow_up_queue.add_argument("--run-id", required=True)
+    p17_shadow_follow_up_queue.add_argument("--follow-up-date", required=True)
+    p17_shadow_follow_up_queue.add_argument("--operator-id", required=True)
+    p17_shadow_follow_up_queue.add_argument("--output-dir", required=True)
+
     p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
     p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
     p14_import_shadow_outcome_analytics.add_argument("--service", default=SETTINGS.research_service)
@@ -1837,6 +1851,10 @@ def build_parser() -> argparse.ArgumentParser:
     p16_import_shadow_review_decisions = subparsers.add_parser("p16-import-shadow-review-decisions")
     p16_import_shadow_review_decisions.add_argument("--path", required=True)
     p16_import_shadow_review_decisions.add_argument("--service", default=SETTINGS.research_service)
+
+    p17_import_shadow_follow_up_queue = subparsers.add_parser("p17-import-shadow-follow-up-queue")
+    p17_import_shadow_follow_up_queue.add_argument("--path", required=True)
+    p17_import_shadow_follow_up_queue.add_argument("--service", default=SETTINGS.research_service)
 
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
@@ -3359,6 +3377,20 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p16_shadow_review_decisions|json|{paths['json_path']}")
         print(f"p16_shadow_review_decisions|groups_csv|{paths['groups_csv_path']}")
         print(f"p16_shadow_review_decisions|markdown|{paths['markdown_path']}")
+    elif args.command == "p17-shadow-follow-up-queue":
+        p16_payload = json.loads(Path(args.p16_decisions_json).read_text(encoding="utf-8"))
+        queue = build_shadow_follow_up_queue(
+            p16_decisions=p16_payload,
+            run_id=args.run_id,
+            follow_up_date=args.follow_up_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_follow_up_queue(queue, args.output_dir)
+        print(f"p17_shadow_follow_up_queue|status|{queue['status']}")
+        print(f"p17_shadow_follow_up_queue|items|{queue['item_count']}")
+        print(f"p17_shadow_follow_up_queue|json|{paths['json_path']}")
+        print(f"p17_shadow_follow_up_queue|items_csv|{paths['items_csv_path']}")
+        print(f"p17_shadow_follow_up_queue|markdown|{paths['markdown_path']}")
     elif args.command == "p14-import-shadow-outcome-analytics":
         result = import_shadow_outcome_analytics(args.path, service=args.service)
         print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
@@ -3374,6 +3406,11 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p16_import_shadow_review_decisions|imported|{result['imported_count']}")
         print(f"p16_import_shadow_review_decisions|groups|{result['group_count']}")
         print(f"p16_import_shadow_review_decisions|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p17-import-shadow-follow-up-queue":
+        result = import_shadow_follow_up_queue(args.path, service=args.service)
+        print(f"p17_import_shadow_follow_up_queue|imported|{result['imported_count']}")
+        print(f"p17_import_shadow_follow_up_queue|items|{result['item_count']}")
+        print(f"p17_import_shadow_follow_up_queue|runs|{','.join(result['run_ids'])}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
