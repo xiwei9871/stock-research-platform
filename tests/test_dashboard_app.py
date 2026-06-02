@@ -304,6 +304,52 @@ def test_shadow_follow_up_queue_route_returns_read_only_summary(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_shadow_follow_up_resolution_route_returns_read_only_summary(monkeypatch):
+    captured = {}
+
+    def fake_load_resolution(start_date, end_date, limit):
+        captured["args"] = [start_date, end_date, limit]
+        return [
+            {
+                "resolution_item_id": "operator_shadow_follow_up_resolution:trend-ready",
+                "run_id": "p18-shadow-follow-up-resolution-2026-08-31",
+                "resolution_date": "2026-08-31",
+                "group_key": "trend_shadow|shadow_ready",
+                "shadow_layer": "trend_shadow",
+                "shadow_status": "shadow_ready",
+                "follow_up_status": "collect_more_evidence",
+                "priority_bucket": "high",
+                "resolution_status": "stale_unresolved",
+                "resolution_bucket": "needs_operator_review",
+                "recommended_resolution_action": "Review whether requested evidence has been collected.",
+                "resolution_reason": "P17 follow-up maps to stale unresolved.",
+                "manual_review_required": True,
+                "auto_trade_enabled": False,
+                "production_watchlist_enabled": False,
+                "production_write_enabled": False,
+            }
+        ]
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_shadow_follow_up_resolution_summary",
+        fake_load_resolution,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/shadow-follow-up-resolution"
+        "?start_date=2026-06-01"
+        "&end_date=2026-08-31"
+        "&limit=10"
+    )
+
+    assert response.status_code == 200
+    assert captured["args"] == ["2026-06-01", "2026-08-31", 10]
+    assert response.json()["items"][0]["resolution_status"] == "stale_unresolved"
+    assert response.json()["items"][0]["auto_trade_enabled"] is False
+
+
 def test_outcome_analytics_route_returns_read_only_summary(monkeypatch):
     captured = {}
 

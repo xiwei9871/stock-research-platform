@@ -3461,6 +3461,83 @@ def test_p17_shadow_follow_up_queue_dispatches_to_builder(monkeypatch, tmp_path,
     assert captured["build"]["p16_decisions"] == {"groups": []}
 
 
+def test_p18_shadow_follow_up_resolution_parser_accepts_required_args():
+    args = cli.build_parser().parse_args(
+        [
+            "p18-shadow-follow-up-resolution",
+            "--p17-follow-up-json",
+            "outputs/p17/operator_shadow_follow_up_queue_2026-08-29.json",
+            "--run-id",
+            "p18-shadow-follow-up-resolution-2026-08-29",
+            "--resolution-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            "outputs/p18",
+        ]
+    )
+
+    assert args.command == "p18-shadow-follow-up-resolution"
+    assert args.p17_follow_up_json.endswith(".json")
+    assert args.operator_id == "operator-a"
+
+
+def test_p18_shadow_follow_up_resolution_dispatches_to_builder(monkeypatch, tmp_path, capsys):
+    json_path = tmp_path / "operator_shadow_follow_up_queue_2026-08-29.json"
+    json_path.write_text('{"items": []}', encoding="utf-8")
+    captured = {}
+
+    def fake_build_shadow_follow_up_resolution(**kwargs):
+        captured["build"] = kwargs
+        return {
+            "run_id": kwargs["run_id"],
+            "resolution_date": kwargs["resolution_date"],
+            "operator_id": kwargs["operator_id"],
+            "status": "shadow_follow_up_resolution_ready",
+            "item_count": 1,
+            "items": [{"resolution_item_id": "item-a"}],
+        }
+
+    def fake_write_shadow_follow_up_resolution(resolution, output_dir):
+        captured["written"] = {"resolution": resolution, "output_dir": str(output_dir)}
+        return {
+            "json_path": str(tmp_path / "p18.json"),
+            "items_csv_path": str(tmp_path / "p18_items.csv"),
+            "markdown_path": str(tmp_path / "p18.md"),
+        }
+
+    monkeypatch.setattr(cli, "build_shadow_follow_up_resolution", fake_build_shadow_follow_up_resolution)
+    monkeypatch.setattr(cli, "write_shadow_follow_up_resolution", fake_write_shadow_follow_up_resolution)
+
+    cli.main_for_args(
+        [
+            "p18-shadow-follow-up-resolution",
+            "--p17-follow-up-json",
+            str(json_path),
+            "--run-id",
+            "p18-run",
+            "--resolution-date",
+            "2026-08-29",
+            "--operator-id",
+            "operator-a",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert capsys.readouterr().out.splitlines() == [
+        "p18_shadow_follow_up_resolution|status|shadow_follow_up_resolution_ready",
+        "p18_shadow_follow_up_resolution|items|1",
+        f"p18_shadow_follow_up_resolution|json|{tmp_path / 'p18.json'}",
+        f"p18_shadow_follow_up_resolution|items_csv|{tmp_path / 'p18_items.csv'}",
+        f"p18_shadow_follow_up_resolution|markdown|{tmp_path / 'p18.md'}",
+    ]
+    assert captured["build"]["run_id"] == "p18-run"
+    assert captured["build"]["operator_id"] == "operator-a"
+    assert captured["build"]["p17_follow_up"] == {"items": []}
+
+
 def test_p14_shadow_outcome_analytics_cli_preserves_read_model_metrics(tmp_path, capsys):
     p13_json = tmp_path / "operator_shadow_outcomes_2026-08-29.json"
     p13_json.write_text(
@@ -3689,6 +3766,43 @@ def test_p17_import_shadow_follow_up_queue_dispatches(monkeypatch, capsys):
     assert "p17_import_shadow_follow_up_queue|items|3" in output
     assert "p17_import_shadow_follow_up_queue|runs|p17-a,p17-b" in output
     assert captured == {"path": "outputs/p17", "service": "stock_research_test"}
+
+
+def test_p18_import_shadow_follow_up_resolution_parser_accepts_path():
+    args = cli.build_parser().parse_args(
+        ["p18-import-shadow-follow-up-resolution", "--path", "outputs/p18"]
+    )
+
+    assert args.command == "p18-import-shadow-follow-up-resolution"
+    assert args.path == "outputs/p18"
+    assert args.service == "stock_research"
+
+
+def test_p18_import_shadow_follow_up_resolution_dispatches(monkeypatch, capsys):
+    captured = {}
+
+    def fake_import_shadow_follow_up_resolution(path, service):
+        captured["path"] = path
+        captured["service"] = service
+        return {"imported_count": 2, "item_count": 3, "run_ids": ["p18-a", "p18-b"]}
+
+    monkeypatch.setattr(cli, "import_shadow_follow_up_resolution", fake_import_shadow_follow_up_resolution)
+
+    cli.main_for_args(
+        [
+            "p18-import-shadow-follow-up-resolution",
+            "--path",
+            "outputs/p18",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p18_import_shadow_follow_up_resolution|imported|2" in output
+    assert "p18_import_shadow_follow_up_resolution|items|3" in output
+    assert "p18_import_shadow_follow_up_resolution|runs|p18-a,p18-b" in output
+    assert captured == {"path": "outputs/p18", "service": "stock_research_test"}
 
 
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):

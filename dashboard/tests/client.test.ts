@@ -8,6 +8,7 @@ import {
   fetchOverview,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
+  fetchShadowFollowUpResolution,
   fetchShadowReviewDecisions,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
@@ -222,5 +223,20 @@ describe('dashboard API client', () => {
       '/api/shadow-follow-up-queue?start_date=2026-06-01&end_date=2026-08-31&limit=20'
     );
     expect(result[0].follow_up_status).toBe('collect_more_evidence');
+  });
+
+  it('fetches shadow follow-up resolution summary with limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ resolution_status: 'stale_unresolved' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchShadowFollowUpResolution('2026-06-01', '2026-08-31', { limit: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/shadow-follow-up-resolution?start_date=2026-06-01&end_date=2026-08-31&limit=20'
+    );
+    expect(result[0].resolution_status).toBe('stale_unresolved');
   });
 });
