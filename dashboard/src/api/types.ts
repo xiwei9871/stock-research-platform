@@ -323,6 +323,47 @@ export type ShadowFollowUpRow = {
   production_write_enabled: boolean;
 };
 
+export type ShadowFollowUpResolutionRow = {
+  resolution_item_id: string;
+  run_id: string;
+  resolution_date: string;
+  source_p17_follow_up_item_id: string;
+  source_p17_follow_up_run_id: string;
+  source_p16_decision_group_id: string;
+  source_p16_decision_run_id: string;
+  source_p15_review_group_id: string;
+  source_p15_review_run_id: string;
+  source_p14_analytics_group_id: string;
+  source_p14_analytics_run_id: string;
+  group_key: string;
+  shadow_layer: string;
+  shadow_status: string;
+  sample_count: number;
+  complete_count: number;
+  insufficient_data_count: number;
+  review_status: string;
+  review_bucket: string;
+  decision_status: string;
+  decision_bucket: string;
+  follow_up_status: string;
+  priority_bucket: string;
+  required_input: string;
+  resolution_status: string;
+  resolution_bucket: string;
+  recommended_resolution_action: string;
+  resolution_reason: string;
+  follow_up_reason: string;
+  decision_reason: string;
+  required_next_action: string;
+  evidence_summary: string;
+  risk_notes: string;
+  next_research_question: string;
+  manual_review_required: boolean;
+  auto_trade_enabled: boolean;
+  production_watchlist_enabled: boolean;
+  production_write_enabled: boolean;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;
