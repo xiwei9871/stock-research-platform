@@ -1202,6 +1202,70 @@ CREATE TABLE IF NOT EXISTS ops.operator_shadow_follow_up_item (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ops.operator_shadow_follow_up_resolution_run (
+    run_id text PRIMARY KEY,
+    resolution_date date NOT NULL,
+    status text NOT NULL,
+    operator_id text NOT NULL,
+    source_p17_follow_up_run_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+    item_count integer NOT NULL DEFAULT 0,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_watchlist_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    json_path text NOT NULL,
+    items_csv_path text NOT NULL,
+    markdown_path text NOT NULL,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ops.operator_shadow_follow_up_resolution_item (
+    resolution_item_id text PRIMARY KEY,
+    run_id text NOT NULL REFERENCES ops.operator_shadow_follow_up_resolution_run(run_id) ON DELETE CASCADE,
+    resolution_date date NOT NULL,
+    source_p17_follow_up_item_id text NOT NULL,
+    source_p17_follow_up_run_id text NOT NULL,
+    source_p16_decision_group_id text NOT NULL,
+    source_p16_decision_run_id text NOT NULL,
+    source_p15_review_group_id text NOT NULL,
+    source_p15_review_run_id text NOT NULL,
+    source_p14_analytics_group_id text NOT NULL,
+    source_p14_analytics_run_id text NOT NULL,
+    group_key text NOT NULL,
+    shadow_layer text NOT NULL,
+    shadow_status text NOT NULL,
+    sample_count integer NOT NULL DEFAULT 0,
+    complete_count integer NOT NULL DEFAULT 0,
+    insufficient_data_count integer NOT NULL DEFAULT 0,
+    review_status text NOT NULL,
+    review_bucket text NOT NULL,
+    decision_status text NOT NULL,
+    decision_bucket text NOT NULL,
+    follow_up_status text NOT NULL,
+    priority_bucket text NOT NULL,
+    required_input text NOT NULL,
+    resolution_status text NOT NULL,
+    resolution_bucket text NOT NULL,
+    recommended_resolution_action text NOT NULL,
+    resolution_reason text NOT NULL,
+    follow_up_reason text NOT NULL,
+    decision_reason text NOT NULL,
+    required_next_action text NOT NULL,
+    evidence_summary text NOT NULL,
+    risk_notes text NOT NULL,
+    next_research_question text NOT NULL,
+    resolution_artifact_path text NOT NULL,
+    manual_review_required boolean NOT NULL DEFAULT true,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    production_watchlist_enabled boolean NOT NULL DEFAULT false,
+    production_write_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS simulation.virtual_portfolio_state_daily (
     portfolio_id text NOT NULL,
     trade_date date NOT NULL,
@@ -1643,6 +1707,16 @@ CREATE INDEX IF NOT EXISTS idx_operator_shadow_follow_up_item_date
 
 CREATE INDEX IF NOT EXISTS idx_operator_shadow_follow_up_item_status
     ON ops.operator_shadow_follow_up_item (follow_up_status, priority_bucket, follow_up_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_operator_shadow_follow_up_resolution_item_date
+    ON ops.operator_shadow_follow_up_resolution_item (
+        resolution_date DESC, resolution_status, resolution_bucket, priority_bucket
+    );
+
+CREATE INDEX IF NOT EXISTS idx_operator_shadow_follow_up_resolution_item_status
+    ON ops.operator_shadow_follow_up_resolution_item (
+        resolution_status, resolution_bucket, resolution_date DESC
+    );
 
 CREATE INDEX IF NOT EXISTS idx_simulation_virtual_portfolio_state_portfolio_date
     ON simulation.virtual_portfolio_state_daily (portfolio_id, trade_date DESC);

@@ -3768,6 +3768,43 @@ def test_p17_import_shadow_follow_up_queue_dispatches(monkeypatch, capsys):
     assert captured == {"path": "outputs/p17", "service": "stock_research_test"}
 
 
+def test_p18_import_shadow_follow_up_resolution_parser_accepts_path():
+    args = cli.build_parser().parse_args(
+        ["p18-import-shadow-follow-up-resolution", "--path", "outputs/p18"]
+    )
+
+    assert args.command == "p18-import-shadow-follow-up-resolution"
+    assert args.path == "outputs/p18"
+    assert args.service == "stock_research"
+
+
+def test_p18_import_shadow_follow_up_resolution_dispatches(monkeypatch, capsys):
+    captured = {}
+
+    def fake_import_shadow_follow_up_resolution(path, service):
+        captured["path"] = path
+        captured["service"] = service
+        return {"imported_count": 2, "item_count": 3, "run_ids": ["p18-a", "p18-b"]}
+
+    monkeypatch.setattr(cli, "import_shadow_follow_up_resolution", fake_import_shadow_follow_up_resolution)
+
+    cli.main_for_args(
+        [
+            "p18-import-shadow-follow-up-resolution",
+            "--path",
+            "outputs/p18",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert "p18_import_shadow_follow_up_resolution|imported|2" in output
+    assert "p18_import_shadow_follow_up_resolution|items|3" in output
+    assert "p18_import_shadow_follow_up_resolution|runs|p18-a,p18-b" in output
+    assert captured == {"path": "outputs/p18", "service": "stock_research_test"}
+
+
 def test_p4_daily_orchestration_cli_prints_summary(monkeypatch, capsys, tmp_path):
     aggregate_path = tmp_path / "p2_aggregate_review_2026-05-29.json"
     virtual_path = tmp_path / "virtual_portfolio_review_2026-05-29_demo.json"

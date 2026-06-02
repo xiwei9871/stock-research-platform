@@ -212,6 +212,9 @@ from stock_research.operator_decision.shadow_review_decisions_read_model import 
 from stock_research.operator_decision.shadow_follow_up_queue_read_model import (
     import_shadow_follow_up_queue,
 )
+from stock_research.operator_decision.shadow_follow_up_resolution_read_model import (
+    import_shadow_follow_up_resolution,
+)
 from stock_research.operator_decision.experiment_proposals import (
     build_experiment_proposal_review,
     write_experiment_proposal_review,
@@ -1867,6 +1870,12 @@ def build_parser() -> argparse.ArgumentParser:
     p17_import_shadow_follow_up_queue.add_argument("--path", required=True)
     p17_import_shadow_follow_up_queue.add_argument("--service", default=SETTINGS.research_service)
 
+    p18_import_shadow_follow_up_resolution = subparsers.add_parser(
+        "p18-import-shadow-follow-up-resolution"
+    )
+    p18_import_shadow_follow_up_resolution.add_argument("--path", required=True)
+    p18_import_shadow_follow_up_resolution.add_argument("--service", default=SETTINGS.research_service)
+
     p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
     p4_daily_orchestration.add_argument("--trade-date", required=True)
     p4_daily_orchestration.add_argument("--aggregate-review", required=True)
@@ -3436,6 +3445,11 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p17_import_shadow_follow_up_queue|imported|{result['imported_count']}")
         print(f"p17_import_shadow_follow_up_queue|items|{result['item_count']}")
         print(f"p17_import_shadow_follow_up_queue|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p18-import-shadow-follow-up-resolution":
+        result = import_shadow_follow_up_resolution(args.path, service=args.service)
+        print(f"p18_import_shadow_follow_up_resolution|imported|{result['imported_count']}")
+        print(f"p18_import_shadow_follow_up_resolution|items|{result['item_count']}")
+        print(f"p18_import_shadow_follow_up_resolution|runs|{','.join(result['run_ids'])}")
     elif args.command == "p4-daily-orchestration":
         result = run_daily_orchestration(
             trade_date=args.trade_date,
