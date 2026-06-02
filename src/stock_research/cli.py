@@ -196,6 +196,10 @@ from stock_research.operator_decision.shadow_follow_up_queue import (
     build_shadow_follow_up_queue,
     write_shadow_follow_up_queue,
 )
+from stock_research.operator_decision.shadow_follow_up_resolution import (
+    build_shadow_follow_up_resolution,
+    write_shadow_follow_up_resolution,
+)
 from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
     import_shadow_outcome_analytics,
 )
@@ -1840,6 +1844,13 @@ def build_parser() -> argparse.ArgumentParser:
     p17_shadow_follow_up_queue.add_argument("--operator-id", required=True)
     p17_shadow_follow_up_queue.add_argument("--output-dir", required=True)
 
+    p18_shadow_follow_up_resolution = subparsers.add_parser("p18-shadow-follow-up-resolution")
+    p18_shadow_follow_up_resolution.add_argument("--p17-follow-up-json", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--run-id", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--resolution-date", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--operator-id", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--output-dir", required=True)
+
     p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
     p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
     p14_import_shadow_outcome_analytics.add_argument("--service", default=SETTINGS.research_service)
@@ -3391,6 +3402,20 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p17_shadow_follow_up_queue|json|{paths['json_path']}")
         print(f"p17_shadow_follow_up_queue|items_csv|{paths['items_csv_path']}")
         print(f"p17_shadow_follow_up_queue|markdown|{paths['markdown_path']}")
+    elif args.command == "p18-shadow-follow-up-resolution":
+        p17_payload = json.loads(Path(args.p17_follow_up_json).read_text(encoding="utf-8"))
+        resolution = build_shadow_follow_up_resolution(
+            p17_follow_up=p17_payload,
+            run_id=args.run_id,
+            resolution_date=args.resolution_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_follow_up_resolution(resolution, args.output_dir)
+        print(f"p18_shadow_follow_up_resolution|status|{resolution['status']}")
+        print(f"p18_shadow_follow_up_resolution|items|{resolution['item_count']}")
+        print(f"p18_shadow_follow_up_resolution|json|{paths['json_path']}")
+        print(f"p18_shadow_follow_up_resolution|items_csv|{paths['items_csv_path']}")
+        print(f"p18_shadow_follow_up_resolution|markdown|{paths['markdown_path']}")
     elif args.command == "p14-import-shadow-outcome-analytics":
         result = import_shadow_outcome_analytics(args.path, service=args.service)
         print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
