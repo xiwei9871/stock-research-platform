@@ -15,6 +15,7 @@ from stock_research.reports.sector_strength_report import (
     calc_sector_strength,
     load_sector_strength_bars,
 )
+from stock_research.run_card import write_run_card
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -92,6 +93,36 @@ def run_daily_research_report(
         industry_system=industry_system,
         top_n=top_n,
     )
+    run_card_paths = write_run_card(
+        output_dir=Path(reports_dir) / "run_card",
+        run_type="daily_research_report",
+        run_id=f"daily_research:{trade_date}:{score_version}:top{top_n}",
+        title="Daily Research Report",
+        config={
+            "trade_date": trade_date,
+            "score_version": score_version,
+            "top_n": top_n,
+            "index_id": index_id,
+            "industry_system": industry_system,
+        },
+        metrics={
+            "top_scores_count": len(top_scores),
+            "sector_strength_rows": int(len(sector_strength)),
+            "feature_snapshot_rows": int(len(feature_snapshot)),
+        },
+        artifact_paths=result["report_paths"],
+        warnings=["top_scores_empty"] if not top_scores else [],
+        data_coverage={
+            "input_start_date": trade_date,
+            "input_end_date": trade_date,
+            "actual_dates": [trade_date] if top_scores else [],
+            "row_count": len(top_scores),
+            "asset_count": len({str(row.get("asset_id")) for row in top_scores if row.get("asset_id")}),
+            "feature_snapshot_rows": int(len(feature_snapshot)),
+            "sector_strength_rows": int(len(sector_strength)),
+        },
+    )
+    result["run_card"] = run_card_paths
     if record_run:
         result["report_run_id"] = record_report_run(
             trade_date=trade_date,
@@ -102,6 +133,7 @@ def run_daily_research_report(
                 "top_n": top_n,
                 "index_id": index_id,
                 "industry_system": industry_system,
+                "run_card": run_card_paths,
             },
         )
     return result

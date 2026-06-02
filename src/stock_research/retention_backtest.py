@@ -1,22 +1,33 @@
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from stock_research.backtest import (
-    BacktestBar,
     BacktestSelection,
+    LOW_LIQUIDITY_THRESHOLD,
     FEATURE_COLUMNS,
     REQUIRED_SCORE_FEATURES,
-    apply_buy_filter,
     load_backtest_bars,
     load_backtest_inputs,
     next_trade_date,
 )
+from stock_research.backtest_constraints import (
+    BacktestExecutionConstraints,
+    can_close_long,
+    can_open_long,
+    one_way_cost_rate,
+)
 from stock_research.portfolio_backtest import shares_for_budget
+from stock_research.run_card import write_run_card
 from stock_research.selection import score_asset
+from stock_research.services.universe_service import (
+    UniverseResult,
+    filter_dataframe_by_universe,
+    get_universe_allowed_ids,
+)
 
 
 RETENTION_TRADE_COLUMNS = [
@@ -90,6 +101,9 @@ class RetentionConfig:
     market_entry_filter: bool = False
     board_entry_filter: bool = False
     stop_loss_pct: float | None = None
+    execution_constraints: BacktestExecutionConstraints = field(
+        default_factory=BacktestExecutionConstraints
+    )
 
 
 @dataclass(frozen=True)
@@ -104,6 +118,7 @@ def simulate_retention_config(
     bar_frame: pd.DataFrame,
     config: RetentionConfig,
     signal_cache: dict[str, dict[str, Any]] | None = None,
+    universe_result: UniverseResult | None = None,
 ) -> RetentionResult:
     if config.max_positions <= 0:
         raise ValueError("max_positions must be positive")
@@ -116,8 +131,24 @@ def simulate_retention_config(
     if config.exit_confirm_days <= 0:
         raise ValueError("exit_confirm_days must be positive")
 
-    features = _normalize_dates(feature_frame)
-    bars = _normalize_dates(bar_frame)
+    features = _normalize_dates(
+        filter_dataframe_by_universe(
+            feature_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    bars = _normalize_dates(
+        filter_dataframe_by_universe(
+            bar_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    filtered_signal_cache = _filter_retention_signal_cache_by_universe(
+        signal_cache,
+        universe_result,
+    )
     trading_dates = _trading_dates(bars)
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
@@ -140,7 +171,7 @@ def simulate_retention_config(
         ):
             break
 
-        cash = _execute_pending_sells(current_date, cash, positions, bars_by_date_asset)
+        cash = _execute_pending_sells(current_date, cash, positions, bars_by_date_asset, config)
 
         for pending_buy in pending_buys.pop(current_date, []):
             cash, finalized = _execute_pending_buy(
@@ -184,8 +215,8 @@ def simulate_retention_config(
 
         if current_date <= end_date:
             signal = (
-                signal_cache.get(current_date, {})
-                if signal_cache is not None
+                filtered_signal_cache.get(current_date, {})
+                if filtered_signal_cache is not None
                 else {}
             )
             selections = signal.get("selections")
@@ -198,6 +229,7 @@ def simulate_retention_config(
                     bars,
                     current_date,
                     config,
+                    universe_result=universe_result,
                 )
             if feature_values is None:
                 feature_values = _feature_values_for_date(features, current_date)
@@ -226,16 +258,28 @@ def select_retention_candidates(
     bar_frame: pd.DataFrame,
     selection_date: object,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> list[BacktestSelection]:
     normalized_date = _iso_date(selection_date)
     if feature_frame.empty or bar_frame.empty:
         return []
 
-    matrix = _feature_values_for_date(feature_frame, normalized_date)
+    filtered_features = filter_dataframe_by_universe(
+        feature_frame,
+        universe_result,
+        asset_id_col="asset_id",
+    )
+    filtered_bars = filter_dataframe_by_universe(
+        bar_frame,
+        universe_result,
+        asset_id_col="asset_id",
+    )
+
+    matrix = _feature_values_for_date(filtered_features, normalized_date)
     if not matrix:
         return []
 
-    bars = bar_frame.copy()
+    bars = filtered_bars.copy()
     bars["trade_date"] = bars["trade_date"].map(_iso_date)
     bars = bars[bars["trade_date"] == normalized_date]
     if bars.empty:
@@ -469,6 +513,8 @@ def run_retention_backtest(
     reports_dir: str | Path = Path("/Users/xiwei/stock_research/reports"),
     variant: str = "v1",
     cache_dir: str | Path | None = Path("/Users/xiwei/stock_research/cache/v3_1"),
+    universe_result: UniverseResult | None = None,
+    execution_constraints: BacktestExecutionConstraints | None = None,
 ) -> dict[str, object]:
     normalized_variant = _normalize_variant(variant)
     top_values = tuple(int(value) for value in top_ks)
@@ -479,6 +525,7 @@ def run_retention_backtest(
         initial_cash=float(initial_cash),
         max_positions=top_values[0] if top_values else 1,
         strategy_id=None,
+        execution_constraints=execution_constraints,
     )
     if normalized_variant == "v3.1" and cache_dir is not None:
         features = pd.DataFrame(columns=FEATURE_COLUMNS)
@@ -492,6 +539,7 @@ def run_retention_backtest(
             start_date=start_date,
             end_date=end_date,
             config=signal_config,
+            universe_result=universe_result,
         )
     else:
         features, bars = load_backtest_inputs(
@@ -499,7 +547,12 @@ def run_retention_backtest(
             end_date,
             future_buffer_days=30,
         )
-        signal_cache = _build_retention_signal_cache(features, bars, signal_config)
+        signal_cache = _build_retention_signal_cache(
+            features,
+            bars,
+            signal_config,
+            universe_result=universe_result,
+        )
 
     results: list[RetentionResult] = []
     for top_k in top_values:
@@ -516,13 +569,19 @@ def run_retention_backtest(
                 initial_cash,
                 normalized_variant,
             ),
+            execution_constraints=execution_constraints,
         )
+        simulate_kwargs = {
+            "signal_cache": signal_cache,
+        }
+        if universe_result is not None:
+            simulate_kwargs["universe_result"] = universe_result
         results.append(
             simulate_retention_config(
                 features,
                 bars,
                 config,
-                signal_cache=signal_cache,
+                **simulate_kwargs,
             )
         )
 
@@ -540,6 +599,17 @@ def run_retention_backtest(
         variant=normalized_variant,
         reports_dir=reports_dir,
     )
+    run_card = write_retention_run_card(
+        results=results,
+        summary=summary,
+        start_date=start_date,
+        end_date=end_date,
+        initial_cash=float(initial_cash),
+        top_ks=top_values,
+        variant=normalized_variant,
+        reports_dir=reports_dir,
+        report_paths=report_paths,
+    )
     return {
         "results": results,
         "equity_curve": _combined_equity_curve(results),
@@ -547,7 +617,78 @@ def run_retention_backtest(
         "summary": summary,
         "report_path": report_paths["report_path"],
         "report_paths": report_paths,
+        "run_card": run_card,
     }
+
+
+def write_retention_run_card(
+    *,
+    results: list[RetentionResult],
+    summary: pd.DataFrame,
+    start_date: object,
+    end_date: object,
+    initial_cash: float,
+    top_ks: tuple[int, ...],
+    variant: str,
+    reports_dir: str | Path,
+    report_paths: dict[str, str],
+) -> dict[str, str]:
+    equity_curve = _combined_equity_curve(results)
+    trades = _combined_trades(results)
+    actual_dates = (
+        sorted(equity_curve["date"].astype(str).unique().tolist())
+        if not equity_curve.empty and "date" in equity_curve.columns
+        else []
+    )
+    asset_count = int(trades["asset_id"].nunique()) if not trades.empty and "asset_id" in trades.columns else 0
+    warnings: list[str] = []
+    if summary.empty:
+        warnings.append("summary_empty")
+    if trades.empty:
+        warnings.append("trades_empty")
+    if equity_curve.empty:
+        warnings.append("equity_curve_empty")
+    return write_run_card(
+        output_dir=Path(reports_dir) / "run_card",
+        run_type="retention_backtest",
+        run_id=(
+            f"retention:{_iso_date(start_date)}:{_iso_date(end_date)}:"
+            f"top{'-'.join(str(value) for value in top_ks)}:{variant}"
+        ),
+        title="Retention Backtest",
+        config={
+            **(asdict(results[0].config) if results else {}),
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "initial_cash": float(initial_cash),
+            "top_ks": list(top_ks),
+            "variant": variant,
+        },
+        metrics={
+            "workflow_type": "retention_backtest",
+            "strategy_count": len(results),
+            "summary_rows": int(len(summary)),
+            "final_equity_mean": _mean_numeric_value(summary, "final_equity"),
+            "max_drawdown_min": _min_numeric_value(summary, "max_drawdown"),
+            "total_return_mean": _mean_numeric_value(summary, "total_return"),
+            "trade_count": int(len(trades)),
+            "position_count": asset_count,
+            "win_rate_mean": _mean_numeric_value(summary, "win_rate"),
+            "start_date": _iso_date(start_date),
+            "end_date": _iso_date(end_date),
+            "candidate_count": None,
+            "retained_count": int(len(results)),
+        },
+        artifact_paths=report_paths,
+        warnings=warnings,
+        data_coverage={
+            "input_start_date": _iso_date(start_date),
+            "input_end_date": _iso_date(end_date),
+            "actual_dates": actual_dates,
+            "row_count": int(len(trades)),
+            "asset_count": asset_count,
+        },
+    )
 
 
 def _normalize_variant(variant: str) -> str:
@@ -563,11 +704,24 @@ def _build_retention_signal_cache(
     feature_frame: pd.DataFrame,
     bar_frame: pd.DataFrame,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, dict[str, Any]]:
     if "trade_date" not in feature_frame.columns or "trade_date" not in bar_frame.columns:
         return {}
-    features = _normalize_dates(feature_frame)
-    bars = _normalize_dates(bar_frame)
+    features = _normalize_dates(
+        filter_dataframe_by_universe(
+            feature_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
+    bars = _normalize_dates(
+        filter_dataframe_by_universe(
+            bar_frame,
+            universe_result,
+            asset_id_col="asset_id",
+        )
+    )
     start_date = _iso_date(config.start_date)
     end_date = _iso_date(config.end_date)
     cache: dict[str, dict[str, Any]] = {}
@@ -588,6 +742,7 @@ def _build_retention_signal_cache(
                 bars,
                 trade_date,
                 config,
+                universe_result=universe_result,
             ),
             "feature_values": feature_values_by_date.get(trade_date, {}),
             "market_allows_entry": market_entry_by_date.get(trade_date, True),
@@ -601,6 +756,7 @@ def _load_v31_signal_cache(
     start_date: object,
     end_date: object,
     config: RetentionConfig,
+    universe_result: UniverseResult | None = None,
 ) -> dict[str, dict[str, Any]]:
     cache_path = Path(cache_dir)
     manifest_path = cache_path / "manifest.json"
@@ -635,7 +791,7 @@ def _load_v31_signal_cache(
     selections = _selections_from_candidate_cache(candidates, feature_values, config)
 
     dates = sorted(set(feature_values) | set(selections) | set(market_entry) | set(board_assets))
-    return {
+    result = {
         trade_date: {
             "selections": selections.get(trade_date, []),
             "feature_values": feature_values.get(trade_date, {}),
@@ -644,6 +800,42 @@ def _load_v31_signal_cache(
         }
         for trade_date in dates
     }
+    return _filter_retention_signal_cache_by_universe(result, universe_result)
+
+
+def _filter_retention_signal_cache_by_universe(
+    signal_cache: dict[str, dict[str, Any]] | None,
+    universe_result: UniverseResult | None,
+) -> dict[str, dict[str, Any]] | None:
+    if signal_cache is None or universe_result is None:
+        return signal_cache
+    allowed = get_universe_allowed_ids(universe_result)
+    if allowed is None:
+        return signal_cache
+    filtered: dict[str, dict[str, Any]] = {}
+    for trade_date, payload in signal_cache.items():
+        selections = [
+            selection
+            for selection in payload.get("selections", [])
+            if str(selection.asset_id) in allowed
+        ]
+        feature_values = {
+            str(asset_id): values
+            for asset_id, values in payload.get("feature_values", {}).items()
+            if str(asset_id) in allowed
+        }
+        entry_allowed_assets = payload.get("entry_allowed_assets")
+        if entry_allowed_assets is not None:
+            entry_allowed_assets = {
+                str(asset_id) for asset_id in entry_allowed_assets if str(asset_id) in allowed
+            }
+        filtered[trade_date] = {
+            "selections": selections,
+            "feature_values": feature_values,
+            "market_allows_entry": payload.get("market_allows_entry", True),
+            "entry_allowed_assets": entry_allowed_assets,
+        }
+    return filtered
 
 
 def _read_cache_frame(path: str) -> pd.DataFrame:
@@ -978,14 +1170,19 @@ def _retention_config_for_variant(
     initial_cash: float,
     max_positions: int,
     strategy_id: str | None,
+    execution_constraints: BacktestExecutionConstraints | None = None,
 ) -> RetentionConfig:
+    base_kwargs = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "initial_cash": initial_cash,
+        "max_positions": max_positions,
+        "strategy_id": strategy_id,
+        "execution_constraints": execution_constraints or BacktestExecutionConstraints(),
+    }
     if variant == "v2":
         return RetentionConfig(
-            start_date=start_date,
-            end_date=end_date,
-            initial_cash=initial_cash,
-            max_positions=max_positions,
-            strategy_id=strategy_id,
+            **base_kwargs,
             entry_top_n=20,
             observe_top_n=30,
             exit_confirm_days=2,
@@ -994,11 +1191,7 @@ def _retention_config_for_variant(
         )
     if variant == "v3.1":
         return RetentionConfig(
-            start_date=start_date,
-            end_date=end_date,
-            initial_cash=initial_cash,
-            max_positions=max_positions,
-            strategy_id=strategy_id,
+            **base_kwargs,
             entry_top_n=20,
             observe_top_n=30,
             exit_confirm_days=2,
@@ -1009,13 +1202,7 @@ def _retention_config_for_variant(
             board_entry_filter=True,
             stop_loss_pct=0.10,
         )
-    return RetentionConfig(
-        start_date=start_date,
-        end_date=end_date,
-        initial_cash=initial_cash,
-        max_positions=max_positions,
-        strategy_id=strategy_id,
-    )
+    return RetentionConfig(**base_kwargs)
 
 
 def _exit_rule_description(variant: str) -> str:
@@ -1118,43 +1305,79 @@ def _execute_pending_buy(
     cash: float,
     positions: list[dict[str, Any]],
     trade_rows: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
     config: RetentionConfig,
 ) -> tuple[float, bool]:
     selection = pending_buy["selection"]
     if len(positions) >= config.max_positions:
         return cash, False
 
-    buy_bar = bars_by_date_asset.get((current_date, selection.asset_id))
-    decision = apply_buy_filter(selection, buy_bar)
-    if not decision.can_buy or buy_bar is None:
+    if _is_missing(selection.amount_20d_avg) or float(selection.amount_20d_avg) < LOW_LIQUIDITY_THRESHOLD:
         trade_rows.append(
             _skip_trade(
                 selection,
                 current_date,
                 config,
-                decision.skip_reason or "missing_next_buy_date",
+                "low_liquidity",
             )
         )
         return cash, True
 
-    if buy_bar.open is None:
+    buy_bar = bars_by_date_asset.get((current_date, selection.asset_id))
+    if buy_bar is None:
+        trade_rows.append(
+            _skip_trade(
+                selection,
+                current_date,
+                config,
+                "suspended",
+            )
+        )
+        return cash, True
+
+    if _bool_value(buy_bar.get("is_st")):
+        trade_rows.append(_skip_trade(selection, current_date, config, "st"))
+        return cash, True
+
+    buy_amount = _float_or_none(buy_bar.get("amount"))
+    if buy_amount is None or buy_amount < LOW_LIQUIDITY_THRESHOLD:
+        trade_rows.append(_skip_trade(selection, current_date, config, "low_liquidity"))
+        return cash, True
+
+    allowed, reason = can_open_long(buy_bar, config.execution_constraints)
+    if not allowed:
+        trade_rows.append(
+            _skip_trade(
+                selection,
+                current_date,
+                config,
+                reason or "suspended",
+            )
+        )
+        return cash, True
+
+    if buy_bar.get("open") is None or buy_bar.get("preclose") is None:
         trade_rows.append(_skip_trade(selection, current_date, config, "missing_price"))
+        return cash, True
+
+    if float(buy_bar["open"]) >= float(buy_bar["preclose"]) * 1.095:
+        trade_rows.append(_skip_trade(selection, current_date, config, "limit_up_open"))
         return cash, True
 
     equity = cash + _market_value(positions, bars_by_date_asset, current_date)
     target_budget = equity / config.max_positions
-    affordable_budget = min(target_budget, cash)
-    shares = shares_for_budget(affordable_budget, buy_bar.open, config.lot_size)
+    buy_cost_rate = one_way_cost_rate("buy", config.execution_constraints)
+    affordable_budget = min(target_budget, cash / (1.0 + buy_cost_rate))
+    shares = shares_for_budget(affordable_budget, float(buy_bar["open"]), config.lot_size)
     if shares == 0:
         trade_rows.append(
             _skip_trade(selection, current_date, config, "insufficient_lot_cash")
         )
         return cash, True
 
-    buy_open = float(buy_bar.open)
+    buy_open = float(buy_bar["open"])
     buy_value = shares * buy_open
-    cash -= buy_value
+    cash -= buy_value * (1.0 + buy_cost_rate)
     trade = _base_trade_row(selection, current_date, config)
     trade.update(
         {
@@ -1176,6 +1399,7 @@ def _execute_pending_buy(
             "last_price": buy_open,
             "out_of_entry_count": 0,
             "exit_reason": None,
+            "buy_cost_rate": buy_cost_rate,
         }
     )
     return cash, True
@@ -1185,7 +1409,8 @@ def _execute_pending_sells(
     current_date: str,
     cash: float,
     positions: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
+    config: RetentionConfig,
 ) -> float:
     remaining: list[dict[str, Any]] = []
     for position in positions:
@@ -1195,21 +1420,42 @@ def _execute_pending_sells(
             continue
 
         bar = bars_by_date_asset.get((current_date, position["asset_id"]))
+        if bar is None:
+            remaining.append(position)
+            continue
+
+        allowed, _reason = can_close_long(bar, config.execution_constraints)
+        if not allowed:
+            remaining.append(position)
+            continue
+
         if not _is_tradable_open(bar):
             remaining.append(position)
             continue
 
-        sell_open = float(bar.open)  # type: ignore[arg-type,union-attr]
+        sell_open = float(bar["open"])
+        sell_cost_rate = one_way_cost_rate(
+            "sell",
+            config.execution_constraints,
+        )
         position["last_price"] = sell_open
         sell_value = int(position["shares"]) * sell_open
-        cash += sell_value
+        cash += sell_value * (1.0 - sell_cost_rate)
         trade = position["trade"]
         trade.update(
             {
                 "sell_date": current_date,
                 "sell_open": sell_open,
                 "sell_value": sell_value,
-                "return_value": round(sell_open / float(trade["buy_open"]) - 1.0, 10),
+                "return_value": round(
+                    (sell_value * (1.0 - sell_cost_rate))
+                    / (
+                        float(trade["buy_value"])
+                        * (1.0 + float(position.get("buy_cost_rate", 0.0)))
+                    )
+                    - 1.0,
+                    10,
+                ),
                 "status": "closed",
                 "exit_reason": position.get("exit_reason") or "exit_top20",
             }
@@ -1220,14 +1466,14 @@ def _execute_pending_sells(
 
 def _market_value(
     positions: list[dict[str, Any]],
-    bars_by_date_asset: dict[tuple[str, str], BacktestBar],
+    bars_by_date_asset: dict[tuple[str, str], dict[str, Any]],
     current_date: str,
 ) -> float:
     value = 0.0
     for position in positions:
         bar = bars_by_date_asset.get((current_date, position["asset_id"]))
-        if bar is not None and bar.open is not None:
-            position["last_price"] = float(bar.open)
+        if bar is not None and bar.get("open") is not None:
+            position["last_price"] = float(bar["open"])
         value += int(position["shares"]) * float(position["last_price"])
     return value
 
@@ -1606,21 +1852,25 @@ def _markdown_cell(value: object) -> str:
     return str(value).replace("|", "\\|")
 
 
-def _bars_by_date_asset(bar_frame: pd.DataFrame) -> dict[tuple[str, str], BacktestBar]:
-    indexed: dict[tuple[str, str], BacktestBar] = {}
+def _bars_by_date_asset(bar_frame: pd.DataFrame) -> dict[tuple[str, str], dict[str, Any]]:
+    indexed: dict[tuple[str, str], dict[str, Any]] = {}
     if bar_frame.empty:
         return indexed
     for row in bar_frame.to_dict("records"):
-        bar = BacktestBar(
-            asset_id=str(row["asset_id"]),
-            trade_date=_iso_date(row["trade_date"]),
-            open=_float_or_none(row.get("open")),
-            preclose=_float_or_none(row.get("preclose")),
-            amount=_float_or_none(row.get("amount")),
-            trade_status=str(row.get("trade_status")),
-            is_st=bool(row.get("is_st")),
-        )
-        indexed[(bar.trade_date, bar.asset_id)] = bar
+        trade_date = _iso_date(row["trade_date"])
+        asset_id = str(row["asset_id"])
+        indexed[(trade_date, asset_id)] = {
+            "asset_id": asset_id,
+            "trade_date": trade_date,
+            "open": _float_or_none(row.get("open")),
+            "preclose": _float_or_none(row.get("preclose")),
+            "amount": _float_or_none(row.get("amount")),
+            "trade_status": str(row.get("trade_status")),
+            "is_st": _bool_value(row.get("is_st")),
+            "is_suspended": _bool_value(row.get("is_suspended")),
+            "is_limit_up": _bool_value(row.get("is_limit_up")),
+            "is_limit_down": _bool_value(row.get("is_limit_down")),
+        }
     return indexed
 
 
@@ -1630,10 +1880,10 @@ def _float_or_none(value: object) -> float | None:
     return float(value)
 
 
-def _is_tradable_open(bar: BacktestBar | None) -> bool:
+def _is_tradable_open(bar: dict[str, Any] | None) -> bool:
     return (
         bar is not None
-        and bar.trade_status == "1"
-        and bar.open is not None
-        and not pd.isna(bar.open)
+        and str(bar.get("trade_status")) == "1"
+        and bar.get("open") is not None
+        and not pd.isna(bar.get("open"))
     )

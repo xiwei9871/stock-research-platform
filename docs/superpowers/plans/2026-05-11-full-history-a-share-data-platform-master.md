@@ -282,11 +282,11 @@ The platform is usable only when these contracts hold:
 
 **Tasks:**
 
-- [ ] Define one daily DAG order: raw bars, normalized bars, asset status, index data, industry bars, labels, factors, approvals as needed, scores, reports.
-- [ ] Add run recording for every daily job.
-- [ ] Add data freshness checks.
-- [ ] Add alerting for failed ingest/backfill tasks and stale data.
-- [ ] Add runbook commands for recovery after source outage or interrupted jobs.
+- [x] Define one daily DAG order: raw bars, normalized bars, asset status, index data, industry bars, labels, factors, approvals as needed, scores, reports.
+- [x] Add run recording for every daily job.
+- [x] Add data freshness checks.
+- [x] Add alerting for failed ingest/backfill tasks and stale data.
+- [x] Add runbook commands for recovery after source outage or interrupted jobs.
 
 **Acceptance:**
 
@@ -299,11 +299,11 @@ The platform is usable only when these contracts hold:
 
 **Tasks:**
 
-- [ ] Add indexes for date/asset/factor lookup patterns observed in full-history workloads.
-- [ ] Evaluate partitioning for the largest tables: `market_daily_bar`, `label_snapshot`, `factor.factor_daily`, and raw payload tables.
-- [ ] Add `VACUUM ANALYZE` guidance after large backfills.
-- [ ] Add export snapshots for reproducible research runs.
-- [ ] Add backup and restore checks before destructive schema migrations.
+- [x] Add indexes for date/asset/factor lookup patterns observed in full-history workloads.
+- [x] Evaluate partitioning for the largest tables: `market_daily_bar`, `label_snapshot`, `factor.factor_daily`, and raw payload tables.
+- [x] Add `VACUUM ANALYZE` guidance after large backfills.
+- [x] Add export snapshots for reproducible research runs.
+- [x] Add backup and restore checks before destructive schema migrations.
 
 **Acceptance:**
 

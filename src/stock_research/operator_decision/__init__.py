@@ -1,0 +1,1 @@
+"""Operator decision journal artifacts."""

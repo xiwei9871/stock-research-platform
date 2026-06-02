@@ -81,6 +81,7 @@ def build_corporate_actions_from_factors_for_service(
     start_date: str | None = None,
     end_date: str | None = None,
     source_version: str = "derived_adjustment_factor_v1",
+    factor_source_version: str = "derived_market_daily_bar_v1",
     service: str = SETTINGS.research_service,
 ) -> None:
     with connect(service) as conn:
@@ -89,6 +90,7 @@ def build_corporate_actions_from_factors_for_service(
             start_date=start_date,
             end_date=end_date,
             source_version=source_version,
+            factor_source_version=factor_source_version,
         )
 
 
@@ -97,8 +99,9 @@ def build_corporate_actions_from_factors(
     start_date: str | None = None,
     end_date: str | None = None,
     source_version: str = "derived_adjustment_factor_v1",
+    factor_source_version: str = "derived_market_daily_bar_v1",
 ) -> None:
-    params = [source_version, source_version]
+    params = [source_version, factor_source_version]
     filters = ["factor_before IS NOT NULL"]
     if start_date:
         filters.append("event_date >= %s")

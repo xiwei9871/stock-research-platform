@@ -10,8 +10,13 @@ def calc_ic(
     returns: pd.DataFrame,
     factor_col: str = "factor_value",
     return_col: str = "forward_return_5d",
+    merged_frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    merged = merged_factor_returns(factors, returns, factor_col, return_col)
+    merged = (
+        merged_factor_returns(factors, returns, factor_col, return_col)
+        if merged_frame is None
+        else merged_frame.copy()
+    )
     rows = []
     for trade_date, group in merged.groupby("trade_date", sort=True):
         rows.append(
@@ -29,8 +34,13 @@ def calc_rank_ic(
     returns: pd.DataFrame,
     factor_col: str = "factor_value",
     return_col: str = "forward_return_5d",
+    merged_frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    merged = merged_factor_returns(factors, returns, factor_col, return_col)
+    merged = (
+        merged_factor_returns(factors, returns, factor_col, return_col)
+        if merged_frame is None
+        else merged_frame.copy()
+    )
     rows = []
     for trade_date, group in merged.groupby("trade_date", sort=True):
         factor_rank = group[factor_col].rank(method="average")

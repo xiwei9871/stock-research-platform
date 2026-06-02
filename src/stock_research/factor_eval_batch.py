@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ from stock_research.factor_eval_store import (
     store_factor_eval_run,
 )
 from stock_research.factor_config import candidate_factor_names
+from stock_research.run_card import write_run_card
 
 
 def run_factor_gate_batch(
@@ -24,6 +26,7 @@ def run_factor_gate_batch(
     quantiles: int = 5,
     top_n: int = 30,
     validation_start_date: str | None = None,
+    output_dir: str | Path | None = None,
 ) -> pd.DataFrame:
     rows = []
     selected_factor_names = candidate_factor_names() if factor_names is None else factor_names
@@ -40,40 +43,54 @@ def run_factor_gate_batch(
             horizons=horizons,
             calc_version=calc_version,
         )
-        multi_horizon_report = generate_multi_horizon_report(
-            factors=factors,
-            returns=returns,
-            factor_name=factor_name,
-            horizons=horizons,
-            quantiles=quantiles,
-            top_n=top_n,
-        )
-        decision = decide_factor_gate(
-            factor_name=factor_name,
-            multi_horizon_report=multi_horizon_report,
-            primary_horizon=primary_horizon,
-        )
+        multi_horizon_report = None
         validation_report = None
-        if validation_start_date:
-            validation_factors, validation_returns = load_multi_horizon_factor_eval_inputs(
-                factor_name=factor_name,
-                start_date=validation_start_date,
-                end_date=end_date,
-                horizons=horizons,
-                calc_version=calc_version,
-            )
-            validation_report = generate_multi_horizon_report(
-                factors=validation_factors,
-                returns=validation_returns,
+        if factors.empty:
+            decision = {
+                "factor_name": factor_name,
+                "status": "rejected",
+                "reason": "missing_factor_data",
+                "primary_horizon": primary_horizon,
+            }
+        else:
+            multi_horizon_report = generate_multi_horizon_report(
+                factors=factors,
+                returns=returns,
                 factor_name=factor_name,
                 horizons=horizons,
                 quantiles=quantiles,
                 top_n=top_n,
             )
+            decision = decide_factor_gate(
+                factor_name=factor_name,
+                multi_horizon_report=multi_horizon_report,
+                primary_horizon=primary_horizon,
+            )
+            if validation_start_date:
+                validation_factors, validation_returns = load_multi_horizon_factor_eval_inputs(
+                    factor_name=factor_name,
+                    start_date=validation_start_date,
+                    end_date=end_date,
+                    horizons=horizons,
+                    calc_version=calc_version,
+                )
+                if not validation_factors.empty:
+                    validation_report = generate_multi_horizon_report(
+                        factors=validation_factors,
+                        returns=validation_returns,
+                        factor_name=factor_name,
+                        horizons=horizons,
+                        quantiles=quantiles,
+                        top_n=top_n,
+                    )
         run_id = _new_run_id(factor_name)
         metrics = {
             "decision": decision,
-            "multi_horizon": _summarize_multi_horizon_report(multi_horizon_report),
+            "multi_horizon": (
+                _summarize_multi_horizon_report(multi_horizon_report)
+                if multi_horizon_report is not None
+                else None
+            ),
         }
         if validation_report is not None:
             metrics["walk_forward"] = {
@@ -89,6 +106,35 @@ def run_factor_gate_batch(
                     validation_report
                 ),
             }
+        run_card_paths = {}
+        if output_dir is not None:
+            run_card_paths = write_run_card(
+                output_dir=Path(output_dir) / factor_name,
+                run_type="factor_eval",
+                run_id=run_id,
+                title=f"Factor Eval: {factor_name}",
+                config={
+                    "factor_name": factor_name,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "horizons": horizons,
+                    "primary_horizon": primary_horizon,
+                    "calc_version": calc_version,
+                    "score_version": score_version,
+                },
+                metrics=metrics,
+                artifact_paths={},
+                status=decision["status"],
+                warnings=["missing_factor_data"] if decision["reason"] == "missing_factor_data" else [],
+                data_coverage={
+                    "input_start_date": start_date,
+                    "input_end_date": end_date,
+                    "actual_dates": sorted(factors["trade_date"].astype(str).unique().tolist()) if not factors.empty else [],
+                    "row_count": int(len(factors)),
+                    "asset_count": int(factors["asset_id"].nunique()) if not factors.empty else 0,
+                },
+            )
+            metrics["artifacts"] = run_card_paths
         store_factor_eval_run(
             run_id=run_id,
             factor_name=factor_name,
@@ -123,6 +169,13 @@ def run_factor_gate_batch(
                 "validation_icir": validation_summary.get("icir"),
                 "validation_ic_count": validation_summary.get("ic_count"),
                 "eval_run_id": run_id,
+                "run_card_json_path": run_card_paths.get("run_card_json_path"),
+                "run_card_md_path": run_card_paths.get("run_card_md_path"),
+                "run_card_markdown_path": run_card_paths.get("run_card_md_path"),
+                "metrics_json_path": run_card_paths.get("metrics_json_path"),
+                "config_snapshot_path": run_card_paths.get("config_snapshot_path"),
+                "warnings_md_path": run_card_paths.get("warnings_md_path"),
+                "data_coverage_json_path": run_card_paths.get("data_coverage_json_path"),
             }
         )
     return pd.DataFrame(rows)

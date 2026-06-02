@@ -1,8 +1,15 @@
 import argparse
+import json
+import math
+import os
 import sys
+from pathlib import Path
 from uuid import uuid4
 
+import pandas as pd
+
 from stock_research.assets import sync_asset_master
+from stock_research.config import SETTINGS
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
     backfill_status_for_service,
@@ -22,6 +29,13 @@ from stock_research.core_data import (
     sync_core_asset_master_for_service,
 )
 from stock_research.data_audit import format_audit_line, run_data_audit
+from stock_research.data_quality import (
+    format_data_quality_check_line,
+    format_data_quality_summary_line,
+    run_data_quality,
+)
+from stock_research.dashboard.api import run_dashboard_api
+from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
     sync_asset_lifecycle_from_master,
@@ -30,6 +44,24 @@ from stock_research.finance_audit import format_finance_audit_line, summarize_fi
 from stock_research.industry_history import (
     benchmark_industry_day,
     run_industry_history_range,
+)
+from stock_research.industry_focus_score import run_industry_focus_backtest_report
+from stock_research.industry_focus_v2 import (
+    run_industry_focus_v2_backtest,
+    run_industry_focus_v2_diagnostics,
+)
+from stock_research.industry_factor_audit import (
+    run_fixed_industry_reconciliation,
+    run_industry_error_audit,
+)
+from stock_research.industry_mainline_regime import (
+    run_industry_mainline_regime_diagnostics,
+)
+from stock_research.industry_regime_gated_backtest import (
+    run_industry_regime_gated_backtest,
+)
+from stock_research.industry_exposure_risk_control import (
+    run_industry_exposure_risk_control,
 )
 from stock_research.features import (
     compute_and_store_p0_features,
@@ -42,12 +74,15 @@ from stock_research.factor_backfill import (
     derive_factor_backfill_window,
 )
 from stock_research.approved_scoring_workflow import score_approved_factors_range
-from stock_research.factor_config import candidate_factor_names
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
 from stock_research.factor_eval.gate import decide_factor_gate
 from stock_research.factor_eval.multi_horizon import generate_multi_horizon_report
 from stock_research.factor_eval.report import generate_factor_eval_report
+from stock_research.factor_eval.validation_review import (
+    build_factor_validation_review,
+    write_factor_validation_review,
+)
 from stock_research.factor_eval_store import (
     load_factor_eval_inputs,
     load_multi_horizon_factor_eval_inputs,
@@ -55,6 +90,7 @@ from stock_research.factor_eval_store import (
     store_factor_eval_run,
 )
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
+from stock_research.factor_gate_watchdog import run_factor_gate_batch_watchdog
 from stock_research.daily_pipeline import run_daily_factor_pipeline
 from stock_research.daily_incremental import (
     build_default_step_runners,
@@ -69,6 +105,21 @@ from stock_research.daily_health import (
     format_operational_health_lines,
     summarize_operational_health,
 )
+from stock_research.dragon_strategy_research import run_dragon_research_v1
+from stock_research.dragon_case_library import (
+    apply_source_backfill,
+    build_source_backfill_check_report,
+    build_source_backfill_workpack,
+    compare_source_backfill_curated,
+    build_failure_event_rule_v21_curated_view,
+    build_failure_event_rule_v21_transition_matrix,
+    run_failure_event_rule_v2_diagnostics,
+    run_dragon_case_expand_web_seeds,
+    import_web_seeds,
+    run_dragon_case_library_build,
+    run_dragon_case_library_diagnose,
+    run_dragon_case_web_verify,
+)
 from stock_research.ingest_jobs import (
     create_ingest_jobs_for_service,
     format_ingest_loop_report,
@@ -78,6 +129,16 @@ from stock_research.ingest_jobs import (
     run_ingest_jobs_for_service,
 )
 from stock_research.labels import compute_and_store_labels, derive_label_backfill_window
+from stock_research.lhb_data import (
+    run_dragon_case_lhb_alignment_audit,
+    run_dragon_case_lhb_summary_report,
+    run_lhb_diagnostics_after_failure_rule_v21,
+    run_lhb_coverage_and_failure_rule_plan,
+    run_lhb_risk_feature_diagnostics,
+    run_lhb_case_difference_report,
+    run_lhb_event_features_build,
+    run_lhb_sample_import,
+)
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
     sync_index_constituents,
@@ -85,20 +146,224 @@ from stock_research.loaders.baostock_ingestion import (
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
 from stock_research.market_data import load_market_daily_bars
+from stock_research.migration_safety import run_backup_restore_check
+from stock_research.minute_backfill import (
+    load_backfill_status,
+    plan_baostock_minute_backfill,
+    run_baostock_minute_backfill,
+    run_baostock_minute_backfill_range,
+    validate_minute_bars,
+)
+from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
+from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
+from stock_research.p2.artifact_rollup import (
+    build_p2_artifact_rollup,
+    write_p2_artifact_rollup,
+)
+from stock_research.p2.aggregate_review import (
+    build_p2_aggregate_review,
+    load_aggregate_artifact_payloads,
+    write_p2_aggregate_review,
+)
+from stock_research.p2.review_read_model import import_p2_aggregate_review
+from stock_research.p3.operator_export import export_operator_review
+from stock_research.operator_decision.journal import (
+    build_decision_journal,
+    write_decision_journal,
+)
+from stock_research.operator_decision.outcome import (
+    build_decision_outcome_review,
+    write_decision_outcome_review,
+)
+from stock_research.operator_decision.outcome_analytics import (
+    build_decision_outcome_analytics,
+    write_decision_outcome_analytics,
+)
+from stock_research.operator_decision.shadow_outcome_analytics import (
+    build_shadow_outcome_analytics,
+    write_shadow_outcome_analytics,
+)
+from stock_research.operator_decision.shadow_analytics_review import (
+    build_shadow_analytics_review,
+    write_shadow_analytics_review,
+)
+from stock_research.operator_decision.shadow_review_decisions import (
+    build_shadow_review_decisions,
+    write_shadow_review_decisions,
+)
+from stock_research.operator_decision.shadow_follow_up_queue import (
+    build_shadow_follow_up_queue,
+    write_shadow_follow_up_queue,
+)
+from stock_research.operator_decision.shadow_follow_up_resolution import (
+    build_shadow_follow_up_resolution,
+    write_shadow_follow_up_resolution,
+)
+from stock_research.operator_decision.shadow_outcome_analytics_read_model import (
+    import_shadow_outcome_analytics,
+)
+from stock_research.operator_decision.shadow_analytics_review_read_model import (
+    import_shadow_analytics_review,
+)
+from stock_research.operator_decision.shadow_review_decisions_read_model import (
+    import_shadow_review_decisions,
+)
+from stock_research.operator_decision.shadow_follow_up_queue_read_model import (
+    import_shadow_follow_up_queue,
+)
+from stock_research.operator_decision.shadow_follow_up_resolution_read_model import (
+    import_shadow_follow_up_resolution,
+)
+from stock_research.operator_decision.experiment_proposals import (
+    build_experiment_proposal_review,
+    write_experiment_proposal_review,
+)
+from stock_research.operator_decision.experiment_proposals_read_model import import_experiment_proposal_review
+from stock_research.operator_decision.experiment_replay import (
+    build_experiment_replay_review,
+    write_experiment_replay_review,
+)
+from stock_research.operator_decision.experiment_replay_read_model import import_experiment_replay_review
+from stock_research.operator_decision.shadow_watchlist import (
+    build_shadow_watchlist_review,
+    write_shadow_watchlist_review,
+)
+from stock_research.operator_decision.shadow_outcomes import (
+    build_shadow_outcome_review,
+    write_shadow_outcome_review,
+)
+from stock_research.operator_decision.shadow_outcomes_read_model import (
+    import_shadow_outcome_review,
+    load_shadow_outcome_read_model_rows,
+)
+from stock_research.operator_decision.shadow_watchlist_read_model import (
+    import_shadow_watchlist_review,
+    load_shadow_watchlist_read_model_rows,
+)
+from stock_research.operator_decision.outcome_analytics_read_model import import_decision_outcome_analytics
+from stock_research.operator_decision.outcome_read_model import import_decision_outcome_review
+from stock_research.operator_decision.read_model import import_decision_journal
+from stock_research.p4.scheduler import (
+    check_read_model_freshness,
+    format_daily_orchestration_lines,
+    format_read_model_freshness_lines,
+    run_daily_orchestration,
+)
+from stock_research.p4.scheduler_wrapper import build_p4_scheduler_cron_entry
+from stock_research.simulation.portfolio import write_portfolio_simulation_review
+from stock_research.simulation.virtual_portfolio import (
+    build_virtual_portfolio_review,
+    load_simulation_states,
+    write_virtual_portfolio_review,
+)
+from stock_research.simulation.virtual_portfolio_read_model import (
+    import_virtual_portfolio_review,
+)
 from stock_research.quality import run_daily_quality_checks
 from stock_research.reporting import format_daily_report
+from stock_research.report_delivery import deliver_local_reports
+from stock_research.report_delivery_feishu import (
+    FeishuDryRunAdapter,
+    FeishuSendConfig,
+    FeishuSender,
+    FakeFeishuTransport,
+    HttpFeishuTransport,
+)
+from stock_research.report_delivery_openclaw import OpenClawExportAdapter
+from stock_research.report_delivery_openclaw_sender import (
+    DryRunOpenClawTransport,
+    HttpOpenClawTransport,
+    OpenClawSendConfig,
+    OpenClawSendInputError,
+    OpenClawSender,
+)
 from stock_research.research_preflight import (
     check_factor_label_coverage,
     check_industry_membership_coverage,
     find_latest_common_label_date,
+    default_research_factor_names,
 )
 from stock_research.research_windows import load_market_date_bounds
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
+from stock_research.reports.agent_research_report import build_agent_research_report
+from stock_research.reports.watchlist_report import (
+    _json_safe_value,
+    write_watchlist_diagnostics_report,
+    write_watchlist_report,
+)
+from stock_research.backtest_constraints import BacktestExecutionConstraints
 from stock_research.retention_backtest import run_retention_backtest
+from stock_research.research_snapshot_export import export_research_snapshot
 from stock_research.schema import apply_schema
 from stock_research.selection import generate_selection, store_selection
+from stock_research.trend_candidate_backtest import run_trend_candidate_backtest_report
+from stock_research.trend_candidate_enrichment import (
+    run_entry_success_candidate_v2_report,
+    run_entry_success_reverse_profile_report,
+    run_candidate_enrichment_report,
+    run_full_universe_candidate_enrichment_report,
+)
+from stock_research.trend_factor_profile import run_mid_trend_factor_profile_report
+from stock_research.trend_lifecycle import run_trend_lifecycle_v1_report
+from stock_research.trade_advice.advice import (
+    TradeAdvicePolicy,
+    generate_trade_advice,
+    write_trade_advice,
+)
+from stock_research.technical_feature_store import (
+    TECHNICAL_FEATURE_CALC_VERSION,
+    build_and_store_stock_technical_features_daily,
+)
+from stock_research.technical_feature_benchmark import (
+    run_technical_feature_compare_benchmark,
+    run_technical_feature_store_compare_benchmark,
+)
+from stock_research.technical_feature_performance_review import (
+    build_technical_feature_performance_review,
+    write_technical_feature_performance_review,
+)
+from stock_research.technical_feature_promotion_audit import (
+    run_technical_feature_promotion_audit,
+)
+from stock_research.technical_feature_regression import run_technical_feature_fast_regression
+from stock_research.technical_feature_backfill import (
+    backfill_technical_features_daily_range,
+    derive_technical_feature_backfill_window,
+    run_technical_feature_backfill_benchmark,
+)
+from stock_research.technical_feature_audit import (
+    run_technical_feature_gap_check,
+)
+from stock_research.technical_feature_watchdog import (
+    run_technical_feature_backfill_watchdog,
+)
+from stock_research.alpha191_pilot_validation import (
+    run_validate_alpha191_expanded,
+    run_validate_alpha191_pilot,
+)
+from stock_research.technical_method_validation import run_validate_technical_methods
+from stock_research.run_card import write_run_card
+from stock_research.services.universe_service import (
+    UniverseConfig,
+    UniverseMember,
+    UniverseService,
+    get_universe_preset,
+    load_watchlist_codes,
+    write_universe_artifacts,
+)
 from stock_research.v31_cache import build_v31_cache
+from stock_research.watchlist.workflow import (
+    build_watchlist_diagnostics_snapshot,
+    build_watchlist_snapshot,
+    explain_watchlist_asset,
+)
+from stock_research.watchlist.diagnostics import DIAGNOSTICS_RULE_VERSION
+from stock_research.watchlist.effectiveness import (
+    run_watchlist_diagnostics_effectiveness_review,
+)
+from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
+from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
 def parse_int_list(value: str, option_name: str) -> list[int]:
@@ -123,6 +388,10 @@ def parse_holding_days(value: str) -> list[int]:
 
 def parse_top_ks(value: str) -> list[int]:
     return parse_int_list(value, "--top-ks")
+
+
+def parse_topn_thresholds(value: str) -> list[int]:
+    return parse_int_list(value, "--topn-thresholds")
 
 
 def parse_research_horizons(value: str) -> list[int]:
@@ -151,12 +420,182 @@ def parse_index_ids(value: str) -> list[str]:
     return parse_str_list(value, "--index-ids")
 
 
+def parse_adjust_types(value: str) -> list[str]:
+    adjust_types = parse_str_list(value, "--adjust-types")
+    allowed = {"raw", "qfq", "hfq"}
+    invalid = [item for item in adjust_types if item not in allowed]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            "--adjust-types values must be one of raw, qfq, hfq"
+        )
+    return adjust_types
+
+
 def parse_ingest_datasets(value: str) -> list[str]:
     return parse_str_list(value, "--ingest-datasets")
 
 
 def parse_backfill_run_ids(value: str) -> list[str]:
     return parse_str_list(value, "--backfill-run-ids")
+
+
+def parse_openclaw_timeout_seconds(value: object) -> float:
+    try:
+        timeout_seconds = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "report-delivery-openclaw-send: "
+            "--timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0, "
+            f"got {value!r}"
+        ) from exc
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError(
+            "report-delivery-openclaw-send: "
+            "--timeout-seconds / OPENCLAW_TIMEOUT_SECONDS must be a finite number greater than 0, "
+            f"got {value!r}"
+        )
+    return timeout_seconds
+
+
+def build_universe_config_from_args(
+    args: argparse.Namespace,
+    *,
+    watchlist_codes: list[str] | None = None,
+) -> UniverseConfig:
+    overrides: dict[str, object] = {}
+    if getattr(args, "min_listed_days", None) is not None:
+        overrides["min_listed_days"] = int(args.min_listed_days)
+    if getattr(args, "min_avg_turnover_amount", None) is not None:
+        overrides["min_avg_turnover_amount"] = float(args.min_avg_turnover_amount)
+    if getattr(args, "min_avg_volume", None) is not None:
+        overrides["min_avg_volume"] = float(args.min_avg_volume)
+    if getattr(args, "liquidity_lookback_days", None) is not None:
+        overrides["liquidity_lookback_days"] = int(args.liquidity_lookback_days)
+    if getattr(args, "max_suspended_days", None) is not None:
+        overrides["max_suspended_days"] = int(args.max_suspended_days)
+    return get_universe_preset(
+        args.date,
+        args.preset,
+        watchlist_codes=watchlist_codes,
+        **overrides,
+    )
+
+
+def build_universe_artifacts(
+    *,
+    result: object,
+    output_dir: str,
+) -> object:
+    return write_universe_artifacts(result, output_dir)
+
+
+def openclaw_export(
+    *,
+    trade_date: str,
+    manifest_path: str,
+    output_dir: str,
+    include_all: bool,
+    min_severity: str,
+    dry_run: bool,
+):
+    adapter = OpenClawExportAdapter()
+    manifest = adapter.load_local_manifest(manifest_path)
+    source_trade_date = str(manifest.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-openclaw-export: "
+            f"trade-date {trade_date} does not match manifest trade_date {source_trade_date}"
+        )
+    return adapter.export(
+        manifest_path,
+        include_all=include_all,
+        min_severity=min_severity,
+        dry_run=dry_run,
+        output_dir=output_dir,
+    )
+
+
+def feishu_preview(
+    *,
+    trade_date: str,
+    manifest_path: str,
+    output_dir: str,
+    include_all: bool,
+    min_severity: str,
+):
+    adapter = FeishuDryRunAdapter()
+    manifest = adapter.load_local_manifest(manifest_path)
+    source_trade_date = str(manifest.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-feishu: "
+            f"trade-date {trade_date} does not match manifest trade_date {source_trade_date}"
+        )
+    return adapter.render_preview(
+        manifest_path,
+        output_dir=output_dir,
+        include_all=include_all,
+        min_severity=min_severity,
+    )
+
+
+def feishu_send(
+    *,
+    trade_date: str,
+    preview_path: str,
+    output_dir: str,
+    webhook_url: str | None,
+    dry_run: bool,
+    limit: int | None,
+    allow_live_send: bool,
+    severity_max: str | None,
+    test_mode: bool,
+):
+    sender = FeishuSender(
+        transport=FakeFeishuTransport() if dry_run else HttpFeishuTransport()
+    )
+    preview = sender.load_preview(preview_path)
+    source_trade_date = str(preview.get("trade_date", ""))
+    if source_trade_date != trade_date:
+        raise ValueError(
+            "report-delivery-feishu-send: "
+            f"trade-date {trade_date} does not match preview trade_date {source_trade_date}"
+        )
+    return sender.send_preview(
+        preview_path=preview_path,
+        config=FeishuSendConfig(
+            webhook_url=webhook_url,
+            dry_run=dry_run,
+            outbox_dir=output_dir,
+            limit=limit,
+            allow_live_send=allow_live_send,
+            severity_max=severity_max,
+            test_mode=test_mode,
+        ),
+    )
+
+
+def universe_member_to_json(member: UniverseMember) -> str:
+    return json.dumps(
+        {
+            "trade_date": member.trade_date,
+            "asset_id": member.asset_id,
+            "stock_code": member.stock_code,
+            "stock_name": member.stock_name,
+            "board": member.board,
+            "listed_days": member.listed_days,
+            "is_st": member.is_st,
+            "is_suspended": member.is_suspended,
+            "avg_turnover_amount": member.avg_turnover_amount,
+            "avg_volume": member.avg_volume,
+            "industry": member.industry,
+            "included": member.included,
+            "include_reasons": member.include_reasons,
+            "exclude_reasons": member.exclude_reasons,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
 
 
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
@@ -182,6 +621,147 @@ def print_ingest_progress(event: dict) -> None:
         )
     elif event["event"] == "failed":
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
+
+
+def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--start-date")
+    parser.add_argument("--end-date")
+    parser.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    parser.add_argument(
+        "--adjust-types",
+        type=parse_adjust_types,
+        default=["raw", "qfq"],
+    )
+    parser.add_argument("--max-jobs", type=int, default=1200)
+    parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--stale-after-minutes", type=int, default=20)
+    parser.add_argument("--run-timeout-seconds", type=int, default=1800)
+    parser.add_argument("--output-dir", default="outputs/research")
+    parser.add_argument("--report-target", required=True)
+    parser.add_argument("--report-account", default="jarvis")
+    parser.add_argument("--openclaw-bin", default="openclaw")
+    parser.add_argument("--report-dry-run", action="store_true")
+
+
+def run_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_minute_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        freq=args.freq,
+        adjust_types=args.adjust_types,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = (
+        int(result["post_summary"]["success_jobs"])
+        - int(result["pre_summary"]["success_jobs"])
+    )
+    print(f"minute_backfill_watchdog|action|{result['status']['watchdog_action']}")
+    print(f"minute_backfill_watchdog|delta_success|{delta_success}")
+    print(f"minute_backfill_watchdog|delta_rows|{result['run_result']['rows']}")
+    if "work_remaining" in result["status"]:
+        print(f"minute_backfill_watchdog|work_remaining|{result['status']['work_remaining']}")
+
+
+def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--lookback-bars", type=int, default=260)
+    parser.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    parser.add_argument("--source-data-version")
+    parser.add_argument("--sleep-between-runs-seconds", type=float, default=0.0)
+
+
+def add_factor_gate_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--factor-names", type=parse_factor_names)
+    parser.add_argument("--validation-start-date")
+    parser.add_argument("--horizons", default="5,10,20,60")
+    parser.add_argument("--primary-horizon", type=int, default=5)
+    parser.add_argument("--calc-version", default="v1")
+    parser.add_argument("--score-version", default="manual_v1")
+    parser.add_argument("--quantiles", type=int, default=5)
+    parser.add_argument("--top-n", type=int, default=30)
+
+
+def run_technical_feature_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_technical_feature_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        adjust_type=args.adjust_type,
+        lookback_bars=args.lookback_bars,
+        source_data_version=args.source_data_version,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        sleep_between_runs_seconds=args.sleep_between_runs_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = result["post_summary"].success_tasks - result["pre_summary"].success_tasks
+    delta_rows = result["post_summary"].total_rows_written - result["pre_summary"].total_rows_written
+    run_result = result.get("run_result", {})
+    print(f"technical_feature_watchdog|action|{result['status'].watchdog_action}")
+    print(f"technical_feature_watchdog|delta_success|{delta_success}")
+    print(f"technical_feature_watchdog|delta_rows|{max(0, delta_rows)}")
+    print(f"technical_feature_watchdog|work_remaining|{result['status'].work_remaining}")
+    for key in (
+        "batch_start_date",
+        "batch_end_date",
+        "batch_size_days",
+        "worker_count",
+        "compute_seconds",
+        "sleep_between_runs_seconds",
+        "rows_written",
+        "days_per_hour",
+        "rows_per_hour",
+        "timed_out",
+    ):
+        print(f"technical_feature_watchdog|{key}|{run_result.get(key, '')}")
+
+
+def run_factor_gate_watchdog_command(args: argparse.Namespace) -> None:
+    horizons = [int(value.strip()) for value in args.horizons.split(",") if value.strip()]
+    result = run_factor_gate_batch_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        validation_start_date=args.validation_start_date,
+        horizons=horizons,
+        primary_horizon=args.primary_horizon,
+        calc_version=args.calc_version,
+        score_version=args.score_version,
+        quantiles=args.quantiles,
+        top_n=args.top_n,
+        factor_names=args.factor_names,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+    )
+    delta_success = result["post_summary"].success_tasks - result["pre_summary"].success_tasks
+    delta_rows = result["post_summary"].total_rows_written - result["pre_summary"].total_rows_written
+    print(f"factor_gate_watchdog|action|{result['status'].watchdog_action}")
+    print(f"factor_gate_watchdog|delta_success|{delta_success}")
+    print(f"factor_gate_watchdog|delta_rows|{max(0, delta_rows)}")
+    print(f"factor_gate_watchdog|work_remaining|{result['status'].work_remaining}")
 
 
 def print_factor_backfill_progress(event: dict) -> None:
@@ -215,6 +795,37 @@ def factor_backfill_progress_printer(interval: int):
     return print_progress
 
 
+def print_technical_feature_backfill_progress(event: dict) -> None:
+    if event["event"] == "start":
+        print(
+            "technical_feature_daily_backfill|start|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}",
+            flush=True,
+        )
+    elif event["event"] == "done":
+        print(
+            "technical_feature_daily_backfill|done|"
+            f"{event['trade_date']}|{event['index']}|{event['total']}|{event['feature_rows']}",
+            flush=True,
+        )
+
+
+def technical_feature_backfill_progress_printer(interval: int):
+    progress_interval = max(1, int(interval))
+
+    def print_progress(event: dict) -> None:
+        if event["event"] == "done" and progress_interval > 1:
+            index = int(event["index"])
+            total = int(event["total"])
+            if index % progress_interval != 0 and index != total:
+                return
+        if event["event"] == "start" and progress_interval > 1:
+            return
+        print_technical_feature_backfill_progress(event)
+
+    return print_progress
+
+
 def summarize_multi_horizon_report(report: dict) -> dict:
     summaries = {}
     for horizon, horizon_report in report.get("reports", {}).items():
@@ -229,6 +840,162 @@ def summarize_multi_horizon_report(report: dict) -> dict:
     }
 
 
+def _load_p8_decision_outcome_inputs(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    decision_events_csv: str | None,
+    bars_csv: str | None,
+    service: str,
+    adjust_type: str,
+    max_horizon: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if decision_events_csv:
+        decision_events = pd.read_csv(decision_events_csv)
+    else:
+        decision_events = _load_p8_decision_events_from_db(
+            start_date=start_date,
+            end_date=end_date,
+            review_session_id=review_session_id,
+            service=service,
+        )
+
+    if bars_csv:
+        bars = pd.read_csv(bars_csv)
+    else:
+        bars = _load_p8_market_bars_from_db(
+            start_date=start_date,
+            end_date=end_date,
+            service=service,
+            adjust_type=adjust_type,
+            max_horizon=max_horizon,
+        )
+    return decision_events, bars
+
+
+def _load_p8_decision_events_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    service: str,
+) -> pd.DataFrame:
+    params: list[object] = [start_date, end_date]
+    session_filter = ""
+    if review_session_id:
+        session_filter = "AND review_session_id = %s"
+        params.append(review_session_id)
+    sql = f"""
+        SELECT
+            event_id, review_session_id, review_date, asset_id, stock_code,
+            stock_name, decision_label, evidence_artifact_id, evidence_path,
+            source_context, requires_follow_up, follow_up_note, notes,
+            manual_review_required, auto_trade_enabled, source_artifact_path
+        FROM ops.operator_decision_event
+        WHERE review_date BETWEEN %s AND %s
+        {session_filter}
+        ORDER BY review_date, review_session_id, event_id
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, params))
+
+
+def _load_p8_market_bars_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    service: str,
+    adjust_type: str,
+    max_horizon: int,
+) -> pd.DataFrame:
+    lookahead_days = max(1, int(max_horizon)) * 3
+    extended_end_date = str((pd.Timestamp(end_date) + pd.Timedelta(days=lookahead_days)).date())
+    sql = """
+        SELECT asset_id, trade_date, close, high, low
+        FROM market_daily_bar
+        WHERE trade_date BETWEEN %s AND %s
+          AND adjust_type = %s
+        ORDER BY asset_id, trade_date
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, [start_date, extended_end_date, adjust_type]))
+
+
+def _load_p9_outcome_analytics_inputs(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    outcome_events_csv: str | None,
+    service: str,
+    limit: int,
+) -> pd.DataFrame:
+    if outcome_events_csv:
+        events = pd.read_csv(outcome_events_csv)
+        return _parse_p9_outcome_event_maps(events)
+    return _load_p9_outcome_events_from_db(
+        start_date=start_date,
+        end_date=end_date,
+        review_session_id=review_session_id,
+        service=service,
+        limit=limit,
+    )
+
+
+def _load_p9_outcome_events_from_db(
+    *,
+    start_date: str,
+    end_date: str,
+    review_session_id: str | None,
+    service: str,
+    limit: int,
+) -> pd.DataFrame:
+    params: list[object] = [start_date, end_date]
+    session_filter = ""
+    if review_session_id:
+        session_filter = "AND review_session_id = %s"
+        params.append(review_session_id)
+    params.append(max(1, int(limit)))
+    sql = f"""
+        SELECT
+            outcome_event_id, run_id, decision_event_id, review_session_id,
+            review_date, asset_id, stock_code, stock_name, decision_label,
+            source_context, outcome_status, available_future_bars,
+            forward_returns, max_high_returns, max_low_drawdowns,
+            manual_review_required, auto_trade_enabled, metadata
+        FROM ops.operator_decision_outcome_event
+        WHERE review_date BETWEEN %s AND %s
+        {session_filter}
+        ORDER BY review_date, review_session_id, outcome_event_id
+        LIMIT %s
+    """
+    with connect(service) as conn:
+        return pd.DataFrame(fetch_all(conn, sql, params))
+
+
+def _parse_p9_outcome_event_maps(events: pd.DataFrame) -> pd.DataFrame:
+    parsed = events.copy()
+    for column in ["forward_returns", "max_high_returns", "max_low_drawdowns", "metadata"]:
+        if column in parsed.columns:
+            parsed[column] = parsed[column].map(_parse_json_cell)
+    return parsed
+
+
+def _parse_json_cell(value):
+    if isinstance(value, (dict, list)):
+        return value
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return value
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stock-research")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -238,10 +1005,29 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
 
+    dashboard_api = subparsers.add_parser("dashboard-api")
+    dashboard_api.add_argument("--host", default="127.0.0.1")
+    dashboard_api.add_argument("--port", type=int, default=8765)
+
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
     subparsers.add_parser("finance-audit")
+
+    data_quality = subparsers.add_parser("data-quality")
+    data_quality.add_argument("--expected-start-date", default="1990-12-01")
+    data_quality.add_argument("--start-date")
+    data_quality.add_argument("--end-date")
+    data_quality.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    data_quality.add_argument("--factor-names", type=parse_factor_names)
+    data_quality.add_argument("--calc-version", default="v1")
+    data_quality.add_argument("--min-label-dates", type=int, default=20)
+    data_quality.add_argument("--require-industry-membership", action="store_true")
+    data_quality.add_argument("--json", action="store_true")
 
     seed_trading_calendar = subparsers.add_parser("seed-trading-calendar")
     seed_trading_calendar.add_argument("--start-date", required=True)
@@ -295,6 +1081,10 @@ def build_parser() -> argparse.ArgumentParser:
     corporate_actions.add_argument("--start-date")
     corporate_actions.add_argument("--end-date")
     corporate_actions.add_argument("--source-version", default="derived_adjustment_factor_v1")
+    corporate_actions.add_argument(
+        "--factor-source-version",
+        default="derived_market_daily_bar_v1",
+    )
 
     industry_bars = subparsers.add_parser("build-industry-bars")
     industry_bars.add_argument("--start-date")
@@ -319,6 +1109,95 @@ def build_parser() -> argparse.ArgumentParser:
     baostock_finance.add_argument("--quarter", required=True, type=int)
     baostock_finance.add_argument("--limit", type=int)
     baostock_finance.add_argument("--offset", type=int, default=0)
+
+    baostock_minutes = subparsers.add_parser("sync-baostock-minute-bars")
+    baostock_minutes.add_argument("--start-date", default="2024-01-01")
+    baostock_minutes.add_argument("--end-date", required=True)
+    baostock_minutes.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    baostock_minutes.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    baostock_minutes.add_argument("--limit-assets", type=int)
+    baostock_minutes.add_argument("--sleep-seconds", type=float, default=0.0)
+
+    plan_minute_backfill = subparsers.add_parser("plan-baostock-minute-backfill")
+    plan_minute_backfill.add_argument("--start-date", required=True)
+    plan_minute_backfill.add_argument("--end-date", required=True)
+    plan_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    plan_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    plan_minute_backfill.add_argument("--batch-by", choices=["month"], default="month")
+    plan_minute_backfill.add_argument("--output-dir", default="outputs/research")
+    plan_minute_backfill.add_argument("--limit-assets", type=int)
+
+    run_minute_backfill = subparsers.add_parser("run-baostock-minute-backfill")
+    run_minute_backfill.add_argument("--start-date")
+    run_minute_backfill.add_argument("--end-date")
+    run_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    run_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    run_minute_backfill.add_argument("--batch-by", choices=["month"], default="month")
+    run_minute_backfill.add_argument("--max-jobs", type=int, default=50)
+    run_minute_backfill.add_argument("--retry-failed", action="store_true")
+    run_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.5)
+    run_minute_backfill.add_argument("--workers", type=int, default=1)
+
+    run_minute_backfill_range = subparsers.add_parser("run-baostock-minute-backfill-range")
+    run_minute_backfill_range.add_argument("--start-date", required=True)
+    run_minute_backfill_range.add_argument("--end-date", required=True)
+    run_minute_backfill_range.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    run_minute_backfill_range.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    run_minute_backfill_range.add_argument("--batch-by", choices=["month"], default="month")
+    run_minute_backfill_range.add_argument("--max-jobs", type=int, default=500)
+    run_minute_backfill_range.add_argument("--retry-failed", action="store_true")
+    run_minute_backfill_range.add_argument("--sleep-seconds", type=float, default=0.1)
+    run_minute_backfill_range.add_argument("--workers", type=int, default=1)
+    run_minute_backfill_range.add_argument("--output-dir", default="outputs/research")
+    run_minute_backfill_range.add_argument("--limit-assets", type=int)
+    run_minute_backfill_range.add_argument("--report-target", required=True)
+    run_minute_backfill_range.add_argument("--report-account", default="jarvis")
+    run_minute_backfill_range.add_argument("--openclaw-bin", default="openclaw")
+    run_minute_backfill_range.add_argument("--report-dry-run", action="store_true")
+
+    minute_backfill_watchdog = subparsers.add_parser("minute-backfill-watchdog")
+    add_minute_backfill_watchdog_arguments(minute_backfill_watchdog)
+
+    backfill_watchdog = subparsers.add_parser("backfill-watchdog")
+    backfill_watchdog.add_argument(
+        "--adapter",
+        choices=["minute", "technical-features", "factor-gate"],
+        required=True,
+    )
+    add_minute_backfill_watchdog_arguments(backfill_watchdog)
+    add_technical_feature_watchdog_arguments(backfill_watchdog)
+    add_factor_gate_watchdog_arguments(backfill_watchdog)
+
+    status_minute_backfill = subparsers.add_parser("baostock-minute-backfill-status")
+    status_minute_backfill.add_argument("--output-dir", default="outputs/research")
+
+    validate_minutes = subparsers.add_parser("validate-minute-bars")
+    validate_minutes.add_argument("--start-date", required=True)
+    validate_minutes.add_argument("--end-date", required=True)
+    validate_minutes.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    validate_minutes.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+    validate_minutes.add_argument("--output-dir", default="outputs/research")
+    validate_minutes.add_argument("--limit-rows", type=int)
 
     create_ingest = subparsers.add_parser("create-ingest-jobs")
     create_ingest.add_argument("--dataset", required=True)
@@ -389,6 +1268,104 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--trade-date", required=True)
     report.add_argument("--log-path", required=True)
 
+    report_delivery_local = subparsers.add_parser("report-delivery-local")
+    report_delivery_local.add_argument("--trade-date", required=True)
+    report_delivery_local.add_argument("--input-dir", action="append", default=[])
+    report_delivery_local.add_argument("--report-dir", action="append", default=[])
+    report_delivery_local.add_argument("--run-card-dir", action="append", default=[])
+    report_delivery_local.add_argument("--artifact-path", action="append", default=[])
+    report_delivery_local.add_argument("--output-dir", required=True)
+    report_delivery_local.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_local.add_argument("--no-dry-run", dest="dry_run", action="store_false")
+
+    report_delivery_openclaw_export = subparsers.add_parser("report-delivery-openclaw-export")
+    report_delivery_openclaw_export.add_argument("--trade-date", required=True)
+    report_delivery_openclaw_export.add_argument("--manifest", required=True)
+    report_delivery_openclaw_export.add_argument("--output-dir", required=True)
+    report_delivery_openclaw_export.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_openclaw_export.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_openclaw_export.add_argument("--include-all", action="store_true")
+    report_delivery_openclaw_export.add_argument(
+        "--min-severity",
+        choices=["info", "low", "medium", "high", "critical"],
+        default="info",
+    )
+
+    report_delivery_feishu = subparsers.add_parser("report-delivery-feishu")
+    report_delivery_feishu.add_argument("--trade-date", required=True)
+    report_delivery_feishu.add_argument("--manifest", required=True)
+    report_delivery_feishu.add_argument("--output-dir", required=True)
+    report_delivery_feishu.add_argument("--include-all", action="store_true")
+    report_delivery_feishu.add_argument(
+        "--min-severity",
+        choices=["info", "low", "medium", "high", "critical"],
+        default="info",
+    )
+
+    report_delivery_feishu_send = subparsers.add_parser("report-delivery-feishu-send")
+    report_delivery_feishu_send.add_argument("--trade-date", required=True)
+    report_delivery_feishu_send.add_argument("--preview", required=True)
+    report_delivery_feishu_send.add_argument("--output-dir", required=True)
+    report_delivery_feishu_send.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_feishu_send.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_feishu_send.add_argument("--webhook-url", default=os.environ.get("FEISHU_WEBHOOK_URL"))
+    report_delivery_feishu_send.add_argument("--limit", type=int)
+    report_delivery_feishu_send.add_argument("--allow-live-send", action="store_true")
+    report_delivery_feishu_send.add_argument(
+        "--severity-max",
+        choices=["info", "low", "medium", "high", "critical"],
+    )
+    report_delivery_feishu_send.add_argument("--test-mode", action="store_true")
+
+    agent_report = subparsers.add_parser("agent-report")
+    agent_report.add_argument("--trade-date", required=True)
+    agent_report.add_argument("--mode", choices=["topn", "watchlist"], required=True)
+    agent_report.add_argument("--manifest", required=True)
+    agent_report.add_argument("--output-dir", required=True)
+
+    report_delivery_openclaw_send = subparsers.add_parser("report-delivery-openclaw-send")
+    report_delivery_openclaw_send.add_argument("--trade-date", required=True)
+    report_delivery_openclaw_send.add_argument("--manifest", required=True)
+    report_delivery_openclaw_send.add_argument("--items", required=True)
+    report_delivery_openclaw_send.add_argument("--output-dir", required=True)
+    report_delivery_openclaw_send.add_argument("--dry-run", action="store_true", default=True)
+    report_delivery_openclaw_send.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+    )
+    report_delivery_openclaw_send.add_argument("--endpoint", default=os.environ.get("OPENCLAW_ENDPOINT"))
+    report_delivery_openclaw_send.add_argument(
+        "--timeout-seconds",
+        default=os.environ.get("OPENCLAW_TIMEOUT_SECONDS", "10.0"),
+    )
+    report_delivery_openclaw_send.add_argument("--retry-count", type=int, default=0)
+    report_delivery_openclaw_send.add_argument(
+        "--retry-backoff-seconds",
+        type=float,
+        default=1.0,
+    )
+    report_delivery_openclaw_send.add_argument("--allow-live-send", action="store_true")
+    report_delivery_openclaw_send.add_argument("--limit", type=int)
+    report_delivery_openclaw_send.add_argument(
+        "--route-allowlist",
+        type=lambda value: parse_str_list(value, "--route-allowlist"),
+        default=[],
+    )
+    report_delivery_openclaw_send.add_argument(
+        "--severity-max",
+        choices=["info", "low", "medium", "high", "critical"],
+    )
+    report_delivery_openclaw_send.add_argument("--test-mode", action="store_true")
+
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
     backtest_top20.add_argument("--end-date", required=True)
@@ -418,6 +1395,37 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    simulate_portfolio = subparsers.add_parser("simulate-portfolio")
+    simulate_portfolio.add_argument("--start-date", required=True)
+    simulate_portfolio.add_argument("--end-date", required=True)
+    simulate_portfolio.add_argument("--initial-cash", type=float, default=500000.0)
+    simulate_portfolio.add_argument(
+        "--top-ks",
+        type=parse_top_ks,
+        default="5,10",
+    )
+    simulate_portfolio.add_argument(
+        "--holding-days",
+        type=parse_holding_days,
+        default="5,10,15,20,30",
+    )
+    simulate_portfolio.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+    simulate_portfolio.add_argument("--output-dir", required=True)
+
+    generate_advice = subparsers.add_parser("generate-trade-advice")
+    generate_advice.add_argument("--trade-date", required=True)
+    generate_advice.add_argument("--simulation-state", required=True)
+    generate_advice.add_argument("--candidates", required=True)
+    generate_advice.add_argument("--output-dir", required=True)
+    generate_advice.add_argument("--max-single-position-pct", type=float, default=0.10)
+    generate_advice.add_argument("--max-industry-position-pct", type=float, default=0.30)
+    generate_advice.add_argument("--target-total-exposure-pct", type=float, default=0.60)
+    generate_advice.add_argument("--drawdown-defensive-threshold", type=float, default=-0.10)
+    generate_advice.add_argument("--defensive-exposure-multiplier", type=float, default=0.50)
+
     retention_backtest = subparsers.add_parser("retention-backtest")
     retention_backtest.add_argument("--start-date", required=True)
     retention_backtest.add_argument("--end-date", required=True)
@@ -440,6 +1448,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--cache-dir",
         default="/Users/xiwei/stock_research/cache/v3_1",
     )
+    retention_backtest.add_argument("--commission-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--stamp-duty-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--slippage-bps", type=float, default=0.0)
+    retention_backtest.add_argument("--min-amount", type=float)
 
     v31_cache = subparsers.add_parser("build-v31-cache")
     v31_cache.add_argument("--start-date", required=True)
@@ -558,6 +1570,25 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate_factor_gate_batch.add_argument("--quantiles", type=int, default=5)
     evaluate_factor_gate_batch.add_argument("--top-n", type=int, default=30)
 
+    factor_validation_review = subparsers.add_parser("factor-validation-review")
+    factor_validation_review.add_argument("--factor-name", required=True)
+    factor_validation_review.add_argument("--factors", required=True)
+    factor_validation_review.add_argument("--returns", required=True)
+    factor_validation_review.add_argument("--segments")
+    factor_validation_review.add_argument("--segment-col")
+    factor_validation_review.add_argument("--split-date", required=True)
+    factor_validation_review.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    factor_validation_review.add_argument("--primary-horizon", type=int, default=5)
+    factor_validation_review.add_argument("--factor-col", default="factor_value")
+    factor_validation_review.add_argument("--min-abs-mean-ic", type=float, default=0.02)
+    factor_validation_review.add_argument("--min-icir", type=float, default=0.3)
+    factor_validation_review.add_argument("--min-ic-count", type=int, default=20)
+    factor_validation_review.add_argument("--output-dir", required=True)
+
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
     daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
@@ -568,6 +1599,315 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    technical_features_daily = subparsers.add_parser("build-technical-features-daily")
+    technical_features_daily.add_argument("--trade-date", required=True)
+    technical_features_daily.add_argument("--lookback-bars", type=int, default=260)
+    technical_features_daily.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    technical_features_daily.add_argument(
+        "--build-strategy",
+        choices=["legacy", "batch_frame", "latest_only"],
+        default="latest_only",
+    )
+
+    backfill_technical_features_daily = subparsers.add_parser(
+        "backfill-technical-features-daily"
+    )
+    backfill_technical_features_daily.add_argument("--start-date")
+    backfill_technical_features_daily.add_argument("--end-date")
+    backfill_technical_features_daily.add_argument("--lookback-bars", type=int, default=260)
+    backfill_technical_features_daily.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    backfill_technical_features_daily.add_argument("--source-data-version")
+    backfill_technical_features_daily.add_argument("--workers", type=int, default=1)
+    backfill_technical_features_daily.add_argument("--skip-complete", action="store_true")
+    backfill_technical_features_daily.add_argument("--progress-interval", type=int, default=1)
+    backfill_technical_features_daily.add_argument(
+        "--build-strategy",
+        choices=["legacy", "batch_frame", "latest_only"],
+        default="latest_only",
+    )
+
+    benchmark_technical_feature_backfill = subparsers.add_parser(
+        "benchmark-technical-feature-backfill"
+    )
+    benchmark_technical_feature_backfill.add_argument("--start-date", required=True)
+    benchmark_technical_feature_backfill.add_argument("--end-date", required=True)
+    benchmark_technical_feature_backfill.add_argument("--lookback-bars", type=int, default=260)
+    benchmark_technical_feature_backfill.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    benchmark_technical_feature_backfill.add_argument(
+        "--strategy",
+        choices=["current", "parallel_dates"],
+        default="current",
+    )
+    benchmark_technical_feature_backfill.add_argument("--workers", type=int, default=1)
+    benchmark_technical_feature_backfill.add_argument("--bench-tag", required=True)
+
+    technical_feature_gap_check = subparsers.add_parser("technical-feature-gap-check")
+    technical_feature_gap_check.add_argument("--start-date", required=True)
+    technical_feature_gap_check.add_argument("--end-date", required=True)
+    technical_feature_gap_check.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    technical_feature_gap_check.add_argument(
+        "--calc-version",
+        default=TECHNICAL_FEATURE_CALC_VERSION,
+    )
+    technical_feature_gap_check.add_argument("--source-data-version")
+
+    technical_feature_promotion_audit = subparsers.add_parser("technical-feature-promotion-audit")
+    technical_feature_promotion_audit.add_argument("--start-date", required=True)
+    technical_feature_promotion_audit.add_argument("--end-date", required=True)
+    technical_feature_promotion_audit.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="qfq",
+    )
+    technical_feature_promotion_audit.add_argument("--sample-size", type=int)
+    technical_feature_promotion_audit.add_argument("--asset-id")
+    technical_feature_promotion_audit.add_argument("--ts-code")
+    technical_feature_promotion_audit.add_argument(
+        "--feature-source",
+        choices=["technical_table", "computed_on_fly"],
+        default="technical_table",
+    )
+    technical_feature_promotion_audit.add_argument("--output-dir", required=True)
+
+    technical_feature_performance_review = subparsers.add_parser(
+        "technical-feature-performance-review"
+    )
+    technical_feature_performance_review.add_argument("--asset-count", type=int, default=16)
+    technical_feature_performance_review.add_argument("--bar-count", type=int, default=260)
+    technical_feature_performance_review.add_argument("--repeat", type=int, default=1)
+    technical_feature_performance_review.add_argument("--min-speedup-ratio", type=float, default=1.0)
+    technical_feature_performance_review.add_argument("--output-dir", required=True)
+
+    p2_artifact_rollup = subparsers.add_parser("p2-artifact-rollup")
+    p2_artifact_rollup.add_argument("--manifest", required=True)
+    p2_artifact_rollup.add_argument("--output-dir", required=True)
+
+    p2_simulation_review = subparsers.add_parser("p2-simulation-review")
+    p2_simulation_review.add_argument("--trade-date", required=True)
+    p2_simulation_review.add_argument("--portfolio-id", required=True)
+    p2_simulation_review.add_argument(
+        "--simulation-state",
+        action="append",
+        required=True,
+    )
+    p2_simulation_review.add_argument("--trade-advice")
+    p2_simulation_review.add_argument("--output-dir", required=True)
+
+    p2_aggregate_review = subparsers.add_parser("p2-aggregate-review")
+    p2_aggregate_review.add_argument("--trade-date", required=True)
+    p2_aggregate_review.add_argument("--rollup", required=True)
+    p2_aggregate_review.add_argument("--output-dir", required=True)
+
+    p3_import_p2_aggregate_review = subparsers.add_parser("p3-import-p2-aggregate-review")
+    p3_import_p2_aggregate_review.add_argument("--path", required=True)
+    p3_import_p2_aggregate_review.add_argument("--service", default="stock_research")
+
+    p3_import_virtual_portfolio_review = subparsers.add_parser(
+        "p3-import-virtual-portfolio-review"
+    )
+    p3_import_virtual_portfolio_review.add_argument("--path", required=True)
+    p3_import_virtual_portfolio_review.add_argument("--service", default="stock_research")
+
+    p3_export_operator_review = subparsers.add_parser("p3-export-operator-review")
+    p3_export_operator_review.add_argument("--start-date", required=True)
+    p3_export_operator_review.add_argument("--end-date", required=True)
+    p3_export_operator_review.add_argument("--output-dir", required=True)
+    p3_export_operator_review.add_argument("--status")
+    p3_export_operator_review.add_argument("--section-group")
+    p3_export_operator_review.add_argument("--portfolio-id")
+    p3_export_operator_review.add_argument("--service", default="stock_research")
+
+    p7_decision_journal = subparsers.add_parser("p7-decision-journal")
+    p7_decision_journal.add_argument("--review-date", required=True)
+    p7_decision_journal.add_argument("--review-session-id", required=True)
+    p7_decision_journal.add_argument("--reviewer-id", required=True)
+    p7_decision_journal.add_argument("--source-artifact-root", required=True)
+    p7_decision_journal.add_argument("--input-csv", required=True)
+    p7_decision_journal.add_argument("--output-dir", required=True)
+
+    p7_import_decision_journal = subparsers.add_parser("p7-import-decision-journal")
+    p7_import_decision_journal.add_argument("--path", required=True)
+    p7_import_decision_journal.add_argument("--service", default="stock_research")
+
+    p8_decision_outcome_review = subparsers.add_parser("p8-decision-outcome-review")
+    p8_decision_outcome_review.add_argument("--start-date", required=True)
+    p8_decision_outcome_review.add_argument("--end-date", required=True)
+    p8_decision_outcome_review.add_argument("--review-session-id")
+    p8_decision_outcome_review.add_argument("--decision-events-csv")
+    p8_decision_outcome_review.add_argument("--bars-csv")
+    p8_decision_outcome_review.add_argument("--output-dir", required=True)
+    p8_decision_outcome_review.add_argument("--service", default="stock_research")
+    p8_decision_outcome_review.add_argument("--adjust-type", default="qfq")
+    p8_decision_outcome_review.add_argument("--horizon", dest="horizons", action="append", type=int)
+
+    p8_import_decision_outcome_review = subparsers.add_parser("p8-import-decision-outcome-review")
+    p8_import_decision_outcome_review.add_argument("--path", required=True)
+    p8_import_decision_outcome_review.add_argument("--service", default="stock_research")
+
+    p9_outcome_analytics = subparsers.add_parser("p9-outcome-analytics")
+    p9_outcome_analytics.add_argument("--start-date", required=True)
+    p9_outcome_analytics.add_argument("--end-date", required=True)
+    p9_outcome_analytics.add_argument("--review-session-id")
+    p9_outcome_analytics.add_argument("--outcome-events-csv")
+    p9_outcome_analytics.add_argument("--output-dir", required=True)
+    p9_outcome_analytics.add_argument("--service", default="stock_research")
+    p9_outcome_analytics.add_argument("--limit", type=int, default=1000)
+    p9_outcome_analytics.add_argument("--horizon", dest="horizons", action="append", type=int)
+
+    p9_import_outcome_analytics = subparsers.add_parser("p9-import-outcome-analytics")
+    p9_import_outcome_analytics.add_argument("--path", required=True)
+    p9_import_outcome_analytics.add_argument("--service", default="stock_research")
+
+    p10_experiment_proposals = subparsers.add_parser("p10-experiment-proposals")
+    p10_experiment_proposals.add_argument("--input-csv", required=True)
+    p10_experiment_proposals.add_argument("--review-date", required=True)
+    p10_experiment_proposals.add_argument("--run-id")
+    p10_experiment_proposals.add_argument("--output-dir", required=True)
+
+    p10_import_experiment_proposals = subparsers.add_parser("p10-import-experiment-proposals")
+    p10_import_experiment_proposals.add_argument("--path", required=True)
+    p10_import_experiment_proposals.add_argument("--service", default="stock_research")
+
+    p11_experiment_replay = subparsers.add_parser("p11-experiment-replay")
+    p11_experiment_replay.add_argument("--proposals-json", required=True)
+    p11_experiment_replay.add_argument("--metrics-csv", required=True)
+    p11_experiment_replay.add_argument("--run-id")
+    p11_experiment_replay.add_argument("--replay-start-date", required=True)
+    p11_experiment_replay.add_argument("--replay-end-date", required=True)
+    p11_experiment_replay.add_argument("--output-dir", required=True)
+
+    p11_import_experiment_replay = subparsers.add_parser("p11-import-experiment-replay")
+    p11_import_experiment_replay.add_argument("--path", required=True)
+    p11_import_experiment_replay.add_argument("--service", default="stock_research")
+
+    p12_shadow_watchlist = subparsers.add_parser("p12-shadow-watchlist")
+    p12_shadow_watchlist.add_argument("--replay-json", required=True)
+    p12_shadow_watchlist.add_argument("--candidates-csv", required=True)
+    p12_shadow_watchlist.add_argument("--review-date", required=True)
+    p12_shadow_watchlist.add_argument("--run-id")
+    p12_shadow_watchlist.add_argument("--output-dir", required=True)
+
+    p12_import_shadow_watchlist = subparsers.add_parser("p12-import-shadow-watchlist")
+    p12_import_shadow_watchlist.add_argument("--path", required=True)
+    p12_import_shadow_watchlist.add_argument("--service", default="stock_research")
+
+    p13_shadow_outcome_review = subparsers.add_parser("p13-shadow-outcome-review")
+    p13_shadow_outcome_review.add_argument("--shadow-json", required=True)
+    p13_shadow_outcome_review.add_argument("--bars-csv", required=True)
+    p13_shadow_outcome_review.add_argument("--review-date", required=True)
+    p13_shadow_outcome_review.add_argument("--run-id")
+    p13_shadow_outcome_review.add_argument("--output-dir", required=True)
+
+    p13_import_shadow_outcomes = subparsers.add_parser("p13-import-shadow-outcomes")
+    p13_import_shadow_outcomes.add_argument("--path", required=True)
+    p13_import_shadow_outcomes.add_argument("--service", default="stock_research")
+
+    p14_shadow_outcome_analytics = subparsers.add_parser("p14-shadow-outcome-analytics")
+    p14_shadow_outcome_analytics.add_argument("--shadow-outcomes-json", required=True)
+    p14_shadow_outcome_analytics.add_argument("--run-id", required=True)
+    p14_shadow_outcome_analytics.add_argument("--review-start-date", required=True)
+    p14_shadow_outcome_analytics.add_argument("--review-end-date", required=True)
+    p14_shadow_outcome_analytics.add_argument("--output-dir", required=True)
+
+    p15_shadow_analytics_review = subparsers.add_parser("p15-shadow-analytics-review")
+    p15_shadow_analytics_review.add_argument("--p14-analytics-json", required=True)
+    p15_shadow_analytics_review.add_argument("--run-id", required=True)
+    p15_shadow_analytics_review.add_argument("--review-start-date", required=True)
+    p15_shadow_analytics_review.add_argument("--review-end-date", required=True)
+    p15_shadow_analytics_review.add_argument("--reviewer-id", required=True)
+    p15_shadow_analytics_review.add_argument("--output-dir", required=True)
+
+    p16_shadow_review_decisions = subparsers.add_parser("p16-shadow-review-decisions")
+    p16_shadow_review_decisions.add_argument("--p15-review-json", required=True)
+    p16_shadow_review_decisions.add_argument("--run-id", required=True)
+    p16_shadow_review_decisions.add_argument("--decision-date", required=True)
+    p16_shadow_review_decisions.add_argument("--operator-id", required=True)
+    p16_shadow_review_decisions.add_argument("--output-dir", required=True)
+
+    p17_shadow_follow_up_queue = subparsers.add_parser("p17-shadow-follow-up-queue")
+    p17_shadow_follow_up_queue.add_argument("--p16-decisions-json", required=True)
+    p17_shadow_follow_up_queue.add_argument("--run-id", required=True)
+    p17_shadow_follow_up_queue.add_argument("--follow-up-date", required=True)
+    p17_shadow_follow_up_queue.add_argument("--operator-id", required=True)
+    p17_shadow_follow_up_queue.add_argument("--output-dir", required=True)
+
+    p18_shadow_follow_up_resolution = subparsers.add_parser("p18-shadow-follow-up-resolution")
+    p18_shadow_follow_up_resolution.add_argument("--p17-follow-up-json", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--run-id", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--resolution-date", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--operator-id", required=True)
+    p18_shadow_follow_up_resolution.add_argument("--output-dir", required=True)
+
+    p14_import_shadow_outcome_analytics = subparsers.add_parser("p14-import-shadow-outcome-analytics")
+    p14_import_shadow_outcome_analytics.add_argument("--path", required=True)
+    p14_import_shadow_outcome_analytics.add_argument("--service", default=SETTINGS.research_service)
+
+    p15_import_shadow_analytics_review = subparsers.add_parser("p15-import-shadow-analytics-review")
+    p15_import_shadow_analytics_review.add_argument("--path", required=True)
+    p15_import_shadow_analytics_review.add_argument("--service", default=SETTINGS.research_service)
+
+    p16_import_shadow_review_decisions = subparsers.add_parser("p16-import-shadow-review-decisions")
+    p16_import_shadow_review_decisions.add_argument("--path", required=True)
+    p16_import_shadow_review_decisions.add_argument("--service", default=SETTINGS.research_service)
+
+    p17_import_shadow_follow_up_queue = subparsers.add_parser("p17-import-shadow-follow-up-queue")
+    p17_import_shadow_follow_up_queue.add_argument("--path", required=True)
+    p17_import_shadow_follow_up_queue.add_argument("--service", default=SETTINGS.research_service)
+
+    p18_import_shadow_follow_up_resolution = subparsers.add_parser(
+        "p18-import-shadow-follow-up-resolution"
+    )
+    p18_import_shadow_follow_up_resolution.add_argument("--path", required=True)
+    p18_import_shadow_follow_up_resolution.add_argument("--service", default=SETTINGS.research_service)
+
+    p4_daily_orchestration = subparsers.add_parser("p4-daily-orchestration")
+    p4_daily_orchestration.add_argument("--trade-date", required=True)
+    p4_daily_orchestration.add_argument("--aggregate-review", required=True)
+    p4_daily_orchestration.add_argument("--virtual-portfolio", required=True)
+    p4_daily_orchestration.add_argument("--output-dir", required=True)
+    p4_daily_orchestration.add_argument("--portfolio-id")
+    p4_daily_orchestration.add_argument("--apply-daily-run-schema", action="store_true")
+    p4_daily_orchestration.add_argument("--record-run", action="store_true")
+    p4_daily_orchestration.add_argument("--service", default="stock_research")
+
+    p4_read_model_smoke = subparsers.add_parser("p4-read-model-smoke")
+    p4_read_model_smoke.add_argument("--trade-date", required=True)
+    p4_read_model_smoke.add_argument("--operator-manifest", required=True)
+    p4_read_model_smoke.add_argument("--portfolio-id")
+    p4_read_model_smoke.add_argument("--service", default="stock_research")
+
+    p4_scheduler_cron_entry = subparsers.add_parser("p4-scheduler-cron-entry")
+    p4_scheduler_cron_entry.add_argument(
+        "--project-dir",
+        default="/Users/xiwei/stock_research",
+    )
+    p4_scheduler_cron_entry.add_argument("--trade-date-expr", default="$(date +%F)")
+    p4_scheduler_cron_entry.add_argument("--hour", type=int, default=19)
+    p4_scheduler_cron_entry.add_argument("--minute", type=int, default=15)
+    p4_scheduler_cron_entry.add_argument("--weekdays", default="1-5")
+    p4_scheduler_cron_entry.add_argument("--portfolio-id", default="p2_smoke_demo")
+    p4_scheduler_cron_entry.add_argument("--service", default="stock_research")
+    p4_scheduler_cron_entry.add_argument(
+        "--log-path",
+        default="logs/p4_scheduler_daily.log",
+    )
+
     daily_incremental = subparsers.add_parser("run-daily-incremental")
     daily_incremental.add_argument("--trade-date", required=True)
     daily_incremental.add_argument("--score-version", default="manual_v1")
@@ -576,6 +1916,9 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--adjust-type", default="hfq")
     daily_incremental.add_argument("--source-service", default="stock_hfq")
     daily_incremental.add_argument("--industry-system", default="csrc")
+    daily_incremental_resume = daily_incremental.add_mutually_exclusive_group()
+    daily_incremental_resume.add_argument("--start-at")
+    daily_incremental_resume.add_argument("--only-step")
     daily_incremental.add_argument(
         "--reports-dir",
         default="/Users/xiwei/stock_research/reports",
@@ -594,6 +1937,18 @@ def build_parser() -> argparse.ArgumentParser:
     daily_health.add_argument("--openclaw-bin", default="openclaw")
     daily_health.add_argument("--notify-dry-run", action="store_true")
 
+    export_snapshot = subparsers.add_parser("export-research-snapshot")
+    export_snapshot.add_argument("--start-date", required=True)
+    export_snapshot.add_argument("--end-date", required=True)
+    export_snapshot.add_argument("--score-version", default="manual_v1")
+    export_snapshot.add_argument("--output-dir", required=True)
+
+    migration_safety = subparsers.add_parser("migration-safety-check")
+    migration_safety.add_argument("--backup-path", required=True)
+    migration_safety.add_argument("--source-service", default="stock_research")
+    migration_safety.add_argument("--restore-service")
+    migration_safety.add_argument("--dry-run", action="store_true")
+
     daily_research_report = subparsers.add_parser("run-daily-research-report")
     daily_research_report.add_argument("--trade-date", required=True)
     daily_research_report.add_argument("--score-version", default="manual_v1")
@@ -610,11 +1965,626 @@ def build_parser() -> argparse.ArgumentParser:
     daily_research_report.add_argument("--apply-report-run-schema", action="store_true")
     daily_research_report.add_argument("--record-run", action="store_true")
 
+    trend_lifecycle_v1 = subparsers.add_parser("trend-lifecycle-v1")
+    trend_lifecycle_v1.add_argument("--start-date", required=True)
+    trend_lifecycle_v1.add_argument("--end-date", required=True)
+    trend_lifecycle_v1.add_argument("--score-version", default="manual_v1")
+    trend_lifecycle_v1.add_argument("--top-n", type=int, default=20)
+    trend_lifecycle_v1.add_argument("--adjust-type", default="hfq")
+    trend_lifecycle_v1.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_factor_profile = subparsers.add_parser("mid-trend-factor-profile")
+    mid_trend_factor_profile.add_argument("--start-date", required=True)
+    mid_trend_factor_profile.add_argument("--end-date", required=True)
+    mid_trend_factor_profile.add_argument("--lifecycle-samples-path", required=True)
+    mid_trend_factor_profile.add_argument("--factor-names", type=parse_factor_names)
+    mid_trend_factor_profile.add_argument("--period", default="Q")
+    mid_trend_factor_profile.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_candidate_enrichment = subparsers.add_parser("mid-trend-candidate-enrichment")
+    mid_trend_candidate_enrichment.add_argument("--start-date", required=True)
+    mid_trend_candidate_enrichment.add_argument("--end-date", required=True)
+    mid_trend_candidate_enrichment.add_argument("--candidate-rank-path", required=True)
+    mid_trend_candidate_enrichment.add_argument("--entry-success-labels-path", required=True)
+    mid_trend_candidate_enrichment.add_argument("--max-factors", type=int)
+    mid_trend_candidate_enrichment.add_argument("--min-candidate-score", type=float, default=0.0)
+    mid_trend_candidate_enrichment.add_argument("--quantiles", type=int, default=5)
+    mid_trend_candidate_enrichment.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    mid_trend_candidate_enrichment.add_argument("--period", default="Q")
+    mid_trend_candidate_enrichment.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    mid_trend_full_universe_enrichment = subparsers.add_parser(
+        "mid-trend-full-universe-enrichment"
+    )
+    mid_trend_full_universe_enrichment.add_argument("--start-date", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--end-date", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--candidate-scores-path", required=True)
+    mid_trend_full_universe_enrichment.add_argument("--adjust-type", default="hfq")
+    mid_trend_full_universe_enrichment.add_argument("--quantiles", type=int, default=5)
+    mid_trend_full_universe_enrichment.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    mid_trend_full_universe_enrichment.add_argument("--period", default="Q")
+    mid_trend_full_universe_enrichment.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    entry_success_reverse_profile = subparsers.add_parser("entry-success-reverse-profile")
+    entry_success_reverse_profile.add_argument("--start-date", required=True)
+    entry_success_reverse_profile.add_argument("--end-date", required=True)
+    entry_success_reverse_profile.add_argument("--entry-success-labels-path", required=True)
+    entry_success_reverse_profile.add_argument("--factor-names", type=parse_factor_names)
+    entry_success_reverse_profile.add_argument("--horizons", type=parse_research_horizons, default=(20, 40, 60))
+    entry_success_reverse_profile.add_argument("--period", default="Q")
+    entry_success_reverse_profile.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    entry_success_candidate_v2 = subparsers.add_parser("entry-success-candidate-v2")
+    entry_success_candidate_v2.add_argument("--start-date", required=True)
+    entry_success_candidate_v2.add_argument("--end-date", required=True)
+    entry_success_candidate_v2.add_argument("--factor-rank-path", required=True)
+    entry_success_candidate_v2.add_argument("--horizon", type=int, default=40)
+    entry_success_candidate_v2.add_argument("--max-factors", type=int)
+    entry_success_candidate_v2.add_argument("--min-candidate-score", type=float, default=0.0)
+    entry_success_candidate_v2.add_argument("--min-sign-match-rate", type=float, default=0.6)
+    entry_success_candidate_v2.add_argument("--adjust-type", default="hfq")
+    entry_success_candidate_v2.add_argument("--quantiles", type=int, default=5)
+    entry_success_candidate_v2.add_argument("--top-ns", type=parse_top_ks, default=(20, 50, 100))
+    entry_success_candidate_v2.add_argument("--period", default="Q")
+    entry_success_candidate_v2.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    trend_candidate_backtest = subparsers.add_parser("trend-candidate-backtest")
+    trend_candidate_backtest.add_argument("--start-date", required=True)
+    trend_candidate_backtest.add_argument("--end-date", required=True)
+    trend_candidate_backtest.add_argument("--candidate-scores-path", required=True)
+    trend_candidate_backtest.add_argument("--top-ns", type=parse_top_ks, default=(20, 50))
+    trend_candidate_backtest.add_argument("--holding-days", type=parse_holding_days, default=(5, 10, 20))
+    trend_candidate_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    trend_candidate_backtest.add_argument("--adjust-type", default="hfq")
+    trend_candidate_backtest.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    industry_focus_backtest = subparsers.add_parser("industry-focus-backtest")
+    industry_focus_backtest.add_argument("--start-date", required=True)
+    industry_focus_backtest.add_argument("--end-date", required=True)
+    industry_focus_backtest.add_argument("--top-n", type=int, default=20)
+    industry_focus_backtest.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_focus_backtest.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_focus_backtest.add_argument("--industry-system", default="csrc")
+    industry_focus_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_focus_backtest.add_argument("--adjust-type", default="hfq")
+    industry_focus_backtest.add_argument(
+        "--reports-dir",
+        default="/Users/xiwei/stock_research/reports",
+    )
+
+    industry_v1_attribution = subparsers.add_parser("industry-v1-attribution")
+    industry_v1_attribution.add_argument("--start-date", required=True)
+    industry_v1_attribution.add_argument("--end-date", required=True)
+    industry_v1_attribution.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_v1_attribution.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_v1_attribution.add_argument("--industry-system", default="csrc")
+    industry_v1_attribution.add_argument("--industry-level", type=int, default=1)
+    industry_v1_attribution.add_argument("--adjust-type", default="hfq")
+    industry_v1_attribution.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_focus_v2_diagnostics = subparsers.add_parser("industry-focus-v2-diagnostics")
+    industry_focus_v2_diagnostics.add_argument("--start-date", required=True)
+    industry_focus_v2_diagnostics.add_argument("--end-date", required=True)
+    industry_focus_v2_diagnostics.add_argument("--min-industry-stocks", type=int, default=20)
+    industry_focus_v2_diagnostics.add_argument("--dynamic-top-k", type=int, default=4)
+    industry_focus_v2_diagnostics.add_argument("--industry-system", default="csrc")
+    industry_focus_v2_diagnostics.add_argument("--industry-level", type=int, default=1)
+    industry_focus_v2_diagnostics.add_argument("--adjust-type", default="hfq")
+    industry_focus_v2_diagnostics.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_focus_v2_backtest = subparsers.add_parser("industry-focus-v2-backtest")
+    industry_focus_v2_backtest.add_argument("--start-date", required=True)
+    industry_focus_v2_backtest.add_argument("--end-date", required=True)
+    industry_focus_v2_backtest.add_argument("--diagnostics-path", required=True)
+    industry_focus_v2_backtest.add_argument("--top-n", type=int, default=20)
+    industry_focus_v2_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    industry_focus_v2_backtest.add_argument("--industry-system", default="csrc")
+    industry_focus_v2_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_focus_v2_backtest.add_argument("--adjust-type", default="hfq")
+    industry_focus_v2_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_research_v1 = subparsers.add_parser("dragon-research-v1")
+    dragon_research_v1.add_argument("--start-date", required=True)
+    dragon_research_v1.add_argument("--end-date", required=True)
+    dragon_research_v1.add_argument("--hot-industry-top-n", type=int, default=6)
+    dragon_research_v1.add_argument("--adjust-type", default="hfq")
+    dragon_research_v1.add_argument("--industry-system", default="csrc")
+    dragon_research_v1.add_argument("--industry-level", type=int, default=1)
+    dragon_research_v1.add_argument("--industry-diagnostics-path")
+    dragon_research_v1.add_argument("--candidate-scores-path")
+    dragon_research_v1.add_argument("--lifecycle-samples-path")
+    dragon_research_v1.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_library_build = subparsers.add_parser("dragon-case-library-build")
+    dragon_case_library_build.add_argument("--start-date", required=True)
+    dragon_case_library_build.add_argument("--end-date", required=True)
+    dragon_case_library_build.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_library_build.add_argument(
+        "--seed-path",
+        default="/Users/xiwei/stock_research/data/seed/dragon_case_seed.csv",
+    )
+    dragon_case_library_build.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_library_diagnose = subparsers.add_parser("dragon-case-library-diagnose")
+    dragon_case_library_diagnose.add_argument("--case-path", required=True)
+    dragon_case_library_diagnose.add_argument("--start-date", required=True)
+    dragon_case_library_diagnose.add_argument("--end-date", required=True)
+    dragon_case_library_diagnose.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_library_diagnose.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_import_web_seeds = subparsers.add_parser("dragon-case-import-web-seeds")
+    dragon_case_import_web_seeds.add_argument("--input", required=True)
+    dragon_case_import_web_seeds.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_expand_web_seeds = subparsers.add_parser("dragon-case-expand-web-seeds")
+    dragon_case_expand_web_seeds.add_argument("--article-seed", required=True)
+    dragon_case_expand_web_seeds.add_argument("--output", required=True)
+    dragon_case_expand_web_seeds.add_argument("--start-date", required=True)
+    dragon_case_expand_web_seeds.add_argument("--end-date", required=True)
+    dragon_case_expand_web_seeds.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_web_verify = subparsers.add_parser("dragon-case-web-verify")
+    dragon_case_web_verify.add_argument("--candidate-path", required=True)
+    dragon_case_web_verify.add_argument("--start-date", required=True)
+    dragon_case_web_verify.add_argument("--end-date", required=True)
+    dragon_case_web_verify.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_web_verify.add_argument("--adjust-type", default="hfq")
+
+    dragon_case_apply_source_backfill = subparsers.add_parser("dragon-case-apply-source-backfill")
+    dragon_case_apply_source_backfill.add_argument("--tasks-path", required=True)
+    dragon_case_apply_source_backfill.add_argument(
+        "--article-seed",
+        default="/Users/xiwei/stock_research/data/seed/dragon_case_web_article_seed_2024_2026.csv",
+    )
+    dragon_case_apply_source_backfill.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    dragon_case_apply_source_backfill.add_argument("--dry-run", action="store_true")
+
+    dragon_case_source_backfill_compare = subparsers.add_parser("dragon-case-source-backfill-compare")
+    dragon_case_source_backfill_compare.add_argument("--before-curated", required=True)
+    dragon_case_source_backfill_compare.add_argument("--after-curated", required=True)
+    dragon_case_source_backfill_compare.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_source_backfill_workpack = subparsers.add_parser("dragon-case-source-backfill-workpack")
+    dragon_case_source_backfill_workpack.add_argument("--tasks-path", required=True)
+    dragon_case_source_backfill_workpack.add_argument("--top-n", type=int, default=20)
+    dragon_case_source_backfill_workpack.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_source_backfill_check = subparsers.add_parser("dragon-case-source-backfill-check")
+    dragon_case_source_backfill_check.add_argument("--apply-summary", required=True)
+    dragon_case_source_backfill_check.add_argument("--delta-summary", required=True)
+    dragon_case_source_backfill_check.add_argument("--curated", required=True)
+    dragon_case_source_backfill_check.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_failure_event_rules_v2 = subparsers.add_parser("dragon-case-failure-event-rules-v2")
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    dragon_case_failure_event_rules_v2.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    validate_technical_methods = subparsers.add_parser("validate-technical-methods")
+    validate_technical_methods.add_argument("--start-date", required=True)
+    validate_technical_methods.add_argument("--end-date", required=True)
+    validate_technical_methods.add_argument("--adjust-type", default="qfq")
+    validate_technical_methods.add_argument("--sample-size", type=int)
+    validate_technical_methods.add_argument("--asset-id")
+    validate_technical_methods.add_argument("--ts-code")
+    validate_technical_methods.add_argument("--feature-source", default="technical_table")
+    validate_technical_methods.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    validate_alpha191_pilot = subparsers.add_parser("validate-alpha191-pilot")
+    validate_alpha191_pilot.add_argument("--start-date", required=True)
+    validate_alpha191_pilot.add_argument("--end-date", required=True)
+    validate_alpha191_pilot.add_argument("--adjust-type", default="qfq")
+    validate_alpha191_pilot.add_argument("--sample-size", type=int)
+    validate_alpha191_pilot.add_argument("--asset-id")
+    validate_alpha191_pilot.add_argument("--ts-code")
+    validate_alpha191_pilot.add_argument("--strong-start-date", default="2025-01-01")
+    validate_alpha191_pilot.add_argument("--strong-end-date", default="2025-05-01")
+    validate_alpha191_pilot.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    validate_alpha191_expanded = subparsers.add_parser("validate-alpha191-expanded")
+    validate_alpha191_expanded.add_argument("--start-date", required=True)
+    validate_alpha191_expanded.add_argument("--end-date", required=True)
+    validate_alpha191_expanded.add_argument("--adjust-type", default="qfq")
+    validate_alpha191_expanded.add_argument("--sample-size", type=int)
+    validate_alpha191_expanded.add_argument("--asset-id")
+    validate_alpha191_expanded.add_argument("--ts-code")
+    validate_alpha191_expanded.add_argument("--strong-start-date", default="2025-01-01")
+    validate_alpha191_expanded.add_argument("--strong-end-date", default="2025-05-01")
+    validate_alpha191_expanded.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_risk_diagnostics_after_failure_rule_v21 = subparsers.add_parser(
+        "lhb-risk-diagnostics-after-failure-rule-v2-1"
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--failure-audit-path",
+        default="/Users/xiwei/stock_research/outputs/research/failure_event_rule_v2_audit.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--lhb-features-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_event_features_daily_sample.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--alignment-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_lhb_alignment_audit_2024_2026.csv",
+    )
+    lhb_risk_diagnostics_after_failure_rule_v21.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_sample_import = subparsers.add_parser("lhb-sample-import")
+    lhb_sample_import.add_argument("--start-date", required=True)
+    lhb_sample_import.add_argument("--end-date", required=True)
+    lhb_sample_import.add_argument("--ts-codes")
+    lhb_sample_import.add_argument("--provider", default="tushare")
+    lhb_sample_import.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_event_features_build = subparsers.add_parser("lhb-build-event-features")
+    lhb_event_features_build.add_argument("--start-date", required=True)
+    lhb_event_features_build.add_argument("--end-date", required=True)
+    lhb_event_features_build.add_argument("--ts-codes")
+    lhb_event_features_build.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_lhb_alignment = subparsers.add_parser("dragon-case-lhb-alignment-audit")
+    dragon_case_lhb_alignment.add_argument("--curated-path", required=True)
+    dragon_case_lhb_alignment.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    dragon_case_lhb_summary = subparsers.add_parser("dragon-case-lhb-summary")
+    dragon_case_lhb_summary.add_argument("--curated-path", required=True)
+    dragon_case_lhb_summary.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_case_difference_report = subparsers.add_parser("lhb-case-difference-report")
+    lhb_case_difference_report.add_argument("--case-path", required=True)
+    lhb_case_difference_report.add_argument("--lhb-features-path", required=True)
+    lhb_case_difference_report.add_argument("--alignment-path", required=True)
+    lhb_case_difference_report.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_risk_feature_diagnostics = subparsers.add_parser("lhb-risk-feature-diagnostics")
+    lhb_risk_feature_diagnostics.add_argument("--case-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument("--lhb-features-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument("--alignment-path", required=True)
+    lhb_risk_feature_diagnostics.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_coverage_failure_plan = subparsers.add_parser("lhb-coverage-failure-plan")
+    lhb_coverage_failure_plan.add_argument(
+        "--coverage-gap-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_coverage_gap_recommendations.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--case-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_curated_library_2024_2026.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--snapshot-path",
+        default="/Users/xiwei/stock_research/outputs/research/dragon_case_factor_snapshot_2024_2026.csv",
+    )
+    lhb_coverage_failure_plan.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    fixed_industry_reconciliation = subparsers.add_parser(
+        "fixed-industry-reconciliation"
+    )
+    fixed_industry_reconciliation.add_argument("--start-date", required=True)
+    fixed_industry_reconciliation.add_argument("--end-date", required=True)
+    fixed_industry_reconciliation.add_argument("--top-n", type=int, default=20)
+    fixed_industry_reconciliation.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    fixed_industry_reconciliation.add_argument("--industry-system", default="csrc")
+    fixed_industry_reconciliation.add_argument("--industry-level", type=int, default=1)
+    fixed_industry_reconciliation.add_argument("--adjust-type", default="hfq")
+    fixed_industry_reconciliation.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_error_audit = subparsers.add_parser("industry-error-audit")
+    industry_error_audit.add_argument("--diagnostics-path", required=True)
+    industry_error_audit.add_argument("--start-date", required=True)
+    industry_error_audit.add_argument("--end-date", required=True)
+    industry_error_audit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    industry_error_audit.add_argument(
+        "--backtest-summary-path",
+        default="/Users/xiwei/stock_research/outputs/research/industry_focus_score_v2_backtest_summary.csv",
+    )
+    industry_error_audit.add_argument(
+        "--annual-metrics-path",
+        default="/Users/xiwei/stock_research/outputs/research/industry_focus_score_v2_backtest_annual_metrics.csv",
+    )
+
+    industry_mainline_regime = subparsers.add_parser(
+        "industry-mainline-regime-diagnostics"
+    )
+    industry_mainline_regime.add_argument("--diagnostics-path", required=True)
+    industry_mainline_regime.add_argument("--start-date", required=True)
+    industry_mainline_regime.add_argument("--end-date", required=True)
+    industry_mainline_regime.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_regime_gated_backtest = subparsers.add_parser(
+        "industry-regime-gated-backtest"
+    )
+    industry_regime_gated_backtest.add_argument("--start-date", required=True)
+    industry_regime_gated_backtest.add_argument("--end-date", required=True)
+    industry_regime_gated_backtest.add_argument("--diagnostics-path", required=True)
+    industry_regime_gated_backtest.add_argument("--regime-path", required=True)
+    industry_regime_gated_backtest.add_argument("--mainline-path", required=True)
+    industry_regime_gated_backtest.add_argument("--top-n", type=int, default=20)
+    industry_regime_gated_backtest.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    industry_regime_gated_backtest.add_argument("--industry-system", default="csrc")
+    industry_regime_gated_backtest.add_argument("--industry-level", type=int, default=1)
+    industry_regime_gated_backtest.add_argument("--adjust-type", default="hfq")
+    industry_regime_gated_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    industry_exposure_risk_control = subparsers.add_parser(
+        "industry-exposure-risk-control"
+    )
+    industry_exposure_risk_control.add_argument("--start-date", required=True)
+    industry_exposure_risk_control.add_argument("--end-date", required=True)
+    industry_exposure_risk_control.add_argument("--diagnostics-path", required=True)
+    industry_exposure_risk_control.add_argument("--regime-path", required=True)
+    industry_exposure_risk_control.add_argument("--mainline-path", required=True)
+    industry_exposure_risk_control.add_argument("--top-n", type=int, default=20)
+    industry_exposure_risk_control.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    industry_exposure_risk_control.add_argument("--industry-system", default="csrc")
+    industry_exposure_risk_control.add_argument("--industry-level", type=int, default=1)
+    industry_exposure_risk_control.add_argument("--adjust-type", default="hfq")
+    industry_exposure_risk_control.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    build_universe = subparsers.add_parser("build-universe")
+    build_universe.add_argument("--date", required=True)
+    build_universe.add_argument("--preset", default="research_default")
+    build_universe.add_argument("--output", required=True)
+    build_universe.add_argument("--min-listed-days", type=int)
+    build_universe.add_argument("--min-avg-turnover-amount", type=float)
+    build_universe.add_argument("--min-avg-volume", type=float)
+    build_universe.add_argument("--liquidity-lookback-days", type=int)
+    build_universe.add_argument("--max-suspended-days", type=int)
+
+    explain_universe = subparsers.add_parser("explain-universe")
+    explain_universe.add_argument("--date", required=True)
+    explain_universe.add_argument("--code", required=True)
+    explain_universe.add_argument("--preset", default="research_default")
+    explain_universe.add_argument("--min-listed-days", type=int)
+    explain_universe.add_argument("--min-avg-turnover-amount", type=float)
+    explain_universe.add_argument("--min-avg-volume", type=float)
+    explain_universe.add_argument("--liquidity-lookback-days", type=int)
+    explain_universe.add_argument("--max-suspended-days", type=int)
+
+    check_watchlist_universe = subparsers.add_parser("check-watchlist-universe")
+    check_watchlist_universe.add_argument("--date", required=True)
+    check_watchlist_universe.add_argument("--watchlist", required=True)
+    check_watchlist_universe.add_argument("--preset", default="watchlist_check")
+    check_watchlist_universe.add_argument("--output", required=True)
+    check_watchlist_universe.add_argument("--min-listed-days", type=int)
+    check_watchlist_universe.add_argument("--min-avg-turnover-amount", type=float)
+    check_watchlist_universe.add_argument("--min-avg-volume", type=float)
+    check_watchlist_universe.add_argument("--liquidity-lookback-days", type=int)
+    check_watchlist_universe.add_argument("--max-suspended-days", type=int)
+
+    watchlist_build = subparsers.add_parser("watchlist-build")
+    watchlist_build.add_argument("--trade-date", required=True)
+    watchlist_build.add_argument("--watchlist-id", required=True)
+    watchlist_build.add_argument("--score-version", default="manual_v1")
+    watchlist_build.add_argument("--top-n", type=int, default=30)
+    watchlist_build.add_argument("--output-dir", required=True)
+
+    build_watchlist_diagnostics = subparsers.add_parser("build-watchlist-diagnostics")
+    build_watchlist_diagnostics.add_argument("--trade-date", required=True)
+    build_watchlist_diagnostics.add_argument("--score-version", default="manual_v1")
+    build_watchlist_diagnostics.add_argument("--top-n", type=int, default=50)
+    build_watchlist_diagnostics.add_argument("--risk-watch-n", type=int, default=10)
+    build_watchlist_diagnostics.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
+
+    build_watchlist_diagnostics_range = subparsers.add_parser("build-watchlist-diagnostics-range")
+    build_watchlist_diagnostics_range.add_argument("--start-date", required=True)
+    build_watchlist_diagnostics_range.add_argument("--end-date", required=True)
+    build_watchlist_diagnostics_range.add_argument("--score-version", default="manual_v1")
+    build_watchlist_diagnostics_range.add_argument("--top-n", type=int, default=50)
+    build_watchlist_diagnostics_range.add_argument("--risk-watch-n", type=int, default=10)
+    build_watchlist_diagnostics_range.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics_range.add_argument("--output-dir", default="outputs/research")
+    build_watchlist_diagnostics_range.add_argument("--force", action="store_true")
+
+    review_watchlist_diagnostics = subparsers.add_parser("review-watchlist-diagnostics")
+    review_watchlist_diagnostics.add_argument("--diagnostics-dir", default="outputs/research")
+    review_watchlist_diagnostics.add_argument("--start-date")
+    review_watchlist_diagnostics.add_argument("--end-date")
+    review_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_miss_analysis = subparsers.add_parser("analyze-strong-winner-misses")
+    strong_winner_miss_analysis.add_argument("--start-date", required=True)
+    strong_winner_miss_analysis.add_argument("--end-date", required=True)
+    strong_winner_miss_analysis.add_argument("--adjust-type", default="qfq")
+    strong_winner_miss_analysis.add_argument("--window-days", type=int, default=60)
+    strong_winner_miss_analysis.add_argument("--threshold", type=float, default=1.0)
+    strong_winner_miss_analysis.add_argument("--diagnostics-dir", default="outputs/research")
+    strong_winner_miss_analysis.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_topn_source = subparsers.add_parser("analyze-strong-winner-topn-source")
+    strong_winner_topn_source.add_argument(
+        "--miss-analysis-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    strong_winner_topn_source.add_argument("--score-version", default="manual_v1")
+    strong_winner_topn_source.add_argument(
+        "--topn-thresholds",
+        type=parse_topn_thresholds,
+        default=[50, 100, 200, 500],
+    )
+    strong_winner_topn_source.add_argument("--output-dir", default="outputs/research")
+
+    watchlist_report = subparsers.add_parser("watchlist-report")
+    watchlist_report.add_argument("--trade-date", required=True)
+    watchlist_report.add_argument("--watchlist-id", required=True)
+    watchlist_report.add_argument("--output-dir", required=True)
+
+    watchlist_explain = subparsers.add_parser("watchlist-explain")
+    watchlist_explain.add_argument("--trade-date", required=True)
+    watchlist_explain.add_argument("--watchlist-id", required=True)
+    watchlist_explain.add_argument("--asset-id", required=True)
+
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def _load_trade_dates_for_watchlist_diagnostics_range(start_date: str, end_date: str) -> list[str]:
+    sql = """
+        SELECT trade_date::text AS trade_date
+        FROM market_daily_bar
+        WHERE adjust_type = 'qfq'
+          AND trade_date BETWEEN %s AND %s
+        GROUP BY trade_date
+        ORDER BY trade_date
+    """
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date])
+    return [str(row["trade_date"]) for row in rows]
+
+
+def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_date: str) -> bool:
+    path = Path(output_dir) / f"watchlist_diagnostics_{trade_date}_diagnostics_v1.csv"
+    if not path.exists():
+        return False
+    try:
+        frame = pd.read_csv(path, usecols=["diagnostics_rule_version"])
+    except (ValueError, OSError, pd.errors.EmptyDataError):
+        return False
+    if frame.empty:
+        return False
+    versions = {str(value) for value in frame["diagnostics_rule_version"].dropna().unique()}
+    return versions == {DIAGNOSTICS_RULE_VERSION}
+
+
+def main_for_args(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
 
     if args.command == "apply-schema":
         apply_schema()
@@ -627,12 +2597,37 @@ def main() -> None:
     elif args.command == "sync-core-assets":
         sync_core_asset_master_for_service()
         print("core_asset_master_synced")
+    elif args.command == "dashboard-api":
+        run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "data-quality":
+        start_date = args.start_date
+        if start_date is None:
+            bounds = load_market_date_bounds()
+            start_date = bounds["start_date"]
+        report = run_data_quality(
+            expected_start_date=args.expected_start_date,
+            start_date=start_date,
+            end_date=args.end_date,
+            horizons=args.horizons,
+            factor_names=args.factor_names,
+            calc_version=args.calc_version,
+            min_label_dates=args.min_label_dates,
+            require_industry_membership=args.require_industry_membership,
+        )
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False))
+        else:
+            print(format_data_quality_summary_line(report))
+            for check in report["checks"]:
+                print(format_data_quality_check_line(check))
+        if report["overall_status"] == "blocked":
+            raise SystemExit(1)
     elif args.command == "seed-trading-calendar":
         count = seed_trading_calendar_from_bars(
             start_date=args.start_date,
@@ -708,6 +2703,7 @@ def main() -> None:
             start_date=args.start_date,
             end_date=args.end_date,
             source_version=args.source_version,
+            factor_source_version=args.factor_source_version,
         )
         print("corporate_actions_built")
     elif args.command == "build-industry-bars":
@@ -754,7 +2750,7 @@ def main() -> None:
             )
             print("research_preflight|short_label_horizons|")
             return
-        factors = args.factor_names if args.factor_names else candidate_factor_names()
+        factors = args.factor_names if args.factor_names else default_research_factor_names()
         coverage = check_factor_label_coverage(
             factor_names=factors,
             start_date=start_date,
@@ -952,6 +2948,33 @@ def main() -> None:
                 f"{row['factor_name']}|{row['status']}|{row['reason']}|"
                 f"{row['primary_horizon']}|{row['eval_run_id']}"
             )
+    elif args.command == "factor-validation-review":
+        import pandas as pd
+
+        factors = pd.read_csv(args.factors, low_memory=False)
+        returns = pd.read_csv(args.returns, low_memory=False)
+        segments = pd.read_csv(args.segments, low_memory=False) if args.segments else None
+        review = build_factor_validation_review(
+            factors=factors,
+            returns=returns,
+            factor_name=args.factor_name,
+            horizons=args.horizons,
+            split_date=args.split_date,
+            primary_horizon=args.primary_horizon,
+            segments=segments,
+            segment_col=args.segment_col,
+            factor_col=args.factor_col,
+            min_abs_mean_ic=args.min_abs_mean_ic,
+            min_icir=args.min_icir,
+            min_ic_count=args.min_ic_count,
+        )
+        paths = write_factor_validation_review(review, output_dir=args.output_dir)
+        print(f"factor_validation_review|status|{review['approval']['status']}")
+        print(f"factor_validation_review|json|{paths['json_path']}")
+        print(f"factor_validation_review|markdown|{paths['markdown_path']}")
+        print(f"factor_validation_review|decay_csv|{paths['decay_csv_path']}")
+        if "segment_csv_path" in paths:
+            print(f"factor_validation_review|segment_csv|{paths['segment_csv_path']}")
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,
@@ -963,6 +2986,505 @@ def main() -> None:
         print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "build-technical-features-daily":
+        count = build_and_store_stock_technical_features_daily(
+            trade_date=args.trade_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            build_strategy=args.build_strategy,
+        )
+        print(f"technical_features_daily_stored|{count}")
+    elif args.command == "backfill-technical-features-daily":
+        window = derive_technical_feature_backfill_window(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+        )
+        start_date = args.start_date or window["start_date"]
+        end_date = args.end_date or window["end_date"]
+        if start_date is None or end_date is None:
+            print("technical_feature_daily_backfill|dates|0")
+            print("technical_feature_daily_backfill|rows|0")
+            return
+        result = backfill_technical_features_daily_range(
+            start_date=str(start_date),
+            end_date=str(end_date),
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            source_data_version=args.source_data_version,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+            build_strategy=args.build_strategy,
+            progress=technical_feature_backfill_progress_printer(args.progress_interval),
+        )
+        total = int(result["feature_rows"].sum()) if not result.empty else 0
+        print(f"technical_feature_daily_backfill|dates|{len(result)}")
+        print(f"technical_feature_daily_backfill|rows|{total}")
+    elif args.command == "benchmark-technical-feature-backfill":
+        result = run_technical_feature_backfill_benchmark(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lookback_bars=args.lookback_bars,
+            adjust_type=args.adjust_type,
+            workers=args.workers,
+            strategy=args.strategy,
+            bench_tag=args.bench_tag,
+        )
+        print(f"technical_feature_benchmark|strategy|{result['strategy']}")
+        print(f"technical_feature_benchmark|workers|{result['workers']}")
+        print(f"technical_feature_benchmark|bench_tag|{result['bench_tag']}")
+        print(
+            "technical_feature_benchmark|source_data_version|"
+            f"{result['source_data_version']}"
+        )
+        print(f"technical_feature_benchmark|dates|{result['dates']}")
+        print(f"technical_feature_benchmark|rows|{result['rows']}")
+        print(
+            "technical_feature_benchmark|elapsed_seconds|"
+            f"{result['elapsed_seconds']}"
+        )
+        print(
+            "technical_feature_benchmark|rows_per_second|"
+            f"{result['rows_per_second']}"
+        )
+        print(
+            "technical_feature_benchmark|dates_per_second|"
+            f"{result['dates_per_second']}"
+        )
+    elif args.command == "technical-feature-gap-check":
+        result = run_technical_feature_gap_check(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            calc_version=args.calc_version,
+            source_data_version=args.source_data_version,
+        )
+        for row in result.get("dates", []):
+            if not row.get("has_gap"):
+                continue
+            print(
+                "technical_feature_gap_check|date|"
+                f"{row['trade_date']}|"
+                f"market_assets={int(row['market_assets'])}|"
+                f"feature_rows={int(row['feature_rows'])}|"
+                f"missing={int(row['missing'])}|"
+                f"stale={int(row['stale'])}"
+            )
+        summary = result.get("summary", {})
+        print(
+            "technical_feature_gap_check|summary|"
+            f"dates={int(summary.get('dates') or 0)}|"
+            f"dates_with_gaps={int(summary.get('dates_with_gaps') or 0)}"
+        )
+    elif args.command == "technical-feature-performance-review":
+        compare_benchmark = run_technical_feature_compare_benchmark(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+            repeat=args.repeat,
+        )
+        store_benchmark = run_technical_feature_store_compare_benchmark(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+        )
+        regression = run_technical_feature_fast_regression(
+            asset_count=args.asset_count,
+            bar_count=args.bar_count,
+        )
+        review = build_technical_feature_performance_review(
+            compare_benchmark=compare_benchmark,
+            store_benchmark=store_benchmark,
+            regression=regression,
+            min_speedup_ratio=args.min_speedup_ratio,
+        )
+        paths = write_technical_feature_performance_review(
+            review,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_feature_performance_review|status|{review['gate']['status']}")
+        print(f"technical_feature_performance_review|json|{paths['json_path']}")
+        print(f"technical_feature_performance_review|markdown|{paths['markdown_path']}")
+        print(f"technical_feature_performance_review|metrics_csv|{paths['metrics_csv_path']}")
+    elif args.command == "p2-artifact-rollup":
+        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+        rollup = build_p2_artifact_rollup(manifest)
+        paths = write_p2_artifact_rollup(rollup, output_dir=args.output_dir)
+        print(f"p2_artifact_rollup|status|{rollup['status']}")
+        print(f"p2_artifact_rollup|json|{paths['json_path']}")
+        print(f"p2_artifact_rollup|markdown|{paths['markdown_path']}")
+    elif args.command == "p2-simulation-review":
+        import pandas as pd
+
+        states = load_simulation_states(args.simulation_state)
+        advice = pd.read_csv(args.trade_advice) if args.trade_advice else None
+        review = build_virtual_portfolio_review(
+            trade_date=args.trade_date,
+            portfolio_id=args.portfolio_id,
+            states=states,
+            advice=advice,
+        )
+        paths = write_virtual_portfolio_review(review, output_dir=args.output_dir)
+        print(f"p2_simulation_review|status|{review['status']}")
+        print(f"p2_simulation_review|json|{paths['json_path']}")
+        print(f"p2_simulation_review|markdown|{paths['markdown_path']}")
+        print(f"p2_simulation_review|history_csv|{paths['history_csv_path']}")
+        print(f"p2_simulation_review|positions_csv|{paths['positions_csv_path']}")
+    elif args.command == "p2-aggregate-review":
+        rollup = json.loads(Path(args.rollup).read_text(encoding="utf-8"))
+        payloads = load_aggregate_artifact_payloads(rollup)
+        review = build_p2_aggregate_review(
+            trade_date=args.trade_date,
+            rollup=rollup,
+            artifact_payloads=payloads,
+        )
+        paths = write_p2_aggregate_review(review, output_dir=args.output_dir)
+        print(f"p2_aggregate_review|status|{review['status']}")
+        print(f"p2_aggregate_review|json|{paths['json_path']}")
+        print(f"p2_aggregate_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p3-import-p2-aggregate-review":
+        result = import_p2_aggregate_review(Path(args.path), service=args.service)
+        print(f"p3_p2_review_import|imported|{result['imported_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p3_p2_review_import|run_id|{run_id}")
+    elif args.command == "p3-import-virtual-portfolio-review":
+        result = import_virtual_portfolio_review(Path(args.path), service=args.service)
+        print(f"p3_virtual_portfolio_import|imported|{result['imported_count']}")
+        print(f"p3_virtual_portfolio_import|states|{result['state_count']}")
+        print(f"p3_virtual_portfolio_import|positions|{result['position_count']}")
+        for portfolio_id in result["portfolio_ids"]:
+            print(f"p3_virtual_portfolio_import|portfolio_id|{portfolio_id}")
+    elif args.command == "p3-export-operator-review":
+        result = export_operator_review(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=Path(args.output_dir),
+            status=args.status,
+            section_group=args.section_group,
+            portfolio_id=args.portfolio_id,
+            service=args.service,
+        )
+        print(f"p3_operator_export|manifest|{result['manifest_path']}")
+        for dataset_name, rows in result["row_counts"].items():
+            print(
+                "p3_operator_export_dataset|"
+                f"{dataset_name}|rows|{rows}|{result['files'][dataset_name]}"
+            )
+    elif args.command == "p7-decision-journal":
+        import pandas as pd
+
+        events = pd.read_csv(args.input_csv)
+        try:
+            journal = build_decision_journal(
+                review_date=args.review_date,
+                review_session_id=args.review_session_id,
+                reviewer_id=args.reviewer_id,
+                source_artifact_root=args.source_artifact_root,
+                events=events,
+            )
+        except ValueError as exc:
+            print(f"p7_decision_journal|error|{exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        paths = write_decision_journal(journal, output_dir=args.output_dir)
+        print(f"p7_decision_journal|status|{journal['status']}")
+        print(f"p7_decision_journal|json|{paths['json_path']}")
+        print(f"p7_decision_journal|csv|{paths['csv_path']}")
+        print(f"p7_decision_journal|markdown|{paths['markdown_path']}")
+    elif args.command == "p7-import-decision-journal":
+        result = import_decision_journal(Path(args.path), service=args.service)
+        print(f"p7_decision_journal_import|imported|{result['imported_count']}")
+        print(f"p7_decision_journal_import|events|{result['event_count']}")
+        for session_id in result["session_ids"]:
+            print(f"p7_decision_journal_import|session_id|{session_id}")
+    elif args.command == "p8-decision-outcome-review":
+        horizons = args.horizons or None
+        max_horizon = max(horizons) if horizons else 60
+        decision_events, bars = _load_p8_decision_outcome_inputs(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            review_session_id=args.review_session_id,
+            decision_events_csv=args.decision_events_csv,
+            bars_csv=args.bars_csv,
+            service=args.service,
+            adjust_type=args.adjust_type,
+            max_horizon=max_horizon,
+        )
+        review = build_decision_outcome_review(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            decision_events=decision_events,
+            bars=bars,
+            horizons=horizons,
+        )
+        paths = write_decision_outcome_review(review, args.output_dir)
+        print(f"p8_decision_outcome_review|status|{review['status']}")
+        print(f"p8_decision_outcome_review|outcomes|{review['outcome_count']}")
+        print(f"p8_decision_outcome_review|json|{paths['json_path']}")
+        print(f"p8_decision_outcome_review|details_csv|{paths['details_csv_path']}")
+        print(f"p8_decision_outcome_review|summary_csv|{paths['summary_csv_path']}")
+        print(f"p8_decision_outcome_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p8-import-decision-outcome-review":
+        result = import_decision_outcome_review(Path(args.path), service=args.service)
+        print(f"p8_decision_outcome_review_import|imported|{result['imported_count']}")
+        print(f"p8_decision_outcome_review_import|events|{result['event_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p8_decision_outcome_review_import|run_id|{run_id}")
+    elif args.command == "p9-outcome-analytics":
+        outcome_events = _load_p9_outcome_analytics_inputs(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            review_session_id=args.review_session_id,
+            outcome_events_csv=args.outcome_events_csv,
+            service=args.service,
+            limit=args.limit,
+        )
+        analytics = build_decision_outcome_analytics(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            outcome_events=outcome_events,
+            horizons=args.horizons or None,
+        )
+        paths = write_decision_outcome_analytics(analytics, args.output_dir)
+        print(f"p9_outcome_analytics|status|{analytics['status']}")
+        print(f"p9_outcome_analytics|groups|{analytics['group_count']}")
+        print(f"p9_outcome_analytics|json|{paths['json_path']}")
+        print(f"p9_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
+        print(f"p9_outcome_analytics|diagnostics_csv|{paths['diagnostics_csv_path']}")
+        print(f"p9_outcome_analytics|markdown|{paths['markdown_path']}")
+    elif args.command == "p9-import-outcome-analytics":
+        result = import_decision_outcome_analytics(Path(args.path), service=args.service)
+        print(f"p9_outcome_analytics_import|imported|{result['imported_count']}")
+        print(f"p9_outcome_analytics_import|groups|{result['group_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p9_outcome_analytics_import|run_id|{run_id}")
+    elif args.command == "p10-experiment-proposals":
+        import pandas as pd
+
+        proposal_events = pd.read_csv(args.input_csv)
+        review = build_experiment_proposal_review(
+            proposal_events=proposal_events,
+            run_id=args.run_id,
+            review_date=args.review_date,
+        )
+        paths = write_experiment_proposal_review(review, args.output_dir)
+        print(f"p10_experiment_proposals|status|{review['status']}")
+        print(f"p10_experiment_proposals|proposals|{review['proposal_count']}")
+        print(f"p10_experiment_proposals|json|{paths['json_path']}")
+        print(f"p10_experiment_proposals|proposals_csv|{paths['proposals_csv_path']}")
+        print(f"p10_experiment_proposals|markdown|{paths['markdown_path']}")
+    elif args.command == "p10-import-experiment-proposals":
+        result = import_experiment_proposal_review(Path(args.path), service=args.service)
+        print(f"p10_experiment_proposals_import|imported|{result['imported_count']}")
+        print(f"p10_experiment_proposals_import|proposals|{result['proposal_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p10_experiment_proposals_import|run_id|{run_id}")
+    elif args.command == "p11-experiment-replay":
+        import pandas as pd
+
+        proposal_payload = json.loads(Path(args.proposals_json).read_text(encoding="utf-8"))
+        proposals = pd.DataFrame(proposal_payload.get("proposals", []))
+        replay_events = pd.read_csv(args.metrics_csv)
+        review = build_experiment_replay_review(
+            proposals=proposals,
+            replay_events=replay_events,
+            run_id=args.run_id,
+            replay_start_date=args.replay_start_date,
+            replay_end_date=args.replay_end_date,
+        )
+        paths = write_experiment_replay_review(review, args.output_dir)
+        print(f"p11_experiment_replay|status|{review['status']}")
+        print(f"p11_experiment_replay|results|{review['result_count']}")
+        print(f"p11_experiment_replay|json|{paths['json_path']}")
+        print(f"p11_experiment_replay|results_csv|{paths['results_csv_path']}")
+        print(f"p11_experiment_replay|markdown|{paths['markdown_path']}")
+    elif args.command == "p11-import-experiment-replay":
+        result = import_experiment_replay_review(Path(args.path), service=args.service)
+        print(f"p11_experiment_replay_import|imported|{result['imported_count']}")
+        print(f"p11_experiment_replay_import|results|{result['result_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p11_experiment_replay_import|run_id|{run_id}")
+    elif args.command == "p12-shadow-watchlist":
+        import pandas as pd
+
+        replay_payload = json.loads(Path(args.replay_json).read_text(encoding="utf-8"))
+        replay_results = pd.DataFrame(replay_payload.get("results", []))
+        candidate_events = pd.read_csv(args.candidates_csv)
+        review = build_shadow_watchlist_review(
+            replay_results=replay_results,
+            candidate_events=candidate_events,
+            run_id=args.run_id,
+            review_date=args.review_date,
+        )
+        paths = write_shadow_watchlist_review(review, args.output_dir)
+        print(f"p12_shadow_watchlist|status|{review['status']}")
+        print(f"p12_shadow_watchlist|candidates|{review['candidate_count']}")
+        print(f"p12_shadow_watchlist|json|{paths['json_path']}")
+        print(f"p12_shadow_watchlist|candidates_csv|{paths['candidates_csv_path']}")
+        print(f"p12_shadow_watchlist|markdown|{paths['markdown_path']}")
+    elif args.command == "p12-import-shadow-watchlist":
+        result = import_shadow_watchlist_review(Path(args.path), service=args.service)
+        print(f"p12_shadow_watchlist_import|imported|{result['imported_count']}")
+        print(f"p12_shadow_watchlist_import|candidates|{result['candidate_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p12_shadow_watchlist_import|run_id|{run_id}")
+    elif args.command == "p13-shadow-outcome-review":
+        import pandas as pd
+
+        shadow_rows = load_shadow_watchlist_read_model_rows(args.shadow_json)
+        shadow_candidates = pd.DataFrame(shadow_rows["candidates"])
+        bars = pd.read_csv(args.bars_csv)
+        review = build_shadow_outcome_review(
+            review_date=args.review_date,
+            shadow_candidates=shadow_candidates,
+            bars=bars,
+            run_id=args.run_id,
+        )
+        paths = write_shadow_outcome_review(review, args.output_dir)
+        print(f"p13_shadow_outcome|status|{review['status']}")
+        print(f"p13_shadow_outcome|outcomes|{review['outcome_count']}")
+        print(f"p13_shadow_outcome|json|{paths['json_path']}")
+        print(f"p13_shadow_outcome|details_csv|{paths['details_csv_path']}")
+        print(f"p13_shadow_outcome|markdown|{paths['markdown_path']}")
+    elif args.command == "p13-import-shadow-outcomes":
+        result = import_shadow_outcome_review(Path(args.path), service=args.service)
+        print(f"p13_shadow_outcome_import|imported|{result['imported_count']}")
+        print(f"p13_shadow_outcome_import|candidates|{result['candidate_count']}")
+        for run_id in result["run_ids"]:
+            print(f"p13_shadow_outcome_import|run_id|{run_id}")
+    elif args.command == "p14-shadow-outcome-analytics":
+        import pandas as pd
+
+        rows = load_shadow_outcome_read_model_rows(args.shadow_outcomes_json)
+        shadow_outcomes = pd.DataFrame(rows["candidates"])
+        analytics = build_shadow_outcome_analytics(
+            review_start_date=args.review_start_date,
+            review_end_date=args.review_end_date,
+            shadow_outcomes=shadow_outcomes,
+            run_id=args.run_id,
+        )
+        paths = write_shadow_outcome_analytics(analytics, args.output_dir)
+        print(f"p14_shadow_outcome_analytics|status|{analytics['status']}")
+        print(f"p14_shadow_outcome_analytics|source_outcomes|{analytics['source_outcome_count']}")
+        print(f"p14_shadow_outcome_analytics|groups|{analytics['group_count']}")
+        print(f"p14_shadow_outcome_analytics|json|{paths['json_path']}")
+        print(f"p14_shadow_outcome_analytics|groups_csv|{paths['groups_csv_path']}")
+        print(f"p14_shadow_outcome_analytics|markdown|{paths['markdown_path']}")
+    elif args.command == "p15-shadow-analytics-review":
+        p14_payload = json.loads(Path(args.p14_analytics_json).read_text(encoding="utf-8"))
+        review = build_shadow_analytics_review(
+            p14_analytics=p14_payload,
+            run_id=args.run_id,
+            review_start_date=args.review_start_date,
+            review_end_date=args.review_end_date,
+            reviewer_id=args.reviewer_id,
+        )
+        paths = write_shadow_analytics_review(review, args.output_dir)
+        print(f"p15_shadow_analytics_review|status|{review['status']}")
+        print(f"p15_shadow_analytics_review|groups|{review['group_count']}")
+        print(f"p15_shadow_analytics_review|json|{paths['json_path']}")
+        print(f"p15_shadow_analytics_review|groups_csv|{paths['groups_csv_path']}")
+        print(f"p15_shadow_analytics_review|markdown|{paths['markdown_path']}")
+    elif args.command == "p16-shadow-review-decisions":
+        p15_payload = json.loads(Path(args.p15_review_json).read_text(encoding="utf-8"))
+        decisions = build_shadow_review_decisions(
+            p15_review=p15_payload,
+            run_id=args.run_id,
+            decision_date=args.decision_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_review_decisions(decisions, args.output_dir)
+        print(f"p16_shadow_review_decisions|status|{decisions['status']}")
+        print(f"p16_shadow_review_decisions|groups|{decisions['group_count']}")
+        print(f"p16_shadow_review_decisions|json|{paths['json_path']}")
+        print(f"p16_shadow_review_decisions|groups_csv|{paths['groups_csv_path']}")
+        print(f"p16_shadow_review_decisions|markdown|{paths['markdown_path']}")
+    elif args.command == "p17-shadow-follow-up-queue":
+        p16_payload = json.loads(Path(args.p16_decisions_json).read_text(encoding="utf-8"))
+        queue = build_shadow_follow_up_queue(
+            p16_decisions=p16_payload,
+            run_id=args.run_id,
+            follow_up_date=args.follow_up_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_follow_up_queue(queue, args.output_dir)
+        print(f"p17_shadow_follow_up_queue|status|{queue['status']}")
+        print(f"p17_shadow_follow_up_queue|items|{queue['item_count']}")
+        print(f"p17_shadow_follow_up_queue|json|{paths['json_path']}")
+        print(f"p17_shadow_follow_up_queue|items_csv|{paths['items_csv_path']}")
+        print(f"p17_shadow_follow_up_queue|markdown|{paths['markdown_path']}")
+    elif args.command == "p18-shadow-follow-up-resolution":
+        p17_payload = json.loads(Path(args.p17_follow_up_json).read_text(encoding="utf-8"))
+        resolution = build_shadow_follow_up_resolution(
+            p17_follow_up=p17_payload,
+            run_id=args.run_id,
+            resolution_date=args.resolution_date,
+            operator_id=args.operator_id,
+        )
+        paths = write_shadow_follow_up_resolution(resolution, args.output_dir)
+        print(f"p18_shadow_follow_up_resolution|status|{resolution['status']}")
+        print(f"p18_shadow_follow_up_resolution|items|{resolution['item_count']}")
+        print(f"p18_shadow_follow_up_resolution|json|{paths['json_path']}")
+        print(f"p18_shadow_follow_up_resolution|items_csv|{paths['items_csv_path']}")
+        print(f"p18_shadow_follow_up_resolution|markdown|{paths['markdown_path']}")
+    elif args.command == "p14-import-shadow-outcome-analytics":
+        result = import_shadow_outcome_analytics(args.path, service=args.service)
+        print(f"p14_import_shadow_outcome_analytics|imported|{result['imported_count']}")
+        print(f"p14_import_shadow_outcome_analytics|groups|{result['group_count']}")
+        print(f"p14_import_shadow_outcome_analytics|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p15-import-shadow-analytics-review":
+        result = import_shadow_analytics_review(args.path, service=args.service)
+        print(f"p15_import_shadow_analytics_review|imported|{result['imported_count']}")
+        print(f"p15_import_shadow_analytics_review|groups|{result['group_count']}")
+        print(f"p15_import_shadow_analytics_review|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p16-import-shadow-review-decisions":
+        result = import_shadow_review_decisions(args.path, service=args.service)
+        print(f"p16_import_shadow_review_decisions|imported|{result['imported_count']}")
+        print(f"p16_import_shadow_review_decisions|groups|{result['group_count']}")
+        print(f"p16_import_shadow_review_decisions|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p17-import-shadow-follow-up-queue":
+        result = import_shadow_follow_up_queue(args.path, service=args.service)
+        print(f"p17_import_shadow_follow_up_queue|imported|{result['imported_count']}")
+        print(f"p17_import_shadow_follow_up_queue|items|{result['item_count']}")
+        print(f"p17_import_shadow_follow_up_queue|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p18-import-shadow-follow-up-resolution":
+        result = import_shadow_follow_up_resolution(args.path, service=args.service)
+        print(f"p18_import_shadow_follow_up_resolution|imported|{result['imported_count']}")
+        print(f"p18_import_shadow_follow_up_resolution|items|{result['item_count']}")
+        print(f"p18_import_shadow_follow_up_resolution|runs|{','.join(result['run_ids'])}")
+    elif args.command == "p4-daily-orchestration":
+        result = run_daily_orchestration(
+            trade_date=args.trade_date,
+            aggregate_review_path=Path(args.aggregate_review),
+            virtual_portfolio_path=Path(args.virtual_portfolio),
+            output_dir=Path(args.output_dir),
+            portfolio_id=args.portfolio_id,
+            apply_daily_run_schema=args.apply_daily_run_schema,
+            record_run=args.record_run,
+            service=args.service,
+        )
+        for line in format_daily_orchestration_lines(result):
+            print(line)
+    elif args.command == "p4-read-model-smoke":
+        result = check_read_model_freshness(
+            trade_date=args.trade_date,
+            operator_manifest_path=Path(args.operator_manifest),
+            portfolio_id=args.portfolio_id,
+            service=args.service,
+        )
+        for line in format_read_model_freshness_lines(result):
+            print(line)
+    elif args.command == "p4-scheduler-cron-entry":
+        print(
+            build_p4_scheduler_cron_entry(
+                project_dir=args.project_dir,
+                trade_date_expr=args.trade_date_expr,
+                hour=args.hour,
+                minute=args.minute,
+                weekdays=args.weekdays,
+                portfolio_id=args.portfolio_id,
+                service=args.service,
+                log_path=args.log_path,
+            )
+        )
     elif args.command == "run-daily-incremental":
         if args.apply_daily_run_schema:
             apply_daily_job_run_schema()
@@ -988,6 +3510,8 @@ def main() -> None:
             step_runners=None if args.dry_run else build_default_step_runners(),
             freshness_checker=None,
             recorder=recorder,
+            start_at=args.start_at,
+            only_step=args.only_step,
         )
         print(f"daily_incremental|status|{result['status']}")
         if "reason" in result:
@@ -1014,6 +3538,28 @@ def main() -> None:
                 openclaw_bin=args.openclaw_bin,
                 dry_run=args.notify_dry_run,
             )
+    elif args.command == "export-research-snapshot":
+        result = export_research_snapshot(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_version=args.score_version,
+            output_dir=args.output_dir,
+        )
+        print(f"research_snapshot|manifest|{result['manifest_path']}")
+        for dataset, rows in result["row_counts"].items():
+            print(f"research_snapshot_dataset|{dataset}|rows|{rows}|{result['files'][dataset]}")
+    elif args.command == "migration-safety-check":
+        result = run_backup_restore_check(
+            backup_path=args.backup_path,
+            source_service=args.source_service,
+            restore_service=args.restore_service,
+            dry_run=args.dry_run,
+        )
+        print(f"migration_safety|status|{result['status']}")
+        for command in result["commands"]:
+            print(f"migration_safety_command|{command}")
+        for check in result["checks"]:
+            print(f"migration_safety_check|{check['check']}|{check['status']}|{check['detail']}")
     elif args.command == "run-daily-research-report":
         result = run_daily_research_report(
             trade_date=args.trade_date,
@@ -1031,6 +3577,654 @@ def main() -> None:
         report_paths = result["report_paths"]
         for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
             print(f"daily_research_report|{key}|{report_paths[key]['markdown_path']}")
+    elif args.command == "trend-lifecycle-v1":
+        result = run_trend_lifecycle_v1_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"trend_lifecycle_v1|report|{paths['markdown_report']}")
+        print(f"trend_lifecycle_v1|trend_segments|{paths['trend_segments']}")
+        print(f"trend_lifecycle_v1|lifecycle_samples|{paths['lifecycle_samples']}")
+        print(f"trend_lifecycle_v1|entry_success_labels|{paths['entry_success_labels']}")
+        print(f"trend_lifecycle_v1|top20_stage_hit_report|{paths['top20_stage_hit_report']}")
+        print(f"trend_lifecycle_v1|segments|{len(result['segments'])}")
+        print(f"trend_lifecycle_v1|lifecycle_samples_rows|{len(result['lifecycle_samples'])}")
+        print(f"trend_lifecycle_v1|entry_success_rows|{len(result['entry_success'])}")
+        print(f"trend_lifecycle_v1|top20_stage_hit_rows|{len(result['top20_stage_hits'])}")
+        print(f"trend_lifecycle_v1|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-factor-profile":
+        result = run_mid_trend_factor_profile_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            lifecycle_samples_path=args.lifecycle_samples_path,
+            factor_names=args.factor_names,
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_factor_profile|report|{paths['markdown_report']}")
+        print(f"mid_trend_factor_profile|factor_profile|{paths['factor_profile']}")
+        print(f"mid_trend_factor_profile|stage_stability|{paths['stage_stability']}")
+        print(f"mid_trend_factor_profile|candidate_rank|{paths['candidate_rank']}")
+        print(f"mid_trend_factor_profile|stage_signatures|{paths['stage_signatures']}")
+        print(f"mid_trend_factor_profile|profile_rows|{len(result['profile'])}")
+        print(f"mid_trend_factor_profile|stability_rows|{len(result['stability'])}")
+        print(f"mid_trend_factor_profile|candidate_rows|{len(result['candidate_rank'])}")
+        print(f"mid_trend_factor_profile|stage_signature_rows|{len(result['stage_signatures'])}")
+        print(f"mid_trend_factor_profile|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-candidate-enrichment":
+        result = run_candidate_enrichment_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_rank_path=args.candidate_rank_path,
+            entry_success_labels_path=args.entry_success_labels_path,
+            max_factors=args.max_factors,
+            min_candidate_score=args.min_candidate_score,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_candidate_enrichment|report|{paths['markdown_report']}")
+        print(f"mid_trend_candidate_enrichment|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "mid_trend_candidate_enrichment|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(f"mid_trend_candidate_enrichment|enrichment_by_topn|{paths['enrichment_by_topn']}")
+        print(f"mid_trend_candidate_enrichment|enrichment_by_period|{paths['enrichment_by_period']}")
+        print(f"mid_trend_candidate_enrichment|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(f"mid_trend_candidate_enrichment|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"mid_trend_candidate_enrichment|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"mid_trend_candidate_enrichment|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"mid_trend_candidate_enrichment|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "mid-trend-full-universe-enrichment":
+        result = run_full_universe_candidate_enrichment_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_scores_path=args.candidate_scores_path,
+            adjust_type=args.adjust_type,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"mid_trend_full_universe_enrichment|report|{paths['markdown_report']}")
+        print(f"mid_trend_full_universe_enrichment|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "mid_trend_full_universe_enrichment|candidate_entry_success_labels|"
+            f"{paths['candidate_entry_success_labels']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_topn|"
+            f"{paths['enrichment_by_topn']}"
+        )
+        print(
+            "mid_trend_full_universe_enrichment|enrichment_by_period|"
+            f"{paths['enrichment_by_period']}"
+        )
+        print(f"mid_trend_full_universe_enrichment|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(
+            "mid_trend_full_universe_enrichment|entry_success_rows|"
+            f"{len(result['candidate_entry_success_labels'])}"
+        )
+        print(f"mid_trend_full_universe_enrichment|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"mid_trend_full_universe_enrichment|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"mid_trend_full_universe_enrichment|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"mid_trend_full_universe_enrichment|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "entry-success-reverse-profile":
+        result = run_entry_success_reverse_profile_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            entry_success_labels_path=args.entry_success_labels_path,
+            factor_names=args.factor_names,
+            horizons=tuple(args.horizons),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"entry_success_reverse_profile|report|{paths['markdown_report']}")
+        print(
+            "entry_success_reverse_profile|factor_profile|"
+            f"{paths['entry_success_factor_profile']}"
+        )
+        print(
+            "entry_success_reverse_profile|factor_rank|"
+            f"{paths['entry_success_factor_rank']}"
+        )
+        print(f"entry_success_reverse_profile|factor_profile_rows|{len(result['factor_profile'])}")
+        print(f"entry_success_reverse_profile|factor_rank_rows|{len(result['factor_rank'])}")
+        print(f"entry_success_reverse_profile|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "entry-success-candidate-v2":
+        result = run_entry_success_candidate_v2_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            factor_rank_path=args.factor_rank_path,
+            horizon=args.horizon,
+            max_factors=args.max_factors,
+            min_candidate_score=args.min_candidate_score,
+            min_sign_match_rate=args.min_sign_match_rate,
+            adjust_type=args.adjust_type,
+            quantiles=args.quantiles,
+            top_ns=tuple(args.top_ns),
+            period=args.period,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"entry_success_candidate_v2|report|{paths['markdown_report']}")
+        print(f"entry_success_candidate_v2|candidate_rank|{paths['candidate_rank']}")
+        print(f"entry_success_candidate_v2|candidate_scores|{paths['candidate_scores']}")
+        print(
+            "entry_success_candidate_v2|candidate_entry_success_labels|"
+            f"{paths['candidate_entry_success_labels']}"
+        )
+        print(
+            "entry_success_candidate_v2|enrichment_by_quantile|"
+            f"{paths['enrichment_by_quantile']}"
+        )
+        print(f"entry_success_candidate_v2|enrichment_by_topn|{paths['enrichment_by_topn']}")
+        print(f"entry_success_candidate_v2|enrichment_by_period|{paths['enrichment_by_period']}")
+        print(f"entry_success_candidate_v2|candidate_rank_rows|{len(result['candidate_rank'])}")
+        print(f"entry_success_candidate_v2|candidate_score_rows|{len(result['candidate_scores'])}")
+        print(f"entry_success_candidate_v2|entry_success_rows|{len(result['candidate_entry_success_labels'])}")
+        print(f"entry_success_candidate_v2|quantile_rows|{len(result['enrichment_by_quantile'])}")
+        print(f"entry_success_candidate_v2|topn_rows|{len(result['enrichment_by_topn'])}")
+        print(f"entry_success_candidate_v2|period_rows|{len(result['enrichment_by_period'])}")
+        print(f"entry_success_candidate_v2|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "trend-candidate-backtest":
+        result = run_trend_candidate_backtest_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            candidate_scores_path=args.candidate_scores_path,
+            top_ns=tuple(args.top_ns),
+            holding_days=tuple(args.holding_days),
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"trend_candidate_backtest|report|{paths['markdown_report']}")
+        print(f"trend_candidate_backtest|summary|{paths['summary']}")
+        print(f"trend_candidate_backtest|equity_curve|{paths['equity_curve']}")
+        print(f"trend_candidate_backtest|positions|{paths['positions']}")
+        print(f"trend_candidate_backtest|trades|{paths['trades']}")
+        print(f"trend_candidate_backtest|summary_rows|{len(result['summary'])}")
+        print(f"trend_candidate_backtest|equity_rows|{len(result['equity_curve'])}")
+        print(f"trend_candidate_backtest|position_rows|{len(result['positions'])}")
+        print(f"trend_candidate_backtest|trade_rows|{len(result['trades'])}")
+        print(f"trend_candidate_backtest|diagnostics|{len(result['diagnostics'])}")
+    elif args.command == "industry-focus-backtest":
+        result = run_industry_focus_backtest_report(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            dynamic_top_k=args.dynamic_top_k,
+            min_industry_stocks=args.min_industry_stocks,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+            reports_dir=args.reports_dir,
+        )
+        paths = result["paths"]
+        print(f"industry_focus_backtest|report|{paths['markdown_report']}")
+        print(f"industry_focus_backtest|summary|{paths['summary']}")
+        print(f"industry_focus_backtest|industry_scores|{paths['industry_scores']}")
+        print(f"industry_focus_backtest|focus_industries_daily|{paths['focus_industries_daily']}")
+        print(f"industry_focus_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command in {"industry-v1-attribution", "industry-focus-v2-diagnostics"}:
+        result = run_industry_focus_v2_diagnostics(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            min_industry_stocks=args.min_industry_stocks,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+            dynamic_top_k=args.dynamic_top_k,
+        )
+        paths = result["paths"]
+        prefix = "industry_v1_attribution" if args.command == "industry-v1-attribution" else "industry_focus_v2_diagnostics"
+        print(f"{prefix}|v1_failure_attribution|{paths['v1_failure_attribution']}")
+        print(f"{prefix}|v2_diagnostics|{paths['v2_diagnostics']}")
+        print(f"{prefix}|v1_rows|{len(result['v1_failure_attribution'])}")
+        print(f"{prefix}|v2_rows|{len(result['v2_diagnostics'])}")
+    elif args.command == "industry-focus-v2-backtest":
+        result = run_industry_focus_v2_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_focus_v2_backtest|summary|{paths['summary']}")
+        print(f"industry_focus_v2_backtest|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_focus_v2_backtest|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_focus_v2_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command == "dragon-research-v1":
+        result = run_dragon_research_v1(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            hot_industry_top_n=args.hot_industry_top_n,
+            adjust_type=args.adjust_type,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            industry_diagnostics_path=args.industry_diagnostics_path,
+            candidate_scores_path=args.candidate_scores_path,
+            lifecycle_samples_path=args.lifecycle_samples_path,
+        )
+        paths = result["paths"]
+        print(f"dragon_research_v1|diagnostics|{paths['diagnostics']}")
+        print(f"dragon_research_v1|monthly_summary|{paths['monthly_summary']}")
+        print(f"dragon_research_v1|role_effectiveness|{paths['role_effectiveness']}")
+        print(f"dragon_research_v1|yearly_diagnosis|{paths['yearly_diagnosis']}")
+        print(f"dragon_research_v1|report|{paths['markdown_report']}")
+        print(f"dragon_research_v1|diagnostic_rows|{len(result['diagnostics'])}")
+        print(f"dragon_research_v1|role_rows|{len(result['role_effectiveness'])}")
+        print(f"dragon_research_v1|yearly_rows|{len(result['yearly_diagnosis'])}")
+    elif args.command == "dragon-case-library-build":
+        result = run_dragon_case_library_build(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            seed_path=args.seed_path,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_library_build|case_library|{result['paths']['case_library']}")
+        if "auto_candidates" in result.get("paths", {}):
+            print(f"dragon_case_library_build|auto_candidates_csv|{result['paths']['auto_candidates']}")
+        print(f"dragon_case_library_build|cases|{len(result['case_library'])}")
+        print(f"dragon_case_library_build|auto_candidates|{len(result['auto_candidates'])}")
+    elif args.command == "dragon-case-library-diagnose":
+        result = run_dragon_case_library_diagnose(
+            case_path=args.case_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_library_diagnose|event_diagnostics|{result['paths']['event_diagnostics']}")
+        print(
+            "dragon_case_library_diagnose|success_failure_comparison|"
+            f"{result['paths']['success_failure_comparison']}"
+        )
+        print(f"dragon_case_library_diagnose|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_library_diagnose|event_rows|{len(result['event_diagnostics'])}")
+        print(f"dragon_case_library_diagnose|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-import-web-seeds":
+        result = import_web_seeds(args.input, args.output_dir)
+        print(f"dragon_case_import_web_seeds|web_candidates|{result['paths']['web_candidates']}")
+        print(f"dragon_case_import_web_seeds|rows|{len(result['web_candidates'])}")
+    elif args.command == "dragon-case-expand-web-seeds":
+        result = run_dragon_case_expand_web_seeds(
+            article_seed_path=args.article_seed,
+            output_path=args.output,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_expand_web_seeds|web_seed|{result['paths']['web_seed']}")
+        print(f"dragon_case_expand_web_seeds|summary|{result['paths']['summary']}")
+        print(f"dragon_case_expand_web_seeds|unmatched|{result['paths']['unmatched']}")
+        print(f"dragon_case_expand_web_seeds|coverage|{result['paths']['coverage']}")
+        print(f"dragon_case_expand_web_seeds|report|{result['paths']['report']}")
+        print(f"dragon_case_expand_web_seeds|matched|{len(result['web_seed'])}")
+        print(f"dragon_case_expand_web_seeds|unmatched_rows|{len(result['unmatched'])}")
+    elif args.command == "dragon-case-web-verify":
+        result = run_dragon_case_web_verify(
+            candidate_path=args.candidate_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            adjust_type=args.adjust_type,
+        )
+        print(f"dragon_case_web_verify|event_verification|{result['paths']['event_verification']}")
+        print(f"dragon_case_web_verify|factor_review|{result['paths']['factor_review']}")
+        print(f"dragon_case_web_verify|curated_library|{result['paths']['curated_library']}")
+        print(f"dragon_case_web_verify|source_evidence|{result['paths']['source_evidence']}")
+        print(f"dragon_case_web_verify|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_web_verify|web_candidates|{len(result['web_candidates'])}")
+        print(f"dragon_case_web_verify|verified|{len(result['verified'])}")
+        print(f"dragon_case_web_verify|curated|{len(result['curated'])}")
+    elif args.command == "dragon-case-apply-source-backfill":
+        result = apply_source_backfill(
+            tasks_path=args.tasks_path,
+            article_seed_path=args.article_seed,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+        )
+        print(f"dragon_case_apply_source_backfill|summary|{result['paths']['summary']}")
+        print(f"dragon_case_apply_source_backfill|errors|{result['paths']['errors']}")
+        print(f"dragon_case_apply_source_backfill|report|{result['paths']['report']}")
+        print(f"dragon_case_apply_source_backfill|article_seed|{result['paths']['article_seed']}")
+        print(f"dragon_case_apply_source_backfill|inserted|{int(result['summary'].iloc[0]['inserted_article_seed_rows'])}")
+        print(f"dragon_case_apply_source_backfill|skipped_duplicate|{int(result['summary'].iloc[0]['skipped_duplicate_rows'])}")
+        print(f"dragon_case_apply_source_backfill|dry_run|{args.dry_run}")
+    elif args.command == "dragon-case-source-backfill-compare":
+        result = compare_source_backfill_curated(
+            before_curated_path=args.before_curated,
+            after_curated_path=args.after_curated,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_source_backfill_compare|delta|{result['paths']['delta']}")
+        print(f"dragon_case_source_backfill_compare|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-source-backfill-workpack":
+        import pandas as pd
+
+        tasks = pd.read_csv(args.tasks_path, low_memory=False)
+        result = build_source_backfill_workpack(tasks, top_n=args.top_n, output_dir=args.output_dir)
+        print(f"dragon_case_source_backfill_workpack|csv|{result['paths']['csv']}")
+        print(f"dragon_case_source_backfill_workpack|markdown|{result['paths']['markdown']}")
+        print(f"dragon_case_source_backfill_workpack|next_commands|{result['paths']['next_commands']}")
+        print(f"dragon_case_source_backfill_workpack|rows|{len(result['workpack'])}")
+    elif args.command == "dragon-case-source-backfill-check":
+        import pandas as pd
+
+        apply_summary = pd.read_csv(args.apply_summary, low_memory=False)
+        delta_summary = pd.read_csv(args.delta_summary, low_memory=False)
+        curated = pd.read_csv(args.curated, low_memory=False)
+        report = build_source_backfill_check_report(apply_summary, delta_summary, curated)
+        out = Path(args.output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        report_path = out / "dragon_case_source_backfill_check_report.md"
+        report_path.write_text(report, encoding="utf-8")
+        print(f"dragon_case_source_backfill_check|report|{report_path}")
+    elif args.command == "dragon-case-failure-event-rules-v2":
+        result = run_failure_event_rule_v2_diagnostics(
+            case_path=args.case_path,
+            snapshot_path=args.snapshot_path,
+            output_dir=args.output_dir,
+        )
+        print(f"failure_event_rule_v2|audit|{result['paths']['audit']}")
+        print(f"failure_event_rule_v2|summary|{result['paths']['summary']}")
+        print(f"failure_event_rule_v2|report|{result['paths']['report']}")
+        print(f"failure_event_rule_v2|audit_rows|{len(result['audit'])}")
+    elif args.command == "validate-technical-methods":
+        result = run_validate_technical_methods(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            feature_source=args.feature_source,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_method_validation|feature_bucket_effectiveness|{result['paths']['feature_bucket_effectiveness']}")
+        print(f"technical_method_validation|combo_effectiveness|{result['paths']['combo_effectiveness']}")
+        print(f"technical_method_validation|regime_effectiveness|{result['paths']['regime_effectiveness']}")
+        print(f"technical_method_validation|case_event_effectiveness|{result['paths']['case_event_effectiveness']}")
+        print(f"technical_method_validation|lhb_cross_effectiveness|{result['paths']['lhb_cross_effectiveness']}")
+        print(f"technical_method_validation|feature_correlation|{result['paths']['feature_correlation']}")
+        print(f"technical_method_validation|redundancy_report|{result['paths']['redundancy_report']}")
+        print(f"technical_method_validation|recommendation|{result['paths']['recommendation']}")
+        print(f"technical_method_validation|report|{result['paths']['report']}")
+        print(f"technical_method_validation|rows|{len(result['dataset'])}")
+    elif args.command == "validate-alpha191-pilot":
+        result = run_validate_alpha191_pilot(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            strong_start_date=args.strong_start_date,
+            strong_end_date=args.strong_end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"alpha191_pilot_validation|factor_effectiveness|{result['paths']['factor_effectiveness']}")
+        print(f"alpha191_pilot_validation|strong_winner_explanation|{result['paths']['strong_winner_explanation']}")
+        print(f"alpha191_pilot_validation|trend_overlay|{result['paths']['trend_overlay']}")
+        print(f"alpha191_pilot_validation|high_volatility_risk_split|{result['paths']['high_volatility_risk_split']}")
+        print(f"alpha191_pilot_validation|recommendation|{result['paths']['recommendation']}")
+        print(f"alpha191_pilot_validation|report|{result['paths']['report']}")
+        print(f"alpha191_pilot_validation|rows|{len(result['dataset'])}")
+    elif args.command == "validate-alpha191-expanded":
+        result = run_validate_alpha191_expanded(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            strong_start_date=args.strong_start_date,
+            strong_end_date=args.strong_end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"alpha191_expanded_validation|factor_effectiveness|{result['paths']['factor_effectiveness']}")
+        print(f"alpha191_expanded_validation|factor_bucket_effectiveness|{result['paths']['factor_bucket_effectiveness']}")
+        print(f"alpha191_expanded_validation|strong_winner_explanation|{result['paths']['strong_winner_explanation']}")
+        print(f"alpha191_expanded_validation|drawdown_risk_effectiveness|{result['paths']['drawdown_risk_effectiveness']}")
+        print(f"alpha191_expanded_validation|redundancy_report|{result['paths']['redundancy_report']}")
+        print(f"alpha191_expanded_validation|candidate_factors|{result['paths']['candidate_factors']}")
+        print(f"alpha191_expanded_validation|trend_overlay|{result['paths']['trend_overlay']}")
+        print(f"alpha191_expanded_validation|high_volatility_risk_split|{result['paths']['high_volatility_risk_split']}")
+        print(f"alpha191_expanded_validation|report|{result['paths']['report']}")
+        print(f"alpha191_expanded_validation|rows|{len(result['dataset'])}")
+    elif args.command == "technical-feature-promotion-audit":
+        result = run_technical_feature_promotion_audit(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            sample_size=args.sample_size,
+            asset_id=args.asset_id,
+            ts_code=args.ts_code,
+            feature_source=args.feature_source,
+            output_dir=args.output_dir,
+        )
+        print(f"technical_feature_promotion_audit|audit|{result['paths']['promotion_audit']}")
+        print(f"technical_feature_promotion_audit|watchlist|{result['paths']['watchlist_readiness']}")
+        print(f"technical_feature_promotion_audit|report|{result['paths']['report']}")
+        print(f"technical_feature_promotion_audit|rows|{len(result['promotion_audit'])}")
+    elif args.command == "lhb-risk-diagnostics-after-failure-rule-v2-1":
+        result = run_lhb_diagnostics_after_failure_rule_v21(
+            case_path=args.case_path,
+            failure_audit_path=args.failure_audit_path,
+            snapshot_path=args.snapshot_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_after_failure_rule_v2_1|curated_failure_v21|{result['paths']['curated_failure_v21']}")
+        print(f"lhb_after_failure_rule_v2_1|transition_matrix|{result['paths']['transition_matrix']}")
+        print(f"lhb_after_failure_rule_v2_1|case_type_difference_summary|{result['paths']['case_type_difference_summary']}")
+        print(f"lhb_after_failure_rule_v2_1|risk_feature_case_detail|{result['paths']['risk_feature_case_detail']}")
+        print(f"lhb_after_failure_rule_v2_1|comparison|{result['paths']['comparison']}")
+        print(f"lhb_after_failure_rule_v2_1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-sample-import":
+        ts_codes = parse_str_list(args.ts_codes, "--ts-codes") if args.ts_codes else None
+        result = run_lhb_sample_import(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+            output_dir=args.output_dir,
+            provider=args.provider,
+        )
+        print(f"lhb_sample_import|top_list|{result['paths']['top_list']}")
+        print(f"lhb_sample_import|top_inst|{result['paths']['top_inst']}")
+        print(f"lhb_sample_import|top_list_rows|{len(result['top_list'])}")
+        print(f"lhb_sample_import|top_inst_rows|{len(result['top_inst'])}")
+    elif args.command == "lhb-build-event-features":
+        ts_codes = parse_str_list(args.ts_codes, "--ts-codes") if args.ts_codes else None
+        result = run_lhb_event_features_build(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_event_features_build|lhb_event_features|{result['paths']['lhb_event_features']}")
+        print(f"lhb_event_features_build|rows|{len(result['lhb_event_features'])}")
+    elif args.command == "dragon-case-lhb-alignment-audit":
+        result = run_dragon_case_lhb_alignment_audit(
+            curated_path=args.curated_path,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_lhb_alignment_audit|alignment_audit|{result['paths']['alignment_audit']}")
+        print(f"dragon_case_lhb_alignment_audit|rows|{len(result['alignment_audit'])}")
+        print(f"dragon_case_lhb_alignment_audit|warnings|{len(result['warnings'])}")
+    elif args.command == "dragon-case-lhb-summary":
+        result = run_dragon_case_lhb_summary_report(
+            curated_path=args.curated_path,
+            output_dir=args.output_dir,
+        )
+        print(f"dragon_case_lhb_summary|summary|{result['paths']['summary']}")
+        print(f"dragon_case_lhb_summary|comparison|{result['paths']['comparison']}")
+        print(f"dragon_case_lhb_summary|report|{result['paths']['markdown_report']}")
+        print(f"dragon_case_lhb_summary|rows|{len(result['summary'])}")
+    elif args.command == "lhb-case-difference-report":
+        result = run_lhb_case_difference_report(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_case_difference_report|case_type_difference_summary|{result['paths']['case_type_difference_summary']}")
+        print(f"lhb_case_difference_report|event_window_difference|{result['paths']['event_window_difference']}")
+        print(f"lhb_case_difference_report|risk_signal_effectiveness|{result['paths']['risk_signal_effectiveness']}")
+        print(f"lhb_case_difference_report|positive_signal_effectiveness|{result['paths']['positive_signal_effectiveness']}")
+        print(f"lhb_case_difference_report|case_event_detail|{result['paths']['case_event_detail']}")
+        print(f"lhb_case_difference_report|coverage_summary|{result['paths']['coverage_summary']}")
+        print(f"lhb_case_difference_report|report|{result['paths']['markdown_report']}")
+        print(f"lhb_case_difference_report|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-risk-feature-diagnostics":
+        result = run_lhb_risk_feature_diagnostics(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_risk_feature_diagnostics|risk_feature_case_detail|{result['paths']['risk_feature_case_detail']}")
+        print(f"lhb_risk_feature_diagnostics|risk_score_bucket_effectiveness|{result['paths']['risk_score_bucket_effectiveness']}")
+        print(f"lhb_risk_feature_diagnostics|risk_failure_type_cross|{result['paths']['risk_failure_type_cross']}")
+        print(f"lhb_risk_feature_diagnostics|dragon_risk_cross_diagnostics|{result['paths']['dragon_risk_cross_diagnostics']}")
+        print(f"lhb_risk_feature_diagnostics|coverage_gap_recommendations|{result['paths']['coverage_gap_recommendations']}")
+        print(f"lhb_risk_feature_diagnostics|report|{result['paths']['markdown_report']}")
+        print(f"lhb_risk_feature_diagnostics|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-coverage-failure-plan":
+        result = run_lhb_coverage_and_failure_rule_plan(
+            coverage_gap_path=args.coverage_gap_path,
+            case_path=args.case_path,
+            snapshot_path=args.snapshot_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_coverage_failure_plan|coverage_expansion_plan|{result['paths']['coverage_expansion_plan']}")
+        print(f"lhb_coverage_failure_plan|coverage_expansion_summary|{result['paths']['coverage_expansion_summary']}")
+        print(f"lhb_coverage_failure_plan|next_commands|{result['paths']['next_commands']}")
+        print(f"lhb_coverage_failure_plan|failure_rule_audit|{result['paths']['failure_rule_audit']}")
+        print(f"lhb_coverage_failure_plan|failure_rule_suggestions|{result['paths']['failure_rule_suggestions']}")
+        print(f"lhb_coverage_failure_plan|report|{result['paths']['markdown_report']}")
+        print(f"lhb_coverage_failure_plan|warnings|{len(result['warnings'])}")
+    elif args.command == "fixed-industry-reconciliation":
+        result = run_fixed_industry_reconciliation(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            output_dir=args.output_dir,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"fixed_industry_reconciliation|csv|{paths['reconciliation']}")
+        print(f"fixed_industry_reconciliation|rows|{len(result['reconciliation'])}")
+        print(f"fixed_industry_reconciliation|explanation|{result['explanation']}")
+    elif args.command == "industry-error-audit":
+        result = run_industry_error_audit(
+            diagnostics_path=args.diagnostics_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            backtest_summary_path=args.backtest_summary_path,
+            annual_metrics_path=args.annual_metrics_path,
+        )
+        paths = result["paths"]
+        print(f"industry_error_audit|monthly|{paths['monthly']}")
+        print(f"industry_error_audit|summary|{paths['summary']}")
+        print(f"industry_error_audit|tag_effectiveness|{paths['tag_effectiveness']}")
+        print(f"industry_error_audit|component_effectiveness|{paths['component_effectiveness']}")
+        print(f"industry_error_audit|yearly|{paths['yearly']}")
+        print(f"industry_error_audit|markdown_report|{paths['markdown_report']}")
+        print(f"industry_error_audit|monthly_rows|{len(result['monthly'])}")
+        print(f"industry_error_audit|summary_rows|{len(result['summary'])}")
+    elif args.command == "industry-mainline-regime-diagnostics":
+        result = run_industry_mainline_regime_diagnostics(
+            diagnostics_path=args.diagnostics_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        paths = result["paths"]
+        print(f"industry_mainline_regime|diagnostics|{paths['diagnostics']}")
+        print(f"industry_mainline_regime|market_regimes|{paths['market_regimes']}")
+        print(
+            "industry_mainline_regime|regime_effectiveness|"
+            f"{paths['regime_effectiveness']}"
+        )
+        print(f"industry_mainline_regime|tag_effectiveness|{paths['tag_effectiveness']}")
+        print(f"industry_mainline_regime|markdown_report|{paths['markdown_report']}")
+        print(f"industry_mainline_regime|diagnostic_rows|{len(result['diagnostics'])}")
+        print(f"industry_mainline_regime|regime_rows|{len(result['market_regimes'])}")
+    elif args.command == "industry-regime-gated-backtest":
+        result = run_industry_regime_gated_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            regime_path=args.regime_path,
+            mainline_path=args.mainline_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_regime_gated_backtest|summary|{paths['summary']}")
+        print(f"industry_regime_gated_backtest|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_regime_gated_backtest|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_regime_gated_backtest|industry_exposure|{paths['industry_exposure']}")
+        print(f"industry_regime_gated_backtest|turnover_detail|{paths['turnover_detail']}")
+        print(f"industry_regime_gated_backtest|markdown_report|{paths['markdown_report']}")
+        print(f"industry_regime_gated_backtest|summary_rows|{len(result['summary'])}")
+    elif args.command == "industry-exposure-risk-control":
+        result = run_industry_exposure_risk_control(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            diagnostics_path=args.diagnostics_path,
+            regime_path=args.regime_path,
+            mainline_path=args.mainline_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            transaction_cost_bps=args.transaction_cost_bps,
+            industry_system=args.industry_system,
+            industry_level=args.industry_level,
+            adjust_type=args.adjust_type,
+        )
+        paths = result["paths"]
+        print(f"industry_exposure_risk_control|summary|{paths['summary']}")
+        print(f"industry_exposure_risk_control|annual_metrics|{paths['annual_metrics']}")
+        print(f"industry_exposure_risk_control|monthly_metrics|{paths['monthly_metrics']}")
+        print(f"industry_exposure_risk_control|industry_exposure|{paths['industry_exposure']}")
+        print(f"industry_exposure_risk_control|turnover_detail|{paths['turnover_detail']}")
+        print(f"industry_exposure_risk_control|markdown_report|{paths['markdown_report']}")
+        print(f"industry_exposure_risk_control|summary_rows|{len(result['summary'])}")
     elif args.command == "sync-industry-memberships":
         count = sync_industry_memberships(args.trade_date)
         print(f"industry_memberships_synced|{count}")
@@ -1094,6 +4288,114 @@ def main() -> None:
         print(f"finance_indicator_quarter_synced|{counts['indicator_quarter']}")
         print(f"finance_income_statement_synced|{counts['income_statement']}")
         print(f"finance_share_capital_event_synced|{counts['share_capital_event']}")
+    elif args.command == "sync-baostock-minute-bars":
+        counts = sync_baostock_stock_minute_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            limit_assets=args.limit_assets,
+            sleep_seconds=args.sleep_seconds,
+        )
+        for adjust_type, count in counts.items():
+            print(f"stock_minute_bars_synced|{args.freq}|{adjust_type}|{count}")
+    elif args.command == "plan-baostock-minute-backfill":
+        result = plan_baostock_minute_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            output_dir=args.output_dir,
+            limit_assets=args.limit_assets,
+        )
+        for key, value in result["summary"].items():
+            print(f"minute_backfill_plan|{key}|{value}")
+    elif args.command == "run-baostock-minute-backfill":
+        result = run_baostock_minute_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            max_jobs=args.max_jobs,
+            retry_failed=args.retry_failed,
+            sleep_seconds=args.sleep_seconds,
+            workers=args.workers,
+        )
+        for key, value in result.items():
+            print(f"minute_backfill_run|{key}|{value}")
+    elif args.command == "run-baostock-minute-backfill-range":
+        def report(summary: dict) -> None:
+            month = summary["month"]
+            job_summary = summary["job_summary"]
+            validation_summary = summary["validation_summary"]
+            message = (
+                f"minute_backfill_month_done|{month}\n"
+                f"jobs_total={job_summary['total_jobs']}\n"
+                f"jobs_success={job_summary['success_jobs']}\n"
+                f"jobs_failed={job_summary['failed_jobs']}\n"
+                f"market_rows={job_summary['total_market_rows']}\n"
+                f"staging_rows={job_summary['total_staging_rows']}\n"
+                f"validation_errors={validation_summary['error_count']}"
+            )
+            print(message, flush=True)
+            try:
+                send_openclaw_feishu_message(
+                    message=message,
+                    target=args.report_target,
+                    account=args.report_account,
+                    openclaw_bin=args.openclaw_bin,
+                    dry_run=args.report_dry_run,
+                )
+            except Exception as exc:
+                print(
+                    f"minute_backfill_report_failed|{exc.__class__.__name__}|{exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+        result = run_baostock_minute_backfill_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            max_jobs=args.max_jobs,
+            retry_failed=args.retry_failed,
+            sleep_seconds=args.sleep_seconds,
+            workers=args.workers,
+            output_dir=args.output_dir,
+            limit_assets=args.limit_assets,
+            report=report,
+        )
+        for key, value in result.items():
+            print(f"minute_backfill_range|{key}|{value}")
+    elif args.command == "minute-backfill-watchdog":
+        run_minute_backfill_watchdog_command(args)
+    elif args.command == "backfill-watchdog":
+        if args.adapter == "minute":
+            run_minute_backfill_watchdog_command(args)
+        elif args.adapter == "technical-features":
+            run_technical_feature_watchdog_command(args)
+        elif args.adapter == "factor-gate":
+            run_factor_gate_watchdog_command(args)
+    elif args.command == "baostock-minute-backfill-status":
+        result = load_backfill_status(output_dir=args.output_dir)
+        for key, value in result["summary"].items():
+            print(f"minute_backfill_status|{key}|{value}")
+        print(f"minute_backfill_status_by_period_rows|{len(result['by_period'])}")
+    elif args.command == "validate-minute-bars":
+        result = validate_minute_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            output_dir=args.output_dir,
+            limit_rows=args.limit_rows,
+        )
+        for key, value in result["summary"].items():
+            print(f"minute_bar_validation|{key}|{value}")
     elif args.command == "create-ingest-jobs":
         count = create_ingest_jobs_for_service(
             args.dataset,
@@ -1238,6 +4540,139 @@ def main() -> None:
                 args.log_path,
             )
         )
+    elif args.command == "report-delivery-local":
+        result = deliver_local_reports(
+            trade_date=args.trade_date,
+            input_dirs=args.input_dir,
+            report_dirs=args.report_dir,
+            run_card_dirs=args.run_card_dir,
+            artifact_paths=args.artifact_path,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+        )
+        print(f"report_delivery|status|{result.status}")
+        print(f"report_delivery|artifacts|{result.artifact_count}")
+        print(f"report_delivery|manifest|{result.manifest_path}")
+        print(f"report_delivery|output_dir|{result.output_dir}")
+        if result.delivery_log_path is not None:
+            print(f"report_delivery|delivery_log|{result.delivery_log_path}")
+    elif args.command == "report-delivery-openclaw-export":
+        result = openclaw_export(
+            trade_date=args.trade_date,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+            include_all=args.include_all,
+            min_severity=args.min_severity,
+            dry_run=args.dry_run,
+        )
+        print(f"report_delivery_openclaw|status|{result.status}")
+        print(f"report_delivery_openclaw|item_count|{result.item_count}")
+        print(f"report_delivery_openclaw|manifest|{result.openclaw_manifest_path}")
+        print(f"report_delivery_openclaw|items|{result.openclaw_items_path}")
+        print(f"report_delivery_openclaw|output_dir|{result.output_dir}")
+        print(f"report_delivery_openclaw|log|{result.openclaw_delivery_log_path}")
+    elif args.command == "report-delivery-feishu":
+        result = feishu_preview(
+            trade_date=args.trade_date,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+            include_all=args.include_all,
+            min_severity=args.min_severity,
+        )
+        print(f"report_delivery_feishu|status|{result.status}")
+        print(f"report_delivery_feishu|item_count|{result.item_count}")
+        print(f"report_delivery_feishu|preview|{result.preview_path}")
+        print(f"report_delivery_feishu|output_dir|{result.output_dir}")
+        print(f"report_delivery_feishu|log|{result.delivery_log_path}")
+    elif args.command == "report-delivery-feishu-send":
+        result = feishu_send(
+            trade_date=args.trade_date,
+            preview_path=args.preview,
+            output_dir=args.output_dir,
+            webhook_url=args.webhook_url,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            allow_live_send=args.allow_live_send,
+            severity_max=args.severity_max,
+            test_mode=args.test_mode,
+        )
+        print(f"report_delivery_feishu_send|status|{result.status}")
+        print(f"report_delivery_feishu_send|dry_run|{result.dry_run}")
+        print(f"report_delivery_feishu_send|send_id|{result.send_id}")
+        print(f"report_delivery_feishu_send|item_count|{result.item_count}")
+        print(f"report_delivery_feishu_send|sent_count|{result.sent_count}")
+        print(f"report_delivery_feishu_send|failed_count|{result.failed_count}")
+        print(f"report_delivery_feishu_send|skipped_count|{result.skipped_count}")
+        print(f"report_delivery_feishu_send|preview|{result.send_preview_path}")
+        print(f"report_delivery_feishu_send|log|{result.send_log_path}")
+        if not result.dry_run and result.status != "sent":
+            raise RuntimeError(
+                "report-delivery-feishu-send: "
+                f"non-dry-run send failed with status {result.status}; "
+                f"artifacts preserved at {result.send_log_path}"
+            )
+    elif args.command == "agent-report":
+        result = build_agent_research_report(
+            trade_date=args.trade_date,
+            mode=args.mode,
+            manifest_path=args.manifest,
+            output_dir=args.output_dir,
+        )
+        print(f"agent_report|status|{result.status}")
+        print(f"agent_report|review_status|{result.review_status}")
+        print(f"agent_report|observations|{result.observation_count}")
+        print(f"agent_report|blockers|{result.blocker_count}")
+        print(f"agent_report|markdown|{result.markdown_path}")
+        print(f"agent_report|json|{result.json_path}")
+        print(f"agent_report|review|{result.review_path}")
+    elif args.command == "report-delivery-openclaw-send":
+        timeout_seconds = parse_openclaw_timeout_seconds(args.timeout_seconds)
+        sender = OpenClawSender(
+            transport=DryRunOpenClawTransport() if args.dry_run else HttpOpenClawTransport()
+        )
+        try:
+            export_data = sender.load_export(args.manifest, args.items)
+            manifest_trade_date = str(export_data["manifest"].get("trade_date", ""))
+            if manifest_trade_date != args.trade_date:
+                raise ValueError(
+                    "report-delivery-openclaw-send: "
+                    f"trade-date {args.trade_date} does not match loaded manifest trade_date {manifest_trade_date}"
+                )
+            result = sender.send_batch(
+                manifest_path=args.manifest,
+                items_path=args.items,
+                config=OpenClawSendConfig(
+                    endpoint=args.endpoint,
+                    token=os.environ.get("OPENCLAW_TOKEN"),
+                    timeout_seconds=timeout_seconds,
+                    dry_run=args.dry_run,
+                    retry_count=args.retry_count,
+                    retry_backoff_seconds=args.retry_backoff_seconds,
+                    outbox_dir=args.output_dir,
+                    limit=args.limit,
+                    allow_live_send=args.allow_live_send,
+                    route_allowlist=args.route_allowlist,
+                    severity_max=args.severity_max,
+                    test_mode=args.test_mode,
+                ),
+            )
+        except OpenClawSendInputError as exc:
+            raise ValueError(f"report-delivery-openclaw-send: {exc}") from exc
+        print(f"report_delivery_openclaw_send|status|{result.status}")
+        print(f"report_delivery_openclaw_send|dry_run|{result.dry_run}")
+        print(f"report_delivery_openclaw_send|send_id|{result.send_id}")
+        print(f"report_delivery_openclaw_send|item_count|{result.item_count}")
+        print(f"report_delivery_openclaw_send|sent_count|{result.sent_count}")
+        print(f"report_delivery_openclaw_send|failed_count|{result.failed_count}")
+        print(f"report_delivery_openclaw_send|skipped_count|{result.skipped_count}")
+        print(f"report_delivery_openclaw_send|preview|{result.preview_path}")
+        print(f"report_delivery_openclaw_send|log|{result.send_log_path}")
+        if not result.dry_run and result.status != "sent":
+            raise RuntimeError(
+                "report-delivery-openclaw-send: "
+                f"non-dry-run send failed with status {result.status}; "
+                f"artifacts preserved at {result.send_log_path}"
+            )
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,
@@ -1263,12 +4698,60 @@ def main() -> None:
             f"portfolio_backtest_summary|{result['report_paths']['summary_path']}"
         )
         print(f"portfolio_backtest_configs|{len(result['summary'])}")
+    elif args.command == "simulate-portfolio":
+        result = run_portfolio_backtest(
+            args.start_date,
+            args.end_date,
+            initial_cash=args.initial_cash,
+            top_ks=args.top_ks,
+            holding_days=args.holding_days,
+            reports_dir=args.reports_dir,
+        )
+        review_paths = write_portfolio_simulation_review(
+            result,
+            output_dir=args.output_dir,
+        )
+        print(f"simulate_portfolio|json|{review_paths['json_path']}")
+        print(f"simulate_portfolio|states_csv|{review_paths['states_csv_path']}")
+        print(f"simulate_portfolio|markdown|{review_paths['markdown_path']}")
+    elif args.command == "generate-trade-advice":
+        import pandas as pd
+
+        simulation_state = json.loads(Path(args.simulation_state).read_text(encoding="utf-8"))
+        candidates = pd.read_csv(args.candidates)
+        advice = generate_trade_advice(
+            trade_date=args.trade_date,
+            simulation_state=simulation_state,
+            candidates=candidates,
+            policy=TradeAdvicePolicy(
+                max_single_position_pct=args.max_single_position_pct,
+                max_industry_position_pct=args.max_industry_position_pct,
+                target_total_exposure_pct=args.target_total_exposure_pct,
+                drawdown_defensive_threshold=args.drawdown_defensive_threshold,
+                defensive_exposure_multiplier=args.defensive_exposure_multiplier,
+            ),
+        )
+        advice_paths = write_trade_advice(
+            trade_date=args.trade_date,
+            advice=advice,
+            output_dir=args.output_dir,
+        )
+        print(f"trade_advice|csv|{advice_paths['csv_path']}")
+        print(f"trade_advice|json|{advice_paths['json_path']}")
+        print(f"trade_advice|markdown|{advice_paths['markdown_path']}")
     elif args.command == "retention-backtest":
+        execution_constraints = BacktestExecutionConstraints(
+            commission_bps=args.commission_bps,
+            stamp_duty_bps=args.stamp_duty_bps,
+            slippage_bps=args.slippage_bps,
+            min_amount=args.min_amount,
+        )
         retention_kwargs = {
             "initial_cash": args.initial_cash,
             "top_ks": args.top_ks,
             "variant": args.variant,
             "reports_dir": args.reports_dir,
+            "execution_constraints": execution_constraints,
         }
         if str(args.variant).strip().lower() in {"v3.1", "v31"}:
             retention_kwargs["cache_dir"] = args.cache_dir
@@ -1291,6 +4774,179 @@ def main() -> None:
         )
         print(f"v31_cache_manifest|{result['paths']['manifest']}")
         print(f"v31_cache_candidates|{result['counts']['retention_candidates']}")
+    elif args.command == "build-universe":
+        config = build_universe_config_from_args(args)
+        result = UniverseService().build_universe(config)
+        build_universe_artifacts(result=result, output_dir=args.output)
+        print(f"universe_build|output|{args.output}")
+        print(f"universe_build|included|{result.included_count}")
+        print(f"universe_build|excluded|{result.excluded_count}")
+    elif args.command == "explain-universe":
+        config = build_universe_config_from_args(args)
+        member = UniverseService().explain_stock(args.code, args.date, config)
+        print(universe_member_to_json(member))
+    elif args.command == "check-watchlist-universe":
+        watchlist_codes = load_watchlist_codes(args.watchlist)
+        config = build_universe_config_from_args(
+            args,
+            watchlist_codes=watchlist_codes,
+        )
+        result = UniverseService().build_universe(config)
+        build_universe_artifacts(result=result, output_dir=args.output)
+        print(f"watchlist_universe|output|{args.output}")
+        print(f"watchlist_universe|members|{result.total_candidates}")
+        print(f"watchlist_universe|included|{result.included_count}")
+    elif args.command == "watchlist-build":
+        rows = build_watchlist_snapshot(
+            trade_date=args.trade_date,
+            watchlist_id=args.watchlist_id,
+            score_version=args.score_version,
+            top_n=args.top_n,
+        )
+        report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
+        run_card = write_run_card(
+            output_dir=Path(args.output_dir) / "run_card",
+            run_type="watchlist_build",
+            run_id=f"watchlist:{args.watchlist_id}:{args.trade_date}",
+            title="Watchlist Build",
+            config={
+                "trade_date": args.trade_date,
+                "watchlist_id": args.watchlist_id,
+                "score_version": args.score_version,
+                "top_n": args.top_n,
+            },
+            metrics={
+                "rows": len(rows),
+                "must_watch": int(rows["must_watch"].sum()) if not rows.empty else 0,
+            },
+            artifact_paths=report_paths,
+        )
+        print(f"watchlist_build|watchlist_id|{args.watchlist_id}")
+        print(f"watchlist_build|members|{len(rows)}")
+        print(f"watchlist_build|must_watch|{int(rows['must_watch'].sum()) if not rows.empty else 0}")
+        print(f"watchlist_build|report|{report_paths['markdown_path']}")
+        print(f"watchlist_build|run_card|{run_card['run_card_json_path']}")
+    elif args.command == "build-watchlist-diagnostics":
+        diagnostics = build_watchlist_diagnostics_snapshot(
+            trade_date=args.trade_date,
+            score_version=args.score_version,
+            top_n=args.top_n,
+            risk_watch_n=args.risk_watch_n,
+            opportunity_watch_n=args.opportunity_watch_n,
+        )
+        report_paths = write_watchlist_diagnostics_report(
+            full_rows=diagnostics["full"],
+            must_watch_rows=diagnostics["must_watch"],
+            output_dir=args.output_dir,
+            output_version="v1",
+            trade_date=args.trade_date,
+            watchlist_id="diagnostics",
+        )
+        print(f"watchlist_diagnostics|full_csv|{report_paths['full_csv_path']}")
+        print(f"watchlist_diagnostics|must_watch_csv|{report_paths['must_watch_csv_path']}")
+        print(f"watchlist_diagnostics|markdown|{report_paths['markdown_path']}")
+    elif args.command == "build-watchlist-diagnostics-range":
+        dates = _load_trade_dates_for_watchlist_diagnostics_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        built = 0
+        skipped = 0
+        for trade_date in dates:
+            if not args.force and _has_matching_watchlist_diagnostics_cache(
+                output_dir=args.output_dir,
+                trade_date=trade_date,
+            ):
+                skipped += 1
+                print(f"watchlist_diagnostics_range|skipped|{trade_date}")
+                continue
+            diagnostics = build_watchlist_diagnostics_snapshot(
+                trade_date=trade_date,
+                score_version=args.score_version,
+                top_n=args.top_n,
+                risk_watch_n=args.risk_watch_n,
+                opportunity_watch_n=args.opportunity_watch_n,
+            )
+            write_watchlist_diagnostics_report(
+                full_rows=diagnostics["full"],
+                must_watch_rows=diagnostics["must_watch"],
+                output_dir=args.output_dir,
+                output_version="v1",
+                trade_date=trade_date,
+                watchlist_id="diagnostics",
+            )
+            built += 1
+            print(f"watchlist_diagnostics_range|built|{trade_date}")
+        print(
+            "watchlist_diagnostics_range|summary|"
+            f"dates|{len(dates)}|built|{built}|skipped|{skipped}|rule_version|{DIAGNOSTICS_RULE_VERSION}"
+        )
+    elif args.command == "review-watchlist-diagnostics":
+        review_paths = run_watchlist_diagnostics_effectiveness_review(
+            diagnostics_dir=args.diagnostics_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"watchlist_effectiveness|detail_csv|{review_paths['detail_csv_path']}")
+        print(f"watchlist_effectiveness|summary_csv|{review_paths['summary_csv_path']}")
+        print(f"watchlist_effectiveness|markdown|{review_paths['markdown_path']}")
+    elif args.command == "analyze-strong-winner-misses":
+        result = run_strong_winner_miss_analysis(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            window_days=args.window_days,
+            threshold=args.threshold,
+            diagnostics_dir=args.diagnostics_dir,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_miss_analysis|strong_winners|{result['paths']['strong_winners']}")
+        print(f"strong_winner_miss_analysis|miss_analysis|{result['paths']['miss_analysis']}")
+        print(f"strong_winner_miss_analysis|summary|{result['paths']['summary']}")
+        print(f"strong_winner_miss_analysis|report|{result['paths']['report']}")
+        print(f"strong_winner_miss_analysis|rows|{len(result['miss_analysis'])}")
+    elif args.command == "analyze-strong-winner-topn-source":
+        from stock_research.strong_winner_topn_attribution import (
+            run_strong_winner_topn_attribution,
+        )
+
+        result = run_strong_winner_topn_attribution(
+            miss_analysis_path=args.miss_analysis_path,
+            score_version=args.score_version,
+            topn_thresholds=args.topn_thresholds,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_topn_source|attribution|{result['paths']['attribution']}")
+        print(
+            "strong_winner_topn_source|threshold_sensitivity|"
+            f"{result['paths']['threshold_sensitivity']}"
+        )
+        print(f"strong_winner_topn_source|component_gap|{result['paths']['component_gap']}")
+        print(f"strong_winner_topn_source|report|{result['paths']['report']}")
+        print(f"strong_winner_topn_source|rows|{len(result['attribution'])}")
+    elif args.command == "watchlist-report":
+        rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
+        report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
+        print(f"watchlist_report|markdown|{report_paths['markdown_path']}")
+    elif args.command == "watchlist-explain":
+        print(
+            json.dumps(
+                _json_safe_value(
+                    explain_watchlist_asset(
+                    trade_date=args.trade_date,
+                    watchlist_id=args.watchlist_id,
+                    asset_id=args.asset_id,
+                    )
+                ),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+
+
+def main() -> None:
+    main_for_args()
 
 
 if __name__ == "__main__":

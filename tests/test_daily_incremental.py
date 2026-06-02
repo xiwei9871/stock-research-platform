@@ -96,6 +96,52 @@ def test_run_daily_incremental_pipeline_checks_freshness_after_loading_bars():
     assert result["steps"][2]["step"] == "check_market_data_freshness"
 
 
+def test_run_daily_incremental_pipeline_can_start_at_named_step():
+    calls = []
+    result = daily_incremental.run_daily_incremental_pipeline(
+        trade_date="2026-05-12",
+        start_at="build_factor_daily",
+        step_runners={
+            "build_factor_daily": lambda context: calls.append("build_factor_daily") or {"rows": 17},
+            "score_approved_factors": lambda context: calls.append("score_approved_factors") or {"rows": 19},
+            "run_daily_research_report": lambda context: calls.append("run_daily_research_report") or {"report_paths": {}},
+        },
+    )
+
+    assert result["status"] == "success"
+    assert calls == [
+        "build_factor_daily",
+        "score_approved_factors",
+        "run_daily_research_report",
+    ]
+    assert [step["step"] for step in result["steps"]] == calls
+
+
+def test_run_daily_incremental_pipeline_can_run_only_one_step():
+    calls = []
+    result = daily_incremental.run_daily_incremental_pipeline(
+        trade_date="2026-05-12",
+        only_step="score_approved_factors",
+        step_runners={
+            "score_approved_factors": lambda context: calls.append("score_approved_factors") or {"rows": 19},
+            "run_daily_research_report": lambda context: pytest.fail("should not run"),
+        },
+    )
+
+    assert result["status"] == "success"
+    assert calls == ["score_approved_factors"]
+    assert [step["step"] for step in result["steps"]] == ["score_approved_factors"]
+
+
+def test_run_daily_incremental_pipeline_rejects_unknown_resume_step():
+    with pytest.raises(ValueError, match="Unknown daily incremental step"):
+        daily_incremental.run_daily_incremental_pipeline(
+            trade_date="2026-05-12",
+            start_at="missing_step",
+            dry_run=True,
+        )
+
+
 def test_run_daily_incremental_pipeline_blocks_on_freshness_check():
     result = daily_incremental.run_daily_incremental_pipeline(
         trade_date="2026-05-12",

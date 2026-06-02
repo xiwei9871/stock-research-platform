@@ -1,0 +1,529 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+SEVERITY_ORDER = {
+    "critical": 4,
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "info": 0,
+    "unknown": 0,
+}
+DATE_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+class OpenClawManifestError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class OpenClawExportItem:
+    item_id: str
+    artifact_id: str
+    report_type: str
+    title: str
+    summary: str
+    severity: str
+    requires_attention: bool
+    delivery_priority: int
+    tags: list[str] = field(default_factory=list)
+    source_paths: list[str] = field(default_factory=list)
+    evidence_paths: list[str] = field(default_factory=list)
+    run_card_path: str | None = None
+    recommended_action: str = ""
+    openclaw_route: str = ""
+    payload: dict[str, Any] = field(default_factory=dict)
+    recommended_channels: list[str] = field(default_factory=list)
+
+    @property
+    def action(self) -> str:
+        return self.recommended_action
+
+    @property
+    def route(self) -> str:
+        return self.openclaw_route
+
+
+@dataclass(frozen=True)
+class OpenClawExportResult:
+    manifest_path: str
+    item_count: int
+    items: list[OpenClawExportItem]
+    source_manifest_path: str = ""
+    export_id: str = ""
+    channel: str = "openclaw"
+    status: str = "dry_run"
+    trade_date: str = ""
+    generated_at: str = ""
+    output_dir: str = ""
+    openclaw_manifest_path: str = ""
+    openclaw_items_path: str = ""
+    openclaw_delivery_log_path: str = ""
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    log_path: str | None = None
+
+
+class OpenClawExportAdapter:
+    def load_local_manifest(self, manifest_path: str | Path) -> dict[str, Any]:
+        path = self._resolved_manifest_path(manifest_path)
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest not found: {path}") from exc
+        except json.JSONDecodeError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest is not valid JSON: {path}") from exc
+        except OSError as exc:
+            raise OpenClawManifestError(f"OpenClaw manifest is not readable: {path}") from exc
+
+    def select_openclaw_artifacts(
+        self,
+        manifest: dict[str, Any],
+        *,
+        include_all: bool = False,
+        min_severity: str = "info",
+        manifest_root: str | Path | None = None,
+    ) -> list[dict[str, Any]]:
+        selected, _, _ = self._select_openclaw_artifacts_with_diagnostics(
+            manifest,
+            include_all=include_all,
+            min_severity=min_severity,
+            manifest_root=manifest_root,
+        )
+        return selected
+
+    def _select_openclaw_artifacts_with_diagnostics(
+        self,
+        manifest: dict[str, Any],
+        *,
+        include_all: bool = False,
+        min_severity: str = "info",
+        manifest_root: str | Path | None = None,
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        artifacts = manifest.get("artifacts", [])
+        if not isinstance(artifacts, list):
+            warning = "invalid_artifacts_section:expected_list"
+            return [], [warning], [warning]
+
+        selected: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        errors: list[str] = []
+        severity_threshold = self._severity_rank(min_severity)
+        resolved_manifest_root = self._resolved_manifest_root(manifest_root)
+
+        for index, artifact in enumerate(artifacts):
+            if not isinstance(artifact, dict):
+                warnings.append(f"invalid_artifact_entry:index={index}:expected_dict")
+                continue
+
+            if not include_all:
+                recommended_channels = artifact.get("recommended_channels", [])
+                if not (isinstance(recommended_channels, list) and "openclaw" in recommended_channels):
+                    continue
+
+            severity = str(artifact.get("severity", "info"))
+            if self._severity_rank(severity) < severity_threshold:
+                continue
+
+            sanitized_artifact, artifact_warnings = self._sanitize_artifact(
+                artifact,
+                manifest_root=resolved_manifest_root,
+            )
+            if artifact_warnings:
+                warnings.extend(artifact_warnings)
+            if sanitized_artifact is None:
+                continue
+            selected.append(sanitized_artifact)
+
+        return selected, list(dict.fromkeys(warnings)), list(dict.fromkeys(errors))
+
+    def build_openclaw_item(
+        self,
+        artifact: dict[str, Any],
+        *,
+        manifest_root: str | Path | None = None,
+    ) -> OpenClawExportItem:
+        report_type = str(artifact.get("report_type", "generic_report"))
+        requires_attention = bool(artifact.get("requires_attention", False))
+        recommended_action = self._recommended_action_for(report_type)
+        openclaw_route = self._openclaw_route_for(report_type, requires_attention=requires_attention)
+        resolved_manifest_root = self._resolved_manifest_root(manifest_root)
+        source_paths = self._existing_paths(
+            [
+                artifact.get("markdown_path"),
+                artifact.get("json_path"),
+                *self._coerce_path_list(artifact.get("csv_paths")),
+                *self._metadata_paths(artifact.get("metadata"), "source_paths"),
+                self._metadata_path(artifact.get("metadata"), "source_path"),
+            ],
+            resolved_manifest_root,
+        )
+        evidence_paths = self._existing_paths(
+            [
+                artifact.get("evidence_dir"),
+                *self._metadata_paths(artifact.get("metadata"), "evidence_paths"),
+            ],
+            resolved_manifest_root,
+        )
+        run_card_path = self._existing_path(artifact.get("run_card_path"), resolved_manifest_root)
+        payload = {
+            "artifact_id": artifact.get("artifact_id", ""),
+            "report_type": report_type,
+            "title": artifact.get("title", ""),
+            "summary": artifact.get("summary", ""),
+            "severity": artifact.get("severity", "info"),
+            "requires_attention": requires_attention,
+            "delivery_priority": artifact.get("delivery_priority", 10),
+            "tags": list(artifact.get("tags", [])),
+            "source_paths": list(source_paths),
+            "evidence_paths": list(evidence_paths),
+            "run_card_path": run_card_path,
+            "metadata": artifact.get("metadata", {}),
+            "warnings": list(artifact.get("warnings", [])),
+            "recommended_action": recommended_action,
+            "openclaw_route": openclaw_route,
+            "route": openclaw_route,
+            "action": recommended_action,
+        }
+        return OpenClawExportItem(
+            item_id=f"openclaw:{artifact.get('artifact_id', '')}",
+            artifact_id=str(artifact.get("artifact_id", "")),
+            report_type=report_type,
+            title=str(artifact.get("title", "")),
+            summary=str(artifact.get("summary", "")),
+            severity=str(artifact.get("severity", "info")),
+            requires_attention=requires_attention,
+            delivery_priority=int(artifact.get("delivery_priority", 10)),
+            tags=list(artifact.get("tags", [])),
+            source_paths=list(source_paths),
+            evidence_paths=list(evidence_paths),
+            run_card_path=run_card_path,
+            recommended_action=recommended_action,
+            openclaw_route=openclaw_route,
+            payload=payload,
+            recommended_channels=list(artifact.get("recommended_channels", [])),
+        )
+
+    def export(
+        self,
+        manifest_path: str | Path,
+        *,
+        include_all: bool = False,
+        min_severity: str = "info",
+        dry_run: bool = True,
+        output_dir: str | Path | None = None,
+        log_path: str | Path | None = None,
+    ) -> OpenClawExportResult:
+        resolved_manifest_path = self._resolved_manifest_path(manifest_path)
+        manifest = self.load_local_manifest(resolved_manifest_path)
+        resolved_output_dir = self._resolved_output_dir(
+            output_dir=output_dir,
+            manifest_path=resolved_manifest_path,
+            trade_date=str(manifest.get("trade_date", "")),
+            log_path=log_path,
+        )
+        artifacts, warnings, errors = self._select_openclaw_artifacts_with_diagnostics(
+            manifest,
+            include_all=include_all,
+            min_severity=min_severity,
+            manifest_root=resolved_manifest_path.parent,
+        )
+        items = [
+            self.build_openclaw_item(artifact, manifest_root=resolved_manifest_path.parent)
+            for artifact in artifacts
+        ]
+        if not items and not warnings and not errors:
+            warnings.append("empty_match_set:no_openclaw_artifacts_selected")
+
+        export_id = self._export_id_for(
+            trade_date=str(manifest.get("trade_date", "")),
+            generated_at=str(manifest.get("generated_at", "")),
+            item_count=len(items),
+        )
+        openclaw_manifest_path = resolved_output_dir / "openclaw_manifest.json"
+        openclaw_items_path = resolved_output_dir / "openclaw_items.jsonl"
+        openclaw_delivery_log_path = (
+            Path(log_path)
+            if log_path is not None
+            else resolved_output_dir / "openclaw_delivery_log.jsonl"
+        )
+        result = OpenClawExportResult(
+            manifest_path=str(resolved_manifest_path),
+            source_manifest_path=str(resolved_manifest_path),
+            export_id=export_id,
+            item_count=len(items),
+            items=items,
+            status="dry_run" if dry_run else "completed",
+            trade_date=str(manifest.get("trade_date", "")),
+            generated_at=str(manifest.get("generated_at", "")),
+            output_dir=str(resolved_output_dir),
+            openclaw_manifest_path=str(openclaw_manifest_path),
+            openclaw_items_path=str(openclaw_items_path),
+            openclaw_delivery_log_path=str(openclaw_delivery_log_path),
+            warnings=list(dict.fromkeys(warnings)),
+            errors=list(dict.fromkeys(errors)),
+            log_path=str(openclaw_delivery_log_path),
+        )
+        self.write_openclaw_package(
+            openclaw_manifest_path=openclaw_manifest_path,
+            openclaw_items_path=openclaw_items_path,
+            openclaw_delivery_log_path=openclaw_delivery_log_path,
+            result=result,
+            source_manifest_path=resolved_manifest_path,
+            dry_run=dry_run,
+        )
+        return result
+
+    def write_openclaw_log(self, log_path: str | Path, result: OpenClawExportResult) -> None:
+        path = Path(log_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "export_id": result.export_id,
+            "generated_at": result.generated_at,
+            "channel": result.channel,
+            "status": result.status,
+            "trade_date": result.trade_date,
+            "item_count": result.item_count,
+            "openclaw_manifest_path": result.openclaw_manifest_path,
+            "openclaw_items_path": result.openclaw_items_path,
+            "openclaw_delivery_log_path": result.openclaw_delivery_log_path,
+            "error_message": "; ".join(dict.fromkeys(result.errors)) if result.errors else "",
+            "manifest_path": result.manifest_path,
+            "item_count": result.item_count,
+            "items": [asdict(item) for item in result.items],
+            "warnings": list(result.warnings),
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n")
+
+    def write_openclaw_package(
+        self,
+        *,
+        openclaw_manifest_path: Path,
+        openclaw_items_path: Path,
+        openclaw_delivery_log_path: Path,
+        result: OpenClawExportResult,
+        source_manifest_path: Path,
+        dry_run: bool,
+    ) -> None:
+        openclaw_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        openclaw_items_path.parent.mkdir(parents=True, exist_ok=True)
+        openclaw_delivery_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self._write_openclaw_manifest(
+            openclaw_manifest_path,
+            result=result,
+            source_manifest_path=source_manifest_path,
+            dry_run=dry_run,
+        )
+        self._write_openclaw_items(openclaw_items_path, result.items)
+        self.write_openclaw_log(openclaw_delivery_log_path, result)
+
+    def _write_openclaw_manifest(
+        self,
+        path: Path,
+        *,
+        result: OpenClawExportResult,
+        source_manifest_path: Path,
+        dry_run: bool,
+    ) -> None:
+        manifest = {
+            "generated_at": result.generated_at,
+            "trade_date": result.trade_date,
+            "channel": result.channel,
+            "dry_run": dry_run,
+            "source_manifest_path": str(source_manifest_path),
+            "item_count": result.item_count,
+            "items": [asdict(item) for item in result.items],
+            "warnings": list(result.warnings),
+            "errors": list(result.errors),
+        }
+        path.write_text(
+            json.dumps(manifest, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    def _write_openclaw_items(self, path: Path, items: list[OpenClawExportItem]) -> None:
+        lines = [json.dumps(asdict(item), ensure_ascii=True, sort_keys=True) for item in items]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+    def _sanitize_artifact(
+        self,
+        artifact: dict[str, Any],
+        *,
+        manifest_root: Path,
+    ) -> tuple[dict[str, Any] | None, list[str]]:
+        warnings: list[str] = []
+        sanitized = dict(artifact)
+
+        source_paths = self._sanitize_paths(
+            [
+                artifact.get("markdown_path"),
+                artifact.get("json_path"),
+                *self._coerce_path_list(artifact.get("csv_paths")),
+                *self._metadata_paths(artifact.get("metadata"), "source_paths"),
+                self._metadata_path(artifact.get("metadata"), "source_path"),
+            ],
+            warnings,
+            manifest_root,
+        )
+        evidence_paths = self._sanitize_paths(
+            [
+                artifact.get("evidence_dir"),
+                *self._metadata_paths(artifact.get("metadata"), "evidence_paths"),
+            ],
+            warnings,
+            manifest_root,
+        )
+        run_card_path = self._sanitize_path(artifact.get("run_card_path"), warnings, manifest_root)
+
+        sanitized["source_paths"] = source_paths
+        sanitized["evidence_paths"] = evidence_paths
+        if run_card_path is None:
+            sanitized.pop("run_card_path", None)
+        else:
+            sanitized["run_card_path"] = run_card_path
+
+        if not source_paths and not evidence_paths and run_card_path is None:
+            return None, warnings
+
+        return sanitized, warnings
+
+    def _sanitize_paths(
+        self,
+        values: list[Any],
+        warnings: list[str],
+        manifest_root: Path,
+    ) -> list[str]:
+        sanitized: list[str] = []
+        for value in values:
+            path = self._sanitize_path(value, warnings, manifest_root)
+            if path is not None and path not in sanitized:
+                sanitized.append(path)
+        return sanitized
+
+    def _sanitize_path(self, value: Any, warnings: list[str], manifest_root: Path) -> str | None:
+        if value in (None, ""):
+            return None
+        path = self._resolve_manifest_path(value, manifest_root)
+        if path.exists():
+            return str(path)
+        warnings.append(f"missing_source_path:{path}")
+        return None
+
+    def _existing_paths(self, values: list[Any], manifest_root: Path) -> list[str]:
+        paths: list[str] = []
+        for value in values:
+            if value in (None, ""):
+                continue
+            path = self._resolve_manifest_path(value, manifest_root)
+            if path.exists():
+                rendered = str(path)
+                if rendered not in paths:
+                    paths.append(rendered)
+        return paths
+
+    def _existing_path(self, value: Any, manifest_root: Path) -> str | None:
+        if value in (None, ""):
+            return None
+        path = self._resolve_manifest_path(value, manifest_root)
+        if path.exists():
+            return str(path)
+        return None
+
+    def _coerce_path_list(self, value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value if item not in (None, "")]
+        return []
+
+    def _metadata_paths(self, metadata: Any, key: str) -> list[str]:
+        if not isinstance(metadata, dict):
+            return []
+        value = metadata.get(key)
+        if isinstance(value, list):
+            return [str(item) for item in value if item not in (None, "")]
+        return []
+
+    def _metadata_path(self, metadata: Any, key: str) -> Any:
+        if not isinstance(metadata, dict):
+            return None
+        value = metadata.get(key)
+        return value if value not in (None, "") else None
+
+    def _recommended_action_for(self, report_type: str) -> str:
+        if report_type == "run_card_bundle":
+            return "review_evidence"
+        if report_type == "daily_topn_report":
+            return "review_topn_candidates"
+        if report_type == "watchlist_report":
+            return "review_watchlist"
+        if report_type == "must_watch_report":
+            return "review_must_watch"
+        if report_type == "risk_alert_report":
+            return "review_risk_alert"
+        if report_type == "factor_eval_report":
+            return "review_factor_eval"
+        if report_type == "backtest_report":
+            return "review_backtest"
+        return "review_report"
+
+    def _openclaw_route_for(self, report_type: str, *, requires_attention: bool) -> str:
+        if requires_attention:
+            return "research_alert"
+        if report_type == "run_card_bundle":
+            return "evidence_review"
+        if report_type in {"daily_topn_report", "watchlist_report", "must_watch_report"}:
+            return "daily_research"
+        if report_type in {"factor_eval_report", "backtest_report"}:
+            return "research_validation"
+        if report_type == "risk_alert_report":
+            return "research_alert"
+        return "research_inbox"
+
+    def _severity_rank(self, severity: str) -> int:
+        return SEVERITY_ORDER.get(str(severity).lower(), 0)
+
+    def _resolved_manifest_root(self, manifest_root: str | Path | None) -> Path:
+        if manifest_root is None:
+            return Path.cwd()
+        return Path(manifest_root).resolve()
+
+    def _resolved_output_dir(
+        self,
+        *,
+        output_dir: str | Path | None,
+        manifest_path: Path,
+        trade_date: str,
+        log_path: str | Path | None,
+    ) -> Path:
+        if output_dir is not None:
+            return Path(output_dir).resolve()
+        if log_path is not None:
+            return Path(log_path).resolve().parent
+        date_part = trade_date or "unknown-date"
+        base_dir = (
+            manifest_path.parent.parent
+            if DATE_DIR_RE.fullmatch(manifest_path.parent.name)
+            else manifest_path.parent
+        )
+        return (base_dir / "openclaw" / date_part).resolve()
+
+    def _export_id_for(self, *, trade_date: str, generated_at: str, item_count: int) -> str:
+        return f"openclaw:{trade_date or 'unknown'}:{generated_at or 'unknown'}:{item_count}"
+
+    def _resolve_manifest_path(self, value: Any, manifest_root: Path) -> Path:
+        path = Path(value)
+        if path.is_absolute():
+            return path
+        return (manifest_root / path).resolve()
+
+    def _resolved_manifest_path(self, manifest_path: str | Path) -> Path:
+        path = Path(manifest_path)
+        if path.is_dir():
+            return path / "manifest.json"
+        return path

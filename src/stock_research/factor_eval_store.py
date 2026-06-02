@@ -5,6 +5,20 @@ import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.factor_registry import factor_metadata_frame
+
+
+def _normalize_factor_eval_numeric_columns(
+    frame: pd.DataFrame,
+    columns: list[str],
+) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    result = frame.copy()
+    for column in columns:
+        if column in result.columns:
+            result[column] = pd.to_numeric(result[column], errors="coerce")
+    return result
 
 
 def load_factor_eval_inputs(
@@ -46,10 +60,15 @@ def load_factor_eval_inputs(
             return_sql,
             [label_set, label_version, horizon, start_date, end_date],
         )
+    factors = _normalize_factor_eval_numeric_columns(
+        pd.DataFrame(factor_rows),
+        ["factor_value"],
+    )
     returns = pd.DataFrame(return_rows)
     if not returns.empty:
         returns = returns.rename(columns={"forward_return": return_col})
-    return pd.DataFrame(factor_rows), returns
+        returns = _normalize_factor_eval_numeric_columns(returns, [return_col])
+    return factors, returns
 
 
 def load_multi_horizon_factor_eval_inputs(
@@ -95,10 +114,14 @@ def load_multi_horizon_factor_eval_inputs(
             [label_set, label_version, horizons, start_date, end_date],
         )
 
+    factors = _normalize_factor_eval_numeric_columns(
+        pd.DataFrame(factor_rows),
+        ["factor_value"],
+    )
     returns_long = pd.DataFrame(return_rows)
     if returns_long.empty:
         columns = ["trade_date", "asset_id", *[f"forward_return_{horizon}d" for horizon in horizons]]
-        return pd.DataFrame(factor_rows), pd.DataFrame(columns=columns)
+        return factors, pd.DataFrame(columns=columns)
 
     returns = (
         returns_long.pivot_table(
@@ -112,7 +135,11 @@ def load_multi_horizon_factor_eval_inputs(
         .sort_values(["trade_date", "asset_id"])
         .reset_index(drop=True)
     )
-    return pd.DataFrame(factor_rows), returns
+    returns = _normalize_factor_eval_numeric_columns(
+        returns,
+        [f"forward_return_{int(horizon)}d" for horizon in horizons],
+    )
+    return factors, returns
 
 
 def store_factor_eval_run(
@@ -194,3 +221,9 @@ def store_factor_approval(
     with connect(service) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
+
+
+def load_factor_eval_metadata_frame(
+    factor_names: list[str] | tuple[str, ...] | None = None,
+) -> pd.DataFrame:
+    return factor_metadata_frame(factor_names)

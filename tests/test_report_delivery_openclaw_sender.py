@@ -1,0 +1,1645 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import urllib.error
+
+import pytest
+
+import stock_research.report_delivery_openclaw_sender as report_delivery_openclaw_sender
+
+
+def _write_export(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 1,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    }
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        json.dumps(
+            {
+                "item_id": "openclaw:1",
+                "artifact_id": "daily_topn_report:2026-05-20:abc",
+                "report_type": "daily_topn_report",
+                "title": "Daily TopN",
+                "summary": "Daily TopN summary",
+                "severity": "info",
+                "requires_attention": False,
+                "delivery_priority": 10,
+                "tags": ["daily", "topn"],
+                "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                "evidence_paths": [],
+                "run_card_path": None,
+                "recommended_action": "review_topn_candidates",
+                "openclaw_route": "daily_research",
+                "payload": {"title": "Daily TopN"},
+            },
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_export_with_multiple_items(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 3,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "openclaw_route": "research_validation",
+                        "severity": "high",
+                    },
+                    {
+                        "item_id": "openclaw:3",
+                        "artifact_id": "risk_alert_report:2026-05-20:ghi",
+                        "report_type": "risk_alert_report",
+                        "openclaw_route": "research_alert",
+                        "severity": "critical",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "title": "Factor Eval",
+                        "summary": "Factor eval summary",
+                        "severity": "high",
+                        "requires_attention": False,
+                        "delivery_priority": 20,
+                        "tags": ["factor", "eval"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/factor.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_factor_eval",
+                        "openclaw_route": "research_validation",
+                        "payload": {"title": "Factor Eval"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:3",
+                        "artifact_id": "risk_alert_report:2026-05-20:ghi",
+                        "report_type": "risk_alert_report",
+                        "title": "Risk Alert",
+                        "summary": "Risk alert summary",
+                        "severity": "critical",
+                        "requires_attention": True,
+                        "delivery_priority": 30,
+                        "tags": ["risk", "alert"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/risk.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_risk_alert",
+                        "openclaw_route": "research_alert",
+                        "payload": {"title": "Risk Alert"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_export_with_multiple_deliverable_items(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 2,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "low",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "title": "Factor Eval",
+                        "summary": "Factor eval summary",
+                        "severity": "low",
+                        "requires_attention": False,
+                        "delivery_priority": 20,
+                        "tags": ["factor", "eval"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/factor.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_factor_eval",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Factor Eval"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_mismatched_export_bundle(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 2,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:3",
+                        "artifact_id": "risk_alert_report:2026-05-20:ghi",
+                        "report_type": "risk_alert_report",
+                        "title": "Risk Alert",
+                        "summary": "Risk alert summary",
+                        "severity": "critical",
+                        "requires_attention": True,
+                        "delivery_priority": 30,
+                        "tags": ["risk", "alert"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/risk.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_risk_alert",
+                        "openclaw_route": "research_alert",
+                        "payload": {"title": "Risk Alert"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_count_mismatched_export_bundle(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 1,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "factor_eval_report:2026-05-20:def",
+                        "report_type": "factor_eval_report",
+                        "title": "Factor Eval",
+                        "summary": "Factor eval summary",
+                        "severity": "high",
+                        "requires_attention": False,
+                        "delivery_priority": 20,
+                        "tags": ["factor", "eval"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/factor.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_factor_eval",
+                        "openclaw_route": "research_validation",
+                        "payload": {"title": "Factor Eval"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_export_with_unknown_severity_item(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 1,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "generic_report:2026-05-20:xyz",
+                        "report_type": "generic_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "mystery",
+                    }
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        json.dumps(
+            {
+                "item_id": "openclaw:1",
+                "artifact_id": "generic_report:2026-05-20:xyz",
+                "report_type": "generic_report",
+                "title": "Generic Report",
+                "summary": "Generic summary",
+                "severity": "mystery",
+                "requires_attention": False,
+                "delivery_priority": 10,
+                "tags": ["generic"],
+                "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/generic.md"],
+                "evidence_paths": [],
+                "run_card_path": None,
+                "recommended_action": "review_report",
+                "openclaw_route": "daily_research",
+                "payload": {"title": "Generic Report"},
+            },
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+def _write_export_with_mixed_severity_items(tmp_path: Path) -> tuple[Path, Path]:
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 2,
+                "items": [
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "info",
+                    },
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "generic_report:2026-05-20:xyz",
+                        "report_type": "generic_report",
+                        "openclaw_route": "daily_research",
+                        "severity": "mystery",
+                    },
+                ],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "openclaw:1",
+                        "artifact_id": "daily_topn_report:2026-05-20:abc",
+                        "report_type": "daily_topn_report",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["daily", "topn"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_topn_candidates",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Daily TopN"},
+                    },
+                    ensure_ascii=True,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "openclaw:2",
+                        "artifact_id": "generic_report:2026-05-20:xyz",
+                        "report_type": "generic_report",
+                        "title": "Generic Report",
+                        "summary": "Generic summary",
+                        "severity": "mystery",
+                        "requires_attention": False,
+                        "delivery_priority": 10,
+                        "tags": ["generic"],
+                        "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/generic.md"],
+                        "evidence_paths": [],
+                        "run_card_path": None,
+                        "recommended_action": "review_report",
+                        "openclaw_route": "daily_research",
+                        "payload": {"title": "Generic Report"},
+                    },
+                    ensure_ascii=True,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path, items_path
+
+
+class _FailingNonDryTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+        self.calls += 1
+        raise AssertionError("dry_run sender must not invoke non-dry transport")
+
+
+class _EndpointEchoFailingTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(
+        self,
+        payload: dict[str, object],
+        config: report_delivery_openclaw_sender.OpenClawSendConfig,
+    ) -> dict[str, object]:
+        self.calls += 1
+        raise RuntimeError(f"transport failed for {config.endpoint} while calling OpenClaw")
+
+
+class _FlakyTransport:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("temporary transport failure")
+        item_results = [
+            {
+                "item_id": str(item.get("item_id", "")),
+                "status": "sent",
+            }
+            for item in payload.get("items", [])
+            if isinstance(item, dict)
+        ]
+        return {
+            "status": "sent",
+            "dry_run": False,
+            "sent_count": len(item_results),
+            "failed_count": 0,
+            "skipped_count": 0,
+            "warnings": [],
+            "errors": [],
+            "item_results": item_results,
+            "payload": payload,
+        }
+
+
+def test_openclaw_sender_dry_run_writes_preview_and_log(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.dry_run is True
+    assert result.item_count == 1
+    assert result.sent_count == 0
+    assert result.failed_count == 0
+    assert result.skipped_count == 0
+    assert Path(result.preview_path).exists()
+    assert Path(result.send_log_path).exists()
+    preview_record = json.loads(Path(result.preview_path).read_text(encoding="utf-8"))
+    assert preview_record["source_manifest_path"] == str(manifest_path)
+
+
+def test_preview_does_not_retain_raw_endpoint_string(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    endpoint = "https://tenant-123.openclaw.example.test/send?secret=abc"
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=endpoint,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    preview_text = Path(result.preview_path).read_text(encoding="utf-8")
+    preview_record = json.loads(preview_text)
+
+    assert preview_record["endpoint_host"] == "tenant-123.openclaw.example.test"
+    assert "endpoint" not in preview_record
+    assert endpoint not in preview_text
+
+
+def test_openclaw_sender_dry_run_does_not_invoke_non_dry_transport(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    transport = _FailingNonDryTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.dry_run is True
+    assert transport.calls == 0
+
+
+def test_fake_transport_can_simulate_success() -> None:
+    transport = report_delivery_openclaw_sender.FakeOpenClawTransport()
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir="/tmp/openclaw-send",
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    result = transport.send(
+        {
+            "items": [
+                {
+                    "item_id": "openclaw:1",
+                    "payload": {
+                        "openclaw_transport_result": "success",
+                    },
+                }
+            ]
+        },
+        config,
+    )
+
+    assert result["status"] == "sent"
+    assert result["sent_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["item_results"] == [{"item_id": "openclaw:1", "status": "sent"}]
+
+
+def test_fake_transport_can_simulate_partial_failure() -> None:
+    transport = report_delivery_openclaw_sender.FakeOpenClawTransport()
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir="/tmp/openclaw-send",
+        limit=2,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    result = transport.send(
+        {
+            "items": [
+                {
+                    "item_id": "openclaw:1",
+                    "payload": {
+                        "openclaw_transport_result": "success",
+                    },
+                },
+                {
+                    "item_id": "openclaw:2",
+                    "payload": {
+                        "openclaw_transport_result": "failure",
+                        "openclaw_transport_error": "simulated transport failure",
+                    },
+                },
+            ]
+        },
+        config,
+    )
+
+    assert result["status"] == "partial_failure"
+    assert result["sent_count"] == 1
+    assert result["failed_count"] == 1
+    assert result["item_results"] == [
+        {"item_id": "openclaw:1", "status": "sent"},
+        {
+            "item_id": "openclaw:2",
+            "status": "failed",
+            "error": "simulated transport failure",
+        },
+    ]
+
+
+def test_send_log_excludes_token_and_auth_headers(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="super-secret-token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    send_log_text = Path(result.send_log_path).read_text(encoding="utf-8")
+    send_log_records = [json.loads(line) for line in send_log_text.splitlines() if line.strip()]
+
+    assert send_log_records[0]["endpoint_host"] == "openclaw.example.test"
+    assert "endpoint" not in send_log_records[0]
+    assert "super-secret-token" not in send_log_text
+    assert "Authorization" not in send_log_text
+    assert send_log_records[0]["source_manifest_path"] == str(manifest_path)
+    assert "outputs/report_delivery/2026-05-20/manifest.json" not in send_log_text
+
+
+def test_live_send_redacts_endpoint_from_errors_and_log_output(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    endpoint = "https://tenant-123.openclaw.example.test/send?secret=abc"
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=endpoint,
+        token="super-secret-token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+    transport = _EndpointEchoFailingTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    send_log_text = Path(result.send_log_path).read_text(encoding="utf-8")
+    send_log_records = [json.loads(line) for line in send_log_text.splitlines() if line.strip()]
+
+    assert transport.calls == 1
+    assert endpoint not in result.errors[0]
+    assert "tenant-123.openclaw.example.test" in result.errors[0]
+    assert endpoint not in send_log_text
+    assert send_log_records[0]["error"] == "transport failed for tenant-123.openclaw.example.test while calling OpenClaw"
+    assert send_log_records[0]["error_context"] == send_log_records[0]["error"]
+    assert send_log_records[1]["error"] == "transport failed for tenant-123.openclaw.example.test while calling OpenClaw"
+    assert send_log_records[1]["error_context"] == send_log_records[1]["error"]
+
+
+def test_write_send_log_appends_records(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    send_log_path = tmp_path / "send_log.jsonl"
+
+    sender.write_send_log(send_log_path, [{"send_id": "first", "status": "sent"}])
+    sender.write_send_log(send_log_path, [{"send_id": "second", "status": "failed"}])
+
+    send_log_records = [
+        json.loads(line)
+        for line in send_log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert send_log_records == [
+        {"send_id": "first", "status": "sent"},
+        {"send_id": "second", "status": "failed"},
+    ]
+
+
+def test_live_send_retries_and_honors_backoff(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    sleep_calls: list[float] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr(report_delivery_openclaw_sender.time, "sleep", _fake_sleep)
+
+    transport = _FlakyTransport()
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=transport)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=1,
+        retry_backoff_seconds=2.5,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert transport.calls == 2
+    assert sleep_calls == [2.5]
+    assert result.status == "sent"
+    assert result.sent_count == 1
+    assert result.failed_count == 0
+
+
+def test_non_dry_run_sender_writes_preview_and_log_when_transport_raises(
+    tmp_path: Path,
+) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    class _FailingTransport:
+        def send(self, payload: dict[str, object], config: object) -> dict[str, object]:
+            raise RuntimeError("simulated transport failure")
+
+    sender = report_delivery_openclaw_sender.OpenClawSender(transport=_FailingTransport())
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "failed"
+    assert result.failed_count == 1
+    assert Path(result.preview_path).exists()
+    assert Path(result.send_log_path).exists()
+
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert send_log_records[0]["status"] == "failed"
+    assert send_log_records[0]["error"] == "simulated transport failure"
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["status"] == "failed"
+    assert send_log_records[1]["error"] == "simulated transport failure"
+
+
+def test_partial_failure_send_log_preserves_per_item_outcomes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path, items_path = _write_export_with_multiple_items(tmp_path)
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    original_load_export = sender.load_export
+
+    def _load_export_with_partial_failure(
+        manifest_path: str | Path, items_path: str | Path
+    ) -> dict[str, object]:
+        export_data = original_load_export(manifest_path, items_path)
+        export_items = export_data["items"]
+        export_items[1]["payload"]["openclaw_transport_result"] = "failure"
+        export_items[1]["payload"]["openclaw_transport_error"] = "simulated transport failure"
+        return export_data
+
+    monkeypatch.setattr(sender, "load_export", _load_export_with_partial_failure)
+    monkeypatch.setattr(sender, "_validate_live_send_config", lambda config: None)
+    monkeypatch.setattr(sender, "_validate_live_send_items", lambda items: None)
+
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["daily_research", "research_validation", "research_alert"],
+        severity_max="critical",
+        test_mode=True,
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "partial_failure"
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert send_log_records[0]["status"] == "partial_failure"
+    assert send_log_records[0]["failed_count"] == 1
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["artifact_id"] == "daily_topn_report:2026-05-20:abc"
+    assert send_log_records[1]["report_type"] == "daily_topn_report"
+    assert send_log_records[1]["openclaw_route"] == "daily_research"
+    assert send_log_records[1]["status"] == "sent"
+    assert send_log_records[2]["item_id"] == "openclaw:2"
+    assert send_log_records[2]["artifact_id"] == "factor_eval_report:2026-05-20:def"
+    assert send_log_records[2]["report_type"] == "factor_eval_report"
+    assert send_log_records[2]["openclaw_route"] == "research_validation"
+    assert send_log_records[2]["status"] == "failed"
+    assert send_log_records[2]["error"] == "simulated transport failure"
+    assert send_log_records[3]["item_id"] == "openclaw:3"
+    assert send_log_records[3]["artifact_id"] == "risk_alert_report:2026-05-20:ghi"
+    assert send_log_records[3]["report_type"] == "risk_alert_report"
+    assert send_log_records[3]["openclaw_route"] == "research_alert"
+    assert send_log_records[3]["status"] == "sent"
+
+
+def test_live_send_with_zero_deliverable_items_fails_clearly(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["research_validation"],
+        severity_max="info",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="at least one deliverable item after filtering"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
+
+
+def test_dry_run_transport_never_accesses_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fail_network_access(*args: object, **kwargs: object) -> None:
+        raise AssertionError("dry-run transport must not access the network")
+
+    monkeypatch.setattr("socket.create_connection", _fail_network_access)
+
+    transport = report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir="/tmp/openclaw-send",
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+
+    result = transport.send({"items": []}, config)
+
+    assert result["dry_run"] is True
+    assert result["status"] == "dry_run"
+
+
+def test_http_transport_builds_request_and_accepts_http_2xx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeResponse:
+        status = 202
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeResponse:
+        captured["url"] = getattr(request, "full_url", None)
+        captured["method"] = getattr(request, "method", None)
+        captured["headers"] = dict(getattr(request, "header_items", lambda: [])())
+        captured["data"] = getattr(request, "data", None)
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr(report_delivery_openclaw_sender, "urlopen", _fake_urlopen)
+
+    transport = report_delivery_openclaw_sender.HttpOpenClawTransport()
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="secret-token",
+        timeout_seconds=12.5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir="/tmp/openclaw-send",
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+
+    result = transport.send(
+        {
+            "items": [
+                {
+                    "item_id": "openclaw:1",
+                    "artifact_id": "daily_topn_report:2026-05-20:abc",
+                    "report_type": "daily_topn_report",
+                    "openclaw_route": "daily_research",
+                    "route": "daily_research",
+                    "action": "review_topn_candidates",
+                    "title": "Daily TopN",
+                    "summary": "Daily TopN summary",
+                    "severity": "info",
+                    "tags": ["daily", "topn"],
+                    "payload": {
+                        "route": "daily_research",
+                        "action": "review_topn_candidates",
+                        "title": "Daily TopN",
+                        "summary": "Daily TopN summary",
+                        "severity": "info",
+                        "tags": ["daily", "topn"],
+                        "openclaw_transport_result": "failure",
+                        "openclaw_transport_error": "simulated transport failure",
+                    },
+                }
+            ],
+        },
+        config,
+    )
+
+    assert captured["url"] == "https://openclaw.example.test/send"
+    assert captured["method"] == "POST"
+    assert captured["timeout"] == 12.5
+    headers = {str(key).lower(): str(value) for key, value in dict(captured["headers"]).items()}
+    assert headers["authorization"] == "Bearer secret-token"
+    body = json.loads(bytes(captured["data"]).decode("utf-8"))
+    assert body == {
+        "route": "daily_research",
+        "action": "review_topn_candidates",
+        "title": "Daily TopN",
+        "summary": "Daily TopN summary",
+        "severity": "info",
+        "tags": ["daily", "topn"],
+        "payload": {
+            "route": "daily_research",
+            "action": "review_topn_candidates",
+            "title": "Daily TopN",
+            "summary": "Daily TopN summary",
+            "severity": "info",
+            "tags": ["daily", "topn"],
+            "metadata": {
+                "source": "stock_research_openclaw_smoke_test",
+                "test_mode": True,
+            },
+        },
+    }
+    assert "openclaw_transport_result" not in body["payload"]
+    assert "openclaw_transport_error" not in body["payload"]
+    assert "item_count" not in body
+    assert "source_manifest_path" not in body
+    assert captured["closed"] is True
+    assert result["status"] == "sent"
+    assert result["dry_run"] is False
+    assert result["sent_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["skipped_count"] == 0
+    assert result["item_results"] == [{"item_id": "openclaw:1", "status": "sent"}]
+
+
+def test_openclaw_sender_load_export_rejects_mismatched_bundle(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    manifest_path, items_path = _write_mismatched_export_bundle(tmp_path)
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="export bundle mismatch",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+
+def test_openclaw_sender_load_export_rejects_item_count_mismatch(tmp_path: Path) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    manifest_path, items_path = _write_count_mismatched_export_bundle(tmp_path)
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match=r"manifest item_count=1, items jsonl entries=2",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+
+def test_openclaw_sender_load_export_rejects_empty_manifest_items_with_jsonl_items(
+    tmp_path: Path,
+) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-05-21T09:00:00Z",
+                "trade_date": "2026-05-20",
+                "channel": "openclaw",
+                "dry_run": True,
+                "source_manifest_path": "outputs/report_delivery/2026-05-20/manifest.json",
+                "item_count": 1,
+                "items": [],
+                "warnings": [],
+                "errors": [],
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    items_path.write_text(
+        json.dumps(
+            {
+                "item_id": "openclaw:1",
+                "artifact_id": "daily_topn_report:2026-05-20:abc",
+                "report_type": "daily_topn_report",
+                "title": "Daily TopN",
+                "summary": "Daily TopN summary",
+                "severity": "info",
+                "requires_attention": False,
+                "delivery_priority": 10,
+                "tags": ["daily", "topn"],
+                "source_paths": ["outputs/report_delivery/2026-05-20/artifacts/topn.md"],
+                "evidence_paths": [],
+                "run_card_path": None,
+                "recommended_action": "review_topn_candidates",
+                "openclaw_route": "daily_research",
+                "payload": {"title": "Daily TopN"},
+            },
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match=r"manifest item_count=1, manifest items=0",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+
+def test_openclaw_sender_load_export_rejects_missing_or_malformed_inputs(
+    tmp_path: Path,
+) -> None:
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+    missing_manifest = tmp_path / "missing_openclaw_manifest.json"
+    missing_items = tmp_path / "missing_openclaw_items.jsonl"
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="OpenClaw sender manifest not found",
+    ):
+        sender.load_export(missing_manifest, missing_items)
+
+    manifest_path = tmp_path / "openclaw_manifest.json"
+    items_path = tmp_path / "openclaw_items.jsonl"
+    manifest_path.write_text("{not-json}\n", encoding="utf-8")
+    items_path.write_text("not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="OpenClaw sender manifest is not valid JSON",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+    manifest_path.write_text(json.dumps({"trade_date": "2026-05-21"}, ensure_ascii=True) + "\n", encoding="utf-8")
+    items_path.write_text("[1]\n", encoding="utf-8")
+
+    with pytest.raises(
+        report_delivery_openclaw_sender.OpenClawSendInputError,
+        match="must contain JSON objects",
+    ):
+        sender.load_export(manifest_path, items_path)
+
+
+def test_openclaw_sender_no_dry_run_without_endpoint_fails_clearly(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.HttpOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="endpoint is required when dry_run is False"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
+
+
+def test_live_send_requires_allow_live_send(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=False,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.HttpOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="allow_live_send"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
+
+
+def test_live_send_requires_limit_one(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=2,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.HttpOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="limit == 1"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
+
+
+def test_live_send_bounded_by_limit_one_even_with_multiple_deliverable_items(
+    tmp_path: Path,
+) -> None:
+    manifest_path, items_path = _write_export_with_multiple_deliverable_items(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max="low",
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    result = sender.send_batch(
+        manifest_path=manifest_path,
+        items_path=items_path,
+        config=config,
+    )
+
+    assert result.status == "sent"
+    assert result.item_count == 1
+    assert result.sent_count == 1
+    send_log_records = [
+        json.loads(line)
+        for line in Path(result.send_log_path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert send_log_records[1]["item_id"] == "openclaw:1"
+    assert send_log_records[1]["status"] == "sent"
+
+
+@pytest.mark.parametrize("severity_max", ["medium", "high", "critical"])
+def test_live_send_rejects_severity_max_outside_low_risk_envelope(
+    tmp_path: Path, severity_max: str
+) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint="https://openclaw.example.test/send",
+        token="token",
+        timeout_seconds=5,
+        dry_run=False,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=True,
+        route_allowlist=["daily_research"],
+        severity_max=severity_max,
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.FakeOpenClawTransport()
+    )
+
+    with pytest.raises(ValueError, match="low-risk smoke-test envelope"):
+        sender.send_batch(
+            manifest_path=manifest_path,
+            items_path=items_path,
+            config=config,
+        )
+
+
+def test_route_allowlist_filters_items(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export_with_multiple_items(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["research_validation"],
+        severity_max="critical",
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 1
+    assert [item["openclaw_route"] for item in payload["items"]] == ["research_validation"]
+
+
+def test_severity_max_filters_items(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export_with_multiple_items(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["daily_research", "research_validation", "research_alert"],
+        severity_max="medium",
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 1
+    assert [item["severity"] for item in payload["items"]] == ["info"]
+
+
+def test_build_send_payload_excludes_unknown_severity_items_under_cap(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export_with_mixed_severity_items(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 1
+    assert [item["severity"] for item in payload["items"]] == ["info"]
+
+
+def test_test_mode_marks_payload_metadata(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=None,
+        allow_live_send=False,
+        route_allowlist=[],
+        severity_max=None,
+        test_mode=True,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["payload"]["metadata"] == {
+        "source": "stock_research_openclaw_smoke_test",
+        "test_mode": True,
+    }
+    assert payload["items"][0]["payload"]["metadata"] == {
+        "source": "stock_research_openclaw_smoke_test",
+        "test_mode": True,
+    }
+
+
+def test_live_send_rejects_unknown_severity_item(tmp_path: Path) -> None:
+    manifest_path, items_path = _write_export_with_unknown_severity_item(tmp_path)
+    config = report_delivery_openclaw_sender.OpenClawSendConfig(
+        endpoint=None,
+        token=None,
+        timeout_seconds=5,
+        dry_run=True,
+        retry_count=0,
+        retry_backoff_seconds=0,
+        outbox_dir=str(tmp_path / "send"),
+        limit=1,
+        allow_live_send=False,
+        route_allowlist=["daily_research"],
+        severity_max="info",
+        test_mode=False,
+    )
+    sender = report_delivery_openclaw_sender.OpenClawSender(
+        transport=report_delivery_openclaw_sender.DryRunOpenClawTransport()
+    )
+
+    payload = sender.build_send_payload(sender.load_export(manifest_path, items_path), config)
+
+    assert payload["item_count"] == 0
+    assert payload["items"] == []

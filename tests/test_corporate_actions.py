@@ -69,6 +69,7 @@ def test_build_corporate_actions_from_factors_detects_factor_changes(monkeypatch
         start_date="2024-05-27",
         end_date="2024-05-31",
         source_version="derived_actions_v1",
+        factor_source_version="derived_factors_v1",
     )
 
     sql, params = conn.executed[0]
@@ -82,7 +83,7 @@ def test_build_corporate_actions_from_factors_detects_factor_changes(monkeypatch
     assert "ON CONFLICT (asset_id, event_date, action_type, source_version) DO UPDATE" in sql
     assert params == [
         "derived_actions_v1",
-        "derived_actions_v1",
+        "derived_factors_v1",
         "2024-05-27",
         "2024-05-31",
     ]
@@ -112,6 +113,7 @@ def test_service_wrappers_open_connection(monkeypatch):
     corporate_actions.build_corporate_actions_from_factors_for_service(
         end_date="2024-05-31",
         source_version="actions_v1",
+        factor_source_version="factors_v1",
         service="research",
     )
 
@@ -132,6 +134,7 @@ def test_service_wrappers_open_connection(monkeypatch):
                 "start_date": None,
                 "end_date": "2024-05-31",
                 "source_version": "actions_v1",
+                "factor_source_version": "factors_v1",
             },
         ),
     ]
