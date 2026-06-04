@@ -135,3 +135,38 @@ def test_build_tech_bottleneck_packets_scores_and_states() -> None:
     assert weak["evidence_score"] == 1.0
     assert weak["candidate_state"] == "reject"
     assert len(weak["evidence_items"]) == 1
+
+
+def test_render_tech_bottleneck_markdown_includes_review_and_evidence() -> None:
+    packets = build_tech_bottleneck_packets(
+        candidates=_candidate_frame(),
+        evidence=_evidence_frame(),
+        run_id="tech-bottleneck-2026-06-05",
+    )
+    packet = packets.set_index("asset_id").loc["CN:SH:688001"].to_dict()
+
+    markdown = render_tech_bottleneck_markdown(packet)
+
+    assert "# 示例光电 tech-bottleneck-discovery Packet" in markdown
+    assert "State: `conviction_candidate`" in markdown
+    assert "## Evidence" in markdown
+    assert "[tier1] 公司披露关键材料客户验证和扩产计划。" in markdown
+    assert "Decision: `pending_review`" in markdown
+
+
+def test_write_tech_bottleneck_artifacts_writes_json_csv_markdown(tmp_path: Path) -> None:
+    packets = build_tech_bottleneck_packets(
+        candidates=_candidate_frame(),
+        evidence=_evidence_frame(),
+        run_id="tech-bottleneck-2026-06-05",
+    )
+
+    paths = write_tech_bottleneck_artifacts(packets=packets, output_dir=tmp_path)
+
+    assert paths["json"].exists()
+    assert paths["csv"].exists()
+    assert paths["summary"].exists()
+    assert (tmp_path / "CN_SH_688001.md").exists()
+    payload = json.loads(paths["json"].read_text(encoding="utf-8"))
+    assert payload[0]["run_id"] == "tech-bottleneck-2026-06-05"
+    assert "tech-bottleneck-discovery Summary" in paths["summary"].read_text(encoding="utf-8")
