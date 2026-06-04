@@ -48,6 +48,14 @@ def test_payload_hash_is_stable_for_dict_key_order():
     assert len(left) == 64
 
 
+def test_payload_hash_normalizes_missing_and_numpy_scalar_values():
+    import numpy as np
+
+    assert payload_hash({"x": None}) == payload_hash({"x": np.nan})
+    assert payload_hash({"x": pd.NA}) == payload_hash({"x": pd.NaT})
+    assert payload_hash({"x": np.int64(1)}) == payload_hash({"x": 1})
+
+
 def test_build_event_id_is_deterministic():
     assert build_event_id("repurchase", ["600000.SH", "2025-01-02", "plan"]) == build_event_id(
         "repurchase", ["600000.SH", "2025-01-02", "plan"]
@@ -128,6 +136,25 @@ def test_normalize_top_holder_rows_supports_float_holder_flag():
     assert frame.iloc[0]["holder_name"] == "中央汇金资产管理有限责任公司"
 
 
+def test_holder_normalizers_filter_invalid_rows_and_empty_frames():
+    empty_shareholders = normalize_shareholder_count_rows(pd.DataFrame(), endpoint="x")
+    empty_holders = normalize_top_holder_rows(pd.DataFrame(), endpoint="x")
+    assert empty_shareholders.empty
+    assert empty_holders.empty
+
+    invalid_shareholders = normalize_shareholder_count_rows(
+        pd.DataFrame([{"代码": "bad", "截止日期": "2025-03-31"}]),
+        endpoint="x",
+    )
+    invalid_holders = normalize_top_holder_rows(
+        pd.DataFrame([{"代码": "000001", "报告期": "2025-03-31", "股东名称": ""}]),
+        endpoint="x",
+    )
+
+    assert invalid_shareholders.empty
+    assert invalid_holders.empty
+
+
 def test_holder_upserts_use_expected_tables(monkeypatch):
     calls = []
 
@@ -184,6 +211,82 @@ def test_holder_upserts_use_expected_tables(monkeypatch):
 
     assert "INSERT INTO fundamental.shareholder_count" in calls[0][0]
     assert "INSERT INTO fundamental.top10_holder" in calls[1][0]
+    assert "ON CONFLICT (asset_id, report_period, holder_name, source)" in calls[1][0]
+    assert calls[1][1][0][0:5] == ("CN:SH:600000", "600000.SH", "2025-03-31", "holder", "fund")
+
+
+def test_holder_upserts_convert_missing_values_and_use_conflict_keys(monkeypatch):
+    import numpy as np
+
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    shareholder = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "report_date": "2025-03-31",
+                "announcement_date": pd.NaT,
+                "shareholder_count": pd.NA,
+                "shareholder_count_change": float("nan"),
+                "shareholder_count_change_pct": -1,
+                "source": "akshare",
+                "source_endpoint": "endpoint",
+                "payload_hash": "h",
+            }
+        ]
+    )
+    upsert_shareholder_count_rows(shareholder, service="test")
+
+    sql, rows = calls[0]
+    assert "ON CONFLICT (asset_id, report_date, source)" in sql
+    assert rows[0][0:4] == ("CN:SH:600000", "600000.SH", "2025-03-31", None)
+    assert rows[0][4] is None
+    assert rows[0][5] is None
+
+    holders = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "report_period": "2025-03-31",
+                "holder_name": "holder",
+                "holder_type": np.array(["fund", "other"]),
+                "hold_amount": 1,
+                "hold_ratio": 1,
+                "hold_change": 0,
+                "rank": 1,
+                "source": "akshare",
+                "source_endpoint": "endpoint",
+                "payload_hash": "h",
+            }
+        ]
+    )
+    upsert_top_holder_rows(holders, table="fundamental.top10_float_holder", service="test")
+
+    assert calls[1][1][0][4] == ["fund", "other"]
+
+
+def test_upsert_top_holder_rejects_unknown_table():
+    try:
+        upsert_top_holder_rows(pd.DataFrame(), table="fundamental.bad_table", service="test")
+    except ValueError as exc:
+        assert "Unsupported holder table" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_run_lhb_backfill_uses_existing_lhb_import(tmp_path):

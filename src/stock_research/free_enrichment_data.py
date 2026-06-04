@@ -96,8 +96,47 @@ def ts_code_to_asset_id(ts_code: str) -> str:
     return f"CN:{exchange}:{symbol}"
 
 
+def _normalize_payload_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_payload_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_payload_value(item) for item in value]
+    if value is None:
+        return None
+    if isinstance(value, (pd.Series, pd.Index)):
+        return [_normalize_payload_value(item) for item in value.tolist()]
+
+    ndim = getattr(value, "ndim", None)
+    if ndim is not None and ndim > 0 and hasattr(value, "tolist"):
+        return _normalize_payload_value(value.tolist())
+
+    item = getattr(value, "item", None)
+    if callable(item) and not isinstance(value, (str, bytes, bytearray)):
+        try:
+            scalar = item()
+        except (TypeError, ValueError):
+            scalar = value
+        if scalar is not value:
+            return _normalize_payload_value(scalar)
+
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        missing = False
+    if isinstance(missing, bool) and missing:
+        return None
+    if hasattr(missing, "item"):
+        try:
+            if bool(missing.item()):
+                return None
+        except (TypeError, ValueError):
+            pass
+
+    return value
+
+
 def payload_hash(payload: Any) -> str:
-    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    text = json.dumps(_normalize_payload_value(payload), ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -179,9 +218,7 @@ def normalize_top_holder_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataF
 
 
 def _value_or_none(value: Any) -> Any:
-    if pd.isna(value):
-        return None
-    return value
+    return _normalize_payload_value(value)
 
 
 def _frame_rows(frame: pd.DataFrame, columns: list[str]) -> list[tuple[Any, ...]]:
