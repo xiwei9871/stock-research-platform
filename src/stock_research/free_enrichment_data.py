@@ -217,6 +217,100 @@ def normalize_top_holder_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataF
     ].reset_index(drop=True)
 
 
+def _base_event_frame(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+
+    data = pd.DataFrame(index=frame.index)
+    data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
+    data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
+    data["source"] = SOURCE
+    data["source_endpoint"] = endpoint
+    data["payload_hash"] = frame.apply(lambda row: payload_hash(row.to_dict()), axis=1)
+    return data
+
+
+def normalize_repurchase_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    data = _base_event_frame(frame, endpoint=endpoint)
+    if data.empty:
+        return data
+
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["progress_date"] = _date_text(_first_existing(frame, ["进度日期", "更新日期", "UPDATE_DATE"]))
+    data["progress"] = _first_existing(frame, ["进度", "回购进度", "PROGRESS"])
+    data["repurchase_amount"] = pd.to_numeric(
+        _first_existing(frame, ["已回购金额", "回购金额", "REPURCHASE_AMOUNT"]),
+        errors="coerce",
+    )
+    data["repurchase_amount_min"] = pd.to_numeric(
+        _first_existing(frame, ["拟回购金额下限", "金额下限"]),
+        errors="coerce",
+    )
+    data["repurchase_amount_max"] = pd.to_numeric(
+        _first_existing(frame, ["拟回购金额上限", "金额上限"]),
+        errors="coerce",
+    )
+    data["repurchase_price_min"] = pd.to_numeric(
+        _first_existing(frame, ["回购价格下限", "价格下限"]),
+        errors="coerce",
+    )
+    data["repurchase_price_max"] = pd.to_numeric(
+        _first_existing(frame, ["回购价格上限", "价格上限"]),
+        errors="coerce",
+    )
+    data["event_id"] = data.apply(
+        lambda row: build_event_id("repurchase", [row["ts_code"], row["announcement_date"], row["progress"]]),
+        axis=1,
+    )
+    return data[data["asset_id"].ne("")].reset_index(drop=True)
+
+
+def normalize_institution_survey_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    data = _base_event_frame(frame, endpoint=endpoint)
+    if data.empty:
+        return data
+
+    data["survey_date"] = _date_text(_first_existing(frame, ["调研日期", "接待日期", "SURVEY_DATE"]))
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["institution_count"] = pd.to_numeric(
+        _first_existing(frame, ["机构数量", "调研机构数量"]),
+        errors="coerce",
+    )
+    data["institution_names"] = _first_existing(frame, ["调研机构", "机构名称", "ORG_NAMES"])
+    data["survey_type"] = _first_existing(frame, ["调研类型", "接待方式", "SURVEY_TYPE"])
+    data["summary"] = _first_existing(frame, ["调研内容", "主要内容", "SUMMARY"])
+    data["event_id"] = data.apply(
+        lambda row: build_event_id("survey", [row["ts_code"], row["survey_date"], row["summary"]]),
+        axis=1,
+    )
+    return data[data["asset_id"].ne("")].reset_index(drop=True)
+
+
+def normalize_shareholder_trade_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    data = _base_event_frame(frame, endpoint=endpoint)
+    if data.empty:
+        return data
+
+    data["trade_date"] = _date_text(_first_existing(frame, ["变动日期", "交易日期", "TRADE_DATE"]))
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["holder_name"] = _first_existing(frame, ["股东名称", "变动人", "HOLDER_NAME"])
+    data["trade_type"] = _first_existing(frame, ["变动方向", "变动类型", "TRADE_TYPE"])
+    data["trade_amount"] = pd.to_numeric(
+        _first_existing(frame, ["变动数量", "成交股数", "TRADE_AMOUNT"]),
+        errors="coerce",
+    )
+    data["trade_ratio"] = pd.to_numeric(_first_existing(frame, ["变动比例", "TRADE_RATIO"]), errors="coerce")
+    data["trade_price"] = pd.to_numeric(_first_existing(frame, ["成交均价", "TRADE_PRICE"]), errors="coerce")
+    data["event_id"] = data.apply(
+        lambda row: build_event_id(
+            "shareholder_trade",
+            [row["ts_code"], row["trade_date"], row["holder_name"], row["trade_type"]],
+        ),
+        axis=1,
+    )
+    return data[data["asset_id"].ne("")].reset_index(drop=True)
+
+
 def _value_or_none(value: Any) -> Any:
     return _normalize_payload_value(value)
 
@@ -330,6 +424,95 @@ def upsert_top_holder_rows(
             updated_at = now()
     """
     rows = _frame_rows(frame, columns)
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
+
+
+_EVENT_TABLE_COLUMNS = {
+    "event.stock_repurchase": [
+        "event_id",
+        "asset_id",
+        "ts_code",
+        "announcement_date",
+        "progress_date",
+        "progress",
+        "repurchase_amount",
+        "repurchase_amount_min",
+        "repurchase_amount_max",
+        "repurchase_price_min",
+        "repurchase_price_max",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ],
+    "event.institution_survey": [
+        "event_id",
+        "asset_id",
+        "ts_code",
+        "survey_date",
+        "announcement_date",
+        "institution_count",
+        "institution_names",
+        "survey_type",
+        "summary",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ],
+    "event.shareholder_trade": [
+        "event_id",
+        "asset_id",
+        "ts_code",
+        "trade_date",
+        "announcement_date",
+        "holder_name",
+        "trade_type",
+        "trade_amount",
+        "trade_ratio",
+        "trade_price",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ],
+}
+
+_EVENT_DATE_COLUMNS = {
+    "announcement_date",
+    "progress_date",
+    "survey_date",
+    "trade_date",
+}
+
+
+def upsert_event_rows(
+    frame: pd.DataFrame,
+    *,
+    table: str,
+    service: str = SETTINGS.research_service,
+) -> int:
+    if table not in _EVENT_TABLE_COLUMNS:
+        raise ValueError(f"Unsupported event table: {table}")
+    if frame.empty:
+        return 0
+
+    columns = _EVENT_TABLE_COLUMNS[table]
+    insert_columns = ",\n            ".join(columns)
+    placeholders = ", ".join("%s::date" if column in _EVENT_DATE_COLUMNS else "%s" for column in columns)
+    updates = ",\n            ".join(
+        f"{column} = EXCLUDED.{column}" for column in columns if column not in {"event_id", "source"}
+    )
+    sql = f"""
+        INSERT INTO {table} (
+            {insert_columns}
+        ) VALUES (
+            {placeholders}
+        )
+        ON CONFLICT (event_id) DO UPDATE SET
+            {updates},
+            updated_at = now()
+    """
+    rows = _frame_rows(frame.reindex(columns=columns), columns)
     with connect(service) as conn:
         execute_many(conn, sql, rows)
     return len(rows)

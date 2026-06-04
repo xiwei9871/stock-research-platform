@@ -3,12 +3,16 @@ import pandas as pd
 from stock_research.free_enrichment_data import (
     DatasetRunResult,
     build_event_id,
+    normalize_institution_survey_rows,
+    normalize_repurchase_rows,
     normalize_shareholder_count_rows,
+    normalize_shareholder_trade_rows,
     normalize_top_holder_rows,
     normalize_ts_code,
     payload_hash,
     run_lhb_backfill,
     ts_code_to_asset_id,
+    upsert_event_rows,
     upsert_shareholder_count_rows,
     upsert_top_holder_rows,
 )
@@ -134,6 +138,29 @@ def test_normalize_top_holder_rows_supports_float_holder_flag():
     assert frame.iloc[0]["ts_code"] == "000001.SZ"
     assert frame.iloc[0]["report_period"] == "2025-03-31"
     assert frame.iloc[0]["holder_name"] == "中央汇金资产管理有限责任公司"
+
+
+def test_normalize_repurchase_rows_builds_event_id():
+    raw = pd.DataFrame([{"代码": "600000", "公告日期": "2025-02-01", "进度": "实施", "已回购金额": 1000}])
+    frame = normalize_repurchase_rows(raw, endpoint="stock_repurchase_em")
+    assert frame.iloc[0]["event_id"].startswith("repurchase:")
+    assert frame.iloc[0]["asset_id"] == "CN:SH:600000"
+    assert frame.iloc[0]["announcement_date"] == "2025-02-01"
+
+
+def test_normalize_institution_survey_rows_keeps_summary():
+    raw = pd.DataFrame([{"代码": "000001", "调研日期": "2025-05-01", "机构数量": 12, "调研内容": "核心问题"}])
+    frame = normalize_institution_survey_rows(raw, endpoint="stock_jgdy_detail_em")
+    assert frame.iloc[0]["event_id"].startswith("survey:")
+    assert frame.iloc[0]["institution_count"] == 12
+    assert frame.iloc[0]["summary"] == "核心问题"
+
+
+def test_normalize_shareholder_trade_rows_keeps_trade_type():
+    raw = pd.DataFrame([{"代码": "000001", "变动日期": "2025-04-01", "股东名称": "holder", "变动方向": "减持", "变动数量": 10}])
+    frame = normalize_shareholder_trade_rows(raw, endpoint="stock_ggcg_em")
+    assert frame.iloc[0]["event_id"].startswith("shareholder_trade:")
+    assert frame.iloc[0]["trade_type"] == "减持"
 
 
 def test_holder_normalizers_filter_invalid_rows_and_empty_frames():
@@ -287,6 +314,61 @@ def test_upsert_top_holder_rejects_unknown_table():
         assert "Unsupported holder table" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_upsert_event_rows_uses_requested_event_table(monkeypatch):
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    frame = pd.DataFrame([{"event_id": "repurchase:1", "asset_id": "CN:SH:600000", "ts_code": "600000.SH"}])
+    upsert_event_rows(frame, table="event.stock_repurchase", service="test")
+
+    assert "INSERT INTO event.stock_repurchase" in calls[0][0]
+    assert "ON CONFLICT (event_id)" in calls[0][0]
+
+
+def test_upsert_event_rows_rejects_unknown_table():
+    try:
+        upsert_event_rows(pd.DataFrame(), table="event.bad_table", service="test")
+    except ValueError as exc:
+        assert "Unsupported event table" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_upsert_event_rows_fills_missing_optional_columns(monkeypatch):
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    frame = pd.DataFrame([{"event_id": "survey:1", "asset_id": "CN:SZ:000001", "ts_code": "000001.SZ"}])
+    upsert_event_rows(frame, table="event.institution_survey", service="test")
+
+    assert calls[0][1][0][0:3] == ("survey:1", "CN:SZ:000001", "000001.SZ")
+    assert calls[0][1][0][3:9] == (None, None, None, None, None, None)
 
 
 def test_run_lhb_backfill_uses_existing_lhb_import(tmp_path):
