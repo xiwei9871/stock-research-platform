@@ -1251,6 +1251,202 @@ def run_holder_backfill(
     )
 
 
+_HOLDER_GAP_DETAIL_COLUMNS = [
+    "endpoint",
+    "ts_code",
+    "period",
+    "status",
+    "fetched_rows",
+    "normalized_rows",
+    "upserted_rows",
+    "error",
+]
+
+
+def _holder_gap_detail(
+    *,
+    endpoint: str,
+    ts_code: str,
+    period: str = "",
+    status: str,
+    fetched_rows: int = 0,
+    normalized_rows: int = 0,
+    upserted_rows: int = 0,
+    error: str = "",
+) -> dict[str, Any]:
+    return {
+        "endpoint": endpoint,
+        "ts_code": ts_code,
+        "period": period,
+        "status": status,
+        "fetched_rows": fetched_rows,
+        "normalized_rows": normalized_rows,
+        "upserted_rows": upserted_rows,
+        "error": error,
+    }
+
+
+def _write_holder_gap_details(details: list[dict[str, Any]], details_path: str | Path | None) -> str:
+    if details_path is None:
+        return ""
+    path = Path(details_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(details, columns=_HOLDER_GAP_DETAIL_COLUMNS).to_csv(path, index=False)
+    return str(path)
+
+
+def _normalize_period_requests(requests: list[tuple[str, Any]] | None) -> list[tuple[str, str]]:
+    normalized: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for ts_code_value, period_value in requests or []:
+        ts_code = normalize_ts_code(ts_code_value)
+        period = _compact_date(period_value)
+        if not ts_code or not period:
+            continue
+        key = (ts_code, period)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return normalized
+
+
+def run_holder_gap_retry(
+    *,
+    start_date: str,
+    end_date: str,
+    shareholder_count_ts_codes: list[str] | None = None,
+    top_holder_requests: list[tuple[str, Any]] | None = None,
+    float_holder_requests: list[tuple[str, Any]] | None = None,
+    sleep_seconds: float = 1.0,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+    details_path: str | Path | None = None,
+) -> dict[str, Any]:
+    client = client or build_akshare_client()
+    shareholder_codes = _normalize_ts_code_list(shareholder_count_ts_codes or [], limit=None)
+    top_requests = _normalize_period_requests(top_holder_requests)
+    float_requests = _normalize_period_requests(float_holder_requests)
+    total_requests = len(shareholder_codes) + len(top_requests) + len(float_requests)
+
+    details: list[dict[str, Any]] = []
+    fetched_rows = 0
+    normalized_rows = 0
+    upserted_rows = 0
+    empty_results = 0
+    failed_requests = 0
+    errors: list[str] = []
+    request_index = 0
+
+    def log_progress(endpoint: str, ts_code: str, period: str = "") -> None:
+        nonlocal request_index
+        request_index += 1
+        print(
+            "free_enrichment_holder_gap_request|"
+            f"request={request_index}/{total_requests}|endpoint={endpoint}|ts_code={ts_code}|period={period}",
+            flush=True,
+        )
+
+    for ts_code in shareholder_codes:
+        endpoint = "stock_zh_a_gdhs_detail_em"
+        log_progress(endpoint, ts_code)
+        try:
+            raw = pd.DataFrame(client.stock_zh_a_gdhs_detail_em(symbol=_ts_code_to_plain_symbol(ts_code)))
+            fetched = len(raw)
+            fetched_rows += fetched
+            if raw.empty:
+                empty_results += 1
+            normalized = normalize_shareholder_count_rows(raw, endpoint=endpoint)
+            normalized = _filter_frame_by_date_range(
+                normalized,
+                columns=["report_date"],
+                start_date=start_date,
+                end_date=end_date,
+            )
+            normalized_count = len(normalized)
+            normalized_rows += normalized_count
+            upserted = 0 if dry_run else upsert_shareholder_count_rows(normalized, service=service)
+            upserted_rows += upserted
+            status = "empty" if fetched == 0 or normalized_count == 0 else "success"
+            details.append(
+                _holder_gap_detail(
+                    endpoint=endpoint,
+                    ts_code=ts_code,
+                    status=status,
+                    fetched_rows=fetched,
+                    normalized_rows=normalized_count,
+                    upserted_rows=upserted,
+                )
+            )
+        except Exception as exc:
+            failed_requests += 1
+            error = str(exc)
+            errors.append(f"{endpoint}:{ts_code}:{error}")
+            details.append(_holder_gap_detail(endpoint=endpoint, ts_code=ts_code, status="failed", error=error))
+        _sleep_after_batch(request_index, total_requests, sleep_seconds)
+
+    for endpoint, table, requests in (
+        ("stock_gdfx_top_10_em", "fundamental.top10_holder", top_requests),
+        ("stock_gdfx_free_top_10_em", "fundamental.top10_float_holder", float_requests),
+    ):
+        for ts_code, period in requests:
+            log_progress(endpoint, ts_code, period)
+            try:
+                raw = pd.DataFrame(getattr(client, endpoint)(symbol=ts_code_to_akshare_symbol(ts_code), date=period))
+                fetched = len(raw)
+                fetched_rows += fetched
+                if raw.empty:
+                    empty_results += 1
+                normalized = pd.DataFrame()
+                if not raw.empty:
+                    raw = raw.copy()
+                    raw["股票代码"] = ts_code
+                    raw["报告期"] = _display_date(period)
+                    normalized = normalize_top_holder_rows(raw, endpoint=endpoint)
+                normalized_count = len(normalized)
+                normalized_rows += normalized_count
+                upserted = 0 if dry_run else upsert_top_holder_rows(normalized, table=table, service=service)
+                upserted_rows += upserted
+                status = "empty" if fetched == 0 or normalized_count == 0 else "success"
+                details.append(
+                    _holder_gap_detail(
+                        endpoint=endpoint,
+                        ts_code=ts_code,
+                        period=period,
+                        status=status,
+                        fetched_rows=fetched,
+                        normalized_rows=normalized_count,
+                        upserted_rows=upserted,
+                    )
+                )
+            except Exception as exc:
+                failed_requests += 1
+                error = str(exc)
+                errors.append(f"{endpoint}:{ts_code}:{period}:{error}")
+                details.append(
+                    _holder_gap_detail(endpoint=endpoint, ts_code=ts_code, period=period, status="failed", error=error)
+                )
+            _sleep_after_batch(request_index, total_requests, sleep_seconds)
+
+    detail_path = _write_holder_gap_details(details, details_path)
+    result = DatasetRunResult(
+        dataset="holder_gap_retry",
+        status=_run_status(
+            normalized_rows=normalized_rows,
+            upserted_rows=upserted_rows,
+            failed_requests=failed_requests,
+        ),
+        message="; ".join(errors[:3]),
+        fetched_rows=fetched_rows,
+        normalized_rows=normalized_rows,
+        upserted_rows=upserted_rows,
+        empty_results=empty_results,
+        failed_requests=failed_requests,
+    )
+    return {"result": result, "details": details, "details_path": detail_path}
+
+
 def run_repurchase_backfill(
     *,
     start_date: str,

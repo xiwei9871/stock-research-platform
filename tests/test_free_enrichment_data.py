@@ -21,6 +21,7 @@ from stock_research.free_enrichment_data import (
     run_forecast_backfill,
     run_free_enrichment_backfill,
     run_holder_backfill,
+    run_holder_gap_retry,
     run_lhb_backfill,
     run_mainbiz_backfill,
     run_repurchase_backfill,
@@ -972,6 +973,65 @@ def test_run_holder_backfill_reports_universe_loader_failure(monkeypatch):
     assert result.status == "failed"
     assert result.failed_requests == 1
     assert "asset master unavailable" in result.message
+
+
+def test_run_holder_gap_retry_targets_only_requested_holder_endpoints(monkeypatch, tmp_path):
+    calls = []
+    upserts = []
+
+    class FakeClient:
+        def stock_zh_a_gdhs_detail_em(self, symbol):
+            calls.append(("gdhs", symbol))
+            return pd.DataFrame([{"股票代码": symbol, "股东户数统计截止日": "2025-03-31", "区间涨跌幅": 1}])
+
+        def stock_gdfx_top_10_em(self, symbol, date):
+            calls.append(("top10", symbol, date))
+            return pd.DataFrame([{"股东名称": "holder", "持股数": 10}])
+
+        def stock_gdfx_free_top_10_em(self, symbol, date):
+            calls.append(("free_top10", symbol, date))
+            raise RuntimeError("temporary failure")
+
+        def stock_ggcg_em(self, symbol):
+            raise AssertionError("gap retry should not rerun shareholder trades")
+
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_shareholder_count_rows",
+        lambda frame, service: upserts.append(("shareholder_count", frame.copy(), service)) or len(frame),
+    )
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_top_holder_rows",
+        lambda frame, table, service: upserts.append((table, frame.copy(), service)) or len(frame),
+    )
+
+    retry = run_holder_gap_retry(
+        start_date="2025-01-01",
+        end_date="2025-06-30",
+        shareholder_count_ts_codes=["600000.SH"],
+        top_holder_requests=[("600000.SH", "20250331")],
+        float_holder_requests=[("600000.SH", "20250331")],
+        sleep_seconds=0,
+        service="test",
+        client=FakeClient(),
+        details_path=tmp_path / "details.csv",
+    )
+
+    assert calls == [
+        ("gdhs", "600000"),
+        ("top10", "SH600000", "20250331"),
+        ("free_top10", "SH600000", "20250331"),
+    ]
+    assert retry["result"].status == "partial_failed"
+    assert retry["result"].upserted_rows == 2
+    assert retry["result"].failed_requests == 1
+    assert [item[0] for item in upserts] == ["shareholder_count", "fundamental.top10_holder"]
+    details = retry["details"]
+    assert [item["status"] for item in details] == ["success", "success", "failed"]
+    assert details[-1]["endpoint"] == "stock_gdfx_free_top_10_em"
+    assert "temporary failure" in details[-1]["error"]
+    detail_csv = (tmp_path / "details.csv").read_text()
+    assert "stock_gdfx_free_top_10_em" in detail_csv
+    assert "temporary failure" in detail_csv
 
 
 def test_run_mainbiz_backfill_allows_explicit_empty_ts_codes(monkeypatch):
