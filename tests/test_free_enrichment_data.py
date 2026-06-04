@@ -16,8 +16,15 @@ from stock_research.free_enrichment_data import (
     normalize_top_holder_rows,
     normalize_ts_code,
     payload_hash,
+    run_express_backfill,
+    run_forecast_backfill,
     run_free_enrichment_backfill,
+    run_holder_backfill,
     run_lhb_backfill,
+    run_mainbiz_backfill,
+    run_repurchase_backfill,
+    run_survey_backfill,
+    ts_code_to_akshare_symbol,
     ts_code_to_asset_id,
     upsert_event_rows,
     upsert_main_business_rows,
@@ -125,6 +132,29 @@ def test_normalize_shareholder_count_rows_maps_chinese_columns():
     assert frame.iloc[0]["shareholder_count"] == 100000
 
 
+def test_normalize_shareholder_count_rows_maps_actual_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "代码": "600000",
+                "股东户数统计截止日": "2025-03-31",
+                "股东户数公告日期": "2025-04-20",
+                "股东户数-本次": 100000,
+                "股东户数-增减": -1000,
+                "股东户数-增减比例": -1.0,
+            }
+        ]
+    )
+
+    frame = normalize_shareholder_count_rows(raw, endpoint="stock_zh_a_gdhs_detail_em")
+
+    assert frame.iloc[0]["report_date"] == "2025-03-31"
+    assert frame.iloc[0]["announcement_date"] == "2025-04-20"
+    assert frame.iloc[0]["shareholder_count"] == 100000
+    assert frame.iloc[0]["shareholder_count_change"] == -1000
+    assert frame.iloc[0]["shareholder_count_change_pct"] == -1.0
+
+
 def test_normalize_top_holder_rows_supports_float_holder_flag():
     raw = pd.DataFrame(
         [
@@ -156,6 +186,35 @@ def test_normalize_repurchase_rows_builds_event_id():
     assert frame.iloc[0]["announcement_date"] == "2025-02-01"
 
 
+def test_normalize_repurchase_rows_maps_actual_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "股票代码": "600000",
+                "最新公告日期": "2025-02-01",
+                "回购起始时间": "2025-01-15",
+                "实施进度": "实施中",
+                "已回购金额": 1000,
+                "计划回购金额区间-下限": 500,
+                "计划回购金额区间-上限": 1500,
+                "已回购股份价格区间-下限": 8.5,
+                "已回购股份价格区间-上限": 10.5,
+            }
+        ]
+    )
+
+    frame = normalize_repurchase_rows(raw, endpoint="stock_repurchase_em")
+
+    assert frame.iloc[0]["announcement_date"] == "2025-02-01"
+    assert frame.iloc[0]["progress_date"] == "2025-01-15"
+    assert frame.iloc[0]["progress"] == "实施中"
+    assert frame.iloc[0]["repurchase_amount"] == 1000
+    assert frame.iloc[0]["repurchase_amount_min"] == 500
+    assert frame.iloc[0]["repurchase_amount_max"] == 1500
+    assert frame.iloc[0]["repurchase_price_min"] == 8.5
+    assert frame.iloc[0]["repurchase_price_max"] == 10.5
+
+
 def test_normalize_institution_survey_rows_keeps_summary():
     raw = pd.DataFrame([{"代码": "000001", "调研日期": "2025-05-01", "机构数量": 12, "调研内容": "核心问题"}])
     frame = normalize_institution_survey_rows(raw, endpoint="stock_jgdy_detail_em")
@@ -169,6 +228,30 @@ def test_normalize_shareholder_trade_rows_keeps_trade_type():
     frame = normalize_shareholder_trade_rows(raw, endpoint="stock_ggcg_em")
     assert frame.iloc[0]["event_id"].startswith("shareholder_trade:")
     assert frame.iloc[0]["trade_type"] == "减持"
+
+
+def test_normalize_shareholder_trade_rows_maps_actual_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "代码": "000001",
+                "股东名称": "holder",
+                "持股变动信息-增减": "减持",
+                "持股变动信息-变动数量": 10,
+                "持股变动信息-占总股本比例": 0.1,
+                "变动截止日": "2025-04-01",
+                "公告日": "2025-04-10",
+            }
+        ]
+    )
+
+    frame = normalize_shareholder_trade_rows(raw, endpoint="stock_ggcg_em")
+
+    assert frame.iloc[0]["trade_date"] == "2025-04-01"
+    assert frame.iloc[0]["announcement_date"] == "2025-04-10"
+    assert frame.iloc[0]["trade_type"] == "减持"
+    assert frame.iloc[0]["trade_amount"] == 10
+    assert frame.iloc[0]["trade_ratio"] == 0.1
 
 
 def test_normalize_earnings_forecast_rows():
@@ -187,11 +270,63 @@ def test_normalize_earnings_express_rows():
     assert frame.iloc[0]["np_parent"] == 20
 
 
+def test_normalize_earnings_express_rows_maps_actual_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "股票代码": "000001",
+                "公告日期": "2025-04-15",
+                "报告期": "2025-03-31",
+                "每股收益": 1.2,
+                "营业收入-营业收入": 100,
+                "营业收入-同比增长": 10,
+                "净利润-净利润": 20,
+                "净利润-同比增长": 5,
+                "净资产收益率": 8,
+            }
+        ]
+    )
+
+    frame = normalize_earnings_express_rows(raw, endpoint="stock_yjkb_em")
+
+    assert frame.iloc[0]["revenue"] == 100
+    assert frame.iloc[0]["revenue_yoy"] == 10
+    assert frame.iloc[0]["np_parent"] == 20
+    assert frame.iloc[0]["np_parent_yoy"] == 5
+    assert frame.iloc[0]["eps_basic"] == 1.2
+    assert frame.iloc[0]["roe_weighted"] == 8
+
+
 def test_normalize_main_business_rows():
     raw = pd.DataFrame([{"代码": "600000", "报告期": "2025-06-30", "分类方向": "按产品", "主营构成": "贷款", "主营收入": 1000, "毛利率": 40}])
     frame = normalize_main_business_rows(raw, endpoint="stock_zygc_em")
     assert frame.iloc[0]["classify_type"] == "按产品"
     assert frame.iloc[0]["item_name"] == "贷款"
+
+
+def test_normalize_main_business_rows_maps_actual_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "股票代码": "600000",
+                "报告日期": "2025-06-30",
+                "分类类型": "按产品",
+                "主营构成": "贷款",
+                "主营收入": 1000,
+                "收入比例": 50,
+                "主营成本": 600,
+                "主营利润": 400,
+                "毛利率": 40,
+            }
+        ]
+    )
+
+    frame = normalize_main_business_rows(raw, endpoint="stock_zygc_em")
+
+    assert frame.iloc[0]["report_period"] == "2025-06-30"
+    assert frame.iloc[0]["classify_type"] == "按产品"
+    assert frame.iloc[0]["revenue"] == 1000
+    assert frame.iloc[0]["cost"] == 600
 
 
 def test_normalize_main_business_rows_filters_empty_and_invalid_rows():
@@ -671,6 +806,248 @@ def test_run_lhb_backfill_counts_none_and_missing_outputs_as_empty(tmp_path):
     assert missing_result.empty_results == 1
 
 
+def test_ts_code_to_akshare_symbol_converts_ts_code():
+    assert ts_code_to_akshare_symbol("600000.SH") == "SH600000"
+    assert ts_code_to_akshare_symbol("000001.SZ") == "SZ000001"
+    assert ts_code_to_akshare_symbol("bad") == ""
+
+
+def test_run_holder_backfill_fetches_per_stock_periods_and_shareholder_trade(monkeypatch):
+    calls = []
+    upserts = []
+
+    class FakeClient:
+        def stock_zh_a_gdhs_detail_em(self, symbol):
+            calls.append(("gdhs", symbol))
+            return pd.DataFrame(
+                [
+                    {
+                        "代码": symbol[-6:],
+                        "股东户数统计截止日": "2025-03-31",
+                        "股东户数公告日期": "2025-04-20",
+                        "股东户数-本次": 100,
+                    },
+                    {
+                        "代码": symbol[-6:],
+                        "股东户数统计截止日": "2024-12-31",
+                        "股东户数公告日期": "2025-01-02",
+                        "股东户数-本次": 90,
+                    },
+                ]
+            )
+
+        def stock_gdfx_top_10_em(self, symbol, date):
+            calls.append(("top10", symbol, date))
+            return pd.DataFrame([{"股东名称": "top holder", "持股数": 10, "名次": 1}])
+
+        def stock_gdfx_free_top_10_em(self, symbol, date):
+            calls.append(("free_top10", symbol, date))
+            return pd.DataFrame([{"股东名称": "float holder", "持股数": 5, "名次": 1}])
+
+        def stock_ggcg_em(self, symbol):
+            calls.append(("trade", symbol))
+            return pd.DataFrame(
+                [
+                    {
+                        "代码": "600000",
+                        "股东名称": "holder",
+                        "持股变动信息-增减": "减持",
+                        "持股变动信息-变动数量": 1,
+                        "变动截止日": "2025-04-01",
+                        "公告日": "2025-04-10",
+                    },
+                    {
+                        "代码": "600000",
+                        "股东名称": "holder",
+                        "持股变动信息-增减": "增持",
+                        "持股变动信息-变动数量": 2,
+                        "变动截止日": "2024-12-01",
+                        "公告日": "2024-12-10",
+                    },
+                ]
+            )
+
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_shareholder_count_rows",
+        lambda frame, service: upserts.append(("shareholder_count", frame.copy(), service)) or len(frame),
+    )
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_top_holder_rows",
+        lambda frame, table, service: upserts.append((table, frame.copy(), service)) or len(frame),
+    )
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_event_rows",
+        lambda frame, table, service: upserts.append((table, frame.copy(), service)) or len(frame),
+    )
+
+    result = run_holder_backfill(
+        start_date="2025-01-01",
+        end_date="2025-06-30",
+        batch_size=1,
+        sleep_seconds=0,
+        limit=1,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+        ts_codes=["600000.SH", "000001.SZ"],
+    )
+
+    assert ("gdhs", "600000") in calls
+    assert ("top10", "SH600000", "20250331") in calls
+    assert ("top10", "SH600000", "20250630") in calls
+    assert ("free_top10", "SH600000", "20250331") in calls
+    assert ("trade", "全部") in calls
+    assert not any(call == ("gdhs", "000001") for call in calls)
+    assert result.status == "success"
+    assert result.upserted_rows == 6
+    assert upserts[0][0] == "shareholder_count"
+    assert upserts[0][1]["report_date"].tolist() == ["2025-03-31"]
+    assert upserts[1][0] == "fundamental.top10_holder"
+    assert set(upserts[1][1]["report_period"]) == {"2025-03-31", "2025-06-30"}
+    assert upserts[2][0] == "fundamental.top10_float_holder"
+    assert upserts[3][0] == "event.shareholder_trade"
+    assert upserts[3][1]["trade_date"].tolist() == ["2025-04-01"]
+
+
+def test_run_forecast_and_express_backfill_use_quarter_periods(monkeypatch):
+    calls = []
+    upserts = []
+
+    class FakeClient:
+        def stock_yjyg_em(self, date):
+            calls.append(("forecast", date))
+            return pd.DataFrame([{"股票代码": "600000", "公告日期": "2025-04-15", "预告类型": "预增"}])
+
+        def stock_yjkb_em(self, date):
+            calls.append(("express", date))
+            return pd.DataFrame(
+                [{"股票代码": "600000", "公告日期": "2025-04-20", "营业收入-营业收入": 100, "净利润-净利润": 20}]
+            )
+
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_event_rows",
+        lambda frame, table, service: upserts.append((table, frame.copy(), service)) or len(frame),
+    )
+
+    forecast = run_forecast_backfill(
+        start_date="2025-04-01",
+        end_date="2025-12-31",
+        batch_size=2,
+        sleep_seconds=0,
+        limit=None,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+    )
+    express = run_express_backfill(
+        start_date="2025-04-01",
+        end_date="2025-12-31",
+        batch_size=2,
+        sleep_seconds=0,
+        limit=2,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+    )
+
+    assert [call for call in calls if call[0] == "forecast"] == [
+        ("forecast", "20250630"),
+        ("forecast", "20250930"),
+        ("forecast", "20251231"),
+    ]
+    assert [call for call in calls if call[0] == "express"] == [("express", "20250630"), ("express", "20250930")]
+    assert forecast.upserted_rows == 3
+    assert express.upserted_rows == 2
+    assert upserts[0][0] == "event.earnings_forecast"
+    assert upserts[0][1]["report_period"].tolist() == ["2025-06-30", "2025-09-30", "2025-12-31"]
+    assert upserts[1][0] == "event.earnings_express"
+    assert upserts[1][1]["report_period"].tolist() == ["2025-06-30", "2025-09-30"]
+
+
+def test_run_repurchase_survey_and_mainbiz_backfills_call_expected_endpoints(monkeypatch):
+    calls = []
+    upserts = []
+
+    class FakeClient:
+        def stock_repurchase_em(self):
+            calls.append(("repurchase",))
+            return pd.DataFrame(
+                [{"股票代码": "600000", "最新公告日期": "2025-02-01", "实施进度": "实施中", "已回购金额": 1000}]
+            )
+
+        def stock_jgdy_detail_em(self, date):
+            calls.append(("survey", date))
+            return pd.DataFrame([{"代码": "000001", "调研机构": "org", "调研日期": "2025-05-01", "公告日期": "2025-05-02"}])
+
+        def stock_zygc_em(self, symbol):
+            calls.append(("mainbiz", symbol))
+            return pd.DataFrame(
+                [
+                    {
+                        "股票代码": "600000",
+                        "报告日期": "2025-06-30",
+                        "分类类型": "按产品",
+                        "主营构成": "贷款",
+                        "主营收入": 1000,
+                    }
+                ]
+            )
+
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_event_rows",
+        lambda frame, table, service: upserts.append((table, frame.copy(), service)) or len(frame),
+    )
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_main_business_rows",
+        lambda frame, service: upserts.append(("finance.main_business_composition", frame.copy(), service)) or len(frame),
+    )
+
+    repurchase = run_repurchase_backfill(
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        batch_size=10,
+        sleep_seconds=0,
+        limit=1,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+    )
+    survey = run_survey_backfill(
+        start_date="2025-05-01",
+        end_date="2025-05-31",
+        batch_size=10,
+        sleep_seconds=0,
+        limit=None,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+    )
+    mainbiz = run_mainbiz_backfill(
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        batch_size=1,
+        sleep_seconds=0,
+        limit=1,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+        ts_codes=["600000.SH", "000001.SZ"],
+    )
+
+    assert ("repurchase",) in calls
+    assert ("survey", "20250501") in calls
+    assert ("mainbiz", "SH600000") in calls
+    assert not any(call == ("mainbiz", "SZ000001") for call in calls)
+    assert repurchase.upserted_rows == 1
+    assert survey.upserted_rows == 1
+    assert mainbiz.upserted_rows == 1
+    assert [item[0] for item in upserts] == [
+        "event.stock_repurchase",
+        "event.institution_survey",
+        "finance.main_business_composition",
+    ]
+
+
 def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_summary(
     monkeypatch, tmp_path, capsys
 ):
@@ -717,11 +1094,20 @@ def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_su
     assert "batch_controls_applied=False|ignored_params=batch_size,sleep_seconds,limit" in out
 
 
-def test_run_free_enrichment_backfill_all_marks_unimplemented_datasets_as_failures(monkeypatch, tmp_path):
+def test_run_free_enrichment_backfill_all_dispatches_real_datasets_and_reports_batch_controls(
+    monkeypatch, tmp_path, capsys
+):
     monkeypatch.setattr(
         "stock_research.free_enrichment_data.run_lhb_backfill",
         lambda **kwargs: DatasetRunResult(dataset="lhb", upserted_rows=1),
     )
+    for dataset_name in DATASETS:
+        if dataset_name == "lhb":
+            continue
+        monkeypatch.setattr(
+            f"stock_research.free_enrichment_data.run_{dataset_name}_backfill",
+            lambda dataset_name=dataset_name, **kwargs: DatasetRunResult(dataset=dataset_name, upserted_rows=2),
+        )
 
     result = run_free_enrichment_backfill(
         dataset="all",
@@ -735,17 +1121,25 @@ def test_run_free_enrichment_backfill_all_marks_unimplemented_datasets_as_failur
     assert [item.dataset for item in result["results"]] == list(DATASETS)
     summary = json.loads((tmp_path / "run_summary.json").read_text(encoding="utf-8"))
     statuses = {item["dataset"]: item["status"] for item in summary["results"]}
-    assert statuses["lhb"] == "success"
-    assert statuses["holder"] == "not_implemented"
-    assert summary["results"][1]["message"] == "dataset runner not implemented"
+    assert set(statuses.values()) == {"success"}
+    assert "not_implemented" not in statuses.values()
+    assert summary["params"]["batch_controls_applied_by_dataset"]["lhb"] is False
+    assert summary["params"]["ignored_params_by_dataset"]["lhb"] == ["batch_size", "sleep_seconds"]
+    assert summary["params"]["batch_controls_applied_by_dataset"]["holder"] is True
+    assert summary["params"]["ignored_params_by_dataset"]["holder"] == []
+    assert summary["params"]["batch_controls_applied_by_dataset"]["repurchase"] is False
+    assert summary["params"]["ignored_params_by_dataset"]["repurchase"] == ["batch_size", "sleep_seconds"]
     failures = pd.read_csv(tmp_path / "dataset_failures.csv")
-    assert set(failures["dataset"]) == set(DATASETS) - {"lhb"}
-    assert set(failures["error"]) == {"dataset runner not implemented"}
+    assert failures.empty
     coverage = pd.read_csv(tmp_path / "dataset_coverage.csv")
     assert coverage["dataset"].tolist() == list(DATASETS)
     assert "status" in coverage.columns
     assert "message" in coverage.columns
     assert coverage.loc[coverage["dataset"].eq("lhb"), "row_count"].iloc[0] == 1
+    out = capsys.readouterr().out
+    assert "free_enrichment_batch|dataset=holder" in out
+    assert "dataset=holder" in out and "batch_controls_applied=True|ignored_params=" in out
+    assert "dataset=repurchase" in out and "batch_controls_applied=False|ignored_params=batch_size,sleep_seconds" in out
 
 
 def test_run_free_enrichment_backfill_captures_runner_exception(monkeypatch, tmp_path):

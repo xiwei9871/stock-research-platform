@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,12 +12,13 @@ from typing import Any
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many
+from stock_research.db import connect, execute_many, fetch_all
 
 
 SOURCE = "akshare"
 DATASETS = ("lhb", "holder", "repurchase", "survey", "forecast", "express", "mainbiz")
 _EXCHANGES = {"SH", "SZ", "BJ"}
+_BATCH_CONTROLLED_DATASETS = {"holder", "forecast", "express", "mainbiz"}
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,12 @@ def build_event_id(prefix: str, parts: list[Any]) -> str:
     return f"{prefix}:{digest}"
 
 
+def build_akshare_client() -> Any:
+    import akshare as ak
+
+    return ak
+
+
 def _date_text(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce").dt.strftime("%Y-%m-%d")
 
@@ -173,6 +181,159 @@ def _first_existing(frame: pd.DataFrame, names: list[str]) -> pd.Series:
     return pd.Series([None] * len(frame), index=frame.index)
 
 
+def ts_code_to_akshare_symbol(ts_code: str) -> str:
+    normalized = normalize_ts_code(ts_code)
+    if not normalized or "." not in normalized:
+        return ""
+    symbol, exchange = normalized.split(".", 1)
+    if exchange not in _EXCHANGES:
+        return ""
+    return f"{exchange}{symbol}"
+
+
+def _ts_code_to_plain_symbol(ts_code: str) -> str:
+    normalized = normalize_ts_code(ts_code)
+    if not normalized or "." not in normalized:
+        return ""
+    return normalized.split(".", 1)[0]
+
+
+def _compact_date(value: Any) -> str:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.strftime("%Y%m%d")
+
+
+def _display_date(value: Any) -> str:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.strftime("%Y-%m-%d")
+
+
+def report_quarter_ends_between(start_date: str, end_date: str) -> list[str]:
+    start = pd.to_datetime(start_date, errors="raise")
+    end = pd.to_datetime(end_date, errors="raise")
+    periods: list[str] = []
+    for year in range(start.year, end.year + 1):
+        for month_day in ("0331", "0630", "0930", "1231"):
+            parsed = pd.to_datetime(f"{year}{month_day}", format="%Y%m%d")
+            if start <= parsed <= end:
+                periods.append(parsed.strftime("%Y%m%d"))
+    return periods
+
+
+def _filter_frame_by_date_range(
+    frame: pd.DataFrame,
+    *,
+    columns: list[str],
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    start = pd.to_datetime(start_date, errors="coerce")
+    end = pd.to_datetime(end_date, errors="coerce")
+    mask = pd.Series([False] * len(frame), index=frame.index)
+    found = False
+    for column in columns:
+        if column not in frame.columns:
+            continue
+        found = True
+        values = pd.to_datetime(frame[column], errors="coerce")
+        mask = mask | ((values >= start) & (values <= end))
+    if not found:
+        return frame.reset_index(drop=True)
+    return frame[mask].reset_index(drop=True)
+
+
+def _limited(items: list[str], limit: int | None) -> list[str]:
+    if limit is None:
+        return items
+    return items[: max(0, int(limit))]
+
+
+def _iter_batches(items: list[str], batch_size: int | None) -> list[list[str]]:
+    if not items:
+        return []
+    size = max(1, int(batch_size or len(items)))
+    return [items[idx : idx + size] for idx in range(0, len(items), size)]
+
+
+def _sleep_after_batch(batch_index: int, total_batches: int, sleep_seconds: float | None) -> None:
+    if batch_index >= total_batches:
+        return
+    if sleep_seconds is None or sleep_seconds <= 0:
+        return
+    time.sleep(sleep_seconds)
+
+
+def _concat_frames(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    frames = [frame for frame in frames if frame is not None and not frame.empty]
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def _run_status(*, normalized_rows: int, upserted_rows: int, failed_requests: int) -> str:
+    useful_rows = normalized_rows if upserted_rows == 0 else upserted_rows
+    if failed_requests and useful_rows:
+        return "partial_failed"
+    if failed_requests:
+        return "failed"
+    return "success"
+
+
+def _normalize_ts_code_list(values: list[Any], *, limit: int | None = None) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        code = normalize_ts_code(value)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        normalized.append(code)
+        if limit is not None and len(normalized) >= limit:
+            break
+    return normalized
+
+
+def load_free_enrichment_ts_codes(
+    *,
+    service: str = SETTINGS.research_service,
+    limit: int | None = None,
+) -> list[str]:
+    sql = """
+        SELECT ts_code, asset_id, symbol, exchange
+        FROM core.asset_master
+        WHERE exchange IN ('SH', 'SZ', 'BJ')
+          AND is_active IS TRUE
+          AND delist_date IS NULL
+        ORDER BY exchange, symbol
+    """
+    params: list[Any] = []
+    if limit is not None:
+        sql += "\n        LIMIT %s"
+        params.append(limit)
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(conn, sql, params)
+    except Exception as exc:
+        print(f"free_enrichment_universe_loader_failed|service={service}|error={exc}")
+        return []
+
+    values: list[Any] = []
+    for row in rows:
+        ts_code = row.get("ts_code")
+        if not ts_code and row.get("asset_id"):
+            ts_code = row["asset_id"]
+        if not ts_code and row.get("symbol") and row.get("exchange"):
+            ts_code = f"{row['symbol']}.{row['exchange']}"
+        values.append(ts_code)
+    return _normalize_ts_code_list(values, limit=limit)
+
+
 def normalize_shareholder_count_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame()
@@ -180,15 +341,20 @@ def normalize_shareholder_count_rows(frame: pd.DataFrame, *, endpoint: str) -> p
     data = pd.DataFrame(index=frame.index)
     data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
     data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
-    data["report_date"] = _date_text(_first_existing(frame, ["截止日期", "报告期", "END_DATE"]))
-    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "DECLAREDATE", "公告日"]))
-    data["shareholder_count"] = pd.to_numeric(_first_existing(frame, ["股东户数", "HOLDER_NUM"]), errors="coerce")
+    data["report_date"] = _date_text(_first_existing(frame, ["股东户数统计截止日", "截止日期", "报告期", "END_DATE"]))
+    data["announcement_date"] = _date_text(
+        _first_existing(frame, ["股东户数公告日期", "公告日期", "DECLAREDATE", "公告日"])
+    )
+    data["shareholder_count"] = pd.to_numeric(
+        _first_existing(frame, ["股东户数-本次", "股东户数", "HOLDER_NUM"]),
+        errors="coerce",
+    )
     data["shareholder_count_change"] = pd.to_numeric(
-        _first_existing(frame, ["股东户数增减", "较上期变化", "HOLDER_NUM_CHANGE"]),
+        _first_existing(frame, ["股东户数-增减", "股东户数增减", "较上期变化", "HOLDER_NUM_CHANGE"]),
         errors="coerce",
     )
     data["shareholder_count_change_pct"] = pd.to_numeric(
-        _first_existing(frame, ["股东户数较上期变化百分比", "较上期变化百分比"]),
+        _first_existing(frame, ["股东户数-增减比例", "股东户数较上期变化百分比", "较上期变化百分比"]),
         errors="coerce",
     )
     data["source"] = SOURCE
@@ -240,27 +406,27 @@ def normalize_repurchase_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataF
     if data.empty:
         return data
 
-    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
-    data["progress_date"] = _date_text(_first_existing(frame, ["进度日期", "更新日期", "UPDATE_DATE"]))
-    data["progress"] = _first_existing(frame, ["进度", "回购进度", "PROGRESS"])
+    data["announcement_date"] = _date_text(_first_existing(frame, ["最新公告日期", "公告日期", "ANN_DATE"]))
+    data["progress_date"] = _date_text(_first_existing(frame, ["回购起始时间", "进度日期", "更新日期", "UPDATE_DATE"]))
+    data["progress"] = _first_existing(frame, ["实施进度", "进度", "回购进度", "PROGRESS"])
     data["repurchase_amount"] = pd.to_numeric(
         _first_existing(frame, ["已回购金额", "回购金额", "REPURCHASE_AMOUNT"]),
         errors="coerce",
     )
     data["repurchase_amount_min"] = pd.to_numeric(
-        _first_existing(frame, ["拟回购金额下限", "金额下限"]),
+        _first_existing(frame, ["计划回购金额区间-下限", "拟回购金额下限", "金额下限"]),
         errors="coerce",
     )
     data["repurchase_amount_max"] = pd.to_numeric(
-        _first_existing(frame, ["拟回购金额上限", "金额上限"]),
+        _first_existing(frame, ["计划回购金额区间-上限", "拟回购金额上限", "金额上限"]),
         errors="coerce",
     )
     data["repurchase_price_min"] = pd.to_numeric(
-        _first_existing(frame, ["回购价格下限", "价格下限"]),
+        _first_existing(frame, ["已回购股份价格区间-下限", "回购价格下限", "价格下限"]),
         errors="coerce",
     )
     data["repurchase_price_max"] = pd.to_numeric(
-        _first_existing(frame, ["回购价格上限", "价格上限"]),
+        _first_existing(frame, ["已回购股份价格区间-上限", "回购价格上限", "价格上限"]),
         errors="coerce",
     )
     data["event_id"] = data.apply(
@@ -299,15 +465,18 @@ def normalize_shareholder_trade_rows(frame: pd.DataFrame, *, endpoint: str) -> p
     if data.empty:
         return data
 
-    data["trade_date"] = _date_text(_first_existing(frame, ["变动日期", "交易日期", "TRADE_DATE"]))
-    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["trade_date"] = _date_text(_first_existing(frame, ["变动截止日", "变动日期", "交易日期", "TRADE_DATE"]))
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日", "公告日期", "ANN_DATE"]))
     data["holder_name"] = _first_existing(frame, ["股东名称", "变动人", "HOLDER_NAME"])
-    data["trade_type"] = _first_existing(frame, ["变动方向", "变动类型", "TRADE_TYPE"])
+    data["trade_type"] = _first_existing(frame, ["持股变动信息-增减", "变动方向", "变动类型", "TRADE_TYPE"])
     data["trade_amount"] = pd.to_numeric(
-        _first_existing(frame, ["变动数量", "成交股数", "TRADE_AMOUNT"]),
+        _first_existing(frame, ["持股变动信息-变动数量", "变动数量", "成交股数", "TRADE_AMOUNT"]),
         errors="coerce",
     )
-    data["trade_ratio"] = pd.to_numeric(_first_existing(frame, ["变动比例", "TRADE_RATIO"]), errors="coerce")
+    data["trade_ratio"] = pd.to_numeric(
+        _first_existing(frame, ["持股变动信息-占总股本比例", "变动比例", "TRADE_RATIO"]),
+        errors="coerce",
+    )
     data["trade_price"] = pd.to_numeric(_first_existing(frame, ["成交均价", "TRADE_PRICE"]), errors="coerce")
     data["event_id"] = data.apply(
         lambda row: build_event_id(
@@ -328,7 +497,7 @@ def normalize_earnings_forecast_rows(frame: pd.DataFrame, *, endpoint: str) -> p
     data["report_period"] = _date_text(_first_existing(frame, ["报告期", "预测报告期", "REPORT_PERIOD"]))
     data["forecast_type"] = _first_existing(frame, ["预告类型", "业绩变动类型", "FORECAST_TYPE"])
     data["forecast_np_min"] = pd.to_numeric(
-        _first_existing(frame, ["净利润下限", "FORECAST_NP_MIN"]),
+        _first_existing(frame, ["预测数值", "净利润下限", "FORECAST_NP_MIN"]),
         errors="coerce",
     )
     data["forecast_np_max"] = pd.to_numeric(
@@ -336,14 +505,14 @@ def normalize_earnings_forecast_rows(frame: pd.DataFrame, *, endpoint: str) -> p
         errors="coerce",
     )
     data["forecast_np_change_min"] = pd.to_numeric(
-        _first_existing(frame, ["净利润变动幅度下限", "预增幅下限"]),
+        _first_existing(frame, ["业绩变动幅度", "净利润变动幅度下限", "预增幅下限"]),
         errors="coerce",
     )
     data["forecast_np_change_max"] = pd.to_numeric(
         _first_existing(frame, ["净利润变动幅度上限", "预增幅上限"]),
         errors="coerce",
     )
-    data["summary"] = _first_existing(frame, ["业绩预告摘要", "变动原因", "SUMMARY"])
+    data["summary"] = _first_existing(frame, ["业绩变动原因", "业绩预告摘要", "变动原因", "SUMMARY"])
     data["event_id"] = data.apply(
         lambda row: build_event_id(
             "earnings_forecast",
@@ -367,15 +536,24 @@ def normalize_earnings_express_rows(frame: pd.DataFrame, *, endpoint: str) -> pd
 
     data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
     data["report_period"] = _date_text(_first_existing(frame, ["报告期", "REPORT_PERIOD"]))
-    data["revenue"] = pd.to_numeric(_first_existing(frame, ["营业收入", "REVENUE"]), errors="coerce")
-    data["revenue_yoy"] = pd.to_numeric(_first_existing(frame, ["营业收入同比", "REVENUE_YOY"]), errors="coerce")
-    data["np_parent"] = pd.to_numeric(_first_existing(frame, ["归母净利润", "净利润", "NP_PARENT"]), errors="coerce")
-    data["np_parent_yoy"] = pd.to_numeric(
-        _first_existing(frame, ["归母净利润同比", "净利润同比", "NP_PARENT_YOY"]),
+    data["revenue"] = pd.to_numeric(_first_existing(frame, ["营业收入-营业收入", "营业收入", "REVENUE"]), errors="coerce")
+    data["revenue_yoy"] = pd.to_numeric(
+        _first_existing(frame, ["营业收入-同比增长", "营业收入同比", "REVENUE_YOY"]),
         errors="coerce",
     )
-    data["eps_basic"] = pd.to_numeric(_first_existing(frame, ["基本每股收益", "EPS_BASIC"]), errors="coerce")
-    data["roe_weighted"] = pd.to_numeric(_first_existing(frame, ["加权净资产收益率", "ROE_WEIGHTED"]), errors="coerce")
+    data["np_parent"] = pd.to_numeric(
+        _first_existing(frame, ["净利润-净利润", "归母净利润", "净利润", "NP_PARENT"]),
+        errors="coerce",
+    )
+    data["np_parent_yoy"] = pd.to_numeric(
+        _first_existing(frame, ["净利润-同比增长", "归母净利润同比", "净利润同比", "NP_PARENT_YOY"]),
+        errors="coerce",
+    )
+    data["eps_basic"] = pd.to_numeric(_first_existing(frame, ["每股收益", "基本每股收益", "EPS_BASIC"]), errors="coerce")
+    data["roe_weighted"] = pd.to_numeric(
+        _first_existing(frame, ["净资产收益率", "加权净资产收益率", "ROE_WEIGHTED"]),
+        errors="coerce",
+    )
     data["event_id"] = data.apply(
         lambda row: build_event_id(
             "earnings_express",
@@ -393,7 +571,7 @@ def normalize_main_business_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.Da
     data = pd.DataFrame(index=frame.index)
     data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
     data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
-    data["report_period"] = _date_text(_first_existing(frame, ["报告期", "截止日期", "REPORT_PERIOD"]))
+    data["report_period"] = _date_text(_first_existing(frame, ["报告日期", "报告期", "截止日期", "REPORT_PERIOD"]))
     data["classify_type"] = (
         _first_existing(frame, ["分类方向", "分类类型", "CLASSIFY_TYPE"]).fillna("").astype(str).str.strip()
     )
@@ -772,6 +950,414 @@ def run_lhb_backfill(
     )
 
 
+def run_shareholder_trade_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+) -> DatasetRunResult:
+    client = client or build_akshare_client()
+    try:
+        raw = client.stock_ggcg_em(symbol="全部")
+    except Exception as exc:
+        return DatasetRunResult(dataset="shareholder_trade", status="failed", failed_requests=1, message=str(exc))
+
+    fetched_rows = _safe_len(raw)
+    normalized = normalize_shareholder_trade_rows(pd.DataFrame(raw), endpoint="stock_ggcg_em")
+    normalized = _filter_frame_by_date_range(
+        normalized,
+        columns=["trade_date", "announcement_date"],
+        start_date=start_date,
+        end_date=end_date,
+    )
+    upserted = 0 if dry_run else upsert_event_rows(normalized, table="event.shareholder_trade", service=service)
+    return DatasetRunResult(
+        dataset="shareholder_trade",
+        status=_run_status(normalized_rows=len(normalized), upserted_rows=upserted, failed_requests=0),
+        fetched_rows=fetched_rows,
+        normalized_rows=len(normalized),
+        upserted_rows=upserted,
+        empty_results=1 if fetched_rows == 0 or normalized.empty else 0,
+    )
+
+
+def run_holder_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+    ts_codes: list[str] | None = None,
+) -> DatasetRunResult:
+    client = client or build_akshare_client()
+    universe = _normalize_ts_code_list(
+        ts_codes or load_free_enrichment_ts_codes(service=service, limit=limit),
+        limit=limit,
+    )
+    periods = report_quarter_ends_between(start_date, end_date)
+
+    fetched_rows = 0
+    empty_results = 0
+    failed_requests = 0
+    errors: list[str] = []
+    shareholder_frames: list[pd.DataFrame] = []
+    top_frames: list[pd.DataFrame] = []
+    float_frames: list[pd.DataFrame] = []
+    batches = _iter_batches(universe, batch_size)
+
+    for batch_index, batch in enumerate(batches, start=1):
+        print(
+            "free_enrichment_request_batch|"
+            f"dataset=holder|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+        )
+        for ts_code in batch:
+            plain_symbol = _ts_code_to_plain_symbol(ts_code)
+            ak_symbol = ts_code_to_akshare_symbol(ts_code)
+            if plain_symbol:
+                try:
+                    raw = pd.DataFrame(client.stock_zh_a_gdhs_detail_em(symbol=plain_symbol))
+                    fetched_rows += len(raw)
+                    if raw.empty:
+                        empty_results += 1
+                    normalized = normalize_shareholder_count_rows(raw, endpoint="stock_zh_a_gdhs_detail_em")
+                    normalized = _filter_frame_by_date_range(
+                        normalized,
+                        columns=["report_date"],
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    shareholder_frames.append(normalized)
+                except Exception as exc:
+                    failed_requests += 1
+                    errors.append(f"stock_zh_a_gdhs_detail_em:{ts_code}:{exc}")
+
+            if not ak_symbol:
+                continue
+            for period in periods:
+                for endpoint, target in (
+                    ("stock_gdfx_top_10_em", top_frames),
+                    ("stock_gdfx_free_top_10_em", float_frames),
+                ):
+                    try:
+                        func = getattr(client, endpoint)
+                        raw = pd.DataFrame(func(symbol=ak_symbol, date=period))
+                        fetched_rows += len(raw)
+                        if raw.empty:
+                            empty_results += 1
+                            continue
+                        raw = raw.copy()
+                        raw["股票代码"] = ts_code
+                        raw["报告期"] = _display_date(period)
+                        target.append(normalize_top_holder_rows(raw, endpoint=endpoint))
+                    except Exception as exc:
+                        failed_requests += 1
+                        errors.append(f"{endpoint}:{ts_code}:{period}:{exc}")
+        _sleep_after_batch(batch_index, len(batches), sleep_seconds)
+
+    try:
+        trade_raw = pd.DataFrame(client.stock_ggcg_em(symbol="全部"))
+        fetched_rows += len(trade_raw)
+        if trade_raw.empty:
+            empty_results += 1
+        trade_frame = normalize_shareholder_trade_rows(trade_raw, endpoint="stock_ggcg_em")
+        trade_frame = _filter_frame_by_date_range(
+            trade_frame,
+            columns=["trade_date", "announcement_date"],
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        trade_frame = pd.DataFrame()
+        failed_requests += 1
+        errors.append(f"stock_ggcg_em:全部:{exc}")
+
+    shareholder_frame = _concat_frames(shareholder_frames)
+    top_frame = _concat_frames(top_frames)
+    float_frame = _concat_frames(float_frames)
+    normalized_rows = len(shareholder_frame) + len(top_frame) + len(float_frame) + len(trade_frame)
+    if dry_run:
+        upserted_rows = 0
+    else:
+        upserted_rows = (
+            upsert_shareholder_count_rows(shareholder_frame, service=service)
+            + upsert_top_holder_rows(top_frame, table="fundamental.top10_holder", service=service)
+            + upsert_top_holder_rows(float_frame, table="fundamental.top10_float_holder", service=service)
+            + upsert_event_rows(trade_frame, table="event.shareholder_trade", service=service)
+        )
+
+    return DatasetRunResult(
+        dataset="holder",
+        status=_run_status(
+            normalized_rows=normalized_rows,
+            upserted_rows=upserted_rows,
+            failed_requests=failed_requests,
+        ),
+        message="; ".join(errors[:3]),
+        fetched_rows=fetched_rows,
+        normalized_rows=normalized_rows,
+        upserted_rows=upserted_rows,
+        empty_results=empty_results,
+        failed_requests=failed_requests,
+    )
+
+
+def run_repurchase_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+) -> DatasetRunResult:
+    del batch_size, sleep_seconds, limit
+    client = client or build_akshare_client()
+    try:
+        raw = pd.DataFrame(client.stock_repurchase_em())
+    except Exception as exc:
+        return DatasetRunResult(dataset="repurchase", status="failed", failed_requests=1, message=str(exc))
+
+    normalized = normalize_repurchase_rows(raw, endpoint="stock_repurchase_em")
+    normalized = _filter_frame_by_date_range(
+        normalized,
+        columns=["announcement_date", "progress_date"],
+        start_date=start_date,
+        end_date=end_date,
+    )
+    upserted = 0 if dry_run else upsert_event_rows(normalized, table="event.stock_repurchase", service=service)
+    return DatasetRunResult(
+        dataset="repurchase",
+        status=_run_status(normalized_rows=len(normalized), upserted_rows=upserted, failed_requests=0),
+        fetched_rows=len(raw),
+        normalized_rows=len(normalized),
+        upserted_rows=upserted,
+        empty_results=1 if raw.empty or normalized.empty else 0,
+    )
+
+
+def run_survey_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+) -> DatasetRunResult:
+    del batch_size, sleep_seconds, limit
+    client = client or build_akshare_client()
+    try:
+        raw = pd.DataFrame(client.stock_jgdy_detail_em(date=_compact_date(start_date)))
+    except Exception as exc:
+        return DatasetRunResult(dataset="survey", status="failed", failed_requests=1, message=str(exc))
+
+    normalized = normalize_institution_survey_rows(raw, endpoint="stock_jgdy_detail_em")
+    normalized = _filter_frame_by_date_range(
+        normalized,
+        columns=["survey_date", "announcement_date"],
+        start_date=start_date,
+        end_date=end_date,
+    )
+    upserted = 0 if dry_run else upsert_event_rows(normalized, table="event.institution_survey", service=service)
+    return DatasetRunResult(
+        dataset="survey",
+        status=_run_status(normalized_rows=len(normalized), upserted_rows=upserted, failed_requests=0),
+        fetched_rows=len(raw),
+        normalized_rows=len(normalized),
+        upserted_rows=upserted,
+        empty_results=1 if raw.empty or normalized.empty else 0,
+    )
+
+
+def _run_period_event_backfill(
+    *,
+    dataset: str,
+    endpoint: str,
+    table: str,
+    start_date: str,
+    end_date: str,
+    batch_size: int,
+    sleep_seconds: float,
+    limit: int | None,
+    dry_run: bool,
+    service: str,
+    client: Any,
+) -> DatasetRunResult:
+    periods = _limited(report_quarter_ends_between(start_date, end_date), limit)
+    frames: list[pd.DataFrame] = []
+    fetched_rows = 0
+    empty_results = 0
+    failed_requests = 0
+    errors: list[str] = []
+    batches = _iter_batches(periods, batch_size)
+    for batch_index, batch in enumerate(batches, start=1):
+        print(
+            "free_enrichment_request_batch|"
+            f"dataset={dataset}|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+        )
+        for period in batch:
+            try:
+                raw = pd.DataFrame(getattr(client, endpoint)(date=period))
+                fetched_rows += len(raw)
+                if raw.empty:
+                    empty_results += 1
+                    continue
+                raw = raw.copy()
+                raw["报告期"] = _display_date(period)
+                if dataset == "forecast":
+                    frames.append(normalize_earnings_forecast_rows(raw, endpoint=endpoint))
+                else:
+                    frames.append(normalize_earnings_express_rows(raw, endpoint=endpoint))
+            except Exception as exc:
+                failed_requests += 1
+                errors.append(f"{endpoint}:{period}:{exc}")
+        _sleep_after_batch(batch_index, len(batches), sleep_seconds)
+
+    normalized = _concat_frames(frames)
+    upserted = 0 if dry_run else upsert_event_rows(normalized, table=table, service=service)
+    return DatasetRunResult(
+        dataset=dataset,
+        status=_run_status(normalized_rows=len(normalized), upserted_rows=upserted, failed_requests=failed_requests),
+        message="; ".join(errors[:3]),
+        fetched_rows=fetched_rows,
+        normalized_rows=len(normalized),
+        upserted_rows=upserted,
+        empty_results=empty_results,
+        failed_requests=failed_requests,
+    )
+
+
+def run_forecast_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+) -> DatasetRunResult:
+    return _run_period_event_backfill(
+        dataset="forecast",
+        endpoint="stock_yjyg_em",
+        table="event.earnings_forecast",
+        start_date=start_date,
+        end_date=end_date,
+        batch_size=batch_size,
+        sleep_seconds=sleep_seconds,
+        limit=limit,
+        dry_run=dry_run,
+        service=service,
+        client=client or build_akshare_client(),
+    )
+
+
+def run_express_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+) -> DatasetRunResult:
+    return _run_period_event_backfill(
+        dataset="express",
+        endpoint="stock_yjkb_em",
+        table="event.earnings_express",
+        start_date=start_date,
+        end_date=end_date,
+        batch_size=batch_size,
+        sleep_seconds=sleep_seconds,
+        limit=limit,
+        dry_run=dry_run,
+        service=service,
+        client=client or build_akshare_client(),
+    )
+
+
+def run_mainbiz_backfill(
+    *,
+    start_date: str,
+    end_date: str,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+    client: Any = None,
+    ts_codes: list[str] | None = None,
+) -> DatasetRunResult:
+    client = client or build_akshare_client()
+    universe = _normalize_ts_code_list(
+        ts_codes or load_free_enrichment_ts_codes(service=service, limit=limit),
+        limit=limit,
+    )
+    frames: list[pd.DataFrame] = []
+    fetched_rows = 0
+    empty_results = 0
+    failed_requests = 0
+    errors: list[str] = []
+    batches = _iter_batches(universe, batch_size)
+
+    for batch_index, batch in enumerate(batches, start=1):
+        print(
+            "free_enrichment_request_batch|"
+            f"dataset=mainbiz|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+        )
+        for ts_code in batch:
+            ak_symbol = ts_code_to_akshare_symbol(ts_code)
+            if not ak_symbol:
+                continue
+            try:
+                raw = pd.DataFrame(client.stock_zygc_em(symbol=ak_symbol))
+                fetched_rows += len(raw)
+                if raw.empty:
+                    empty_results += 1
+                    continue
+                raw = raw.copy()
+                if "股票代码" not in raw.columns:
+                    raw["股票代码"] = ts_code
+                normalized = normalize_main_business_rows(raw, endpoint="stock_zygc_em")
+                normalized = _filter_frame_by_date_range(
+                    normalized,
+                    columns=["report_period"],
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                frames.append(normalized)
+            except Exception as exc:
+                failed_requests += 1
+                errors.append(f"stock_zygc_em:{ts_code}:{exc}")
+        _sleep_after_batch(batch_index, len(batches), sleep_seconds)
+
+    normalized = _concat_frames(frames)
+    upserted = 0 if dry_run else upsert_main_business_rows(normalized, service=service)
+    return DatasetRunResult(
+        dataset="mainbiz",
+        status=_run_status(normalized_rows=len(normalized), upserted_rows=upserted, failed_requests=failed_requests),
+        message="; ".join(errors[:3]),
+        fetched_rows=fetched_rows,
+        normalized_rows=len(normalized),
+        upserted_rows=upserted,
+        empty_results=empty_results,
+        failed_requests=failed_requests,
+    )
+
+
 def coverage_row(result: DatasetRunResult, *, start_date: str, end_date: str) -> dict[str, Any]:
     return {
         "dataset": result.dataset,
@@ -800,6 +1386,22 @@ def _ignored_batch_control_params(*, batch_size: int, sleep_seconds: float, limi
     return ignored
 
 
+def _batch_controls_applied(dataset: str) -> bool:
+    return dataset in _BATCH_CONTROLLED_DATASETS
+
+
+def _ignored_batch_control_params_for_dataset(
+    dataset: str,
+    *,
+    batch_size: int,
+    sleep_seconds: float,
+    limit: int | None,
+) -> list[str]:
+    if _batch_controls_applied(dataset):
+        return []
+    return _ignored_batch_control_params(batch_size=batch_size, sleep_seconds=sleep_seconds, limit=limit)
+
+
 def run_free_enrichment_backfill(
     *,
     dataset: str,
@@ -826,10 +1428,23 @@ def run_free_enrichment_backfill(
     results: list[DatasetRunResult] = []
     failures: list[dict[str, str]] = []
     total = len(requested)
-    batch_controls_applied_by_dataset = {name: False for name in requested}
+    batch_controls_applied_by_dataset = {name: _batch_controls_applied(name) for name in requested}
     ignored_params_by_dataset = {
-        name: _ignored_batch_control_params(batch_size=batch_size, sleep_seconds=sleep_seconds, limit=limit)
+        name: _ignored_batch_control_params_for_dataset(
+            name,
+            batch_size=batch_size,
+            sleep_seconds=sleep_seconds,
+            limit=limit,
+        )
         for name in requested
+    }
+    runners = {
+        "holder": run_holder_backfill,
+        "repurchase": run_repurchase_backfill,
+        "survey": run_survey_backfill,
+        "forecast": run_forecast_backfill,
+        "express": run_express_backfill,
+        "mainbiz": run_mainbiz_backfill,
     }
     for idx, name in enumerate(requested, start=1):
         try:
@@ -842,19 +1457,22 @@ def run_free_enrichment_backfill(
                     service=service,
                 )
             else:
-                message = "dataset runner not implemented"
-                result = DatasetRunResult(
-                    dataset=name,
-                    status="not_implemented",
-                    failed_requests=1,
-                    message=message,
+                result = runners[name](
+                    start_date=start_date,
+                    end_date=end_date,
+                    batch_size=batch_size,
+                    sleep_seconds=sleep_seconds,
+                    limit=limit,
+                    dry_run=dry_run,
+                    service=service,
                 )
-                failures.append({"dataset": name, "request": "dataset", "error": message})
         except Exception as exc:
             message = str(exc)
             result = DatasetRunResult(dataset=name, status="failed", failed_requests=1, message=message)
             failures.append({"dataset": name, "request": "dataset", "error": message})
 
+        if result.status in {"failed", "partial_failed"} and result.message:
+            failures.append({"dataset": name, "request": "dataset", "error": result.message})
         results.append(result)
         print(
             "free_enrichment_batch|"
