@@ -3,10 +3,14 @@ import pandas as pd
 from stock_research.free_enrichment_data import (
     DatasetRunResult,
     build_event_id,
+    normalize_shareholder_count_rows,
+    normalize_top_holder_rows,
     normalize_ts_code,
     payload_hash,
     run_lhb_backfill,
     ts_code_to_asset_id,
+    upsert_shareholder_count_rows,
+    upsert_top_holder_rows,
 )
 
 
@@ -77,6 +81,109 @@ def test_dataset_run_result_to_dict():
     )
     assert result.to_dict()["dataset"] == "repurchase"
     assert result.to_dict()["upserted_rows"] == 2
+
+
+def test_normalize_shareholder_count_rows_maps_chinese_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "代码": "600000",
+                "截止日期": "2025-03-31",
+                "公告日期": "2025-04-20",
+                "股东户数": 100000,
+                "股东户数增减": -1000,
+                "股东户数较上期变化百分比": -1.0,
+            }
+        ]
+    )
+
+    frame = normalize_shareholder_count_rows(raw, endpoint="stock_zh_a_gdhs_detail_em")
+
+    assert frame.iloc[0]["ts_code"] == "600000.SH"
+    assert frame.iloc[0]["asset_id"] == "CN:SH:600000"
+    assert frame.iloc[0]["report_date"] == "2025-03-31"
+    assert frame.iloc[0]["shareholder_count"] == 100000
+
+
+def test_normalize_top_holder_rows_supports_float_holder_flag():
+    raw = pd.DataFrame(
+        [
+            {
+                "代码": "000001",
+                "报告期": "2025-03-31",
+                "股东名称": "中央汇金资产管理有限责任公司",
+                "股东类型": "其它",
+                "持股数": 123,
+                "占总股本持股比例": 1.2,
+                "增减": 3,
+                "名次": 1,
+            }
+        ]
+    )
+
+    frame = normalize_top_holder_rows(raw, endpoint="stock_gdfx_top_10_em")
+
+    assert frame.iloc[0]["ts_code"] == "000001.SZ"
+    assert frame.iloc[0]["report_period"] == "2025-03-31"
+    assert frame.iloc[0]["holder_name"] == "中央汇金资产管理有限责任公司"
+
+
+def test_holder_upserts_use_expected_tables(monkeypatch):
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    shareholder = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "report_date": "2025-03-31",
+                "announcement_date": "2025-04-20",
+                "shareholder_count": 100000,
+                "shareholder_count_change": -1000,
+                "shareholder_count_change_pct": -1,
+                "source": "akshare",
+                "source_endpoint": "stock_zh_a_gdhs_detail_em",
+                "payload_hash": "h1",
+            }
+        ]
+    )
+    holders = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "report_period": "2025-03-31",
+                "holder_name": "holder",
+                "holder_type": "fund",
+                "hold_amount": 1,
+                "hold_ratio": 1,
+                "hold_change": 0,
+                "rank": 1,
+                "source": "akshare",
+                "source_endpoint": "stock_gdfx_top_10_em",
+                "payload_hash": "h2",
+            }
+        ]
+    )
+
+    upsert_shareholder_count_rows(shareholder, service="test")
+    upsert_top_holder_rows(holders, table="fundamental.top10_holder", service="test")
+
+    assert "INSERT INTO fundamental.shareholder_count" in calls[0][0]
+    assert "INSERT INTO fundamental.top10_holder" in calls[1][0]
 
 
 def test_run_lhb_backfill_uses_existing_lhb_import(tmp_path):

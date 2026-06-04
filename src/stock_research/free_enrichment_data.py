@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from stock_research.config import SETTINGS
+from stock_research.db import connect, execute_many
 
 
 SOURCE = "akshare"
@@ -113,6 +116,186 @@ def build_event_id(prefix: str, parts: list[Any]) -> str:
     normalized = [_stable_part_text(part) for part in parts]
     digest = payload_hash({"prefix": prefix, "parts": normalized})[:24]
     return f"{prefix}:{digest}"
+
+
+def _date_text(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series, errors="coerce").dt.strftime("%Y-%m-%d")
+
+
+def _first_existing(frame: pd.DataFrame, names: list[str]) -> pd.Series:
+    for name in names:
+        if name in frame.columns:
+            return frame[name]
+    return pd.Series([None] * len(frame), index=frame.index)
+
+
+def normalize_shareholder_count_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+
+    data = pd.DataFrame(index=frame.index)
+    data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
+    data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
+    data["report_date"] = _date_text(_first_existing(frame, ["截止日期", "报告期", "END_DATE"]))
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "DECLAREDATE", "公告日"]))
+    data["shareholder_count"] = pd.to_numeric(_first_existing(frame, ["股东户数", "HOLDER_NUM"]), errors="coerce")
+    data["shareholder_count_change"] = pd.to_numeric(
+        _first_existing(frame, ["股东户数增减", "较上期变化", "HOLDER_NUM_CHANGE"]),
+        errors="coerce",
+    )
+    data["shareholder_count_change_pct"] = pd.to_numeric(
+        _first_existing(frame, ["股东户数较上期变化百分比", "较上期变化百分比"]),
+        errors="coerce",
+    )
+    data["source"] = SOURCE
+    data["source_endpoint"] = endpoint
+    data["payload_hash"] = frame.apply(lambda row: payload_hash(row.to_dict()), axis=1)
+    return data[data["asset_id"].ne("") & data["report_date"].notna()].reset_index(drop=True)
+
+
+def normalize_top_holder_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+
+    data = pd.DataFrame(index=frame.index)
+    data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
+    data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
+    data["report_period"] = _date_text(_first_existing(frame, ["报告期", "截止日期", "END_DATE"]))
+    data["holder_name"] = _first_existing(frame, ["股东名称", "HOLDER_NAME"]).fillna("").astype(str)
+    data["holder_type"] = _first_existing(frame, ["股东类型", "HOLDER_TYPE"])
+    data["hold_amount"] = pd.to_numeric(_first_existing(frame, ["持股数", "持股数量", "HOLD_NUM"]), errors="coerce")
+    data["hold_ratio"] = pd.to_numeric(
+        _first_existing(frame, ["占总股本持股比例", "持股比例", "HOLD_RATIO"]),
+        errors="coerce",
+    )
+    data["hold_change"] = pd.to_numeric(_first_existing(frame, ["增减", "持股变动", "HOLD_CHANGE"]), errors="coerce")
+    data["rank"] = pd.to_numeric(_first_existing(frame, ["名次", "排名", "RANK"]), errors="coerce")
+    data["source"] = SOURCE
+    data["source_endpoint"] = endpoint
+    data["payload_hash"] = frame.apply(lambda row: payload_hash(row.to_dict()), axis=1)
+    return data[
+        data["asset_id"].ne("") & data["report_period"].notna() & data["holder_name"].ne("")
+    ].reset_index(drop=True)
+
+
+def _value_or_none(value: Any) -> Any:
+    if pd.isna(value):
+        return None
+    return value
+
+
+def _frame_rows(frame: pd.DataFrame, columns: list[str]) -> list[tuple[Any, ...]]:
+    return [tuple(_value_or_none(row[column]) for column in columns) for row in frame.to_dict("records")]
+
+
+def upsert_shareholder_count_rows(
+    frame: pd.DataFrame,
+    service: str = SETTINGS.research_service,
+) -> int:
+    if frame.empty:
+        return 0
+
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_date",
+        "announcement_date",
+        "shareholder_count",
+        "shareholder_count_change",
+        "shareholder_count_change_pct",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ]
+    sql = """
+        INSERT INTO fundamental.shareholder_count (
+            asset_id,
+            ts_code,
+            report_date,
+            announcement_date,
+            shareholder_count,
+            shareholder_count_change,
+            shareholder_count_change_pct,
+            source,
+            source_endpoint,
+            payload_hash
+        ) VALUES (
+            %s, %s, %s::date, %s::date, %s, %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (asset_id, report_date, source) DO UPDATE SET
+            ts_code = EXCLUDED.ts_code,
+            announcement_date = EXCLUDED.announcement_date,
+            shareholder_count = EXCLUDED.shareholder_count,
+            shareholder_count_change = EXCLUDED.shareholder_count_change,
+            shareholder_count_change_pct = EXCLUDED.shareholder_count_change_pct,
+            source_endpoint = EXCLUDED.source_endpoint,
+            payload_hash = EXCLUDED.payload_hash,
+            updated_at = now()
+    """
+    rows = _frame_rows(frame, columns)
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
+
+
+def upsert_top_holder_rows(
+    frame: pd.DataFrame,
+    *,
+    table: str,
+    service: str = SETTINGS.research_service,
+) -> int:
+    allowed_tables = {"fundamental.top10_holder", "fundamental.top10_float_holder"}
+    if table not in allowed_tables:
+        raise ValueError(f"Unsupported holder table: {table}")
+    if frame.empty:
+        return 0
+
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_period",
+        "holder_name",
+        "holder_type",
+        "hold_amount",
+        "hold_ratio",
+        "hold_change",
+        "rank",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ]
+    sql = f"""
+        INSERT INTO {table} (
+            asset_id,
+            ts_code,
+            report_period,
+            holder_name,
+            holder_type,
+            hold_amount,
+            hold_ratio,
+            hold_change,
+            rank,
+            source,
+            source_endpoint,
+            payload_hash
+        ) VALUES (
+            %s, %s, %s::date, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (asset_id, report_period, holder_name, source) DO UPDATE SET
+            ts_code = EXCLUDED.ts_code,
+            holder_type = EXCLUDED.holder_type,
+            hold_amount = EXCLUDED.hold_amount,
+            hold_ratio = EXCLUDED.hold_ratio,
+            hold_change = EXCLUDED.hold_change,
+            rank = EXCLUDED.rank,
+            source_endpoint = EXCLUDED.source_endpoint,
+            payload_hash = EXCLUDED.payload_hash,
+            updated_at = now()
+    """
+    rows = _frame_rows(frame, columns)
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
 
 
 def _safe_len(value: Any) -> int:
