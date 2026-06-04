@@ -709,8 +709,12 @@ def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_su
     assert summary["params"]["sleep_seconds"] == 0.5
     assert summary["params"]["limit"] == 3
     assert summary["params"]["limit_applies_to_placeholders"] is False
+    assert summary["params"]["batch_controls_applied_by_dataset"]["lhb"] is False
+    assert summary["params"]["ignored_params_by_dataset"]["lhb"] == ["batch_size", "sleep_seconds", "limit"]
     assert summary["results"][0]["status"] == "success"
-    assert "free_enrichment_batch|dataset=lhb|batch=1/1|dry_run=True|status=success" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "free_enrichment_batch|dataset=lhb|batch=1/1|dry_run=True|status=success" in out
+    assert "batch_controls_applied=False|ignored_params=batch_size,sleep_seconds,limit" in out
 
 
 def test_run_free_enrichment_backfill_all_marks_unimplemented_datasets_as_failures(monkeypatch, tmp_path):

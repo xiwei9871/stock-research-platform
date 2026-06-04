@@ -789,6 +789,17 @@ def coverage_row(result: DatasetRunResult, *, start_date: str, end_date: str) ->
     }
 
 
+def _ignored_batch_control_params(*, batch_size: int, sleep_seconds: float, limit: int | None) -> list[str]:
+    ignored = []
+    if batch_size is not None:
+        ignored.append("batch_size")
+    if sleep_seconds is not None:
+        ignored.append("sleep_seconds")
+    if limit is not None:
+        ignored.append("limit")
+    return ignored
+
+
 def run_free_enrichment_backfill(
     *,
     dataset: str,
@@ -815,6 +826,11 @@ def run_free_enrichment_backfill(
     results: list[DatasetRunResult] = []
     failures: list[dict[str, str]] = []
     total = len(requested)
+    batch_controls_applied_by_dataset = {name: False for name in requested}
+    ignored_params_by_dataset = {
+        name: _ignored_batch_control_params(batch_size=batch_size, sleep_seconds=sleep_seconds, limit=limit)
+        for name in requested
+    }
     for idx, name in enumerate(requested, start=1):
         try:
             if name == "lhb":
@@ -843,7 +859,9 @@ def run_free_enrichment_backfill(
         print(
             "free_enrichment_batch|"
             f"dataset={result.dataset}|batch={idx}/{total}|dry_run={dry_run}|"
-            f"status={result.status}|batch_size={batch_size}|sleep_seconds={sleep_seconds}|"
+            f"status={result.status}|batch_controls_applied={batch_controls_applied_by_dataset[name]}|"
+            f"ignored_params={','.join(ignored_params_by_dataset[name])}|"
+            f"batch_size={batch_size}|sleep_seconds={sleep_seconds}|"
             f"limit={limit}|limit_applies_to_placeholders=False|fetched={result.fetched_rows}|"
             f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
             f"empty={result.empty_results}|failed={result.failed_requests}|failure_sample={failures_path}"
@@ -859,6 +877,8 @@ def run_free_enrichment_backfill(
         "sleep_seconds": sleep_seconds,
         "limit": limit,
         "limit_applies_to_placeholders": False,
+        "batch_controls_applied_by_dataset": batch_controls_applied_by_dataset,
+        "ignored_params_by_dataset": ignored_params_by_dataset,
         "dry_run": dry_run,
         "service": service,
     }
