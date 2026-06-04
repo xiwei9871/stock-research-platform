@@ -8,6 +8,7 @@ import pandas as pd
 from stock_research.tech_bottleneck_discovery import (
     build_tech_bottleneck_packets,
     render_tech_bottleneck_markdown,
+    run_tech_bottleneck_discovery_from_files,
     write_tech_bottleneck_artifacts,
 )
 
@@ -170,3 +171,22 @@ def test_write_tech_bottleneck_artifacts_writes_json_csv_markdown(tmp_path: Path
     payload = json.loads(paths["json"].read_text(encoding="utf-8"))
     assert payload[0]["run_id"] == "tech-bottleneck-2026-06-05"
     assert "tech-bottleneck-discovery Summary" in paths["summary"].read_text(encoding="utf-8")
+
+
+def test_run_tech_bottleneck_discovery_from_files(tmp_path: Path) -> None:
+    candidates_path = tmp_path / "candidates.csv"
+    evidence_path = tmp_path / "evidence.csv"
+    output_dir = tmp_path / "out"
+    _candidate_frame().to_csv(candidates_path, index=False)
+    _evidence_frame().to_csv(evidence_path, index=False)
+
+    paths = run_tech_bottleneck_discovery_from_files(
+        candidates_path=candidates_path,
+        evidence_path=evidence_path,
+        output_dir=output_dir,
+        run_id="tech-bottleneck-2026-06-05",
+    )
+
+    assert paths["json"] == output_dir / "packets.json"
+    assert paths["json"].exists()
+    assert (output_dir / "CN_SH_688001.md").exists()

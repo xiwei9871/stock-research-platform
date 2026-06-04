@@ -197,6 +197,23 @@ def write_tech_bottleneck_artifacts(
     return {"json": json_path, "csv": csv_path, "summary": summary_path}
 
 
+def run_tech_bottleneck_discovery_from_files(
+    *,
+    candidates_path: Path,
+    evidence_path: Path,
+    output_dir: Path,
+    run_id: str,
+) -> dict[str, Path]:
+    candidates = pd.read_csv(candidates_path)
+    evidence = pd.read_csv(evidence_path)
+    packets = build_tech_bottleneck_packets(
+        candidates=candidates,
+        evidence=evidence,
+        run_id=run_id,
+    )
+    return write_tech_bottleneck_artifacts(packets=packets, output_dir=output_dir)
+
+
 def _evidence_lookup(evidence: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     if evidence.empty:
         return {}

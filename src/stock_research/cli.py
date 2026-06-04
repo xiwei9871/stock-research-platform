@@ -158,6 +158,7 @@ from stock_research.minute_backfill import (
 from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
+from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
@@ -1384,6 +1385,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["info", "low", "medium", "high", "critical"],
     )
     report_delivery_openclaw_send.add_argument("--test-mode", action="store_true")
+
+    tech_bottleneck_parser = subparsers.add_parser(
+        "tech-bottleneck-discovery",
+        help="Generate automated tech bottleneck discovery research packets.",
+    )
+    tech_bottleneck_parser.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_parser.add_argument("--evidence-csv", required=True)
+    tech_bottleneck_parser.add_argument("--output-dir", required=True)
+    tech_bottleneck_parser.add_argument("--run-id", required=True)
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
@@ -4708,6 +4718,14 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"non-dry-run send failed with status {result.status}; "
                 f"artifacts preserved at {result.send_log_path}"
             )
+    elif args.command == "tech-bottleneck-discovery":
+        paths = run_tech_bottleneck_discovery_from_files(
+            candidates_path=Path(args.candidates_csv),
+            evidence_path=Path(args.evidence_csv),
+            output_dir=Path(args.output_dir),
+            run_id=str(args.run_id),
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "backtest-top20":
         result = run_top20_backtest(
             args.start_date,
