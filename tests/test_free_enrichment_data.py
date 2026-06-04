@@ -163,6 +163,50 @@ def test_normalize_shareholder_trade_rows_keeps_trade_type():
     assert frame.iloc[0]["trade_type"] == "减持"
 
 
+def test_event_normalizers_keep_sparse_rows_with_distinct_event_ids():
+    repurchase = normalize_repurchase_rows(
+        pd.DataFrame(
+            [
+                {"代码": "600000", "已回购金额": 1000},
+                {"代码": "600000", "已回购金额": 2000},
+            ]
+        ),
+        endpoint="stock_repurchase_em",
+    )
+    survey = normalize_institution_survey_rows(
+        pd.DataFrame(
+            [
+                {"代码": "000001", "机构数量": 1},
+                {"代码": "000001", "机构数量": 2},
+            ]
+        ),
+        endpoint="stock_jgdy_detail_em",
+    )
+    trade = normalize_shareholder_trade_rows(
+        pd.DataFrame(
+            [
+                {"代码": "000001", "变动数量": 10},
+                {"代码": "000001", "变动数量": 20},
+            ]
+        ),
+        endpoint="stock_ggcg_em",
+    )
+
+    assert len(repurchase) == 2
+    assert repurchase["event_id"].nunique() == 2
+    assert len(survey) == 2
+    assert survey["event_id"].nunique() == 2
+    assert len(trade) == 2
+    assert trade["event_id"].nunique() == 2
+
+
+def test_event_normalizers_filter_invalid_assets_and_empty_frames():
+    assert normalize_repurchase_rows(pd.DataFrame(), endpoint="x").empty
+    assert normalize_institution_survey_rows(pd.DataFrame(), endpoint="x").empty
+    assert normalize_shareholder_trade_rows(pd.DataFrame(), endpoint="x").empty
+    assert normalize_repurchase_rows(pd.DataFrame([{"代码": "bad", "公告日期": "2025-01-01"}]), endpoint="x").empty
+
+
 def test_holder_normalizers_filter_invalid_rows_and_empty_frames():
     empty_shareholders = normalize_shareholder_count_rows(pd.DataFrame(), endpoint="x")
     empty_holders = normalize_top_holder_rows(pd.DataFrame(), endpoint="x")

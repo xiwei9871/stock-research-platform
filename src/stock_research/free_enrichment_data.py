@@ -259,7 +259,10 @@ def normalize_repurchase_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataF
         errors="coerce",
     )
     data["event_id"] = data.apply(
-        lambda row: build_event_id("repurchase", [row["ts_code"], row["announcement_date"], row["progress"]]),
+        lambda row: build_event_id(
+            "repurchase",
+            [row["ts_code"], row["announcement_date"], row["progress"], row["payload_hash"]],
+        ),
         axis=1,
     )
     return data[data["asset_id"].ne("")].reset_index(drop=True)
@@ -280,7 +283,7 @@ def normalize_institution_survey_rows(frame: pd.DataFrame, *, endpoint: str) -> 
     data["survey_type"] = _first_existing(frame, ["调研类型", "接待方式", "SURVEY_TYPE"])
     data["summary"] = _first_existing(frame, ["调研内容", "主要内容", "SUMMARY"])
     data["event_id"] = data.apply(
-        lambda row: build_event_id("survey", [row["ts_code"], row["survey_date"], row["summary"]]),
+        lambda row: build_event_id("survey", [row["ts_code"], row["survey_date"], row["summary"], row["payload_hash"]]),
         axis=1,
     )
     return data[data["asset_id"].ne("")].reset_index(drop=True)
@@ -304,7 +307,7 @@ def normalize_shareholder_trade_rows(frame: pd.DataFrame, *, endpoint: str) -> p
     data["event_id"] = data.apply(
         lambda row: build_event_id(
             "shareholder_trade",
-            [row["ts_code"], row["trade_date"], row["holder_name"], row["trade_type"]],
+            [row["ts_code"], row["trade_date"], row["holder_name"], row["trade_type"], row["payload_hash"]],
         ),
         axis=1,
     )
