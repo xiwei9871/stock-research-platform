@@ -372,10 +372,10 @@ def normalize_top_holder_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataF
     data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
     data["report_period"] = _date_text(_first_existing(frame, ["报告期", "截止日期", "END_DATE"]))
     data["holder_name"] = _first_existing(frame, ["股东名称", "HOLDER_NAME"]).fillna("").astype(str)
-    data["holder_type"] = _first_existing(frame, ["股东类型", "HOLDER_TYPE"])
+    data["holder_type"] = _first_existing(frame, ["股东类型", "股东性质", "股份类型", "HOLDER_TYPE"])
     data["hold_amount"] = pd.to_numeric(_first_existing(frame, ["持股数", "持股数量", "HOLD_NUM"]), errors="coerce")
     data["hold_ratio"] = pd.to_numeric(
-        _first_existing(frame, ["占总股本持股比例", "持股比例", "HOLD_RATIO"]),
+        _first_existing(frame, ["占总股本持股比例", "占总流通股本持股比例", "持股比例", "HOLD_RATIO"]),
         errors="coerce",
     )
     data["hold_change"] = pd.to_numeric(_first_existing(frame, ["增减", "持股变动", "HOLD_CHANGE"]), errors="coerce")
@@ -1386,8 +1386,16 @@ def _ignored_batch_control_params(*, batch_size: int, sleep_seconds: float, limi
     return ignored
 
 
-def _batch_controls_applied(dataset: str) -> bool:
+def _batch_controls_applied(dataset: str) -> bool | str:
+    if dataset == "holder":
+        return "partial"
     return dataset in _BATCH_CONTROLLED_DATASETS
+
+
+def _uncontrolled_request_units(dataset: str) -> list[str]:
+    if dataset == "holder":
+        return ["stock_ggcg_em(symbol=全部)"]
+    return []
 
 
 def _ignored_batch_control_params_for_dataset(
@@ -1397,6 +1405,8 @@ def _ignored_batch_control_params_for_dataset(
     sleep_seconds: float,
     limit: int | None,
 ) -> list[str]:
+    if dataset == "holder":
+        return _ignored_batch_control_params(batch_size=batch_size, sleep_seconds=sleep_seconds, limit=limit)
     if _batch_controls_applied(dataset):
         return []
     return _ignored_batch_control_params(batch_size=batch_size, sleep_seconds=sleep_seconds, limit=limit)
@@ -1438,6 +1448,7 @@ def run_free_enrichment_backfill(
         )
         for name in requested
     }
+    uncontrolled_request_units_by_dataset = {name: _uncontrolled_request_units(name) for name in requested}
     runners = {
         "holder": run_holder_backfill,
         "repurchase": run_repurchase_backfill,
@@ -1479,6 +1490,7 @@ def run_free_enrichment_backfill(
             f"dataset={result.dataset}|batch={idx}/{total}|dry_run={dry_run}|"
             f"status={result.status}|batch_controls_applied={batch_controls_applied_by_dataset[name]}|"
             f"ignored_params={','.join(ignored_params_by_dataset[name])}|"
+            f"uncontrolled_request_units={','.join(uncontrolled_request_units_by_dataset[name])}|"
             f"batch_size={batch_size}|sleep_seconds={sleep_seconds}|"
             f"limit={limit}|limit_applies_to_placeholders=False|fetched={result.fetched_rows}|"
             f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
@@ -1497,6 +1509,7 @@ def run_free_enrichment_backfill(
         "limit_applies_to_placeholders": False,
         "batch_controls_applied_by_dataset": batch_controls_applied_by_dataset,
         "ignored_params_by_dataset": ignored_params_by_dataset,
+        "uncontrolled_request_units_by_dataset": uncontrolled_request_units_by_dataset,
         "dry_run": dry_run,
         "service": service,
     }

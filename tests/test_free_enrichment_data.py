@@ -178,6 +178,49 @@ def test_normalize_top_holder_rows_supports_float_holder_flag():
     assert frame.iloc[0]["holder_name"] == "中央汇金资产管理有限责任公司"
 
 
+def test_normalize_top_holder_rows_maps_actual_top10_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "股票代码": "600000",
+                "报告期": "2025-03-31",
+                "股东名称": "上海国际集团有限公司",
+                "股份类型": "流通A股",
+                "持股数": 123,
+                "占总股本持股比例": 1.2,
+                "名次": 1,
+            }
+        ]
+    )
+
+    frame = normalize_top_holder_rows(raw, endpoint="stock_gdfx_top_10_em")
+
+    assert frame.iloc[0]["holder_type"] == "流通A股"
+    assert frame.iloc[0]["hold_ratio"] == 1.2
+
+
+def test_normalize_top_holder_rows_maps_actual_free_top10_akshare_columns():
+    raw = pd.DataFrame(
+        [
+            {
+                "股票代码": "600000",
+                "报告期": "2025-03-31",
+                "股东名称": "香港中央结算有限公司",
+                "股东性质": "其它",
+                "股份类型": "流通A股",
+                "持股数": 456,
+                "占总流通股本持股比例": 2.3,
+                "名次": 1,
+            }
+        ]
+    )
+
+    frame = normalize_top_holder_rows(raw, endpoint="stock_gdfx_free_top_10_em")
+
+    assert frame.iloc[0]["holder_type"] == "其它"
+    assert frame.iloc[0]["hold_ratio"] == 2.3
+
+
 def test_normalize_repurchase_rows_builds_event_id():
     raw = pd.DataFrame([{"代码": "600000", "公告日期": "2025-02-01", "进度": "实施", "已回购金额": 1000}])
     frame = normalize_repurchase_rows(raw, endpoint="stock_repurchase_em")
@@ -1125,8 +1168,9 @@ def test_run_free_enrichment_backfill_all_dispatches_real_datasets_and_reports_b
     assert "not_implemented" not in statuses.values()
     assert summary["params"]["batch_controls_applied_by_dataset"]["lhb"] is False
     assert summary["params"]["ignored_params_by_dataset"]["lhb"] == ["batch_size", "sleep_seconds"]
-    assert summary["params"]["batch_controls_applied_by_dataset"]["holder"] is True
-    assert summary["params"]["ignored_params_by_dataset"]["holder"] == []
+    assert summary["params"]["batch_controls_applied_by_dataset"]["holder"] == "partial"
+    assert summary["params"]["ignored_params_by_dataset"]["holder"] == ["batch_size", "sleep_seconds"]
+    assert summary["params"]["uncontrolled_request_units_by_dataset"]["holder"] == ["stock_ggcg_em(symbol=全部)"]
     assert summary["params"]["batch_controls_applied_by_dataset"]["repurchase"] is False
     assert summary["params"]["ignored_params_by_dataset"]["repurchase"] == ["batch_size", "sleep_seconds"]
     failures = pd.read_csv(tmp_path / "dataset_failures.csv")
@@ -1138,7 +1182,8 @@ def test_run_free_enrichment_backfill_all_dispatches_real_datasets_and_reports_b
     assert coverage.loc[coverage["dataset"].eq("lhb"), "row_count"].iloc[0] == 1
     out = capsys.readouterr().out
     assert "free_enrichment_batch|dataset=holder" in out
-    assert "dataset=holder" in out and "batch_controls_applied=True|ignored_params=" in out
+    assert "dataset=holder" in out and "batch_controls_applied=partial|ignored_params=batch_size,sleep_seconds" in out
+    assert "uncontrolled_request_units=stock_ggcg_em(symbol=全部)" in out
     assert "dataset=repurchase" in out and "batch_controls_applied=False|ignored_params=batch_size,sleep_seconds" in out
 
 
