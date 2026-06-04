@@ -205,6 +205,13 @@ def _compact_date(value: Any) -> str:
     return parsed.strftime("%Y%m%d")
 
 
+def _compact_previous_date(value: Any) -> str:
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return (parsed - pd.Timedelta(days=1)).strftime("%Y%m%d")
+
+
 def _display_date(value: Any) -> str:
     parsed = pd.to_datetime(value, errors="coerce")
     if pd.isna(parsed):
@@ -316,12 +323,8 @@ def load_free_enrichment_ts_codes(
     if limit is not None:
         sql += "\n        LIMIT %s"
         params.append(limit)
-    try:
-        with connect(service) as conn:
-            rows = fetch_all(conn, sql, params)
-    except Exception as exc:
-        print(f"free_enrichment_universe_loader_failed|service={service}|error={exc}")
-        return []
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, params)
 
     values: list[Any] = []
     for row in rows:
@@ -996,10 +999,19 @@ def run_holder_backfill(
     ts_codes: list[str] | None = None,
 ) -> DatasetRunResult:
     client = client or build_akshare_client()
-    universe = _normalize_ts_code_list(
-        ts_codes or load_free_enrichment_ts_codes(service=service, limit=limit),
-        limit=limit,
-    )
+    if ts_codes is None:
+        try:
+            universe_values = load_free_enrichment_ts_codes(service=service, limit=limit)
+        except Exception as exc:
+            return DatasetRunResult(
+                dataset="holder",
+                status="failed",
+                failed_requests=1,
+                message=f"universe loader failed: {exc}",
+            )
+    else:
+        universe_values = ts_codes
+    universe = _normalize_ts_code_list(universe_values, limit=limit)
     periods = report_quarter_ends_between(start_date, end_date)
 
     fetched_rows = 0
@@ -1157,7 +1169,7 @@ def run_survey_backfill(
     del batch_size, sleep_seconds, limit
     client = client or build_akshare_client()
     try:
-        raw = pd.DataFrame(client.stock_jgdy_detail_em(date=_compact_date(start_date)))
+        raw = pd.DataFrame(client.stock_jgdy_detail_em(date=_compact_previous_date(start_date)))
     except Exception as exc:
         return DatasetRunResult(dataset="survey", status="failed", failed_requests=1, message=str(exc))
 
@@ -1302,10 +1314,19 @@ def run_mainbiz_backfill(
     ts_codes: list[str] | None = None,
 ) -> DatasetRunResult:
     client = client or build_akshare_client()
-    universe = _normalize_ts_code_list(
-        ts_codes or load_free_enrichment_ts_codes(service=service, limit=limit),
-        limit=limit,
-    )
+    if ts_codes is None:
+        try:
+            universe_values = load_free_enrichment_ts_codes(service=service, limit=limit)
+        except Exception as exc:
+            return DatasetRunResult(
+                dataset="mainbiz",
+                status="failed",
+                failed_requests=1,
+                message=f"universe loader failed: {exc}",
+            )
+    else:
+        universe_values = ts_codes
+    universe = _normalize_ts_code_list(universe_values, limit=limit)
     frames: list[pd.DataFrame] = []
     fetched_rows = 0
     empty_results = 0
@@ -1458,6 +1479,7 @@ def run_free_enrichment_backfill(
         "mainbiz": run_mainbiz_backfill,
     }
     for idx, name in enumerate(requested, start=1):
+        captured_exception = False
         try:
             if name == "lhb":
                 result = run_lhb_backfill(
@@ -1481,8 +1503,9 @@ def run_free_enrichment_backfill(
             message = str(exc)
             result = DatasetRunResult(dataset=name, status="failed", failed_requests=1, message=message)
             failures.append({"dataset": name, "request": "dataset", "error": message})
+            captured_exception = True
 
-        if result.status in {"failed", "partial_failed"} and result.message:
+        if result.status in {"failed", "partial_failed"} and result.message and not captured_exception:
             failures.append({"dataset": name, "request": "dataset", "error": result.message})
         results.append(result)
         print(

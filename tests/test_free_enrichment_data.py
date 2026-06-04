@@ -952,6 +952,53 @@ def test_run_holder_backfill_fetches_per_stock_periods_and_shareholder_trade(mon
     assert upserts[3][1]["trade_date"].tolist() == ["2025-04-01"]
 
 
+def test_run_holder_backfill_reports_universe_loader_failure(monkeypatch):
+    def fail_loader(**kwargs):
+        raise RuntimeError("asset master unavailable")
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.load_free_enrichment_ts_codes", fail_loader)
+
+    result = run_holder_backfill(
+        start_date="2025-01-01",
+        end_date="2025-06-30",
+        batch_size=1,
+        sleep_seconds=0,
+        dry_run=True,
+        service="test",
+        client=object(),
+    )
+
+    assert result.status == "failed"
+    assert result.failed_requests == 1
+    assert "asset master unavailable" in result.message
+
+
+def test_run_mainbiz_backfill_allows_explicit_empty_ts_codes(monkeypatch):
+    def fail_loader(**kwargs):
+        raise AssertionError("loader should not be called for explicit empty ts_codes")
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.load_free_enrichment_ts_codes", fail_loader)
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_main_business_rows",
+        lambda frame, service: len(frame),
+    )
+
+    result = run_mainbiz_backfill(
+        start_date="2025-01-01",
+        end_date="2025-06-30",
+        batch_size=1,
+        sleep_seconds=0,
+        dry_run=False,
+        service="test",
+        client=object(),
+        ts_codes=[],
+    )
+
+    assert result.status == "success"
+    assert result.failed_requests == 0
+    assert result.normalized_rows == 0
+
+
 def test_run_forecast_and_express_backfill_use_quarter_periods(monkeypatch):
     calls = []
     upserts = []
@@ -1078,7 +1125,7 @@ def test_run_repurchase_survey_and_mainbiz_backfills_call_expected_endpoints(mon
     )
 
     assert ("repurchase",) in calls
-    assert ("survey", "20250501") in calls
+    assert ("survey", "20250430") in calls
     assert ("mainbiz", "SH600000") in calls
     assert not any(call == ("mainbiz", "SZ000001") for call in calls)
     assert repurchase.upserted_rows == 1
@@ -1089,6 +1136,34 @@ def test_run_repurchase_survey_and_mainbiz_backfills_call_expected_endpoints(mon
         "event.institution_survey",
         "finance.main_business_composition",
     ]
+
+
+def test_run_survey_backfill_queries_day_before_start_date(monkeypatch):
+    calls = []
+
+    class FakeClient:
+        def stock_jgdy_detail_em(self, date):
+            calls.append(date)
+            return pd.DataFrame([{"代码": "000001", "调研日期": "2025-05-01"}])
+
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.upsert_event_rows",
+        lambda frame, table, service: len(frame),
+    )
+
+    result = run_survey_backfill(
+        start_date="2025-05-01",
+        end_date="2025-05-31",
+        batch_size=10,
+        sleep_seconds=0,
+        limit=None,
+        dry_run=False,
+        service="test",
+        client=FakeClient(),
+    )
+
+    assert calls == ["20250430"]
+    assert result.upserted_rows == 1
 
 
 def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_summary(
@@ -1210,6 +1285,7 @@ def test_run_free_enrichment_backfill_captures_runner_exception(monkeypatch, tmp
     assert failures.iloc[0]["dataset"] == "lhb"
     assert failures.iloc[0]["request"] == "dataset"
     assert failures.iloc[0]["error"] == "akshare down"
+    assert len(failures) == 1
 
 
 def test_run_free_enrichment_backfill_invalid_dataset_does_not_create_output_dir(tmp_path):
