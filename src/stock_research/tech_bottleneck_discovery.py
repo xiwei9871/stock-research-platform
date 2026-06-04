@@ -214,6 +214,27 @@ def run_tech_bottleneck_discovery_from_files(
     return write_tech_bottleneck_artifacts(packets=packets, output_dir=output_dir)
 
 
+def apply_review_decisions(*, packets: pd.DataFrame, decisions: pd.DataFrame) -> pd.DataFrame:
+    if packets.empty or decisions.empty:
+        return packets.copy()
+    normalized = decisions.copy()
+    for column in ["asset_id", "review_decision", "review_reason"]:
+        if column not in normalized.columns:
+            normalized[column] = ""
+    normalized["asset_id"] = normalized["asset_id"].map(_safe_text)
+    normalized = normalized.drop_duplicates(subset=["asset_id"], keep="last")
+    decision_map = normalized.set_index("asset_id")[["review_decision", "review_reason"]].to_dict("index")
+    reviewed = packets.copy()
+    for index, row in reviewed.iterrows():
+        asset_id = _safe_text(row.get("asset_id"))
+        decision = decision_map.get(asset_id)
+        if decision is None:
+            continue
+        reviewed.at[index, "review_decision"] = _safe_text(decision.get("review_decision")) or "pending_review"
+        reviewed.at[index, "review_reason"] = _safe_text(decision.get("review_reason"))
+    return reviewed
+
+
 def _evidence_lookup(evidence: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     if evidence.empty:
         return {}

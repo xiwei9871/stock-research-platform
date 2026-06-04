@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from stock_research.tech_bottleneck_discovery import (
+    apply_review_decisions,
     build_tech_bottleneck_packets,
     render_tech_bottleneck_markdown,
     run_tech_bottleneck_discovery_from_files,
@@ -190,3 +191,32 @@ def test_run_tech_bottleneck_discovery_from_files(tmp_path: Path) -> None:
     assert paths["json"] == output_dir / "packets.json"
     assert paths["json"].exists()
     assert (output_dir / "CN_SH_688001.md").exists()
+
+
+def test_apply_review_decisions_updates_decision_without_regenerating_packet() -> None:
+    packets = build_tech_bottleneck_packets(
+        candidates=_candidate_frame(),
+        evidence=_evidence_frame(),
+        run_id="tech-bottleneck-2026-06-05",
+    )
+    decisions = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688001",
+                "review_decision": "approve",
+                "review_reason": "证据链完整，进入 shadow 跟踪。",
+            },
+            {
+                "asset_id": "CN:SZ:300001",
+                "review_decision": "reject",
+                "review_reason": "只有弱证据，且不是上游咽喉点。",
+            },
+        ]
+    )
+
+    reviewed = apply_review_decisions(packets=packets, decisions=decisions)
+    rows = reviewed.set_index("asset_id")
+
+    assert rows.loc["CN:SH:688001", "review_decision"] == "approve"
+    assert rows.loc["CN:SH:688001", "review_reason"] == "证据链完整，进入 shadow 跟踪。"
+    assert rows.loc["CN:SZ:300001", "review_decision"] == "reject"
