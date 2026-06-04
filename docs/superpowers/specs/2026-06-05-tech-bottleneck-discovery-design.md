@@ -37,7 +37,7 @@ Reference material reviewed:
 
 - Define a reusable research template for hard-technology chokepoint opportunities.
 - Add a second-stage scoring lens over existing candidates.
-- Produce a shadow research list and evidence packet for manual review.
+- Automatically produce a shadow research list and evidence packet for human review.
 - Track outcomes for 5, 10, 20, and 60 trading days.
 - Preserve explicit thesis, evidence, catalyst, and invalidation fields for later review.
 
@@ -59,7 +59,8 @@ Existing candidate pools
 -> trend, quality, industry, and risk scores
 -> tech-bottleneck-discovery lens
 -> shadow research candidates
--> human / LLM evidence packet
+-> automated evidence packet
+-> human review / approve / reject
 -> outcome tracking
 ```
 
@@ -266,7 +267,7 @@ The first version should avoid overfitting. The score is a ranking and triage to
 | `watch` | Interesting chokepoint idea, evidence incomplete. |
 | `research` | Chokepoint is plausible and evidence justifies deeper review. |
 | `probe` | Evidence, valuation, and catalyst are strong enough for shadow tracking. |
-| `conviction_candidate` | High-confidence research candidate for manual review, not automatic production approval. |
+| `conviction_candidate` | High-confidence research candidate for human review, not automatic production approval. |
 | `invalidated` | Thesis failed one or more predefined invalidation rules. |
 
 ## Research Packet Output
@@ -320,9 +321,9 @@ Outcome review should answer:
 4. Did technical confirmation improve or worsen results?
 5. Which invalidation rule should have fired earlier?
 
-## Manual Research Template
+## Automated Research Packet Review Checklist
 
-Use this short checklist before promoting any candidate:
+The system should automatically answer this checklist before any candidate can be promoted to review. A human reviewer checks the generated answers, evidence, and citations, then records approve, reject, or needs-more-evidence.
 
 1. What is the terminal demand?
 2. What exact supply-chain node can become a bottleneck?
@@ -340,7 +341,7 @@ Use this short checklist before promoting any candidate:
 ### Phase 1: Research Layer
 
 - Build a static scoring rubric and markdown research packet.
-- Apply manually to selected existing candidates.
+- Generate packets automatically for selected existing candidates.
 - Store packet outputs under research outputs.
 - Track outcomes without affecting production watchlists.
 
