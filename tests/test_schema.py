@@ -69,6 +69,27 @@ def test_research_extension_creates_watchlist_tables():
     assert "CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal" in sql
 
 
+def test_research_extension_includes_free_enrichment_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE SCHEMA IF NOT EXISTS fundamental;" in sql
+    assert "CREATE SCHEMA IF NOT EXISTS event;" in sql
+    assert "CREATE TABLE IF NOT EXISTS raw_akshare.enrichment_payload" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.shareholder_count" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.top10_holder" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.top10_float_holder" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.shareholder_trade" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.stock_repurchase" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.institution_survey" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.earnings_forecast" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.earnings_express" in sql
+    assert "CREATE TABLE IF NOT EXISTS finance.main_business_composition" in sql
+    assert "payload_hash text NOT NULL" in sql
+    assert "idx_raw_akshare_enrichment_payload_endpoint" in sql
+    assert "idx_event_stock_repurchase_asset_date" in sql
+    assert "idx_finance_main_business_composition_asset_period" in sql
+
+
 def test_research_extension_includes_unified_stock_minute_bar_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS market.stock_minute_bar" in sql

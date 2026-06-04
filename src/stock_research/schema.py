@@ -32,6 +32,8 @@ CREATE SCHEMA IF NOT EXISTS raw_baostock;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS finance;
+CREATE SCHEMA IF NOT EXISTS fundamental;
+CREATE SCHEMA IF NOT EXISTS event;
 CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
@@ -238,6 +240,8 @@ CREATE SCHEMA IF NOT EXISTS raw_baostock;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS finance;
+CREATE SCHEMA IF NOT EXISTS fundamental;
+CREATE SCHEMA IF NOT EXISTS event;
 CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
@@ -539,6 +543,172 @@ CREATE TABLE IF NOT EXISTS raw_akshare.finance_payload (
     payload jsonb NOT NULL,
     fetched_at timestamptz NOT NULL DEFAULT now(),
     payload_hash text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS raw_akshare.enrichment_payload (
+    id bigserial PRIMARY KEY,
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    asset_id text,
+    ts_code text,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (source_endpoint, payload_hash)
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.shareholder_count (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_date date NOT NULL,
+    announcement_date date,
+    shareholder_count numeric,
+    shareholder_count_change numeric,
+    shareholder_count_change_pct numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_date, source)
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.top10_holder (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    holder_name text NOT NULL,
+    holder_type text,
+    hold_amount numeric,
+    hold_ratio numeric,
+    hold_change numeric,
+    rank integer,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, holder_name, source)
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.top10_float_holder (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    holder_name text NOT NULL,
+    holder_type text,
+    hold_amount numeric,
+    hold_ratio numeric,
+    hold_change numeric,
+    rank integer,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, holder_name, source)
+);
+
+CREATE TABLE IF NOT EXISTS event.shareholder_trade (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date,
+    announcement_date date,
+    holder_name text,
+    trade_type text,
+    trade_amount numeric,
+    trade_ratio numeric,
+    trade_price numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.stock_repurchase (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date,
+    progress_date date,
+    progress text,
+    repurchase_amount numeric,
+    repurchase_amount_min numeric,
+    repurchase_amount_max numeric,
+    repurchase_price_min numeric,
+    repurchase_price_max numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.institution_survey (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    survey_date date,
+    announcement_date date,
+    institution_count numeric,
+    institution_names text,
+    survey_type text,
+    summary text,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.earnings_forecast (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date NOT NULL,
+    report_period date,
+    forecast_type text,
+    forecast_np_min numeric,
+    forecast_np_max numeric,
+    forecast_np_change_min numeric,
+    forecast_np_change_max numeric,
+    summary text,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.earnings_express (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date NOT NULL,
+    report_period date,
+    revenue numeric,
+    revenue_yoy numeric,
+    np_parent numeric,
+    np_parent_yoy numeric,
+    eps_basic numeric,
+    roe_weighted numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS finance.main_business_composition (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    classify_type text NOT NULL,
+    item_name text NOT NULL,
+    revenue numeric,
+    revenue_ratio numeric,
+    cost numeric,
+    gross_profit numeric,
+    gross_margin numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, classify_type, item_name, source)
 );
 
 CREATE TABLE IF NOT EXISTS raw_baostock.finance_payload (
@@ -1545,6 +1715,27 @@ CREATE INDEX IF NOT EXISTS idx_finance_balance_sheet_pit
 
 CREATE INDEX IF NOT EXISTS idx_finance_cash_flow_pit
     ON finance.cash_flow (asset_id, announcement_date DESC, report_period DESC);
+
+CREATE INDEX IF NOT EXISTS idx_raw_akshare_enrichment_payload_endpoint
+    ON raw_akshare.enrichment_payload (source_endpoint, fetched_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fundamental_shareholder_count_asset_date
+    ON fundamental.shareholder_count (asset_id, report_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_stock_repurchase_asset_date
+    ON event.stock_repurchase (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_institution_survey_asset_date
+    ON event.institution_survey (asset_id, survey_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_earnings_forecast_asset_date
+    ON event.earnings_forecast (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_earnings_express_asset_date
+    ON event.earnings_express (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_finance_main_business_composition_asset_period
+    ON finance.main_business_composition (asset_id, report_period DESC);
 
 CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
     ON core.industry_membership (asset_id, industry_system, start_date, end_date);
