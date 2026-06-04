@@ -73,6 +73,7 @@ from stock_research.factor_backfill import (
     backfill_factor_daily_range,
     derive_factor_backfill_window,
 )
+from stock_research.free_enrichment_data import run_free_enrichment_backfill
 from stock_research.approved_scoring_workflow import score_approved_factors_range
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
@@ -1013,6 +1014,24 @@ def build_parser() -> argparse.ArgumentParser:
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
     subparsers.add_parser("finance-audit")
+
+    free_enrichment_backfill = subparsers.add_parser("free-enrichment-backfill")
+    free_enrichment_backfill.add_argument(
+        "--dataset",
+        choices=["all", "lhb", "holder", "repurchase", "survey", "forecast", "express", "mainbiz"],
+        default="all",
+    )
+    free_enrichment_backfill.add_argument("--start-date", required=True)
+    free_enrichment_backfill.add_argument("--end-date", required=True)
+    free_enrichment_backfill.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/free_enrichment",
+    )
+    free_enrichment_backfill.add_argument("--batch-size", type=int, default=100)
+    free_enrichment_backfill.add_argument("--sleep-seconds", type=float, default=1.0)
+    free_enrichment_backfill.add_argument("--limit", type=int)
+    free_enrichment_backfill.add_argument("--dry-run", action="store_true")
+    free_enrichment_backfill.add_argument("--service", default=SETTINGS.research_service)
 
     data_quality = subparsers.add_parser("data-quality")
     data_quality.add_argument("--expected-start-date", default="1990-12-01")
@@ -2605,6 +2624,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "free-enrichment-backfill":
+        result = run_free_enrichment_backfill(
+            dataset=args.dataset,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            batch_size=args.batch_size,
+            sleep_seconds=args.sleep_seconds,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            service=args.service,
+        )
+        print(f"free_enrichment_backfill|summary|{result['summary_path']}")
+        print(f"free_enrichment_backfill|coverage|{result['coverage_path']}")
+        print(f"free_enrichment_backfill|failures|{result['failures_path']}")
+        print(f"free_enrichment_backfill|datasets|{len(result['results'])}")
     elif args.command == "data-quality":
         start_date = args.start_date
         if start_date is None:

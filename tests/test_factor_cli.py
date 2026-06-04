@@ -6853,3 +6853,125 @@ def test_sync_asset_lifecycle_cli_prints_count(monkeypatch, capsys):
     cli.main()
 
     assert capsys.readouterr().out.strip() == "asset_lifecycle_synced|rows|100"
+
+
+def test_cli_accepts_free_enrichment_backfill_command():
+    args = build_parser().parse_args(
+        [
+            "free-enrichment-backfill",
+            "--dataset",
+            "holder",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+            "--output-dir",
+            "outputs/free",
+            "--batch-size",
+            "25",
+            "--sleep-seconds",
+            "0.25",
+            "--limit",
+            "7",
+            "--dry-run",
+            "--service",
+            "research_test",
+        ]
+    )
+
+    assert args.command == "free-enrichment-backfill"
+    assert args.dataset == "holder"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-31"
+    assert args.output_dir == "outputs/free"
+    assert args.batch_size == 25
+    assert args.sleep_seconds == 0.25
+    assert args.limit == 7
+    assert args.dry_run is True
+    assert args.service == "research_test"
+
+    default_args = build_parser().parse_args(
+        [
+            "free-enrichment-backfill",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+        ]
+    )
+
+    assert default_args.dataset == "all"
+    assert default_args.output_dir == "/Users/xiwei/stock_research/outputs/research/free_enrichment"
+    assert default_args.batch_size == 100
+    assert default_args.sleep_seconds == 1.0
+    assert default_args.limit is None
+    assert default_args.dry_run is False
+    assert default_args.service == cli.SETTINGS.research_service
+
+
+def test_free_enrichment_backfill_cli_dispatches_and_prints_artifacts(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    def fake_run_free_enrichment_backfill(**kwargs):
+        calls.append(kwargs)
+        print("free_enrichment_batch|dataset=holder|batch=1/1")
+        return {
+            "summary_path": "outputs/free/run_summary.json",
+            "coverage_path": "outputs/free/dataset_coverage.csv",
+            "failures_path": "outputs/free/dataset_failures.csv",
+            "results": [object(), object()],
+        }
+
+    monkeypatch.setattr(cli, "run_free_enrichment_backfill", fake_run_free_enrichment_backfill)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "free-enrichment-backfill",
+            "--dataset",
+            "holder",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+            "--output-dir",
+            "outputs/free",
+            "--batch-size",
+            "25",
+            "--sleep-seconds",
+            "0.25",
+            "--limit",
+            "7",
+            "--dry-run",
+            "--service",
+            "research_test",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "dataset": "holder",
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-31",
+            "output_dir": "outputs/free",
+            "batch_size": 25,
+            "sleep_seconds": 0.25,
+            "limit": 7,
+            "dry_run": True,
+            "service": "research_test",
+        }
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "free_enrichment_batch|dataset=holder|batch=1/1",
+        "free_enrichment_backfill|summary|outputs/free/run_summary.json",
+        "free_enrichment_backfill|coverage|outputs/free/dataset_coverage.csv",
+        "free_enrichment_backfill|failures|outputs/free/dataset_failures.csv",
+        "free_enrichment_backfill|datasets|2",
+    ]
