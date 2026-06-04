@@ -55,6 +55,16 @@ def test_build_event_id_changes_when_parts_change():
     )
 
 
+def test_build_event_id_preserves_zero_as_distinct_part():
+    assert build_event_id("x", [0]) != build_event_id("x", [""])
+
+
+def test_build_event_id_handles_missing_parts_without_crashing():
+    first = build_event_id("x", [None, float("nan"), pd.NA])
+    second = build_event_id("x", [None, float("nan"), pd.NA])
+    assert first == second
+
+
 def test_dataset_run_result_to_dict():
     result = DatasetRunResult(
         dataset="repurchase",

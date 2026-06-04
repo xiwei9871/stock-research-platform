@@ -95,7 +95,18 @@ def payload_hash(payload: Any) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _stable_part_text(part: Any) -> str:
+    if part is None:
+        return ""
+    if isinstance(part, float) and math.isnan(part):
+        return ""
+    text = str(part).strip()
+    if text.upper() in {"<NA>", "NAN", "NONE"}:
+        return ""
+    return text
+
+
 def build_event_id(prefix: str, parts: list[Any]) -> str:
-    normalized = [str(part or "").strip() for part in parts]
+    normalized = [_stable_part_text(part) for part in parts]
     digest = payload_hash({"prefix": prefix, "parts": normalized})[:24]
     return f"{prefix}:{digest}"
