@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 from stock_research.free_enrichment_data import (
@@ -669,34 +671,49 @@ def test_run_lhb_backfill_counts_none_and_missing_outputs_as_empty(tmp_path):
     assert missing_result.empty_results == 1
 
 
-def test_run_free_enrichment_backfill_writes_summary_and_coverage(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(
-        "stock_research.free_enrichment_data.run_lhb_backfill",
-        lambda **kwargs: DatasetRunResult(dataset="lhb", fetched_rows=2, normalized_rows=2, upserted_rows=2),
-    )
+def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_summary(
+    monkeypatch, tmp_path, capsys
+):
+    calls = []
+
+    def fake_lhb(**kwargs):
+        calls.append(kwargs)
+        return DatasetRunResult(dataset="lhb", fetched_rows=2, normalized_rows=2, upserted_rows=2)
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.run_lhb_backfill", fake_lhb)
 
     result = run_free_enrichment_backfill(
         dataset="lhb",
         start_date="2025-01-01",
         end_date="2025-01-31",
         output_dir=tmp_path,
-        batch_size=100,
-        sleep_seconds=0,
-        limit=None,
-        dry_run=False,
+        batch_size=7,
+        sleep_seconds=0.5,
+        limit=3,
+        dry_run=True,
         service="test",
     )
 
+    assert calls[0]["start_date"] == "2025-01-01"
+    assert calls[0]["end_date"] == "2025-01-31"
+    assert calls[0]["dry_run"] is True
+    assert calls[0]["service"] == "test"
     assert result["summary_path"].endswith("run_summary.json")
     assert result["coverage_path"].endswith("dataset_coverage.csv")
     assert result["failures_path"].endswith("dataset_failures.csv")
     assert (tmp_path / "run_summary.json").exists()
     assert (tmp_path / "dataset_coverage.csv").exists()
     assert (tmp_path / "dataset_failures.csv").exists()
-    assert "free_enrichment_batch|dataset=lhb|fetched=2|normalized=2|upserted=2|empty=0|failed=0" in capsys.readouterr().out
+    summary = json.loads((tmp_path / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["params"]["batch_size"] == 7
+    assert summary["params"]["sleep_seconds"] == 0.5
+    assert summary["params"]["limit"] == 3
+    assert summary["params"]["limit_applies_to_placeholders"] is False
+    assert summary["results"][0]["status"] == "success"
+    assert "free_enrichment_batch|dataset=lhb|batch=1/1|dry_run=True|status=success" in capsys.readouterr().out
 
 
-def test_run_free_enrichment_backfill_all_expands_to_all_datasets(monkeypatch, tmp_path):
+def test_run_free_enrichment_backfill_all_marks_unimplemented_datasets_as_failures(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "stock_research.free_enrichment_data.run_lhb_backfill",
         lambda **kwargs: DatasetRunResult(dataset="lhb", upserted_rows=1),
@@ -712,19 +729,55 @@ def test_run_free_enrichment_backfill_all_expands_to_all_datasets(monkeypatch, t
     )
 
     assert [item.dataset for item in result["results"]] == list(DATASETS)
+    summary = json.loads((tmp_path / "run_summary.json").read_text(encoding="utf-8"))
+    statuses = {item["dataset"]: item["status"] for item in summary["results"]}
+    assert statuses["lhb"] == "success"
+    assert statuses["holder"] == "not_implemented"
+    assert summary["results"][1]["message"] == "dataset runner not implemented"
+    failures = pd.read_csv(tmp_path / "dataset_failures.csv")
+    assert set(failures["dataset"]) == set(DATASETS) - {"lhb"}
+    assert set(failures["error"]) == {"dataset runner not implemented"}
     coverage = pd.read_csv(tmp_path / "dataset_coverage.csv")
     assert coverage["dataset"].tolist() == list(DATASETS)
+    assert "status" in coverage.columns
+    assert "message" in coverage.columns
     assert coverage.loc[coverage["dataset"].eq("lhb"), "row_count"].iloc[0] == 1
-    assert (tmp_path / "dataset_failures.csv").read_text(encoding="utf-8").splitlines()[0] == "dataset,request,error"
 
 
-def test_run_free_enrichment_backfill_rejects_invalid_dataset(tmp_path):
+def test_run_free_enrichment_backfill_captures_runner_exception(monkeypatch, tmp_path):
+    def boom(**kwargs):
+        raise RuntimeError("akshare down")
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.run_lhb_backfill", boom)
+
+    result = run_free_enrichment_backfill(
+        dataset="lhb",
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        sleep_seconds=0,
+        service="test",
+    )
+
+    assert result["results"][0].status == "failed"
+    summary = json.loads((tmp_path / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["results"][0]["status"] == "failed"
+    assert summary["results"][0]["message"] == "akshare down"
+    failures = pd.read_csv(tmp_path / "dataset_failures.csv")
+    assert failures.iloc[0]["dataset"] == "lhb"
+    assert failures.iloc[0]["request"] == "dataset"
+    assert failures.iloc[0]["error"] == "akshare down"
+
+
+def test_run_free_enrichment_backfill_invalid_dataset_does_not_create_output_dir(tmp_path):
+    out = tmp_path / "new-output"
+
     try:
         run_free_enrichment_backfill(
             dataset="bad",
             start_date="2025-01-01",
             end_date="2025-01-31",
-            output_dir=tmp_path,
+            output_dir=out,
             sleep_seconds=0,
             service="test",
         )
@@ -732,3 +785,4 @@ def test_run_free_enrichment_backfill_rejects_invalid_dataset(tmp_path):
         assert "Unsupported free enrichment dataset: bad" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+    assert not out.exists()

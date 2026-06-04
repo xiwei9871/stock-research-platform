@@ -22,6 +22,8 @@ _EXCHANGES = {"SH", "SZ", "BJ"}
 @dataclass(frozen=True)
 class DatasetRunResult:
     dataset: str
+    status: str = "success"
+    message: str = ""
     fetched_rows: int = 0
     normalized_rows: int = 0
     upserted_rows: int = 0
@@ -31,6 +33,8 @@ class DatasetRunResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset": self.dataset,
+            "status": self.status,
+            "message": self.message,
             "fetched_rows": self.fetched_rows,
             "normalized_rows": self.normalized_rows,
             "upserted_rows": self.upserted_rows,
@@ -779,6 +783,8 @@ def coverage_row(result: DatasetRunResult, *, start_date: str, end_date: str) ->
         "row_count": result.upserted_rows,
         "empty_result_count": result.empty_results,
         "failed_request_count": result.failed_requests,
+        "status": result.status,
+        "message": result.message,
         "source": SOURCE,
     }
 
@@ -795,8 +801,6 @@ def run_free_enrichment_backfill(
     dry_run: bool = False,
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
-    del batch_size, sleep_seconds, limit
-
     requested = list(DATASETS) if dataset == "all" else [dataset]
     invalid = [name for name in requested if name not in DATASETS]
     if invalid:
@@ -804,40 +808,69 @@ def run_free_enrichment_backfill(
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-
-    results: list[DatasetRunResult] = []
-    for name in requested:
-        if name == "lhb":
-            result = run_lhb_backfill(
-                start_date=start_date,
-                end_date=end_date,
-                output_dir=out,
-                dry_run=dry_run,
-                service=service,
-            )
-        else:
-            result = DatasetRunResult(dataset=name)
-        results.append(result)
-        print(
-            "free_enrichment_batch|"
-            f"dataset={result.dataset}|fetched={result.fetched_rows}|"
-            f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
-            f"empty={result.empty_results}|failed={result.failed_requests}"
-        )
-
     summary_path = out / "run_summary.json"
     coverage_path = out / "dataset_coverage.csv"
     failures_path = out / "dataset_failures.csv"
 
+    results: list[DatasetRunResult] = []
+    failures: list[dict[str, str]] = []
+    total = len(requested)
+    for idx, name in enumerate(requested, start=1):
+        try:
+            if name == "lhb":
+                result = run_lhb_backfill(
+                    start_date=start_date,
+                    end_date=end_date,
+                    output_dir=out,
+                    dry_run=dry_run,
+                    service=service,
+                )
+            else:
+                message = "dataset runner not implemented"
+                result = DatasetRunResult(
+                    dataset=name,
+                    status="not_implemented",
+                    failed_requests=1,
+                    message=message,
+                )
+                failures.append({"dataset": name, "request": "dataset", "error": message})
+        except Exception as exc:
+            message = str(exc)
+            result = DatasetRunResult(dataset=name, status="failed", failed_requests=1, message=message)
+            failures.append({"dataset": name, "request": "dataset", "error": message})
+
+        results.append(result)
+        print(
+            "free_enrichment_batch|"
+            f"dataset={result.dataset}|batch={idx}/{total}|dry_run={dry_run}|"
+            f"status={result.status}|batch_size={batch_size}|sleep_seconds={sleep_seconds}|"
+            f"limit={limit}|limit_applies_to_placeholders=False|fetched={result.fetched_rows}|"
+            f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
+            f"empty={result.empty_results}|failed={result.failed_requests}|failure_sample={failures_path}"
+        )
+
+    params = {
+        "dataset": dataset,
+        "requested_datasets": requested,
+        "start_date": start_date,
+        "end_date": end_date,
+        "output_dir": str(out),
+        "batch_size": batch_size,
+        "sleep_seconds": sleep_seconds,
+        "limit": limit,
+        "limit_applies_to_placeholders": False,
+        "dry_run": dry_run,
+        "service": service,
+    }
     summary_path.write_text(
-        json.dumps([item.to_dict() for item in results], ensure_ascii=False, indent=2),
+        json.dumps({"params": params, "results": [item.to_dict() for item in results]}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     pd.DataFrame([coverage_row(item, start_date=start_date, end_date=end_date) for item in results]).to_csv(
         coverage_path,
         index=False,
     )
-    pd.DataFrame(columns=["dataset", "request", "error"]).to_csv(failures_path, index=False)
+    pd.DataFrame(failures, columns=["dataset", "request", "error"]).to_csv(failures_path, index=False)
 
     return {
         "results": results,
