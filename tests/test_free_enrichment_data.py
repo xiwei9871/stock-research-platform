@@ -5,6 +5,7 @@ from stock_research.free_enrichment_data import (
     build_event_id,
     normalize_ts_code,
     payload_hash,
+    run_lhb_backfill,
     ts_code_to_asset_id,
 )
 
@@ -76,3 +77,30 @@ def test_dataset_run_result_to_dict():
     )
     assert result.to_dict()["dataset"] == "repurchase"
     assert result.to_dict()["upserted_rows"] == 2
+
+
+def test_run_lhb_backfill_uses_existing_lhb_import(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_lhb_import(**kwargs):
+        calls.append(kwargs)
+        return {
+            "top_list": pd.DataFrame([{"ts_code": "600000.SH"}]),
+            "top_inst": pd.DataFrame(),
+            "paths": {"top_list": str(tmp_path / "list.csv"), "top_inst": str(tmp_path / "inst.csv")},
+        }
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.run_lhb_sample_import", fake_lhb_import)
+
+    result = run_lhb_backfill(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        dry_run=False,
+        service="test",
+    )
+
+    assert calls[0]["provider"] == "akshare"
+    assert calls[0]["ts_codes"] is None
+    assert result.dataset == "lhb"
+    assert result.normalized_rows == 1
