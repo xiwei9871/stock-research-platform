@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import datetime as dt
 import hashlib
 import json
+import math
+import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-
-import pandas as pd
-
-from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many, fetch_all
 
 
 SOURCE = "akshare"
+_EXCHANGES = {"SH", "SZ", "BJ"}
 
 
 @dataclass(frozen=True)
@@ -37,19 +33,51 @@ class DatasetRunResult:
 
 
 def normalize_ts_code(value: Any) -> str:
-    text = str(value or "").strip().upper()
-    if not text:
+    if value is None:
         return ""
-    if text.endswith((".SH", ".SZ", ".BJ")):
-        return text
+
+    if isinstance(value, float):
+        if math.isnan(value):
+            return ""
+        if value.is_integer():
+            value = int(value)
+
+    try:
+        text = str(value).strip().upper()
+    except TypeError:
+        return ""
+
+    if not text or text in {"<NA>", "NAN", "NONE"}:
+        return ""
+
+    asset_match = re.fullmatch(r"CN:(SH|SZ|BJ):(\d{6})", text)
+    if asset_match:
+        exchange, code = asset_match.groups()
+        return f"{code}.{exchange}"
+
+    suffix_match = re.fullmatch(r"(\d{6})\.(SH|SZ|BJ)", text)
+    if suffix_match:
+        code, exchange = suffix_match.groups()
+        return f"{code}.{exchange}"
+
+    prefix_match = re.fullmatch(r"(SH|SZ|BJ)\.?(\d{6})", text)
+    if prefix_match:
+        exchange, code = prefix_match.groups()
+        return f"{code}.{exchange}"
+
+    if not re.fullmatch(r"\d+", text):
+        return ""
+
     code = text.zfill(6)
+    if len(code) != 6:
+        return ""
     if code.startswith(("60", "68", "90")):
         return f"{code}.SH"
     if code.startswith(("00", "30", "20")):
         return f"{code}.SZ"
     if code.startswith(("43", "83", "87", "92")):
         return f"{code}.BJ"
-    return code
+    return ""
 
 
 def ts_code_to_asset_id(ts_code: str) -> str:
@@ -57,6 +85,8 @@ def ts_code_to_asset_id(ts_code: str) -> str:
     if not code or "." not in code:
         return ""
     symbol, exchange = code.split(".", 1)
+    if exchange not in _EXCHANGES or not re.fullmatch(r"\d{6}", symbol):
+        return ""
     return f"CN:{exchange}:{symbol}"
 
 
