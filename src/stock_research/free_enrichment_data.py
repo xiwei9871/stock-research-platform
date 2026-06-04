@@ -378,7 +378,8 @@ def _request_json_with_retries(
             page = params.get("pageNumber", "")
             print(
                 "free_enrichment_request_retry|"
-                f"dataset=survey|page={page}|attempt={attempt + 1}/{attempts}|error={exc}"
+                f"dataset=survey|page={page}|attempt={attempt + 1}/{attempts}|error={exc}",
+                flush=True,
             )
             if retry_sleep_seconds > 0:
                 time.sleep(retry_sleep_seconds)
@@ -420,7 +421,7 @@ def _fetch_stock_jgdy_detail_em_robust(
         data = (data_json.get("result") or {}).get("data") or []
         frames.append(pd.DataFrame(data))
         if page == 1 or page == total_page or page % 100 == 0:
-            print(f"free_enrichment_request_page|dataset=survey|page={page}/{total_page}")
+            print(f"free_enrichment_request_page|dataset=survey|page={page}/{total_page}", flush=True)
 
     big_df = _concat_frames(frames)
     if big_df.empty:
@@ -1156,7 +1157,8 @@ def run_holder_backfill(
     for batch_index, batch in enumerate(batches, start=1):
         print(
             "free_enrichment_request_batch|"
-            f"dataset=holder|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+            f"dataset=holder|batch={batch_index}/{len(batches)}|requests={len(batch)}",
+            flush=True,
         )
         for ts_code in batch:
             plain_symbol = _ts_code_to_plain_symbol(ts_code)
@@ -1348,7 +1350,8 @@ def _run_period_event_backfill(
     for batch_index, batch in enumerate(batches, start=1):
         print(
             "free_enrichment_request_batch|"
-            f"dataset={dataset}|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+            f"dataset={dataset}|batch={batch_index}/{len(batches)}|requests={len(batch)}",
+            flush=True,
         )
         for period in batch:
             try:
@@ -1470,7 +1473,8 @@ def run_mainbiz_backfill(
     for batch_index, batch in enumerate(batches, start=1):
         print(
             "free_enrichment_request_batch|"
-            f"dataset=mainbiz|batch={batch_index}/{len(batches)}|requests={len(batch)}"
+            f"dataset=mainbiz|batch={batch_index}/{len(batches)}|requests={len(batch)}",
+            flush=True,
         )
         for ts_code in batch:
             ak_symbol = ts_code_to_akshare_symbol(ts_code)
@@ -1650,7 +1654,8 @@ def run_free_enrichment_backfill(
             f"batch_size={batch_size}|sleep_seconds={sleep_seconds}|"
             f"limit={limit}|limit_applies_to_placeholders=False|fetched={result.fetched_rows}|"
             f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
-            f"empty={result.empty_results}|failed={result.failed_requests}|failure_sample={failures_path}"
+            f"empty={result.empty_results}|failed={result.failed_requests}|failure_sample={failures_path}",
+            flush=True,
         )
 
     params = {
