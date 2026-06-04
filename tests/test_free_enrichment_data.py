@@ -1,6 +1,7 @@
 import pandas as pd
 
 from stock_research.free_enrichment_data import (
+    DATASETS,
     DatasetRunResult,
     build_event_id,
     normalize_earnings_express_rows,
@@ -13,6 +14,7 @@ from stock_research.free_enrichment_data import (
     normalize_top_holder_rows,
     normalize_ts_code,
     payload_hash,
+    run_free_enrichment_backfill,
     run_lhb_backfill,
     ts_code_to_asset_id,
     upsert_event_rows,
@@ -665,3 +667,68 @@ def test_run_lhb_backfill_counts_none_and_missing_outputs_as_empty(tmp_path):
     assert none_result.empty_results == 1
     assert missing_result.normalized_rows == 0
     assert missing_result.empty_results == 1
+
+
+def test_run_free_enrichment_backfill_writes_summary_and_coverage(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.run_lhb_backfill",
+        lambda **kwargs: DatasetRunResult(dataset="lhb", fetched_rows=2, normalized_rows=2, upserted_rows=2),
+    )
+
+    result = run_free_enrichment_backfill(
+        dataset="lhb",
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        batch_size=100,
+        sleep_seconds=0,
+        limit=None,
+        dry_run=False,
+        service="test",
+    )
+
+    assert result["summary_path"].endswith("run_summary.json")
+    assert result["coverage_path"].endswith("dataset_coverage.csv")
+    assert result["failures_path"].endswith("dataset_failures.csv")
+    assert (tmp_path / "run_summary.json").exists()
+    assert (tmp_path / "dataset_coverage.csv").exists()
+    assert (tmp_path / "dataset_failures.csv").exists()
+    assert "free_enrichment_batch|dataset=lhb|fetched=2|normalized=2|upserted=2|empty=0|failed=0" in capsys.readouterr().out
+
+
+def test_run_free_enrichment_backfill_all_expands_to_all_datasets(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.run_lhb_backfill",
+        lambda **kwargs: DatasetRunResult(dataset="lhb", upserted_rows=1),
+    )
+
+    result = run_free_enrichment_backfill(
+        dataset="all",
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        sleep_seconds=0,
+        service="test",
+    )
+
+    assert [item.dataset for item in result["results"]] == list(DATASETS)
+    coverage = pd.read_csv(tmp_path / "dataset_coverage.csv")
+    assert coverage["dataset"].tolist() == list(DATASETS)
+    assert coverage.loc[coverage["dataset"].eq("lhb"), "row_count"].iloc[0] == 1
+    assert (tmp_path / "dataset_failures.csv").read_text(encoding="utf-8").splitlines()[0] == "dataset,request,error"
+
+
+def test_run_free_enrichment_backfill_rejects_invalid_dataset(tmp_path):
+    try:
+        run_free_enrichment_backfill(
+            dataset="bad",
+            start_date="2025-01-01",
+            end_date="2025-01-31",
+            output_dir=tmp_path,
+            sleep_seconds=0,
+            service="test",
+        )
+    except ValueError as exc:
+        assert "Unsupported free enrichment dataset: bad" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")

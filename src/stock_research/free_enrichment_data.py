@@ -15,6 +15,7 @@ from stock_research.db import connect, execute_many
 
 
 SOURCE = "akshare"
+DATASETS = ("lhb", "holder", "repurchase", "survey", "forecast", "express", "mainbiz")
 _EXCHANGES = {"SH", "SZ", "BJ"}
 
 
@@ -765,3 +766,82 @@ def run_lhb_backfill(
         upserted_rows=normalized_rows,
         empty_results=1 if normalized_rows == 0 else 0,
     )
+
+
+def coverage_row(result: DatasetRunResult, *, start_date: str, end_date: str) -> dict[str, Any]:
+    return {
+        "dataset": result.dataset,
+        "start_date": start_date,
+        "end_date": end_date,
+        "asset_count_total": 0,
+        "asset_count_covered": 0,
+        "coverage_ratio": 0.0,
+        "row_count": result.upserted_rows,
+        "empty_result_count": result.empty_results,
+        "failed_request_count": result.failed_requests,
+        "source": SOURCE,
+    }
+
+
+def run_free_enrichment_backfill(
+    *,
+    dataset: str,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+    batch_size: int = 100,
+    sleep_seconds: float = 1.0,
+    limit: int | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    del batch_size, sleep_seconds, limit
+
+    requested = list(DATASETS) if dataset == "all" else [dataset]
+    invalid = [name for name in requested if name not in DATASETS]
+    if invalid:
+        raise ValueError(f"Unsupported free enrichment dataset: {invalid[0]}")
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    results: list[DatasetRunResult] = []
+    for name in requested:
+        if name == "lhb":
+            result = run_lhb_backfill(
+                start_date=start_date,
+                end_date=end_date,
+                output_dir=out,
+                dry_run=dry_run,
+                service=service,
+            )
+        else:
+            result = DatasetRunResult(dataset=name)
+        results.append(result)
+        print(
+            "free_enrichment_batch|"
+            f"dataset={result.dataset}|fetched={result.fetched_rows}|"
+            f"normalized={result.normalized_rows}|upserted={result.upserted_rows}|"
+            f"empty={result.empty_results}|failed={result.failed_requests}"
+        )
+
+    summary_path = out / "run_summary.json"
+    coverage_path = out / "dataset_coverage.csv"
+    failures_path = out / "dataset_failures.csv"
+
+    summary_path.write_text(
+        json.dumps([item.to_dict() for item in results], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame([coverage_row(item, start_date=start_date, end_date=end_date) for item in results]).to_csv(
+        coverage_path,
+        index=False,
+    )
+    pd.DataFrame(columns=["dataset", "request", "error"]).to_csv(failures_path, index=False)
+
+    return {
+        "results": results,
+        "summary_path": str(summary_path),
+        "coverage_path": str(coverage_path),
+        "failures_path": str(failures_path),
+    }
