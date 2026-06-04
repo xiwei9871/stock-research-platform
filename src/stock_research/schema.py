@@ -553,8 +553,7 @@ CREATE TABLE IF NOT EXISTS raw_akshare.enrichment_payload (
     ts_code text,
     payload jsonb NOT NULL,
     payload_hash text NOT NULL,
-    fetched_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_endpoint, payload_hash)
+    fetched_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS fundamental.shareholder_count (
@@ -1721,6 +1720,9 @@ CREATE INDEX IF NOT EXISTS idx_raw_akshare_enrichment_payload_endpoint
 
 CREATE INDEX IF NOT EXISTS idx_fundamental_shareholder_count_asset_date
     ON fundamental.shareholder_count (asset_id, report_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_shareholder_trade_asset_date
+    ON event.shareholder_trade (asset_id, trade_date DESC, announcement_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_event_stock_repurchase_asset_date
     ON event.stock_repurchase (asset_id, announcement_date DESC);
