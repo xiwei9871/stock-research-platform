@@ -79,7 +79,7 @@ def test_dataset_run_result_to_dict():
     assert result.to_dict()["upserted_rows"] == 2
 
 
-def test_run_lhb_backfill_uses_existing_lhb_import(monkeypatch, tmp_path):
+def test_run_lhb_backfill_uses_existing_lhb_import(tmp_path):
     calls = []
 
     def fake_lhb_import(**kwargs):
@@ -90,17 +90,56 @@ def test_run_lhb_backfill_uses_existing_lhb_import(monkeypatch, tmp_path):
             "paths": {"top_list": str(tmp_path / "list.csv"), "top_inst": str(tmp_path / "inst.csv")},
         }
 
-    monkeypatch.setattr("stock_research.free_enrichment_data.run_lhb_sample_import", fake_lhb_import)
-
     result = run_lhb_backfill(
         start_date="2025-01-01",
         end_date="2025-01-31",
         output_dir=tmp_path,
         dry_run=False,
         service="test",
+        runner=fake_lhb_import,
     )
 
     assert calls[0]["provider"] == "akshare"
     assert calls[0]["ts_codes"] is None
     assert result.dataset == "lhb"
     assert result.normalized_rows == 1
+
+
+def test_run_lhb_backfill_dry_run_does_not_call_importer(tmp_path):
+    def fail_import(**kwargs):
+        raise AssertionError("runner should not be called")
+
+    result = run_lhb_backfill(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        dry_run=True,
+        service="test",
+        runner=fail_import,
+    )
+
+    assert result == DatasetRunResult(dataset="lhb")
+
+
+def test_run_lhb_backfill_counts_none_and_missing_outputs_as_empty(tmp_path):
+    none_result = run_lhb_backfill(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        dry_run=False,
+        service="test",
+        runner=lambda **kwargs: {"top_list": None, "top_inst": None},
+    )
+    missing_result = run_lhb_backfill(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+        dry_run=False,
+        service="test",
+        runner=lambda **kwargs: {},
+    )
+
+    assert none_result.normalized_rows == 0
+    assert none_result.empty_results == 1
+    assert missing_result.normalized_rows == 0
+    assert missing_result.empty_results == 1

@@ -8,10 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from stock_research.config import SETTINGS
-from stock_research.lhb_data import run_lhb_sample_import
 
 
 SOURCE = "akshare"
@@ -118,6 +115,15 @@ def build_event_id(prefix: str, parts: list[Any]) -> str:
     return f"{prefix}:{digest}"
 
 
+def _safe_len(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        return len(value)
+    except TypeError:
+        return 0
+
+
 def run_lhb_backfill(
     *,
     start_date: str,
@@ -125,11 +131,17 @@ def run_lhb_backfill(
     output_dir: str | Path,
     dry_run: bool = False,
     service: str = SETTINGS.research_service,
+    runner: Any = None,
 ) -> DatasetRunResult:
     if dry_run:
         return DatasetRunResult(dataset="lhb")
 
-    result = run_lhb_sample_import(
+    if runner is None:
+        from stock_research.lhb_data import run_lhb_sample_import as actual_runner
+    else:
+        actual_runner = runner
+
+    result = actual_runner(
         start_date=start_date,
         end_date=end_date,
         ts_codes=None,
@@ -137,9 +149,7 @@ def run_lhb_backfill(
         output_dir=output_dir,
         service=service,
     )
-    top_list = result.get("top_list", pd.DataFrame())
-    top_inst = result.get("top_inst", pd.DataFrame())
-    normalized_rows = len(top_list) + len(top_inst)
+    normalized_rows = _safe_len(result.get("top_list")) + _safe_len(result.get("top_inst"))
     return DatasetRunResult(
         dataset="lhb",
         fetched_rows=normalized_rows,
