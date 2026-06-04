@@ -314,6 +314,119 @@ def normalize_shareholder_trade_rows(frame: pd.DataFrame, *, endpoint: str) -> p
     return data[data["asset_id"].ne("")].reset_index(drop=True)
 
 
+def normalize_earnings_forecast_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    data = _base_event_frame(frame, endpoint=endpoint)
+    if data.empty:
+        return data
+
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["report_period"] = _date_text(_first_existing(frame, ["报告期", "预测报告期", "REPORT_PERIOD"]))
+    data["forecast_type"] = _first_existing(frame, ["预告类型", "业绩变动类型", "FORECAST_TYPE"])
+    data["forecast_np_min"] = pd.to_numeric(
+        _first_existing(frame, ["净利润下限", "FORECAST_NP_MIN"]),
+        errors="coerce",
+    )
+    data["forecast_np_max"] = pd.to_numeric(
+        _first_existing(frame, ["净利润上限", "FORECAST_NP_MAX"]),
+        errors="coerce",
+    )
+    data["forecast_np_change_min"] = pd.to_numeric(
+        _first_existing(frame, ["净利润变动幅度下限", "预增幅下限"]),
+        errors="coerce",
+    )
+    data["forecast_np_change_max"] = pd.to_numeric(
+        _first_existing(frame, ["净利润变动幅度上限", "预增幅上限"]),
+        errors="coerce",
+    )
+    data["summary"] = _first_existing(frame, ["业绩预告摘要", "变动原因", "SUMMARY"])
+    data["event_id"] = data.apply(
+        lambda row: build_event_id(
+            "earnings_forecast",
+            [
+                row["ts_code"],
+                row["announcement_date"],
+                row["report_period"],
+                row["forecast_type"],
+                row["payload_hash"],
+            ],
+        ),
+        axis=1,
+    )
+    return data[data["asset_id"].ne("") & data["announcement_date"].notna()].reset_index(drop=True)
+
+
+def normalize_earnings_express_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    data = _base_event_frame(frame, endpoint=endpoint)
+    if data.empty:
+        return data
+
+    data["announcement_date"] = _date_text(_first_existing(frame, ["公告日期", "ANN_DATE"]))
+    data["report_period"] = _date_text(_first_existing(frame, ["报告期", "REPORT_PERIOD"]))
+    data["revenue"] = pd.to_numeric(_first_existing(frame, ["营业收入", "REVENUE"]), errors="coerce")
+    data["revenue_yoy"] = pd.to_numeric(_first_existing(frame, ["营业收入同比", "REVENUE_YOY"]), errors="coerce")
+    data["np_parent"] = pd.to_numeric(_first_existing(frame, ["归母净利润", "净利润", "NP_PARENT"]), errors="coerce")
+    data["np_parent_yoy"] = pd.to_numeric(
+        _first_existing(frame, ["归母净利润同比", "净利润同比", "NP_PARENT_YOY"]),
+        errors="coerce",
+    )
+    data["eps_basic"] = pd.to_numeric(_first_existing(frame, ["基本每股收益", "EPS_BASIC"]), errors="coerce")
+    data["roe_weighted"] = pd.to_numeric(_first_existing(frame, ["加权净资产收益率", "ROE_WEIGHTED"]), errors="coerce")
+    data["event_id"] = data.apply(
+        lambda row: build_event_id(
+            "earnings_express",
+            [row["ts_code"], row["announcement_date"], row["report_period"], row["payload_hash"]],
+        ),
+        axis=1,
+    )
+    return data[data["asset_id"].ne("") & data["announcement_date"].notna()].reset_index(drop=True)
+
+
+def normalize_main_business_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame()
+
+    data = pd.DataFrame(index=frame.index)
+    data["ts_code"] = _first_existing(frame, ["代码", "股票代码", "SECURITY_CODE"]).map(normalize_ts_code)
+    data["asset_id"] = data["ts_code"].map(ts_code_to_asset_id)
+    data["report_period"] = _date_text(_first_existing(frame, ["报告期", "截止日期", "REPORT_PERIOD"]))
+    data["classify_type"] = (
+        _first_existing(frame, ["分类方向", "分类类型", "CLASSIFY_TYPE"]).fillna("").astype(str).str.strip()
+    )
+    data["item_name"] = _first_existing(frame, ["主营构成", "项目名称", "ITEM_NAME"]).fillna("").astype(str).str.strip()
+    data["revenue"] = pd.to_numeric(_first_existing(frame, ["主营收入", "营业收入", "REVENUE"]), errors="coerce")
+    data["revenue_ratio"] = pd.to_numeric(
+        _first_existing(frame, ["收入比例", "主营收入占比", "REVENUE_RATIO"]),
+        errors="coerce",
+    )
+    data["cost"] = pd.to_numeric(_first_existing(frame, ["主营成本", "营业成本", "COST"]), errors="coerce")
+    data["gross_profit"] = pd.to_numeric(_first_existing(frame, ["主营利润", "毛利", "GROSS_PROFIT"]), errors="coerce")
+    data["gross_margin"] = pd.to_numeric(_first_existing(frame, ["毛利率", "GROSS_MARGIN"]), errors="coerce")
+    data["source"] = SOURCE
+    data["source_endpoint"] = endpoint
+    data["payload_hash"] = frame.apply(lambda row: payload_hash(row.to_dict()), axis=1)
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_period",
+        "classify_type",
+        "item_name",
+        "revenue",
+        "revenue_ratio",
+        "cost",
+        "gross_profit",
+        "gross_margin",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ]
+    return data[
+        data["asset_id"].ne("")
+        & data["report_period"].notna()
+        & data["classify_type"].ne("")
+        & data["item_name"].ne("")
+    ][columns].reset_index(drop=True)
+
+
 def _value_or_none(value: Any) -> Any:
     return _normalize_payload_value(value)
 
@@ -432,6 +545,62 @@ def upsert_top_holder_rows(
     return len(rows)
 
 
+def upsert_main_business_rows(
+    frame: pd.DataFrame,
+    service: str = SETTINGS.research_service,
+) -> int:
+    if frame.empty:
+        return 0
+
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_period",
+        "classify_type",
+        "item_name",
+        "revenue",
+        "revenue_ratio",
+        "cost",
+        "gross_profit",
+        "gross_margin",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ]
+    sql = """
+        INSERT INTO finance.main_business_composition (
+            asset_id,
+            ts_code,
+            report_period,
+            classify_type,
+            item_name,
+            revenue,
+            revenue_ratio,
+            cost,
+            gross_profit,
+            gross_margin,
+            source,
+            source_endpoint,
+            payload_hash
+        ) VALUES (
+            %s, %s, %s::date, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (asset_id, report_period, classify_type, item_name, source) DO UPDATE SET
+            revenue = EXCLUDED.revenue,
+            revenue_ratio = EXCLUDED.revenue_ratio,
+            cost = EXCLUDED.cost,
+            gross_profit = EXCLUDED.gross_profit,
+            gross_margin = EXCLUDED.gross_margin,
+            source_endpoint = EXCLUDED.source_endpoint,
+            payload_hash = EXCLUDED.payload_hash,
+            updated_at = now()
+    """
+    rows = _frame_rows(frame, columns)
+    with connect(service) as conn:
+        execute_many(conn, sql, rows)
+    return len(rows)
+
+
 _EVENT_TABLE_COLUMNS = {
     "event.stock_repurchase": [
         "event_id",
@@ -478,11 +647,44 @@ _EVENT_TABLE_COLUMNS = {
         "source_endpoint",
         "payload_hash",
     ],
+    "event.earnings_forecast": [
+        "event_id",
+        "asset_id",
+        "ts_code",
+        "announcement_date",
+        "report_period",
+        "forecast_type",
+        "forecast_np_min",
+        "forecast_np_max",
+        "forecast_np_change_min",
+        "forecast_np_change_max",
+        "summary",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ],
+    "event.earnings_express": [
+        "event_id",
+        "asset_id",
+        "ts_code",
+        "announcement_date",
+        "report_period",
+        "revenue",
+        "revenue_yoy",
+        "np_parent",
+        "np_parent_yoy",
+        "eps_basic",
+        "roe_weighted",
+        "source",
+        "source_endpoint",
+        "payload_hash",
+    ],
 }
 
 _EVENT_DATE_COLUMNS = {
     "announcement_date",
     "progress_date",
+    "report_period",
     "survey_date",
     "trade_date",
 }

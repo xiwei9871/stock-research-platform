@@ -3,7 +3,10 @@ import pandas as pd
 from stock_research.free_enrichment_data import (
     DatasetRunResult,
     build_event_id,
+    normalize_earnings_express_rows,
+    normalize_earnings_forecast_rows,
     normalize_institution_survey_rows,
+    normalize_main_business_rows,
     normalize_repurchase_rows,
     normalize_shareholder_count_rows,
     normalize_shareholder_trade_rows,
@@ -13,6 +16,7 @@ from stock_research.free_enrichment_data import (
     run_lhb_backfill,
     ts_code_to_asset_id,
     upsert_event_rows,
+    upsert_main_business_rows,
     upsert_shareholder_count_rows,
     upsert_top_holder_rows,
 )
@@ -161,6 +165,63 @@ def test_normalize_shareholder_trade_rows_keeps_trade_type():
     frame = normalize_shareholder_trade_rows(raw, endpoint="stock_ggcg_em")
     assert frame.iloc[0]["event_id"].startswith("shareholder_trade:")
     assert frame.iloc[0]["trade_type"] == "减持"
+
+
+def test_normalize_earnings_forecast_rows():
+    raw = pd.DataFrame([{"代码": "600000", "公告日期": "2025-04-10", "报告期": "2025-03-31", "预告类型": "预增", "净利润下限": 10}])
+    frame = normalize_earnings_forecast_rows(raw, endpoint="stock_yjyg_em")
+    assert frame.iloc[0]["event_id"].startswith("earnings_forecast:")
+    assert frame.iloc[0]["forecast_type"] == "预增"
+    assert frame.iloc[0]["report_period"] == "2025-03-31"
+
+
+def test_normalize_earnings_express_rows():
+    raw = pd.DataFrame([{"代码": "000001", "公告日期": "2025-04-15", "报告期": "2025-03-31", "营业收入": 100, "净利润": 20}])
+    frame = normalize_earnings_express_rows(raw, endpoint="stock_yjkb_em")
+    assert frame.iloc[0]["event_id"].startswith("earnings_express:")
+    assert frame.iloc[0]["revenue"] == 100
+    assert frame.iloc[0]["np_parent"] == 20
+
+
+def test_normalize_main_business_rows():
+    raw = pd.DataFrame([{"代码": "600000", "报告期": "2025-06-30", "分类方向": "按产品", "主营构成": "贷款", "主营收入": 1000, "毛利率": 40}])
+    frame = normalize_main_business_rows(raw, endpoint="stock_zygc_em")
+    assert frame.iloc[0]["classify_type"] == "按产品"
+    assert frame.iloc[0]["item_name"] == "贷款"
+
+
+def test_normalize_main_business_rows_filters_empty_and_invalid_rows():
+    assert normalize_main_business_rows(pd.DataFrame(), endpoint="x").empty
+
+    invalid = normalize_main_business_rows(
+        pd.DataFrame(
+            [
+                {"代码": "bad", "报告期": "2025-06-30", "分类方向": "按产品", "主营构成": "贷款"},
+                {"代码": "600000", "分类方向": "按产品", "主营构成": "贷款"},
+                {"代码": "600000", "报告期": "2025-06-30", "分类方向": "", "主营构成": "贷款"},
+                {"代码": "600000", "报告期": "2025-06-30", "分类方向": "按产品", "主营构成": " "},
+            ]
+        ),
+        endpoint="x",
+    )
+
+    assert invalid.empty
+
+
+def test_normalize_earnings_forecast_sparse_rows_use_payload_hash_and_require_announcement_date():
+    frame = normalize_earnings_forecast_rows(
+        pd.DataFrame(
+            [
+                {"代码": "600000", "公告日期": "2025-04-10", "报告期": "2025-03-31", "预告类型": "预增", "净利润下限": 10},
+                {"代码": "600000", "公告日期": "2025-04-10", "报告期": "2025-03-31", "预告类型": "预增", "净利润下限": 20},
+                {"代码": "600000", "报告期": "2025-03-31", "预告类型": "预增", "净利润下限": 30},
+            ]
+        ),
+        endpoint="stock_yjyg_em",
+    )
+
+    assert len(frame) == 2
+    assert frame["event_id"].nunique() == 2
 
 
 def test_event_normalizers_keep_sparse_rows_with_distinct_event_ids():
@@ -413,6 +474,131 @@ def test_upsert_event_rows_fills_missing_optional_columns(monkeypatch):
 
     assert calls[0][1][0][0:3] == ("survey:1", "CN:SZ:000001", "000001.SZ")
     assert calls[0][1][0][3:9] == (None, None, None, None, None, None)
+
+
+def test_upsert_event_rows_allows_earnings_tables(monkeypatch):
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    forecast = pd.DataFrame(
+        [
+            {
+                "event_id": "earnings_forecast:1",
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "announcement_date": "2025-04-10",
+                "report_period": "2025-03-31",
+                "forecast_type": "预增",
+                "payload_hash": "h1",
+            }
+        ]
+    )
+    express = pd.DataFrame(
+        [
+            {
+                "event_id": "earnings_express:1",
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "announcement_date": "2025-04-15",
+                "report_period": "2025-03-31",
+                "revenue": 100,
+                "np_parent": 20,
+                "payload_hash": "h2",
+            }
+        ]
+    )
+
+    upsert_event_rows(forecast, table="event.earnings_forecast", service="test")
+    upsert_event_rows(express, table="event.earnings_express", service="test")
+
+    assert "INSERT INTO event.earnings_forecast" in calls[0][0]
+    assert "INSERT INTO event.earnings_express" in calls[1][0]
+    assert calls[0][1][0][0:6] == (
+        "earnings_forecast:1",
+        "CN:SH:600000",
+        "600000.SH",
+        "2025-04-10",
+        "2025-03-31",
+        "预增",
+    )
+    assert calls[1][1][0][0:6] == (
+        "earnings_express:1",
+        "CN:SZ:000001",
+        "000001.SZ",
+        "2025-04-15",
+        "2025-03-31",
+        100,
+    )
+
+
+def test_upsert_main_business_rows_uses_expected_table_conflict_key_and_order(monkeypatch):
+    calls = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("stock_research.free_enrichment_data.connect", lambda service: Conn())
+    monkeypatch.setattr(
+        "stock_research.free_enrichment_data.execute_many",
+        lambda conn, sql, rows: calls.append((sql, list(rows))),
+    )
+
+    frame = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600000",
+                "ts_code": "600000.SH",
+                "report_period": "2025-06-30",
+                "classify_type": "按产品",
+                "item_name": "贷款",
+                "revenue": 1000,
+                "revenue_ratio": 50,
+                "cost": 600,
+                "gross_profit": 400,
+                "gross_margin": 40,
+                "source": "akshare",
+                "source_endpoint": "stock_zygc_em",
+                "payload_hash": "h",
+            }
+        ]
+    )
+
+    upsert_main_business_rows(frame, service="test")
+
+    sql, rows = calls[0]
+    assert "INSERT INTO finance.main_business_composition" in sql
+    assert "ON CONFLICT (asset_id, report_period, classify_type, item_name, source)" in sql
+    assert rows[0] == (
+        "CN:SH:600000",
+        "600000.SH",
+        "2025-06-30",
+        "按产品",
+        "贷款",
+        1000,
+        50,
+        600,
+        400,
+        40,
+        "akshare",
+        "stock_zygc_em",
+        "h",
+    )
 
 
 def test_run_lhb_backfill_uses_existing_lhb_import(tmp_path):
