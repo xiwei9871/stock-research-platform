@@ -5,6 +5,7 @@ import pandas as pd
 from stock_research.free_enrichment_data import (
     DATASETS,
     DatasetRunResult,
+    _fetch_stock_jgdy_detail_em_robust,
     build_event_id,
     normalize_earnings_express_rows,
     normalize_earnings_forecast_rows,
@@ -1164,6 +1165,60 @@ def test_run_survey_backfill_queries_day_before_start_date(monkeypatch):
 
     assert calls == ["20250430"]
     assert result.upserted_rows == 1
+
+
+def test_fetch_stock_jgdy_detail_em_robust_retries_failed_pages():
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, page):
+            self.page = page
+
+        def json(self):
+            return {
+                "result": {
+                    "pages": 2,
+                    "data": [
+                        {
+                            "SECUCODE": f"00000{self.page}.SZ",
+                            "SECURITY_CODE": f"00000{self.page}",
+                            "SECURITY_NAME_ABBR": "测试",
+                            "NOTICE_DATE": "2025-05-02",
+                            "RECEIVE_START_DATE": "2025-05-01",
+                            "RECEIVE_OBJECT": "机构",
+                            "RECEIVE_PLACE": "线上",
+                            "RECEIVE_WAY_EXPLAIN": "电话会议",
+                            "INVESTIGATORS": "analyst",
+                            "RECEPTIONIST": "ir",
+                            "ORG_TYPE": "基金",
+                            "CLOSE_PRICE": 10,
+                            "CHANGE_RATE": 1,
+                        }
+                    ],
+                }
+            }
+
+    attempts = {"2": 0}
+
+    def fake_get(url, params, timeout):
+        del url, timeout
+        page = str(params["pageNumber"])
+        calls.append(page)
+        if page == "2" and attempts["2"] == 0:
+            attempts["2"] += 1
+            raise RuntimeError("temporary ssl eof")
+        return FakeResponse(page)
+
+    frame = _fetch_stock_jgdy_detail_em_robust(
+        date="20250430",
+        request_get=fake_get,
+        max_retries=2,
+        retry_sleep_seconds=0,
+    )
+
+    assert calls == ["1", "1", "2", "2"]
+    assert frame["代码"].tolist() == ["000001", "000002"]
+    assert frame["调研日期"].tolist() == [pd.Timestamp("2025-05-01").date(), pd.Timestamp("2025-05-01").date()]
 
 
 def test_run_free_enrichment_backfill_forwards_lhb_args_and_writes_structured_summary(

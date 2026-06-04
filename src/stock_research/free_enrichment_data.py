@@ -337,6 +337,136 @@ def load_free_enrichment_ts_codes(
     return _normalize_ts_code_list(values, limit=limit)
 
 
+def _stock_jgdy_detail_params(date: str, page_number: int) -> dict[str, Any]:
+    return {
+        "sortColumns": "NOTICE_DATE,RECEIVE_START_DATE,SECURITY_CODE,NUMBERNEW",
+        "sortTypes": "-1,-1,1,-1",
+        "pageSize": "50",
+        "pageNumber": str(page_number),
+        "reportName": "RPT_ORG_SURVEY",
+        "columns": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR,NOTICE_DATE,RECEIVE_START_DATE,"
+        "RECEIVE_OBJECT,RECEIVE_PLACE,RECEIVE_WAY_EXPLAIN,INVESTIGATORS,RECEPTIONIST,ORG_TYPE",
+        "quoteColumns": "f2~01~SECURITY_CODE~CLOSE_PRICE,f3~01~SECURITY_CODE~CHANGE_RATE",
+        "quoteType": "0",
+        "source": "WEB",
+        "client": "WEB",
+        "filter": f"""(IS_SOURCE="1")(RECEIVE_START_DATE>'{"-".join([date[:4], date[4:6], date[6:]])}')""",
+    }
+
+
+def _request_json_with_retries(
+    *,
+    url: str,
+    params: dict[str, Any],
+    request_get: Any,
+    max_retries: int,
+    retry_sleep_seconds: float,
+) -> dict[str, Any]:
+    attempts = max(1, int(max_retries))
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = request_get(url, params=params, timeout=30)
+            raise_for_status = getattr(response, "raise_for_status", None)
+            if callable(raise_for_status):
+                raise_for_status()
+            return response.json()
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            page = params.get("pageNumber", "")
+            print(
+                "free_enrichment_request_retry|"
+                f"dataset=survey|page={page}|attempt={attempt + 1}/{attempts}|error={exc}"
+            )
+            if retry_sleep_seconds > 0:
+                time.sleep(retry_sleep_seconds)
+    if last_exc is None:
+        raise RuntimeError("request failed without exception")
+    raise last_exc
+
+
+def _fetch_stock_jgdy_detail_em_robust(
+    *,
+    date: str,
+    request_get: Any = None,
+    max_retries: int = 5,
+    retry_sleep_seconds: float = 2.0,
+) -> pd.DataFrame:
+    if request_get is None:
+        import requests
+
+        request_get = requests.get
+
+    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+    first_json = _request_json_with_retries(
+        url=url,
+        params=_stock_jgdy_detail_params(date, 1),
+        request_get=request_get,
+        max_retries=max_retries,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    total_page = int((first_json.get("result") or {}).get("pages") or 0)
+    frames: list[pd.DataFrame] = []
+    for page in range(1, total_page + 1):
+        data_json = _request_json_with_retries(
+            url=url,
+            params=_stock_jgdy_detail_params(date, page),
+            request_get=request_get,
+            max_retries=max_retries,
+            retry_sleep_seconds=retry_sleep_seconds,
+        )
+        data = (data_json.get("result") or {}).get("data") or []
+        frames.append(pd.DataFrame(data))
+        if page == 1 or page == total_page or page % 100 == 0:
+            print(f"free_enrichment_request_page|dataset=survey|page={page}/{total_page}")
+
+    big_df = _concat_frames(frames)
+    if big_df.empty:
+        return pd.DataFrame()
+    big_df.reset_index(inplace=True)
+    big_df["index"] = list(range(1, len(big_df) + 1))
+    big_df.columns = [
+        "序号",
+        "_",
+        "代码",
+        "名称",
+        "公告日期",
+        "调研日期",
+        "调研机构",
+        "接待地点",
+        "接待方式",
+        "调研人员",
+        "接待人员",
+        "机构类型",
+        "最新价",
+        "涨跌幅",
+    ]
+    big_df = big_df[
+        [
+            "序号",
+            "代码",
+            "名称",
+            "最新价",
+            "涨跌幅",
+            "调研机构",
+            "机构类型",
+            "调研人员",
+            "接待方式",
+            "接待人员",
+            "接待地点",
+            "调研日期",
+            "公告日期",
+        ]
+    ]
+    big_df["最新价"] = pd.to_numeric(big_df["最新价"], errors="coerce")
+    big_df["涨跌幅"] = pd.to_numeric(big_df["涨跌幅"], errors="coerce")
+    big_df["调研日期"] = pd.to_datetime(big_df["调研日期"], errors="coerce").dt.date
+    big_df["公告日期"] = pd.to_datetime(big_df["公告日期"], errors="coerce").dt.date
+    return big_df
+
+
 def normalize_shareholder_count_rows(frame: pd.DataFrame, *, endpoint: str) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame()
@@ -1167,9 +1297,12 @@ def run_survey_backfill(
     client: Any = None,
 ) -> DatasetRunResult:
     del batch_size, sleep_seconds, limit
-    client = client or build_akshare_client()
+    query_date = _compact_previous_date(start_date)
     try:
-        raw = pd.DataFrame(client.stock_jgdy_detail_em(date=_compact_previous_date(start_date)))
+        if client is None:
+            raw = _fetch_stock_jgdy_detail_em_robust(date=query_date)
+        else:
+            raw = pd.DataFrame(client.stock_jgdy_detail_em(date=query_date))
     except Exception as exc:
         return DatasetRunResult(dataset="survey", status="failed", failed_requests=1, message=str(exc))
 
