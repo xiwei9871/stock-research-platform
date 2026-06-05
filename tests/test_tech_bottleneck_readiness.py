@@ -31,8 +31,18 @@ def test_normalize_readiness_candidates_fills_optional_columns_and_dates() -> No
         lookback_days=365,
     )
 
+    assert list(candidates.columns) == [
+        "asset_id",
+        "stock_name",
+        "trade_date",
+        "candidate_source",
+        "rank",
+        "as_of_date",
+        "lookback_days",
+    ]
     rows = candidates.set_index("asset_id")
     assert rows.loc["CN:SH:688001", "as_of_date"] == "2026-06-05"
+    assert rows.loc["CN:SH:688001", "rank"] == "1"
     assert rows.loc["CN:SZ:300001", "as_of_date"] == "2026-06-06"
     assert rows.loc["CN:SZ:300001", "stock_name"] == ""
     assert rows.loc["CN:SZ:300001", "candidate_source"] == ""

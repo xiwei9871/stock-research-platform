@@ -182,6 +182,8 @@ def normalize_readiness_candidates(
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
     try:
         if pd.isna(value):
             return ""
