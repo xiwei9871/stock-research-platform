@@ -436,14 +436,14 @@ def _coverage_status(
 ) -> str:
     if not flags["has_industry_context"] or not flags["has_product_revenue_exposure"]:
         return "data_blocked"
-    if source_gap_flags:
-        return "source_gap"
     if (
         flags["has_research_report"]
         and flags["has_bottleneck_keywords"]
         and coverage_score >= 7
     ):
         return "ready_for_scoring"
+    if source_gap_flags:
+        return "source_gap"
     return "needs_evidence_backfill"
 
 
