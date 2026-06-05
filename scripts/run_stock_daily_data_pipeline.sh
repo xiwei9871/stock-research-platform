@@ -12,11 +12,12 @@ OUTPUT_DIR="${STOCK_DAILY_PIPELINE_OUTPUT_DIR:-$ROOT/outputs/research/stock_dail
 FEISHU_TARGET="${STOCK_DAILY_PIPELINE_FEISHU_TARGET:-chat:oc_82dd978138a0cde5864868c5b5b8e754}"
 FEISHU_ACCOUNT="${STOCK_DAILY_PIPELINE_FEISHU_ACCOUNT:-jarvis}"
 
-mkdir -p "$LOG_DIR" "$OUTPUT_DIR"
+mkdir -p "$LOG_DIR" "$(dirname "$RUN_LOG")" "$OUTPUT_DIR"
 
 {
   echo "=== stock daily data pipeline host run start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
   cd "$ROOT"
+  set +e
   "$PYTHON" -m stock_research.cli run-stock-daily-data-pipeline \
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
@@ -24,6 +25,7 @@ mkdir -p "$LOG_DIR" "$OUTPUT_DIR"
     --feishu-account "$FEISHU_ACCOUNT" \
     --openclaw-bin "$OPENCLAW_BIN"
   rc=$?
+  set -e
   echo "=== stock daily data pipeline host run end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
   exit "$rc"
 } 2>&1 | tee -a "$RUN_LOG"
