@@ -134,7 +134,8 @@ INVALIDATION_KEYWORDS = [
     "路线变化",
     "技术替代",
     "price cut",
-    "substitution",
+    "technical substitution",
+    "technology substitution",
     "demand miss",
     "oversupply",
     "customer loss",
@@ -389,11 +390,11 @@ def _append_text(
     records.append(
         {
             "source_table": source_table,
-            "source_id": _safe_text(
-                row.get("report_id")
-                or row.get("event_id")
-                or row.get("news_id")
-                or row.get("source_event_id")
+            "source_id": _first_non_empty_text(
+                row.get("report_id"),
+                row.get("event_id"),
+                row.get("news_id"),
+                row.get("source_event_id"),
             ),
             "source_date": _date_text(
                 row.get("report_date")
@@ -509,6 +510,14 @@ def _safe_text(value: Any) -> str:
     except Exception:
         pass
     return str(value).strip()
+
+
+def _first_non_empty_text(*values: Any) -> str:
+    for value in values:
+        text = _safe_text(value)
+        if text:
+            return text
+    return ""
 
 
 def _date_text(value: Any) -> str:

@@ -305,6 +305,31 @@ def test_domestic_substitution_alone_does_not_set_invalidation_evidence() -> Non
     assert row["has_invalidation_evidence"] is False
 
 
+@pytest.mark.parametrize(
+    "substitution_text",
+    [
+        "The company benefits from domestic substitution in critical materials.",
+        "Import substitution demand is accelerating for this product line.",
+    ],
+)
+def test_positive_english_substitution_does_not_set_invalidation_evidence(substitution_text: str) -> None:
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(
+            report_title="Critical material localization opportunity",
+            raw_summary=substitution_text,
+        ),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_bottleneck_keywords"] is True
+    assert row["has_invalidation_evidence"] is False
+
+
 def test_explicit_technology_substitution_sets_invalidation_evidence() -> None:
     audit = build_readiness_audit(
         candidates=_single_candidate(),
@@ -313,6 +338,27 @@ def test_explicit_technology_substitution_sets_invalidation_evidence() -> None:
         as_of_date=None,
         lookback_days=365,
         **_single_candidate_frames(risk_summary="主要风险为技术替代导致需求下滑。"),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_invalidation_evidence"] is True
+
+
+@pytest.mark.parametrize(
+    "risk_text",
+    [
+        "Main risk is technology substitution reducing demand for the current route.",
+        "Technical substitution may replace the current solution faster than expected.",
+    ],
+)
+def test_explicit_english_substitution_risk_sets_invalidation_evidence(risk_text: str) -> None:
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(risk_summary=risk_text),
     )
 
     row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
