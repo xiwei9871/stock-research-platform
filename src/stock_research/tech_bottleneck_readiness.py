@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import json
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -342,6 +344,96 @@ def build_readiness_audit(
     return ReadinessAuditResult(summary=summary, details=details)
 
 
+def write_readiness_artifacts(*, audit: ReadinessAuditResult, output_dir: Path) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / "readiness.csv"
+    json_path = output_dir / "readiness.json"
+    summary_path = output_dir / "summary.md"
+
+    csv_summary = audit.summary.copy()
+    for column in ["missing_flags", "proxy_flags", "source_gap_flags"]:
+        if column in csv_summary.columns:
+            csv_summary[column] = csv_summary[column].map(lambda value: json.dumps(_to_jsonable(value), ensure_ascii=False))
+    csv_summary.to_csv(csv_path, index=False)
+
+    status_counts = _status_counts(audit.summary)
+    payload = {
+        "candidate_count": _auditable_candidate_count(audit.summary),
+        "status_counts": status_counts,
+        "flag_coverage": _flag_coverage(audit.summary),
+        "candidates": _to_jsonable(audit.details),
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary_path.write_text(render_readiness_summary(audit), encoding="utf-8")
+
+    return {"csv": csv_path, "json": json_path, "summary": summary_path}
+
+
+def render_readiness_summary(audit: ReadinessAuditResult) -> str:
+    summary = audit.summary
+    candidate_count = _auditable_candidate_count(summary)
+    status_counts = _status_counts(summary)
+    flag_coverage = _flag_coverage(summary)
+
+    lines = [
+        "# tech-bottleneck data readiness audit",
+        "",
+        f"Candidate count: {candidate_count}",
+        "",
+        "## Status counts",
+    ]
+    if status_counts:
+        lines.extend(f"- {status}: {count}" for status, count in status_counts.items())
+    else:
+        lines.append("- No candidates.")
+
+    lines.extend(["", "## Flag coverage"])
+    if flag_coverage:
+        lines.extend(
+            f"- {flag}: {coverage['true_count']}/{coverage['total']} true ({coverage['true_rate']:.1%})"
+            for flag, coverage in flag_coverage.items()
+        )
+    else:
+        lines.append("- No readiness flags.")
+
+    lines.extend(["", "## Ready candidates"])
+    ready = _summary_records(summary, "ready_for_scoring")
+    if ready:
+        lines.extend(_candidate_summary_line(row) for row in ready)
+    else:
+        lines.append("- None.")
+
+    lines.extend(["", "## Blocked candidates"])
+    blocked = [
+        row
+        for row in summary.to_dict("records")
+        if _safe_text(row.get("coverage_status")) != "ready_for_scoring"
+    ]
+    if blocked:
+        lines.extend(_candidate_summary_line(row) for row in blocked)
+    else:
+        lines.append("- None.")
+
+    return "\n".join(lines) + "\n"
+
+
+def _flag_coverage(summary: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    coverage: dict[str, dict[str, Any]] = {}
+    total = len(summary)
+    for flag in READINESS_FLAGS:
+        if flag not in summary.columns:
+            continue
+        true_count = int(summary[flag].map(bool).sum()) if total else 0
+        false_count = total - true_count
+        coverage[flag] = {
+            "total": total,
+            "true_count": true_count,
+            "false_count": false_count,
+            "true_rate": true_count / total if total else 0.0,
+        }
+    return coverage
+
+
 def _rows_by_asset(frame: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     if frame.empty or "asset_id" not in frame.columns:
         return {}
@@ -525,3 +617,65 @@ def _date_text(value: Any) -> str:
     if pd.isna(parsed):
         return ""
     return parsed.strftime("%Y-%m-%d")
+
+
+def _status_counts(summary: pd.DataFrame) -> dict[str, int]:
+    if summary.empty or "coverage_status" not in summary.columns:
+        return {}
+    return {str(status): int(count) for status, count in summary["coverage_status"].value_counts().to_dict().items()}
+
+
+def _auditable_candidate_count(summary: pd.DataFrame) -> int:
+    if summary.empty:
+        return 0
+    if "has_industry_context" not in summary.columns:
+        return len(summary)
+    return int(summary["has_industry_context"].map(bool).sum())
+
+
+def _summary_records(summary: pd.DataFrame, coverage_status: str) -> list[dict[str, Any]]:
+    if summary.empty or "coverage_status" not in summary.columns:
+        return []
+    return [
+        row
+        for row in summary.to_dict("records")
+        if _safe_text(row.get("coverage_status")) == coverage_status
+    ]
+
+
+def _candidate_summary_line(row: dict[str, Any]) -> str:
+    asset_id = _safe_text(row.get("asset_id")) or "unknown"
+    stock_name = _safe_text(row.get("stock_name"))
+    status = _safe_text(row.get("coverage_status")) or "unknown"
+    missing_flags = _to_jsonable(row.get("missing_flags", []))
+    source_gap_flags = _to_jsonable(row.get("source_gap_flags", []))
+    suffix_parts = []
+    if missing_flags:
+        suffix_parts.append(f"missing={', '.join(missing_flags)}")
+    if source_gap_flags:
+        suffix_parts.append(f"source_gaps={', '.join(source_gap_flags)}")
+    suffix = f" ({'; '.join(suffix_parts)})" if suffix_parts else ""
+    label = f"{asset_id} {stock_name}".strip()
+    return f"- {label}: {status}{suffix}"
+
+
+def _to_jsonable(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_jsonable(item) for item in value]
+    if isinstance(value, pd.Timestamp):
+        return _date_text(value)
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value

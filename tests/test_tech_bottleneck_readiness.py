@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -7,6 +10,7 @@ from stock_research.tech_bottleneck_readiness import (
     READINESS_FLAGS,
     build_readiness_audit,
     normalize_readiness_candidates,
+    write_readiness_artifacts,
 )
 
 
@@ -440,3 +444,34 @@ def test_build_readiness_audit_flags_statuses_and_source_gaps() -> None:
     detail = {row["asset_id"]: row for row in audit.details}
     assert detail["CN:SH:688001"]["evidence_counts"]["reports"] == 1
     assert detail["CN:SH:688001"]["flag_details"]["has_capacity_evidence"][0]["keyword"] == "扩产"
+
+
+def test_write_readiness_artifacts_writes_csv_json_and_summary(tmp_path: Path) -> None:
+    audit = build_readiness_audit(
+        candidates=_candidate_pool(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        source_tables_empty={"news": True},
+        **_context_frames(),
+    )
+
+    paths = write_readiness_artifacts(audit=audit, output_dir=tmp_path)
+
+    assert paths["csv"] == tmp_path / "readiness.csv"
+    assert paths["json"] == tmp_path / "readiness.json"
+    assert paths["summary"] == tmp_path / "summary.md"
+    assert paths["csv"].exists()
+    assert paths["json"].exists()
+    assert paths["summary"].exists()
+
+    csv_text = paths["csv"].read_text(encoding="utf-8")
+    assert "ready_for_scoring" in csv_text
+    payload = json.loads(paths["json"].read_text(encoding="utf-8"))
+    assert payload["candidate_count"] == 3
+    assert payload["candidates"][0]["run_id"] == "readiness-test"
+    markdown = paths["summary"].read_text(encoding="utf-8")
+    assert "# tech-bottleneck data readiness audit" in markdown
+    assert "ready_for_scoring" in markdown
+    assert "has_news_or_announcement_catalyst" in markdown
