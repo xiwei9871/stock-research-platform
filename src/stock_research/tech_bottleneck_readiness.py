@@ -358,7 +358,7 @@ def write_readiness_artifacts(*, audit: ReadinessAuditResult, output_dir: Path) 
 
     status_counts = _status_counts(audit.summary)
     payload = {
-        "candidate_count": _auditable_candidate_count(audit.summary),
+        "candidate_count": int(len(audit.summary)),
         "status_counts": status_counts,
         "flag_coverage": _flag_coverage(audit.summary),
         "candidates": _to_jsonable(audit.details),
@@ -371,7 +371,7 @@ def write_readiness_artifacts(*, audit: ReadinessAuditResult, output_dir: Path) 
 
 def render_readiness_summary(audit: ReadinessAuditResult) -> str:
     summary = audit.summary
-    candidate_count = _auditable_candidate_count(summary)
+    candidate_count = int(len(summary))
     status_counts = _status_counts(summary)
     flag_coverage = _flag_coverage(summary)
 
@@ -623,14 +623,6 @@ def _status_counts(summary: pd.DataFrame) -> dict[str, int]:
     if summary.empty or "coverage_status" not in summary.columns:
         return {}
     return {str(status): int(count) for status, count in summary["coverage_status"].value_counts().to_dict().items()}
-
-
-def _auditable_candidate_count(summary: pd.DataFrame) -> int:
-    if summary.empty:
-        return 0
-    if "has_industry_context" not in summary.columns:
-        return len(summary)
-    return int(summary["has_industry_context"].map(bool).sum())
 
 
 def _summary_records(summary: pd.DataFrame, coverage_status: str) -> list[dict[str, Any]]:

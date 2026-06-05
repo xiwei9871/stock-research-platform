@@ -469,7 +469,7 @@ def test_write_readiness_artifacts_writes_csv_json_and_summary(tmp_path: Path) -
     csv_text = paths["csv"].read_text(encoding="utf-8")
     assert "ready_for_scoring" in csv_text
     payload = json.loads(paths["json"].read_text(encoding="utf-8"))
-    assert payload["candidate_count"] == 3
+    assert payload["candidate_count"] == len(_candidate_pool())
     assert payload["candidates"][0]["run_id"] == "readiness-test"
     markdown = paths["summary"].read_text(encoding="utf-8")
     assert "# tech-bottleneck data readiness audit" in markdown
