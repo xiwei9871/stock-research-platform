@@ -35,7 +35,7 @@ def derive_daily_windows(trade_date: str) -> dict[str, str]:
 
 def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[DailyPipelineStep]:
     windows = derive_daily_windows(trade_date)
-    python = "./.venv/bin/python"
+    python = "/Users/xiwei/stock_research/.venv/bin/python"
     return [
         DailyPipelineStep(name="start_report", command=[], required=False, timeout_seconds=60),
         DailyPipelineStep(
@@ -181,11 +181,24 @@ def run_stock_daily_data_pipeline(
     runner = command_runner or _default_command_runner
     steps = build_daily_pipeline_steps(trade_date=trade_date, output_dir=resolved_output_dir)
     step_results: list[dict[str, Any]] = []
+    required_failed = False
 
     for step in steps:
+        if step.name == "daily_report_delivery":
+            continue
         if not step.command:
             step_results.append(
                 {"step": step.name, "status": "skipped", "rows": 0, "error": ""}
+            )
+            continue
+        if required_failed:
+            step_results.append(
+                {
+                    "step": step.name,
+                    "status": "skipped_dependency_failed",
+                    "rows": 0,
+                    "error": "upstream required step failed",
+                }
             )
             continue
         try:
@@ -203,6 +216,8 @@ def run_stock_daily_data_pipeline(
                     "returncode": returncode,
                 }
             )
+            if step.required and status == "failed":
+                required_failed = True
         except Exception as exc:
             step_results.append(
                 {
@@ -213,30 +228,49 @@ def run_stock_daily_data_pipeline(
                     "returncode": 1,
                 }
             )
+            if step.required:
+                required_failed = True
 
-    failed_required = [
-        item
-        for item, step in zip(step_results, steps)
-        if step.required and item["status"] == "failed"
-    ]
-    status = "partial_failed" if failed_required else "success"
+    status = "partial_failed" if required_failed else "success"
+    delivery_result = {
+        "step": "daily_report_delivery",
+        "status": "skipped",
+        "rows": 0,
+        "error": "",
+    }
+    if send_feishu and feishu_sender is not None:
+        delivery_result["status"] = "success"
+        step_results.append(delivery_result)
+        message = render_daily_pipeline_feishu_message(
+            trade_date=trade_date,
+            status=status,
+            output_dir=resolved_output_dir,
+            step_results=step_results,
+        )
+        try:
+            feishu_sender(message)
+        except Exception as exc:
+            delivery_result["status"] = "failed"
+            delivery_result["error"] = str(exc)
+            status = "partial_failed"
+    else:
+        step_results.append(delivery_result)
+
     summary = {
         "trade_date": trade_date,
         "status": status,
         "output_dir": str(resolved_output_dir),
         "steps": step_results,
     }
-    (resolved_output_dir / "run_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
     message = render_daily_pipeline_feishu_message(
         trade_date=trade_date,
         status=status,
         output_dir=resolved_output_dir,
         step_results=step_results,
     )
+    (resolved_output_dir / "run_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     (resolved_output_dir / "feishu_message.txt").write_text(message + "\n", encoding="utf-8")
-    if send_feishu and feishu_sender is not None:
-        feishu_sender(message)
     return summary

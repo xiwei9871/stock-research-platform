@@ -46,6 +46,7 @@ def test_build_daily_pipeline_steps_commands_parse_through_cli() -> None:
 
     for step in steps:
         if step.command:
+            assert step.command[0] == "/Users/xiwei/stock_research/.venv/bin/python"
             parser.parse_args(step.command[3:])
 
 
@@ -113,3 +114,100 @@ def test_run_stock_daily_data_pipeline_can_skip_feishu(tmp_path: Path) -> None:
 
     assert result["status"] == "success"
     assert sent == []
+
+
+def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        calls.append(command)
+        if "run-daily-incremental" in command:
+            return {"returncode": 1, "stdout": "", "stderr": "market failed"}
+        return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    assert result["status"] == "partial_failed"
+    assert len(calls) == 1
+    assert "run-daily-incremental" in calls[0]
+
+    steps = {step["step"]: step for step in result["steps"]}
+    for step_name in [
+        "minute_incremental_refresh",
+        "daily_event_refresh",
+        "daily_feature_build",
+    ]:
+        assert steps[step_name]["status"] == "skipped_dependency_failed"
+        assert steps[step_name]["rows"] == 0
+        assert steps[step_name]["error"] == "upstream required step failed"
+
+
+def test_run_stock_daily_data_pipeline_records_successful_feishu_delivery(
+    tmp_path: Path,
+) -> None:
+    sent: list[str] = []
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "rows|3",
+            "stderr": "",
+        },
+        feishu_sender=lambda message: sent.append(message),
+        send_feishu=True,
+    )
+
+    assert result["status"] == "success"
+    assert len(sent) == 1
+    delivery = next(step for step in result["steps"] if step["step"] == "daily_report_delivery")
+    assert delivery["status"] == "success"
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    summary_delivery = next(
+        step for step in summary["steps"] if step["step"] == "daily_report_delivery"
+    )
+    assert summary_delivery["status"] == "success"
+    assert "daily_report_delivery: success" in (tmp_path / "feishu_message.txt").read_text()
+
+
+def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
+    tmp_path: Path,
+) -> None:
+    def failing_sender(message: str) -> None:
+        raise RuntimeError("feishu unavailable")
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "rows|3",
+            "stderr": "",
+        },
+        feishu_sender=failing_sender,
+        send_feishu=True,
+    )
+
+    assert result["status"] == "partial_failed"
+    delivery = next(step for step in result["steps"] if step["step"] == "daily_report_delivery")
+    assert delivery["status"] == "failed"
+    assert delivery["error"] == "feishu unavailable"
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    summary_delivery = next(
+        step for step in summary["steps"] if step["step"] == "daily_report_delivery"
+    )
+    assert summary["status"] == "partial_failed"
+    assert summary_delivery["status"] == "failed"
+    assert summary_delivery["error"] == "feishu unavailable"
+    assert "daily_report_delivery: failed" in (tmp_path / "feishu_message.txt").read_text()
+    assert "feishu unavailable" in (tmp_path / "feishu_message.txt").read_text()
