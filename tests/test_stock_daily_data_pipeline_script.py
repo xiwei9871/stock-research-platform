@@ -67,3 +67,46 @@ exit 7
     assert "--feishu-target chat:test" in arg_text
     assert "--feishu-account jarvis" in arg_text
     assert "--openclaw-bin openclaw-test" in arg_text
+
+
+def test_stock_daily_data_pipeline_host_script_preserves_cli_rc_when_tee_fails(
+    tmp_path: Path,
+) -> None:
+    fake_root = tmp_path / "fake_root"
+    fake_root.mkdir()
+    fake_python = tmp_path / "fake_python.sh"
+    log_dir = tmp_path / "logs"
+    run_log = log_dir / "custom"
+    output_dir = tmp_path / "outputs"
+
+    run_log.mkdir(parents=True)
+    fake_python.write_text(
+        """#!/usr/bin/env bash
+exit 7
+"""
+    )
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "STOCK_DAILY_PIPELINE_ROOT": str(fake_root),
+            "STOCK_DAILY_PIPELINE_PYTHON": str(fake_python),
+            "STOCK_DAILY_PIPELINE_OPENCLAW_BIN": "openclaw-test",
+            "STOCK_DAILY_PIPELINE_LOG_DIR": str(log_dir),
+            "STOCK_DAILY_PIPELINE_RUN_LOG": str(run_log),
+            "STOCK_DAILY_PIPELINE_TRADE_DATE": "2026-06-05",
+            "STOCK_DAILY_PIPELINE_OUTPUT_DIR": str(output_dir),
+            "STOCK_DAILY_PIPELINE_FEISHU_TARGET": "chat:test",
+            "STOCK_DAILY_PIPELINE_FEISHU_ACCOUNT": "jarvis",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_stock_daily_data_pipeline.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 7

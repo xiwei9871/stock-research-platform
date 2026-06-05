@@ -14,6 +14,7 @@ FEISHU_ACCOUNT="${STOCK_DAILY_PIPELINE_FEISHU_ACCOUNT:-jarvis}"
 
 mkdir -p "$LOG_DIR" "$(dirname "$RUN_LOG")" "$OUTPUT_DIR"
 
+set +e
 {
   echo "=== stock daily data pipeline host run start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
   cd "$ROOT"
@@ -29,3 +30,12 @@ mkdir -p "$LOG_DIR" "$(dirname "$RUN_LOG")" "$OUTPUT_DIR"
   echo "=== stock daily data pipeline host run end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
   exit "$rc"
 } 2>&1 | tee -a "$RUN_LOG"
+pipeline_status=("${PIPESTATUS[@]}")
+block_rc=${pipeline_status[0]}
+tee_rc=${pipeline_status[1]}
+set -e
+
+if [ "$block_rc" -ne 0 ]; then
+  exit "$block_rc"
+fi
+exit "$tee_rc"
