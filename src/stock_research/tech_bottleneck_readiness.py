@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.db import connect, fetch_all
+
 
 READINESS_FLAGS = [
     "has_industry_context",
@@ -369,6 +371,186 @@ def write_readiness_artifacts(*, audit: ReadinessAuditResult, output_dir: Path) 
     return {"csv": csv_path, "json": json_path, "summary": summary_path}
 
 
+def run_readiness_audit_from_files(
+    *,
+    candidates_csv: Path,
+    output_dir: Path,
+    run_id: str,
+    run_date: str,
+    as_of_date: str | None,
+    lookback_days: int,
+    service: str,
+    context_loader: Any | None = None,
+) -> dict[str, Path]:
+    candidates = pd.read_csv(candidates_csv)
+    normalized = normalize_readiness_candidates(
+        candidates,
+        run_date=run_date,
+        as_of_date=as_of_date,
+        lookback_days=lookback_days,
+    )
+    loader = context_loader or load_readiness_context_from_db
+    context = loader(normalized, lookback_days=lookback_days, service=service)
+    source_tables_empty = context.pop("source_tables_empty", {})
+    audit = build_readiness_audit(
+        candidates=normalized,
+        run_id=run_id,
+        run_date=run_date,
+        as_of_date=as_of_date,
+        lookback_days=lookback_days,
+        source_tables_empty=source_tables_empty,
+        **context,
+    )
+    return write_readiness_artifacts(audit=audit, output_dir=output_dir)
+
+
+def load_readiness_context_from_db(
+    candidates: pd.DataFrame,
+    *,
+    lookback_days: int,
+    service: str,
+) -> dict[str, Any]:
+    asset_ids = sorted(
+        {
+            _safe_text(value)
+            for value in candidates.get("asset_id", pd.Series(dtype=object)).tolist()
+            if _safe_text(value)
+        }
+    )
+    if not asset_ids:
+        return _empty_context()
+
+    as_of_dates = pd.to_datetime(candidates.get("as_of_date", pd.Series(dtype=object)), errors="coerce").dropna()
+    if as_of_dates.empty:
+        return _empty_context()
+    min_as_of = as_of_dates.min().strftime("%Y-%m-%d")
+    max_as_of = as_of_dates.max().strftime("%Y-%m-%d")
+    min_window_start = (as_of_dates.min() - pd.Timedelta(days=int(lookback_days))).strftime("%Y-%m-%d")
+
+    with connect(service) as conn:
+        industry = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT asset_id, industry_system, industry_code, industry_name, level, start_date, end_date
+                FROM core.industry_membership
+                WHERE asset_id = ANY(%s)
+                  AND start_date <= %s::date
+                  AND (end_date IS NULL OR end_date >= %s::date)
+                """,
+                (asset_ids, max_as_of, min_as_of),
+            )
+        )
+        main_business = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT asset_id, report_period, classify_type, item_name, revenue, revenue_ratio, gross_margin
+                FROM finance.main_business_composition
+                WHERE asset_id = ANY(%s)
+                  AND report_period <= %s::date
+                """,
+                (asset_ids, max_as_of),
+            )
+        )
+        reports = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT
+                    e.asset_id,
+                    e.report_id,
+                    e.report_date,
+                    s.report_title,
+                    s.raw_summary,
+                    e.company_view,
+                    e.industry_view,
+                    e.risk_summary,
+                    s.source_type,
+                    s.broker
+                FROM research.stock_report_event e
+                LEFT JOIN research.stock_report_source s ON s.report_id = e.report_id
+                WHERE e.asset_id = ANY(%s)
+                  AND e.report_date BETWEEN %s::date AND %s::date
+                """,
+                (asset_ids, min_window_start, max_as_of),
+            )
+        )
+        report_features = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT asset_id, trade_date, report_count_90d, source_count
+                FROM research.stock_report_feature_daily
+                WHERE asset_id = ANY(%s)
+                  AND trade_date BETWEEN %s::date AND %s::date
+                """,
+                (asset_ids, min_window_start, max_as_of),
+            )
+        )
+        events = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT event_id, asset_id, 'institution_survey' AS event_type, survey_date AS event_date, summary
+                FROM event.institution_survey
+                WHERE asset_id = ANY(%s)
+                  AND survey_date BETWEEN %s::date AND %s::date
+                UNION ALL
+                SELECT event_id, asset_id, 'earnings_forecast' AS event_type, announcement_date AS event_date, summary
+                FROM event.earnings_forecast
+                WHERE asset_id = ANY(%s)
+                  AND announcement_date BETWEEN %s::date AND %s::date
+                UNION ALL
+                SELECT event_id, asset_id, 'earnings_express' AS event_type, announcement_date AS event_date, '' AS summary
+                FROM event.earnings_express
+                WHERE asset_id = ANY(%s)
+                  AND announcement_date BETWEEN %s::date AND %s::date
+                """,
+                (
+                    asset_ids,
+                    min_window_start,
+                    max_as_of,
+                    asset_ids,
+                    min_window_start,
+                    max_as_of,
+                    asset_ids,
+                    min_window_start,
+                    max_as_of,
+                ),
+            )
+        )
+        news = pd.DataFrame(
+            fetch_all(
+                conn,
+                """
+                SELECT
+                    m.asset_id,
+                    m.source_event_id,
+                    s.published_at,
+                    s.title,
+                    s.content
+                FROM research.news_event_mention m
+                JOIN research.news_event_source s ON s.source_event_id = m.source_event_id
+                WHERE m.asset_id = ANY(%s)
+                  AND s.published_at::date BETWEEN %s::date AND %s::date
+                """,
+                (asset_ids, min_window_start, max_as_of),
+            )
+        )
+        news_count = fetch_all(conn, "SELECT count(*) AS count FROM research.news_event_source")
+
+    return {
+        "industry": industry,
+        "main_business": main_business,
+        "reports": reports,
+        "report_features": report_features,
+        "events": events,
+        "news": news,
+        "source_tables_empty": {"news": int(news_count[0]["count"]) == 0 if news_count else True},
+    }
+
+
 def render_readiness_summary(audit: ReadinessAuditResult) -> str:
     summary = audit.summary
     candidate_count = int(len(summary))
@@ -415,6 +597,18 @@ def render_readiness_summary(audit: ReadinessAuditResult) -> str:
         lines.append("- None.")
 
     return "\n".join(lines) + "\n"
+
+
+def _empty_context() -> dict[str, Any]:
+    return {
+        "industry": pd.DataFrame(),
+        "main_business": pd.DataFrame(),
+        "reports": pd.DataFrame(),
+        "report_features": pd.DataFrame(),
+        "events": pd.DataFrame(),
+        "news": pd.DataFrame(),
+        "source_tables_empty": {"news": True},
+    }
 
 
 def _flag_coverage(summary: pd.DataFrame) -> dict[str, dict[str, Any]]:

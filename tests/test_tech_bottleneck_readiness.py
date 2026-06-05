@@ -10,6 +10,7 @@ from stock_research.tech_bottleneck_readiness import (
     READINESS_FLAGS,
     build_readiness_audit,
     normalize_readiness_candidates,
+    run_readiness_audit_from_files,
     write_readiness_artifacts,
 )
 
@@ -475,3 +476,29 @@ def test_write_readiness_artifacts_writes_csv_json_and_summary(tmp_path: Path) -
     assert "# tech-bottleneck data readiness audit" in markdown
     assert "ready_for_scoring" in markdown
     assert "has_news_or_announcement_catalyst" in markdown
+
+
+def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_path: Path) -> None:
+    candidates_csv = tmp_path / "candidates.csv"
+    _candidate_pool().to_csv(candidates_csv, index=False)
+
+    def fake_loader(candidates: pd.DataFrame, *, lookback_days: int, service: str) -> dict[str, pd.DataFrame]:
+        assert set(candidates["asset_id"]) == {"CN:SH:688001", "CN:SZ:300001", "CN:SH:688002", "CN:SH:688003"}
+        assert lookback_days == 365
+        assert service == "stock_research"
+        return _context_frames() | {"source_tables_empty": {"news": True}}
+
+    paths = run_readiness_audit_from_files(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        service="stock_research",
+        context_loader=fake_loader,
+    )
+
+    assert paths["csv"].exists()
+    assert paths["json"].exists()
+    assert paths["summary"].exists()
