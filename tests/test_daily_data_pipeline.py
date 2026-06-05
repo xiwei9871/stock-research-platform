@@ -36,6 +36,17 @@ def test_build_daily_pipeline_steps_lists_required_initial_steps() -> None:
     assert steps[1].required is True
 
 
+def test_build_daily_pipeline_steps_commands_parse_through_cli() -> None:
+    from stock_research.cli import build_parser
+
+    parser = build_parser()
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    for step in steps:
+        if step.command:
+            parser.parse_args(step.command[3:])
+
+
 def test_render_daily_pipeline_feishu_message_is_mobile_sized() -> None:
     message = render_daily_pipeline_feishu_message(
         trade_date="2026-06-05",
