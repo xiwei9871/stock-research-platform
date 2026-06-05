@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -142,3 +144,99 @@ def render_daily_pipeline_feishu_message(
             line += f" error={item['error']}"
         lines.append(line)
     return "\n".join(lines)
+
+
+def _default_command_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+    )
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def _step_rows(stdout: str) -> int:
+    rows = 0
+    for token in stdout.replace("\n", "|").split("|"):
+        if token.isdigit():
+            rows = int(token)
+    return rows
+
+
+def run_stock_daily_data_pipeline(
+    *,
+    trade_date: str,
+    output_dir: str | Path,
+    command_runner: Any = None,
+    feishu_sender: Any = None,
+    send_feishu: bool = True,
+) -> dict[str, Any]:
+    resolved_output_dir = Path(output_dir)
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
+    runner = command_runner or _default_command_runner
+    steps = build_daily_pipeline_steps(trade_date=trade_date, output_dir=resolved_output_dir)
+    step_results: list[dict[str, Any]] = []
+
+    for step in steps:
+        if not step.command:
+            step_results.append(
+                {"step": step.name, "status": "skipped", "rows": 0, "error": ""}
+            )
+            continue
+        try:
+            outcome = runner(step.command, step.timeout_seconds)
+            returncode = int(outcome.get("returncode", 1))
+            stdout = str(outcome.get("stdout", ""))
+            stderr = str(outcome.get("stderr", ""))
+            status = "success" if returncode == 0 else "failed"
+            step_results.append(
+                {
+                    "step": step.name,
+                    "status": status,
+                    "rows": _step_rows(stdout),
+                    "error": "" if status == "success" else (stderr or stdout)[-500:],
+                    "returncode": returncode,
+                }
+            )
+        except Exception as exc:
+            step_results.append(
+                {
+                    "step": step.name,
+                    "status": "failed",
+                    "rows": 0,
+                    "error": str(exc),
+                    "returncode": 1,
+                }
+            )
+
+    failed_required = [
+        item
+        for item, step in zip(step_results, steps)
+        if step.required and item["status"] == "failed"
+    ]
+    status = "partial_failed" if failed_required else "success"
+    summary = {
+        "trade_date": trade_date,
+        "status": status,
+        "output_dir": str(resolved_output_dir),
+        "steps": step_results,
+    }
+    (resolved_output_dir / "run_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    message = render_daily_pipeline_feishu_message(
+        trade_date=trade_date,
+        status=status,
+        output_dir=resolved_output_dir,
+        step_results=step_results,
+    )
+    (resolved_output_dir / "feishu_message.txt").write_text(message + "\n", encoding="utf-8")
+    if send_feishu and feishu_sender is not None:
+        feishu_sender(message)
+    return summary

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from stock_research.daily_data_pipeline import (
@@ -5,6 +6,7 @@ from stock_research.daily_data_pipeline import (
     build_daily_pipeline_steps,
     derive_daily_windows,
     render_daily_pipeline_feishu_message,
+    run_stock_daily_data_pipeline,
 )
 
 
@@ -64,3 +66,50 @@ def test_render_daily_pipeline_feishu_message_is_mobile_sized() -> None:
     assert "daily_event_refresh: partial_failed rows=45 error=lhb failed" in message
     assert "outputs/daily/20260605" in message
     assert len(message) < 1800
+
+
+def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        calls.append(command)
+        if "free-enrichment-backfill" in command:
+            return {"returncode": 1, "stdout": "failed output", "stderr": "lhb failed"}
+        return {"returncode": 0, "stdout": "rows|12", "stderr": ""}
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    assert result["status"] == "partial_failed"
+    assert len(result["steps"]) == 6
+    assert any(
+        step["step"] == "daily_event_refresh" and step["status"] == "failed"
+        for step in result["steps"]
+    )
+    assert calls
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    assert summary["trade_date"] == "2026-06-05"
+    assert summary["status"] == "partial_failed"
+
+
+def test_run_stock_daily_data_pipeline_can_skip_feishu(tmp_path: Path) -> None:
+    sent: list[str] = []
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "",
+            "stderr": "",
+        },
+        feishu_sender=lambda message: sent.append(message),
+        send_feishu=False,
+    )
+
+    assert result["status"] == "success"
+    assert sent == []
