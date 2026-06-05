@@ -27,3 +27,22 @@ stock-research tech-bottleneck-discovery \
 ## Review Boundary
 
 The command does not produce trading instructions, broker actions, or production watchlist promotion. Reviewers inspect the generated packet and record the review decision separately.
+
+## Historical Re-Score Experiment
+
+Use this after packet generation to evaluate scored candidates against future bars. The 20D and 60D horizons are diagnostics only. The main validation horizons are 120D and 250D; 500D is a long-cycle observation horizon.
+
+```bash
+stock-research tech-bottleneck-historical-rescore \
+  --packets-csv outputs/tech_bottleneck_discovery/example/packets.csv \
+  --bars-csv data/manual/tech_bottleneck_bars_example.csv \
+  --output-dir outputs/tech_bottleneck_discovery/historical_rescore_example \
+  --run-id tech-bottleneck-historical-example \
+  --horizons 1,2,4,5
+```
+
+Outputs:
+
+- `outcomes.csv`
+- `bucket_summary.csv`
+- `summary.md`
