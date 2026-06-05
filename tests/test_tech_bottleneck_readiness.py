@@ -220,6 +220,132 @@ def _context_frames() -> dict[str, pd.DataFrame]:
     }
 
 
+def _single_candidate() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688099",
+                "stock_name": "证据测试",
+                "trade_date": "2026-06-05",
+                "candidate_source": "unit-test",
+                "rank": 1,
+            }
+        ]
+    )
+
+
+def _single_candidate_frames(
+    *,
+    report_title: str = "经营跟踪",
+    raw_summary: str = "产品结构稳定。",
+    risk_summary: str = "",
+    news: pd.DataFrame | None = None,
+) -> dict[str, pd.DataFrame]:
+    return {
+        "industry": pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688099",
+                    "industry_system": "申万",
+                    "industry_code": "801080",
+                    "industry_name": "电子",
+                    "level": 1,
+                }
+            ]
+        ),
+        "main_business": pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688099",
+                    "report_period": "2026-03-31",
+                    "classify_type": "按产品分类",
+                    "item_name": "通用电子材料",
+                    "revenue": 100,
+                    "revenue_ratio": 45,
+                    "gross_margin": 35,
+                }
+            ]
+        ),
+        "reports": pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688099",
+                    "report_id": "r-test",
+                    "report_date": "2026-05-20",
+                    "report_title": report_title,
+                    "raw_summary": raw_summary,
+                    "company_view": "",
+                    "industry_view": "",
+                    "risk_summary": risk_summary,
+                    "source_type": "public_web_search_result",
+                    "broker": "示例证券",
+                }
+            ]
+        ),
+        "report_features": pd.DataFrame(),
+        "events": pd.DataFrame(),
+        "news": news if news is not None else pd.DataFrame(),
+    }
+
+
+def test_domestic_substitution_alone_does_not_set_invalidation_evidence() -> None:
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(
+            report_title="关键材料国产替代加速",
+            raw_summary="公司推进国产替代，客户导入稳步进行。",
+        ),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_invalidation_evidence"] is False
+
+
+def test_explicit_technology_substitution_sets_invalidation_evidence() -> None:
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(risk_summary="主要风险为技术替代导致需求下滑。"),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_invalidation_evidence"] is True
+
+
+def test_news_source_event_id_is_used_in_keyword_match_details() -> None:
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(
+            news=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "CN:SH:688099",
+                        "source_event_id": "news-source-123",
+                        "published_at": "2026-05-28",
+                        "title": "公司突破关键设备卡脖子环节",
+                        "content": "客户验证同步推进。",
+                    }
+                ]
+            )
+        ),
+    )
+
+    detail = audit.details[0]["flag_details"]["has_bottleneck_keywords"][0]
+    assert detail["source_table"] == "news"
+    assert detail["source_id"] == "news-source-123"
+
+
 def test_build_readiness_audit_flags_statuses_and_source_gaps() -> None:
     audit = build_readiness_audit(
         candidates=_candidate_pool(),

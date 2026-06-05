@@ -124,7 +124,6 @@ TECHNICAL_BARRIER_KEYWORDS = [
 
 INVALIDATION_KEYWORDS = [
     "降价",
-    "替代",
     "需求不及预期",
     "产能过剩",
     "客户流失",
@@ -201,6 +200,10 @@ def build_readiness_audit(
     news: pd.DataFrame,
     source_tables_empty: dict[str, bool] | None = None,
 ) -> ReadinessAuditResult:
+    """Build readiness flags from evidence frames pre-filtered to each candidate's as-of/lookback window.
+
+    The caller or DB loader is responsible for point-in-time and lookback filtering before invoking this pure function.
+    """
     normalized = normalize_readiness_candidates(
         candidates,
         run_date=run_date,
@@ -386,7 +389,12 @@ def _append_text(
     records.append(
         {
             "source_table": source_table,
-            "source_id": _safe_text(row.get("report_id") or row.get("event_id") or row.get("news_id")),
+            "source_id": _safe_text(
+                row.get("report_id")
+                or row.get("event_id")
+                or row.get("news_id")
+                or row.get("source_event_id")
+            ),
             "source_date": _date_text(
                 row.get("report_date")
                 or row.get("event_date")
