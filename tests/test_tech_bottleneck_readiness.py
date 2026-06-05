@@ -397,6 +397,69 @@ def test_news_source_event_id_is_used_in_keyword_match_details() -> None:
     assert detail["source_id"] == "news-source-123"
 
 
+def test_future_report_does_not_set_research_or_keyword_flags_for_earlier_candidate() -> None:
+    audit = build_readiness_audit(
+        candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688099",
+                    "stock_name": "证据测试",
+                    "trade_date": "2026-01-10",
+                    "candidate_source": "unit-test",
+                    "rank": 1,
+                }
+            ]
+        ),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **_single_candidate_frames(report_title="关键材料国产替代加速"),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_research_report"] is False
+    assert row["has_bottleneck_keywords"] is False
+
+
+def test_future_main_business_does_not_set_product_revenue_exposure() -> None:
+    frames = _single_candidate_frames()
+    frames["main_business"] = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688099",
+                "report_period": "2026-03-31",
+                "classify_type": "按产品分类",
+                "item_name": "AI 光模块关键材料",
+                "revenue": 100,
+                "revenue_ratio": 45,
+                "gross_margin": 35,
+            }
+        ]
+    )
+    audit = build_readiness_audit(
+        candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688099",
+                    "stock_name": "证据测试",
+                    "trade_date": "2026-01-10",
+                    "candidate_source": "unit-test",
+                    "rank": 1,
+                }
+            ]
+        ),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_product_revenue_exposure"] is False
+
+
 def test_build_readiness_audit_flags_statuses_and_source_gaps() -> None:
     audit = build_readiness_audit(
         candidates=_candidate_pool(),

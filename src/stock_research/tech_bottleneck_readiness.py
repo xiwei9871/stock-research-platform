@@ -205,9 +205,10 @@ def build_readiness_audit(
     news: pd.DataFrame,
     source_tables_empty: dict[str, bool] | None = None,
 ) -> ReadinessAuditResult:
-    """Build readiness flags from evidence frames pre-filtered to each candidate's as-of/lookback window.
+    """Build readiness flags after candidate-level point-in-time/lookback filtering.
 
-    The caller or DB loader is responsible for point-in-time and lookback filtering before invoking this pure function.
+    Callers or the DB loader may pass a prebounded batch superset; this pure function
+    still filters evidence rows against each candidate's as-of date before computing flags.
     """
     normalized = normalize_readiness_candidates(
         candidates,
@@ -229,20 +230,51 @@ def build_readiness_audit(
     details: list[dict[str, Any]] = []
     for candidate in normalized.to_dict("records"):
         asset_id = candidate["asset_id"]
-        industry_rows = lookups["industry"].get(asset_id, [])
+        candidate_as_of_date = _date_text(candidate.get("as_of_date"))
+        candidate_lookback_days = int(_safe_number(candidate.get("lookback_days")) or lookback_days)
+        industry_rows = _filter_industry_rows(
+            lookups["industry"].get(asset_id, []),
+            as_of_date=candidate_as_of_date,
+        )
         main_business_rows = [
             row
-            for row in lookups["main_business"].get(asset_id, [])
+            for row in _filter_candidate_rows(
+                lookups["main_business"].get(asset_id, []),
+                as_of_date=candidate_as_of_date,
+                lookback_days=candidate_lookback_days,
+                date_fields=["report_period"],
+                allow_before_window=True,
+            )
             if _safe_text(row.get("classify_type")) == "按产品分类" and _safe_text(row.get("item_name"))
         ]
-        report_rows = lookups["reports"].get(asset_id, [])
+        report_rows = _filter_candidate_rows(
+            lookups["reports"].get(asset_id, []),
+            as_of_date=candidate_as_of_date,
+            lookback_days=candidate_lookback_days,
+            date_fields=["report_date"],
+        )
         report_feature_rows = [
             row
-            for row in lookups["report_features"].get(asset_id, [])
+            for row in _filter_candidate_rows(
+                lookups["report_features"].get(asset_id, []),
+                as_of_date=candidate_as_of_date,
+                lookback_days=candidate_lookback_days,
+                date_fields=["trade_date"],
+            )
             if _safe_number(row.get("report_count_90d")) > 0 or _safe_number(row.get("source_count")) > 0
         ]
-        event_rows = lookups["events"].get(asset_id, [])
-        news_rows = lookups["news"].get(asset_id, [])
+        event_rows = _filter_candidate_rows(
+            lookups["events"].get(asset_id, []),
+            as_of_date=candidate_as_of_date,
+            lookback_days=candidate_lookback_days,
+            date_fields=["event_date"],
+        )
+        news_rows = _filter_candidate_rows(
+            lookups["news"].get(asset_id, []),
+            as_of_date=candidate_as_of_date,
+            lookback_days=candidate_lookback_days,
+            date_fields=["published_at", "event_date", "trade_date"],
+        )
         corpus = _build_text_corpus(
             asset_id=asset_id,
             reports=report_rows,
@@ -639,6 +671,55 @@ def _rows_by_asset(frame: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     return dict(rows)
 
 
+def _filter_industry_rows(rows: list[dict[str, Any]], *, as_of_date: str) -> list[dict[str, Any]]:
+    as_of_timestamp = _date_timestamp(as_of_date)
+    if as_of_timestamp is None:
+        return rows
+
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        if "start_date" not in row and "end_date" not in row:
+            filtered.append(row)
+            continue
+
+        start_date = _date_timestamp(row.get("start_date"))
+        end_date = _date_timestamp(row.get("end_date"))
+        if start_date is None:
+            filtered.append(row)
+            continue
+        if start_date <= as_of_timestamp and (end_date is None or end_date >= as_of_timestamp):
+            filtered.append(row)
+    return filtered
+
+
+def _filter_candidate_rows(
+    rows: list[dict[str, Any]],
+    *,
+    as_of_date: str,
+    lookback_days: int,
+    date_fields: list[str],
+    allow_before_window: bool = False,
+) -> list[dict[str, Any]]:
+    as_of_timestamp = _date_timestamp(as_of_date)
+    if as_of_timestamp is None:
+        return rows
+    window_start = as_of_timestamp - pd.Timedelta(days=int(lookback_days))
+
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        row_dates = [_date_timestamp(row.get(field)) for field in date_fields if field in row]
+        row_dates = [row_date for row_date in row_dates if row_date is not None]
+        if not row_dates:
+            filtered.append(row)
+            continue
+        if any(
+            row_date <= as_of_timestamp and (allow_before_window or row_date >= window_start)
+            for row_date in row_dates
+        ):
+            filtered.append(row)
+    return filtered
+
+
 def _build_text_corpus(
     *,
     asset_id: str,
@@ -811,6 +892,16 @@ def _date_text(value: Any) -> str:
     if pd.isna(parsed):
         return ""
     return parsed.strftime("%Y-%m-%d")
+
+
+def _date_timestamp(value: Any) -> pd.Timestamp | None:
+    date_text = _date_text(value)
+    if not date_text:
+        return None
+    parsed = pd.to_datetime(date_text, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed
 
 
 def _status_counts(summary: pd.DataFrame) -> dict[str, int]:
