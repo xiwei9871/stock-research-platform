@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from stock_research.cli import build_parser
 from stock_research.tech_bottleneck_experiment import (
     build_historical_rescore_report,
     render_historical_rescore_summary,
@@ -187,3 +188,24 @@ def test_run_historical_rescore_from_files(tmp_path: Path) -> None:
     assert set(outcomes["asset_id"]) == {"A", "B", "C"}
     summary = pd.read_csv(paths["bucket_summary"]).set_index("bucket")
     assert summary.loc["high", "candidate_count"] == 1
+
+
+def test_cli_parser_accepts_historical_rescore_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-historical-rescore",
+            "--packets-csv",
+            "packets.csv",
+            "--bars-csv",
+            "bars.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "run",
+            "--horizons",
+            "20,60,120",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-historical-rescore"
+    assert args.horizons == "20,60,120"

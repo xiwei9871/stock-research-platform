@@ -159,6 +159,7 @@ from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
+from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
@@ -1394,6 +1395,20 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_parser.add_argument("--evidence-csv", required=True)
     tech_bottleneck_parser.add_argument("--output-dir", required=True)
     tech_bottleneck_parser.add_argument("--run-id", required=True)
+
+    tech_bottleneck_rescore = subparsers.add_parser(
+        "tech-bottleneck-historical-rescore",
+        help="Evaluate historical tech bottleneck scored candidates across forward horizons.",
+    )
+    tech_bottleneck_rescore.add_argument("--packets-csv", required=True)
+    tech_bottleneck_rescore.add_argument("--bars-csv", required=True)
+    tech_bottleneck_rescore.add_argument("--output-dir", required=True)
+    tech_bottleneck_rescore.add_argument("--run-id", required=True)
+    tech_bottleneck_rescore.add_argument(
+        "--horizons",
+        default="20,60,120,250,500",
+        help="Comma-separated trading-day horizons.",
+    )
 
     backtest_top20 = subparsers.add_parser("backtest-top20")
     backtest_top20.add_argument("--start-date", required=True)
@@ -4724,6 +4739,16 @@ def main_for_args(argv: list[str] | None = None) -> None:
             evidence_path=Path(args.evidence_csv),
             output_dir=Path(args.output_dir),
             run_id=str(args.run_id),
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-historical-rescore":
+        horizons = tuple(int(item) for item in str(args.horizons).split(",") if item.strip())
+        paths = run_historical_rescore_from_files(
+            packets_csv=Path(args.packets_csv),
+            bars_csv=Path(args.bars_csv),
+            output_dir=Path(args.output_dir),
+            run_id=str(args.run_id),
+            horizons=horizons,
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "backtest-top20":
