@@ -243,6 +243,7 @@ def build_readiness_audit(
                 as_of_date=candidate_as_of_date,
                 lookback_days=candidate_lookback_days,
                 date_fields=["report_period"],
+                require_date=True,
                 allow_before_window=True,
             )
             if _safe_text(row.get("classify_type")) == "按产品分类" and _safe_text(row.get("item_name"))
