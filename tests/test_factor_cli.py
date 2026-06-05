@@ -77,6 +77,24 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.exact_window is True
 
 
+def test_cli_accepts_run_stock_daily_data_pipeline_command():
+    args = build_parser().parse_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert args.command == "run-stock-daily-data-pipeline"
+    assert args.trade_date == "2026-06-05"
+    assert args.output_dir == "outputs/daily/20260605"
+    assert args.no_feishu is True
+
+
 def test_cli_accepts_report_delivery_local_command():
     args = build_parser().parse_args(
         [
@@ -5250,6 +5268,124 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
         "daily_factor_pipeline|factor_rows|100",
         "daily_factor_pipeline|score_rows|20",
         "daily_factor_pipeline|top_scores|3",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        fake_run_stock_daily_data_pipeline,
+    )
+
+    cli.main(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-05",
+            "output_dir": "outputs/daily/20260605",
+            "feishu_sender": None,
+            "send_feishu": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        lambda **kwargs: {"status": "partial_failed"},
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "run-stock-daily-data-pipeline",
+                "--trade-date",
+                "2026-06-05",
+                "--output-dir",
+                "outputs/daily/20260605",
+                "--no-feishu",
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|partial_failed",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_wires_feishu_sender(monkeypatch, capsys):
+    sent_messages = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        kwargs["feishu_sender"]("hello")
+        return {"status": "success"}
+
+    def fake_send_openclaw_feishu_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        fake_run_stock_daily_data_pipeline,
+    )
+    monkeypatch.setattr(
+        cli,
+        "send_openclaw_feishu_message",
+        fake_send_openclaw_feishu_message,
+    )
+
+    cli.main(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--feishu-target",
+            "chat:test",
+            "--feishu-account",
+            "jarvis",
+            "--openclaw-bin",
+            "openclaw-test",
+        ]
+    )
+
+    assert sent_messages == [
+        {
+            "message": "hello",
+            "target": "chat:test",
+            "account": "jarvis",
+            "openclaw_bin": "openclaw-test",
+            "dry_run": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
     ]
 
 
