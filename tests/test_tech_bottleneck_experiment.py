@@ -107,3 +107,40 @@ def test_build_historical_rescore_report_computes_horizon_returns_and_drawdowns(
     assert outcomes.loc["C", "bucket"] == "low"
     assert round(float(outcomes.loc["C", "return_4d"]), 4) == -0.30
     assert round(float(outcomes.loc["C", "max_drawdown_4d"]), 4) == -0.30
+
+
+def test_build_historical_rescore_report_summarizes_buckets() -> None:
+    report = build_historical_rescore_report(
+        packets=_packets(),
+        bars=_bars(),
+        run_id="rescore-run",
+        horizons=(1, 2, 4),
+    )
+    summary = report["bucket_summary"].set_index("bucket")
+
+    assert summary.loc["high", "candidate_count"] == 1
+    assert summary.loc["medium", "candidate_count"] == 1
+    assert summary.loc["low", "candidate_count"] == 1
+    assert summary.loc["high", "mean_return_4d"] == 0.5
+    assert summary.loc["low", "mean_return_4d"] == -0.3
+    assert summary.loc["high", "excess_return_4d"] > 0
+
+
+def test_render_historical_rescore_summary_labels_horizon_roles() -> None:
+    report = build_historical_rescore_report(
+        packets=_packets(),
+        bars=_bars(),
+        run_id="rescore-run",
+        horizons=(20, 60, 120, 250, 500),
+    )
+
+    markdown = render_historical_rescore_summary(
+        run_id="rescore-run",
+        bucket_summary=report["bucket_summary"],
+        horizons=(20, 60, 120, 250, 500),
+    )
+
+    assert "Short-term diagnostics: 20D / 60D" in markdown
+    assert "Primary validation: 120D / 250D" in markdown
+    assert "Long-cycle observation: 500D" in markdown
+    assert "### high" in markdown
