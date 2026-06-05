@@ -252,6 +252,7 @@ def build_readiness_audit(
             as_of_date=candidate_as_of_date,
             lookback_days=candidate_lookback_days,
             date_fields=["report_date"],
+            require_date=True,
         )
         report_feature_rows = [
             row
@@ -260,6 +261,7 @@ def build_readiness_audit(
                 as_of_date=candidate_as_of_date,
                 lookback_days=candidate_lookback_days,
                 date_fields=["trade_date"],
+                require_date=True,
             )
             if _safe_number(row.get("report_count_90d")) > 0 or _safe_number(row.get("source_count")) > 0
         ]
@@ -268,12 +270,14 @@ def build_readiness_audit(
             as_of_date=candidate_as_of_date,
             lookback_days=candidate_lookback_days,
             date_fields=["event_date"],
+            require_date=True,
         )
         news_rows = _filter_candidate_rows(
             lookups["news"].get(asset_id, []),
             as_of_date=candidate_as_of_date,
             lookback_days=candidate_lookback_days,
             date_fields=["published_at", "event_date", "trade_date"],
+            require_date=True,
         )
         corpus = _build_text_corpus(
             asset_id=asset_id,
@@ -422,8 +426,10 @@ def run_readiness_audit_from_files(
         lookback_days=lookback_days,
     )
     loader = context_loader or load_readiness_context_from_db
-    context = loader(normalized, lookback_days=lookback_days, service=service)
-    source_tables_empty = context.pop("source_tables_empty", {})
+    loader_context = loader(normalized, lookback_days=lookback_days, service=service)
+    context = dict(loader_context)
+    source_tables_empty = context.get("source_tables_empty", {})
+    audit_context = {key: value for key, value in context.items() if key != "source_tables_empty"}
     audit = build_readiness_audit(
         candidates=normalized,
         run_id=run_id,
@@ -431,7 +437,7 @@ def run_readiness_audit_from_files(
         as_of_date=as_of_date,
         lookback_days=lookback_days,
         source_tables_empty=source_tables_empty,
-        **context,
+        **audit_context,
     )
     return write_readiness_artifacts(audit=audit, output_dir=output_dir)
 
@@ -699,6 +705,7 @@ def _filter_candidate_rows(
     lookback_days: int,
     date_fields: list[str],
     allow_before_window: bool = False,
+    require_date: bool = False,
 ) -> list[dict[str, Any]]:
     as_of_timestamp = _date_timestamp(as_of_date)
     if as_of_timestamp is None:
@@ -710,7 +717,8 @@ def _filter_candidate_rows(
         row_dates = [_date_timestamp(row.get(field)) for field in date_fields if field in row]
         row_dates = [row_date for row_date in row_dates if row_date is not None]
         if not row_dates:
-            filtered.append(row)
+            if not require_date:
+                filtered.append(row)
             continue
         if any(
             row_date <= as_of_timestamp and (allow_before_window or row_date >= window_start)

@@ -422,6 +422,25 @@ def test_future_report_does_not_set_research_or_keyword_flags_for_earlier_candid
     assert row["has_bottleneck_keywords"] is False
 
 
+def test_undated_report_does_not_set_research_or_keyword_flags() -> None:
+    frames = _single_candidate_frames(report_title="关键材料国产替代加速")
+    frames["reports"] = frames["reports"].assign(report_date=None)
+
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_research_report"] is False
+    assert row["has_bottleneck_keywords"] is False
+    assert audit.details[0]["evidence_counts"]["reports"] == 0
+
+
 def test_future_main_business_does_not_set_product_revenue_exposure() -> None:
     frames = _single_candidate_frames()
     frames["main_business"] = pd.DataFrame(
@@ -544,12 +563,13 @@ def test_write_readiness_artifacts_writes_csv_json_and_summary(tmp_path: Path) -
 def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_path: Path) -> None:
     candidates_csv = tmp_path / "candidates.csv"
     _candidate_pool().to_csv(candidates_csv, index=False)
+    loader_context = _context_frames() | {"source_tables_empty": {"news": True}}
 
     def fake_loader(candidates: pd.DataFrame, *, lookback_days: int, service: str) -> dict[str, pd.DataFrame]:
         assert set(candidates["asset_id"]) == {"CN:SH:688001", "CN:SZ:300001", "CN:SH:688002", "CN:SH:688003"}
         assert lookback_days == 365
         assert service == "stock_research"
-        return _context_frames() | {"source_tables_empty": {"news": True}}
+        return loader_context
 
     paths = run_readiness_audit_from_files(
         candidates_csv=candidates_csv,
@@ -565,3 +585,4 @@ def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_pat
     assert paths["csv"].exists()
     assert paths["json"].exists()
     assert paths["summary"].exists()
+    assert loader_context["source_tables_empty"] == {"news": True}
