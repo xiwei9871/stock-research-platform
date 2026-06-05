@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
 from stock_research.tech_bottleneck_readiness import (
-    READINESS_FLAGS,
-    build_readiness_audit,
     normalize_readiness_candidates,
 )
 

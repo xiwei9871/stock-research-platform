@@ -179,10 +179,6 @@ def normalize_readiness_candidates(
     ]
 
 
-def build_readiness_audit(*args: Any, **kwargs: Any) -> Any:
-    raise NotImplementedError("build_readiness_audit is implemented in a later task")
-
-
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
