@@ -144,3 +144,46 @@ def test_render_historical_rescore_summary_labels_horizon_roles() -> None:
     assert "Primary validation: 120D / 250D" in markdown
     assert "Long-cycle observation: 500D" in markdown
     assert "### high" in markdown
+
+
+def test_write_historical_rescore_artifacts(tmp_path: Path) -> None:
+    report = build_historical_rescore_report(
+        packets=_packets(),
+        bars=_bars(),
+        run_id="rescore-run",
+        horizons=(1, 2, 4),
+    )
+
+    paths = write_historical_rescore_artifacts(
+        report=report,
+        output_dir=tmp_path,
+        run_id="rescore-run",
+        horizons=(1, 2, 4),
+    )
+
+    assert paths["outcomes"].exists()
+    assert paths["bucket_summary"].exists()
+    assert paths["summary"].exists()
+    assert "tech-bottleneck historical rescore summary" in paths["summary"].read_text(encoding="utf-8")
+
+
+def test_run_historical_rescore_from_files(tmp_path: Path) -> None:
+    packets_csv = tmp_path / "packets.csv"
+    bars_csv = tmp_path / "bars.csv"
+    output_dir = tmp_path / "out"
+    _packets().to_csv(packets_csv, index=False)
+    _bars().to_csv(bars_csv, index=False)
+
+    paths = run_historical_rescore_from_files(
+        packets_csv=packets_csv,
+        bars_csv=bars_csv,
+        output_dir=output_dir,
+        run_id="rescore-run",
+        horizons=(1, 2, 4),
+    )
+
+    assert paths["outcomes"] == output_dir / "outcomes.csv"
+    outcomes = pd.read_csv(paths["outcomes"])
+    assert set(outcomes["asset_id"]) == {"A", "B", "C"}
+    summary = pd.read_csv(paths["bucket_summary"]).set_index("bucket")
+    assert summary.loc["high", "candidate_count"] == 1
