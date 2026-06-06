@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research.research_infra.experiment_registry import read_experiment_registry
 from stock_research.research_infra.mid_trend_integration import (
+    build_mid_trend_review_with_research_infra,
     write_mid_trend_research_infra_artifacts,
 )
 
@@ -181,3 +183,75 @@ def test_mid_trend_integration_handles_empty_review_rows(tmp_path: Path) -> None
         Path(result["run_card"]["run_card_json_path"]).read_text(encoding="utf-8")
     )
     assert "empty_review_rows" in run_card["warnings"]
+
+
+def test_mid_trend_review_wrapper_disabled_returns_original_without_sidecars(
+    tmp_path: Path,
+) -> None:
+    review_result = _toy_review_result(tmp_path)
+    calls = {"count": 0}
+
+    def build_review() -> dict:
+        calls["count"] += 1
+        return review_result
+
+    result = build_mid_trend_review_with_research_infra(
+        trade_date="2026-06-04",
+        strategy_variant="top5_weekly_max_2_replacements",
+        review_builder=build_review,
+        output_dir=tmp_path,
+        write_research_infra=False,
+    )
+
+    assert result is review_result
+    assert calls["count"] == 1
+    assert not (tmp_path / "research_infra").exists()
+
+
+def test_mid_trend_review_wrapper_enabled_writes_research_infra(
+    tmp_path: Path,
+) -> None:
+    review_result = _toy_review_result(tmp_path)
+    calls = {"count": 0}
+
+    def build_review() -> dict:
+        calls["count"] += 1
+        return review_result
+
+    result = build_mid_trend_review_with_research_infra(
+        trade_date="2026-06-04",
+        strategy_variant="top5_weekly_max_2_replacements",
+        review_builder=build_review,
+        output_dir=tmp_path,
+        write_research_infra=True,
+    )
+
+    assert result is not review_result
+    assert result["portfolio_summary"] == review_result["portfolio_summary"]
+    assert result["markdown"] == review_result["markdown"]
+    assert result["paths"] == review_result["paths"]
+    assert result["review_rows"].equals(review_result["review_rows"])
+    assert calls["count"] == 1
+
+    research_infra = result["research_infra"]
+    assert Path(research_infra["research_signals_json_path"]).exists()
+    assert Path(research_infra["attribution_cards_json_path"]).exists()
+    assert Path(research_infra["attribution_cards_md_path"]).exists()
+    assert Path(research_infra["experiment_registry_path"]).exists()
+    assert Path(research_infra["run_card"]["run_card_json_path"]).exists()
+    assert research_infra["research_signal_count"] == 6
+    assert research_infra["attribution_card_count"] == 1
+
+
+def test_mid_trend_review_wrapper_rejects_non_dict_result(tmp_path: Path) -> None:
+    def build_review() -> list[str]:
+        return ["not", "a", "review", "result"]
+
+    with pytest.raises(TypeError, match="review_builder must return a dict"):
+        build_mid_trend_review_with_research_infra(
+            trade_date="2026-06-04",
+            strategy_variant="top5_weekly_max_2_replacements",
+            review_builder=build_review,
+            output_dir=tmp_path,
+            write_research_infra=True,
+        )

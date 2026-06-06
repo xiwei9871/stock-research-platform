@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,30 @@ from stock_research.research_infra.research_signals import (
     export_research_signal_records,
 )
 from stock_research.research_infra.run_evidence import write_evidence_bundle
+
+
+def build_mid_trend_review_with_research_infra(
+    *,
+    trade_date: str,
+    strategy_variant: str,
+    review_builder: Callable[[], dict[str, Any]],
+    output_dir: str | Path,
+    write_research_infra: bool = False,
+) -> dict[str, Any]:
+    review_result = review_builder()
+    if not isinstance(review_result, dict):
+        raise TypeError("review_builder must return a dict review_result")
+
+    if not write_research_infra:
+        return review_result
+
+    research_infra = write_mid_trend_research_infra_artifacts(
+        trade_date=trade_date,
+        strategy_variant=strategy_variant,
+        review_result=review_result,
+        output_dir=output_dir,
+    )
+    return {**review_result, "research_infra": research_infra}
 
 
 def write_mid_trend_research_infra_artifacts(
