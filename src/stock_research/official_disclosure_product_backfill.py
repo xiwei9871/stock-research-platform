@@ -47,7 +47,7 @@ def is_supported_product_disclosure(title: object) -> bool:
     if any(term in lowered for term in excluded_terms):
         return False
 
-    return "年年度报告" in text or "年半年度报告" in text
+    return _disclosure_type(text) in {"annual", "semiannual"}
 
 
 def normalize_disclosure_manifest(rows: Iterable[dict[str, Any]] | pd.DataFrame) -> pd.DataFrame:
@@ -185,10 +185,10 @@ def _normalize_product_rows(main_business: pd.DataFrame) -> pd.DataFrame:
 
 def _disclosure_type(title: object) -> str:
     text = _safe_text(title)
-    if "年年度报告" in text:
-        return "annual"
-    if "年半年度报告" in text:
+    if "年半年度报告" in text or "半年度报告" in text:
         return "semiannual"
+    if "年年度报告" in text or "年度报告" in text:
+        return "annual"
     return "other"
 
 

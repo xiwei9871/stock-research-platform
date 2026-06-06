@@ -11,11 +11,18 @@ from stock_research.official_disclosure_product_backfill import (
 
 def test_supported_product_disclosure_title_filter():
     assert is_supported_product_disclosure("2024年年度报告")
+    assert is_supported_product_disclosure("2024年度报告")
     assert is_supported_product_disclosure("2024年半年度报告")
+    assert is_supported_product_disclosure("2024半年度报告")
     assert is_supported_product_disclosure("2024年年度报告（更正后）")
     assert not is_supported_product_disclosure("2024年年度报告摘要")
     assert not is_supported_product_disclosure("关于召开股东大会的公告")
     assert not is_supported_product_disclosure("Annual Report 2024")
+    assert not is_supported_product_disclosure("关于取消披露2024年年度报告的公告")
+    assert not is_supported_product_disclosure("2024年度社会责任报告")
+    assert not is_supported_product_disclosure("2024年度环境、社会及治理报告")
+    assert not is_supported_product_disclosure("关于2024年年度报告的问询函")
+    assert not is_supported_product_disclosure("关于2024年年度报告问询函的回复公告")
 
 
 def test_manifest_normalization_preserves_official_trace():
@@ -46,6 +53,30 @@ def test_manifest_normalization_preserves_official_trace():
             "is_supported_product_disclosure": True,
         }
     ]
+
+
+def test_manifest_normalization_infers_short_chinese_disclosure_types():
+    manifest = normalize_disclosure_manifest(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "publish_date": "2025-04-25",
+                "report_period": "2024-12-31",
+                "announcement_title": "2024年度报告",
+            },
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "publish_date": "2024-08-25",
+                "report_period": "2024-06-30",
+                "announcement_title": "2024半年度报告",
+            },
+        ]
+    )
+
+    assert manifest["disclosure_type"].tolist() == ["semiannual", "annual"]
+    assert manifest["is_supported_product_disclosure"].tolist() == [True, True]
 
 
 def test_product_evidence_requires_publish_date_visible_to_candidate():
