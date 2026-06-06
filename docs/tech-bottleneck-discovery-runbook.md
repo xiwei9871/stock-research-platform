@@ -61,6 +61,7 @@ Artifacts:
 - `product_evidence.csv`
 - `disclosure_manifest.csv`
 - `manifest_query_errors.csv`
+- `product_join_diagnostics.csv`
 - `source_gap_report.csv`
 - `coverage_summary.md`
 

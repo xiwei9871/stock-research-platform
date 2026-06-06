@@ -43,6 +43,14 @@ DOCUMENT_CACHE_INDEX_COLUMNS = [
     "source_document_id",
     "source_document_url",
 ]
+PRODUCT_JOIN_DIAGNOSTIC_COLUMNS = [
+    "asset_id",
+    "ts_code",
+    "report_period",
+    "manifest_rows",
+    "product_main_business_rows",
+    "join_status",
+]
 MANIFEST_QUERY_ERROR_COLUMNS = [
     "asset_id",
     "ts_code",
@@ -57,6 +65,9 @@ SOURCE_GAP_REPORT_COLUMNS = [
     "candidate_rows_without_safe_product_evidence",
     "manifest_rows",
     "manifest_query_error_count",
+    "main_business_rows",
+    "product_main_business_rows",
+    "joinable_product_report_periods",
     "evidence_rows",
     "safe_evidence_rows",
     "assets_with_safe_product_evidence",
@@ -209,12 +220,9 @@ def run_official_disclosure_product_backfill(
 ) -> OfficialDisclosureProductBackfillResult:
     candidates = _normalize_candidates(pd.read_csv(candidates_csv, dtype=str))
     client = manifest_client or CninfoDisclosureIndexClient()
-    manifest_start_date = _date_text(start_date) or ""
-    manifest_end_date = _date_text(end_date) or ""
-    manifest_result = _collect_manifest(candidates, client, manifest_start_date, manifest_end_date)
-
     asset_ids = sorted(candidates["asset_id"].dropna().astype(str).unique().tolist())
     business_start_date, business_end_date = _main_business_report_window(start_date, end_date)
+    manifest_result = _collect_manifest(candidates, client, business_start_date, business_end_date)
     if main_business_loader is not None:
         main_business = main_business_loader(asset_ids, business_start_date, business_end_date)
     else:
@@ -231,6 +239,7 @@ def run_official_disclosure_product_backfill(
         run_id=run_id,
         candidates=candidates,
         disclosure_manifest=manifest_result.manifest,
+        main_business=main_business,
         manifest_query_errors=manifest_result.errors,
         product_evidence=evidence,
     )
@@ -309,6 +318,7 @@ def _write_artifacts(
     run_id: str,
     candidates: pd.DataFrame,
     disclosure_manifest: pd.DataFrame,
+    main_business: pd.DataFrame,
     product_evidence: pd.DataFrame,
     manifest_query_errors: pd.DataFrame | None = None,
 ) -> OfficialDisclosureProductBackfillResult:
@@ -316,6 +326,8 @@ def _write_artifacts(
 
     normalized_candidates = _normalize_candidates(candidates)
     manifest = normalize_disclosure_manifest(disclosure_manifest)
+    product_join_diagnostics = _product_join_diagnostics(manifest, main_business)
+    product_rows = _normalize_product_rows(main_business)
     errors = _normalize_manifest_query_errors(manifest_query_errors if manifest_query_errors is not None else [])
     evidence = normalize_evidence_rows(product_evidence)
     if not evidence.empty:
@@ -347,6 +359,13 @@ def _write_artifacts(
                 "candidate_rows_without_safe_product_evidence": candidate_rows_without_safe_product_evidence,
                 "manifest_rows": int(len(manifest)),
                 "manifest_query_error_count": int(len(errors)),
+                "main_business_rows": int(len(main_business)),
+                "product_main_business_rows": int(len(product_rows)),
+                "joinable_product_report_periods": int(
+                    product_join_diagnostics["join_status"].eq("joinable").sum()
+                    if not product_join_diagnostics.empty
+                    else 0
+                ),
                 "evidence_rows": int(len(evidence)),
                 "safe_evidence_rows": safe_evidence_rows,
                 "assets_with_safe_product_evidence": assets_with_safe_product_evidence,
@@ -359,6 +378,7 @@ def _write_artifacts(
     evidence.to_csv(output_dir / "product_evidence.csv", index=False)
     manifest.to_csv(output_dir / "disclosure_manifest.csv", index=False)
     errors.to_csv(output_dir / "manifest_query_errors.csv", index=False)
+    product_join_diagnostics.to_csv(output_dir / "product_join_diagnostics.csv", index=False)
     document_cache_index.to_csv(output_dir / "document_cache_index.csv", index=False)
     source_gap_report.to_csv(output_dir / "source_gap_report.csv", index=False)
     (output_dir / "coverage_summary.md").write_text(
@@ -708,6 +728,45 @@ def _document_cache_index(manifest: pd.DataFrame) -> pd.DataFrame:
         normalized[DOCUMENT_CACHE_INDEX_COLUMNS]
         .drop_duplicates()
         .sort_values(["asset_id", "ts_code", "source_document_id", "source_document_url"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _product_join_diagnostics(manifest: pd.DataFrame, main_business: pd.DataFrame) -> pd.DataFrame:
+    normalized_manifest = normalize_disclosure_manifest(manifest)
+    if normalized_manifest.empty:
+        return pd.DataFrame(columns=PRODUCT_JOIN_DIAGNOSTIC_COLUMNS)
+
+    manifest_counts = (
+        normalized_manifest.groupby(["asset_id", "ts_code", "report_period"], dropna=False)
+        .size()
+        .reset_index(name="manifest_rows")
+    )
+    product_rows = _normalize_product_rows(main_business)
+    if product_rows.empty:
+        manifest_counts["product_main_business_rows"] = 0
+    else:
+        product_counts = (
+            product_rows.groupby(["asset_id", "ts_code", "report_period"], dropna=False)
+            .size()
+            .reset_index(name="product_main_business_rows")
+        )
+        manifest_counts = manifest_counts.merge(
+            product_counts,
+            on=["asset_id", "ts_code", "report_period"],
+            how="left",
+        )
+        manifest_counts["product_main_business_rows"] = (
+            manifest_counts["product_main_business_rows"].fillna(0).astype(int)
+        )
+
+    manifest_counts["report_period"] = manifest_counts["report_period"].map(_date_text)
+    manifest_counts["join_status"] = manifest_counts["product_main_business_rows"].map(
+        lambda count: "joinable" if int(count) > 0 else "missing_product_report_period"
+    )
+    return (
+        manifest_counts[PRODUCT_JOIN_DIAGNOSTIC_COLUMNS]
+        .sort_values(["asset_id", "ts_code", "report_period"], kind="stable")
         .reset_index(drop=True)
     )
 

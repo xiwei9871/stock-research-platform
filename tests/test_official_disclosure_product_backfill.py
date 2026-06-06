@@ -804,7 +804,7 @@ def test_runner_deduplicates_manifest_queries_per_asset_ts_code(tmp_path: Path):
         end_date="2025-12-31",
     )
 
-    assert calls == [("1", "000001.SZ", "2025-01-01", "2025-12-31")]
+    assert calls == [("1", "000001.SZ", "2023-01-01", "2025-12-31")]
 
 
 def test_runner_continues_when_manifest_query_fails_for_asset(tmp_path: Path):
@@ -888,6 +888,8 @@ def test_runner_supports_real_pilot_candidate_shape(tmp_path: Path):
         def query_asset(self, *, asset_id, ts_code, start_date, end_date):
             assert asset_id == "CN:SZ:000001"
             assert ts_code == "000001.SZ"
+            assert start_date == "2023-01-01"
+            assert end_date == "2025-12-31"
             return normalize_disclosure_manifest(
                 [
                     {
@@ -927,6 +929,52 @@ def test_runner_supports_real_pilot_candidate_shape(tmp_path: Path):
     assert evidence.loc[0, "asset_id"] == "CN:SZ:000001"
     assert evidence.loc[0, "candidate_trade_date"] == "2025-05-09"
     assert evidence.loc[0, "as_of_date"] == "2025-05-09"
+
+
+def test_runner_writes_product_join_diagnostics_when_manifest_has_no_product_rows(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "report_period": "2025-06-30",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
+    )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: main_business,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    diagnostics = pd.read_csv(tmp_path / "out" / "product_join_diagnostics.csv")
+    assert diagnostics.to_dict("records") == [
+        {
+            "asset_id": 1,
+            "ts_code": "000001.SZ",
+            "report_period": "2024-12-31",
+            "manifest_rows": 1,
+            "product_main_business_rows": 0,
+            "join_status": "missing_product_report_period",
+        }
+    ]
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert gaps.loc[0, "main_business_rows"] == 1
+    assert gaps.loc[0, "product_main_business_rows"] == 1
+    assert gaps.loc[0, "joinable_product_report_periods"] == 0
 
 
 def test_db_loader_preserves_digit_asset_ids_as_strings(monkeypatch):
