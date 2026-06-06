@@ -58,6 +58,8 @@ def normalize_disclosure_manifest(rows: Iterable[dict[str, Any]] | pd.DataFrame)
     if manifest.empty:
         return pd.DataFrame(columns=PRODUCT_DISCLOSURE_COLUMNS)
 
+    manifest["asset_id"] = manifest["asset_id"].map(_safe_text)
+    manifest["ts_code"] = manifest["ts_code"].map(_safe_text)
     manifest["publish_date"] = manifest["publish_date"].map(_date_value)
     manifest["report_period"] = manifest["report_period"].map(_date_value)
     manifest["announcement_title"] = manifest["announcement_title"].map(_safe_text)
@@ -67,8 +69,8 @@ def normalize_disclosure_manifest(rows: Iterable[dict[str, Any]] | pd.DataFrame)
     manifest["is_supported_product_disclosure"] = manifest["announcement_title"].map(is_supported_product_disclosure)
 
     manifest = manifest[
-        manifest["asset_id"].map(_safe_text).ne("")
-        & manifest["ts_code"].map(_safe_text).ne("")
+        manifest["asset_id"].ne("")
+        & manifest["ts_code"].ne("")
         & manifest["publish_date"].notna()
         & manifest["report_period"].notna()
     ].copy()
@@ -135,7 +137,7 @@ def build_product_evidence_rows(
             }
         )
 
-    return normalize_evidence_rows(pd.DataFrame(evidence_rows))
+    return normalize_evidence_rows(_sort_product_evidence_rows(pd.DataFrame(evidence_rows)))
 
 
 def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -146,12 +148,13 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     if normalized.empty:
         return pd.DataFrame(columns=["asset_id", "ts_code", "stock_name", "candidate_trade_date", "as_of_date"])
 
+    normalized["asset_id"] = normalized["asset_id"].map(_safe_text)
     normalized["ts_code"] = normalized["ts_code"].map(_safe_text)
     normalized["stock_name"] = normalized["stock_name"].map(_safe_text)
     normalized["candidate_trade_date"] = normalized["candidate_trade_date"].map(_date_value)
     normalized["as_of_date"] = normalized["as_of_date"].map(_date_value)
     normalized = normalized[
-        normalized["asset_id"].map(_safe_text).ne("")
+        normalized["asset_id"].ne("")
         & normalized["ts_code"].ne("")
         & normalized["candidate_trade_date"].notna()
         & normalized["as_of_date"].notna()
@@ -180,18 +183,28 @@ def _normalize_product_rows(main_business: pd.DataFrame) -> pd.DataFrame:
     if product_rows.empty:
         return pd.DataFrame(columns=product_columns)
 
+    product_rows["asset_id"] = product_rows["asset_id"].map(_safe_text)
     product_rows["ts_code"] = product_rows["ts_code"].map(_safe_text)
     product_rows["report_period"] = product_rows["report_period"].map(_date_value)
     product_rows["classify_type"] = product_rows["classify_type"].map(_safe_text)
     product_rows["item_name"] = product_rows["item_name"].map(_safe_text)
     product_rows["source"] = product_rows["source"].map(_safe_text)
     product_rows = product_rows[
-        product_rows["asset_id"].map(_safe_text).ne("")
+        product_rows["asset_id"].ne("")
         & product_rows["ts_code"].ne("")
         & product_rows["report_period"].notna()
         & product_rows["classify_type"].str.contains("产品", na=False)
     ].copy()
     return product_rows[product_columns]
+
+
+def _sort_product_evidence_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    if rows.empty:
+        return rows
+    return rows.sort_values(
+        ["candidate_trade_date", "as_of_date", "asset_id", "evidence_date", "source_id", "evidence_snippet"],
+        kind="stable",
+    ).reset_index(drop=True)
 
 
 def _disclosure_type(title: object) -> str:
