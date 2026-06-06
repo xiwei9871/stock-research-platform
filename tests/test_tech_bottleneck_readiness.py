@@ -479,6 +479,150 @@ def test_undated_main_business_does_not_set_product_or_proxy_keyword_flags() -> 
     assert audit.details[0]["evidence_counts"]["main_business"] == 0
 
 
+def test_safe_strong_evidence_csv_sets_readiness_flags(tmp_path: Path) -> None:
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "run_id": "evidence-unit",
+                "asset_id": "CN:SH:688099",
+                "stock_name": "证据测试",
+                "candidate_trade_date": "2026-06-05",
+                "as_of_date": "2026-06-05",
+                "evidence_date": "2026-05-20",
+                "source_type": "fixture",
+                "source_id": "fixture-product",
+                "source_title": "主营构成",
+                "source_url": "",
+                "evidence_type": "product_revenue_exposure",
+                "matched_keyword": "",
+                "evidence_snippet": "AI关键材料收入占比45%",
+                "source_confidence": "strong",
+                "is_proxy": False,
+                "as_of_safe": True,
+                "metadata_json": "{}",
+            },
+            {
+                "run_id": "evidence-unit",
+                "asset_id": "CN:SH:688099",
+                "stock_name": "证据测试",
+                "candidate_trade_date": "2026-06-05",
+                "as_of_date": "2026-06-05",
+                "evidence_date": "2026-05-20",
+                "source_type": "fixture",
+                "source_id": "fixture-bottleneck",
+                "source_title": "国产替代",
+                "source_url": "",
+                "evidence_type": "bottleneck_keyword",
+                "matched_keyword": "国产替代",
+                "evidence_snippet": "关键材料国产替代加速",
+                "source_confidence": "medium",
+                "is_proxy": False,
+                "as_of_safe": True,
+                "metadata_json": "{}",
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        evidence=pd.read_csv(evidence_csv),
+        **_single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。"),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_product_revenue_exposure"] is True
+    assert row["has_bottleneck_keywords"] is True
+    assert audit.details[0]["flag_details"]["has_product_revenue_exposure"][0]["source_table"] == "evidence"
+
+
+def test_proxy_or_unsafe_product_evidence_does_not_set_product_flag() -> None:
+    base = {
+        "run_id": "evidence-unit",
+        "asset_id": "CN:SH:688099",
+        "stock_name": "证据测试",
+        "candidate_trade_date": "2026-06-05",
+        "as_of_date": "2026-06-05",
+        "evidence_date": "2026-05-20",
+        "source_type": "fixture",
+        "source_id": "fixture-product",
+        "source_title": "产品描述",
+        "source_url": "",
+        "evidence_type": "product_revenue_exposure",
+        "matched_keyword": "",
+        "evidence_snippet": "产品描述但不是强主营构成",
+        "source_confidence": "medium",
+        "is_proxy": True,
+        "as_of_safe": True,
+        "metadata_json": "{}",
+    }
+    frames = _single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。")
+    frames["main_business"] = pd.DataFrame()
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        evidence=pd.DataFrame(
+            [
+                base,
+                {**base, "source_confidence": "strong", "is_proxy": False, "as_of_safe": False},
+                {**base, "source_confidence": "strong", "is_proxy": False, "evidence_date": None},
+                {**base, "source_confidence": "strong", "is_proxy": False, "evidence_date": "2026-06-06"},
+            ]
+        ),
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_product_revenue_exposure"] is False
+
+
+def test_unsafe_missing_or_future_text_evidence_does_not_set_flags() -> None:
+    base = {
+        "run_id": "evidence-unit",
+        "asset_id": "CN:SH:688099",
+        "stock_name": "证据测试",
+        "candidate_trade_date": "2026-06-05",
+        "as_of_date": "2026-06-05",
+        "evidence_date": "2026-05-20",
+        "source_type": "fixture",
+        "source_id": "fixture-bottleneck",
+        "source_title": "国产替代",
+        "source_url": "",
+        "evidence_type": "bottleneck_keyword",
+        "matched_keyword": "国产替代",
+        "evidence_snippet": "关键材料国产替代加速",
+        "source_confidence": "medium",
+        "is_proxy": False,
+        "as_of_safe": False,
+        "metadata_json": "{}",
+    }
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        evidence=pd.DataFrame(
+            [
+                base,
+                {**base, "as_of_safe": True, "evidence_date": None},
+                {**base, "as_of_safe": True, "evidence_date": "2026-06-06"},
+            ]
+        ),
+        **_single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。"),
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_bottleneck_keywords"] is False
+
+
 def test_future_main_business_does_not_set_product_revenue_exposure() -> None:
     frames = _single_candidate_frames()
     frames["main_business"] = pd.DataFrame(
@@ -600,7 +744,31 @@ def test_write_readiness_artifacts_writes_csv_json_and_summary(tmp_path: Path) -
 
 def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_path: Path) -> None:
     candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
     _candidate_pool().to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "run_id": "evidence-unit",
+                "asset_id": "CN:SZ:300001",
+                "stock_name": "缺主营科技",
+                "candidate_trade_date": "2026-06-05",
+                "as_of_date": "2026-06-05",
+                "evidence_date": "2026-05-20",
+                "source_type": "fixture",
+                "source_id": "fixture-product",
+                "source_title": "主营构成",
+                "source_url": "",
+                "evidence_type": "product_revenue_exposure",
+                "matched_keyword": "",
+                "evidence_snippet": "AI关键材料收入占比45%",
+                "source_confidence": "strong",
+                "is_proxy": False,
+                "as_of_safe": True,
+                "metadata_json": "{}",
+            }
+        ]
+    ).to_csv(evidence_csv, index=False)
     loader_context = _context_frames() | {"source_tables_empty": {"news": True}}
 
     def fake_loader(candidates: pd.DataFrame, *, lookback_days: int, service: str) -> dict[str, pd.DataFrame]:
@@ -617,6 +785,7 @@ def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_pat
         as_of_date=None,
         lookback_days=365,
         service="stock_research",
+        evidence_csv=evidence_csv,
         context_loader=fake_loader,
     )
 
@@ -624,3 +793,5 @@ def test_run_readiness_audit_from_files_uses_loader_and_writes_artifacts(tmp_pat
     assert paths["json"].exists()
     assert paths["summary"].exists()
     assert loader_context["source_tables_empty"] == {"news": True}
+    rows = pd.read_csv(paths["csv"]).set_index("asset_id")
+    assert bool(rows.loc["CN:SZ:300001", "has_product_revenue_exposure"]) is True

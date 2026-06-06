@@ -149,6 +149,15 @@ INVALIDATION_KEYWORDS = [
     "route change",
 ]
 
+EVIDENCE_TYPE_FLAGS = {
+    "bottleneck_keyword": "has_bottleneck_keywords",
+    "capacity": "has_capacity_evidence",
+    "customer_certification": "has_customer_certification_evidence",
+    "technical_barrier": "has_patent_or_technical_barrier",
+    "patent_proxy": "has_patent_or_technical_barrier",
+    "invalidation": "has_invalidation_evidence",
+}
+
 
 def normalize_readiness_candidates(
     candidates: pd.DataFrame,
@@ -203,6 +212,7 @@ def build_readiness_audit(
     report_features: pd.DataFrame,
     events: pd.DataFrame,
     news: pd.DataFrame,
+    evidence: pd.DataFrame | None = None,
     source_tables_empty: dict[str, bool] | None = None,
 ) -> ReadinessAuditResult:
     """Build readiness flags after candidate-level point-in-time/lookback filtering.
@@ -224,6 +234,7 @@ def build_readiness_audit(
         "report_features": _rows_by_asset(report_features),
         "events": _rows_by_asset(events),
         "news": _rows_by_asset(news),
+        "evidence": _rows_by_asset(evidence if evidence is not None else pd.DataFrame()),
     }
 
     summary_rows: list[dict[str, Any]] = []
@@ -280,6 +291,17 @@ def build_readiness_audit(
             date_fields=["published_at", "event_date", "trade_date"],
             require_date=True,
         )
+        evidence_rows = [
+            row
+            for row in _filter_candidate_rows(
+                lookups["evidence"].get(asset_id, []),
+                as_of_date=candidate_as_of_date,
+                lookback_days=candidate_lookback_days,
+                date_fields=["evidence_date"],
+                require_date=True,
+            )
+            if _bool_value(row.get("as_of_safe"))
+        ]
         corpus = _build_text_corpus(
             asset_id=asset_id,
             reports=report_rows,
@@ -301,8 +323,27 @@ def build_readiness_audit(
             "has_invalidation_evidence": False,
         }
 
+        evidence_flag_rows: dict[str, list[dict[str, Any]]] = {flag: [] for flag in READINESS_FLAGS}
+        for row in evidence_rows:
+            evidence_type = _safe_text(row.get("evidence_type"))
+            if evidence_type == "product_revenue_exposure":
+                has_strong_source = _safe_text(row.get("source_confidence")).lower() == "strong"
+                if has_strong_source and not _bool_value(row.get("is_proxy")):
+                    evidence_flag_rows["has_product_revenue_exposure"].append(row)
+                continue
+            flag = EVIDENCE_TYPE_FLAGS.get(evidence_type)
+            if flag:
+                evidence_flag_rows[flag].append(row)
+
+        for flag, rows in evidence_flag_rows.items():
+            if rows:
+                flags[flag] = True
+
         flag_details["has_industry_context"] = _sample_rows(industry_rows, "industry")
-        flag_details["has_product_revenue_exposure"] = _sample_rows(main_business_rows, "main_business")
+        flag_details["has_product_revenue_exposure"] = (
+            _evidence_flag_details(evidence_flag_rows["has_product_revenue_exposure"])
+            + _sample_rows(main_business_rows, "main_business")
+        )[:3]
         flag_details["has_research_report"] = _sample_rows(report_rows or report_feature_rows, "reports")
         flag_details["has_news_or_announcement_catalyst"] = _sample_rows(
             news_rows or event_rows,
@@ -319,7 +360,9 @@ def build_readiness_audit(
             matches = _keyword_matches(corpus, keywords)
             if matches:
                 flags[flag] = True
-                flag_details[flag] = matches[:3]
+                flag_details[flag] = (_evidence_flag_details(evidence_flag_rows[flag]) + matches)[:3]
+            elif evidence_flag_rows[flag]:
+                flag_details[flag] = _evidence_flag_details(evidence_flag_rows[flag])
 
         proxy_flags = []
         if flags["has_patent_or_technical_barrier"]:
@@ -328,6 +371,13 @@ def build_readiness_audit(
             match.get("proxy_only") for match in flag_details["has_bottleneck_keywords"]
         ):
             proxy_flags.append("has_bottleneck_keywords")
+        for flag, rows in evidence_flag_rows.items():
+            if flag in proxy_flags:
+                continue
+            if any(_safe_text(row.get("evidence_type")) in {"patent_proxy", "technical_barrier"} for row in rows):
+                proxy_flags.append(flag)
+            elif rows and all(_bool_value(row.get("is_proxy")) for row in rows):
+                proxy_flags.append(flag)
 
         source_gap_flags = []
         if not flags["has_news_or_announcement_catalyst"] and empty_sources.get("news"):
@@ -371,6 +421,7 @@ def build_readiness_audit(
                     "report_features": len(report_feature_rows),
                     "events": len(event_rows),
                     "news": len(news_rows),
+                    "evidence": len(evidence_rows),
                 },
                 "flag_details": flag_details,
             }
@@ -417,9 +468,11 @@ def run_readiness_audit_from_files(
     as_of_date: str | None,
     lookback_days: int,
     service: str,
+    evidence_csv: Path | None = None,
     context_loader: Any | None = None,
 ) -> dict[str, Path]:
     candidates = pd.read_csv(candidates_csv)
+    evidence = pd.read_csv(evidence_csv) if evidence_csv else pd.DataFrame()
     normalized = normalize_readiness_candidates(
         candidates,
         run_date=run_date,
@@ -437,6 +490,7 @@ def run_readiness_audit_from_files(
         run_date=run_date,
         as_of_date=as_of_date,
         lookback_days=lookback_days,
+        evidence=evidence,
         source_tables_empty=source_tables_empty,
         **audit_context,
     )
@@ -857,6 +911,20 @@ def _sample_rows(rows: list[dict[str, Any]], source_table: str) -> list[dict[str
     return samples
 
 
+def _evidence_flag_details(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "source_table": "evidence",
+            "source_date": _date_text(row.get("evidence_date")),
+            "summary": _safe_text(row.get("evidence_snippet") or row.get("source_title")),
+            "source_id": _safe_text(row.get("source_id")),
+            "evidence_type": _safe_text(row.get("evidence_type")),
+            "matched_keyword": _safe_text(row.get("matched_keyword")),
+        }
+        for row in rows[:3]
+    ]
+
+
 def _snippet(text: str, keyword: str) -> str:
     index = text.lower().find(keyword.lower())
     if index < 0:
@@ -886,6 +954,12 @@ def _safe_text(value: Any) -> str:
     except Exception:
         pass
     return str(value).strip()
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return _safe_text(value).lower() in {"true", "1", "yes", "y"}
 
 
 def _first_non_empty_text(*values: Any) -> str:
