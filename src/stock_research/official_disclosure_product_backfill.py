@@ -101,6 +101,7 @@ class CninfoDisclosureIndexClient:
         end_date: object,
     ) -> pd.DataFrame:
         stock_code, exchange = _exchange_suffix(ts_code)
+        stock_org_id = _cninfo_stock_org_id(stock_code=stock_code, exchange=exchange)
         column = "sse" if exchange == "SH" else "szse"
         plate = exchange.lower()
         rows = []
@@ -110,6 +111,7 @@ class CninfoDisclosureIndexClient:
             try:
                 response_payload = self._query_category(
                     stock_code=stock_code,
+                    stock_org_id=stock_org_id,
                     exchange=exchange,
                     column=column,
                     plate=plate,
@@ -155,6 +157,7 @@ class CninfoDisclosureIndexClient:
         self,
         *,
         stock_code: str,
+        stock_org_id: str,
         exchange: str,
         column: str,
         plate: str,
@@ -164,7 +167,7 @@ class CninfoDisclosureIndexClient:
     ) -> dict[str, Any]:
         body = parse.urlencode(
             {
-                "stock": f"{stock_code},{exchange}",
+                "stock": f"{stock_code},{stock_org_id}",
                 "tabName": "fulltext",
                 "pageSize": "30",
                 "pageNum": "1",
@@ -599,6 +602,11 @@ def _exchange_suffix(ts_code: object) -> tuple[str, str]:
     if exchange not in {"SH", "SZ"} or not re.fullmatch(r"\d+", stock_code):
         raise ValueError(f"Unsupported CNINFO ts_code format: {text}")
     return stock_code, exchange
+
+
+def _cninfo_stock_org_id(*, stock_code: str, exchange: str) -> str:
+    org_prefix = "gssh" if exchange == "SH" else "gssz"
+    return f"{org_prefix}{int(stock_code):07d}"
 
 
 def _announcement_time_to_date(value: object) -> dt.date | None:

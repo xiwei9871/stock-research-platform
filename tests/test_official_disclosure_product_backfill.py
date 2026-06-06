@@ -208,7 +208,7 @@ def test_cninfo_client_parses_supported_announcements():
         parsed = urlparse(request.full_url)
         body = parse_qs(request.data.decode("utf-8"))
         assert parsed.path.endswith("/new/hisAnnouncement/query")
-        assert body["stock"] == ["000001,SZ"]
+        assert body["stock"] == ["000001,gssz0000001"]
         return FakeResponse(
             {
                 "announcements": [
@@ -259,11 +259,11 @@ def test_cninfo_client_parses_supported_announcements():
 @pytest.mark.parametrize(
     ("ts_code", "expected_stock", "expected_column", "expected_plate"),
     [
-        ("600000.SH", "600000,SH", "sse", "sh"),
-        ("600000.SSE", "600000,SH", "sse", "sh"),
-        ("CN:SH:600000", "600000,SH", "sse", "sh"),
-        ("000001.SZSE", "000001,SZ", "szse", "sz"),
-        ("CN:SZ:000001", "000001,SZ", "szse", "sz"),
+        ("600000.SH", "600000,gssh0600000", "sse", "sh"),
+        ("600000.SSE", "600000,gssh0600000", "sse", "sh"),
+        ("CN:SH:600000", "600000,gssh0600000", "sse", "sh"),
+        ("000001.SZSE", "000001,gssz0000001", "szse", "sz"),
+        ("CN:SZ:000001", "000001,gssz0000001", "szse", "sz"),
     ],
 )
 def test_cninfo_client_normalizes_exchange_suffixes(ts_code, expected_stock, expected_column, expected_plate):
