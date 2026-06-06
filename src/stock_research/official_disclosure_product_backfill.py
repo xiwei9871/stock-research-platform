@@ -45,16 +45,25 @@ class CninfoDisclosureIndexClient:
         rows = []
 
         for category in CNINFO_CATEGORIES:
-            response_payload = self._query_category(
-                stock_code=stock_code,
-                exchange=exchange,
-                column=column,
-                plate=plate,
-                category=category,
-                start_date=start_date,
-                end_date=end_date,
-            )
-            for announcement in response_payload.get("announcements", []) or []:
+            try:
+                response_payload = self._query_category(
+                    stock_code=stock_code,
+                    exchange=exchange,
+                    column=column,
+                    plate=plate,
+                    category=category,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            except Exception:
+                continue
+
+            announcements = response_payload.get("announcements", [])
+            if not isinstance(announcements, list):
+                continue
+            for announcement in announcements:
+                if not isinstance(announcement, dict):
+                    continue
                 publish_date = _announcement_time_to_date(announcement.get("announcementTime"))
                 title = _safe_text(announcement.get("announcementTitle"))
                 rows.append(
@@ -111,7 +120,11 @@ class CninfoDisclosureIndexClient:
             method="POST",
         )
         with self._opener(cninfo_request, timeout=self._timeout_seconds) as response:
-            return json.loads(response.read().decode("utf-8"))
+            try:
+                payload = json.loads(response.read().decode("utf-8"))
+            except json.JSONDecodeError:
+                return {}
+        return payload if isinstance(payload, dict) else {}
 
 
 def is_supported_product_disclosure(title: object) -> bool:
@@ -311,13 +324,33 @@ def _disclosure_type(title: object) -> str:
 
 def _exchange_suffix(ts_code: object) -> tuple[str, str]:
     text = _safe_text(ts_code)
-    stock_code, _, exchange = text.partition(".")
-    return stock_code, exchange.upper()
+    if not text:
+        raise ValueError("CNINFO ts_code is required")
+
+    if text.upper().startswith("CN:"):
+        parts = text.split(":")
+        if len(parts) != 3 or parts[0].upper() != "CN":
+            raise ValueError(f"Unsupported CNINFO ts_code format: {text}")
+        exchange = parts[1].upper()
+        stock_code = parts[2]
+    elif "." in text:
+        stock_code, exchange = text.rsplit(".", 1)
+        exchange = exchange.upper()
+    else:
+        raise ValueError(f"Unsupported CNINFO ts_code format: {text}")
+
+    exchange = {"SSE": "SH", "SZSE": "SZ"}.get(exchange, exchange)
+    if exchange not in {"SH", "SZ"} or not re.fullmatch(r"\d+", stock_code):
+        raise ValueError(f"Unsupported CNINFO ts_code format: {text}")
+    return stock_code, exchange
 
 
 def _announcement_time_to_date(value: object) -> dt.date | None:
     if isinstance(value, (int, float)) and not pd.isna(value):
         return dt.datetime.fromtimestamp(value / 1000, tz=dt.timezone(dt.timedelta(hours=8))).date()
+    text = _safe_text(value)
+    if re.fullmatch(r"\d{13}", text):
+        return dt.datetime.fromtimestamp(int(text) / 1000, tz=dt.timezone(dt.timedelta(hours=8))).date()
     return _date_value(value)
 
 

@@ -2,6 +2,7 @@ import json
 from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
+import pytest
 
 from stock_research.official_disclosure_product_backfill import (
     CninfoDisclosureIndexClient,
@@ -12,7 +13,7 @@ from stock_research.official_disclosure_product_backfill import (
 
 
 class FakeResponse:
-    def __init__(self, payload: dict):
+    def __init__(self, payload):
         self.payload = payload
 
     def __enter__(self):
@@ -23,6 +24,20 @@ class FakeResponse:
 
     def read(self):
         return json.dumps(self.payload, ensure_ascii=False).encode("utf-8")
+
+
+class FakeRawResponse:
+    def __init__(self, payload: bytes):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return self.payload
 
 
 def test_cninfo_client_parses_supported_announcements():
@@ -79,6 +94,128 @@ def test_cninfo_client_parses_supported_announcements():
             "is_supported_product_disclosure": True,
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("ts_code", "expected_stock", "expected_column", "expected_plate"),
+    [
+        ("600000.SH", "600000,SH", "sse", "sh"),
+        ("600000.SSE", "600000,SH", "sse", "sh"),
+        ("CN:SH:600000", "600000,SH", "sse", "sh"),
+        ("000001.SZSE", "000001,SZ", "szse", "sz"),
+        ("CN:SZ:000001", "000001,SZ", "szse", "sz"),
+    ],
+)
+def test_cninfo_client_normalizes_exchange_suffixes(ts_code, expected_stock, expected_column, expected_plate):
+    request_bodies = []
+
+    def opener(request, timeout):
+        request_bodies.append(parse_qs(request.data.decode("utf-8")))
+        return FakeResponse({"announcements": []})
+
+    CninfoDisclosureIndexClient(opener=opener).query_asset(
+        asset_id=1,
+        ts_code=ts_code,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert len(request_bodies) == 2
+    assert {body["stock"][0] for body in request_bodies} == {expected_stock}
+    assert {body["column"][0] for body in request_bodies} == {expected_column}
+    assert {body["plate"][0] for body in request_bodies} == {expected_plate}
+
+
+@pytest.mark.parametrize("ts_code", ["", "600000", "600000.BJ", "CN:BJ:600000", "CN:SH", "CN:SH:"])
+def test_cninfo_client_rejects_malformed_exchange_codes(ts_code):
+    def opener(request, timeout):
+        raise AssertionError("malformed codes should not issue CNINFO requests")
+
+    with pytest.raises(ValueError):
+        CninfoDisclosureIndexClient(opener=opener).query_asset(
+            asset_id=1,
+            ts_code=ts_code,
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+        )
+
+
+def test_cninfo_client_skips_failed_category_and_returns_successful_rows():
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(parse_qs(request.data.decode("utf-8"))["category"][0])
+        if len(calls) == 1:
+            raise OSError("category request failed")
+        return FakeResponse(
+            {
+                "announcements": [
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": 1745510400000,
+                        "announcementId": "121999",
+                        "adjunctUrl": "finalpage/2025-04-25/121999.PDF",
+                    }
+                ]
+            }
+        )
+
+    manifest = CninfoDisclosureIndexClient(opener=opener).query_asset(
+        asset_id=1,
+        ts_code="000001.SZ",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert len(calls) == 2
+    assert manifest["source_document_id"].tolist() == ["121999"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        FakeRawResponse(b"{not-json"),
+        FakeResponse(["not", "a", "dict"]),
+        FakeResponse({"announcements": ["not-a-dict"]}),
+    ],
+)
+def test_cninfo_client_ignores_malformed_response_shapes(response):
+    def opener(request, timeout):
+        return response
+
+    manifest = CninfoDisclosureIndexClient(opener=opener).query_asset(
+        asset_id=1,
+        ts_code="000001.SZ",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert manifest.empty
+
+
+def test_cninfo_client_parses_string_millisecond_timestamps():
+    def opener(request, timeout):
+        return FakeResponse(
+            {
+                "announcements": [
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": "1745510400000",
+                        "announcementId": "121999",
+                        "adjunctUrl": "finalpage/2025-04-25/121999.PDF",
+                    }
+                ]
+            }
+        )
+
+    manifest = CninfoDisclosureIndexClient(opener=opener).query_asset(
+        asset_id=1,
+        ts_code="000001.SZ",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert manifest["publish_date"].tolist() == [pd.Timestamp("2025-04-25").date()]
 
 
 def test_supported_product_disclosure_title_filter():
