@@ -415,6 +415,76 @@ def test_product_evidence_with_future_visible_date_is_retained_as_unsafe() -> No
     assert result.evidence.iloc[0]["as_of_safe"] is False
 
 
+def test_product_evidence_with_future_report_period_is_retained_as_unsafe() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2025-06-30",
+                    "publish_date": "2025-01-05",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                }
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert len(result.evidence) == 1
+    assert result.evidence.iloc[0]["evidence_date"] == "2025-01-05"
+    assert result.evidence.iloc[0]["as_of_safe"] is False
+
+
+def test_product_evidence_source_id_includes_source_for_duplicate_products() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "publish_date": "2025-01-05",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                    "source": "source_b",
+                },
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "publish_date": "2025-01-05",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                    "source": "source_a",
+                },
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert result.evidence["source_id"].tolist() == [
+        "CN:SH:688001:2024-12-31:AI关键材料:source_a",
+        "CN:SH:688001:2024-12-31:AI关键材料:source_b",
+    ]
+    metadata_sources = [json.loads(value)["source"] for value in result.evidence["metadata_json"]]
+    assert metadata_sources == ["source_a", "source_b"]
+
+
 def test_future_evidence_is_written_as_unsafe() -> None:
     result = build_evidence_backfill(
         candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),

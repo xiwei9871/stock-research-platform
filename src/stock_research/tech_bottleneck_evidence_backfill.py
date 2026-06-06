@@ -284,11 +284,11 @@ def load_evidence_context_from_db(
             fetch_all(
                 conn,
                 """
-                SELECT asset_id, report_period, classify_type, item_name, revenue, revenue_ratio, gross_margin
+                SELECT asset_id, report_period, classify_type, item_name, revenue, revenue_ratio, gross_margin, source
                 FROM finance.main_business_composition
                 WHERE asset_id = ANY(%s)
                   AND report_period <= %s::date
-                ORDER BY asset_id, report_period, classify_type, item_name
+                ORDER BY asset_id, report_period, classify_type, item_name, source
                 """,
                 (asset_ids, max_as_of),
             )
@@ -467,11 +467,13 @@ def _is_product_business_row(row: dict[str, Any]) -> bool:
 def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run_id: str) -> dict[str, Any]:
     item_name = _safe_text(row.get("item_name"))
     report_period = _date_text(row.get("report_period"))
+    source = _safe_text(row.get("source"))
     visible_date = _visible_date(row)
     metadata = {
         "classify_type": _safe_text(row.get("classify_type")),
         "item_name": item_name,
         "report_period": report_period,
+        "source": source,
         "visible_date_field": _visible_date_field(row),
         "revenue": row.get("revenue"),
         "revenue_ratio": row.get("revenue_ratio"),
@@ -491,6 +493,7 @@ def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run
                 _safe_text(candidate.get("asset_id")),
                 report_period,
                 item_name,
+                source,
             ]
             if part
         ),
@@ -501,13 +504,30 @@ def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run
         "evidence_snippet": _product_snippet(row),
         "source_confidence": "strong",
         "is_proxy": False,
-        "as_of_safe": _is_as_of_safe(
-            evidence_date=visible_date,
+        "as_of_safe": _is_product_as_of_safe(
+            visible_date=visible_date,
+            report_period=report_period,
             as_of_date=candidate.get("as_of_date"),
             lookback_days=candidate.get("lookback_days"),
         ),
         "metadata_json": metadata,
     }
+
+
+def _is_product_as_of_safe(
+    *,
+    visible_date: Any,
+    report_period: Any,
+    as_of_date: Any,
+    lookback_days: Any,
+) -> bool:
+    if not _is_as_of_safe(evidence_date=visible_date, as_of_date=as_of_date, lookback_days=lookback_days):
+        return False
+    report_period_timestamp = _date_timestamp(report_period)
+    as_of_timestamp = _date_timestamp(as_of_date)
+    if report_period_timestamp is None or as_of_timestamp is None:
+        return False
+    return bool(report_period_timestamp <= as_of_timestamp)
 
 
 def _visible_date(row: dict[str, Any]) -> str:
