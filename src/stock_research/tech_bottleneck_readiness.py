@@ -302,6 +302,7 @@ def build_readiness_audit(
                 require_date=True,
             )
             if _bool_value(row.get("as_of_safe"))
+            and _matches_candidate_scoped_evidence(row, candidate)
         ]
         corpus = _build_text_corpus(
             asset_id=asset_id,
@@ -927,6 +928,18 @@ def _evidence_flag_details(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
         for row in rows[:3]
     ]
+
+
+def _matches_candidate_scoped_evidence(row: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    evidence_candidate_trade_date = _date_text(row.get("candidate_trade_date"))
+    if evidence_candidate_trade_date and evidence_candidate_trade_date != _date_text(candidate.get("trade_date")):
+        return False
+
+    evidence_as_of_date = _date_text(row.get("as_of_date"))
+    if evidence_as_of_date and evidence_as_of_date != _date_text(candidate.get("as_of_date")):
+        return False
+
+    return True
 
 
 def _snippet(text: str, keyword: str) -> str:

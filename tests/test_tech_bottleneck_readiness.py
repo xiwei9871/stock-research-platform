@@ -667,6 +667,65 @@ def test_safe_catalyst_evidence_sets_news_or_announcement_flag() -> None:
     assert detail["evidence_type"] == "news_or_announcement_catalyst"
 
 
+def test_candidate_scoped_evidence_does_not_leak_between_same_asset_dates() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688099",
+                "stock_name": "证据测试",
+                "trade_date": "2026-03-01",
+                "candidate_source": "unit-test",
+                "rank": 1,
+            },
+            {
+                "asset_id": "CN:SH:688099",
+                "stock_name": "证据测试",
+                "trade_date": "2026-06-05",
+                "candidate_source": "unit-test",
+                "rank": 2,
+            },
+        ]
+    )
+    frames = _single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。")
+    frames["main_business"] = pd.DataFrame()
+
+    audit = build_readiness_audit(
+        candidates=candidates,
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        evidence=pd.DataFrame(
+            [
+                {
+                    "run_id": "evidence-unit",
+                    "asset_id": "CN:SH:688099",
+                    "stock_name": "证据测试",
+                    "candidate_trade_date": "2026-06-05",
+                    "as_of_date": "2026-06-05",
+                    "evidence_date": "2026-05-20",
+                    "source_type": "fixture",
+                    "source_id": "fixture-product",
+                    "source_title": "主营构成",
+                    "source_url": "",
+                    "evidence_type": "product_revenue_exposure",
+                    "matched_keyword": "",
+                    "evidence_snippet": "AI关键材料收入占比45%",
+                    "source_confidence": "strong",
+                    "is_proxy": False,
+                    "as_of_safe": True,
+                    "metadata_json": "{}",
+                }
+            ]
+        ),
+        **frames,
+    )
+
+    rows = audit.summary.set_index("trade_date")
+    assert rows.loc["2026-03-01", "has_product_revenue_exposure"] is False
+    assert rows.loc["2026-06-05", "has_product_revenue_exposure"] is True
+
+
 def test_future_main_business_does_not_set_product_revenue_exposure() -> None:
     frames = _single_candidate_frames()
     frames["main_business"] = pd.DataFrame(
