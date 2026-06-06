@@ -3,6 +3,7 @@ import json
 import math
 import os
 import sys
+from datetime import date
 from pathlib import Path
 from uuid import uuid4
 
@@ -4746,7 +4747,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"artifacts preserved at {result.send_log_path}"
             )
     elif args.command == "tech-bottleneck-data-readiness-audit":
-        run_date = pd.Timestamp.today().strftime("%Y-%m-%d")
+        run_date = date.today().isoformat()
         paths = run_readiness_audit_from_files(
             candidates_csv=Path(args.candidates_csv),
             output_dir=Path(args.output_dir),
