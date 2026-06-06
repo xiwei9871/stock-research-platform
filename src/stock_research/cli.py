@@ -160,6 +160,7 @@ from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
+from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
@@ -1386,6 +1387,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["info", "low", "medium", "high", "critical"],
     )
     report_delivery_openclaw_send.add_argument("--test-mode", action="store_true")
+
+    tech_bottleneck_readiness = subparsers.add_parser(
+        "tech-bottleneck-data-readiness-audit",
+        help="Audit tech bottleneck evidence completeness for an existing topN candidate CSV.",
+    )
+    tech_bottleneck_readiness.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_readiness.add_argument("--output-dir", required=True)
+    tech_bottleneck_readiness.add_argument("--run-id", required=True)
+    tech_bottleneck_readiness.add_argument("--as-of-date")
+    tech_bottleneck_readiness.add_argument("--lookback-days", type=int, default=365)
+    tech_bottleneck_readiness.add_argument("--service", default="stock_research")
 
     tech_bottleneck_parser = subparsers.add_parser(
         "tech-bottleneck-discovery",
@@ -4733,6 +4745,18 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"non-dry-run send failed with status {result.status}; "
                 f"artifacts preserved at {result.send_log_path}"
             )
+    elif args.command == "tech-bottleneck-data-readiness-audit":
+        run_date = pd.Timestamp.today().strftime("%Y-%m-%d")
+        paths = run_readiness_audit_from_files(
+            candidates_csv=Path(args.candidates_csv),
+            output_dir=Path(args.output_dir),
+            run_id=str(args.run_id),
+            run_date=run_date,
+            as_of_date=args.as_of_date,
+            lookback_days=int(args.lookback_days),
+            service=str(args.service),
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-discovery":
         paths = run_tech_bottleneck_discovery_from_files(
             candidates_path=Path(args.candidates_csv),

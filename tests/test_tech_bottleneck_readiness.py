@@ -15,6 +15,12 @@ from stock_research.tech_bottleneck_readiness import (
 )
 
 
+def test_readiness_module_exports_runner() -> None:
+    from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
+
+    assert callable(run_readiness_audit_from_files)
+
+
 def test_normalize_readiness_candidates_requires_asset_id() -> None:
     with pytest.raises(ValueError, match="asset_id"):
         normalize_readiness_candidates(
