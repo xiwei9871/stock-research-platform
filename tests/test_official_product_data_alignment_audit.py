@@ -5,9 +5,12 @@ import pandas as pd
 
 from stock_research.official_product_data_alignment_audit import (
     ALIGNMENT_AUDIT_COLUMNS,
+    ALIGNMENT_STATUS_SUMMARY_COLUMNS,
     OfficialProductDataAlignmentAuditResult,
+    build_alignment_status_summary,
     normalize_alignment_candidates,
     build_alignment_audit,
+    write_alignment_audit_artifacts,
 )
 
 DESIGN_ALIGNMENT_AUDIT_COLUMNS = [
@@ -611,3 +614,108 @@ def test_manifest_query_error_is_not_treated_as_genuine_no_data():
     assert row["alignment_status"] == "manifest_query_error"
     assert row["manifest_query_error_count_for_asset"] == 1
     assert row["recommended_action"] == "rerun_manifest_source"
+
+
+def test_status_summary_groups_overall_month_status_and_action():
+    audit = pd.DataFrame(
+        [
+            {
+                "run_id": "unit",
+                "asset_id": "CN:SZ:000001",
+                "candidate_trade_date": pd.Timestamp("2025-05-09").date(),
+                "alignment_status": "pit_safe_product_evidence_available",
+                "recommended_action": "use_for_readiness",
+            },
+            {
+                "run_id": "unit",
+                "asset_id": "CN:SZ:000002",
+                "candidate_trade_date": pd.Timestamp("2025-04-18").date(),
+                "alignment_status": "joinable_but_future_disclosure",
+                "recommended_action": "shift_test_window_later",
+            },
+        ]
+    )
+
+    summary = build_alignment_status_summary(audit, run_id="unit")
+
+    assert summary.columns.tolist() == ALIGNMENT_STATUS_SUMMARY_COLUMNS
+    overall = summary[(summary["group"] == "overall") & (summary["group_value"] == "all")].iloc[0].to_dict()
+    assert overall["candidate_rows"] == 2
+    assert overall["candidate_assets"] == 2
+    assert overall["pit_safe_rows"] == 1
+    assert overall["future_disclosure_rows"] == 1
+    assert overall["missing_product_period_rows"] == 0
+    assert overall["manifest_query_error_rows"] == 0
+    assert set(summary["group"]) == {"overall", "candidate_month", "alignment_status", "recommended_action"}
+
+
+def test_write_alignment_audit_artifacts_creates_csv_json_and_markdown(tmp_path):
+    audit = pd.DataFrame(
+        [
+            {
+                "run_id": "unit",
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "candidate_trade_date": pd.Timestamp("2025-04-18").date(),
+                "as_of_date": pd.Timestamp("2025-04-18").date(),
+                "alignment_status": "joinable_but_future_disclosure",
+                "alignment_reason": "official product evidence exists but publish_date is after candidate as_of_date",
+                "has_pit_safe_product_evidence": False,
+                "safe_product_evidence_count": 0,
+                "unsafe_product_evidence_count": 1,
+                "best_report_period": pd.Timestamp("2024-12-31").date(),
+                "best_publish_date": pd.Timestamp("2025-04-25").date(),
+                "best_disclosure_type": "annual",
+                "best_source_document_id": "121999",
+                "best_source_document_url": "http://example.com/report.pdf",
+                "best_source_title": "2024年年度报告",
+                "best_product_main_business_rows": 3,
+                "best_manifest_rows": 1,
+                "manifest_rows_for_asset": 1,
+                "product_main_business_rows_for_asset": 3,
+                "joinable_report_periods_for_asset": 1,
+                "manifest_query_error_count_for_asset": 0,
+                "max_safe_report_period": None,
+                "min_future_publish_date": pd.Timestamp("2025-04-25").date(),
+                "days_until_first_future_disclosure": 7,
+                "recommended_action": "shift_test_window_later",
+            }
+        ],
+        columns=ALIGNMENT_AUDIT_COLUMNS,
+    )
+
+    result = write_alignment_audit_artifacts(audit=audit, output_dir=tmp_path, run_id="unit")
+
+    assert result.output_dir == tmp_path
+    assert result.candidate_rows == 1
+    assert result.candidate_assets == 1
+    assert result.pit_safe_rows == 0
+    assert result.future_disclosure_rows == 1
+    assert result.manifest_query_error_rows == 0
+    assert (tmp_path / "alignment_audit.csv").exists()
+    assert (tmp_path / "alignment_audit.json").exists()
+    assert (tmp_path / "alignment_status_summary.csv").exists()
+    assert (tmp_path / "alignment_summary.md").exists()
+    assert pd.read_csv(tmp_path / "alignment_audit.csv").columns.tolist() == ALIGNMENT_AUDIT_COLUMNS
+    assert pd.read_csv(tmp_path / "alignment_status_summary.csv").columns.tolist() == ALIGNMENT_STATUS_SUMMARY_COLUMNS
+    records = json.loads((tmp_path / "alignment_audit.json").read_text(encoding="utf-8"))
+    assert records[0]["stock_name"] == "平安银行"
+    markdown = (tmp_path / "alignment_summary.md").read_text(encoding="utf-8")
+    assert "shift_test_window_later" in markdown
+    assert "joinable_but_future_disclosure" in markdown
+    assert "official product evidence exists but publish_date is after candidate as_of_date" in markdown
+    assert "2025-04" in markdown
+
+
+def test_write_alignment_audit_artifacts_handles_empty_audit(tmp_path):
+    audit = pd.DataFrame(columns=ALIGNMENT_AUDIT_COLUMNS)
+
+    result = write_alignment_audit_artifacts(audit=audit, output_dir=tmp_path, run_id="unit")
+
+    assert result.candidate_rows == 0
+    assert result.candidate_assets == 0
+    assert result.pit_safe_rows == 0
+    assert result.future_disclosure_rows == 0
+    assert result.manifest_query_error_rows == 0
+    assert json.loads((tmp_path / "alignment_audit.json").read_text(encoding="utf-8")) == []

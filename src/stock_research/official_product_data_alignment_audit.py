@@ -40,9 +40,15 @@ ALIGNMENT_AUDIT_COLUMNS = [
 ]
 
 ALIGNMENT_STATUS_SUMMARY_COLUMNS = [
-    "alignment_status",
+    "run_id",
+    "group",
+    "group_value",
     "candidate_rows",
-    "recommended_action",
+    "candidate_assets",
+    "pit_safe_rows",
+    "future_disclosure_rows",
+    "missing_product_period_rows",
+    "manifest_query_error_rows",
 ]
 
 RECOMMENDED_ACTION_BY_STATUS = {
@@ -205,6 +211,83 @@ def build_alignment_audit(
     return pd.DataFrame(rows, columns=ALIGNMENT_AUDIT_COLUMNS)
 
 
+def build_alignment_status_summary(audit: pd.DataFrame, run_id: str) -> pd.DataFrame:
+    audit_frame = audit.copy()
+    for column in ["asset_id", "candidate_trade_date", "alignment_status", "recommended_action"]:
+        if column not in audit_frame.columns:
+            audit_frame[column] = ""
+
+    rows = [_status_summary_row(audit_frame, run_id=run_id, group="overall", group_value="all")]
+    if not audit_frame.empty:
+        audit_frame["_candidate_month"] = audit_frame["candidate_trade_date"].map(_candidate_month)
+        for candidate_month in sorted(value for value in audit_frame["_candidate_month"].unique() if value):
+            group_rows = audit_frame[audit_frame["_candidate_month"].eq(candidate_month)]
+            rows.append(
+                _status_summary_row(
+                    group_rows,
+                    run_id=run_id,
+                    group="candidate_month",
+                    group_value=candidate_month,
+                )
+            )
+        for alignment_status in sorted(_safe_text(value) for value in audit_frame["alignment_status"].unique()):
+            if alignment_status:
+                group_rows = audit_frame[audit_frame["alignment_status"].map(_safe_text).eq(alignment_status)]
+                rows.append(
+                    _status_summary_row(
+                        group_rows,
+                        run_id=run_id,
+                        group="alignment_status",
+                        group_value=alignment_status,
+                    )
+                )
+        for recommended_action in sorted(_safe_text(value) for value in audit_frame["recommended_action"].unique()):
+            if recommended_action:
+                group_rows = audit_frame[audit_frame["recommended_action"].map(_safe_text).eq(recommended_action)]
+                rows.append(
+                    _status_summary_row(
+                        group_rows,
+                        run_id=run_id,
+                        group="recommended_action",
+                        group_value=recommended_action,
+                    )
+                )
+    return pd.DataFrame(rows, columns=ALIGNMENT_STATUS_SUMMARY_COLUMNS)
+
+
+def write_alignment_audit_artifacts(
+    *,
+    audit: pd.DataFrame,
+    output_dir: Path,
+    run_id: str,
+) -> OfficialProductDataAlignmentAuditResult:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    audit_frame = audit.reindex(columns=ALIGNMENT_AUDIT_COLUMNS).copy()
+    summary = build_alignment_status_summary(audit_frame, run_id=run_id)
+
+    audit_frame.to_csv(output_dir / "alignment_audit.csv", index=False)
+    records = _json_records(audit_frame)
+    (output_dir / "alignment_audit.json").write_text(
+        json.dumps(records, ensure_ascii=False, default=str, indent=2),
+        encoding="utf-8",
+    )
+    summary.to_csv(output_dir / "alignment_status_summary.csv", index=False)
+    (output_dir / "alignment_summary.md").write_text(
+        _alignment_summary_markdown(audit_frame, summary, run_id=run_id),
+        encoding="utf-8",
+    )
+
+    counts = _alignment_counts(audit_frame)
+    return OfficialProductDataAlignmentAuditResult(
+        output_dir=output_dir,
+        candidate_rows=counts["candidate_rows"],
+        candidate_assets=counts["candidate_assets"],
+        pit_safe_rows=counts["pit_safe_rows"],
+        future_disclosure_rows=counts["future_disclosure_rows"],
+        manifest_query_error_rows=counts["manifest_query_error_rows"],
+    )
+
+
 def _normalize_product_evidence(product_evidence: pd.DataFrame) -> pd.DataFrame:
     columns = [
         "asset_id",
@@ -272,6 +355,124 @@ def _normalize_product_evidence(product_evidence: pd.DataFrame) -> pd.DataFrame:
             "source_document_url",
         ]
     ].reset_index(drop=True)
+
+
+def _status_summary_row(frame: pd.DataFrame, *, run_id: str, group: str, group_value: str) -> dict[str, Any]:
+    counts = _alignment_counts(frame)
+    return {
+        "run_id": _safe_text(run_id),
+        "group": group,
+        "group_value": group_value,
+        "candidate_rows": counts["candidate_rows"],
+        "candidate_assets": counts["candidate_assets"],
+        "pit_safe_rows": counts["pit_safe_rows"],
+        "future_disclosure_rows": counts["future_disclosure_rows"],
+        "missing_product_period_rows": counts["missing_product_period_rows"],
+        "manifest_query_error_rows": counts["manifest_query_error_rows"],
+    }
+
+
+def _alignment_counts(frame: pd.DataFrame) -> dict[str, int]:
+    statuses = (
+        frame["alignment_status"].map(_safe_text) if "alignment_status" in frame.columns else pd.Series(dtype=str)
+    )
+    assets = frame["asset_id"].map(_safe_text) if "asset_id" in frame.columns else pd.Series(dtype=str)
+    return {
+        "candidate_rows": int(len(frame)),
+        "candidate_assets": int(assets[assets.ne("")].nunique()),
+        "pit_safe_rows": int(statuses.eq("pit_safe_product_evidence_available").sum()),
+        "future_disclosure_rows": int(statuses.eq("joinable_but_future_disclosure").sum()),
+        "missing_product_period_rows": int(statuses.eq("manifest_available_no_joinable_product_period").sum()),
+        "manifest_query_error_rows": int(statuses.eq("manifest_query_error").sum()),
+    }
+
+
+def _candidate_month(value: object) -> str:
+    date_value = _date_value(value)
+    return date_value.strftime("%Y-%m") if date_value is not None else ""
+
+
+def _json_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    records = frame.astype(object).where(pd.notna(frame), None).to_dict("records")
+    return [{key: _json_value(value) for key, value in record.items()} for record in records]
+
+
+def _json_value(value: object) -> object:
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat()
+    return value
+
+
+def _alignment_summary_markdown(audit: pd.DataFrame, summary: pd.DataFrame, *, run_id: str) -> str:
+    counts = _alignment_counts(audit)
+    lines = [
+        "# Official Product Data Alignment Summary",
+        "",
+        f"- run_id: {_safe_text(run_id)}",
+        f"- candidate_rows: {counts['candidate_rows']}",
+        f"- candidate_assets: {counts['candidate_assets']}",
+        f"- pit_safe_rows: {counts['pit_safe_rows']}",
+        f"- future_disclosure_rows: {counts['future_disclosure_rows']}",
+        f"- missing_product_period_rows: {counts['missing_product_period_rows']}",
+        f"- manifest_query_error_rows: {counts['manifest_query_error_rows']}",
+        "",
+        "## Status Counts",
+    ]
+    lines.extend(_markdown_group_counts(summary, "alignment_status"))
+    lines.extend(["", "## Recommended Action Counts"])
+    lines.extend(_markdown_group_counts(summary, "recommended_action"))
+    lines.extend(["", "## Status Reasons"])
+    lines.extend(_markdown_status_reasons(audit))
+    lines.extend(["", "## Next Action", f"- {_next_action_guidance(audit, counts)}", ""])
+    return "\n".join(lines)
+
+
+def _markdown_group_counts(summary: pd.DataFrame, group: str) -> list[str]:
+    rows = summary[summary["group"].eq(group)] if "group" in summary.columns else pd.DataFrame()
+    if rows.empty:
+        return ["- none"]
+    return [f"- {row['group_value']}: {row['candidate_rows']}" for _, row in rows.iterrows()]
+
+
+def _markdown_status_reasons(audit: pd.DataFrame) -> list[str]:
+    if audit.empty or "alignment_status" not in audit.columns or "alignment_reason" not in audit.columns:
+        return ["- none"]
+    reason_counts = (
+        audit.assign(
+            alignment_status=audit["alignment_status"].map(_safe_text),
+            alignment_reason=audit["alignment_reason"].map(_safe_text),
+        )
+        .groupby(["alignment_status", "alignment_reason"], dropna=False)
+        .size()
+        .reset_index(name="candidate_rows")
+        .sort_values(["alignment_status", "alignment_reason"], kind="stable")
+    )
+    return [
+        f"- {row['alignment_status']}: {row['alignment_reason']} ({row['candidate_rows']})"
+        for _, row in reason_counts.iterrows()
+    ]
+
+
+def _next_action_guidance(audit: pd.DataFrame, counts: dict[str, int]) -> str:
+    if counts["pit_safe_rows"] > 0:
+        return "Proceed with readiness scoring using PIT-safe official product evidence."
+    if counts["future_disclosure_rows"] > 0:
+        earliest_month = _earliest_future_disclosure_month(audit)
+        suffix = f" Earliest future disclosure month: {earliest_month}." if earliest_month else ""
+        return f"Shift test window later before readiness scoring.{suffix}"
+    if counts["missing_product_period_rows"] > 0:
+        return "Backfill historical product rows for manifest periods without joinable product evidence."
+    if counts["manifest_query_error_rows"] > 0:
+        return "Rerun manifest source queries before interpreting coverage gaps."
+    return "Investigate official source coverage before readiness scoring."
+
+
+def _earliest_future_disclosure_month(audit: pd.DataFrame) -> str:
+    if "min_future_publish_date" not in audit.columns:
+        return ""
+    future_dates = [_date_value(value) for value in audit["min_future_publish_date"].tolist()]
+    future_dates = [value for value in future_dates if value is not None]
+    return min(future_dates).strftime("%Y-%m") if future_dates else ""
 
 
 def _normalize_join_diagnostics(product_join_diagnostics: pd.DataFrame) -> pd.DataFrame:
