@@ -79,6 +79,42 @@ def test_manifest_normalization_infers_short_chinese_disclosure_types():
     assert manifest["is_supported_product_disclosure"].tolist() == [True, True]
 
 
+def test_product_evidence_returns_empty_schema_when_inputs_empty():
+    evidence = build_product_evidence_rows(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+
+    assert len(evidence) == 0
+    assert {"asset_id", "evidence_type", "metadata_json", "as_of_safe"}.issubset(evidence.columns)
+
+
+def test_product_evidence_returns_empty_schema_when_manifest_empty():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "candidate_trade_date": "2025-05-09",
+                "as_of_date": "2025-05-09",
+            }
+        ]
+    )
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
+    )
+
+    evidence = build_product_evidence_rows(candidates, pd.DataFrame(), main_business)
+
+    assert len(evidence) == 0
+    assert {"asset_id", "evidence_type", "metadata_json", "as_of_safe"}.issubset(evidence.columns)
+
+
 def test_product_evidence_requires_publish_date_visible_to_candidate():
     candidates = pd.DataFrame(
         [

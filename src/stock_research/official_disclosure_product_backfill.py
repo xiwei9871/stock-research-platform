@@ -55,6 +55,8 @@ def normalize_disclosure_manifest(rows: Iterable[dict[str, Any]] | pd.DataFrame)
     for column in PRODUCT_DISCLOSURE_COLUMNS:
         if column not in manifest.columns:
             manifest[column] = ""
+    if manifest.empty:
+        return pd.DataFrame(columns=PRODUCT_DISCLOSURE_COLUMNS)
 
     manifest["publish_date"] = manifest["publish_date"].map(_date_value)
     manifest["report_period"] = manifest["report_period"].map(_date_value)
@@ -88,6 +90,9 @@ def build_product_evidence_rows(
     product_rows = _normalize_product_rows(main_business)
 
     manifest = manifest[manifest["is_supported_product_disclosure"]].copy()
+    if normalized_candidates.empty or manifest.empty or product_rows.empty:
+        return normalize_evidence_rows(pd.DataFrame())
+
     joined = normalized_candidates.merge(manifest, on=["asset_id", "ts_code"], how="inner")
     joined = joined.merge(product_rows, on=["asset_id", "ts_code", "report_period"], how="inner")
 
@@ -138,6 +143,9 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     for column in ["asset_id", "ts_code", "stock_name", "candidate_trade_date", "as_of_date"]:
         if column not in normalized.columns:
             normalized[column] = ""
+    if normalized.empty:
+        return pd.DataFrame(columns=["asset_id", "ts_code", "stock_name", "candidate_trade_date", "as_of_date"])
+
     normalized["ts_code"] = normalized["ts_code"].map(_safe_text)
     normalized["stock_name"] = normalized["stock_name"].map(_safe_text)
     normalized["candidate_trade_date"] = normalized["candidate_trade_date"].map(_date_value)
@@ -169,6 +177,9 @@ def _normalize_product_rows(main_business: pd.DataFrame) -> pd.DataFrame:
     for column in product_columns:
         if column not in product_rows.columns:
             product_rows[column] = ""
+    if product_rows.empty:
+        return pd.DataFrame(columns=product_columns)
+
     product_rows["ts_code"] = product_rows["ts_code"].map(_safe_text)
     product_rows["report_period"] = product_rows["report_period"].map(_date_value)
     product_rows["classify_type"] = product_rows["classify_type"].map(_safe_text)
