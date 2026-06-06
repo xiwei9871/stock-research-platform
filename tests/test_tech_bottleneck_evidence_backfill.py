@@ -76,6 +76,46 @@ def test_normalize_evidence_rows_outputs_contract_and_json_metadata() -> None:
     assert evidence.iloc[0]["as_of_safe"] is True
 
 
+def test_normalize_evidence_rows_treats_unknown_bool_strings_as_false() -> None:
+    evidence = normalize_evidence_rows(
+        pd.DataFrame(
+            [
+                {
+                    "is_proxy": "unknown",
+                    "as_of_safe": "unknown",
+                }
+            ]
+        )
+    )
+
+    assert evidence.iloc[0]["is_proxy"] is False
+    assert evidence.iloc[0]["as_of_safe"] is False
+
+
+def test_normalize_evidence_rows_serializes_pandas_and_numpy_metadata_values() -> None:
+    np = pytest.importorskip("numpy")
+
+    evidence = normalize_evidence_rows(
+        pd.DataFrame(
+            [
+                {
+                    "metadata_json": {
+                        "date": pd.Timestamp("2025-01-01"),
+                        "count": np.int64(45),
+                        "ratio": np.float64(12.5),
+                    }
+                }
+            ]
+        )
+    )
+
+    assert json.loads(evidence.iloc[0]["metadata_json"]) == {
+        "date": "2025-01-01",
+        "count": 45,
+        "ratio": 12.5,
+    }
+
+
 def test_classify_text_evidence_emits_expected_evidence_types() -> None:
     matches = classify_text_evidence(
         text="关键材料国产替代加速，扩产爬坡，客户认证推进，技术壁垒高，风险是需求不及预期。",

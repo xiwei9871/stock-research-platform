@@ -186,7 +186,10 @@ def _date_timestamp(value: Any) -> pd.Timestamp | None:
         return None
     if pd.isna(timestamp):
         return None
-    return pd.Timestamp(timestamp).normalize()
+    timestamp = pd.Timestamp(timestamp)
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.tz_convert(None)
+    return timestamp.normalize()
 
 
 def _metadata_json(value: Any) -> str:
@@ -198,24 +201,46 @@ def _metadata_json(value: Any) -> str:
             parsed = json.loads(text)
         except json.JSONDecodeError:
             parsed = {"value": text}
-        return json.dumps(parsed, ensure_ascii=False, sort_keys=True)
+        return json.dumps(_json_safe_value(parsed), ensure_ascii=False, sort_keys=True)
     try:
         if pd.isna(value):
             return "{}"
     except Exception:
         pass
-    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return json.dumps(_json_safe_value(value), ensure_ascii=False, sort_keys=True)
+
+
+def _json_safe_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {_safe_text(key): _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(item) for item in value]
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%Y-%m-%d")
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if hasattr(value, "item"):
+        try:
+            return _json_safe_value(value.item())
+        except Exception:
+            pass
+    return value
 
 
 def _bool_value(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     text = _safe_text(value).lower()
-    if text in {"", "0", "false", "f", "no", "n"}:
+    if text in {"", "0", "false", "f", "no", "n", "none", "null", "nan", "na", "n/a", "pd.na"}:
         return False
     if text in {"1", "true", "t", "yes", "y"}:
         return True
-    return bool(value)
+    return False
 
 
 def _snippet(text: str, keyword: str) -> str:
