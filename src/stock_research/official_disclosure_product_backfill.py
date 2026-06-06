@@ -10,6 +10,7 @@ from urllib import parse, request
 
 import pandas as pd
 
+from stock_research.db import fetch_all
 from stock_research.tech_bottleneck_evidence_backfill import normalize_evidence_rows
 
 
@@ -255,7 +256,8 @@ def _load_main_business_from_db(
     if conn is None or not ids:
         return pd.DataFrame(columns=PRODUCT_MAIN_BUSINESS_COLUMNS)
 
-    return pd.read_sql(
+    rows = fetch_all(
+        conn,
         """
         SELECT asset_id, ts_code, report_period, classify_type, item_name,
                revenue, revenue_ratio, cost, gross_profit, gross_margin, source
@@ -264,9 +266,9 @@ def _load_main_business_from_db(
           AND report_period BETWEEN %s::date AND %s::date
         ORDER BY asset_id, ts_code, report_period, classify_type, item_name, source
         """,
-        conn,
-        params=(ids, _date_text(start_date), _date_text(end_date)),
+        (ids, _date_text(start_date), _date_text(end_date)),
     )
+    return pd.DataFrame(rows, columns=PRODUCT_MAIN_BUSINESS_COLUMNS)
 
 
 def _collect_manifest(

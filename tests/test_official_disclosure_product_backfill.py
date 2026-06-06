@@ -980,13 +980,21 @@ def test_runner_writes_product_join_diagnostics_when_manifest_has_no_product_row
 def test_db_loader_preserves_digit_asset_ids_as_strings(monkeypatch):
     captured = {}
 
-    def fake_read_sql(sql, conn, params):
+    def fake_fetch_all(conn, sql, params):
         captured["params"] = params
-        return pd.DataFrame()
+        return [
+            {
+                "asset_id": "000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
 
-    monkeypatch.setattr(pd, "read_sql", fake_read_sql)
+    monkeypatch.setattr("stock_research.official_disclosure_product_backfill.fetch_all", fake_fetch_all)
 
-    _load_main_business_from_db(
+    rows = _load_main_business_from_db(
         ["000001", "1", "CN:SZ:000729"],
         "2023-01-01",
         "2025-12-31",
@@ -994,6 +1002,7 @@ def test_db_loader_preserves_digit_asset_ids_as_strings(monkeypatch):
     )
 
     assert captured["params"][0] == ["000001", "1", "CN:SZ:000729"]
+    assert rows.loc[0, "classify_type"] == "按产品分类"
 
 
 def test_runner_preserves_leading_zero_asset_ids_from_candidate_csv(tmp_path: Path):
