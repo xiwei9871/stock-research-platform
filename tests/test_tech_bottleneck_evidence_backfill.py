@@ -3,15 +3,18 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from stock_research.tech_bottleneck_evidence_backfill import (
     EVIDENCE_COLUMNS,
+    build_evidence_backfill,
     classify_text_evidence,
     normalize_evidence_rows,
     normalize_evidence_candidates,
+    write_evidence_artifacts,
 )
 
 
@@ -181,3 +184,107 @@ def test_classify_text_evidence_emits_expected_evidence_types() -> None:
         "technical_barrier",
         "invalidation",
     }.issubset(evidence_types)
+
+
+def test_build_evidence_backfill_extracts_product_and_text_evidence() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688001",
+                "stock_name": "示例科技",
+                "trade_date": "2025-01-10",
+                "candidate_source": "top50",
+                "rank": 1,
+            }
+        ]
+    )
+    result = build_evidence_backfill(
+        candidates=candidates,
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                    "revenue": 100,
+                    "revenue_ratio": 45,
+                    "gross_margin": 35,
+                }
+            ]
+        ),
+        reports=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_id": "r1",
+                    "report_date": "2025-01-05",
+                    "report_title": "国产替代加速",
+                    "raw_summary": "扩产爬坡，客户认证推进，技术壁垒高。",
+                }
+            ]
+        ),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    evidence_types = set(result.evidence["evidence_type"])
+    assert "product_revenue_exposure" in evidence_types
+    assert "bottleneck_keyword" in evidence_types
+    assert "capacity" in evidence_types
+    assert "customer_certification" in evidence_types
+    assert "technical_barrier" in evidence_types
+    assert bool(result.evidence[result.evidence["evidence_type"].eq("product_revenue_exposure")].iloc[0]["as_of_safe"])
+
+
+def test_future_evidence_is_written_as_unsafe() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2025-06-30",
+                    "classify_type": "按产品分类",
+                    "item_name": "未来产品",
+                }
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert len(result.evidence) == 1
+    assert result.evidence.iloc[0]["as_of_safe"] is False
+
+
+def test_write_evidence_artifacts(tmp_path: Path) -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    paths = write_evidence_artifacts(result=result, output_dir=tmp_path)
+    assert paths["csv"].name == "evidence.csv"
+    assert paths["json"].name == "evidence.json"
+    assert paths["summary"].name == "coverage_summary.md"
+    assert paths["source_gap_report"].name == "source_gap_report.csv"
