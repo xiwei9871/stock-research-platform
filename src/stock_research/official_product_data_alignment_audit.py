@@ -400,6 +400,14 @@ def _classify_from_join_diagnostics(row: dict[str, Any], diagnostics: pd.DataFra
             )
             return
 
+        _apply_diagnostic_details(row, _best_diagnostic_row(joinable))
+        _set_alignment_status(
+            row,
+            "no_official_manifest_or_product_rows",
+            reason="joinable diagnostics exist but report_period or publish_date is unusable",
+        )
+        return
+
     manifest_rows = int(diagnostics["manifest_rows"].sum())
     product_rows = int(diagnostics["product_main_business_rows"].sum())
     if manifest_rows > 0 and product_rows > 0:

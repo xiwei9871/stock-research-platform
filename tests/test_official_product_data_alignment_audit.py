@@ -180,6 +180,52 @@ def test_safe_historical_joinable_diagnostic_is_not_no_joinable_period():
     assert row["best_source_title"] == "2024年年度报告"
 
 
+def test_malformed_joinable_diagnostic_is_not_no_joinable_period():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "trade_date": "2025-05-09",
+            }
+        ]
+    )
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "",
+                "publish_date": "",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+                "product_main_business_rows": 2,
+                "manifest_rows": 1,
+                "join_status": "joinable",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] != "manifest_available_no_joinable_product_period"
+    assert row["alignment_status"] == "no_official_manifest_or_product_rows"
+    assert row["alignment_reason"] == "joinable diagnostics exist but report_period or publish_date is unusable"
+    assert row["recommended_action"] == "collect_official_product_data"
+    assert row["joinable_report_periods_for_asset"] == 0
+
+
 def test_future_disclosure_evidence_remains_blocked():
     candidates = pd.DataFrame(
         [
