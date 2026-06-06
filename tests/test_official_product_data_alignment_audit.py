@@ -130,7 +130,7 @@ def test_safe_product_evidence_produces_pit_safe_status():
     assert row["recommended_action"] == "use_for_readiness"
 
 
-def test_safe_historical_joinable_diagnostic_is_not_no_joinable_period():
+def test_safe_historical_joinable_diagnostic_is_not_readiness():
     candidates = pd.DataFrame(
         [
             {
@@ -170,11 +170,15 @@ def test_safe_historical_joinable_diagnostic_is_not_no_joinable_period():
 
     row = audit.iloc[0].to_dict()
     assert row["alignment_status"] != "manifest_available_no_joinable_product_period"
-    assert row["alignment_status"] == "pit_safe_product_evidence_available"
+    assert row["alignment_status"] != "pit_safe_product_evidence_available"
+    assert row["alignment_status"] == "no_official_manifest_or_product_rows"
+    assert row["has_pit_safe_product_evidence"] is False
     assert (
         row["alignment_reason"]
         == "join diagnostics contain a safe historical period but no candidate-scoped evidence row exists"
     )
+    assert row["recommended_action"] != "use_for_readiness"
+    assert row["recommended_action"] == "investigate_source_coverage"
     assert row["max_safe_report_period"] == pd.Timestamp("2024-12-31").date()
     assert row["joinable_report_periods_for_asset"] == 1
     assert row["best_source_title"] == "2024年年度报告"
@@ -282,6 +286,115 @@ def test_future_disclosure_evidence_remains_blocked():
     assert row["min_future_publish_date"] == pd.Timestamp("2025-04-25").date()
     assert row["days_until_first_future_disclosure"] == 7
     assert row["recommended_action"] == "shift_test_window_later"
+
+
+def test_candidate_unsafe_evidence_with_future_report_period_ignores_future_period():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "candidate_trade_date": "2025-05-09",
+                "as_of_date": "2025-05-09",
+            }
+        ]
+    )
+    product_evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "candidate_trade_date": "2025-05-09",
+                "as_of_date": "2025-05-09",
+                "evidence_date": "2025-04-25",
+                "source_title": "2025年半年度报告",
+                "source_id": "122500",
+                "source_url": "http://example.com/2025h1.pdf",
+                "as_of_safe": False,
+                "metadata_json": json.dumps(
+                    {
+                        "report_period": "2025-06-30",
+                        "publish_date": "2025-04-25",
+                        "source_document_id": "122500",
+                        "source_document_url": "http://example.com/2025h1.pdf",
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=product_evidence,
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=pd.DataFrame(),
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "joinable_but_report_period_future"
+    assert row["alignment_reason"] == "joinable official product period is after candidate as_of_date"
+    assert row["recommended_action"] == "ignore_future_period"
+    assert row["best_report_period"] == pd.Timestamp("2025-06-30").date()
+
+
+def test_real_shape_diagnostics_are_enriched_from_manifest_for_future_disclosure():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "trade_date": "2025-04-18",
+            }
+        ]
+    )
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "manifest_rows": 1,
+                "product_main_business_rows": 3,
+                "join_status": "joinable",
+            }
+        ]
+    )
+    manifest = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "2025-04-25",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=manifest,
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "joinable_but_future_disclosure"
+    assert row["alignment_reason"] == "official manifest and product rows join, but publish_date is after candidate as_of_date"
+    assert row["recommended_action"] == "shift_test_window_later"
+    assert row["best_publish_date"] == pd.Timestamp("2025-04-25").date()
+    assert row["best_source_document_id"] == "121999"
+    assert row["best_source_document_url"] == "http://example.com/report.pdf"
+    assert row["best_source_title"] == "2024年年度报告"
 
 
 def test_joinable_future_report_period_is_separated_from_future_disclosure():

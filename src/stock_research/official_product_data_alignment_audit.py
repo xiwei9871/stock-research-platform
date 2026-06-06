@@ -122,11 +122,13 @@ def build_alignment_audit(
     manifest_query_errors: pd.DataFrame,
     run_id: str,
 ) -> pd.DataFrame:
-    del disclosure_manifest
-
     normalized_candidates = normalize_alignment_candidates(candidates)
     evidence = _normalize_product_evidence(product_evidence)
-    diagnostics = _normalize_join_diagnostics(product_join_diagnostics)
+    manifest = _normalize_disclosure_manifest(disclosure_manifest)
+    diagnostics = _enrich_join_diagnostics_from_manifest(
+        _normalize_join_diagnostics(product_join_diagnostics),
+        manifest,
+    )
     errors = _normalize_manifest_query_errors(manifest_query_errors)
     evidence_by_candidate = {
         key: group.copy()
@@ -144,7 +146,11 @@ def build_alignment_audit(
         safe_evidence = candidate_evidence[candidate_evidence["as_of_safe"].eq(True)].copy()
         unsafe_evidence = candidate_evidence[~candidate_evidence["as_of_safe"].eq(True)].copy()
         best_evidence = _best_evidence_row(safe_evidence if not safe_evidence.empty else candidate_evidence)
-        status = _alignment_status(candidate_evidence=candidate_evidence, safe_evidence=safe_evidence)
+        status = _alignment_status(
+            candidate_evidence=candidate_evidence,
+            safe_evidence=safe_evidence,
+            as_of_date=candidate["as_of_date"],
+        )
         min_future_publish_date = _min_future_publish_date(
             candidate_evidence=candidate_evidence,
             as_of_date=candidate["as_of_date"],
@@ -303,6 +309,74 @@ def _normalize_join_diagnostics(product_join_diagnostics: pd.DataFrame) -> pd.Da
     return diagnostics[columns].reset_index(drop=True)
 
 
+def _normalize_disclosure_manifest(disclosure_manifest: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_period",
+        "publish_date",
+        "disclosure_type",
+        "source_document_id",
+        "source_document_url",
+        "announcement_title",
+    ]
+    manifest = disclosure_manifest.copy()
+    for column in columns:
+        if column not in manifest.columns:
+            manifest[column] = ""
+    if manifest.empty:
+        return pd.DataFrame(columns=columns)
+
+    manifest["asset_id"] = manifest["asset_id"].map(_safe_text)
+    manifest["ts_code"] = manifest.apply(
+        lambda row: _safe_text(row["ts_code"]) or _derive_ts_code(row["asset_id"]),
+        axis=1,
+    )
+    manifest["report_period"] = manifest["report_period"].map(_date_value)
+    manifest["publish_date"] = manifest["publish_date"].map(_date_value)
+    manifest["disclosure_type"] = manifest["disclosure_type"].map(_safe_text)
+    manifest["source_document_id"] = manifest["source_document_id"].map(_safe_text)
+    manifest["source_document_url"] = manifest["source_document_url"].map(_safe_text)
+    manifest["announcement_title"] = manifest["announcement_title"].map(_safe_text)
+    return manifest[columns].reset_index(drop=True)
+
+
+def _enrich_join_diagnostics_from_manifest(diagnostics: pd.DataFrame, manifest: pd.DataFrame) -> pd.DataFrame:
+    if diagnostics.empty or manifest.empty:
+        return diagnostics
+
+    enriched = diagnostics.copy()
+    manifest_rows = _manifest_rows_by_period(manifest)
+    for index, diagnostic in enriched.iterrows():
+        key = (diagnostic["asset_id"], diagnostic["ts_code"], diagnostic["report_period"])
+        manifest_row = manifest_rows.get(key)
+        if manifest_row is None:
+            continue
+        for column in [
+            "publish_date",
+            "disclosure_type",
+            "source_document_id",
+            "source_document_url",
+            "announcement_title",
+        ]:
+            if _missing_value(enriched.at[index, column]):
+                enriched.at[index, column] = manifest_row[column]
+    return enriched
+
+
+def _manifest_rows_by_period(manifest: pd.DataFrame) -> dict[tuple[str, str, dt.date | None], pd.Series]:
+    sortable = manifest.copy()
+    sortable["_report_sort"] = pd.to_datetime(sortable["report_period"], errors="coerce")
+    sortable["_publish_sort"] = pd.to_datetime(sortable["publish_date"], errors="coerce")
+    sortable = sortable.sort_values(["asset_id", "ts_code", "_report_sort", "_publish_sort"], kind="stable")
+    rows: dict[tuple[str, str, dt.date | None], pd.Series] = {}
+    for _, manifest_row in sortable.iterrows():
+        key = (manifest_row["asset_id"], manifest_row["ts_code"], manifest_row["report_period"])
+        if key not in rows:
+            rows[key] = manifest_row
+    return rows
+
+
 def _normalize_manifest_query_errors(manifest_query_errors: pd.DataFrame) -> pd.DataFrame:
     columns = ["asset_id", "ts_code", "error_type", "error_message"]
     errors = manifest_query_errors.copy()
@@ -395,7 +469,7 @@ def _classify_from_join_diagnostics(row: dict[str, Any], diagnostics: pd.DataFra
             row["max_safe_report_period"] = diagnostic_row.get("report_period")
             _set_alignment_status(
                 row,
-                "pit_safe_product_evidence_available",
+                "no_official_manifest_or_product_rows",
                 reason=_ALIGNMENT_REASON_BY_STATUS["pit_safe_product_diagnostic_available"],
             )
             return
@@ -462,10 +536,15 @@ def _min_date(values: list[object]) -> dt.date | None:
     return min(dates) if dates else None
 
 
-def _alignment_status(*, candidate_evidence: pd.DataFrame, safe_evidence: pd.DataFrame) -> str:
+def _alignment_status(*, candidate_evidence: pd.DataFrame, safe_evidence: pd.DataFrame, as_of_date: dt.date) -> str:
     if not safe_evidence.empty:
         return "pit_safe_product_evidence_available"
     if not candidate_evidence.empty:
+        has_future_period = any(
+            _date_after(report_period, as_of_date) for report_period in candidate_evidence["report_period"].tolist()
+        )
+        if has_future_period:
+            return "joinable_but_report_period_future"
         return "joinable_but_future_disclosure"
     return "no_official_manifest_or_product_rows"
 
@@ -548,6 +627,14 @@ def _safe_text(value: object) -> str:
     if pd.isna(value):
         return ""
     return str(value).strip()
+
+
+def _missing_value(value: object) -> bool:
+    if value is None or value is pd.NA:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    return bool(pd.isna(value))
 
 
 def _bool_value(value: object) -> bool:
