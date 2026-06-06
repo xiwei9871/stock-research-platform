@@ -8,6 +8,7 @@ import pytest
 from stock_research.official_disclosure_product_backfill import (
     CninfoDisclosureIndexClient,
     OfficialDisclosureProductBackfillResult,
+    _load_main_business_from_db,
     build_product_evidence_rows,
     is_supported_product_disclosure,
     normalize_disclosure_manifest,
@@ -618,7 +619,17 @@ def test_runner_continues_when_manifest_query_fails_for_asset(tmp_path: Path):
 
     assert result.manifest_rows == 0
     assert result.evidence_rows == 0
+    errors = pd.read_csv(tmp_path / "out" / "manifest_query_errors.csv")
+    assert errors.to_dict("records") == [
+        {
+            "asset_id": 1,
+            "ts_code": "000001.SZ",
+            "error_type": "ValueError",
+            "error_message": "bad exchange",
+        }
+    ]
     gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert gaps.loc[0, "manifest_query_error_count"] == 1
     assert gaps.loc[0, "assets_with_safe_product_evidence"] == 0
     assert gaps.loc[0, "assets_without_safe_product_evidence"] == 1
 
@@ -702,5 +713,94 @@ def test_runner_supports_real_pilot_candidate_shape(tmp_path: Path):
 
     evidence = pd.read_csv(tmp_path / "out" / "product_evidence.csv")
     assert evidence.loc[0, "asset_id"] == "CN:SZ:000001"
+    assert evidence.loc[0, "candidate_trade_date"] == "2025-05-09"
+    assert evidence.loc[0, "as_of_date"] == "2025-05-09"
+
+
+def test_db_loader_preserves_digit_asset_ids_as_strings(monkeypatch):
+    captured = {}
+
+    def fake_read_sql(sql, conn, params):
+        captured["params"] = params
+        return pd.DataFrame()
+
+    monkeypatch.setattr(pd, "read_sql", fake_read_sql)
+
+    _load_main_business_from_db(
+        ["000001", "1", "CN:SZ:000729"],
+        "2023-01-01",
+        "2025-12-31",
+        conn=object(),
+    )
+
+    assert captured["params"][0] == ["000001", "1", "CN:SZ:000729"]
+
+
+def test_runner_counts_candidate_rows_with_safe_product_evidence_by_date(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-04-18,2025-04-18\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
+    )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: main_business,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert gaps.loc[0, "assets_with_safe_product_evidence"] == 1
+    assert gaps.loc[0, "candidate_rows_with_safe_product_evidence"] == 1
+    assert gaps.loc[0, "candidate_rows_without_safe_product_evidence"] == 1
+
+
+def test_runner_falls_back_to_trade_date_when_candidate_date_is_invalid(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,trade_date,as_of_date\n"
+        "1,000001.SZ,not-a-date,2025-05-09,\n",
+        encoding="utf-8",
+    )
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
+    )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: main_business,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    evidence = pd.read_csv(tmp_path / "out" / "product_evidence.csv")
     assert evidence.loc[0, "candidate_trade_date"] == "2025-05-09"
     assert evidence.loc[0, "as_of_date"] == "2025-05-09"

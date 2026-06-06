@@ -43,11 +43,20 @@ DOCUMENT_CACHE_INDEX_COLUMNS = [
     "source_document_id",
     "source_document_url",
 ]
+MANIFEST_QUERY_ERROR_COLUMNS = [
+    "asset_id",
+    "ts_code",
+    "error_type",
+    "error_message",
+]
 SOURCE_GAP_REPORT_COLUMNS = [
     "run_id",
     "candidate_rows",
     "candidate_assets",
+    "candidate_rows_with_safe_product_evidence",
+    "candidate_rows_without_safe_product_evidence",
     "manifest_rows",
+    "manifest_query_error_count",
     "evidence_rows",
     "safe_evidence_rows",
     "assets_with_safe_product_evidence",
@@ -67,6 +76,12 @@ class OfficialDisclosureProductBackfillResult:
     evidence_rows: int
     safe_evidence_rows: int
     assets_with_safe_product_evidence: int
+
+
+@dataclass(frozen=True)
+class ManifestCollectionResult:
+    manifest: pd.DataFrame
+    errors: pd.DataFrame
 
 
 class CninfoDisclosureIndexClient:
@@ -184,7 +199,7 @@ def run_official_disclosure_product_backfill(
     client = manifest_client or CninfoDisclosureIndexClient()
     manifest_start_date = _date_text(start_date) or ""
     manifest_end_date = _date_text(end_date) or ""
-    manifest = _collect_manifest(candidates, client, manifest_start_date, manifest_end_date)
+    manifest_result = _collect_manifest(candidates, client, manifest_start_date, manifest_end_date)
 
     asset_ids = sorted(candidates["asset_id"].dropna().astype(str).unique().tolist())
     business_start_date, business_end_date = _main_business_report_window(start_date, end_date)
@@ -193,7 +208,7 @@ def run_official_disclosure_product_backfill(
     else:
         main_business = _load_main_business_from_db(asset_ids, business_start_date, business_end_date, conn)
 
-    evidence = build_product_evidence_rows(candidates, manifest, main_business)
+    evidence = build_product_evidence_rows(candidates, manifest_result.manifest, main_business)
     if not evidence.empty:
         evidence = evidence.copy()
         evidence["run_id"] = _safe_text(run_id)
@@ -203,7 +218,8 @@ def run_official_disclosure_product_backfill(
         output_dir=Path(output_dir),
         run_id=run_id,
         candidates=candidates,
-        disclosure_manifest=manifest,
+        disclosure_manifest=manifest_result.manifest,
+        manifest_query_errors=manifest_result.errors,
         product_evidence=evidence,
     )
 
@@ -218,7 +234,6 @@ def _load_main_business_from_db(
     if conn is None or not ids:
         return pd.DataFrame(columns=PRODUCT_MAIN_BUSINESS_COLUMNS)
 
-    db_ids = [_db_asset_id(asset_id) for asset_id in ids]
     return pd.read_sql(
         """
         SELECT asset_id, ts_code, report_period, classify_type, item_name,
@@ -229,7 +244,7 @@ def _load_main_business_from_db(
         ORDER BY asset_id, ts_code, report_period, classify_type, item_name, source
         """,
         conn,
-        params=(db_ids, _date_text(start_date), _date_text(end_date)),
+        params=(ids, _date_text(start_date), _date_text(end_date)),
     )
 
 
@@ -238,9 +253,10 @@ def _collect_manifest(
     client: Any,
     start_date: object,
     end_date: object,
-) -> pd.DataFrame:
+) -> ManifestCollectionResult:
     normalized_candidates = _normalize_candidates(candidates)
     manifest_frames = []
+    errors = []
     pairs = (
         normalized_candidates[["asset_id", "ts_code"]]
         .drop_duplicates()
@@ -255,14 +271,24 @@ def _collect_manifest(
                 start_date=start_date,
                 end_date=end_date,
             )
-        except Exception:
+        except Exception as exc:
+            errors.append(
+                {
+                    "asset_id": pair["asset_id"],
+                    "ts_code": pair["ts_code"],
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                }
+            )
             continue
         if manifest is not None:
             manifest_frames.append(manifest)
 
     if not manifest_frames:
-        return normalize_disclosure_manifest(pd.DataFrame())
-    return normalize_disclosure_manifest(pd.concat(manifest_frames, ignore_index=True))
+        manifest = normalize_disclosure_manifest(pd.DataFrame())
+    else:
+        manifest = normalize_disclosure_manifest(pd.concat(manifest_frames, ignore_index=True))
+    return ManifestCollectionResult(manifest=manifest, errors=_normalize_manifest_query_errors(errors))
 
 
 def _write_artifacts(
@@ -272,11 +298,13 @@ def _write_artifacts(
     candidates: pd.DataFrame,
     disclosure_manifest: pd.DataFrame,
     product_evidence: pd.DataFrame,
+    manifest_query_errors: pd.DataFrame | None = None,
 ) -> OfficialDisclosureProductBackfillResult:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     normalized_candidates = _normalize_candidates(candidates)
     manifest = normalize_disclosure_manifest(disclosure_manifest)
+    errors = _normalize_manifest_query_errors(manifest_query_errors if manifest_query_errors is not None else [])
     evidence = normalize_evidence_rows(product_evidence)
     if not evidence.empty:
         evidence = evidence.sort_values(
@@ -291,6 +319,11 @@ def _write_artifacts(
     safe_evidence_rows = int(len(safe_evidence))
     assets_with_safe_product_evidence = int(safe_evidence["asset_id"].nunique()) if not safe_evidence.empty else 0
     assets_without_safe_product_evidence = max(candidate_assets - assets_with_safe_product_evidence, 0)
+    candidate_rows_with_safe_product_evidence = _candidate_rows_with_safe_product_evidence(
+        normalized_candidates,
+        safe_evidence,
+    )
+    candidate_rows_without_safe_product_evidence = max(candidate_rows - candidate_rows_with_safe_product_evidence, 0)
 
     source_gap_report = pd.DataFrame(
         [
@@ -298,7 +331,10 @@ def _write_artifacts(
                 "run_id": _safe_text(run_id),
                 "candidate_rows": candidate_rows,
                 "candidate_assets": candidate_assets,
+                "candidate_rows_with_safe_product_evidence": candidate_rows_with_safe_product_evidence,
+                "candidate_rows_without_safe_product_evidence": candidate_rows_without_safe_product_evidence,
                 "manifest_rows": int(len(manifest)),
+                "manifest_query_error_count": int(len(errors)),
                 "evidence_rows": int(len(evidence)),
                 "safe_evidence_rows": safe_evidence_rows,
                 "assets_with_safe_product_evidence": assets_with_safe_product_evidence,
@@ -310,6 +346,7 @@ def _write_artifacts(
 
     evidence.to_csv(output_dir / "product_evidence.csv", index=False)
     manifest.to_csv(output_dir / "disclosure_manifest.csv", index=False)
+    errors.to_csv(output_dir / "manifest_query_errors.csv", index=False)
     document_cache_index.to_csv(output_dir / "document_cache_index.csv", index=False)
     source_gap_report.to_csv(output_dir / "source_gap_report.csv", index=False)
     (output_dir / "coverage_summary.md").write_text(
@@ -462,15 +499,13 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     )
     normalized["stock_name"] = normalized["stock_name"].map(_safe_text)
     normalized["candidate_trade_date"] = normalized.apply(
-        lambda row: row["candidate_trade_date"] if _safe_text(row["candidate_trade_date"]) else row["trade_date"],
+        lambda row: _first_date_value(row["candidate_trade_date"], row["trade_date"]),
         axis=1,
     )
     normalized["as_of_date"] = normalized.apply(
-        lambda row: row["as_of_date"] if _safe_text(row["as_of_date"]) else row["candidate_trade_date"],
+        lambda row: _first_date_value(row["as_of_date"], row["candidate_trade_date"], row["trade_date"]),
         axis=1,
     )
-    normalized["candidate_trade_date"] = normalized["candidate_trade_date"].map(_date_value)
-    normalized["as_of_date"] = normalized["as_of_date"].map(_date_value)
     normalized = normalized[
         normalized["asset_id"].ne("")
         & normalized["ts_code"].ne("")
@@ -648,13 +683,6 @@ def _main_business_report_window(start_date: object | None, end_date: object | N
     return start.isoformat(), end.isoformat()
 
 
-def _db_asset_id(asset_id: object) -> object:
-    text = _safe_text(asset_id)
-    if re.fullmatch(r"\d+", text):
-        return int(text)
-    return text
-
-
 def _document_cache_index(manifest: pd.DataFrame) -> pd.DataFrame:
     normalized = normalize_disclosure_manifest(manifest)
     if normalized.empty:
@@ -673,3 +701,50 @@ def _coverage_summary_markdown(summary: dict[str, Any]) -> str:
         lines.append(f"- {column}: {summary.get(column, '')}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _first_date_value(*values: object) -> dt.date | None:
+    for value in values:
+        parsed = _date_value(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _normalize_manifest_query_errors(rows: Iterable[dict[str, Any]] | pd.DataFrame) -> pd.DataFrame:
+    errors = rows.copy() if isinstance(rows, pd.DataFrame) else pd.DataFrame(list(rows))
+    for column in MANIFEST_QUERY_ERROR_COLUMNS:
+        if column not in errors.columns:
+            errors[column] = ""
+    if errors.empty:
+        return pd.DataFrame(columns=MANIFEST_QUERY_ERROR_COLUMNS)
+    for column in MANIFEST_QUERY_ERROR_COLUMNS:
+        errors[column] = errors[column].map(_safe_text)
+    return (
+        errors[MANIFEST_QUERY_ERROR_COLUMNS]
+        .sort_values(["asset_id", "ts_code", "error_type", "error_message"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _candidate_rows_with_safe_product_evidence(candidates: pd.DataFrame, safe_evidence: pd.DataFrame) -> int:
+    if candidates.empty or safe_evidence.empty:
+        return 0
+    safe_keys = {
+        (
+            _safe_text(row["asset_id"]),
+            _date_text(row["candidate_trade_date"]),
+            _date_text(row["as_of_date"]),
+        )
+        for row in safe_evidence[["asset_id", "candidate_trade_date", "as_of_date"]].to_dict("records")
+    }
+    count = 0
+    for row in candidates[["asset_id", "candidate_trade_date", "as_of_date"]].to_dict("records"):
+        key = (
+            _safe_text(row["asset_id"]),
+            _date_text(row["candidate_trade_date"]),
+            _date_text(row["as_of_date"]),
+        )
+        if key in safe_keys:
+            count += 1
+    return count
