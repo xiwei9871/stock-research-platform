@@ -192,6 +192,79 @@ def test_cninfo_client_skips_failed_category_and_returns_successful_rows():
     assert manifest["source_document_id"].tolist() == ["121999"]
 
 
+def test_runner_records_no_manifest_error_when_cninfo_category_partially_succeeds(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(parse_qs(request.data.decode("utf-8"))["category"][0])
+        if len(calls) == 1:
+            raise OSError("first category failed")
+        return FakeResponse(
+            {
+                "announcements": [
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": 1745510400000,
+                        "announcementId": "121999",
+                        "adjunctUrl": "finalpage/2025-04-25/121999.PDF",
+                    }
+                ]
+            }
+        )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=CninfoDisclosureIndexClient(opener=opener),
+        main_business_loader=lambda asset_ids, start, end: pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    errors = pd.read_csv(tmp_path / "out" / "manifest_query_errors.csv")
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert len(calls) == 2
+    assert errors.empty
+    assert gaps.loc[0, "manifest_query_error_count"] == 0
+
+
+def test_runner_records_manifest_error_when_all_cninfo_categories_fail(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+
+    def opener(request, timeout):
+        raise OSError("category request failed")
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=CninfoDisclosureIndexClient(opener=opener),
+        main_business_loader=lambda asset_ids, start, end: pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    errors = pd.read_csv(tmp_path / "out" / "manifest_query_errors.csv")
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert errors.loc[0, "asset_id"] == 1
+    assert errors.loc[0, "ts_code"] == "000001.SZ"
+    assert errors.loc[0, "error_type"] in {"RuntimeError", "CninfoDisclosureQueryError"}
+    assert "category request failed" in errors.loc[0, "error_message"]
+    assert gaps.loc[0, "manifest_query_error_count"] == 1
+
+
 @pytest.mark.parametrize(
     "response",
     [
@@ -734,6 +807,32 @@ def test_db_loader_preserves_digit_asset_ids_as_strings(monkeypatch):
     )
 
     assert captured["params"][0] == ["000001", "1", "CN:SZ:000729"]
+
+
+def test_runner_preserves_leading_zero_asset_ids_from_candidate_csv(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "000001,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def loader(asset_ids, start, end):
+        captured["asset_ids"] = asset_ids
+        return pd.DataFrame()
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=loader,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert captured["asset_ids"] == ["000001"]
 
 
 def test_runner_counts_candidate_rows_with_safe_product_evidence_by_date(tmp_path: Path):

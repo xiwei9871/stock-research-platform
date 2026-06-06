@@ -84,6 +84,10 @@ class ManifestCollectionResult:
     errors: pd.DataFrame
 
 
+class CninfoDisclosureQueryError(RuntimeError):
+    pass
+
+
 class CninfoDisclosureIndexClient:
     def __init__(self, opener=None, timeout_seconds: int = 20):
         self._opener = opener or request.urlopen
@@ -100,6 +104,7 @@ class CninfoDisclosureIndexClient:
         column = "sse" if exchange == "SH" else "szse"
         plate = exchange.lower()
         rows = []
+        category_errors = []
 
         for category in CNINFO_CATEGORIES:
             try:
@@ -112,7 +117,8 @@ class CninfoDisclosureIndexClient:
                     start_date=start_date,
                     end_date=end_date,
                 )
-            except Exception:
+            except Exception as exc:
+                category_errors.append((category, exc))
                 continue
 
             announcements = response_payload.get("announcements", [])
@@ -134,6 +140,9 @@ class CninfoDisclosureIndexClient:
                         "source_document_url": _cninfo_static_url(announcement.get("adjunctUrl")),
                     }
                 )
+
+        if not rows and len(category_errors) == len(CNINFO_CATEGORIES):
+            raise CninfoDisclosureQueryError(_cninfo_category_error_message(category_errors))
 
         manifest = normalize_disclosure_manifest(rows)
         manifest = manifest[manifest["is_supported_product_disclosure"]].copy()
@@ -195,7 +204,7 @@ def run_official_disclosure_product_backfill(
     start_date: object | None = None,
     end_date: object | None = None,
 ) -> OfficialDisclosureProductBackfillResult:
-    candidates = _normalize_candidates(pd.read_csv(candidates_csv))
+    candidates = _normalize_candidates(pd.read_csv(candidates_csv, dtype=str))
     client = manifest_client or CninfoDisclosureIndexClient()
     manifest_start_date = _date_text(start_date) or ""
     manifest_end_date = _date_text(end_date) or ""
@@ -701,6 +710,14 @@ def _coverage_summary_markdown(summary: dict[str, Any]) -> str:
         lines.append(f"- {column}: {summary.get(column, '')}")
     lines.append("")
     return "\n".join(lines)
+
+
+def _cninfo_category_error_message(category_errors: list[tuple[str, Exception]]) -> str:
+    details = [
+        f"{category}: {type(error).__name__}: {_safe_text(error)}"
+        for category, error in category_errors
+    ]
+    return "CNINFO query failed for all categories: " + "; ".join(details)
 
 
 def _first_date_value(*values: object) -> dt.date | None:
