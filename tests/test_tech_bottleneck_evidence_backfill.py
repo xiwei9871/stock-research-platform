@@ -210,6 +210,7 @@ def test_build_evidence_backfill_extracts_product_and_text_evidence() -> None:
                 {
                     "asset_id": "CN:SH:688001",
                     "report_period": "2024-12-31",
+                    "publish_date": "2025-01-05",
                     "classify_type": "按产品分类",
                     "item_name": "AI关键材料",
                     "revenue": 100,
@@ -260,12 +261,14 @@ def test_build_evidence_backfill_sorts_evidence_stably_from_shuffled_frames() ->
                 {
                     "asset_id": "CN:SH:688002",
                     "report_period": "2024-12-30",
+                    "publish_date": "2025-01-05",
                     "classify_type": "按产品分类",
                     "item_name": "Z材料",
                 },
                 {
                     "asset_id": "CN:SH:688001",
                     "report_period": "2024-12-31",
+                    "publish_date": "2025-01-05",
                     "classify_type": "按产品分类",
                     "item_name": "A材料",
                 },
@@ -353,6 +356,65 @@ def test_build_evidence_backfill_requires_exact_product_classification_and_item_
     assert "product_revenue_exposure" not in set(result.evidence["evidence_type"])
 
 
+def test_product_evidence_without_visible_date_is_retained_as_unsafe() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                }
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert len(result.evidence) == 1
+    assert result.evidence.iloc[0]["evidence_type"] == "product_revenue_exposure"
+    assert result.evidence.iloc[0]["evidence_date"] == ""
+    assert result.evidence.iloc[0]["as_of_safe"] is False
+    assert json.loads(result.evidence.iloc[0]["metadata_json"])["report_period"] == "2024-12-31"
+
+
+def test_product_evidence_with_future_visible_date_is_retained_as_unsafe() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "publish_date": "2025-01-20",
+                    "classify_type": "按产品分类",
+                    "item_name": "AI关键材料",
+                }
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert len(result.evidence) == 1
+    assert result.evidence.iloc[0]["evidence_date"] == "2025-01-20"
+    assert result.evidence.iloc[0]["as_of_safe"] is False
+
+
 def test_future_evidence_is_written_as_unsafe() -> None:
     result = build_evidence_backfill(
         candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
@@ -378,6 +440,28 @@ def test_future_evidence_is_written_as_unsafe() -> None:
 
     assert len(result.evidence) == 1
     assert result.evidence.iloc[0]["as_of_safe"] is False
+
+
+def test_source_gap_report_is_sorted_deterministically() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame(
+            [
+                {"asset_id": "CN:SH:688002", "trade_date": "2025-01-11"},
+                {"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"},
+            ]
+        ),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert result.source_gap_report["asset_id"].tolist() == ["CN:SH:688001", "CN:SH:688002"]
 
 
 def test_write_evidence_artifacts(tmp_path: Path) -> None:

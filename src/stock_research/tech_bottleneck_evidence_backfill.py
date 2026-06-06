@@ -49,6 +49,17 @@ SOURCE_GAP_COLUMNS = [
     "missing_evidence_types",
 ]
 
+VISIBLE_DATE_FIELDS = [
+    "publish_date",
+    "published_at",
+    "announcement_date",
+    "announce_date",
+    "disclosure_date",
+    "disclosed_at",
+    "release_date",
+    "released_at",
+]
+
 TEXT_EVIDENCE_GROUPS = {
     "bottleneck_keyword": BOTTLENECK_KEYWORDS,
     "capacity": CAPACITY_KEYWORDS,
@@ -456,9 +467,12 @@ def _is_product_business_row(row: dict[str, Any]) -> bool:
 def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run_id: str) -> dict[str, Any]:
     item_name = _safe_text(row.get("item_name"))
     report_period = _date_text(row.get("report_period"))
+    visible_date = _visible_date(row)
     metadata = {
         "classify_type": _safe_text(row.get("classify_type")),
         "item_name": item_name,
+        "report_period": report_period,
+        "visible_date_field": _visible_date_field(row),
         "revenue": row.get("revenue"),
         "revenue_ratio": row.get("revenue_ratio"),
         "gross_margin": row.get("gross_margin"),
@@ -469,7 +483,7 @@ def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run
         "stock_name": _safe_text(candidate.get("stock_name")),
         "candidate_trade_date": _date_text(candidate.get("trade_date")),
         "as_of_date": _date_text(candidate.get("as_of_date")),
-        "evidence_date": report_period,
+        "evidence_date": visible_date,
         "source_type": "finance.main_business_composition",
         "source_id": ":".join(
             part
@@ -488,12 +502,26 @@ def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run
         "source_confidence": "strong",
         "is_proxy": False,
         "as_of_safe": _is_as_of_safe(
-            evidence_date=report_period,
+            evidence_date=visible_date,
             as_of_date=candidate.get("as_of_date"),
             lookback_days=candidate.get("lookback_days"),
         ),
         "metadata_json": metadata,
     }
+
+
+def _visible_date(row: dict[str, Any]) -> str:
+    field_name = _visible_date_field(row)
+    if not field_name:
+        return ""
+    return _date_text(row.get(field_name))
+
+
+def _visible_date_field(row: dict[str, Any]) -> str:
+    for field_name in VISIBLE_DATE_FIELDS:
+        if _date_text(row.get(field_name)):
+            return field_name
+    return ""
 
 
 def _product_snippet(row: dict[str, Any]) -> str:
@@ -622,7 +650,16 @@ def _build_source_gap_report(candidates: pd.DataFrame, evidence: pd.DataFrame) -
                 "missing_evidence_types": ",".join(missing),
             }
         )
-    return pd.DataFrame(rows, columns=SOURCE_GAP_COLUMNS)
+    return _sort_source_gap_report(pd.DataFrame(rows, columns=SOURCE_GAP_COLUMNS))
+
+
+def _sort_source_gap_report(source_gap_report: pd.DataFrame) -> pd.DataFrame:
+    if source_gap_report.empty:
+        return source_gap_report
+    return source_gap_report.sort_values(
+        ["candidate_trade_date", "asset_id", "as_of_date"],
+        kind="mergesort",
+    ).reset_index(drop=True)
 
 
 def _group_evidence_by_candidate(evidence: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
