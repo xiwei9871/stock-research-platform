@@ -129,6 +129,7 @@ def _context_frames() -> dict[str, pd.DataFrame]:
                 {
                     "asset_id": "CN:SH:688001",
                     "report_period": "2026-03-31",
+                    "publish_date": "2026-04-30",
                     "classify_type": "按产品分类",
                     "item_name": "AI 光模块关键材料",
                     "revenue": 100,
@@ -138,6 +139,7 @@ def _context_frames() -> dict[str, pd.DataFrame]:
                 {
                     "asset_id": "CN:SH:688002",
                     "report_period": "2026-03-31",
+                    "publish_date": "2026-04-30",
                     "classify_type": "按产品分类",
                     "item_name": "高纯关键材料",
                     "revenue": 80,
@@ -147,6 +149,7 @@ def _context_frames() -> dict[str, pd.DataFrame]:
                 {
                     "asset_id": "CN:SH:688003",
                     "report_period": "2026-03-31",
+                    "publish_date": "2026-04-30",
                     "classify_type": "按产品分类",
                     "item_name": "通用电子材料",
                     "revenue": 60,
@@ -269,6 +272,7 @@ def _single_candidate_frames(
                 {
                     "asset_id": "CN:SH:688099",
                     "report_period": "2026-03-31",
+                    "publish_date": "2026-04-30",
                     "classify_type": "按产品分类",
                     "item_name": "通用电子材料",
                     "revenue": 100,
@@ -477,6 +481,67 @@ def test_undated_main_business_does_not_set_product_or_proxy_keyword_flags() -> 
     assert row["has_bottleneck_keywords"] is False
     assert "has_bottleneck_keywords" not in row["proxy_flags"]
     assert audit.details[0]["evidence_counts"]["main_business"] == 0
+
+
+def test_main_business_requires_visible_date_for_product_revenue_exposure() -> None:
+    frames = _single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。")
+    frames["main_business"] = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688099",
+                "report_period": "2025-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "AI 光模块关键材料",
+                "revenue": 100,
+                "revenue_ratio": 45,
+                "gross_margin": 35,
+            }
+        ]
+    )
+
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_product_revenue_exposure"] is False
+    assert audit.details[0]["evidence_counts"]["main_business"] == 0
+
+
+def test_main_business_visible_date_sets_product_revenue_exposure() -> None:
+    frames = _single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。")
+    frames["main_business"] = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688099",
+                "report_period": "2025-12-31",
+                "publish_date": "2026-04-30",
+                "classify_type": "按产品分类",
+                "item_name": "AI 光模块关键材料",
+                "revenue": 100,
+                "revenue_ratio": 45,
+                "gross_margin": 35,
+            }
+        ]
+    )
+
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_product_revenue_exposure"] is True
+    assert audit.details[0]["evidence_counts"]["main_business"] == 1
 
 
 def test_safe_strong_evidence_csv_sets_readiness_flags(tmp_path: Path) -> None:

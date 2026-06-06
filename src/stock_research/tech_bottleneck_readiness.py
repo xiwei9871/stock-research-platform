@@ -254,11 +254,12 @@ def build_readiness_audit(
                 lookups["main_business"].get(asset_id, []),
                 as_of_date=candidate_as_of_date,
                 lookback_days=candidate_lookback_days,
-                date_fields=["report_period"],
+                date_fields=["publish_date", "announcement_date", "disclosure_date", "report_date"],
                 require_date=True,
-                allow_before_window=True,
             )
-            if _safe_text(row.get("classify_type")) == "按产品分类" and _safe_text(row.get("item_name"))
+            if _safe_text(row.get("classify_type")) == "按产品分类"
+            and _safe_text(row.get("item_name"))
+            and _main_business_report_period_is_safe(row, as_of_date=candidate_as_of_date)
         ]
         report_rows = _filter_candidate_rows(
             lookups["reports"].get(asset_id, []),
@@ -940,6 +941,14 @@ def _matches_candidate_scoped_evidence(row: dict[str, Any], candidate: dict[str,
         return False
 
     return True
+
+
+def _main_business_report_period_is_safe(row: dict[str, Any], *, as_of_date: str) -> bool:
+    report_period = _date_timestamp(row.get("report_period"))
+    as_of_timestamp = _date_timestamp(as_of_date)
+    if report_period is None or as_of_timestamp is None:
+        return False
+    return report_period <= as_of_timestamp
 
 
 def _snippet(text: str, keyword: str) -> str:
