@@ -10,8 +10,10 @@ from stock_research.official_product_data_alignment_audit import (
     build_alignment_status_summary,
     normalize_alignment_candidates,
     build_alignment_audit,
+    run_official_product_data_alignment_audit_from_files,
     write_alignment_audit_artifacts,
 )
+from stock_research.cli import build_parser, main_for_args
 
 DESIGN_ALIGNMENT_AUDIT_COLUMNS = [
     "run_id",
@@ -797,3 +799,201 @@ def test_write_alignment_audit_artifacts_handles_empty_audit(tmp_path):
     assert result.future_disclosure_rows == 0
     assert result.manifest_query_error_rows == 0
     assert json.loads((tmp_path / "alignment_audit.json").read_text(encoding="utf-8")) == []
+
+
+def test_file_runner_reads_backfill_artifacts_and_writes_audit(tmp_path):
+    candidates_csv = tmp_path / "candidates.csv"
+    backfill_dir = tmp_path / "official_product_backfill"
+    output_dir = tmp_path / "alignment_audit"
+    backfill_dir.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "trade_date": "2025-05-09",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "candidate_trade_date": "2025-05-09",
+                "as_of_date": "2025-05-09",
+                "evidence_date": "2025-04-25",
+                "source_title": "2024年年度报告",
+                "source_id": "121999",
+                "source_url": "http://example.com/report.pdf",
+                "as_of_safe": "True",
+                "metadata_json": json.dumps(
+                    {
+                        "report_period": "2024-12-31",
+                        "publish_date": "2025-04-25",
+                        "source_document_id": "121999",
+                        "source_document_url": "http://example.com/report.pdf",
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ]
+    ).to_csv(backfill_dir / "product_evidence.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "2025-04-25",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+            }
+        ]
+    ).to_csv(backfill_dir / "disclosure_manifest.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "2025-04-25",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+                "product_main_business_rows": "3",
+                "manifest_rows": "1",
+                "join_status": "joinable",
+            }
+        ]
+    ).to_csv(backfill_dir / "product_join_diagnostics.csv", index=False)
+    pd.DataFrame(
+        columns=["asset_id", "ts_code", "error_type", "error_message"]
+    ).to_csv(backfill_dir / "manifest_query_errors.csv", index=False)
+
+    result = run_official_product_data_alignment_audit_from_files(
+        candidates_csv=candidates_csv,
+        official_product_backfill_dir=backfill_dir,
+        output_dir=output_dir,
+        run_id="unit",
+    )
+
+    assert result == OfficialProductDataAlignmentAuditResult(
+        output_dir=output_dir,
+        candidate_rows=1,
+        candidate_assets=1,
+        pit_safe_rows=1,
+        future_disclosure_rows=0,
+        manifest_query_error_rows=0,
+    )
+    audit = pd.read_csv(output_dir / "alignment_audit.csv")
+    assert audit["alignment_status"].tolist() == ["pit_safe_product_evidence_available"]
+    assert (output_dir / "alignment_audit.json").exists()
+    assert (output_dir / "alignment_status_summary.csv").exists()
+    assert (output_dir / "alignment_summary.md").exists()
+
+
+def test_file_runner_treats_missing_or_empty_optional_artifacts_as_empty(tmp_path):
+    candidates_csv = tmp_path / "candidates.csv"
+    backfill_dir = tmp_path / "official_product_backfill"
+    output_dir = tmp_path / "alignment_audit"
+    backfill_dir.mkdir()
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "trade_date": "2025-05-09",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    (backfill_dir / "product_evidence.csv").write_text("", encoding="utf-8")
+    (backfill_dir / "product_join_diagnostics.csv").write_text("", encoding="utf-8")
+    (backfill_dir / "manifest_query_errors.csv").write_text("", encoding="utf-8")
+
+    result = run_official_product_data_alignment_audit_from_files(
+        candidates_csv=candidates_csv,
+        official_product_backfill_dir=backfill_dir,
+        output_dir=output_dir,
+        run_id="unit",
+    )
+
+    assert result.candidate_rows == 1
+    assert result.pit_safe_rows == 0
+    audit = pd.read_csv(output_dir / "alignment_audit.csv")
+    assert audit["alignment_status"].tolist() == ["no_official_manifest_or_product_rows"]
+
+
+def test_cli_includes_official_product_data_alignment_audit_command():
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "tech-bottleneck-official-product-data-alignment-audit",
+            "--candidates-csv",
+            "candidates.csv",
+            "--official-product-backfill-dir",
+            "official_product_backfill",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "unit",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-official-product-data-alignment-audit"
+    assert args.candidates_csv == "candidates.csv"
+    assert args.official_product_backfill_dir == "official_product_backfill"
+    assert args.output_dir == "out"
+    assert args.run_id == "unit"
+
+
+def test_cli_dispatches_official_product_data_alignment_audit(monkeypatch, capsys):
+    calls = {}
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return OfficialProductDataAlignmentAuditResult(
+            output_dir=Path("out"),
+            candidate_rows=3,
+            candidate_assets=2,
+            pit_safe_rows=1,
+            future_disclosure_rows=1,
+            manifest_query_error_rows=1,
+        )
+
+    monkeypatch.setattr("stock_research.cli.run_official_product_data_alignment_audit_from_files", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-official-product-data-alignment-audit",
+            "--candidates-csv",
+            "candidates.csv",
+            "--official-product-backfill-dir",
+            "official_product_backfill",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "unit",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert calls["runner_kwargs"] == {
+        "candidates_csv": Path("candidates.csv"),
+        "official_product_backfill_dir": Path("official_product_backfill"),
+        "output_dir": Path("out"),
+        "run_id": "unit",
+    }
+    assert payload == {
+        "output_dir": "out",
+        "candidate_rows": 3,
+        "candidate_assets": 2,
+        "pit_safe_rows": 1,
+        "future_disclosure_rows": 1,
+        "manifest_query_error_rows": 1,
+    }

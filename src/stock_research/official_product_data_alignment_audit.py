@@ -288,6 +288,38 @@ def write_alignment_audit_artifacts(
     )
 
 
+def _read_csv_if_exists(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path, dtype=str)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
+
+
+def run_official_product_data_alignment_audit_from_files(
+    *,
+    candidates_csv: Path,
+    official_product_backfill_dir: Path,
+    output_dir: Path,
+    run_id: str,
+) -> OfficialProductDataAlignmentAuditResult:
+    candidates = pd.read_csv(candidates_csv, dtype=str)
+    product_evidence = _read_csv_if_exists(official_product_backfill_dir / "product_evidence.csv")
+    disclosure_manifest = _read_csv_if_exists(official_product_backfill_dir / "disclosure_manifest.csv")
+    product_join_diagnostics = _read_csv_if_exists(official_product_backfill_dir / "product_join_diagnostics.csv")
+    manifest_query_errors = _read_csv_if_exists(official_product_backfill_dir / "manifest_query_errors.csv")
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=product_evidence,
+        disclosure_manifest=disclosure_manifest,
+        product_join_diagnostics=product_join_diagnostics,
+        manifest_query_errors=manifest_query_errors,
+        run_id=run_id,
+    )
+    return write_alignment_audit_artifacts(audit=audit, output_dir=output_dir, run_id=run_id)
+
+
 def _normalize_product_evidence(product_evidence: pd.DataFrame) -> pd.DataFrame:
     columns = [
         "asset_id",

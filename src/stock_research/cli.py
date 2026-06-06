@@ -164,6 +164,9 @@ from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfi
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
 from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
 from stock_research.official_disclosure_product_backfill import run_official_disclosure_product_backfill
+from stock_research.official_product_data_alignment_audit import (
+    run_official_product_data_alignment_audit_from_files,
+)
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
@@ -1430,6 +1433,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run without opening DB connection; product rows come only from injected/default empty loader.",
     )
+
+    tech_bottleneck_product_alignment = subparsers.add_parser(
+        "tech-bottleneck-official-product-data-alignment-audit",
+        help="Audit PIT alignment of official product evidence for tech bottleneck candidates.",
+    )
+    tech_bottleneck_product_alignment.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_product_alignment.add_argument("--official-product-backfill-dir", required=True)
+    tech_bottleneck_product_alignment.add_argument("--output-dir", required=True)
+    tech_bottleneck_product_alignment.add_argument("--run-id", required=True)
 
     tech_bottleneck_parser = subparsers.add_parser(
         "tech-bottleneck-discovery",
@@ -4838,6 +4850,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 indent=2,
             )
         )
+    elif args.command == "tech-bottleneck-official-product-data-alignment-audit":
+        result = run_official_product_data_alignment_audit_from_files(
+            candidates_csv=Path(args.candidates_csv),
+            official_product_backfill_dir=Path(args.official_product_backfill_dir),
+            output_dir=Path(args.output_dir),
+            run_id=str(args.run_id),
+        )
+        payload = {
+            "output_dir": str(result.output_dir),
+            "candidate_rows": result.candidate_rows,
+            "candidate_assets": result.candidate_assets,
+            "pit_safe_rows": result.pit_safe_rows,
+            "future_disclosure_rows": result.future_disclosure_rows,
+            "manifest_query_error_rows": result.manifest_query_error_rows,
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-discovery":
         paths = run_tech_bottleneck_discovery_from_files(
             candidates_path=Path(args.candidates_csv),

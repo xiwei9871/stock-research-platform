@@ -67,6 +67,27 @@ Artifacts:
 
 PIT rule: product rows are safe only when `publish_date <= as_of_date` and `report_period <= as_of_date`.
 
+## Official Product Data Alignment Audit
+
+Run this after official product revenue backfill and before readiness or return testing. It decides whether official product evidence is aligned to the candidate as-of dates, or whether the test window/source backfill needs more work first.
+
+```bash
+stock-research tech-bottleneck-official-product-data-alignment-audit \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --official-product-backfill-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_backfill \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_alignment_audit \
+  --run-id pilot-top50-2025-official-product-alignment-audit
+```
+
+Outputs:
+
+- `alignment_audit.csv`: one row per candidate with PIT alignment status and recommended action.
+- `alignment_audit.json`: structured copy of the audit rows.
+- `alignment_status_summary.csv`: overall, month, status, and action counts.
+- `alignment_summary.md`: operator-readable status counts, reasons, and next-action guidance.
+
+Do not run return tests from a window where `pit_safe_product_evidence_available` is zero and the dominant action is `shift_test_window_later` or `backfill_historical_product_rows`. Use this audit to decide data alignment before readiness/return testing.
+
 ## Data Readiness Audit
 
 Run this before generating research packets. It checks whether an existing topN candidate pool has enough industry, product, report, bottleneck, capacity, customer, technical-barrier, catalyst, and invalidation evidence.
