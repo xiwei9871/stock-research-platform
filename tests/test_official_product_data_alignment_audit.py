@@ -152,3 +152,207 @@ def test_future_disclosure_evidence_remains_blocked():
     assert row["min_future_publish_date"] == pd.Timestamp("2025-04-25").date()
     assert row["days_until_first_future_disclosure"] == 7
     assert row["recommended_action"] == "shift_test_window_later"
+
+
+def test_joinable_future_report_period_is_separated_from_future_disclosure():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "candidate_trade_date": "2025-05-09",
+                "as_of_date": "2025-05-09",
+            }
+        ]
+    )
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2025-06-30",
+                "publish_date": "2025-08-28",
+                "disclosure_type": "semiannual",
+                "source_document_id": "122500",
+                "source_document_url": "http://example.com/2025h1.pdf",
+                "announcement_title": "2025年半年度报告",
+                "product_main_business_rows": 5,
+                "manifest_rows": 1,
+                "join_status": "joinable",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "joinable_but_report_period_future"
+    assert row["alignment_reason"] == "joinable official product period is after candidate as_of_date"
+    assert row["best_report_period"] == pd.Timestamp("2025-06-30").date()
+    assert row["best_publish_date"] == pd.Timestamp("2025-08-28").date()
+    assert row["best_product_main_business_rows"] == 5
+    assert row["best_manifest_rows"] == 1
+    assert row["joinable_report_periods_for_asset"] == 1
+    assert row["recommended_action"] == "ignore_future_period"
+
+
+def test_manifest_and_product_rows_without_matching_period_recommends_historical_backfill():
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "trade_date": "2025-05-09",
+            }
+        ]
+    )
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "2025-04-25",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+                "product_main_business_rows": 0,
+                "manifest_rows": 1,
+                "join_status": "missing_product_rows",
+            },
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "",
+                "publish_date": "",
+                "disclosure_type": "",
+                "source_document_id": "",
+                "source_document_url": "",
+                "announcement_title": "",
+                "product_main_business_rows": 4,
+                "manifest_rows": 0,
+                "join_status": "product_rows_without_manifest",
+            },
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "manifest_available_no_joinable_product_period"
+    assert row["manifest_rows_for_asset"] == 1
+    assert row["product_main_business_rows_for_asset"] == 4
+    assert row["recommended_action"] == "backfill_historical_product_rows"
+
+
+def test_manifest_without_product_rows_recommends_product_table_backfill():
+    candidates = pd.DataFrame([{"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "trade_date": "2025-05-09"}])
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "2025-04-25",
+                "disclosure_type": "annual",
+                "source_document_id": "121999",
+                "source_document_url": "http://example.com/report.pdf",
+                "announcement_title": "2024年年度报告",
+                "product_main_business_rows": 0,
+                "manifest_rows": 1,
+                "join_status": "missing_product_rows",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "manifest_available_no_product_rows"
+    assert row["recommended_action"] == "backfill_product_table_source"
+
+
+def test_product_rows_without_manifest_recommends_manifest_source_fix():
+    candidates = pd.DataFrame([{"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "trade_date": "2025-05-09"}])
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "publish_date": "",
+                "disclosure_type": "",
+                "source_document_id": "",
+                "source_document_url": "",
+                "announcement_title": "",
+                "product_main_business_rows": 3,
+                "manifest_rows": 0,
+                "join_status": "product_rows_without_manifest",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=diagnostics,
+        manifest_query_errors=pd.DataFrame(),
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "product_rows_available_no_official_manifest"
+    assert row["recommended_action"] == "extend_or_fix_manifest_source"
+
+
+def test_manifest_query_error_is_not_treated_as_genuine_no_data():
+    candidates = pd.DataFrame([{"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "trade_date": "2025-05-09"}])
+    errors = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "error_type": "TimeoutError",
+                "error_message": "timed out",
+            }
+        ]
+    )
+
+    audit = build_alignment_audit(
+        candidates=candidates,
+        product_evidence=pd.DataFrame(),
+        disclosure_manifest=pd.DataFrame(),
+        product_join_diagnostics=pd.DataFrame(),
+        manifest_query_errors=errors,
+        run_id="unit",
+    )
+
+    row = audit.iloc[0].to_dict()
+    assert row["alignment_status"] == "manifest_query_error"
+    assert row["manifest_query_error_count_for_asset"] == 1
+    assert row["recommended_action"] == "rerun_manifest_source"

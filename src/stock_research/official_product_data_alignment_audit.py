@@ -27,6 +27,14 @@ ALIGNMENT_AUDIT_COLUMNS = [
     "best_publish_date",
     "best_source_document_id",
     "best_source_document_url",
+    "best_disclosure_type",
+    "best_announcement_title",
+    "best_product_main_business_rows",
+    "best_manifest_rows",
+    "manifest_rows_for_asset",
+    "product_main_business_rows_for_asset",
+    "joinable_report_periods_for_asset",
+    "manifest_query_error_count_for_asset",
     "min_future_publish_date",
     "days_until_first_future_disclosure",
 ]
@@ -39,15 +47,29 @@ ALIGNMENT_STATUS_SUMMARY_COLUMNS = [
 
 RECOMMENDED_ACTION_BY_STATUS = {
     "pit_safe_product_evidence_available": "use_for_readiness",
+    "joinable_but_report_period_future": "ignore_future_period",
     "joinable_but_future_disclosure": "shift_test_window_later",
+    "manifest_available_no_joinable_product_period": "backfill_historical_product_rows",
+    "manifest_available_no_product_rows": "backfill_product_table_source",
+    "product_rows_available_no_official_manifest": "extend_or_fix_manifest_source",
+    "manifest_query_error": "rerun_manifest_source",
     "no_official_manifest_or_product_rows": "collect_official_product_data",
 }
 
 _ALIGNMENT_REASON_BY_STATUS = {
     "pit_safe_product_evidence_available": "candidate row has strict PIT-safe official product evidence",
     "joinable_but_future_disclosure": "official product evidence exists but publish_date is after candidate as_of_date",
+    "joinable_but_report_period_future": "joinable official product period is after candidate as_of_date",
+    "manifest_available_no_joinable_product_period": "official manifest and product rows exist, but no matching report period joins",
+    "manifest_available_no_product_rows": "official manifest rows exist, but product table rows are missing",
+    "product_rows_available_no_official_manifest": "product table rows exist without supported official manifest rows",
+    "manifest_query_error": "official manifest source query failed for candidate asset",
     "no_official_manifest_or_product_rows": "no official manifest or product evidence rows found for candidate",
 }
+
+_DIAGNOSTIC_FUTURE_DISCLOSURE_REASON = (
+    "official manifest and product rows join, but publish_date is after candidate as_of_date"
+)
 
 
 @dataclass(frozen=True)
@@ -97,10 +119,12 @@ def build_alignment_audit(
     manifest_query_errors: pd.DataFrame,
     run_id: str,
 ) -> pd.DataFrame:
-    del disclosure_manifest, product_join_diagnostics, manifest_query_errors
+    del disclosure_manifest
 
     normalized_candidates = normalize_alignment_candidates(candidates)
     evidence = _normalize_product_evidence(product_evidence)
+    diagnostics = _normalize_join_diagnostics(product_join_diagnostics)
+    errors = _normalize_manifest_query_errors(manifest_query_errors)
     evidence_by_candidate = {
         key: group.copy()
         for key, group in evidence.groupby(["asset_id", "candidate_trade_date", "as_of_date"], dropna=False)
@@ -126,29 +150,45 @@ def build_alignment_audit(
             (min_future_publish_date - candidate["as_of_date"]).days if min_future_publish_date is not None else None
         )
 
-        rows.append(
-            {
-                "run_id": _safe_text(run_id),
-                "asset_id": candidate["asset_id"],
-                "ts_code": candidate["ts_code"],
-                "stock_name": candidate["stock_name"],
-                "candidate_trade_date": candidate["candidate_trade_date"],
-                "as_of_date": candidate["as_of_date"],
-                "alignment_status": status,
-                "alignment_reason": _ALIGNMENT_REASON_BY_STATUS[status],
-                "recommended_action": RECOMMENDED_ACTION_BY_STATUS[status],
-                "has_pit_safe_product_evidence": bool(not safe_evidence.empty),
-                "product_evidence_count": int(len(candidate_evidence)),
-                "safe_product_evidence_count": int(len(safe_evidence)),
-                "unsafe_product_evidence_count": int(len(unsafe_evidence)),
-                "best_report_period": best_evidence.get("report_period"),
-                "best_publish_date": best_evidence.get("publish_date"),
-                "best_source_document_id": best_evidence.get("source_document_id"),
-                "best_source_document_url": best_evidence.get("source_document_url"),
-                "min_future_publish_date": min_future_publish_date,
-                "days_until_first_future_disclosure": days_until_first_future_disclosure,
-            }
-        )
+        row = {
+            "run_id": _safe_text(run_id),
+            "asset_id": candidate["asset_id"],
+            "ts_code": candidate["ts_code"],
+            "stock_name": candidate["stock_name"],
+            "candidate_trade_date": candidate["candidate_trade_date"],
+            "as_of_date": candidate["as_of_date"],
+            "alignment_status": status,
+            "alignment_reason": _ALIGNMENT_REASON_BY_STATUS[status],
+            "recommended_action": RECOMMENDED_ACTION_BY_STATUS[status],
+            "has_pit_safe_product_evidence": bool(not safe_evidence.empty),
+            "product_evidence_count": int(len(candidate_evidence)),
+            "safe_product_evidence_count": int(len(safe_evidence)),
+            "unsafe_product_evidence_count": int(len(unsafe_evidence)),
+            "best_report_period": best_evidence.get("report_period"),
+            "best_publish_date": best_evidence.get("publish_date"),
+            "best_source_document_id": best_evidence.get("source_document_id"),
+            "best_source_document_url": best_evidence.get("source_document_url"),
+            "best_disclosure_type": None,
+            "best_announcement_title": None,
+            "best_product_main_business_rows": None,
+            "best_manifest_rows": None,
+            "manifest_rows_for_asset": 0,
+            "product_main_business_rows_for_asset": 0,
+            "joinable_report_periods_for_asset": 0,
+            "manifest_query_error_count_for_asset": 0,
+            "min_future_publish_date": min_future_publish_date,
+            "days_until_first_future_disclosure": days_until_first_future_disclosure,
+        }
+
+        if candidate_evidence.empty:
+            candidate_diagnostics = _asset_rows(diagnostics, candidate)
+            candidate_errors = _asset_rows(errors, candidate)
+            _apply_asset_counts(row, candidate_diagnostics, candidate_errors)
+            _classify_from_join_diagnostics(row, candidate_diagnostics)
+            if row["alignment_status"] == "no_official_manifest_or_product_rows":
+                _classify_from_manifest_query_errors(row, candidate_errors)
+
+        rows.append(row)
 
     return pd.DataFrame(rows, columns=ALIGNMENT_AUDIT_COLUMNS)
 
@@ -211,6 +251,180 @@ def _normalize_product_evidence(product_evidence: pd.DataFrame) -> pd.DataFrame:
             "source_document_url",
         ]
     ].reset_index(drop=True)
+
+
+def _normalize_join_diagnostics(product_join_diagnostics: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "asset_id",
+        "ts_code",
+        "report_period",
+        "publish_date",
+        "disclosure_type",
+        "source_document_id",
+        "source_document_url",
+        "announcement_title",
+        "product_main_business_rows",
+        "manifest_rows",
+        "join_status",
+    ]
+    diagnostics = product_join_diagnostics.copy()
+    for column in columns:
+        if column not in diagnostics.columns:
+            diagnostics[column] = ""
+    if diagnostics.empty:
+        return pd.DataFrame(columns=columns)
+
+    diagnostics["asset_id"] = diagnostics["asset_id"].map(_safe_text)
+    diagnostics["ts_code"] = diagnostics.apply(
+        lambda row: _safe_text(row["ts_code"]) or _derive_ts_code(row["asset_id"]),
+        axis=1,
+    )
+    diagnostics["report_period"] = diagnostics["report_period"].map(_date_value)
+    diagnostics["publish_date"] = diagnostics["publish_date"].map(_date_value)
+    diagnostics["disclosure_type"] = diagnostics["disclosure_type"].map(_safe_text)
+    diagnostics["source_document_id"] = diagnostics["source_document_id"].map(_safe_text)
+    diagnostics["source_document_url"] = diagnostics["source_document_url"].map(_safe_text)
+    diagnostics["announcement_title"] = diagnostics["announcement_title"].map(_safe_text)
+    diagnostics["product_main_business_rows"] = diagnostics["product_main_business_rows"].map(_int_value)
+    diagnostics["manifest_rows"] = diagnostics["manifest_rows"].map(_int_value)
+    diagnostics["join_status"] = diagnostics["join_status"].map(_safe_text)
+    return diagnostics[columns].reset_index(drop=True)
+
+
+def _normalize_manifest_query_errors(manifest_query_errors: pd.DataFrame) -> pd.DataFrame:
+    columns = ["asset_id", "ts_code", "error_type", "error_message"]
+    errors = manifest_query_errors.copy()
+    for column in columns:
+        if column not in errors.columns:
+            errors[column] = ""
+    if errors.empty:
+        return pd.DataFrame(columns=columns)
+
+    errors["asset_id"] = errors["asset_id"].map(_safe_text)
+    errors["ts_code"] = errors.apply(
+        lambda row: _safe_text(row["ts_code"]) or _derive_ts_code(row["asset_id"]),
+        axis=1,
+    )
+    errors["error_type"] = errors["error_type"].map(_safe_text)
+    errors["error_message"] = errors["error_message"].map(_safe_text)
+    return errors[columns].reset_index(drop=True)
+
+
+def _asset_rows(frame: pd.DataFrame, candidate: dict[str, Any]) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
+    if "asset_id" in frame.columns and candidate.get("asset_id"):
+        matched = frame[frame["asset_id"].eq(candidate["asset_id"])].copy()
+        if not matched.empty:
+            return matched
+    if "ts_code" in frame.columns and candidate.get("ts_code"):
+        return frame[frame["ts_code"].eq(candidate["ts_code"])].copy()
+    return frame.iloc[0:0].copy()
+
+
+def _apply_asset_counts(row: dict[str, Any], diagnostics: pd.DataFrame, errors: pd.DataFrame) -> None:
+    row["manifest_rows_for_asset"] = int(diagnostics["manifest_rows"].sum()) if "manifest_rows" in diagnostics else 0
+    row["product_main_business_rows_for_asset"] = (
+        int(diagnostics["product_main_business_rows"].sum()) if "product_main_business_rows" in diagnostics else 0
+    )
+    row["joinable_report_periods_for_asset"] = _joinable_report_period_count(diagnostics)
+    row["manifest_query_error_count_for_asset"] = int(len(errors))
+
+
+def _apply_diagnostic_details(row: dict[str, Any], diagnostic_row: pd.Series) -> None:
+    row["best_report_period"] = diagnostic_row.get("report_period")
+    row["best_publish_date"] = diagnostic_row.get("publish_date")
+    row["best_source_document_id"] = diagnostic_row.get("source_document_id")
+    row["best_source_document_url"] = diagnostic_row.get("source_document_url")
+    row["best_disclosure_type"] = diagnostic_row.get("disclosure_type")
+    row["best_announcement_title"] = diagnostic_row.get("announcement_title")
+    row["best_product_main_business_rows"] = diagnostic_row.get("product_main_business_rows")
+    row["best_manifest_rows"] = diagnostic_row.get("manifest_rows")
+
+
+def _classify_from_join_diagnostics(row: dict[str, Any], diagnostics: pd.DataFrame) -> None:
+    if diagnostics.empty:
+        return
+
+    joinable = diagnostics[diagnostics["join_status"].eq("joinable")].copy()
+    if not joinable.empty:
+        future_period = joinable[joinable["report_period"].map(lambda value: _date_after(value, row["as_of_date"]))]
+        if not future_period.empty:
+            _set_alignment_status(row, "joinable_but_report_period_future")
+            _apply_diagnostic_details(row, _best_diagnostic_row(future_period))
+            return
+
+        future_disclosure = joinable[
+            joinable["report_period"].map(lambda value: _date_on_or_before(value, row["as_of_date"]))
+            & joinable["publish_date"].map(lambda value: _date_after(value, row["as_of_date"]))
+        ]
+        if not future_disclosure.empty:
+            _set_alignment_status(
+                row,
+                "joinable_but_future_disclosure",
+                reason=_DIAGNOSTIC_FUTURE_DISCLOSURE_REASON,
+            )
+            diagnostic_row = _best_diagnostic_row(future_disclosure)
+            _apply_diagnostic_details(row, diagnostic_row)
+            min_future_publish_date = _min_date(future_disclosure["publish_date"].tolist())
+            row["min_future_publish_date"] = min_future_publish_date
+            row["days_until_first_future_disclosure"] = (
+                (min_future_publish_date - row["as_of_date"]).days if min_future_publish_date is not None else None
+            )
+            return
+
+    manifest_rows = int(diagnostics["manifest_rows"].sum())
+    product_rows = int(diagnostics["product_main_business_rows"].sum())
+    if manifest_rows > 0 and product_rows > 0:
+        _set_alignment_status(row, "manifest_available_no_joinable_product_period")
+        _apply_diagnostic_details(row, _best_diagnostic_row(diagnostics))
+        return
+    if manifest_rows > 0:
+        _set_alignment_status(row, "manifest_available_no_product_rows")
+        _apply_diagnostic_details(row, _best_diagnostic_row(diagnostics))
+        return
+    if product_rows > 0:
+        _set_alignment_status(row, "product_rows_available_no_official_manifest")
+        _apply_diagnostic_details(row, _best_diagnostic_row(diagnostics))
+
+
+def _classify_from_manifest_query_errors(row: dict[str, Any], errors: pd.DataFrame) -> None:
+    if not errors.empty:
+        _set_alignment_status(row, "manifest_query_error")
+
+
+def _set_alignment_status(row: dict[str, Any], status: str, *, reason: str | None = None) -> None:
+    row["alignment_status"] = status
+    row["alignment_reason"] = reason or _ALIGNMENT_REASON_BY_STATUS[status]
+    row["recommended_action"] = RECOMMENDED_ACTION_BY_STATUS[status]
+
+
+def _best_diagnostic_row(diagnostics: pd.DataFrame) -> pd.Series:
+    sortable = diagnostics.copy()
+    sortable["_publish_sort"] = pd.to_datetime(sortable["publish_date"], errors="coerce")
+    sortable["_report_sort"] = pd.to_datetime(sortable["report_period"], errors="coerce")
+    sortable = sortable.sort_values(["_publish_sort", "_report_sort"], ascending=[False, False], kind="stable")
+    return sortable.iloc[0]
+
+
+def _joinable_report_period_count(diagnostics: pd.DataFrame) -> int:
+    if diagnostics.empty:
+        return 0
+    joinable = diagnostics[diagnostics["join_status"].eq("joinable")]
+    return int(joinable["report_period"].dropna().nunique())
+
+
+def _date_after(value: object, reference: dt.date) -> bool:
+    return isinstance(value, dt.date) and value > reference
+
+
+def _date_on_or_before(value: object, reference: dt.date) -> bool:
+    return isinstance(value, dt.date) and value <= reference
+
+
+def _min_date(values: list[object]) -> dt.date | None:
+    dates = [value for value in values if isinstance(value, dt.date)]
+    return min(dates) if dates else None
 
 
 def _alignment_status(*, candidate_evidence: pd.DataFrame, safe_evidence: pd.DataFrame) -> str:
@@ -303,3 +517,12 @@ def _bool_value(value: object) -> bool:
         return bool(value)
     text = _safe_text(value).lower()
     return text in {"1", "true", "t", "yes", "y"}
+
+
+def _int_value(value: object) -> int:
+    if value is None or value is pd.NA:
+        return 0
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return 0
+    return int(number)
