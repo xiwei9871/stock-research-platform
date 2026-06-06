@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import re
 from typing import Any, Iterable
+from urllib import parse, request
 
 import pandas as pd
 
@@ -19,6 +22,96 @@ PRODUCT_DISCLOSURE_COLUMNS = [
     "disclosure_type",
     "is_supported_product_disclosure",
 ]
+CNINFO_QUERY_URL = "http://www.cninfo.com.cn/new/hisAnnouncement/query"
+CNINFO_STATIC_BASE_URL = "http://static.cninfo.com.cn/"
+CNINFO_CATEGORIES = ("category_ndbg_szsh", "category_bndbg_szsh")
+
+
+class CninfoDisclosureIndexClient:
+    def __init__(self, opener=None, timeout_seconds: int = 20):
+        self._opener = opener or request.urlopen
+        self._timeout_seconds = timeout_seconds
+
+    def query_asset(
+        self,
+        asset_id: object,
+        ts_code: object,
+        start_date: object,
+        end_date: object,
+    ) -> pd.DataFrame:
+        stock_code, exchange = _exchange_suffix(ts_code)
+        column = "sse" if exchange == "SH" else "szse"
+        plate = exchange.lower()
+        rows = []
+
+        for category in CNINFO_CATEGORIES:
+            response_payload = self._query_category(
+                stock_code=stock_code,
+                exchange=exchange,
+                column=column,
+                plate=plate,
+                category=category,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            for announcement in response_payload.get("announcements", []) or []:
+                publish_date = _announcement_time_to_date(announcement.get("announcementTime"))
+                title = _safe_text(announcement.get("announcementTitle"))
+                rows.append(
+                    {
+                        "asset_id": asset_id,
+                        "ts_code": ts_code,
+                        "publish_date": publish_date,
+                        "report_period": _infer_report_period_from_title(title, publish_date),
+                        "announcement_title": title,
+                        "source_document_id": announcement.get("announcementId"),
+                        "source_document_url": _cninfo_static_url(announcement.get("adjunctUrl")),
+                    }
+                )
+
+        manifest = normalize_disclosure_manifest(rows)
+        manifest = manifest[manifest["is_supported_product_disclosure"]].copy()
+        return manifest.drop_duplicates(
+            ["asset_id", "ts_code", "report_period", "source_document_id"],
+            keep="first",
+        ).reset_index(drop=True)
+
+    def _query_category(
+        self,
+        *,
+        stock_code: str,
+        exchange: str,
+        column: str,
+        plate: str,
+        category: str,
+        start_date: object,
+        end_date: object,
+    ) -> dict[str, Any]:
+        body = parse.urlencode(
+            {
+                "stock": f"{stock_code},{exchange}",
+                "tabName": "fulltext",
+                "pageSize": "30",
+                "pageNum": "1",
+                "column": column,
+                "category": category,
+                "plate": plate,
+                "seDate": f"{_safe_text(start_date)}~{_safe_text(end_date)}",
+                "isHLtitle": "true",
+            }
+        ).encode("utf-8")
+        cninfo_request = request.Request(
+            CNINFO_QUERY_URL,
+            data=body,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Referer": "http://www.cninfo.com.cn/new/commonUrl/pageOfSearch",
+            },
+            method="POST",
+        )
+        with self._opener(cninfo_request, timeout=self._timeout_seconds) as response:
+            return json.loads(response.read().decode("utf-8"))
 
 
 def is_supported_product_disclosure(title: object) -> bool:
@@ -214,6 +307,43 @@ def _disclosure_type(title: object) -> str:
     if "年年度报告" in text or "年度报告" in text:
         return "annual"
     return "other"
+
+
+def _exchange_suffix(ts_code: object) -> tuple[str, str]:
+    text = _safe_text(ts_code)
+    stock_code, _, exchange = text.partition(".")
+    return stock_code, exchange.upper()
+
+
+def _announcement_time_to_date(value: object) -> dt.date | None:
+    if isinstance(value, (int, float)) and not pd.isna(value):
+        return dt.datetime.fromtimestamp(value / 1000, tz=dt.timezone(dt.timedelta(hours=8))).date()
+    return _date_value(value)
+
+
+def _infer_report_period_from_title(title: object, publish_date: object) -> dt.date | None:
+    del publish_date
+    text = _safe_text(title)
+    match = re.search(r"(20\d{2})", text)
+    if not match:
+        return None
+
+    year = int(match.group(1))
+    disclosure_type = _disclosure_type(text)
+    if disclosure_type == "annual":
+        return dt.date(year, 12, 31)
+    if disclosure_type == "semiannual":
+        return dt.date(year, 6, 30)
+    return None
+
+
+def _cninfo_static_url(adjunct_url: object) -> str:
+    text = _safe_text(adjunct_url)
+    if not text:
+        return ""
+    if text.startswith(("http://", "https://")):
+        return text
+    return parse.urljoin(CNINFO_STATIC_BASE_URL, text.lstrip("/"))
 
 
 def _date_value(value: object) -> dt.date | None:

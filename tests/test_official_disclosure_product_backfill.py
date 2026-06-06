@@ -1,12 +1,84 @@
 import json
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
 from stock_research.official_disclosure_product_backfill import (
+    CninfoDisclosureIndexClient,
     build_product_evidence_rows,
     is_supported_product_disclosure,
     normalize_disclosure_manifest,
 )
+
+
+class FakeResponse:
+    def __init__(self, payload: dict):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return json.dumps(self.payload, ensure_ascii=False).encode("utf-8")
+
+
+def test_cninfo_client_parses_supported_announcements():
+    requests = []
+
+    def opener(request, timeout):
+        requests.append(request)
+        parsed = urlparse(request.full_url)
+        body = parse_qs(request.data.decode("utf-8"))
+        assert parsed.path.endswith("/new/hisAnnouncement/query")
+        assert body["stock"] == ["000001,SZ"]
+        return FakeResponse(
+            {
+                "announcements": [
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": 1745510400000,
+                        "announcementId": "121999",
+                        "adjunctUrl": "finalpage/2025-04-25/121999.PDF",
+                        "secCode": "000001",
+                        "secName": "示例公司",
+                    },
+                    {
+                        "announcementTitle": "2024年年度报告摘要",
+                        "announcementTime": 1745510400000,
+                        "announcementId": "122000",
+                        "adjunctUrl": "finalpage/2025-04-25/122000.PDF",
+                        "secCode": "000001",
+                        "secName": "示例公司",
+                    },
+                ]
+            }
+        )
+
+    client = CninfoDisclosureIndexClient(opener=opener)
+    manifest = client.query_asset(
+        asset_id=1,
+        ts_code="000001.SZ",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert len(requests) == 2
+    assert manifest.to_dict("records") == [
+        {
+            "asset_id": "1",
+            "ts_code": "000001.SZ",
+            "publish_date": pd.Timestamp("2025-04-25").date(),
+            "report_period": pd.Timestamp("2024-12-31").date(),
+            "announcement_title": "2024年年度报告",
+            "source_document_id": "121999",
+            "source_document_url": "http://static.cninfo.com.cn/finalpage/2025-04-25/121999.PDF",
+            "disclosure_type": "annual",
+            "is_supported_product_disclosure": True,
+        }
+    ]
 
 
 def test_supported_product_disclosure_title_filter():
