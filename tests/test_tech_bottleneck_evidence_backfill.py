@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+from decimal import Decimal
 import json
 
 import pandas as pd
@@ -137,6 +139,28 @@ def test_normalize_evidence_rows_serializes_pandas_and_numpy_metadata_values() -
         "date": "2025-01-01",
         "count": 45,
         "ratio": 12.5,
+    }
+
+
+def test_normalize_evidence_rows_serializes_common_db_metadata_scalars() -> None:
+    evidence = normalize_evidence_rows(
+        pd.DataFrame(
+            [
+                {
+                    "metadata_json": {
+                        "date": dt.date(2025, 1, 1),
+                        "datetime": dt.datetime(2025, 1, 1, 9, 30, 15),
+                        "decimal": Decimal("45.5"),
+                    }
+                }
+            ]
+        )
+    )
+
+    assert json.loads(evidence.iloc[0]["metadata_json"]) == {
+        "date": "2025-01-01",
+        "datetime": "2025-01-01T09:30:15",
+        "decimal": 45.5,
     }
 
 

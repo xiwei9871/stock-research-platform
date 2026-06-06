@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+from decimal import Decimal
 import json
 from typing import Any
 
@@ -217,6 +219,10 @@ def _json_safe_value(value: Any) -> Any:
         return [_json_safe_value(item) for item in value]
     if isinstance(value, pd.Timestamp):
         return value.strftime("%Y-%m-%d")
+    if isinstance(value, (dt.datetime, dt.date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value) if value.is_finite() else str(value)
     if value is None:
         return None
     try:
