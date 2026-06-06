@@ -1425,6 +1425,11 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_product.add_argument("--start-date", required=True)
     tech_bottleneck_product.add_argument("--end-date", required=True)
     tech_bottleneck_product.add_argument("--service", default="stock_research")
+    tech_bottleneck_product.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Run without opening DB connection; product rows come only from injected/default empty loader.",
+    )
 
     tech_bottleneck_parser = subparsers.add_parser(
         "tech-bottleneck-discovery",
@@ -4798,26 +4803,37 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-official-disclosure-product-backfill":
-        with connect(args.service) as conn:
+        if args.no_db:
             result = run_official_disclosure_product_backfill(
                 candidates_csv=Path(args.candidates_csv),
                 output_dir=Path(args.output_dir),
                 run_id=str(args.run_id),
                 start_date=args.start_date,
                 end_date=args.end_date,
-                conn=conn,
+                conn=None,
             )
+        else:
+            with connect(args.service) as conn:
+                result = run_official_disclosure_product_backfill(
+                    candidates_csv=Path(args.candidates_csv),
+                    output_dir=Path(args.output_dir),
+                    run_id=str(args.run_id),
+                    start_date=args.start_date,
+                    end_date=args.end_date,
+                    conn=conn,
+                )
+        payload = {
+            "output_dir": str(result.output_dir),
+            "candidate_rows": result.candidate_rows,
+            "candidate_assets": result.candidate_assets,
+            "manifest_rows": result.manifest_rows,
+            "evidence_rows": result.evidence_rows,
+            "safe_evidence_rows": result.safe_evidence_rows,
+            "assets_with_safe_product_evidence": result.assets_with_safe_product_evidence,
+        }
         print(
             json.dumps(
-                {
-                    "output_dir": str(result.output_dir),
-                    "candidate_rows": result.candidate_rows,
-                    "candidate_assets": result.candidate_assets,
-                    "manifest_rows": result.manifest_rows,
-                    "evidence_rows": result.evidence_rows,
-                    "safe_evidence_rows": result.safe_evidence_rows,
-                    "assets_with_safe_product_evidence": result.assets_with_safe_product_evidence,
-                },
+                payload,
                 ensure_ascii=False,
                 indent=2,
             )

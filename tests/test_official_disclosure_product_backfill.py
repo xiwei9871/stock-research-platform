@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse
 import pandas as pd
 import pytest
 
-from stock_research.cli import build_parser
+from stock_research.cli import build_parser, main_for_args
 from stock_research.official_disclosure_product_backfill import (
     CninfoDisclosureIndexClient,
     OfficialDisclosureProductBackfillResult,
@@ -39,6 +39,120 @@ def test_cli_includes_official_disclosure_product_backfill_command():
     assert args.candidates_csv == "candidates.csv"
     assert args.output_dir == "out"
     assert args.run_id == "unit"
+
+
+def test_cli_dispatches_official_disclosure_product_backfill_with_db(monkeypatch, capsys):
+    calls = {}
+    fake_conn = object()
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            calls["connect_entered"] = True
+            return fake_conn
+
+        def __exit__(self, exc_type, exc, tb):
+            calls["connect_exited"] = True
+            return False
+
+    def fake_connect(service):
+        calls["service"] = service
+        return FakeConnectionContext()
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return OfficialDisclosureProductBackfillResult(
+            output_dir=Path("out"),
+            candidate_rows=3,
+            candidate_assets=2,
+            manifest_rows=4,
+            evidence_rows=5,
+            safe_evidence_rows=6,
+            assets_with_safe_product_evidence=2,
+        )
+
+    monkeypatch.setattr("stock_research.cli.connect", fake_connect)
+    monkeypatch.setattr("stock_research.cli.run_official_disclosure_product_backfill", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-official-disclosure-product-backfill",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "unit",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-12-31",
+            "--service",
+            "stock_research_test",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert calls["service"] == "stock_research_test"
+    assert calls["connect_entered"] is True
+    assert calls["connect_exited"] is True
+    assert calls["runner_kwargs"] == {
+        "candidates_csv": Path("candidates.csv"),
+        "output_dir": Path("out"),
+        "run_id": "unit",
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31",
+        "conn": fake_conn,
+    }
+    assert payload["output_dir"] == "out"
+    assert payload["evidence_rows"] == 5
+    assert payload["safe_evidence_rows"] == 6
+    assert payload["assets_with_safe_product_evidence"] == 2
+
+
+def test_cli_dispatches_official_disclosure_product_backfill_without_db(monkeypatch, capsys):
+    calls = {}
+
+    def fake_connect(service):
+        raise AssertionError("connect should not be called with --no-db")
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return OfficialDisclosureProductBackfillResult(
+            output_dir=Path("out"),
+            candidate_rows=1,
+            candidate_assets=1,
+            manifest_rows=2,
+            evidence_rows=0,
+            safe_evidence_rows=0,
+            assets_with_safe_product_evidence=0,
+        )
+
+    monkeypatch.setattr("stock_research.cli.connect", fake_connect)
+    monkeypatch.setattr("stock_research.cli.run_official_disclosure_product_backfill", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-official-disclosure-product-backfill",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "unit",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-12-31",
+            "--no-db",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert calls["runner_kwargs"]["conn"] is None
+    assert payload["output_dir"] == "out"
+    assert payload["evidence_rows"] == 0
 
 
 class FakeResponse:

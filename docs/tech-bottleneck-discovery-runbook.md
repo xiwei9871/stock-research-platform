@@ -42,6 +42,8 @@ stock-research tech-bottleneck-official-disclosure-product-backfill \
   --service stock_research
 ```
 
+Use `--no-db` when the PostgreSQL service is unavailable and you still need CNINFO manifest, query error, source gap, and coverage artifacts. In that mode, product revenue rows are empty unless injected by a caller outside the CLI.
+
 Then rerun readiness with the generated product evidence:
 
 ```bash
