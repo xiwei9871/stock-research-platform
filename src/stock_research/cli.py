@@ -163,6 +163,7 @@ from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discove
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
 from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
+from stock_research.official_disclosure_product_backfill import run_official_disclosure_product_backfill
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
     write_p2_artifact_rollup,
@@ -1413,6 +1414,17 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_evidence.add_argument("--end-date")
     tech_bottleneck_evidence.add_argument("--lookback-days", type=int, default=365)
     tech_bottleneck_evidence.add_argument("--service", default="stock_research")
+
+    tech_bottleneck_product = subparsers.add_parser(
+        "tech-bottleneck-official-disclosure-product-backfill",
+        help="Backfill official disclosure product revenue evidence for tech bottleneck candidates.",
+    )
+    tech_bottleneck_product.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_product.add_argument("--output-dir", required=True)
+    tech_bottleneck_product.add_argument("--run-id", required=True)
+    tech_bottleneck_product.add_argument("--start-date", required=True)
+    tech_bottleneck_product.add_argument("--end-date", required=True)
+    tech_bottleneck_product.add_argument("--service", default="stock_research")
 
     tech_bottleneck_parser = subparsers.add_parser(
         "tech-bottleneck-discovery",
@@ -4785,6 +4797,31 @@ def main_for_args(argv: list[str] | None = None) -> None:
             service=args.service,
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-official-disclosure-product-backfill":
+        with connect(args.service) as conn:
+            result = run_official_disclosure_product_backfill(
+                candidates_csv=Path(args.candidates_csv),
+                output_dir=Path(args.output_dir),
+                run_id=str(args.run_id),
+                start_date=args.start_date,
+                end_date=args.end_date,
+                conn=conn,
+            )
+        print(
+            json.dumps(
+                {
+                    "output_dir": str(result.output_dir),
+                    "candidate_rows": result.candidate_rows,
+                    "candidate_assets": result.candidate_assets,
+                    "manifest_rows": result.manifest_rows,
+                    "evidence_rows": result.evidence_rows,
+                    "safe_evidence_rows": result.safe_evidence_rows,
+                    "assets_with_safe_product_evidence": result.assets_with_safe_product_evidence,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     elif args.command == "tech-bottleneck-discovery":
         paths = run_tech_bottleneck_discovery_from_files(
             candidates_path=Path(args.candidates_csv),

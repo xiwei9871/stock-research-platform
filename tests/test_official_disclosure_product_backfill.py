@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 import pandas as pd
 import pytest
 
+from stock_research.cli import build_parser
 from stock_research.official_disclosure_product_backfill import (
     CninfoDisclosureIndexClient,
     OfficialDisclosureProductBackfillResult,
@@ -14,6 +15,30 @@ from stock_research.official_disclosure_product_backfill import (
     normalize_disclosure_manifest,
     run_official_disclosure_product_backfill,
 )
+
+
+def test_cli_includes_official_disclosure_product_backfill_command():
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "tech-bottleneck-official-disclosure-product-backfill",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "unit",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-12-31",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-official-disclosure-product-backfill"
+    assert args.candidates_csv == "candidates.csv"
+    assert args.output_dir == "out"
+    assert args.run_id == "unit"
 
 
 class FakeResponse:

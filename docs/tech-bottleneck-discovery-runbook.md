@@ -28,6 +28,42 @@ stock-research tech-bottleneck-data-readiness-audit \
   --service stock_research
 ```
 
+## Official Product Revenue Backfill
+
+Run this when readiness shows product revenue exposure gaps and official disclosure product rows are needed for an existing candidate pool.
+
+```bash
+stock-research tech-bottleneck-official-disclosure-product-backfill \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_backfill \
+  --run-id pilot-top50-2025-official-product-backfill \
+  --start-date 2025-01-01 \
+  --end-date 2025-12-31 \
+  --service stock_research
+```
+
+Then rerun readiness with the generated product evidence:
+
+```bash
+stock-research tech-bottleneck-data-readiness-audit \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --evidence-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_backfill/product_evidence.csv \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/readiness_after_official_product_backfill \
+  --run-id pilot-top50-2025-readiness-after-official-product-backfill \
+  --lookback-days 365 \
+  --service stock_research
+```
+
+Artifacts:
+
+- `product_evidence.csv`
+- `disclosure_manifest.csv`
+- `manifest_query_errors.csv`
+- `source_gap_report.csv`
+- `coverage_summary.md`
+
+PIT rule: product rows are safe only when `publish_date <= as_of_date` and `report_period <= as_of_date`.
+
 ## Data Readiness Audit
 
 Run this before generating research packets. It checks whether an existing topN candidate pool has enough industry, product, report, bottleneck, capacity, customer, technical-barrier, catalyst, and invalidation evidence.
