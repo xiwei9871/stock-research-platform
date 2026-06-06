@@ -222,7 +222,7 @@ def test_malformed_joinable_diagnostic_is_not_no_joinable_period():
     assert row["alignment_status"] != "manifest_available_no_joinable_product_period"
     assert row["alignment_status"] == "no_official_manifest_or_product_rows"
     assert row["alignment_reason"] == "joinable diagnostics exist but report_period or publish_date is unusable"
-    assert row["recommended_action"] == "collect_official_product_data"
+    assert row["recommended_action"] == "investigate_source_coverage"
     assert row["joinable_report_periods_for_asset"] == 0
 
 

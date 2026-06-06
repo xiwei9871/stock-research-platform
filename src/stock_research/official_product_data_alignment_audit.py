@@ -53,7 +53,7 @@ RECOMMENDED_ACTION_BY_STATUS = {
     "manifest_available_no_product_rows": "backfill_product_table_source",
     "product_rows_available_no_official_manifest": "extend_or_fix_manifest_source",
     "manifest_query_error": "rerun_manifest_source",
-    "no_official_manifest_or_product_rows": "collect_official_product_data",
+    "no_official_manifest_or_product_rows": "investigate_source_coverage",
 }
 
 _ALIGNMENT_REASON_BY_STATUS = {
