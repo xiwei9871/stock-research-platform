@@ -16,6 +16,8 @@ The first implementation slice standardizes two method-layer artifacts:
   date, source, and signal name.
 - Factor evaluation card: one standardized review card for an evaluated factor,
   sample, universe, label, IC, quantile returns, turnover, and warnings.
+- Attribution card: one comparable diagnosis for a success, failure, miss,
+  drawdown, replacement, coverage gap, regime mismatch, or data-quality gap.
 
 These artifacts are review-only. They do not create broker, order, account,
 cash, position, fill, or execution state.
@@ -287,6 +289,80 @@ card = build_factor_evaluation_card(
 markdown = render_factor_evaluation_card_markdown(card)
 ```
 
+## Attribution Framework
+
+Use `AttributionCard` when a review needs to explain why a case worked, failed,
+missed, or degraded. Attribution cards are comparable review artifacts; they do
+not change strategy rules by themselves.
+
+Required fields:
+
+- `case_id`
+- `asset_id`
+- `ts_code`
+- `trade_date`
+- `strategy_context`
+- `failure_or_success_type`
+- `primary_cause`
+- `secondary_causes`
+- `evidence`
+- `counterfactual`
+- `preventability`
+- `recommended_rule_change`
+- `confidence`
+
+Allowed cause categories:
+
+- `bad_buy`
+- `missed_winner`
+- `sell_too_early`
+- `drawdown_control`
+- `replacement_failure`
+- `research_coverage_gap`
+- `industry_regime_mismatch`
+- `market_regime_mismatch`
+- `data_quality_gap`
+
+Every card must include evidence and a counterfactual. This prevents attribution
+from becoming a label-only postmortem.
+
+Example:
+
+```python
+from stock_research.research_infra.attribution_cards import (
+    AttributionCard,
+    render_attribution_card_markdown,
+)
+
+card = AttributionCard(
+    case_id="case:mid-trend:000001.SZ:2026-06-06",
+    asset_id="asset:000001.SZ",
+    ts_code="000001.SZ",
+    trade_date="2026-06-06",
+    strategy_context="mid_trend_review",
+    failure_or_success_type="failure",
+    primary_cause="research_coverage_gap",
+    secondary_causes=["market_regime_mismatch"],
+    evidence={
+        "research_support_score": None,
+        "missingness_reason": "no_fresh_report",
+    },
+    counterfactual="Would require fresh coverage before promotion.",
+    preventability="preventable",
+    recommended_rule_change="Block promotion when coverage_freshness_score is missing.",
+    confidence="medium",
+)
+
+markdown = render_attribution_card_markdown(card)
+```
+
+Feedback loop:
+
+- Coverage-gap cards should create feature registry or research signal follow-ups.
+- Regime-mismatch cards should create experiment registry follow-ups.
+- Data-quality-gap cards should create data-quality remediation tasks.
+- Recommended rule changes require a separate experiment before adoption.
+
 ## Difference
 
 A run evidence bundle describes one concrete execution. An experiment registry
@@ -303,6 +379,9 @@ availability. It does not decide whether the signal is useful.
 A factor evaluation card describes how an already-evaluated factor performed
 under a stated sample, universe, and label. It does not compute the factor.
 
+An attribution card describes why a reviewed case succeeded or failed under a
+specific context. It does not approve rule changes or production promotion.
+
 ## First-Slice Acceptance
 
 - Existing `write_run_card()` callers remain compatible.
@@ -316,3 +395,4 @@ under a stated sample, universe, and label. It does not compute the factor.
 - Research signal records reject future availability timestamps by default.
 - Missing research coverage is represented separately from negative evidence.
 - Factor cards require sample, universe, and label metadata before review.
+- Attribution cards require evidence and counterfactuals before review.
