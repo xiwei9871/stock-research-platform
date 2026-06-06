@@ -10,8 +10,10 @@ The first implementation slice standardizes two method-layer artifacts:
   metrics, and point-in-time context.
 - Experiment registry record: one research idea with objective, hypothesis,
   sample, feature set, label, artifacts, conclusion, and reuse status.
-- Feature registry record: one reusable feature or signal with source,
+- Feature registry record: one reusable feature definition with source,
   point-in-time rule, lookback, leakage risk, owner, and downstream usage.
+- Research signal record: one point-in-time signal observation for one asset,
+  date, source, and signal name.
 
 These artifacts are review-only. They do not create broker, order, account,
 cash, position, fill, or execution state.
@@ -160,6 +162,78 @@ records = export_feature_registry([
 ])
 ```
 
+## Research Signal Layer
+
+Use `ResearchSignalRecord` when a report, PDF, news item, announcement, or
+manual review produces a signal observation for a stock on a trade date.
+
+Required fields:
+
+- `asset_id`
+- `ts_code`
+- `trade_date`
+- `signal_name`
+- `signal_value`
+- `signal_type`
+- `source_type`
+- `source_id`
+- `availability_timestamp`
+- `confidence`
+- `missingness_reason`
+
+Allowed source types:
+
+- `stock_report`
+- `pdf`
+- `public_news`
+- `fallback_news`
+- `announcement`
+- `manual_review`
+
+Availability rule:
+
+- Normal records require `availability_timestamp <= trade_date 15:00`.
+- Post-close review records must set `post_close_review=True`; they are
+  review-only and should not be used as same-day pre-close signals.
+
+Missingness rule:
+
+- Missing coverage is not negative evidence.
+- Missing values should use `signal_value=None` and a non-empty
+  `missingness_reason`.
+- Real negative evidence should keep a real signal value and leave
+  `missingness_reason` empty.
+
+Example:
+
+```python
+import pandas as pd
+
+from stock_research.research_infra.research_signals import (
+    build_research_signal_records_from_frame,
+)
+
+frame = pd.DataFrame([
+    {
+        "asset_id": "asset:000001.SZ",
+        "ts_code": "000001.SZ",
+        "trade_date": "2026-06-06",
+        "research_support_score": 0.72,
+        "coverage_freshness_score": None,
+        "source_id": "stock_report:000001.SZ:2026-06-01",
+        "availability_timestamp": "2026-06-05T15:00:00",
+    }
+])
+
+records = build_research_signal_records_from_frame(
+    frame,
+    signal_columns=["research_support_score", "coverage_freshness_score"],
+    source_type="stock_report",
+    default_confidence="medium",
+    missingness_reason="no_fresh_report",
+)
+```
+
 ## Difference
 
 A run evidence bundle describes one concrete execution. An experiment registry
@@ -169,6 +243,9 @@ feature sets.
 
 A feature registry record describes how a feature should be interpreted and
 controlled. It does not compute the feature.
+
+A research signal record describes one observed signal value and its source
+availability. It does not decide whether the signal is useful.
 
 ## First-Slice Acceptance
 
@@ -180,3 +257,5 @@ controlled. It does not compute the feature.
 - Missing evidence context and invalid reuse statuses fail fast.
 - Existing factor metadata can be exported as feature records.
 - Research/news signals have explicit point-in-time and leakage-risk metadata.
+- Research signal records reject future availability timestamps by default.
+- Missing research coverage is represented separately from negative evidence.
