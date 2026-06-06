@@ -10,9 +10,11 @@ The first implementation slice standardizes two method-layer artifacts:
   metrics, and point-in-time context.
 - Experiment registry record: one research idea with objective, hypothesis,
   sample, feature set, label, artifacts, conclusion, and reuse status.
+- Feature registry record: one reusable feature or signal with source,
+  point-in-time rule, lookback, leakage risk, owner, and downstream usage.
 
-Both artifacts are review-only. They do not create broker, order, account, cash,
-position, fill, or execution state.
+These artifacts are review-only. They do not create broker, order, account,
+cash, position, fill, or execution state.
 
 ## Run Evidence Bundle
 
@@ -108,12 +110,65 @@ record = ExperimentRecord(
 append_experiment_record("outputs/research/experiment_registry.jsonl", record)
 ```
 
+## Feature Registry
+
+Use `FeatureRecord` and registry helpers when the platform needs a unified view
+of factor, technical, research coverage, news, regime, and event features.
+
+The current slice registers two kinds of features:
+
+- Existing committed factor metadata from `stock_research.factor_registry`.
+- Method-layer research/news signal records that can be connected to concrete
+  source modules after those modules are merged.
+
+Every record must state a point-in-time rule and leakage-risk classification.
+No feature should be treated as production-eligible without both fields.
+
+Allowed categories:
+
+- `technical`
+- `factor`
+- `text`
+- `news`
+- `industry_regime`
+- `market_regime`
+- `research_coverage`
+- `event`
+
+Allowed leakage-risk values:
+
+- `low`
+- `medium`
+- `high`
+- `blocked`
+
+Example:
+
+```python
+from stock_research.research_infra.feature_registry import (
+    export_feature_registry,
+    get_feature_record,
+)
+
+ret_20 = get_feature_record("ret_20")
+assert ret_20.point_in_time_rule == "uses market data available on or before trade_date"
+
+records = export_feature_registry([
+    "research_support_score",
+    "coverage_freshness_score",
+    "public_news_sentiment_score",
+])
+```
+
 ## Difference
 
 A run evidence bundle describes one concrete execution. An experiment registry
 record describes the research question and reusable conclusion. One experiment
 can have multiple run cards if it is repeated across windows, universes, or
 feature sets.
+
+A feature registry record describes how a feature should be interpreted and
+controlled. It does not compute the feature.
 
 ## First-Slice Acceptance
 
@@ -123,3 +178,5 @@ feature sets.
 - Experiment records can be appended and reviewed as JSONL.
 - Duplicate experiment identifiers are detected when reading the registry.
 - Missing evidence context and invalid reuse statuses fail fast.
+- Existing factor metadata can be exported as feature records.
+- Research/news signals have explicit point-in-time and leakage-risk metadata.
