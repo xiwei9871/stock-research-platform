@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import datetime as dt
 import json
+from pathlib import Path
 import re
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 from urllib import parse, request
 
 import pandas as pd
@@ -22,9 +24,49 @@ PRODUCT_DISCLOSURE_COLUMNS = [
     "disclosure_type",
     "is_supported_product_disclosure",
 ]
+PRODUCT_MAIN_BUSINESS_COLUMNS = [
+    "asset_id",
+    "ts_code",
+    "report_period",
+    "classify_type",
+    "item_name",
+    "revenue",
+    "revenue_ratio",
+    "cost",
+    "gross_profit",
+    "gross_margin",
+    "source",
+]
+DOCUMENT_CACHE_INDEX_COLUMNS = [
+    "asset_id",
+    "ts_code",
+    "source_document_id",
+    "source_document_url",
+]
+SOURCE_GAP_REPORT_COLUMNS = [
+    "run_id",
+    "candidate_rows",
+    "candidate_assets",
+    "manifest_rows",
+    "evidence_rows",
+    "safe_evidence_rows",
+    "assets_with_safe_product_evidence",
+    "assets_without_safe_product_evidence",
+]
 CNINFO_QUERY_URL = "http://www.cninfo.com.cn/new/hisAnnouncement/query"
 CNINFO_STATIC_BASE_URL = "http://static.cninfo.com.cn/"
 CNINFO_CATEGORIES = ("category_ndbg_szsh", "category_bndbg_szsh")
+
+
+@dataclass(frozen=True)
+class OfficialDisclosureProductBackfillResult:
+    output_dir: Path
+    candidate_rows: int
+    candidate_assets: int
+    manifest_rows: int
+    evidence_rows: int
+    safe_evidence_rows: int
+    assets_with_safe_product_evidence: int
 
 
 class CninfoDisclosureIndexClient:
@@ -125,6 +167,165 @@ class CninfoDisclosureIndexClient:
             except json.JSONDecodeError:
                 return {}
         return payload if isinstance(payload, dict) else {}
+
+
+def run_official_disclosure_product_backfill(
+    *,
+    candidates_csv: str | Path,
+    output_dir: str | Path,
+    run_id: str,
+    manifest_client: Any | None = None,
+    main_business_loader: Callable[[list[str], str, str], pd.DataFrame] | None = None,
+    conn: Any | None = None,
+    start_date: object | None = None,
+    end_date: object | None = None,
+) -> OfficialDisclosureProductBackfillResult:
+    candidates = _normalize_candidates(pd.read_csv(candidates_csv))
+    client = manifest_client or CninfoDisclosureIndexClient()
+    manifest_start_date = _date_text(start_date) or ""
+    manifest_end_date = _date_text(end_date) or ""
+    manifest = _collect_manifest(candidates, client, manifest_start_date, manifest_end_date)
+
+    asset_ids = sorted(candidates["asset_id"].dropna().astype(str).unique().tolist())
+    business_start_date, business_end_date = _main_business_report_window(start_date, end_date)
+    if main_business_loader is not None:
+        main_business = main_business_loader(asset_ids, business_start_date, business_end_date)
+    else:
+        main_business = _load_main_business_from_db(asset_ids, business_start_date, business_end_date, conn)
+
+    evidence = build_product_evidence_rows(candidates, manifest, main_business)
+    if not evidence.empty:
+        evidence = evidence.copy()
+        evidence["run_id"] = _safe_text(run_id)
+        evidence = normalize_evidence_rows(evidence)
+
+    return _write_artifacts(
+        output_dir=Path(output_dir),
+        run_id=run_id,
+        candidates=candidates,
+        disclosure_manifest=manifest,
+        product_evidence=evidence,
+    )
+
+
+def _load_main_business_from_db(
+    asset_ids: Iterable[object],
+    start_date: object,
+    end_date: object,
+    conn: Any | None,
+) -> pd.DataFrame:
+    ids = [_safe_text(asset_id) for asset_id in asset_ids if _safe_text(asset_id)]
+    if conn is None or not ids:
+        return pd.DataFrame(columns=PRODUCT_MAIN_BUSINESS_COLUMNS)
+
+    db_ids = [_db_asset_id(asset_id) for asset_id in ids]
+    return pd.read_sql(
+        """
+        SELECT asset_id, ts_code, report_period, classify_type, item_name,
+               revenue, revenue_ratio, cost, gross_profit, gross_margin, source
+        FROM finance.main_business_composition
+        WHERE asset_id = ANY(%s)
+          AND report_period BETWEEN %s::date AND %s::date
+        ORDER BY asset_id, ts_code, report_period, classify_type, item_name, source
+        """,
+        conn,
+        params=(db_ids, _date_text(start_date), _date_text(end_date)),
+    )
+
+
+def _collect_manifest(
+    candidates: pd.DataFrame,
+    client: Any,
+    start_date: object,
+    end_date: object,
+) -> pd.DataFrame:
+    normalized_candidates = _normalize_candidates(candidates)
+    manifest_frames = []
+    pairs = (
+        normalized_candidates[["asset_id", "ts_code"]]
+        .drop_duplicates()
+        .sort_values(["asset_id", "ts_code"], kind="stable")
+        .to_dict("records")
+    )
+    for pair in pairs:
+        try:
+            manifest = client.query_asset(
+                asset_id=pair["asset_id"],
+                ts_code=pair["ts_code"],
+                start_date=start_date,
+                end_date=end_date,
+            )
+        except Exception:
+            continue
+        if manifest is not None:
+            manifest_frames.append(manifest)
+
+    if not manifest_frames:
+        return normalize_disclosure_manifest(pd.DataFrame())
+    return normalize_disclosure_manifest(pd.concat(manifest_frames, ignore_index=True))
+
+
+def _write_artifacts(
+    *,
+    output_dir: Path,
+    run_id: str,
+    candidates: pd.DataFrame,
+    disclosure_manifest: pd.DataFrame,
+    product_evidence: pd.DataFrame,
+) -> OfficialDisclosureProductBackfillResult:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    normalized_candidates = _normalize_candidates(candidates)
+    manifest = normalize_disclosure_manifest(disclosure_manifest)
+    evidence = normalize_evidence_rows(product_evidence)
+    if not evidence.empty:
+        evidence = evidence.sort_values(
+            ["candidate_trade_date", "asset_id", "evidence_date", "source_id", "evidence_snippet"],
+            kind="stable",
+        ).reset_index(drop=True)
+
+    document_cache_index = _document_cache_index(manifest)
+    candidate_rows = int(len(normalized_candidates))
+    candidate_assets = int(normalized_candidates["asset_id"].nunique()) if not normalized_candidates.empty else 0
+    safe_evidence = evidence[evidence["as_of_safe"].eq(True)].copy()
+    safe_evidence_rows = int(len(safe_evidence))
+    assets_with_safe_product_evidence = int(safe_evidence["asset_id"].nunique()) if not safe_evidence.empty else 0
+    assets_without_safe_product_evidence = max(candidate_assets - assets_with_safe_product_evidence, 0)
+
+    source_gap_report = pd.DataFrame(
+        [
+            {
+                "run_id": _safe_text(run_id),
+                "candidate_rows": candidate_rows,
+                "candidate_assets": candidate_assets,
+                "manifest_rows": int(len(manifest)),
+                "evidence_rows": int(len(evidence)),
+                "safe_evidence_rows": safe_evidence_rows,
+                "assets_with_safe_product_evidence": assets_with_safe_product_evidence,
+                "assets_without_safe_product_evidence": assets_without_safe_product_evidence,
+            }
+        ],
+        columns=SOURCE_GAP_REPORT_COLUMNS,
+    )
+
+    evidence.to_csv(output_dir / "product_evidence.csv", index=False)
+    manifest.to_csv(output_dir / "disclosure_manifest.csv", index=False)
+    document_cache_index.to_csv(output_dir / "document_cache_index.csv", index=False)
+    source_gap_report.to_csv(output_dir / "source_gap_report.csv", index=False)
+    (output_dir / "coverage_summary.md").write_text(
+        _coverage_summary_markdown(source_gap_report.iloc[0].to_dict()),
+        encoding="utf-8",
+    )
+
+    return OfficialDisclosureProductBackfillResult(
+        output_dir=output_dir,
+        candidate_rows=candidate_rows,
+        candidate_assets=candidate_assets,
+        manifest_rows=int(len(manifest)),
+        evidence_rows=int(len(evidence)),
+        safe_evidence_rows=safe_evidence_rows,
+        assets_with_safe_product_evidence=assets_with_safe_product_evidence,
+    )
 
 
 def is_supported_product_disclosure(title: object) -> bool:
@@ -248,15 +449,26 @@ def build_product_evidence_rows(
 
 def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     normalized = candidates.copy()
-    for column in ["asset_id", "ts_code", "stock_name", "candidate_trade_date", "as_of_date"]:
+    for column in ["asset_id", "ts_code", "stock_name", "trade_date", "candidate_trade_date", "as_of_date"]:
         if column not in normalized.columns:
             normalized[column] = ""
     if normalized.empty:
         return pd.DataFrame(columns=["asset_id", "ts_code", "stock_name", "candidate_trade_date", "as_of_date"])
 
     normalized["asset_id"] = normalized["asset_id"].map(_safe_text)
-    normalized["ts_code"] = normalized["ts_code"].map(_safe_text)
+    normalized["ts_code"] = normalized.apply(
+        lambda row: _safe_text(row["ts_code"]) or _derive_ts_code(row["asset_id"]),
+        axis=1,
+    )
     normalized["stock_name"] = normalized["stock_name"].map(_safe_text)
+    normalized["candidate_trade_date"] = normalized.apply(
+        lambda row: row["candidate_trade_date"] if _safe_text(row["candidate_trade_date"]) else row["trade_date"],
+        axis=1,
+    )
+    normalized["as_of_date"] = normalized.apply(
+        lambda row: row["as_of_date"] if _safe_text(row["as_of_date"]) else row["candidate_trade_date"],
+        axis=1,
+    )
     normalized["candidate_trade_date"] = normalized["candidate_trade_date"].map(_date_value)
     normalized["as_of_date"] = normalized["as_of_date"].map(_date_value)
     normalized = normalized[
@@ -398,3 +610,66 @@ def _evidence_snippet(row: dict[str, Any]) -> str:
     ratio = row.get("revenue_ratio")
     ratio_text = "" if ratio is None or pd.isna(ratio) else f"，收入占比{ratio}%"
     return f"{row.get('announcement_title', '')}披露{row.get('item_name', '')}{ratio_text}"
+
+
+def _derive_ts_code(asset_id: object) -> str:
+    text = _safe_text(asset_id)
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+\.(SH|SZ|SSE|SZSE)", text, flags=re.IGNORECASE):
+        stock_code, exchange = text.rsplit(".", 1)
+        return f"{stock_code}.{_canonical_exchange(exchange)}"
+    if text.upper().startswith("CN:"):
+        parts = text.split(":")
+        if len(parts) == 3 and parts[0].upper() == "CN":
+            exchange = _canonical_exchange(parts[1])
+            if exchange in {"SH", "SZ"} and re.fullmatch(r"\d+", parts[2]):
+                return f"{parts[2]}.{exchange}"
+    return ""
+
+
+def _canonical_exchange(exchange: object) -> str:
+    text = _safe_text(exchange).upper()
+    return {"SSE": "SH", "SZSE": "SZ"}.get(text, text)
+
+
+def _date_text(value: object) -> str:
+    date_value = _date_value(value)
+    return "" if date_value is None else date_value.isoformat()
+
+
+def _main_business_report_window(start_date: object | None, end_date: object | None) -> tuple[str, str]:
+    end = _date_value(end_date) or dt.date.today()
+    start = _date_value(start_date)
+    if start is None:
+        start = dt.date(end.year - 2, 1, 1)
+    else:
+        start = dt.date(start.year - 2, 1, 1)
+    return start.isoformat(), end.isoformat()
+
+
+def _db_asset_id(asset_id: object) -> object:
+    text = _safe_text(asset_id)
+    if re.fullmatch(r"\d+", text):
+        return int(text)
+    return text
+
+
+def _document_cache_index(manifest: pd.DataFrame) -> pd.DataFrame:
+    normalized = normalize_disclosure_manifest(manifest)
+    if normalized.empty:
+        return pd.DataFrame(columns=DOCUMENT_CACHE_INDEX_COLUMNS)
+    return (
+        normalized[DOCUMENT_CACHE_INDEX_COLUMNS]
+        .drop_duplicates()
+        .sort_values(["asset_id", "ts_code", "source_document_id", "source_document_url"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _coverage_summary_markdown(summary: dict[str, Any]) -> str:
+    lines = ["# Official Disclosure Product Backfill", ""]
+    for column in SOURCE_GAP_REPORT_COLUMNS:
+        lines.append(f"- {column}: {summary.get(column, '')}")
+    lines.append("")
+    return "\n".join(lines)

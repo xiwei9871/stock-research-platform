@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
@@ -6,9 +7,11 @@ import pytest
 
 from stock_research.official_disclosure_product_backfill import (
     CninfoDisclosureIndexClient,
+    OfficialDisclosureProductBackfillResult,
     build_product_evidence_rows,
     is_supported_product_disclosure,
     normalize_disclosure_manifest,
+    run_official_disclosure_product_backfill,
 )
 
 
@@ -38,6 +41,23 @@ class FakeRawResponse:
 
     def read(self):
         return self.payload
+
+
+class FakeManifestClient:
+    def query_asset(self, *, asset_id, ts_code, start_date, end_date):
+        return normalize_disclosure_manifest(
+            [
+                {
+                    "asset_id": asset_id,
+                    "ts_code": ts_code,
+                    "publish_date": "2025-04-25",
+                    "report_period": "2024-12-31",
+                    "announcement_title": "2024年年度报告",
+                    "source_document_id": "121999",
+                    "source_document_url": "http://example.com/report.pdf",
+                }
+            ]
+        )
 
 
 def test_cninfo_client_parses_supported_announcements():
@@ -499,3 +519,188 @@ def test_product_evidence_requires_publish_date_visible_to_candidate():
     metadata = json.loads(records[1]["metadata_json"])
     assert metadata["item_name"] == "先进封装设备"
     assert metadata["source_document_id"] == "121999"
+
+
+def test_runner_writes_product_backfill_artifacts(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": 1,
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+                "revenue": 123456789.0,
+                "revenue_ratio": 42.5,
+                "source": "fixture",
+            }
+        ]
+    )
+
+    result = run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: main_business,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert isinstance(result, OfficialDisclosureProductBackfillResult)
+    assert result.evidence_rows == 1
+    assert result.safe_evidence_rows == 1
+    assert (tmp_path / "out" / "product_evidence.csv").exists()
+    assert (tmp_path / "out" / "disclosure_manifest.csv").exists()
+    assert (tmp_path / "out" / "document_cache_index.csv").exists()
+    assert (tmp_path / "out" / "coverage_summary.md").read_text(encoding="utf-8").startswith(
+        "# Official Disclosure Product Backfill"
+    )
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert gaps.loc[0, "assets_with_safe_product_evidence"] == 1
+
+
+def test_runner_deduplicates_manifest_queries_per_asset_ts_code(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n"
+        "1,000001.SZ,2025-05-10,2025-05-10\n",
+        encoding="utf-8",
+    )
+    calls = []
+
+    class CountingManifestClient(FakeManifestClient):
+        def query_asset(self, *, asset_id, ts_code, start_date, end_date):
+            calls.append((asset_id, ts_code, start_date, end_date))
+            return super().query_asset(asset_id=asset_id, ts_code=ts_code, start_date=start_date, end_date=end_date)
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=CountingManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert calls == [("1", "000001.SZ", "2025-01-01", "2025-12-31")]
+
+
+def test_runner_continues_when_manifest_query_fails_for_asset(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+
+    class FailingManifestClient:
+        def query_asset(self, *, asset_id, ts_code, start_date, end_date):
+            raise ValueError("bad exchange")
+
+    result = run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FailingManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert result.manifest_rows == 0
+    assert result.evidence_rows == 0
+    gaps = pd.read_csv(tmp_path / "out" / "source_gap_report.csv")
+    assert gaps.loc[0, "assets_with_safe_product_evidence"] == 0
+    assert gaps.loc[0, "assets_without_safe_product_evidence"] == 1
+
+
+def test_runner_empty_evidence_artifact_has_standard_columns(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,ts_code,candidate_trade_date,as_of_date\n"
+        "1,000001.SZ,2025-05-09,2025-05-09\n",
+        encoding="utf-8",
+    )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=FakeManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    evidence = pd.read_csv(tmp_path / "out" / "product_evidence.csv")
+    assert {
+        "run_id",
+        "asset_id",
+        "candidate_trade_date",
+        "as_of_date",
+        "evidence_type",
+        "metadata_json",
+        "as_of_safe",
+    }.issubset(evidence.columns)
+
+
+def test_runner_supports_real_pilot_candidate_shape(tmp_path: Path):
+    candidates_csv = tmp_path / "candidates.csv"
+    candidates_csv.write_text(
+        "asset_id,stock_name,trade_date,candidate_source,rank\n"
+        "CN:SZ:000001,示例公司,2025-05-09,pilot,1\n",
+        encoding="utf-8",
+    )
+
+    class AssertingManifestClient:
+        def query_asset(self, *, asset_id, ts_code, start_date, end_date):
+            assert asset_id == "CN:SZ:000001"
+            assert ts_code == "000001.SZ"
+            return normalize_disclosure_manifest(
+                [
+                    {
+                        "asset_id": asset_id,
+                        "ts_code": ts_code,
+                        "publish_date": "2025-04-25",
+                        "report_period": "2024-12-31",
+                        "announcement_title": "2024年年度报告",
+                        "source_document_id": "121999",
+                    }
+                ]
+            )
+
+    main_business = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "report_period": "2024-12-31",
+                "classify_type": "按产品分类",
+                "item_name": "先进封装设备",
+            }
+        ]
+    )
+
+    run_official_disclosure_product_backfill(
+        candidates_csv=candidates_csv,
+        output_dir=tmp_path / "out",
+        run_id="unit",
+        manifest_client=AssertingManifestClient(),
+        main_business_loader=lambda asset_ids, start, end: main_business,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+    )
+
+    evidence = pd.read_csv(tmp_path / "out" / "product_evidence.csv")
+    assert evidence.loc[0, "asset_id"] == "CN:SZ:000001"
+    assert evidence.loc[0, "candidate_trade_date"] == "2025-05-09"
+    assert evidence.loc[0, "as_of_date"] == "2025-05-09"
