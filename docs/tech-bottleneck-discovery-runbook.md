@@ -44,17 +44,7 @@ stock-research tech-bottleneck-official-disclosure-product-backfill \
 
 Use `--no-db` when the PostgreSQL service is unavailable and you still need CNINFO manifest, query error, source gap, and coverage artifacts. In that mode, product revenue rows are empty unless injected by a caller outside the CLI.
 
-Then rerun readiness with the generated product evidence:
-
-```bash
-stock-research tech-bottleneck-data-readiness-audit \
-  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
-  --evidence-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_backfill/product_evidence.csv \
-  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/readiness_after_official_product_backfill \
-  --run-id pilot-top50-2025-readiness-after-official-product-backfill \
-  --lookback-days 365 \
-  --service stock_research
-```
+Then run the official product data alignment audit below. Do not feed `product_evidence.csv` into readiness until the alignment audit confirms PIT-safe product evidence is available for the intended window.
 
 Artifacts:
 
@@ -87,6 +77,18 @@ Outputs:
 - `alignment_summary.md`: operator-readable status counts, reasons, and next-action guidance.
 
 Do not run return tests from a window where `pit_safe_product_evidence_available` is zero and the dominant action is `shift_test_window_later` or `backfill_historical_product_rows`. Use this audit to decide data alignment before readiness/return testing.
+
+Only after the alignment audit shows usable PIT-safe product evidence for the intended window, rerun readiness with the generated product evidence:
+
+```bash
+stock-research tech-bottleneck-data-readiness-audit \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --evidence-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/official_product_backfill/product_evidence.csv \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/readiness_after_official_product_backfill \
+  --run-id pilot-top50-2025-readiness-after-official-product-backfill \
+  --lookback-days 365 \
+  --service stock_research
+```
 
 ## Data Readiness Audit
 
