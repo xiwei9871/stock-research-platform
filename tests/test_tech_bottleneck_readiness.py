@@ -623,6 +623,50 @@ def test_unsafe_missing_or_future_text_evidence_does_not_set_flags() -> None:
     assert row["has_bottleneck_keywords"] is False
 
 
+def test_safe_catalyst_evidence_sets_news_or_announcement_flag() -> None:
+    frames = _single_candidate_frames(report_title="经营跟踪", raw_summary="产品结构稳定。")
+    frames["events"] = pd.DataFrame()
+    frames["news"] = pd.DataFrame()
+    audit = build_readiness_audit(
+        candidates=_single_candidate(),
+        run_id="readiness-test",
+        run_date="2026-06-06",
+        as_of_date=None,
+        lookback_days=365,
+        evidence=pd.DataFrame(
+            [
+                {
+                    "run_id": "evidence-unit",
+                    "asset_id": "CN:SH:688099",
+                    "stock_name": "证据测试",
+                    "candidate_trade_date": "2026-06-05",
+                    "as_of_date": "2026-06-05",
+                    "evidence_date": "2026-05-20",
+                    "source_type": "fixture",
+                    "source_id": "fixture-catalyst",
+                    "source_title": "客户公告",
+                    "source_url": "",
+                    "evidence_type": "news_or_announcement_catalyst",
+                    "matched_keyword": "公告",
+                    "evidence_snippet": "公司公告客户认证进展。",
+                    "source_confidence": "medium",
+                    "is_proxy": False,
+                    "as_of_safe": True,
+                    "metadata_json": "{}",
+                }
+            ]
+        ),
+        **frames,
+    )
+
+    row = audit.summary.set_index("asset_id").loc["CN:SH:688099"]
+    assert row["has_news_or_announcement_catalyst"] is True
+    detail = audit.details[0]["flag_details"]["has_news_or_announcement_catalyst"][0]
+    assert detail["source_table"] == "evidence"
+    assert detail["source_id"] == "fixture-catalyst"
+    assert detail["evidence_type"] == "news_or_announcement_catalyst"
+
+
 def test_future_main_business_does_not_set_product_revenue_exposure() -> None:
     frames = _single_candidate_frames()
     frames["main_business"] = pd.DataFrame(

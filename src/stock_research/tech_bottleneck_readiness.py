@@ -155,6 +155,7 @@ EVIDENCE_TYPE_FLAGS = {
     "customer_certification": "has_customer_certification_evidence",
     "technical_barrier": "has_patent_or_technical_barrier",
     "patent_proxy": "has_patent_or_technical_barrier",
+    "news_or_announcement_catalyst": "has_news_or_announcement_catalyst",
     "invalidation": "has_invalidation_evidence",
 }
 
@@ -345,10 +346,13 @@ def build_readiness_audit(
             + _sample_rows(main_business_rows, "main_business")
         )[:3]
         flag_details["has_research_report"] = _sample_rows(report_rows or report_feature_rows, "reports")
-        flag_details["has_news_or_announcement_catalyst"] = _sample_rows(
-            news_rows or event_rows,
-            "news" if news_rows else "events",
-        )
+        flag_details["has_news_or_announcement_catalyst"] = (
+            _evidence_flag_details(evidence_flag_rows["has_news_or_announcement_catalyst"])
+            + _sample_rows(
+                news_rows or event_rows,
+                "news" if news_rows else "events",
+            )
+        )[:3]
 
         for flag, keywords in [
             ("has_bottleneck_keywords", BOTTLENECK_KEYWORDS),

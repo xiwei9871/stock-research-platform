@@ -72,10 +72,13 @@ CLI options:
 - `--start-date`: first candidate date to consider. Default: minimum `trade_date` in the CSV.
 - `--end-date`: last candidate date to consider. Default: maximum `trade_date` in the CSV.
 - `--lookback-days`: evidence lookback window before each candidate date. Default: 365.
-- `--source`: data source selector. Initial values: `existing-db`, `cninfo-docs`, `text-proxy`.
 - `--output-dir`: artifact directory.
 - `--run-id`: stable identifier.
 - `--service`: database service name. Default: `stock_research`.
+
+Version 1 uses existing database sources only. A future version may add a `--source`
+selector for `cninfo-docs` and other external backfill paths after the artifact
+contract has been validated.
 
 ## Evidence Contract
 
