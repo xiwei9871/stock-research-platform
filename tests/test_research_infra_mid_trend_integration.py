@@ -213,6 +213,7 @@ def test_mid_trend_integration_writes_artifact_index_when_enabled(
     assert record.attribution_cards_json_path == result["attribution_cards_json_path"]
     assert record.attribution_cards_md_path == result["attribution_cards_md_path"]
     assert record.experiment_registry_path == result["experiment_registry_path"]
+    assert record.metrics["review_row_count"] == 2
     assert record.metrics["research_signal_count"] == 6
     assert record.metrics["attribution_card_count"] == 1
     assert record.warnings == []
