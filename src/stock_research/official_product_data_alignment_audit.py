@@ -77,9 +77,12 @@ _DIAGNOSTIC_FUTURE_DISCLOSURE_REASON = (
 
 @dataclass(frozen=True)
 class OfficialProductDataAlignmentAuditResult:
-    audit: pd.DataFrame
-    status_summary: pd.DataFrame
-    output_dir: Path | None = None
+    output_dir: Path
+    candidate_rows: int
+    candidate_assets: int
+    pit_safe_rows: int
+    future_disclosure_rows: int
+    manifest_query_error_rows: int
 
 
 def normalize_alignment_candidates(candidates: pd.DataFrame) -> pd.DataFrame:

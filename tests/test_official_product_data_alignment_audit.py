@@ -5,6 +5,7 @@ import pandas as pd
 
 from stock_research.official_product_data_alignment_audit import (
     ALIGNMENT_AUDIT_COLUMNS,
+    OfficialProductDataAlignmentAuditResult,
     normalize_alignment_candidates,
     build_alignment_audit,
 )
@@ -42,6 +43,17 @@ DESIGN_ALIGNMENT_AUDIT_COLUMNS = [
 
 def test_alignment_audit_columns_match_design_contract():
     assert ALIGNMENT_AUDIT_COLUMNS == DESIGN_ALIGNMENT_AUDIT_COLUMNS
+
+
+def test_alignment_audit_result_fields_are_artifact_summary_only():
+    assert list(OfficialProductDataAlignmentAuditResult.__dataclass_fields__) == [
+        "output_dir",
+        "candidate_rows",
+        "candidate_assets",
+        "pit_safe_rows",
+        "future_disclosure_rows",
+        "manifest_query_error_rows",
+    ]
 
 
 def test_normalize_alignment_candidates_accepts_real_pilot_shape():
