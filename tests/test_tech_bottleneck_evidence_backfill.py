@@ -44,6 +44,30 @@ def test_normalize_evidence_candidates_preserves_trade_date_as_as_of_date() -> N
     assert rows.iloc[0]["rank"] == "1"
 
 
+def test_normalize_evidence_candidates_preserves_timezone_bound_calendar_date() -> None:
+    rows = normalize_evidence_candidates(
+        pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688000",
+                    "trade_date": "2024-12-31",
+                },
+                {
+                    "asset_id": "CN:SH:688001",
+                    "trade_date": "2025-01-01",
+                },
+            ]
+        ),
+        run_date="2026-06-06",
+        start_date="2025-01-01T00:00:00+08:00",
+        end_date=None,
+        lookback_days=365,
+    )
+
+    assert rows["asset_id"].tolist() == ["CN:SH:688001"]
+    assert rows.iloc[0]["as_of_date"] == "2025-01-01"
+
+
 def test_normalize_evidence_rows_outputs_contract_and_json_metadata() -> None:
     evidence = normalize_evidence_rows(
         pd.DataFrame(

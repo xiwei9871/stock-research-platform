@@ -188,7 +188,7 @@ def _date_timestamp(value: Any) -> pd.Timestamp | None:
         return None
     timestamp = pd.Timestamp(timestamp)
     if timestamp.tzinfo is not None:
-        timestamp = timestamp.tz_convert(None)
+        timestamp = timestamp.tz_localize(None)
     return timestamp.normalize()
 
 
