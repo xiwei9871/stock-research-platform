@@ -14,6 +14,8 @@ The first implementation slice standardizes two method-layer artifacts:
   point-in-time rule, lookback, leakage risk, owner, and downstream usage.
 - Research signal record: one point-in-time signal observation for one asset,
   date, source, and signal name.
+- Factor evaluation card: one standardized review card for an evaluated factor,
+  sample, universe, label, IC, quantile returns, turnover, and warnings.
 
 These artifacts are review-only. They do not create broker, order, account,
 cash, position, fill, or execution state.
@@ -234,6 +236,57 @@ records = build_research_signal_records_from_frame(
 )
 ```
 
+## Factor Evaluation Card
+
+Use `build_factor_evaluation_card()` when an existing `factor_eval` report needs
+to become a comparable review artifact. The card wraps current factor evaluation
+outputs; it does not recalculate IC, quantile returns, or turnover.
+
+Required context:
+
+- `sample_window`
+- `universe`
+- `label_definition`
+
+Included review sections:
+
+- `ic_summary`
+- `rank_ic_summary`
+- `quantile_return_summary`
+- `topn_hit_summary`
+- `turnover_summary`
+- `regime_breakdown`
+- `industry_exposure`
+- `drawdown_notes`
+- `warnings`
+
+Example:
+
+```python
+from stock_research.factor_eval.report import generate_factor_eval_report
+from stock_research.research_infra.factor_cards import (
+    build_factor_evaluation_card,
+    render_factor_evaluation_card_markdown,
+)
+
+eval_report = generate_factor_eval_report(
+    factors,
+    returns,
+    factor_name="ret_20",
+    return_col="forward_return_5d",
+)
+
+card = build_factor_evaluation_card(
+    eval_report,
+    sample_window={"start_date": "2026-01-01", "end_date": "2026-06-06"},
+    universe={"name": "topn_candidates", "asset_count": 300},
+    label_definition={"name": "forward_return_5d", "horizon_days": 5},
+    warnings=["review sample excludes suspended stocks"],
+)
+
+markdown = render_factor_evaluation_card_markdown(card)
+```
+
 ## Difference
 
 A run evidence bundle describes one concrete execution. An experiment registry
@@ -247,6 +300,9 @@ controlled. It does not compute the feature.
 A research signal record describes one observed signal value and its source
 availability. It does not decide whether the signal is useful.
 
+A factor evaluation card describes how an already-evaluated factor performed
+under a stated sample, universe, and label. It does not compute the factor.
+
 ## First-Slice Acceptance
 
 - Existing `write_run_card()` callers remain compatible.
@@ -259,3 +315,4 @@ availability. It does not decide whether the signal is useful.
 - Research/news signals have explicit point-in-time and leakage-risk metadata.
 - Research signal records reject future availability timestamps by default.
 - Missing research coverage is represented separately from negative evidence.
+- Factor cards require sample, universe, and label metadata before review.
