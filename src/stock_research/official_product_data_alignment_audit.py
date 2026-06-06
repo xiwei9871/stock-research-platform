@@ -454,6 +454,19 @@ def _markdown_status_reasons(audit: pd.DataFrame) -> list[str]:
 
 
 def _next_action_guidance(audit: pd.DataFrame, counts: dict[str, int]) -> str:
+    unresolved_rows = counts["candidate_rows"] - counts["pit_safe_rows"]
+    if counts["pit_safe_rows"] > 0 and unresolved_rows > 0:
+        unresolved = _dominant_unresolved_alignment(audit)
+        suffix = (
+            f" Dominant unresolved status: {unresolved['alignment_status']}; "
+            f"recommended action: {unresolved['recommended_action']}."
+            if unresolved
+            else ""
+        )
+        return (
+            "mixed coverage: readiness can use PIT-safe rows, but the run still has unresolved alignment gaps."
+            f"{suffix}"
+        )
     if counts["pit_safe_rows"] > 0:
         return "Proceed with readiness scoring using PIT-safe official product evidence."
     if counts["future_disclosure_rows"] > 0:
@@ -465,6 +478,35 @@ def _next_action_guidance(audit: pd.DataFrame, counts: dict[str, int]) -> str:
     if counts["manifest_query_error_rows"] > 0:
         return "Rerun manifest source queries before interpreting coverage gaps."
     return "Investigate official source coverage before readiness scoring."
+
+
+def _dominant_unresolved_alignment(audit: pd.DataFrame) -> dict[str, str]:
+    if audit.empty or "alignment_status" not in audit.columns:
+        return {}
+    unresolved = audit[audit["alignment_status"].map(_safe_text).ne("pit_safe_product_evidence_available")].copy()
+    if unresolved.empty:
+        return {}
+    if "recommended_action" not in unresolved.columns:
+        unresolved["recommended_action"] = ""
+    dominant = (
+        unresolved.assign(
+            alignment_status=unresolved["alignment_status"].map(_safe_text),
+            recommended_action=unresolved["recommended_action"].map(_safe_text),
+        )
+        .groupby(["alignment_status", "recommended_action"], dropna=False)
+        .size()
+        .reset_index(name="candidate_rows")
+        .sort_values(
+            ["candidate_rows", "alignment_status", "recommended_action"],
+            ascending=[False, True, True],
+            kind="stable",
+        )
+        .iloc[0]
+    )
+    return {
+        "alignment_status": dominant["alignment_status"],
+        "recommended_action": dominant["recommended_action"],
+    }
 
 
 def _earliest_future_disclosure_month(audit: pd.DataFrame) -> str:

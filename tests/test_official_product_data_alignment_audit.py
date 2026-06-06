@@ -666,7 +666,7 @@ def test_write_alignment_audit_artifacts_creates_csv_json_and_markdown(tmp_path)
                 "unsafe_product_evidence_count": 1,
                 "best_report_period": pd.Timestamp("2024-12-31").date(),
                 "best_publish_date": pd.Timestamp("2025-04-25").date(),
-                "best_disclosure_type": "annual",
+                "best_disclosure_type": pd.NA,
                 "best_source_document_id": "121999",
                 "best_source_document_url": "http://example.com/report.pdf",
                 "best_source_title": "2024年年度报告",
@@ -701,11 +701,89 @@ def test_write_alignment_audit_artifacts_creates_csv_json_and_markdown(tmp_path)
     assert pd.read_csv(tmp_path / "alignment_status_summary.csv").columns.tolist() == ALIGNMENT_STATUS_SUMMARY_COLUMNS
     records = json.loads((tmp_path / "alignment_audit.json").read_text(encoding="utf-8"))
     assert records[0]["stock_name"] == "平安银行"
+    assert records[0]["candidate_trade_date"] == "2025-04-18"
+    assert records[0]["best_publish_date"] == "2025-04-25"
+    assert records[0]["best_disclosure_type"] is None
     markdown = (tmp_path / "alignment_summary.md").read_text(encoding="utf-8")
     assert "shift_test_window_later" in markdown
     assert "joinable_but_future_disclosure" in markdown
     assert "official product evidence exists but publish_date is after candidate as_of_date" in markdown
     assert "2025-04" in markdown
+
+
+def test_write_alignment_audit_artifacts_marks_mixed_coverage_as_unresolved(tmp_path):
+    audit = pd.DataFrame(
+        [
+            {
+                "run_id": "unit",
+                "asset_id": "CN:SZ:000001",
+                "ts_code": "000001.SZ",
+                "stock_name": "平安银行",
+                "candidate_trade_date": pd.Timestamp("2025-05-09").date(),
+                "as_of_date": pd.Timestamp("2025-05-09").date(),
+                "alignment_status": "pit_safe_product_evidence_available",
+                "alignment_reason": "candidate row has strict PIT-safe official product evidence",
+                "has_pit_safe_product_evidence": True,
+                "safe_product_evidence_count": 1,
+                "unsafe_product_evidence_count": 0,
+                "best_report_period": pd.Timestamp("2024-12-31").date(),
+                "best_publish_date": pd.Timestamp("2025-04-25").date(),
+                "best_disclosure_type": "annual",
+                "best_source_document_id": "121999",
+                "best_source_document_url": "http://example.com/report.pdf",
+                "best_source_title": "2024年年度报告",
+                "best_product_main_business_rows": 3,
+                "best_manifest_rows": 1,
+                "manifest_rows_for_asset": 1,
+                "product_main_business_rows_for_asset": 3,
+                "joinable_report_periods_for_asset": 1,
+                "manifest_query_error_count_for_asset": 0,
+                "max_safe_report_period": pd.Timestamp("2024-12-31").date(),
+                "min_future_publish_date": None,
+                "days_until_first_future_disclosure": None,
+                "recommended_action": "use_for_readiness",
+            },
+            {
+                "run_id": "unit",
+                "asset_id": "CN:SZ:000002",
+                "ts_code": "000002.SZ",
+                "stock_name": "万科A",
+                "candidate_trade_date": pd.Timestamp("2025-04-18").date(),
+                "as_of_date": pd.Timestamp("2025-04-18").date(),
+                "alignment_status": "joinable_but_future_disclosure",
+                "alignment_reason": "official product evidence exists but publish_date is after candidate as_of_date",
+                "has_pit_safe_product_evidence": False,
+                "safe_product_evidence_count": 0,
+                "unsafe_product_evidence_count": 1,
+                "best_report_period": pd.Timestamp("2024-12-31").date(),
+                "best_publish_date": pd.Timestamp("2025-04-25").date(),
+                "best_disclosure_type": "annual",
+                "best_source_document_id": "122000",
+                "best_source_document_url": "http://example.com/future.pdf",
+                "best_source_title": "2024年年度报告",
+                "best_product_main_business_rows": 2,
+                "best_manifest_rows": 1,
+                "manifest_rows_for_asset": 1,
+                "product_main_business_rows_for_asset": 2,
+                "joinable_report_periods_for_asset": 1,
+                "manifest_query_error_count_for_asset": 0,
+                "max_safe_report_period": None,
+                "min_future_publish_date": pd.Timestamp("2025-04-25").date(),
+                "days_until_first_future_disclosure": 7,
+                "recommended_action": "shift_test_window_later",
+            },
+        ],
+        columns=ALIGNMENT_AUDIT_COLUMNS,
+    )
+
+    write_alignment_audit_artifacts(audit=audit, output_dir=tmp_path, run_id="unit")
+
+    markdown = (tmp_path / "alignment_summary.md").read_text(encoding="utf-8")
+    assert "mixed coverage" in markdown
+    assert "unresolved alignment gaps" in markdown
+    assert "shift_test_window_later" in markdown
+    assert "joinable_but_future_disclosure" in markdown
+    assert "Proceed with readiness scoring using PIT-safe official product evidence." not in markdown
 
 
 def test_write_alignment_audit_artifacts_handles_empty_audit(tmp_path):
