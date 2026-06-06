@@ -2,6 +2,32 @@
 
 `tech-bottleneck-discovery` is an automated research lens for hard-technology chokepoint candidates. The system generates research packets; humans review the generated evidence and record approve, reject, or needs-more-evidence.
 
+## Evidence Backfill
+
+Run this when readiness shows data gaps. It builds candidate-scoped evidence artifacts without changing the candidate pool.
+
+```bash
+stock-research tech-bottleneck-evidence-backfill \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/evidence \
+  --run-id pilot-top50-2025-evidence \
+  --start-date 2025-01-01 \
+  --lookback-days 365 \
+  --service stock_research
+```
+
+Then rerun readiness with:
+
+```bash
+stock-research tech-bottleneck-data-readiness-audit \
+  --candidates-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/candidates.csv \
+  --evidence-csv outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/evidence/evidence.csv \
+  --output-dir outputs/tech_bottleneck_discovery/pilot_top50_2025_20_60_120_250/readiness_after_backfill \
+  --run-id pilot-top50-2025-readiness-after-backfill \
+  --lookback-days 365 \
+  --service stock_research
+```
+
 ## Data Readiness Audit
 
 Run this before generating research packets. It checks whether an existing topN candidate pool has enough industry, product, report, bottleneck, capacity, customer, technical-barrier, catalyst, and invalidation evidence.
