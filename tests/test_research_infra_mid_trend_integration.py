@@ -160,3 +160,24 @@ def test_mid_trend_integration_marks_no_risk_disclosure_with_fresh_report(
     missing = by_asset_signal[("CN:SH:600183", "risk_disclosure_score")]
     assert missing["signal_value"] is None
     assert missing["missingness_reason"] == "no_risk_disclosure"
+
+
+def test_mid_trend_integration_handles_empty_review_rows(tmp_path: Path) -> None:
+    result = write_mid_trend_research_infra_artifacts(
+        trade_date="2026-06-04",
+        strategy_variant="top5_weekly_max_2_replacements",
+        review_result={
+            "portfolio_summary": {"trade_date": "2026-06-04"},
+            "review_rows": pd.DataFrame(),
+            "markdown": "",
+            "paths": {},
+        },
+        output_dir=tmp_path,
+    )
+
+    assert result["research_signal_count"] == 0
+    assert result["attribution_card_count"] == 0
+    run_card = json.loads(
+        Path(result["run_card"]["run_card_json_path"]).read_text(encoding="utf-8")
+    )
+    assert "empty_review_rows" in run_card["warnings"]

@@ -363,6 +363,13 @@ Feedback loop:
 - Data-quality-gap cards should create data-quality remediation tasks.
 - Recommended rule changes require a separate experiment before adoption.
 
+## Mid-Trend Integration
+
+Use `write_mid_trend_research_infra_artifacts()` after an existing mid-trend
+portfolio review has produced `review_result`. The integration writes sidecar
+artifacts under `<output_dir>/research_infra/` and does not change review rows,
+portfolio logic, or execution behavior.
+
 ## Difference
 
 A run evidence bundle describes one concrete execution. An experiment registry
