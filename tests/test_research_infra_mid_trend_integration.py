@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from stock_research.research_infra.artifact_index import read_artifact_index
 from stock_research.research_infra.experiment_registry import read_experiment_registry
 from stock_research.research_infra.mid_trend_integration import (
     build_mid_trend_review_with_research_infra,
@@ -183,6 +184,60 @@ def test_mid_trend_integration_handles_empty_review_rows(tmp_path: Path) -> None
         Path(result["run_card"]["run_card_json_path"]).read_text(encoding="utf-8")
     )
     assert "empty_review_rows" in run_card["warnings"]
+
+
+def test_mid_trend_integration_writes_artifact_index_when_enabled(
+    tmp_path: Path,
+) -> None:
+    index_path = tmp_path / "research_infra_index.jsonl"
+
+    result = write_mid_trend_research_infra_artifacts(
+        trade_date="2026-06-04",
+        strategy_variant="top5_weekly_max_2_replacements",
+        review_result=_toy_review_result(tmp_path),
+        output_dir=tmp_path,
+        artifact_index_path=index_path,
+    )
+
+    assert result["artifact_index_path"] == str(index_path)
+    records = read_artifact_index(index_path)
+    assert len(records) == 1
+    record = records[0]
+    assert record.run_id == "mid-trend-review-2026-06-04-top5_weekly_max_2_replacements"
+    assert record.run_type == "mid_trend_portfolio_review"
+    assert record.trade_date == "2026-06-04"
+    assert record.strategy_variant == "top5_weekly_max_2_replacements"
+    assert record.research_infra_dir == result["research_infra_dir"]
+    assert record.run_card_json_path == result["run_card"]["run_card_json_path"]
+    assert record.research_signals_json_path == result["research_signals_json_path"]
+    assert record.attribution_cards_json_path == result["attribution_cards_json_path"]
+    assert record.attribution_cards_md_path == result["attribution_cards_md_path"]
+    assert record.experiment_registry_path == result["experiment_registry_path"]
+    assert record.metrics["research_signal_count"] == 6
+    assert record.metrics["attribution_card_count"] == 1
+    assert record.warnings == []
+    assert record.caveats == ["review-only; no execution instruction"]
+
+
+def test_mid_trend_integration_keeps_repeated_run_artifact_index_readable(
+    tmp_path: Path,
+) -> None:
+    index_path = tmp_path / "research_infra_index.jsonl"
+    kwargs = {
+        "trade_date": "2026-06-04",
+        "strategy_variant": "top5_weekly_max_2_replacements",
+        "review_result": _toy_review_result(tmp_path),
+        "output_dir": tmp_path,
+        "artifact_index_path": index_path,
+    }
+
+    first = write_mid_trend_research_infra_artifacts(**kwargs)
+    second = write_mid_trend_research_infra_artifacts(**kwargs)
+
+    records = read_artifact_index(index_path)
+    assert len(records) == 1
+    assert records[0].run_id == "mid-trend-review-2026-06-04-top5_weekly_max_2_replacements"
+    assert first["artifact_index_path"] == second["artifact_index_path"]
 
 
 def test_mid_trend_review_wrapper_disabled_returns_original_without_sidecars(

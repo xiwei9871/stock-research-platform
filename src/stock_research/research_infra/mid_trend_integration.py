@@ -12,6 +12,10 @@ from stock_research.research_infra.attribution_cards import (
     export_attribution_cards,
     render_attribution_card_markdown,
 )
+from stock_research.research_infra.artifact_index import (
+    ResearchInfraArtifactIndexRecord,
+    append_artifact_index_record,
+)
 from stock_research.research_infra.experiment_registry import (
     ExperimentRecord,
     append_experiment_record,
@@ -54,6 +58,7 @@ def write_mid_trend_research_infra_artifacts(
     strategy_variant: str,
     review_result: dict[str, Any],
     output_dir: str | Path,
+    artifact_index_path: str | Path | None = None,
 ) -> dict[str, Any]:
     sidecar_dir = Path(output_dir) / "research_infra"
     sidecar_dir.mkdir(parents=True, exist_ok=True)
@@ -170,7 +175,32 @@ def write_mid_trend_research_infra_artifacts(
     if experiment_record.experiment_id not in existing_experiment_ids:
         append_experiment_record(experiment_registry_path, experiment_record)
 
-    return {
+    if artifact_index_path is not None:
+        append_artifact_index_record(
+            artifact_index_path,
+            ResearchInfraArtifactIndexRecord(
+                run_id=f"mid-trend-review-{trade_date}-{strategy_variant}",
+                run_type="mid_trend_portfolio_review",
+                trade_date=trade_date,
+                strategy_variant=strategy_variant,
+                created_at=f"{trade_date}T15:00:00",
+                research_infra_dir=str(sidecar_dir),
+                run_card_json_path=run_card["run_card_json_path"],
+                research_signals_json_path=str(signals_path),
+                attribution_cards_json_path=str(attributions_json_path),
+                attribution_cards_md_path=str(attributions_md_path),
+                experiment_registry_path=str(experiment_registry_path),
+                metrics={
+                    "review_row_count": int(len(review_rows)),
+                    "research_signal_count": len(signals),
+                    "attribution_card_count": len(attributions),
+                },
+                warnings=[] if not review_rows.empty else ["empty_review_rows"],
+                caveats=["review-only; no execution instruction"],
+            ),
+        )
+
+    result = {
         "research_infra_dir": str(sidecar_dir),
         "research_signals_json_path": str(signals_path),
         "attribution_cards_json_path": str(attributions_json_path),
@@ -180,6 +210,9 @@ def write_mid_trend_research_infra_artifacts(
         "research_signal_count": len(signals),
         "attribution_card_count": len(attributions),
     }
+    if artifact_index_path is not None:
+        result["artifact_index_path"] = str(artifact_index_path)
+    return result
 
 
 def _review_rows(review_result: dict[str, Any]) -> pd.DataFrame:
