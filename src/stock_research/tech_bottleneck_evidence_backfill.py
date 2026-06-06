@@ -59,6 +59,17 @@ TEXT_EVIDENCE_GROUPS = {
 
 REQUIRED_EVIDENCE_TYPES = ["product_revenue_exposure", *TEXT_EVIDENCE_GROUPS.keys()]
 
+EVIDENCE_SORT_COLUMNS = [
+    "candidate_trade_date",
+    "asset_id",
+    "evidence_date",
+    "evidence_type",
+    "source_type",
+    "source_id",
+    "matched_keyword",
+    "evidence_snippet",
+]
+
 
 class EvidenceBackfillResult:
     def __init__(self, *, candidates: pd.DataFrame, evidence: pd.DataFrame, source_gap_report: pd.DataFrame) -> None:
@@ -206,7 +217,7 @@ def build_evidence_backfill(
                 )
                 rows.append(row)
 
-    evidence = normalize_evidence_rows(pd.DataFrame(rows))
+    evidence = _sort_evidence_rows(normalize_evidence_rows(pd.DataFrame(rows)))
     source_gap_report = _build_source_gap_report(normalized_candidates, evidence)
     return EvidenceBackfillResult(
         candidates=normalized_candidates,
@@ -266,6 +277,7 @@ def load_evidence_context_from_db(
                 FROM finance.main_business_composition
                 WHERE asset_id = ANY(%s)
                   AND report_period <= %s::date
+                ORDER BY asset_id, report_period, classify_type, item_name
                 """,
                 (asset_ids, max_as_of),
             )
@@ -289,6 +301,7 @@ def load_evidence_context_from_db(
                 LEFT JOIN research.stock_report_source s ON s.report_id = e.report_id
                 WHERE e.asset_id = ANY(%s)
                   AND e.report_date BETWEEN %s::date AND %s::date
+                ORDER BY e.asset_id, e.report_date, e.report_id
                 """,
                 (asset_ids, min_window_start, max_as_of),
             )
@@ -311,6 +324,7 @@ def load_evidence_context_from_db(
                 FROM event.earnings_express
                 WHERE asset_id = ANY(%s)
                   AND announcement_date BETWEEN %s::date AND %s::date
+                ORDER BY asset_id, event_date, event_type, event_id
                 """,
                 (
                     asset_ids,
@@ -339,6 +353,7 @@ def load_evidence_context_from_db(
                 JOIN research.news_event_source s ON s.source_event_id = m.source_event_id
                 WHERE m.asset_id = ANY(%s)
                   AND s.published_at::date BETWEEN %s::date AND %s::date
+                ORDER BY m.asset_id, s.published_at, m.source_event_id
                 """,
                 (asset_ids, min_window_start, max_as_of),
             )
@@ -435,8 +450,7 @@ def _rows_by_asset(frame: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
 
 
 def _is_product_business_row(row: dict[str, Any]) -> bool:
-    classify_type = _safe_text(row.get("classify_type"))
-    return "产品" in classify_type or classify_type.lower() in {"product", "by_product"}
+    return _safe_text(row.get("classify_type")) == "按产品分类" and _safe_text(row.get("item_name")) != ""
 
 
 def _product_evidence_row(candidate: dict[str, Any], row: dict[str, Any], *, run_id: str) -> dict[str, Any]:
@@ -501,7 +515,7 @@ def _text_records(
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for row in reports:
-        for field_name in ["report_title", "raw_summary"]:
+        for field_name in ["report_title", "raw_summary", "company_view", "industry_view", "risk_summary"]:
             _append_text_record(
                 records,
                 row,
@@ -533,6 +547,12 @@ def _text_records(
                 field_name=field_name,
             )
     return records
+
+
+def _sort_evidence_rows(evidence: pd.DataFrame) -> pd.DataFrame:
+    if evidence.empty:
+        return evidence
+    return evidence.sort_values(EVIDENCE_SORT_COLUMNS, kind="mergesort").reset_index(drop=True)
 
 
 def _append_text_record(

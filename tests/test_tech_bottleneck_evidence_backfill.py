@@ -242,6 +242,117 @@ def test_build_evidence_backfill_extracts_product_and_text_evidence() -> None:
     assert bool(result.evidence[result.evidence["evidence_type"].eq("product_revenue_exposure")].iloc[0]["as_of_safe"])
 
 
+def test_build_evidence_backfill_sorts_evidence_stably_from_shuffled_frames() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame(
+            [
+                {"asset_id": "CN:SH:688002", "trade_date": "2025-01-11"},
+                {"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"},
+            ]
+        ),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688002",
+                    "report_period": "2024-12-30",
+                    "classify_type": "按产品分类",
+                    "item_name": "Z材料",
+                },
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "classify_type": "按产品分类",
+                    "item_name": "A材料",
+                },
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    sort_columns = [
+        "candidate_trade_date",
+        "asset_id",
+        "evidence_date",
+        "evidence_type",
+        "source_type",
+        "source_id",
+        "matched_keyword",
+        "evidence_snippet",
+    ]
+    expected = result.evidence.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
+    pd.testing.assert_frame_equal(result.evidence.reset_index(drop=True), expected)
+    assert result.evidence["asset_id"].tolist() == ["CN:SH:688001", "CN:SH:688002"]
+
+
+def test_build_evidence_backfill_extracts_report_risk_summary_evidence() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(),
+        reports=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_id": "r1",
+                    "report_date": "2025-01-05",
+                    "report_title": "",
+                    "raw_summary": "",
+                    "company_view": "",
+                    "industry_view": "",
+                    "risk_summary": "风险是需求不及预期。",
+                }
+            ]
+        ),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert "invalidation" in set(result.evidence["evidence_type"])
+
+
+def test_build_evidence_backfill_requires_exact_product_classification_and_item_name() -> None:
+    result = build_evidence_backfill(
+        candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
+        run_id="unit",
+        run_date="2026-06-06",
+        start_date=None,
+        end_date=None,
+        lookback_days=365,
+        main_business=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "classify_type": "按行业分类",
+                    "item_name": "半导体",
+                },
+                {
+                    "asset_id": "CN:SH:688001",
+                    "report_period": "2024-12-31",
+                    "classify_type": "按产品分类",
+                    "item_name": "",
+                },
+            ]
+        ),
+        reports=pd.DataFrame(),
+        events=pd.DataFrame(),
+        news=pd.DataFrame(),
+    )
+
+    assert "product_revenue_exposure" not in set(result.evidence["evidence_type"])
+
+
 def test_future_evidence_is_written_as_unsafe() -> None:
     result = build_evidence_backfill(
         candidates=pd.DataFrame([{"asset_id": "CN:SH:688001", "trade_date": "2025-01-10"}]),
