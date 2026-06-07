@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
-from stock_research.tech_chain_taxonomy import load_taxonomy
+from stock_research.tech_chain_taxonomy import build_chain_mapping, load_taxonomy
 
 
 def test_load_taxonomy_v1_contains_core_chains() -> None:
@@ -132,6 +133,43 @@ def test_load_taxonomy_rejects_invalid_dimension_entries(tmp_path: Path) -> None
         match="bottleneck_dimensions entries must be non-empty strings",
     ):
         load_taxonomy(path)
+
+
+def test_build_chain_mapping_identifies_chain_context_and_product_exposure() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "industry_name": "通信设备",
+                "product_snippet": "光通信模块、光通信收发模块收入占比高",
+            },
+            {
+                "asset_id": "CN:SH:688256",
+                "stock_name": "寒武纪",
+                "trade_date": "2025-08-22",
+                "industry_name": "半导体",
+                "product_snippet": "云端产品线 智能计算芯片 MLU",
+            },
+            {
+                "asset_id": "CN:SZ:300476",
+                "stock_name": "胜宏科技",
+                "trade_date": "2025-07-04",
+                "industry_name": "电子元件",
+                "product_snippet": "AI服务器PCB 高阶HDI 高多层板",
+            },
+        ]
+    )
+
+    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+    rows = mapping.set_index("asset_id")
+
+    assert rows.loc["CN:SZ:300308", "primary_chain_id"] == "ai_optical_interconnect"
+    assert rows.loc["CN:SZ:300308", "product_exposure_quality"] == "strong"
+    assert rows.loc["CN:SH:688256", "primary_chain_id"] == "ai_compute_chips"
+    assert rows.loc["CN:SZ:300476", "primary_chain_id"] == "ai_server_pcb"
 
 
 def _minimal_chain() -> dict[str, object]:

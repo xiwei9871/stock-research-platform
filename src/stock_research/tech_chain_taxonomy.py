@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 import json
+import math
 from pathlib import Path
 from typing import Any
+
+import pandas as pd
 
 
 REQUIRED_LIST_FIELDS = (
@@ -14,6 +18,19 @@ REQUIRED_LIST_FIELDS = (
     "invalidation_terms",
     "global_reference_entities",
 )
+
+CHAIN_MAPPING_COLUMNS = [
+    "asset_id",
+    "stock_name",
+    "trade_date",
+    "primary_chain_id",
+    "primary_chain_name",
+    "matched_chain_ids",
+    "matched_context_terms",
+    "matched_product_terms",
+    "chain_context_quality",
+    "product_exposure_quality",
+]
 
 
 @dataclass(frozen=True)
@@ -56,6 +73,115 @@ def load_taxonomy(path: Path | str) -> TechChainTaxonomy:
         chains.append(_chain_from_payload(item))
 
     return TechChainTaxonomy(version=payload["version"].strip(), chains=chains)
+
+
+def build_chain_mapping(
+    *, candidates: pd.DataFrame, taxonomy: TechChainTaxonomy
+) -> pd.DataFrame:
+    normalized = _normalize_candidates(candidates)
+    rows: list[dict[str, Any]] = []
+    for candidate in normalized.to_dict("records"):
+        text = _compactible_text(
+            " ".join(
+                [
+                    candidate["stock_name"],
+                    candidate["industry_name"],
+                    candidate["product_snippet"],
+                ]
+            )
+        )
+        matches = [_candidate_chain_match(chain, text) for chain in taxonomy.chains]
+        matches = [match for match in matches if match["score"] > 0]
+        matches = sorted(
+            matches,
+            key=lambda item: (
+                item["product_hits"],
+                item["context_hits"],
+                item["score"],
+            ),
+            reverse=True,
+        )
+        primary = matches[0] if matches else {}
+        rows.append(
+            {
+                "asset_id": candidate["asset_id"],
+                "stock_name": candidate["stock_name"],
+                "trade_date": candidate["trade_date"],
+                "primary_chain_id": str(primary.get("chain_id", "")),
+                "primary_chain_name": str(primary.get("display_name", "")),
+                "matched_chain_ids": "|".join(match["chain_id"] for match in matches),
+                "matched_context_terms": "|".join(primary.get("context_terms", [])),
+                "matched_product_terms": "|".join(primary.get("product_terms", [])),
+                "chain_context_quality": (
+                    "strong" if int(primary.get("context_hits", 0)) > 0 else "missing"
+                ),
+                "product_exposure_quality": (
+                    "strong" if int(primary.get("product_hits", 0)) > 0 else "missing"
+                ),
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=CHAIN_MAPPING_COLUMNS)
+
+
+def _candidate_chain_match(chain: TechChainDefinition, text: str) -> dict[str, Any]:
+    context_terms = _matched_terms(text, chain.chain_context_terms)
+    product_terms = _matched_terms(text, chain.product_exposure_terms)
+    context_hits = len(context_terms)
+    product_hits = len(product_terms)
+    return {
+        "chain_id": chain.chain_id,
+        "display_name": chain.display_name,
+        "context_terms": context_terms,
+        "product_terms": product_terms,
+        "context_hits": context_hits,
+        "product_hits": product_hits,
+        "score": context_hits + product_hits * 3,
+    }
+
+
+def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
+    frame = candidates.copy()
+    for column in [
+        "asset_id",
+        "stock_name",
+        "trade_date",
+        "industry_name",
+        "product_snippet",
+    ]:
+        if column not in frame:
+            frame[column] = ""
+    frame["asset_id"] = frame["asset_id"].astype("string").fillna("")
+    frame["stock_name"] = frame["stock_name"].astype("string").fillna("")
+    frame["industry_name"] = frame["industry_name"].astype("string").fillna("")
+    frame["product_snippet"] = frame["product_snippet"].astype("string").fillna("")
+    frame["trade_date"] = frame["trade_date"].map(_normalize_date)
+    return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
+
+
+def _normalize_date(value: Any) -> str:
+    if pd.isna(value):
+        return ""
+    if isinstance(value, (datetime, date)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, float) and math.isfinite(value) and int(value) == value:
+        value = int(value)
+    text = str(value).strip()
+    if len(text) == 8 and text.isdigit():
+        parsed = pd.to_datetime(text, format="%Y%m%d", errors="coerce")
+    else:
+        parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.strftime("%Y-%m-%d")
+
+
+def _matched_terms(text: str, terms: list[str]) -> list[str]:
+    compact_text = _compactible_text(text)
+    return [term for term in terms if _compactible_text(term) in compact_text]
+
+
+def _compactible_text(value: str) -> str:
+    return "".join(str(value).casefold().split())
 
 
 def _chain_from_payload(item: dict[str, Any]) -> TechChainDefinition:
