@@ -402,6 +402,48 @@ from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
 from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
+from stock_research.mid_trend_watch_funnel import run_mid_trend_watch_funnel
+from stock_research.mid_trend_drawdown_control import run_mid_trend_drawdown_control_validation
+from stock_research.mid_trend_pareto_scan import run_mid_trend_pareto_scan
+from stock_research.mid_trend_shadow_stability import run_mid_trend_shadow_stability_review
+from stock_research.mid_trend_shadow_top10 import run_mid_trend_shadow_top10
+from stock_research.mid_trend_research_packet import run_mid_trend_research_packet
+from stock_research.mid_trend_portfolio_review import run_mid_trend_portfolio_review
+from stock_research.mid_trend_position_dossier import run_mid_trend_position_dossier
+from stock_research.mid_trend_shadow_backtest import run_mid_trend_shadow_backtest
+from stock_research.mid_trend_shadow_weekly_optimization import (
+    run_mid_trend_shadow_weekly_optimization,
+)
+from stock_research.mid_trend_shadow_weekly_control import (
+    run_mid_trend_shadow_weekly_control_review,
+)
+from stock_research.mid_trend_shadow_replacement_scan import (
+    run_mid_trend_shadow_replacement_scan,
+)
+from stock_research.mid_trend_trend_protection_scan import run_mid_trend_trend_protection_scan
+from stock_research.mid_trend_trend_protection_stability import (
+    run_mid_trend_trend_protection_stability_review,
+)
+from stock_research.mid_trend_drawdown_throttle_scan import run_mid_trend_drawdown_throttle_scan
+from stock_research.mid_trend_adaptive_candidate_review import (
+    run_mid_trend_adaptive_candidate_review,
+)
+from stock_research.mid_trend_adaptive_issue_attribution import (
+    run_mid_trend_adaptive_issue_attribution,
+)
+from stock_research.mid_trend_adaptive_bad_buy_attribution import (
+    run_mid_trend_adaptive_bad_buy_attribution,
+)
+from stock_research.mid_trend_entry_timing_attribution import (
+    run_mid_trend_entry_timing_attribution,
+)
+from stock_research.mid_trend_rebalance_attribution import run_mid_trend_rebalance_attribution
+from stock_research.mid_trend_shadow_control_v2_scan import (
+    run_mid_trend_shadow_control_v2_scan,
+)
+from stock_research.mid_trend_bad_rebalance_state_attribution import (
+    run_bad_rebalance_state_attribution,
+)
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -418,6 +460,22 @@ def parse_int_list(value: str, option_name: str) -> list[int]:
 
     if any(item <= 0 for item in values):
         raise argparse.ArgumentTypeError(f"{option_name} values must be positive")
+    return values
+
+
+def parse_float_list(value: str, option_name: str) -> list[float]:
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(part == "" for part in parts):
+        raise argparse.ArgumentTypeError(f"{option_name} must not contain empty values")
+    try:
+        values = [float(part) for part in parts]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"{option_name} must be a comma-separated list of numbers"
+        ) from exc
+
+    if any(item < 0 for item in values):
+        raise argparse.ArgumentTypeError(f"{option_name} values must be non-negative")
     return values
 
 
@@ -2032,6 +2090,412 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--dry-run", action="store_true")
     daily_incremental.add_argument("--apply-daily-run-schema", action="store_true")
     daily_incremental.add_argument("--record-run", action="store_true")
+
+    mid_trend_watch_funnel = subparsers.add_parser("build-mid-trend-watch-funnel")
+    mid_trend_watch_funnel.add_argument(
+        "--discovery-pool-path",
+        default="outputs/research/strong_winner_discovery_pool_detail.csv",
+    )
+    mid_trend_watch_funnel.add_argument("--trade-date")
+    mid_trend_watch_funnel.add_argument("--top50-size", type=int, default=50)
+    mid_trend_watch_funnel.add_argument("--top10-size", type=int, default=10)
+    mid_trend_watch_funnel.add_argument(
+        "--context-detail-path",
+        default="outputs/research/trend_discovery_template_detail.csv",
+    )
+    mid_trend_watch_funnel.add_argument(
+        "--market-regime-path",
+        default="outputs/research/market_regime_diagnostics.csv",
+    )
+    mid_trend_watch_funnel.add_argument(
+        "--industry-mainline-path",
+        default="outputs/research/industry_mainline_regime_diagnostics.csv",
+    )
+    mid_trend_watch_funnel.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_drawdown_control = subparsers.add_parser("validate-mid-trend-drawdown-control")
+    mid_trend_drawdown_control.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_drawdown_control.add_argument(
+        "--baseline-top10-path",
+        default="outputs/research/mid_trend_watch_top10.csv",
+    )
+    mid_trend_drawdown_control.add_argument("--top-n", type=int, default=10)
+    mid_trend_drawdown_control.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_pareto_scan = subparsers.add_parser("scan-mid-trend-risk-return-pareto")
+    mid_trend_pareto_scan.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_pareto_scan.add_argument("--top-n", type=int, default=10)
+    mid_trend_pareto_scan.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_stability = subparsers.add_parser("review-mid-trend-shadow-stability")
+    mid_trend_shadow_stability.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_stability.add_argument(
+        "--baseline-top10-path",
+        default="outputs/research/mid_trend_watch_top10.csv",
+    )
+    mid_trend_shadow_stability.add_argument("--top-n", type=int, default=10)
+    mid_trend_shadow_stability.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_top10 = subparsers.add_parser("build-mid-trend-shadow-top10")
+    mid_trend_shadow_top10.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_top10.add_argument("--trade-date")
+    mid_trend_shadow_top10.add_argument("--top-n", type=int, default=10)
+    mid_trend_shadow_top10.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_research_packet = subparsers.add_parser("build-mid-trend-research-packet")
+    mid_trend_research_packet.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_research_packet.add_argument(
+        "--fundamental-path",
+        default="outputs/research/watchlist_fundamental_pit_context.csv",
+    )
+    mid_trend_research_packet.add_argument("--stock-report-feature-path")
+    mid_trend_research_packet.add_argument("--trade-date")
+    mid_trend_research_packet.add_argument("--top-n", type=int, default=5)
+    mid_trend_research_packet.add_argument("--score-floor", type=float, default=80.0)
+    mid_trend_research_packet.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_portfolio_review = subparsers.add_parser("build-mid-trend-portfolio-review")
+    mid_trend_portfolio_review.add_argument("--trade-date", required=True)
+    mid_trend_portfolio_review.add_argument("--strategy-variant", required=True)
+    mid_trend_portfolio_review.add_argument("--top10-path", required=True)
+    mid_trend_portfolio_review.add_argument("--holdings-path", required=True)
+    mid_trend_portfolio_review.add_argument("--trades-path", required=True)
+    mid_trend_portfolio_review.add_argument("--research-packet-path", required=True)
+    mid_trend_portfolio_review.add_argument("--output-dir", default="outputs/research")
+    mid_trend_portfolio_review.add_argument(
+        "--write-research-infra",
+        action="store_true",
+        help="Write standardized research_infra sidecar artifacts for this review.",
+    )
+
+    mid_trend_position_dossier = subparsers.add_parser("build-mid-trend-position-dossier")
+    mid_trend_position_dossier.add_argument("--trade-date", required=True)
+    mid_trend_position_dossier.add_argument("--mode", choices=["replay", "live"], default="replay")
+    mid_trend_position_dossier.add_argument("--portfolio-review-path", required=True)
+    mid_trend_position_dossier.add_argument("--research-packet-path", required=True)
+    mid_trend_position_dossier.add_argument("--news-enrichment-path")
+    mid_trend_position_dossier.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_backtest = subparsers.add_parser("backtest-mid-trend-shadow-top10")
+    mid_trend_shadow_backtest.add_argument(
+        "--shadow-top10-path",
+        default="outputs/research/mid_trend_shadow_top10.csv",
+    )
+    mid_trend_shadow_backtest.add_argument("--start-date", required=True)
+    mid_trend_shadow_backtest.add_argument("--end-date", required=True)
+    mid_trend_shadow_backtest.add_argument("--top-n", type=int, default=10)
+    mid_trend_shadow_backtest.add_argument("--rebalance-frequency", default="daily")
+    mid_trend_shadow_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_shadow_backtest.add_argument("--adjust-type", default="hfq")
+    mid_trend_shadow_backtest.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_weekly_optimization = subparsers.add_parser(
+        "optimize-mid-trend-shadow-weekly"
+    )
+    mid_trend_shadow_weekly_optimization.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_weekly_optimization.add_argument("--start-date", required=True)
+    mid_trend_shadow_weekly_optimization.add_argument("--end-date", required=True)
+    mid_trend_shadow_weekly_optimization.add_argument(
+        "--top-n-values",
+        type=lambda value: parse_int_list(value, "--top-n-values"),
+        default="5,8,10,12,15",
+    )
+    mid_trend_shadow_weekly_optimization.add_argument(
+        "--transaction-cost-bps-values",
+        type=lambda value: parse_float_list(value, "--transaction-cost-bps-values"),
+        default="10,20,30",
+    )
+    mid_trend_shadow_weekly_optimization.add_argument("--adjust-type", default="hfq")
+    mid_trend_shadow_weekly_optimization.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_weekly_control = subparsers.add_parser(
+        "review-mid-trend-shadow-weekly-control"
+    )
+    mid_trend_shadow_weekly_control.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_weekly_control.add_argument("--start-date", required=True)
+    mid_trend_shadow_weekly_control.add_argument("--end-date", required=True)
+    mid_trend_shadow_weekly_control.add_argument("--top-n", type=int, default=5)
+    mid_trend_shadow_weekly_control.add_argument("--buffer-rank", type=int, default=10)
+    mid_trend_shadow_weekly_control.add_argument("--max-weekly-replacements", type=int, default=2)
+    mid_trend_shadow_weekly_control.add_argument("--peak-drawdown-exit", type=float, default=0.12)
+    mid_trend_shadow_weekly_control.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_shadow_weekly_control.add_argument("--adjust-type", default="hfq")
+    mid_trend_shadow_weekly_control.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_adaptive_candidate = subparsers.add_parser(
+        "review-mid-trend-adaptive-candidate"
+    )
+    mid_trend_adaptive_candidate.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_adaptive_candidate.add_argument("--start-date", required=True)
+    mid_trend_adaptive_candidate.add_argument("--end-date", required=True)
+    mid_trend_adaptive_candidate.add_argument(
+        "--cost-bps-values",
+        type=lambda value: parse_float_list(value, "--cost-bps-values"),
+        default="10,20,30,50",
+    )
+    mid_trend_adaptive_candidate.add_argument("--top-n", type=int, default=5)
+    mid_trend_adaptive_candidate.add_argument("--buffer-rank", type=int, default=10)
+    mid_trend_adaptive_candidate.add_argument("--max-weekly-replacements", type=int, default=2)
+    mid_trend_adaptive_candidate.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_adaptive_candidate.add_argument("--adjust-type", default="hfq")
+    mid_trend_adaptive_candidate.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_adaptive_issue = subparsers.add_parser(
+        "review-mid-trend-adaptive-issue-attribution"
+    )
+    mid_trend_adaptive_issue.add_argument(
+        "--monthly-path",
+        default=(
+            "outputs/research/mid_trend_adaptive_candidate_review_v1/"
+            "mid_trend_adaptive_candidate_monthly_stability.csv"
+        ),
+    )
+    mid_trend_adaptive_issue.add_argument(
+        "--attribution-detail-path",
+        default=(
+            "outputs/research/mid_trend_adaptive_candidate_review_v1/"
+            "mid_trend_adaptive_candidate_rebalance_attribution_detail.csv"
+        ),
+    )
+    mid_trend_adaptive_issue.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_adaptive_issue.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_adaptive_bad_buy = subparsers.add_parser(
+        "review-mid-trend-adaptive-bad-buy-attribution"
+    )
+    mid_trend_adaptive_bad_buy.add_argument(
+        "--attribution-detail-path",
+        default=(
+            "outputs/research/mid_trend_adaptive_candidate_review_v1/"
+            "mid_trend_adaptive_candidate_rebalance_attribution_detail.csv"
+        ),
+    )
+    mid_trend_adaptive_bad_buy.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_adaptive_bad_buy.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_entry_timing = subparsers.add_parser(
+        "review-mid-trend-entry-timing-attribution"
+    )
+    mid_trend_entry_timing.add_argument(
+        "--attribution-detail-path",
+        default=(
+            "outputs/research/mid_trend_adaptive_candidate_review_v1/"
+            "mid_trend_adaptive_candidate_rebalance_attribution_detail.csv"
+        ),
+    )
+    mid_trend_entry_timing.add_argument("--start-date", required=True)
+    mid_trend_entry_timing.add_argument("--end-date", required=True)
+    mid_trend_entry_timing.add_argument("--prices-path", default=None)
+    mid_trend_entry_timing.add_argument("--valuation-path", default=None)
+    mid_trend_entry_timing.add_argument("--adjust-type", default="hfq")
+    mid_trend_entry_timing.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_replacement_scan = subparsers.add_parser(
+        "scan-mid-trend-shadow-replacements"
+    )
+    mid_trend_shadow_replacement_scan.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_replacement_scan.add_argument("--start-date", required=True)
+    mid_trend_shadow_replacement_scan.add_argument("--end-date", required=True)
+    mid_trend_shadow_replacement_scan.add_argument(
+        "--top-n-values",
+        type=lambda value: parse_int_list(value, "--top-n-values"),
+        default="5,8",
+    )
+    mid_trend_shadow_replacement_scan.add_argument(
+        "--max-weekly-replacements-values",
+        type=lambda value: parse_int_list(value, "--max-weekly-replacements-values"),
+        default="1,2,3",
+    )
+    mid_trend_shadow_replacement_scan.add_argument(
+        "--transaction-cost-bps-values",
+        type=lambda value: parse_float_list(value, "--transaction-cost-bps-values"),
+        default="10,20,30",
+    )
+    mid_trend_shadow_replacement_scan.add_argument("--adjust-type", default="hfq")
+    mid_trend_shadow_replacement_scan.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_trend_protection_scan = subparsers.add_parser("scan-mid-trend-protection")
+    mid_trend_trend_protection_scan.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_trend_protection_scan.add_argument("--start-date", required=True)
+    mid_trend_trend_protection_scan.add_argument("--end-date", required=True)
+    mid_trend_trend_protection_scan.add_argument(
+        "--score-gap-values",
+        type=lambda value: parse_float_list(value, "--score-gap-values"),
+        default="6,8,10,12",
+    )
+    mid_trend_trend_protection_scan.add_argument(
+        "--mainline-gap-values",
+        type=lambda value: parse_float_list(value, "--mainline-gap-values"),
+        default="0.05,0.10,0.15",
+    )
+    mid_trend_trend_protection_scan.add_argument(
+        "--trend-r2-min-values",
+        type=lambda value: parse_float_list(value, "--trend-r2-min-values"),
+        default="75,80",
+    )
+    mid_trend_trend_protection_scan.add_argument(
+        "--ret20-min-values",
+        type=lambda value: parse_float_list(value, "--ret20-min-values"),
+        default="65,70",
+    )
+    mid_trend_trend_protection_scan.add_argument(
+        "--drawdown-min-values",
+        type=lambda value: parse_float_list(value, "--drawdown-min-values"),
+        default="50,55",
+    )
+    mid_trend_trend_protection_scan.add_argument("--top-n", type=int, default=5)
+    mid_trend_trend_protection_scan.add_argument("--max-weekly-replacements", type=int, default=2)
+    mid_trend_trend_protection_scan.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_trend_protection_scan.add_argument("--adjust-type", default="hfq")
+    mid_trend_trend_protection_scan.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_drawdown_throttle_scan = subparsers.add_parser(
+        "scan-mid-trend-drawdown-throttle"
+    )
+    mid_trend_drawdown_throttle_scan.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_drawdown_throttle_scan.add_argument("--start-date", required=True)
+    mid_trend_drawdown_throttle_scan.add_argument("--end-date", required=True)
+    mid_trend_drawdown_throttle_scan.add_argument(
+        "--threshold-values",
+        type=lambda value: parse_float_list(value, "--threshold-values"),
+        default="0.08,0.10,0.12",
+    )
+    mid_trend_drawdown_throttle_scan.add_argument(
+        "--invested-weight-values",
+        type=lambda value: parse_float_list(value, "--invested-weight-values"),
+        default="0.8,0.9,1.0",
+    )
+    mid_trend_drawdown_throttle_scan.add_argument(
+        "--max-replacement-values",
+        type=lambda value: parse_int_list(value, "--max-replacement-values"),
+        default="1,2",
+    )
+    mid_trend_drawdown_throttle_scan.add_argument("--top-n", type=int, default=5)
+    mid_trend_drawdown_throttle_scan.add_argument("--buffer-rank", type=int, default=10)
+    mid_trend_drawdown_throttle_scan.add_argument("--max-weekly-replacements", type=int, default=2)
+    mid_trend_drawdown_throttle_scan.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_drawdown_throttle_scan.add_argument("--adjust-type", default="hfq")
+    mid_trend_drawdown_throttle_scan.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_trend_protection_stability = subparsers.add_parser(
+        "review-mid-trend-protection-stability"
+    )
+    mid_trend_trend_protection_stability.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_trend_protection_stability.add_argument("--start-date", required=True)
+    mid_trend_trend_protection_stability.add_argument("--end-date", required=True)
+    mid_trend_trend_protection_stability.add_argument("--protection-score-gap", type=float, default=6.0)
+    mid_trend_trend_protection_stability.add_argument("--protection-mainline-gap", type=float, default=0.05)
+    mid_trend_trend_protection_stability.add_argument("--protection-trend-r2-min", type=float, default=75.0)
+    mid_trend_trend_protection_stability.add_argument("--protection-ret20-min", type=float, default=65.0)
+    mid_trend_trend_protection_stability.add_argument("--protection-drawdown-min", type=float, default=50.0)
+    mid_trend_trend_protection_stability.add_argument("--top-n", type=int, default=5)
+    mid_trend_trend_protection_stability.add_argument("--max-weekly-replacements", type=int, default=2)
+    mid_trend_trend_protection_stability.add_argument(
+        "--transaction-cost-bps",
+        type=float,
+        default=20.0,
+    )
+    mid_trend_trend_protection_stability.add_argument("--adjust-type", default="hfq")
+    mid_trend_trend_protection_stability.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_rebalance_attribution = subparsers.add_parser(
+        "review-mid-trend-rebalance-attribution"
+    )
+    mid_trend_rebalance_attribution.add_argument(
+        "--trades-path",
+        default=(
+            "outputs/research/mid_trend_shadow_weekly_control_v1/"
+            "mid_trend_shadow_weekly_control_trades.csv"
+        ),
+    )
+    mid_trend_rebalance_attribution.add_argument(
+        "--equity-path",
+        default=(
+            "outputs/research/mid_trend_shadow_weekly_control_v1/"
+            "mid_trend_shadow_weekly_control_equity.csv"
+        ),
+    )
+    mid_trend_rebalance_attribution.add_argument("--start-date", required=True)
+    mid_trend_rebalance_attribution.add_argument("--end-date", required=True)
+    mid_trend_rebalance_attribution.add_argument(
+        "--variant-name",
+        default="top5_weekly_max_2_replacements",
+    )
+    mid_trend_rebalance_attribution.add_argument("--adjust-type", default="hfq")
+    mid_trend_rebalance_attribution.add_argument("--output-dir", default="outputs/research")
+
+    mid_trend_shadow_control_v2 = subparsers.add_parser("scan-mid-trend-shadow-control-v2")
+    mid_trend_shadow_control_v2.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_shadow_control_v2.add_argument("--start-date", required=True)
+    mid_trend_shadow_control_v2.add_argument("--end-date", required=True)
+    mid_trend_shadow_control_v2.add_argument("--top-n", type=int, default=5)
+    mid_trend_shadow_control_v2.add_argument("--base-max-replacements", type=int, default=2)
+    mid_trend_shadow_control_v2.add_argument("--drawdown-threshold", type=float, default=0.08)
+    mid_trend_shadow_control_v2.add_argument("--drawdown-worsen-threshold", type=float, default=0.03)
+    mid_trend_shadow_control_v2.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    mid_trend_shadow_control_v2.add_argument("--adjust-type", default="hfq")
+    mid_trend_shadow_control_v2.add_argument("--output-dir", default="outputs/research")
+
+    bad_rebalance_state_attribution = subparsers.add_parser(
+        "review-bad-rebalance-state-attribution"
+    )
+    bad_rebalance_state_attribution.add_argument(
+        "--attribution-detail-path",
+        default=(
+            "outputs/research/mid_trend_rebalance_attribution/"
+            "mid_trend_rebalance_attribution_detail.csv"
+        ),
+    )
+    bad_rebalance_state_attribution.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_detail.csv",
+    )
+    bad_rebalance_state_attribution.add_argument("--output-dir", default="outputs/research")
 
     stock_report_workpack = subparsers.add_parser("build-stock-report-workpack")
     stock_report_workpack.add_argument(
@@ -3895,6 +4359,450 @@ def main_for_args(argv: list[str] | None = None) -> None:
             print(f"daily_incremental_step|{step['step']}|{step['status']}")
             if "error" in step:
                 print(f"daily_incremental_step_error|{step['step']}|{step['error']}")
+    elif args.command == "build-mid-trend-watch-funnel":
+        result = run_mid_trend_watch_funnel(
+            discovery_pool_path=args.discovery_pool_path,
+            trade_date=args.trade_date,
+            top50_size=args.top50_size,
+            top10_size=args.top10_size,
+            context_detail_path=args.context_detail_path,
+            market_regime_path=args.market_regime_path,
+            industry_mainline_path=args.industry_mainline_path,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_watch_funnel|detail|{result['paths']['detail']}")
+        print(f"mid_trend_watch_funnel|layer_effectiveness|{result['paths']['layer_effectiveness']}")
+        print(f"mid_trend_watch_funnel|pool_effectiveness|{result['paths']['pool_effectiveness']}")
+        print(f"mid_trend_watch_funnel|top50|{result['paths']['top50']}")
+        print(f"mid_trend_watch_funnel|top10|{result['paths']['top10']}")
+        print(f"mid_trend_watch_funnel|report|{result['paths']['report']}")
+        print(f"mid_trend_watch_funnel|rows|{len(result['detail'])}")
+    elif args.command == "validate-mid-trend-drawdown-control":
+        result = run_mid_trend_drawdown_control_validation(
+            funnel_detail_path=args.funnel_detail_path,
+            baseline_top10_path=args.baseline_top10_path,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_drawdown_control|variant_detail|{result['paths']['variant_detail']}")
+        print(f"mid_trend_drawdown_control|effectiveness|{result['paths']['effectiveness']}")
+        print(f"mid_trend_drawdown_control|recommendations|{result['paths']['recommendations']}")
+        print(f"mid_trend_drawdown_control|report|{result['paths']['report']}")
+        print(f"mid_trend_drawdown_control|rows|{len(result['variant_detail'])}")
+    elif args.command == "scan-mid-trend-risk-return-pareto":
+        result = run_mid_trend_pareto_scan(
+            funnel_detail_path=args.funnel_detail_path,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_pareto_scan|threshold_scan|{result['paths']['threshold_scan']}")
+        print(f"mid_trend_pareto_scan|combo_scan|{result['paths']['combo_scan']}")
+        print(
+            "mid_trend_pareto_scan|high_elasticity_decomposition|"
+            f"{result['paths']['high_elasticity_decomposition']}"
+        )
+        print(f"mid_trend_pareto_scan|pareto_recommendations|{result['paths']['pareto_recommendations']}")
+        print(f"mid_trend_pareto_scan|report|{result['paths']['report']}")
+        print(f"mid_trend_pareto_scan|rows|{len(result['threshold_scan'])}")
+    elif args.command == "review-mid-trend-shadow-stability":
+        result = run_mid_trend_shadow_stability_review(
+            funnel_detail_path=args.funnel_detail_path,
+            baseline_top10_path=args.baseline_top10_path,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_stability|by_period|{result['paths']['by_period']}")
+        print(f"mid_trend_shadow_stability|by_regime|{result['paths']['by_regime']}")
+        print(f"mid_trend_shadow_stability|by_industry|{result['paths']['by_industry']}")
+        print(f"mid_trend_shadow_stability|by_layer|{result['paths']['by_layer']}")
+        print(f"mid_trend_shadow_stability|decision|{result['paths']['decision']}")
+        print(f"mid_trend_shadow_stability|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_stability|rows|{len(result['by_period'])}")
+    elif args.command == "build-mid-trend-shadow-top10":
+        result = run_mid_trend_shadow_top10(
+            funnel_detail_path=args.funnel_detail_path,
+            trade_date=args.trade_date,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_top10|top10|{result['paths']['top10']}")
+        print(f"mid_trend_shadow_top10|daily_summary|{result['paths']['daily_summary']}")
+        print(f"mid_trend_shadow_top10|industry_summary|{result['paths']['industry_summary']}")
+        print(f"mid_trend_shadow_top10|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_top10|rows|{len(result['top10'])}")
+    elif args.command == "build-mid-trend-research-packet":
+        result = run_mid_trend_research_packet(
+            funnel_detail_path=args.funnel_detail_path,
+            fundamental_path=args.fundamental_path,
+            stock_report_feature_path=args.stock_report_feature_path,
+            trade_date=args.trade_date,
+            top_n=args.top_n,
+            score_floor=args.score_floor,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_research_packet|candidates|{result['paths']['candidates']}")
+        print(f"mid_trend_research_packet|manual_fields|{result['paths']['manual_fields']}")
+        print(f"mid_trend_research_packet|report|{result['paths']['report']}")
+        print(f"mid_trend_research_packet|rows|{len(result['candidates'])}")
+    elif args.command == "build-mid-trend-portfolio-review":
+        result = run_mid_trend_portfolio_review(
+            trade_date=args.trade_date,
+            strategy_variant=args.strategy_variant,
+            top10_path=args.top10_path,
+            holdings_path=args.holdings_path,
+            trades_path=args.trades_path,
+            research_packet_path=args.research_packet_path,
+            output_dir=args.output_dir,
+            write_research_infra=args.write_research_infra,
+        )
+        print(f"mid_trend_portfolio_review|csv|{result['paths']['csv']}")
+        print(f"mid_trend_portfolio_review|report|{result['paths']['report']}")
+        print(f"mid_trend_portfolio_review|rows|{len(result['review_rows'])}")
+        research_infra = result.get("research_infra")
+        if research_infra:
+            print(
+                "mid_trend_portfolio_review|research_infra|"
+                f"{research_infra['research_infra_dir']}"
+            )
+            print(
+                "mid_trend_portfolio_review|research_signals|"
+                f"{research_infra['research_signals_json_path']}"
+            )
+            print(
+                "mid_trend_portfolio_review|attribution_cards|"
+                f"{research_infra['attribution_cards_json_path']}"
+            )
+            print(
+                "mid_trend_portfolio_review|run_card|"
+                f"{research_infra['run_card']['run_card_json_path']}"
+            )
+    elif args.command == "build-mid-trend-position-dossier":
+        result = run_mid_trend_position_dossier(
+            trade_date=args.trade_date,
+            mode=args.mode,
+            portfolio_review_path=args.portfolio_review_path,
+            research_packet_path=args.research_packet_path,
+            news_enrichment_path=args.news_enrichment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_position_dossier|csv|{result['paths']['csv']}")
+        print(f"mid_trend_position_dossier|report|{result['paths']['report']}")
+        print(f"mid_trend_position_dossier|rows|{len(result['summary_rows'])}")
+        if args.news_enrichment_path is not None:
+            status = result.get("news_enrichment_status", result.get("summary", {}))
+            print(
+                "mid_trend_position_dossier|news_enrichment_provided|"
+                f"{status.get('news_enrichment_provided', 'yes')}"
+            )
+            print(
+                "mid_trend_position_dossier|news_enrichment_used|"
+                f"{status.get('news_enrichment_used', 'no')}"
+            )
+            print(
+                "mid_trend_position_dossier|matched_news_rows|"
+                f"{status.get('matched_news_rows', 0)}"
+            )
+    elif args.command == "backtest-mid-trend-shadow-top10":
+        result = run_mid_trend_shadow_backtest(
+            shadow_top10_path=args.shadow_top10_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            rebalance_frequency=args.rebalance_frequency,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_backtest|equity_curve|{result['paths']['equity_curve']}")
+        print(f"mid_trend_shadow_backtest|positions|{result['paths']['positions']}")
+        print(f"mid_trend_shadow_backtest|trades|{result['paths']['trades']}")
+        print(f"mid_trend_shadow_backtest|summary|{result['paths']['summary']}")
+        print(f"mid_trend_shadow_backtest|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_backtest|rows|{len(result.get('equity_curve', []))}")
+    elif args.command == "optimize-mid-trend-shadow-weekly":
+        top_n_values = (
+            parse_int_list(args.top_n_values, "--top-n-values")
+            if isinstance(args.top_n_values, str)
+            else args.top_n_values
+        )
+        transaction_cost_bps_values = (
+            parse_float_list(args.transaction_cost_bps_values, "--transaction-cost-bps-values")
+            if isinstance(args.transaction_cost_bps_values, str)
+            else args.transaction_cost_bps_values
+        )
+        result = run_mid_trend_shadow_weekly_optimization(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n_values=top_n_values,
+            transaction_cost_bps_values=transaction_cost_bps_values,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_weekly_optimization|summary|{result['paths']['summary']}")
+        print(f"mid_trend_shadow_weekly_optimization|best_equity_curve|{result['paths']['best_equity_curve']}")
+        print(f"mid_trend_shadow_weekly_optimization|best_positions|{result['paths']['best_positions']}")
+        print(f"mid_trend_shadow_weekly_optimization|best_trades|{result['paths']['best_trades']}")
+        print(f"mid_trend_shadow_weekly_optimization|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_weekly_optimization|rows|{len(result.get('summary', []))}")
+    elif args.command == "review-mid-trend-shadow-weekly-control":
+        result = run_mid_trend_shadow_weekly_control_review(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            buffer_rank=args.buffer_rank,
+            max_weekly_replacements=args.max_weekly_replacements,
+            peak_drawdown_exit=args.peak_drawdown_exit,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_weekly_control|summary|{result['paths']['summary']}")
+        print(f"mid_trend_shadow_weekly_control|equity_curve|{result['paths']['equity_curve']}")
+        print(f"mid_trend_shadow_weekly_control|positions|{result['paths']['positions']}")
+        print(f"mid_trend_shadow_weekly_control|trades|{result['paths']['trades']}")
+        print(f"mid_trend_shadow_weekly_control|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_weekly_control|rows|{len(result.get('summary', []))}")
+    elif args.command == "review-mid-trend-adaptive-candidate":
+        cost_bps_values = (
+            parse_float_list(args.cost_bps_values, "--cost-bps-values")
+            if isinstance(args.cost_bps_values, str)
+            else args.cost_bps_values
+        )
+        result = run_mid_trend_adaptive_candidate_review(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            cost_bps_values=cost_bps_values,
+            top_n=args.top_n,
+            buffer_rank=args.buffer_rank,
+            max_weekly_replacements=args.max_weekly_replacements,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_adaptive_candidate|monthly|{result['paths']['monthly']}")
+        print(f"mid_trend_adaptive_candidate|quarterly|{result['paths']['quarterly']}")
+        print(f"mid_trend_adaptive_candidate|attribution_summary|{result['paths']['attribution_summary']}")
+        print(f"mid_trend_adaptive_candidate|attribution_detail|{result['paths']['attribution_detail']}")
+        print(f"mid_trend_adaptive_candidate|cost_scan|{result['paths']['cost_scan']}")
+        print(f"mid_trend_adaptive_candidate|weak_periods|{result['paths']['weak_periods']}")
+        print(f"mid_trend_adaptive_candidate|report|{result['paths']['report']}")
+        print(f"mid_trend_adaptive_candidate|rows|{len(result.get('monthly', []))}")
+    elif args.command == "review-mid-trend-adaptive-issue-attribution":
+        result = run_mid_trend_adaptive_issue_attribution(
+            monthly_path=args.monthly_path,
+            attribution_detail_path=args.attribution_detail_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_adaptive_issue_attribution|period_gap|{result['paths']['period_gap']}")
+        print(f"mid_trend_adaptive_issue_attribution|sell_fly_detail|{result['paths']['sell_fly_detail']}")
+        print(f"mid_trend_adaptive_issue_attribution|feature_summary|{result['paths']['feature_summary']}")
+        print(f"mid_trend_adaptive_issue_attribution|report|{result['paths']['report']}")
+        print(f"mid_trend_adaptive_issue_attribution|rows|{len(result.get('period_gap', []))}")
+    elif args.command == "review-mid-trend-adaptive-bad-buy-attribution":
+        result = run_mid_trend_adaptive_bad_buy_attribution(
+            attribution_detail_path=args.attribution_detail_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_adaptive_bad_buy_attribution|bad_buy_detail|{result['paths']['bad_buy_detail']}")
+        print(f"mid_trend_adaptive_bad_buy_attribution|feature_contrast|{result['paths']['feature_contrast']}")
+        print(f"mid_trend_adaptive_bad_buy_attribution|report|{result['paths']['report']}")
+        print(f"mid_trend_adaptive_bad_buy_attribution|rows|{len(result.get('bad_buy_detail', []))}")
+    elif args.command == "review-mid-trend-entry-timing-attribution":
+        result = run_mid_trend_entry_timing_attribution(
+            attribution_detail_path=args.attribution_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            prices_path=args.prices_path,
+            valuation_path=args.valuation_path,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_entry_timing_attribution|detail|{result['paths']['entry_timing_detail']}")
+        print(f"mid_trend_entry_timing_attribution|contrast|{result['paths']['entry_timing_contrast']}")
+        print(f"mid_trend_entry_timing_attribution|report|{result['paths']['report']}")
+        print(f"mid_trend_entry_timing_attribution|rows|{len(result.get('entry_timing_detail', []))}")
+    elif args.command == "scan-mid-trend-shadow-replacements":
+        top_n_values = (
+            parse_int_list(args.top_n_values, "--top-n-values")
+            if isinstance(args.top_n_values, str)
+            else args.top_n_values
+        )
+        max_weekly_replacement_values = (
+            parse_int_list(args.max_weekly_replacements_values, "--max-weekly-replacements-values")
+            if isinstance(args.max_weekly_replacements_values, str)
+            else args.max_weekly_replacements_values
+        )
+        transaction_cost_bps_values = (
+            parse_float_list(args.transaction_cost_bps_values, "--transaction-cost-bps-values")
+            if isinstance(args.transaction_cost_bps_values, str)
+            else args.transaction_cost_bps_values
+        )
+        result = run_mid_trend_shadow_replacement_scan(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n_values=top_n_values,
+            max_weekly_replacement_values=max_weekly_replacement_values,
+            transaction_cost_bps_values=transaction_cost_bps_values,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_replacement_scan|summary|{result['paths']['summary']}")
+        print(f"mid_trend_shadow_replacement_scan|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_replacement_scan|rows|{len(result.get('summary', []))}")
+    elif args.command == "scan-mid-trend-protection":
+        score_gap_values = (
+            parse_float_list(args.score_gap_values, "--score-gap-values")
+            if isinstance(args.score_gap_values, str)
+            else args.score_gap_values
+        )
+        mainline_gap_values = (
+            parse_float_list(args.mainline_gap_values, "--mainline-gap-values")
+            if isinstance(args.mainline_gap_values, str)
+            else args.mainline_gap_values
+        )
+        trend_r2_min_values = (
+            parse_float_list(args.trend_r2_min_values, "--trend-r2-min-values")
+            if isinstance(args.trend_r2_min_values, str)
+            else args.trend_r2_min_values
+        )
+        ret20_min_values = (
+            parse_float_list(args.ret20_min_values, "--ret20-min-values")
+            if isinstance(args.ret20_min_values, str)
+            else args.ret20_min_values
+        )
+        drawdown_min_values = (
+            parse_float_list(args.drawdown_min_values, "--drawdown-min-values")
+            if isinstance(args.drawdown_min_values, str)
+            else args.drawdown_min_values
+        )
+        result = run_mid_trend_trend_protection_scan(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_gap_values=score_gap_values,
+            mainline_gap_values=mainline_gap_values,
+            trend_r2_min_values=trend_r2_min_values,
+            ret20_min_values=ret20_min_values,
+            drawdown_min_values=drawdown_min_values,
+            top_n=args.top_n,
+            max_weekly_replacements=args.max_weekly_replacements,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_trend_protection_scan|summary|{result['paths']['summary']}")
+        print(f"mid_trend_trend_protection_scan|report|{result['paths']['report']}")
+        print(f"mid_trend_trend_protection_scan|rows|{len(result.get('summary', []))}")
+    elif args.command == "scan-mid-trend-drawdown-throttle":
+        threshold_values = (
+            parse_float_list(args.threshold_values, "--threshold-values")
+            if isinstance(args.threshold_values, str)
+            else args.threshold_values
+        )
+        invested_weight_values = (
+            parse_float_list(args.invested_weight_values, "--invested-weight-values")
+            if isinstance(args.invested_weight_values, str)
+            else args.invested_weight_values
+        )
+        max_replacement_values = (
+            parse_int_list(args.max_replacement_values, "--max-replacement-values")
+            if isinstance(args.max_replacement_values, str)
+            else args.max_replacement_values
+        )
+        result = run_mid_trend_drawdown_throttle_scan(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            threshold_values=threshold_values,
+            invested_weight_values=invested_weight_values,
+            max_replacement_values=max_replacement_values,
+            top_n=args.top_n,
+            buffer_rank=args.buffer_rank,
+            max_weekly_replacements=args.max_weekly_replacements,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_drawdown_throttle_scan|summary|{result['paths']['summary']}")
+        print(f"mid_trend_drawdown_throttle_scan|report|{result['paths']['report']}")
+        print(f"mid_trend_drawdown_throttle_scan|rows|{len(result.get('summary', []))}")
+    elif args.command == "review-mid-trend-protection-stability":
+        result = run_mid_trend_trend_protection_stability_review(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            protection_score_gap=args.protection_score_gap,
+            protection_mainline_gap=args.protection_mainline_gap,
+            protection_trend_r2_min=args.protection_trend_r2_min,
+            protection_ret20_min=args.protection_ret20_min,
+            protection_drawdown_min=args.protection_drawdown_min,
+            top_n=args.top_n,
+            max_weekly_replacements=args.max_weekly_replacements,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_trend_protection_stability|monthly|{result['paths']['monthly']}")
+        print(f"mid_trend_trend_protection_stability|quarterly|{result['paths']['quarterly']}")
+        print(
+            "mid_trend_trend_protection_stability|attribution_summary|"
+            f"{result['paths']['attribution_summary']}"
+        )
+        print(
+            "mid_trend_trend_protection_stability|attribution_detail|"
+            f"{result['paths']['attribution_detail']}"
+        )
+        print(f"mid_trend_trend_protection_stability|report|{result['paths']['report']}")
+        print(f"mid_trend_trend_protection_stability|rows|{len(result.get('monthly', []))}")
+    elif args.command == "review-mid-trend-rebalance-attribution":
+        result = run_mid_trend_rebalance_attribution(
+            trades_path=args.trades_path,
+            equity_path=args.equity_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            variant_name=args.variant_name,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_rebalance_attribution|detail|{result['paths']['detail']}")
+        print(f"mid_trend_rebalance_attribution|summary|{result['paths']['summary']}")
+        print(f"mid_trend_rebalance_attribution|report|{result['paths']['report']}")
+        print(f"mid_trend_rebalance_attribution|rows|{len(result.get('detail', []))}")
+    elif args.command == "scan-mid-trend-shadow-control-v2":
+        result = run_mid_trend_shadow_control_v2_scan(
+            funnel_detail_path=args.funnel_detail_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n=args.top_n,
+            base_max_replacements=args.base_max_replacements,
+            drawdown_threshold=args.drawdown_threshold,
+            drawdown_worsen_threshold=args.drawdown_worsen_threshold,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_shadow_control_v2|summary|{result['paths']['summary']}")
+        print(f"mid_trend_shadow_control_v2|equity_curve|{result['paths']['equity_curve']}")
+        print(f"mid_trend_shadow_control_v2|positions|{result['paths']['positions']}")
+        print(f"mid_trend_shadow_control_v2|trades|{result['paths']['trades']}")
+        print(f"mid_trend_shadow_control_v2|report|{result['paths']['report']}")
+        print(f"mid_trend_shadow_control_v2|rows|{len(result.get('summary', []))}")
+    elif args.command == "review-bad-rebalance-state-attribution":
+        result = run_bad_rebalance_state_attribution(
+            attribution_detail_path=args.attribution_detail_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"bad_rebalance_state_attribution|detail|{result['paths']['detail']}")
+        print(f"bad_rebalance_state_attribution|feature_summary|{result['paths']['feature_summary']}")
+        print(f"bad_rebalance_state_attribution|report|{result['paths']['report']}")
+        print(f"bad_rebalance_state_attribution|rows|{len(result.get('detail', []))}")
     elif args.command == "build-stock-report-workpack":
         result = run_stock_report_workpack(
             research_packet_path=args.research_packet_path,
