@@ -33,7 +33,14 @@ STYLE_MAPPING = {
 
 
 DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS = ("电力", "热力", "煤炭", "银行", "金融", "食品", "饮料", "酒", "家电", "公用")
-ANCHOR_NAMES = ("长江电力", "中国神华", "农业银行", "伊利股份", "贵州茅台")
+ANCHOR_RECORDS = (
+    {"name": "长江电力", "asset_id": "CN:SH:600900", "code": "600900"},
+    {"name": "中国神华", "asset_id": "CN:SH:601088", "code": "601088"},
+    {"name": "农业银行", "asset_id": "CN:SH:601288", "code": "601288"},
+    {"name": "伊利股份", "asset_id": "CN:SH:600887", "code": "600887"},
+    {"name": "贵州茅台", "asset_id": "CN:SH:600519", "code": "600519"},
+)
+ANCHOR_NAMES = tuple(anchor["name"] for anchor in ANCHOR_RECORDS)
 
 FUNNEL_BASE_COLUMNS = [
     "trade_date",
@@ -49,6 +56,28 @@ FUNNEL_NUMERIC_COLUMNS = [
     "max_drawdown_20_score",
     "ma60_slope_score",
     "score_total",
+]
+
+GROWTH_CANDIDATE_COLUMNS = [*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", "growth_rank_score"]
+DEFENSIVE_CANDIDATE_COLUMNS = [*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", "defensive_rank_score"]
+ROTATION_CANDIDATE_COLUMNS = [
+    *FUNNEL_BASE_COLUMNS,
+    "style_sleeve",
+    "style_rank",
+    "growth_rank_score",
+    "defensive_rank_score",
+]
+ANCHOR_DIAGNOSTIC_COLUMNS = ["trade_date", "anchor_name", "anchor_asset_id", "anchor_present"]
+SUMMARY_COLUMNS = ["strategy_family", "total_return", "annualized_return", "max_drawdown", "days"]
+YEAR_BREAKDOWN_COLUMNS = ["year", "strategy_family", "total_return", "max_drawdown", "days"]
+EMOTION_BREAKDOWN_COLUMNS = [
+    "emotion_state",
+    "risk_state",
+    "style_state",
+    "strategy_family",
+    "total_return",
+    "max_drawdown",
+    "days",
 ]
 
 
@@ -79,7 +108,7 @@ def build_style_state_daily(emotion: pd.DataFrame) -> pd.DataFrame:
 def build_growth_momentum_candidates(funnel: pd.DataFrame, *, top_n: int = 5) -> pd.DataFrame:
     frame = _normalize_funnel(funnel)
     if frame.empty:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", "growth_rank_score"])
+        return pd.DataFrame(columns=GROWTH_CANDIDATE_COLUMNS)
 
     frame["growth_rank_score"] = (
         frame["mid_trend_funnel_score"].fillna(frame["score_total"]).fillna(0)
@@ -96,14 +125,14 @@ def build_defensive_yield_proxy_candidates(
 ) -> pd.DataFrame:
     frame = _normalize_funnel(funnel)
     if frame.empty:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", "defensive_rank_score"])
+        return pd.DataFrame(columns=DEFENSIVE_CANDIDATE_COLUMNS)
 
     industry_match = frame["industry_name"].fillna("").astype(str).apply(
         lambda value: any(keyword in value for keyword in defensive_industry_keywords)
     )
     frame = frame[industry_match].copy()
     if frame.empty:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", "defensive_rank_score"])
+        return pd.DataFrame(columns=DEFENSIVE_CANDIDATE_COLUMNS)
 
     frame["defensive_rank_score"] = (
         0.35 * frame["volatility_20_score"].fillna(50)
@@ -126,7 +155,7 @@ def build_rotation_balanced_candidates(
     if not defensive.empty:
         frames.append(defensive.copy())
     if not frames:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank"])
+        return pd.DataFrame(columns=ROTATION_CANDIDATE_COLUMNS)
 
     combined = pd.concat(frames, ignore_index=True, sort=False)
     combined["trade_date"] = pd.to_datetime(combined["trade_date"], errors="coerce", format="mixed").dt.strftime(
@@ -134,7 +163,7 @@ def build_rotation_balanced_candidates(
     )
     combined = combined.dropna(subset=["trade_date"])
     if combined.empty:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank"])
+        return pd.DataFrame(columns=ROTATION_CANDIDATE_COLUMNS)
 
     combined["style_rank"] = pd.to_numeric(combined.get("style_rank"), errors="coerce").fillna(999).astype(int)
     ordered = []
@@ -161,7 +190,7 @@ def build_rotation_balanced_candidates(
                     seen_assets.add(asset_id)
 
     if not ordered:
-        return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank"])
+        return pd.DataFrame(columns=ROTATION_CANDIDATE_COLUMNS)
 
     rotation = pd.DataFrame(ordered)
     rotation = rotation.groupby("trade_date", group_keys=False, sort=True).head(max(top_n, 0)).reset_index(drop=True)
@@ -173,24 +202,31 @@ def build_anchor_diagnostics(defensive_candidates: pd.DataFrame) -> pd.DataFrame
     rows = []
     frame = defensive_candidates.copy()
     if frame.empty or "trade_date" not in frame.columns:
-        return pd.DataFrame(columns=["trade_date", "anchor_name", "anchor_present"])
+        return pd.DataFrame(columns=ANCHOR_DIAGNOSTIC_COLUMNS)
 
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce", format="mixed").dt.strftime(
         "%Y-%m-%d"
     )
     frame = frame.dropna(subset=["trade_date"])
+    if frame.empty:
+        return pd.DataFrame(columns=ANCHOR_DIAGNOSTIC_COLUMNS)
+
+    frame["stock_name"] = _normalized_text_column(frame, "stock_name")
+    frame["asset_id"] = _normalized_text_column(frame, "asset_id")
     for trade_date, day in frame.groupby("trade_date", sort=True):
-        names = set(day.get("stock_name", pd.Series(dtype=object)).fillna("").astype(str))
-        assets = set(day.get("asset_id", pd.Series(dtype=object)).fillna("").astype(str))
-        for anchor in ANCHOR_NAMES:
+        names = set(day["stock_name"])
+        assets = set(day["asset_id"])
+        for anchor in ANCHOR_RECORDS:
+            anchor_assets = {anchor["asset_id"], anchor["code"]}
             rows.append(
                 {
                     "trade_date": trade_date,
-                    "anchor_name": anchor,
-                    "anchor_present": anchor in names or anchor in assets,
+                    "anchor_name": anchor["name"],
+                    "anchor_asset_id": anchor["asset_id"],
+                    "anchor_present": anchor["name"] in names or bool(anchor_assets & assets),
                 }
             )
-    return pd.DataFrame(rows, columns=["trade_date", "anchor_name", "anchor_present"])
+    return pd.DataFrame(rows, columns=ANCHOR_DIAGNOSTIC_COLUMNS)
 
 
 def write_market_style_switch_outputs(
@@ -218,6 +254,15 @@ def write_market_style_switch_outputs(
         "emotion_breakdown_path": output_path / "style_switch_emotion_breakdown.csv",
         "report_path": output_path / "market_style_switch_v1_report.md",
     }
+    style_state = _normalize_empty_schema(style_state, STYLE_STATE_COLUMNS)
+    growth_candidates = _normalize_empty_schema(growth_candidates, GROWTH_CANDIDATE_COLUMNS)
+    defensive_candidates = _normalize_empty_schema(defensive_candidates, DEFENSIVE_CANDIDATE_COLUMNS)
+    rotation_candidates = _normalize_empty_schema(rotation_candidates, ROTATION_CANDIDATE_COLUMNS)
+    anchor_diagnostics = _normalize_empty_schema(anchor_diagnostics, ANCHOR_DIAGNOSTIC_COLUMNS)
+    summary = _normalize_empty_schema(summary, SUMMARY_COLUMNS)
+    year_breakdown = _normalize_empty_schema(year_breakdown, YEAR_BREAKDOWN_COLUMNS)
+    emotion_breakdown = _normalize_empty_schema(emotion_breakdown, EMOTION_BREAKDOWN_COLUMNS)
+
     style_state.to_csv(paths["style_state_path"], index=False)
     growth_candidates.to_csv(paths["growth_candidates_path"], index=False)
     defensive_candidates.to_csv(paths["defensive_candidates_path"], index=False)
@@ -269,7 +314,22 @@ def _render_market_style_switch_report(
 def _frame_to_markdown(frame: pd.DataFrame) -> str:
     if frame.empty:
         return "_No rows._"
-    return frame.to_markdown(index=False)
+    try:
+        return frame.to_markdown(index=False)
+    except ImportError:
+        return f"```csv\n{frame.to_csv(index=False).rstrip()}\n```"
+
+
+def _normalize_empty_schema(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    return frame
+
+
+def _normalized_text_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series("", index=frame.index, dtype=object)
+    return frame[column].fillna("").astype(str).str.strip()
 
 
 def _normalize_funnel(funnel: pd.DataFrame) -> pd.DataFrame:
@@ -292,6 +352,10 @@ def _normalize_funnel(funnel: pd.DataFrame) -> pd.DataFrame:
 
 def _rank_by_date(frame: pd.DataFrame, score_column: str, top_n: int, style_sleeve: str) -> pd.DataFrame:
     if frame.empty:
+        if score_column == "growth_rank_score":
+            return pd.DataFrame(columns=GROWTH_CANDIDATE_COLUMNS)
+        if score_column == "defensive_rank_score":
+            return pd.DataFrame(columns=DEFENSIVE_CANDIDATE_COLUMNS)
         return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank", score_column])
 
     ranked = frame.copy()
