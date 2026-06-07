@@ -365,6 +365,74 @@ def test_anchor_diagnostics_and_writer(tmp_path) -> None:
     assert set(anchors.loc[anchors["anchor_present"], "anchor_name"]) & {"长江电力", "农业银行"}
 
 
+def test_anchor_diagnostics_match_canonical_asset_id_without_stock_name() -> None:
+    defensive = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "CN:SH:600900",
+                "stock_name": pd.NA,
+                "industry_name": "电力",
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "601088",
+                "industry_name": "煤炭",
+            },
+        ]
+    )
+
+    anchors = build_anchor_diagnostics(defensive)
+
+    present = anchors.loc[anchors["anchor_present"], ["anchor_name", "anchor_asset_id"]]
+    assert present.to_dict("records") == [
+        {"anchor_name": "长江电力", "anchor_asset_id": "CN:SH:600900"},
+        {"anchor_name": "中国神华", "anchor_asset_id": "CN:SH:601088"},
+    ]
+
+
+def test_anchor_diagnostics_strip_whitespace_from_chinese_name_and_asset_id() -> None:
+    defensive = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": " CN:SH:601288 ",
+                "stock_name": " 农业银行 ",
+                "industry_name": "银行",
+            }
+        ]
+    )
+
+    anchors = build_anchor_diagnostics(defensive)
+
+    row = anchors.loc[anchors["anchor_name"] == "农业银行"].iloc[0]
+    assert row["anchor_asset_id"] == "CN:SH:601288"
+    assert bool(row["anchor_present"])
+
+
+def test_report_renders_when_to_markdown_dependency_is_unavailable(tmp_path, monkeypatch) -> None:
+    def raise_import_error(self, *args, **kwargs):
+        raise ImportError("tabulate is not installed")
+
+    monkeypatch.setattr(pd.DataFrame, "to_markdown", raise_import_error)
+
+    paths = write_market_style_switch_outputs(
+        style_state=pd.DataFrame(),
+        growth_candidates=pd.DataFrame(),
+        defensive_candidates=pd.DataFrame(),
+        rotation_candidates=pd.DataFrame(),
+        anchor_diagnostics=pd.DataFrame(),
+        summary=pd.DataFrame([{"strategy_family": "fixed_mid_trend", "total_return": 0.0}]),
+        year_breakdown=pd.DataFrame([{"year": "2026", "strategy_family": "fixed_mid_trend"}]),
+        emotion_breakdown=pd.DataFrame([{"emotion_state": "neutral", "strategy_family": "fixed_mid_trend"}]),
+        output_dir=tmp_path,
+    )
+
+    report = paths["report_path"].read_text(encoding="utf-8")
+    assert "# Market Style Switch V1 Report" in report
+    assert "fixed_mid_trend" in report
+
+
 def test_writer_accepts_empty_frames_and_still_writes_all_files(tmp_path) -> None:
     paths = write_market_style_switch_outputs(
         style_state=pd.DataFrame(),
@@ -380,3 +448,71 @@ def test_writer_accepts_empty_frames_and_still_writes_all_files(tmp_path) -> Non
 
     assert all(path.exists() for path in paths.values())
     assert paths["report_path"].read_text(encoding="utf-8").startswith("# Market Style Switch V1 Report")
+    csv_paths = {key: path for key, path in paths.items() if key != "report_path"}
+    read_back = {key: pd.read_csv(path) for key, path in csv_paths.items()}
+    assert read_back["style_state_path"].columns.tolist() == [
+        "trade_date",
+        "emotion_state",
+        "risk_state",
+        "emotion_score",
+        "style_state",
+        "style_reason",
+        "position_budget_hint",
+    ]
+    assert read_back["growth_candidates_path"].columns.tolist() == [
+        "trade_date",
+        "asset_id",
+        "stock_name",
+        "industry_name",
+        "style_sleeve",
+        "style_rank",
+        "growth_rank_score",
+    ]
+    assert read_back["defensive_candidates_path"].columns.tolist() == [
+        "trade_date",
+        "asset_id",
+        "stock_name",
+        "industry_name",
+        "style_sleeve",
+        "style_rank",
+        "defensive_rank_score",
+    ]
+    assert read_back["rotation_candidates_path"].columns.tolist() == [
+        "trade_date",
+        "asset_id",
+        "stock_name",
+        "industry_name",
+        "style_sleeve",
+        "style_rank",
+        "growth_rank_score",
+        "defensive_rank_score",
+    ]
+    assert read_back["anchor_diagnostics_path"].columns.tolist() == [
+        "trade_date",
+        "anchor_name",
+        "anchor_asset_id",
+        "anchor_present",
+    ]
+    assert read_back["summary_path"].columns.tolist() == [
+        "strategy_family",
+        "total_return",
+        "annualized_return",
+        "max_drawdown",
+        "days",
+    ]
+    assert read_back["year_breakdown_path"].columns.tolist() == [
+        "year",
+        "strategy_family",
+        "total_return",
+        "max_drawdown",
+        "days",
+    ]
+    assert read_back["emotion_breakdown_path"].columns.tolist() == [
+        "emotion_state",
+        "risk_state",
+        "style_state",
+        "strategy_family",
+        "total_return",
+        "max_drawdown",
+        "days",
+    ]
