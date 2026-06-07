@@ -87,10 +87,27 @@ def test_policy_impulse_requires_market_response_and_accelerates_rerisk() -> Non
 
     result = build_market_regime_confirmation_from_frames(emotion, policy)
 
-    impulse_rows = result[result["confirmed_regime_state"] == "bull_impulse"]
-    assert impulse_rows["trade_date"].tolist() == ["2026-01-06", "2026-01-07"]
-    assert impulse_rows["target_exposure"].tolist() == [1.0, 1.0]
+    candidate_response = result[result["trade_date"].isin(["2026-01-06", "2026-01-07"])]
+    assert candidate_response["confirmed_regime_state"].tolist() == ["bull_impulse", "bull_impulse"]
+    assert candidate_response["target_exposure"].tolist() == [1.0, 1.0]
     assert bool(result.loc[result["trade_date"] == "2026-01-05", "policy_impulse_candidate"].iloc[0]) is True
+
+
+def test_policy_impulse_expiry_uses_downgrade_hysteresis_on_one_weak_day() -> None:
+    emotion = _emotion_rows(
+        [25, 26, 28, 32, 45, 58, 64],
+        states=["panic", "cold", "cold", "neutral", "hot", "hot", "euphoria"],
+        risks=["high", "high", "high", "medium", "medium", "low", "low"],
+    )
+    policy = pd.DataFrame([{"event_date": "2026-01-05", "policy_strength": 0.9}])
+
+    result = build_market_regime_confirmation_from_frames(emotion, policy)
+
+    expired_day = result.loc[result["trade_date"] == "2026-01-08"].iloc[0]
+    assert bool(expired_day["policy_impulse_candidate"]) is False
+    assert expired_day["raw_regime_state"] in {"neutral", "weak_repair", "bear"}
+    assert expired_day["confirmed_regime_state"] in {"bull_impulse", "bull_trend"}
+    assert expired_day["transition_reason"] == "downgrade_wait_for_confirmation"
 
 
 def test_confirmed_regime_does_not_downgrade_on_one_bad_day() -> None:
