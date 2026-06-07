@@ -6,6 +6,16 @@ from pathlib import Path
 from typing import Any
 
 
+REQUIRED_LIST_FIELDS = (
+    "chain_context_terms",
+    "product_exposure_terms",
+    "technical_execution_terms",
+    "commercial_validation_terms",
+    "invalidation_terms",
+    "global_reference_entities",
+)
+
+
 @dataclass(frozen=True)
 class TechChainDefinition:
     chain_id: str
@@ -33,19 +43,30 @@ class TechChainTaxonomy:
 
 def load_taxonomy(path: Path | str) -> TechChainTaxonomy:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    chains = [_chain_from_payload(item) for item in payload.get("chains", [])]
+    _validate_taxonomy_payload(payload)
+
+    seen_chain_ids: set[str] = set()
+    chains = []
+    for index, item in enumerate(payload["chains"]):
+        _validate_chain_payload(item, index)
+        chain_id = item["chain_id"].strip()
+        if chain_id in seen_chain_ids:
+            raise ValueError(f"duplicate chain_id: {chain_id}")
+        seen_chain_ids.add(chain_id)
+        chains.append(_chain_from_payload(item))
+
     return TechChainTaxonomy(version=str(payload.get("version", "")), chains=chains)
 
 
 def _chain_from_payload(item: dict[str, Any]) -> TechChainDefinition:
     return TechChainDefinition(
-        chain_id=str(item.get("chain_id", "")),
-        display_name=str(item.get("display_name", "")),
+        chain_id=item["chain_id"].strip(),
+        display_name=item["display_name"].strip(),
         chain_context_terms=_string_list(item.get("chain_context_terms")),
         product_exposure_terms=_string_list(item.get("product_exposure_terms")),
         bottleneck_dimensions={
             str(key): _string_list(value)
-            for key, value in dict(item.get("bottleneck_dimensions") or {}).items()
+            for key, value in item["bottleneck_dimensions"].items()
         },
         technical_execution_terms=_string_list(item.get("technical_execution_terms")),
         commercial_validation_terms=_string_list(item.get("commercial_validation_terms")),
@@ -54,7 +75,36 @@ def _chain_from_payload(item: dict[str, Any]) -> TechChainDefinition:
     )
 
 
+def _validate_taxonomy_payload(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("taxonomy payload must be an object")
+    if "chains" not in payload:
+        raise ValueError("chains is required")
+    if not isinstance(payload["chains"], list):
+        raise ValueError("chains must be a list")
+
+
+def _validate_chain_payload(item: Any, index: int) -> None:
+    if not isinstance(item, dict):
+        raise ValueError(f"chain at index {index} must be an object")
+
+    for field in ("chain_id", "display_name"):
+        if field not in item or not isinstance(item[field], str) or not item[field].strip():
+            raise ValueError(f"chain at index {index} missing required string field: {field}")
+
+    for field in REQUIRED_LIST_FIELDS:
+        if field not in item or not isinstance(item[field], list):
+            raise ValueError(f"chain {item['chain_id']} field {field} must be a list")
+
+    dimensions = item.get("bottleneck_dimensions")
+    if not isinstance(dimensions, dict):
+        raise ValueError(f"chain {item['chain_id']} field bottleneck_dimensions must be a dict")
+    for key, value in dimensions.items():
+        if not isinstance(value, list):
+            raise ValueError(
+                f"chain {item['chain_id']} bottleneck_dimensions.{key} must be a list"
+            )
+
+
 def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
     return [str(item) for item in value if str(item)]

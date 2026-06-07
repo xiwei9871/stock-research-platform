@@ -4,8 +4,8 @@
     {
       "chain_id": "ai_optical_interconnect",
       "display_name": "AI光模块/光通信",
-      "chain_context_terms": ["光模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络"],
-      "product_exposure_terms": ["800G光模块", "1.6T光模块", "高速光模块", "硅光模块", "光芯片", "光器件"],
+      "chain_context_terms": ["光通信", "光模块", "光通信模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络"],
+      "product_exposure_terms": ["800G光模块", "1.6T光模块", "高速光模块", "硅光模块", "光通信模块", "光通信收发模块", "光芯片", "光器件"],
       "bottleneck_dimensions": {
         "bandwidth_generation": ["800G", "1.6T", "3.2T", "高速光模块"],
         "architecture_route": ["硅光", "CPO", "LPO", "NPO", "光引擎"],
@@ -21,8 +21,8 @@
     {
       "chain_id": "ai_compute_chips",
       "display_name": "AI芯片/计算加速器",
-      "chain_context_terms": ["GPU", "ASIC", "NPU", "AI加速器", "训练芯片", "推理芯片", "国产AI芯片"],
-      "product_exposure_terms": ["AI芯片", "GPU", "ASIC", "NPU", "推理卡", "训练卡", "加速卡"],
+      "chain_context_terms": ["GPU", "ASIC", "NPU", "AI加速器", "智能计算芯片", "训练芯片", "推理芯片", "国产AI芯片"],
+      "product_exposure_terms": ["AI芯片", "GPU", "ASIC", "NPU", "MLU", "推理卡", "训练卡", "加速卡"],
       "bottleneck_dimensions": {
         "process_and_architecture": ["先进制程", "chiplet", "互联架构", "片间互联"],
         "memory_interface": ["HBM接口", "高带宽内存", "封装协同"],
@@ -41,9 +41,9 @@
       "product_exposure_terms": ["HBM", "HBM3E", "HBM4", "高带宽内存", "存储堆叠"],
       "bottleneck_dimensions": {
         "memory_generation": ["HBM3E", "HBM4", "12Hi", "16Hi"],
-        "stacking_and_tsv": ["TSV", "堆叠", "base die", "micro bump"],
+        "stacking_tsv": ["TSV", "堆叠", "base die", "micro bump"],
         "packaging_linkage": ["CoWoS", "2.5D", "interposer"],
-        "qualification_and_yield": ["Nvidia认证", "客户验证", "良率", "后段产能"],
+        "qualification_yield": ["Nvidia认证", "客户验证", "良率", "后段产能"],
         "supply_allocation": ["长协", "产能分配", "供给紧张", "sold out"]
       },
       "technical_execution_terms": ["TSV", "堆叠", "良率", "后段产能", "12Hi", "16Hi"],
@@ -102,12 +102,12 @@
     {
       "chain_id": "mlcc_high_end_passives",
       "display_name": "MLCC/高端被动元件",
-      "chain_context_terms": ["MLCC", "高容陶瓷电容", "AI服务器供电", "GPU周边被动元件"],
-      "product_exposure_terms": ["MLCC", "高容量MLCC", "车规MLCC", "陶瓷电容", "被动元件"],
+      "chain_context_terms": ["MLCC", "多层陶瓷电容器", "高容陶瓷电容", "AI服务器供电", "GPU周边被动元件"],
+      "product_exposure_terms": ["MLCC", "高容量MLCC", "车规MLCC", "陶瓷电容", "片式多层陶瓷电容器", "被动元件"],
       "bottleneck_dimensions": {
         "power_density": ["AI server PDN", "GPU周边", "高瞬态电流"],
         "product_grade": ["高容量", "高温", "高可靠", "小型化", "车规级"],
-        "materials_and_process": ["陶瓷粉体", "介质材料", "叠层", "烧结"],
+        "materials_process": ["陶瓷粉体", "介质材料", "叠层", "烧结"],
         "supply_concentration": ["Murata", "Samsung Electro-Mechanics", "Taiyo Yuden"],
         "capacity_tightness": ["涨价", "交期", "满产", "长协"]
       },
