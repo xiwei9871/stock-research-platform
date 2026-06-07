@@ -89,6 +89,12 @@ CAPACITY_TERMS = ["capacity", "产能", "扩产", "量产"]
 CUSTOMER_TERMS = ["customer", "客户", "认证", "导入"]
 TECHNICAL_TEXT_TERMS = ["技术壁垒", "专利", "工艺", "良率"]
 TECHNICAL_TYPE_TERMS = ["technical", "patent", "barrier"]
+ASSET_POOL_DECISION_PRECEDENCE = {
+    "auto_approve": 0,
+    "needs_product_family_mapping": 1,
+    "needs_more_evidence": 2,
+    "reject_or_noise": 3,
+}
 
 
 def normalize_p2_mapping_queue(queue: pd.DataFrame) -> pd.DataFrame:
@@ -329,12 +335,20 @@ def render_promotion_delta(
 
     before_p2 = before[before["p3_decision"].eq("needs_product_family_mapping")].copy()
     before_p1 = before[before["p3_decision"].eq("auto_approve")].copy()
-    after_p1 = after[after["p3_decision"].eq("auto_approve")].copy()
 
     before_p2_assets = _asset_records_by_id(before_p2)
     before_p1_asset_ids = _asset_ids(before_p1)
-    after_p1_asset_ids = _asset_ids(after_p1)
-    after_by_asset = _asset_records_by_id(after)
+    after_by_asset = _asset_records_by_decision_precedence(after)
+    after_p2_asset_ids = {
+        asset_id
+        for asset_id, row in after_by_asset.items()
+        if _safe_text(row.get("p3_decision")) == "needs_product_family_mapping"
+    }
+    after_p1_asset_ids = {
+        asset_id
+        for asset_id, row in after_by_asset.items()
+        if _safe_text(row.get("p3_decision")) == "auto_approve"
+    }
 
     promoted_asset_ids = sorted(set(before_p2_assets) & after_p1_asset_ids)
     blocked_decisions = {"needs_product_family_mapping", "needs_more_evidence", "reject_or_noise"}
@@ -357,6 +371,7 @@ def render_promotion_delta(
         "# Promotion Delta",
         "",
         f"P2 asset count before: {len(before_p2_assets)}",
+        f"P2 asset count after: {len(after_p2_asset_ids)}",
         f"P1 asset count before: {len(before_p1_asset_ids)}",
         f"P1 asset count after: {len(after_p1_asset_ids)}",
         "",
@@ -430,6 +445,30 @@ def _asset_records_by_id(frame: pd.DataFrame) -> dict[str, dict[str, object]]:
         asset_id = _safe_text(row.get("asset_id"))
         if asset_id:
             records[asset_id] = row
+    return dict(sorted(records.items()))
+
+
+def _asset_records_by_decision_precedence(frame: pd.DataFrame) -> dict[str, dict[str, object]]:
+    records: dict[str, dict[str, object]] = {}
+    ranks: dict[str, int] = {}
+    for row in _copy_with_columns(
+        frame,
+        ["asset_id", "stock_name", "p3_decision", "next_evidence_need"],
+    ).to_dict("records"):
+        asset_id = _safe_text(row.get("asset_id"))
+        if not asset_id:
+            continue
+
+        rank = ASSET_POOL_DECISION_PRECEDENCE.get(
+            _safe_text(row.get("p3_decision")),
+            len(ASSET_POOL_DECISION_PRECEDENCE),
+        )
+        if asset_id not in records or rank < ranks[asset_id]:
+            records[asset_id] = row
+            ranks[asset_id] = rank
+        elif rank == ranks[asset_id]:
+            records[asset_id] = _fill_blank_values(records[asset_id], row)
+
     return dict(sorted(records.items()))
 
 

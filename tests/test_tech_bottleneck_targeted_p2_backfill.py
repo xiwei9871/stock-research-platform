@@ -744,6 +744,7 @@ def test_render_promotion_delta_lists_promoted_and_blocked_assets() -> None:
     )
 
     assert "P2 asset count before: 2" in report
+    assert "P2 asset count after: 1" in report
     assert "P1 asset count after: 1" in report
     assert "Alpha (A)" in report
     assert "Beta (B): needs_product_family_mapping" in report
@@ -759,9 +760,65 @@ def test_render_promotion_delta_handles_empty_missing_column_inputs() -> None:
     )
 
     assert "P2 asset count before: 0" in report
+    assert "P2 asset count after: 0" in report
     assert "P1 asset count before: 0" in report
     assert "P1 asset count after: 0" in report
     assert report.endswith("\n")
+
+
+def test_render_promotion_delta_dedupes_conflicting_after_decisions_by_asset() -> None:
+    before_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    after_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "p3_decision": "needs_product_family_mapping",
+            },
+        ]
+    )
+
+    report = render_promotion_delta(
+        before_review=before_review,
+        after_review=after_review,
+        bridge_evidence=pd.DataFrame(),
+    )
+
+    assert "P2 asset count after: 0" in report
+    assert "P1 asset count after: 1" in report
+    assert "- Alpha (A)" in report
+    assert "Alpha (A): needs_product_family_mapping" not in report
+
+
+def test_render_promotion_delta_ignores_malformed_metadata_json() -> None:
+    report = render_promotion_delta(
+        before_review=pd.DataFrame(),
+        after_review=pd.DataFrame(),
+        bridge_evidence=pd.DataFrame(
+            [
+                {
+                    "metadata_json": "{malformed",
+                    "source_type": "derived_product_family_bridge",
+                    "evidence_type": "customer_certification",
+                }
+            ]
+        ),
+    )
+
+    assert "## Added Bridge Evidence Families\n- None" in report
 
 
 def test_write_targeted_backfill_artifacts_writes_required_files(tmp_path: Path) -> None:
