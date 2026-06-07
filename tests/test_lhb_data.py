@@ -374,6 +374,57 @@ def test_run_lhb_event_features_build(tmp_path, monkeypatch):
     assert len(result["lhb_event_features"]) == 1
 
 
+def test_load_lhb_from_db_without_ts_codes_loads_all_codes(monkeypatch):
+    executed = []
+
+    class _Cursor:
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _Conn:
+        def cursor(self):
+            return _Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    class _Ctx:
+        def __enter__(self):
+            return _Conn()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(lhb_data, "connect", lambda service: _Ctx())
+
+    top_list, top_inst = lhb_data.load_lhb_from_db(
+        ts_codes=None,
+        start_date="2026-05-13",
+        end_date="2026-06-05",
+    )
+
+    assert list(top_list.columns) == lhb_data.TOP_LIST_COLUMNS
+    assert list(top_inst.columns) == lhb_data.TOP_INST_COLUMNS
+    assert len(executed) == 2
+    assert "ts_code IN" not in executed[0][0]
+    assert executed[0][1] == ["2026-05-13", "2026-06-05"]
+
+
 def test_build_dragon_case_lhb_summary_report(tmp_path):
     curated = pd.DataFrame(
         [
