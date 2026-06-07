@@ -1458,6 +1458,16 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_core_tech_top100.add_argument("--output-dir", required=True)
     tech_bottleneck_core_tech_top100.add_argument("--top-n", type=int, default=100)
 
+    tech_bottleneck_core_leader_miss_audit = subparsers.add_parser(
+        "tech-bottleneck-core-leader-miss-audit",
+        help="Audit why core technology leader watchlist assets did or did not reach P1/P2.",
+    )
+    tech_bottleneck_core_leader_miss_audit.add_argument("--watchlist-csv", required=True)
+    tech_bottleneck_core_leader_miss_audit.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_core_leader_miss_audit.add_argument("--gate-csv", required=True)
+    tech_bottleneck_core_leader_miss_audit.add_argument("--quality-review-csv", required=True)
+    tech_bottleneck_core_leader_miss_audit.add_argument("--output-dir", required=True)
+
     tech_bottleneck_observation_pool = subparsers.add_parser(
         "tech-bottleneck-observation-pool",
         help="Build an observation pool and comparison groups from tech bottleneck quality review outputs.",
@@ -4913,6 +4923,17 @@ def main_for_args(argv: list[str] | None = None) -> None:
             baseline_promotions_csv=Path(args.baseline_promotions_csv),
             output_dir=Path(args.output_dir),
             top_n=args.top_n,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-core-leader-miss-audit":
+        from stock_research.tech_bottleneck_core_leader_miss_audit import run_core_leader_miss_audit_from_files
+
+        paths = run_core_leader_miss_audit_from_files(
+            watchlist_csv=Path(args.watchlist_csv),
+            candidates_csv=Path(args.candidates_csv),
+            gate_csv=Path(args.gate_csv),
+            quality_review_csv=Path(args.quality_review_csv),
+            output_dir=Path(args.output_dir),
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-observation-pool":

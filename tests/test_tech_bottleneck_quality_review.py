@@ -75,6 +75,37 @@ def test_classify_product_family_links_optical_communication_components_terms() 
     assert family == "optical_communication_components"
 
 
+def test_classify_product_family_links_core_leader_product_aliases() -> None:
+    assert (
+        classify_product_family(
+            "云端产品线 智能计算芯片 MLU",
+            "国产AI芯片自主可控 算力芯片核心技术",
+        )
+        == "ai_compute_chips"
+    )
+    assert (
+        classify_product_family(
+            "PCB制造 高阶HDI 高多层板",
+            "AI服务器PCB国产替代 数据中心高速PCB批量供货",
+        )
+        == "ai_server_high_speed_pcb"
+    )
+    assert (
+        classify_product_family(
+            "光通信模块 光通信收发模块 4.25G以上",
+            "800G光模块 1.6T高速光模块 数据中心客户认证",
+        )
+        == "optical_communication_components"
+    )
+    assert (
+        classify_product_family(
+            "电子工艺装备 半导体工艺装备",
+            "半导体设备国产替代 平台型半导体设备核心技术",
+        )
+        == "semiconductor_equipment"
+    )
+
+
 def test_classify_product_family_links_advanced_medical_devices_terms() -> None:
     family = classify_product_family("数字化X线探测器 骨科植入物 医疗器械", "国产替代 注册证 核心技术 客户认证")
 

@@ -74,6 +74,54 @@ def test_build_core_tech_gate_passes_semiconductor_testing_and_optical_communica
     assert "光模块" in gate.loc["CN:SZ:300001", "matched_terms"]
 
 
+def test_build_core_tech_gate_passes_core_leader_coverage_terms() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "stock_name": "寒武纪",
+                "trade_date": "2025-08-22",
+                "rank": 3,
+                "industry_name": "半导体",
+                "product_snippet": "云端产品线 智能计算芯片 MLU",
+            },
+            {
+                "asset_id": "CN:SZ:300476",
+                "stock_name": "胜宏科技",
+                "trade_date": "2025-07-04",
+                "rank": 4,
+                "industry_name": "电子元件",
+                "product_snippet": "PCB制造 高阶HDI AI服务器PCB",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-13",
+                "rank": 5,
+                "industry_name": "通信设备",
+                "product_snippet": "光通信收发模块 800G 1.6T",
+            },
+            {
+                "asset_id": "CN:SZ:002371",
+                "stock_name": "北方华创",
+                "trade_date": "2026-05-22",
+                "rank": 6,
+                "industry_name": "半导体设备",
+                "product_snippet": "电子工艺装备 半导体工艺装备",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=pd.DataFrame())
+    rows = outputs["core_tech_gate"].set_index("asset_id")
+
+    assert rows.loc["CN:SH:688256", "core_tech_gate"] == "pass"
+    assert rows.loc["CN:SH:688256", "core_tech_category"] == "ai_compute_chips"
+    assert rows.loc["CN:SZ:300476", "core_tech_category"] == "ai_server_high_speed_pcb"
+    assert rows.loc["CN:SZ:300308", "core_tech_category"] == "optical_communication_components"
+    assert rows.loc["CN:SZ:002371", "core_tech_category"] == "semiconductor_equipment"
+
+
 def test_build_core_tech_gate_rejects_excluded_industries_with_exact_reasons() -> None:
     candidates = pd.DataFrame(
         [
