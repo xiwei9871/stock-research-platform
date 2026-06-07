@@ -33,6 +33,11 @@ def build_weekly_topn_candidates(*, score_rows: pd.DataFrame, top_n: int = 100) 
     candidates["stock_name"] = candidates["stock_name"].fillna("").astype(str)
     candidates["trade_date"] = candidates["trade_date"].map(_normalize_date)
     candidates["_score_sort"] = pd.to_numeric(candidates["score"], errors="coerce")
+    candidates = candidates[
+        candidates["asset_id"].str.strip().ne("")
+        & candidates["trade_date"].map(_is_valid_normalized_date)
+        & candidates["_score_sort"].notna()
+    ].copy()
 
     candidates = candidates.sort_values(
         ["trade_date", "_score_sort", "asset_id"],
@@ -114,7 +119,7 @@ def write_core_tech_top100_artifacts(
     candidates_top100: pd.DataFrame,
     comparison: dict[str, Any],
     output_dir: Path,
-    inputs: dict[str, Any] | None = None,
+    inputs: dict[str, Any],
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {key: output_dir / filename for key, filename in TOP100_ARTIFACT_FILES.items()}
@@ -122,7 +127,7 @@ def write_core_tech_top100_artifacts(
     candidates = candidates_top100.copy()
     diff = comparison["top50_vs_top100_diff"].copy()
     manifest = dict(comparison.get("manifest") or _manifest(candidates, diff, pd.DataFrame()))
-    manifest["inputs"] = inputs or {}
+    manifest["inputs"] = inputs
     manifest["files"] = {key: path.name for key, path in paths.items()}
 
     candidates.to_csv(paths["candidates_top100"], index=False)
@@ -245,6 +250,12 @@ def _normalize_date(value: Any) -> str:
     if pd.isna(parsed):
         return str(value)
     return parsed.strftime("%Y-%m-%d")
+
+
+def _is_valid_normalized_date(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    return not pd.isna(pd.to_datetime(value, format="%Y-%m-%d", errors="coerce"))
 
 
 def _as_bool(value: Any) -> bool:

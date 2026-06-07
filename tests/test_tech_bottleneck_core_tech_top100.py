@@ -55,6 +55,28 @@ def test_top100_selection_normalizes_integer_yyyymmdd_dates_and_ranks_by_date() 
     assert candidates["rank"].tolist() == [1, 2, 1]
 
 
+def test_top100_selection_drops_rows_with_invalid_required_inputs() -> None:
+    score_rows = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688001", "stock_name": "有效", "trade_date": "2026-06-05", "score": 100},
+            {"asset_id": "CN:SH:688002", "stock_name": "缺日期", "trade_date": None, "score": 99},
+            {"asset_id": "CN:SH:688003", "stock_name": "坏日期", "trade_date": "not-a-date", "score": 98},
+            {"asset_id": "", "stock_name": "空资产", "trade_date": "2026-06-05", "score": 97},
+            {"asset_id": "   ", "stock_name": "空白资产", "trade_date": "2026-06-05", "score": 96},
+            {"asset_id": None, "stock_name": "缺资产", "trade_date": "2026-06-05", "score": 95},
+            {"asset_id": "CN:SH:688004", "stock_name": "非数字分", "trade_date": "2026-06-05", "score": "high"},
+            {"asset_id": "CN:SH:688005", "stock_name": "缺分", "trade_date": "2026-06-05", "score": None},
+        ]
+    )
+
+    candidates = build_weekly_topn_candidates(score_rows=score_rows, top_n=100)
+
+    assert candidates["asset_id"].tolist() == ["CN:SH:688001"]
+    assert candidates["stock_name"].tolist() == ["有效"]
+    assert candidates["trade_date"].tolist() == ["2026-06-05"]
+    assert candidates["rank"].tolist() == [1]
+
+
 def test_baseline_comparison_reports_new_top100_p1_p2_names_from_ranks_51_100() -> None:
     top100_candidates = pd.DataFrame(
         [
