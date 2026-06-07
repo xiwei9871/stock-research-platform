@@ -45,6 +45,42 @@ def test_classify_product_family_links_hydraulics_terms() -> None:
     assert family == "hydraulics_motion_control"
 
 
+def test_classify_product_family_links_semiconductor_equipment_terms() -> None:
+    family = classify_product_family("半导体设备 薄膜沉积设备 刻蚀设备", "国产替代 核心技术 客户验证 先进制程")
+
+    assert family == "semiconductor_equipment"
+
+
+def test_classify_product_family_links_semiconductor_testing_metrology_terms() -> None:
+    family = classify_product_family("半导体测试设备 晶圆检测设备 量测设备", "国产化 核心技术 客户认证 先进封装")
+
+    assert family == "semiconductor_testing_metrology"
+
+
+def test_classify_product_family_links_semiconductor_materials_components_terms() -> None:
+    family = classify_product_family("半导体材料 靶材 载带 电子级硅微粉", "国产替代 关键材料 客户认证 批量供货")
+
+    assert family == "semiconductor_materials_components"
+
+
+def test_classify_product_family_links_oled_display_materials_terms() -> None:
+    family = classify_product_family("OLED终端材料 OLED有机材料 掩膜版", "国产OLED材料核心技术 客户验证 批量供货")
+
+    assert family == "oled_display_materials"
+
+
+def test_classify_product_family_links_optical_communication_components_terms() -> None:
+    family = classify_product_family("光通信器件 光模块 无源器件 光引擎", "国产替代 高速率 数据中心客户认证")
+
+    assert family == "optical_communication_components"
+
+
+def test_classify_product_family_links_advanced_medical_devices_terms() -> None:
+    family = classify_product_family("数字化X线探测器 骨科植入物 医疗器械", "国产替代 注册证 核心技术 客户认证")
+
+    assert family == "advanced_medical_devices"
+
+
 def test_build_quality_review_auto_approves_same_product_family_strong_evidence() -> None:
     review = build_quality_review(
         candidates=pd.DataFrame(
