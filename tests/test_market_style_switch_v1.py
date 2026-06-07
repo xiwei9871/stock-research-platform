@@ -1,6 +1,7 @@
 import pandas as pd
 
 from stock_research.market_style_switch_v1 import (
+    _max_drawdown,
     build_anchor_diagnostics,
     build_defensive_yield_proxy_candidates,
     build_growth_momentum_candidates,
@@ -134,6 +135,41 @@ def _funnel() -> pd.DataFrame:
             },
         ]
     )
+
+
+def _emotion_rows(states: list[tuple[str, str, str, float]]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "trade_date": trade_date,
+                "emotion_state": emotion_state,
+                "risk_state": risk_state,
+                "emotion_score": emotion_score,
+            }
+            for trade_date, emotion_state, risk_state, emotion_score in states
+        ]
+    )
+
+
+def _growth_funnel_for_dates(dates: list[str], asset_ids: list[str]) -> pd.DataFrame:
+    rows = []
+    for trade_date in dates:
+        for rank, asset_id in enumerate(asset_ids, start=1):
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "asset_id": asset_id,
+                    "stock_name": asset_id,
+                    "mid_trend_funnel_score": 100 - rank,
+                    "shadow_top10_rank": rank,
+                    "industry_name": "软件服务",
+                    "volatility_20_score": 50,
+                    "max_drawdown_20_score": 50,
+                    "ma60_slope_score": 50,
+                    "score_total": 100 - rank,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def test_candidate_sleeves_rank_growth_and_defensive_separately() -> None:
@@ -551,3 +587,146 @@ def test_run_style_switch_backtest_from_frames_returns_three_strategy_families(t
         "emotion_style_switch",
     }
     assert result["paths"]["summary_path"].exists()
+
+
+def test_backtest_uses_per_asset_next_close_alignment() -> None:
+    result = run_style_switch_backtest_from_frames(
+        emotion=_emotion_rows(
+            [
+                ("2026-01-02", "euphoria", "low", 85),
+                ("2026-01-03", "euphoria", "low", 85),
+            ]
+        ),
+        funnel=_growth_funnel_for_dates(["2026-01-02", "2026-01-03"], ["G1", "G2"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+                {"trade_date": "2026-01-04", "asset_id": "G1", "close": 11.0},
+                {"trade_date": "2026-01-02", "asset_id": "G2", "close": 20.0},
+                {"trade_date": "2026-01-03", "asset_id": "G2", "close": 22.0},
+                {"trade_date": "2026-01-04", "asset_id": "G2", "close": 22.0},
+            ]
+        ),
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        top_n=2,
+    )
+
+    fixed = result["equity"].loc[result["equity"]["strategy_family"] == "fixed_mid_trend"]
+
+    assert fixed["trade_date"].tolist() == ["2026-01-02", "2026-01-03"]
+    assert fixed["daily_return"].round(6).tolist() == [0.10, 0.0]
+
+
+def test_terminal_style_date_without_forward_returns_is_excluded_from_performance() -> None:
+    result = run_style_switch_backtest_from_frames(
+        emotion=_emotion_rows(
+            [
+                ("2026-01-02", "euphoria", "low", 85),
+                ("2026-01-03", "euphoria", "low", 85),
+            ]
+        ),
+        funnel=_growth_funnel_for_dates(["2026-01-02", "2026-01-03"], ["G1"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+                {"trade_date": "2026-01-03", "asset_id": "G1", "close": 11.0},
+            ]
+        ),
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        top_n=1,
+    )
+
+    fixed = result["equity"].loc[result["equity"]["strategy_family"] == "fixed_mid_trend"]
+    summary = result["summary"].loc[result["summary"]["strategy_family"] == "fixed_mid_trend"].iloc[0]
+
+    assert fixed["trade_date"].tolist() == ["2026-01-02"]
+    assert summary["days"] == 1
+    assert round(summary["total_return"], 6) == 0.10
+
+
+def test_partial_missing_selected_returns_use_available_returns_and_record_coverage() -> None:
+    result = run_style_switch_backtest_from_frames(
+        emotion=_emotion_rows([("2026-01-02", "euphoria", "low", 85)]),
+        funnel=_growth_funnel_for_dates(["2026-01-02"], ["G1", "G2"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+                {"trade_date": "2026-01-03", "asset_id": "G1", "close": 11.0},
+                {"trade_date": "2026-01-02", "asset_id": "G2", "close": 20.0},
+            ]
+        ),
+        start_date="2026-01-02",
+        end_date="2026-01-02",
+        top_n=2,
+    )
+
+    row = result["equity"].loc[result["equity"]["strategy_family"] == "fixed_mid_trend"].iloc[0]
+
+    assert round(row["daily_return"], 6) == 0.10
+    assert row["selected_holdings"] == 2
+    assert row["priced_holdings"] == 1
+    assert row["invested_weight"] == 1.0
+
+
+def test_cash_rows_do_not_crash_and_terminal_cash_dates_are_skipped() -> None:
+    result = run_style_switch_backtest_from_frames(
+        emotion=_emotion_rows(
+            [
+                ("2026-01-02", "panic", "high", 20),
+                ("2026-01-03", "panic", "high", 20),
+            ]
+        ),
+        funnel=_growth_funnel_for_dates(["2026-01-02", "2026-01-03"], ["G1"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+                {"trade_date": "2026-01-03", "asset_id": "G1", "close": 10.5},
+            ]
+        ),
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        top_n=1,
+    )
+
+    switch = result["equity"].loc[result["equity"]["strategy_family"] == "emotion_style_switch"]
+
+    assert switch["trade_date"].tolist() == ["2026-01-02"]
+    assert switch["daily_return"].tolist() == [0.0]
+    assert switch["selected_holdings"].tolist() == [0]
+    assert switch["priced_holdings"].tolist() == [0]
+    assert switch["invested_weight"].tolist() == [0.0]
+
+
+def test_emotion_budget_only_applies_full_reduced_and_light_weights_to_growth_returns() -> None:
+    result = run_style_switch_backtest_from_frames(
+        emotion=_emotion_rows(
+            [
+                ("2026-01-02", "euphoria", "low", 85),
+                ("2026-01-03", "neutral", "medium", 55),
+                ("2026-01-04", "neutral", "high", 40),
+            ]
+        ),
+        funnel=_growth_funnel_for_dates(["2026-01-02", "2026-01-03", "2026-01-04"], ["G1"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-02", "asset_id": "G1", "close": 100.0},
+                {"trade_date": "2026-01-03", "asset_id": "G1", "close": 110.0},
+                {"trade_date": "2026-01-04", "asset_id": "G1", "close": 121.0},
+                {"trade_date": "2026-01-05", "asset_id": "G1", "close": 133.1},
+            ]
+        ),
+        start_date="2026-01-02",
+        end_date="2026-01-04",
+        top_n=1,
+    )
+
+    budget = result["equity"].loc[result["equity"]["strategy_family"] == "emotion_budget_only"]
+
+    assert budget["invested_weight"].tolist() == [1.0, 0.6, 0.2]
+    assert budget["daily_return"].round(6).tolist() == [0.10, 0.06, 0.02]
+
+
+def test_max_drawdown_includes_initial_capital_for_first_day_loss() -> None:
+    assert round(_max_drawdown(pd.Series([0.9])), 6) == -0.10
