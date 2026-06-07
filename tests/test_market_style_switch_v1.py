@@ -1,12 +1,15 @@
 import pandas as pd
 
+import stock_research.market_style_switch_v1 as style_switch
 from stock_research.market_style_switch_v1 import (
     _max_drawdown,
     build_anchor_diagnostics,
     build_defensive_yield_proxy_candidates,
     build_growth_momentum_candidates,
+    load_style_switch_prices,
     build_rotation_balanced_candidates,
     build_style_state_daily,
+    run_market_style_switch_v1_backtest,
     run_style_switch_backtest_from_frames,
     write_market_style_switch_outputs,
 )
@@ -730,3 +733,116 @@ def test_emotion_budget_only_applies_full_reduced_and_light_weights_to_growth_re
 
 def test_max_drawdown_includes_initial_capital_for_first_day_loss() -> None:
     assert round(_max_drawdown(pd.Series([0.9])), 6) == -0.10
+
+
+def test_load_style_switch_prices_queries_market_daily_bar(monkeypatch) -> None:
+    calls = []
+
+    class FakeConnection:
+        pass
+
+    class FakeConnect:
+        def __init__(self, service):
+            self.service = service
+
+        def __enter__(self):
+            calls.append(("connect", self.service))
+            return FakeConnection()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect(service):
+        return FakeConnect(service)
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append(("fetch", sql, params))
+        return [
+            {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+            {"trade_date": "2026-01-03", "asset_id": "G1", "close": 11.0},
+        ]
+
+    monkeypatch.setattr(style_switch, "connect", fake_connect)
+    monkeypatch.setattr(style_switch, "fetch_all", fake_fetch_all)
+
+    prices = load_style_switch_prices(
+        "2026-01-02",
+        "2026-01-03",
+        adjust_type="qfq",
+        service="research-test",
+    )
+
+    assert calls[0] == ("connect", "research-test")
+    assert "FROM market_daily_bar" in calls[1][1]
+    assert "trade_date" in calls[1][1]
+    assert "asset_id" in calls[1][1]
+    assert "close" in calls[1][1]
+    assert calls[1][2] == ["qfq", "2026-01-02", "2026-01-03"]
+    assert prices.to_dict("records") == [
+        {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+        {"trade_date": "2026-01-03", "asset_id": "G1", "close": 11.0},
+    ]
+
+
+def test_run_market_style_switch_v1_backtest_loads_csvs_prices_and_delegates(tmp_path, monkeypatch) -> None:
+    emotion_path = tmp_path / "emotion.csv"
+    funnel_path = tmp_path / "funnel.csv"
+    output_dir = tmp_path / "outputs"
+    pd.DataFrame(
+        [{"trade_date": "2026-01-02", "emotion_state": "hot", "risk_state": "low", "emotion_score": 80}]
+    ).to_csv(emotion_path, index=False)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "G1",
+                "industry_name": "软件服务",
+                "mid_trend_funnel_score": 90,
+                "shadow_top10_rank": 1,
+            }
+        ]
+    ).to_csv(funnel_path, index=False)
+    prices = pd.DataFrame([{"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0}])
+    captured = {}
+
+    def fake_load_prices(start_date, end_date, *, adjust_type, service):
+        captured["price_args"] = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "adjust_type": adjust_type,
+            "service": service,
+        }
+        return prices
+
+    def fake_backtest_from_frames(**kwargs):
+        captured["backtest_args"] = kwargs
+        return {"summary": pd.DataFrame([{"strategy_family": "fixed_mid_trend"}]), "paths": {}}
+
+    monkeypatch.setattr(style_switch, "load_style_switch_prices", fake_load_prices)
+    monkeypatch.setattr(style_switch, "run_style_switch_backtest_from_frames", fake_backtest_from_frames)
+
+    result = run_market_style_switch_v1_backtest(
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        emotion_path=emotion_path,
+        funnel_detail_path=funnel_path,
+        output_dir=output_dir,
+        top_n=3,
+        defensive_industry_keywords=("电力", "银行"),
+        adjust_type="raw",
+        service="research-test",
+    )
+
+    assert captured["price_args"] == {
+        "start_date": "2026-01-02",
+        "end_date": "2026-01-03",
+        "adjust_type": "raw",
+        "service": "research-test",
+    }
+    assert captured["backtest_args"]["emotion"]["emotion_state"].tolist() == ["hot"]
+    assert captured["backtest_args"]["funnel"]["asset_id"].tolist() == ["G1"]
+    assert captured["backtest_args"]["prices"].equals(prices)
+    assert captured["backtest_args"]["output_dir"] == output_dir
+    assert captured["backtest_args"]["top_n"] == 3
+    assert captured["backtest_args"]["defensive_industry_keywords"] == ("电力", "银行")
+    assert result["summary"]["strategy_family"].tolist() == ["fixed_mid_trend"]

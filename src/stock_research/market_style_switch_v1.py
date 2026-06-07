@@ -5,6 +5,9 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.config import SETTINGS
+from stock_research.db import connect, fetch_all
+
 
 STYLE_STATE_COLUMNS = [
     "trade_date",
@@ -172,6 +175,51 @@ def run_style_switch_backtest_from_frames(
         "equity": equity,
         "paths": paths,
     }
+
+
+def load_style_switch_prices(
+    start_date: str,
+    end_date: str,
+    adjust_type: str = "hfq",
+    service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+        SELECT trade_date::text AS trade_date, asset_id, close
+        FROM market_daily_bar
+        WHERE adjust_type = %s
+          AND trade_date BETWEEN %s AND %s
+        ORDER BY trade_date, asset_id
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [adjust_type, start_date, end_date])
+    return pd.DataFrame(rows, columns=["trade_date", "asset_id", "close"])
+
+
+def run_market_style_switch_v1_backtest(
+    *,
+    start_date: str,
+    end_date: str,
+    emotion_path: str | Path,
+    funnel_detail_path: str | Path,
+    output_dir: str | Path,
+    top_n: int = 5,
+    defensive_industry_keywords: tuple[str, ...] = DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS,
+    adjust_type: str = "hfq",
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    emotion = pd.read_csv(emotion_path, low_memory=False)
+    funnel = pd.read_csv(funnel_detail_path, low_memory=False)
+    prices = load_style_switch_prices(start_date, end_date, adjust_type=adjust_type, service=service)
+    return run_style_switch_backtest_from_frames(
+        emotion=emotion,
+        funnel=funnel,
+        prices=prices,
+        start_date=start_date,
+        end_date=end_date,
+        output_dir=output_dir,
+        top_n=top_n,
+        defensive_industry_keywords=defensive_industry_keywords,
+    )
 
 
 
