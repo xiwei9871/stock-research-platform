@@ -64,6 +64,8 @@ from stock_research.industry_regime_gated_backtest import (
 from stock_research.industry_exposure_risk_control import (
     run_industry_exposure_risk_control,
 )
+from stock_research.intraday_risk_control_v2 import run_intraday_risk_control_v2_backtest
+from stock_research.intraday_risk_filter_backtest import run_intraday_risk_filter_backtest
 from stock_research.features import (
     compute_and_store_p0_features,
     compute_and_store_p0_features_range,
@@ -379,6 +381,13 @@ from stock_research.hibor_reports import (
 )
 from stock_research.hibor_ui_download import run_hibor_ui_download_backfill
 from stock_research.yanbaoke_reports import run_yanbaoke_report_backfill
+from stock_research.intraday_features import (
+    INTRADAY_FEATURE_CALC_VERSION,
+    backfill_intraday_features_daily_range,
+    build_and_store_intraday_features_daily,
+    run_intraday_feature_gap_check,
+)
+from stock_research.intraday_factor_eval import run_intraday_factor_eval
 from stock_research.alpha191_pilot_validation import (
     run_validate_alpha191_expanded,
     run_validate_alpha191_pilot,
@@ -892,6 +901,19 @@ def technical_feature_backfill_progress_printer(interval: int):
         if event["event"] == "start" and progress_interval > 1:
             return
         print_technical_feature_backfill_progress(event)
+
+    return print_progress
+
+
+def intraday_feature_backfill_progress_printer():
+    def print_progress(event: dict) -> None:
+        if event["event"] == "done":
+            print(
+                "intraday_feature_daily_backfill|done|"
+                f"{event['trade_date']}|{event['index']}|{event['total']}|"
+                f"stock_rows={event['stock_rows']}|industry_rows={event['industry_rows']}",
+                flush=True,
+            )
 
     return print_progress
 
@@ -1727,6 +1749,101 @@ def build_parser() -> argparse.ArgumentParser:
     factor_validation_review.add_argument("--min-ic-count", type=int, default=20)
     factor_validation_review.add_argument("--output-dir", required=True)
 
+    intraday_factor_eval = subparsers.add_parser("intraday-factor-eval")
+    intraday_factor_eval.add_argument("--start-date", required=True)
+    intraday_factor_eval.add_argument("--end-date", required=True)
+    intraday_factor_eval.add_argument(
+        "--horizons",
+        type=parse_research_horizons,
+        default=[5, 10, 20, 60],
+    )
+    intraday_factor_eval.add_argument("--features", type=parse_factor_names)
+    intraday_factor_eval.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    intraday_factor_eval.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    intraday_factor_eval.add_argument("--industry-system", default="csrc")
+    intraday_factor_eval.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/intraday_factor_eval",
+    )
+    intraday_factor_eval.add_argument("--quantiles", type=int, default=5)
+    intraday_factor_eval.add_argument("--top-n", type=int, default=30)
+
+    intraday_risk_filter_backtest = subparsers.add_parser("intraday-risk-filter-backtest")
+    intraday_risk_filter_backtest.add_argument("--start-date", required=True)
+    intraday_risk_filter_backtest.add_argument("--end-date", required=True)
+    intraday_risk_filter_backtest.add_argument("--score-version", default="manual_v1")
+    intraday_risk_filter_backtest.add_argument(
+        "--top-n-values",
+        type=lambda value: parse_int_list(value, "--top-n-values"),
+        default=[10, 20],
+    )
+    intraday_risk_filter_backtest.add_argument(
+        "--rebalance-frequency",
+        choices=["daily", "weekly"],
+        default="daily",
+    )
+    intraday_risk_filter_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    intraday_risk_filter_backtest.add_argument(
+        "--score-adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="hfq",
+    )
+    intraday_risk_filter_backtest.add_argument(
+        "--intraday-freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    intraday_risk_filter_backtest.add_argument(
+        "--intraday-adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    intraday_risk_filter_backtest.add_argument("--output-dir", required=True)
+
+    intraday_risk_control_v2_backtest = subparsers.add_parser(
+        "intraday-risk-control-v2-backtest"
+    )
+    intraday_risk_control_v2_backtest.add_argument("--start-date", required=True)
+    intraday_risk_control_v2_backtest.add_argument("--end-date", required=True)
+    intraday_risk_control_v2_backtest.add_argument("--score-version", default="manual_v1")
+    intraday_risk_control_v2_backtest.add_argument(
+        "--top-n-values",
+        type=lambda value: parse_int_list(value, "--top-n-values"),
+        default=[10, 20],
+    )
+    intraday_risk_control_v2_backtest.add_argument(
+        "--rebalance-frequency",
+        choices=["daily", "weekly"],
+        default="daily",
+    )
+    intraday_risk_control_v2_backtest.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    intraday_risk_control_v2_backtest.add_argument(
+        "--score-adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="hfq",
+    )
+    intraday_risk_control_v2_backtest.add_argument(
+        "--intraday-freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    intraday_risk_control_v2_backtest.add_argument(
+        "--intraday-adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    intraday_risk_control_v2_backtest.add_argument("--lookback", type=int, default=20)
+    intraday_risk_control_v2_backtest.add_argument("--zscore-threshold", type=float, default=1.5)
+    intraday_risk_control_v2_backtest.add_argument("--output-dir", required=True)
+
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
     daily_factor_pipeline.add_argument("--score-version", default="manual_v1")
@@ -1812,6 +1929,55 @@ def build_parser() -> argparse.ArgumentParser:
         default=TECHNICAL_FEATURE_CALC_VERSION,
     )
     technical_feature_gap_check.add_argument("--source-data-version")
+
+    intraday_features_daily = subparsers.add_parser("build-intraday-features-daily")
+    intraday_features_daily.add_argument("--trade-date", required=True)
+    intraday_features_daily.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    intraday_features_daily.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    intraday_features_daily.add_argument("--industry-system", default="csrc")
+
+    backfill_intraday_features = subparsers.add_parser("backfill-intraday-features-daily")
+    backfill_intraday_features.add_argument("--start-date", required=True)
+    backfill_intraday_features.add_argument("--end-date", required=True)
+    backfill_intraday_features.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    backfill_intraday_features.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    backfill_intraday_features.add_argument("--industry-system", default="csrc")
+    backfill_intraday_features.add_argument("--workers", type=int, default=1)
+    backfill_intraday_features.add_argument("--skip-complete", action="store_true")
+
+    intraday_feature_gap_check = subparsers.add_parser("intraday-feature-gap-check")
+    intraday_feature_gap_check.add_argument("--start-date", required=True)
+    intraday_feature_gap_check.add_argument("--end-date", required=True)
+    intraday_feature_gap_check.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    intraday_feature_gap_check.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="raw",
+    )
+    intraday_feature_gap_check.add_argument(
+        "--calc-version",
+        default=INTRADAY_FEATURE_CALC_VERSION,
+    )
 
     technical_feature_promotion_audit = subparsers.add_parser("technical-feature-promotion-audit")
     technical_feature_promotion_audit.add_argument("--start-date", required=True)
@@ -3555,6 +3721,62 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"factor_validation_review|decay_csv|{paths['decay_csv_path']}")
         if "segment_csv_path" in paths:
             print(f"factor_validation_review|segment_csv|{paths['segment_csv_path']}")
+    elif args.command == "intraday-factor-eval":
+        result = run_intraday_factor_eval(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            horizons=args.horizons,
+            output_dir=args.output_dir,
+            feature_names=args.features,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            industry_system=args.industry_system,
+            quantiles=args.quantiles,
+            top_n=args.top_n,
+        )
+        summary = result["summary"]
+        paths = result["paths"]
+        print(f"intraday_factor_eval|summary|{paths['summary_csv_path']}")
+        print(f"intraday_factor_eval|markdown|{paths['markdown_path']}")
+        print(f"intraday_factor_eval|rows|{len(summary)}")
+    elif args.command == "intraday-risk-filter-backtest":
+        result = run_intraday_risk_filter_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            score_version=args.score_version,
+            top_n_values=args.top_n_values,
+            rebalance_frequency=args.rebalance_frequency,
+            transaction_cost_bps=args.transaction_cost_bps,
+            score_adjust_type=args.score_adjust_type,
+            intraday_freq=args.intraday_freq,
+            intraday_adjust_type=args.intraday_adjust_type,
+        )
+        summary = result["summary"]
+        paths = result["paths"]
+        print(f"intraday_risk_filter_backtest|summary|{paths['summary']}")
+        print(f"intraday_risk_filter_backtest|report|{paths['report']}")
+        print(f"intraday_risk_filter_backtest|rows|{len(summary)}")
+    elif args.command == "intraday-risk-control-v2-backtest":
+        result = run_intraday_risk_control_v2_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            score_version=args.score_version,
+            top_n_values=args.top_n_values,
+            rebalance_frequency=args.rebalance_frequency,
+            transaction_cost_bps=args.transaction_cost_bps,
+            score_adjust_type=args.score_adjust_type,
+            intraday_freq=args.intraday_freq,
+            intraday_adjust_type=args.intraday_adjust_type,
+            lookback=args.lookback,
+            zscore_threshold=args.zscore_threshold,
+        )
+        summary = result["summary"]
+        paths = result["paths"]
+        print(f"intraday_risk_control_v2_backtest|summary|{paths['summary']}")
+        print(f"intraday_risk_control_v2_backtest|report|{paths['report']}")
+        print(f"intraday_risk_control_v2_backtest|rows|{len(summary)}")
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,
@@ -3678,6 +3900,59 @@ def main_for_args(argv: list[str] | None = None) -> None:
             "technical_feature_gap_check|summary|"
             f"dates={int(summary.get('dates') or 0)}|"
             f"dates_with_gaps={int(summary.get('dates_with_gaps') or 0)}"
+        )
+    elif args.command == "build-intraday-features-daily":
+        result = build_and_store_intraday_features_daily(
+            trade_date=args.trade_date,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            industry_system=args.industry_system,
+        )
+        print(f"intraday_features_daily|stock_rows|{int(result['stock_rows'])}")
+        print(f"intraday_features_daily|industry_rows|{int(result['industry_rows'])}")
+    elif args.command == "backfill-intraday-features-daily":
+        result = backfill_intraday_features_daily_range(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            industry_system=args.industry_system,
+            workers=args.workers,
+            skip_complete=args.skip_complete,
+            progress=intraday_feature_backfill_progress_printer(),
+        )
+        total = 0
+        if not result.empty:
+            total = int(result["stock_rows"].sum()) + int(result["industry_rows"].sum())
+        print(f"intraday_feature_daily_backfill|dates|{len(result)}")
+        print(f"intraday_feature_daily_backfill|rows|{total}")
+    elif args.command == "intraday-feature-gap-check":
+        result = run_intraday_feature_gap_check(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            calc_version=args.calc_version,
+        )
+        for row in result.get("dates", []):
+            if not row.get("has_stock_gap") and not row.get("has_industry_gap"):
+                continue
+            print(
+                "intraday_feature_gap_check|date|"
+                f"{row['trade_date']}|"
+                f"minute_assets={int(row['minute_assets'])}|"
+                f"stock_feature_assets={int(row['stock_feature_assets'])}|"
+                f"stock_missing={int(row['stock_missing'])}|"
+                f"stock_stale={int(row['stock_stale'])}|"
+                f"industry_feature_groups={int(row['industry_feature_groups'])}|"
+                f"industry_gap={1 if row.get('has_industry_gap') else 0}"
+            )
+        summary = result.get("summary", {})
+        print(
+            "intraday_feature_gap_check|summary|"
+            f"dates={int(summary.get('dates') or 0)}|"
+            f"dates_with_stock_gaps={int(summary.get('dates_with_stock_gaps') or 0)}|"
+            f"dates_with_industry_gaps={int(summary.get('dates_with_industry_gaps') or 0)}"
         )
     elif args.command == "technical-feature-performance-review":
         compare_benchmark = run_technical_feature_compare_benchmark(
