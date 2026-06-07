@@ -31,6 +31,16 @@ REGIME_COLUMNS = [
     "transition_reason",
 ]
 
+REGIME_RANK = {
+    "bear": 0,
+    "weak_repair": 1,
+    "neutral": 2,
+    "trend_decay": 3,
+    "bull_trend": 4,
+    "bull_impulse": 5,
+    "overheated": 6,
+}
+
 
 def build_market_regime_confirmation_from_frames(
     emotion: pd.DataFrame,
@@ -104,17 +114,59 @@ def _attach_policy_events(frame: pd.DataFrame, policy_events: pd.DataFrame | Non
     result = frame.copy()
     result["policy_impulse_candidate"] = False
     result["policy_strength"] = 0.0
+    if policy_events is None or policy_events.empty:
+        return result
+
+    events = policy_events.copy()
+    if "event_date" not in events.columns:
+        return result
+
+    event_date = events["event_date"].map(_normalize_trade_date_value)
+    events["event_date"] = pd.to_datetime(event_date, errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
+    strength = events.get("policy_strength", pd.Series(0.0, index=events.index))
+    events["policy_strength"] = pd.to_numeric(strength, errors="coerce").fillna(0.0).clip(0.0, 1.0)
+    events = events.dropna(subset=["event_date"])
+    strength_by_date = events.groupby("event_date")["policy_strength"].max()
+
+    for date, policy_strength in strength_by_date.items():
+        end_date = _shift_trade_date(result, date, 2)
+        if end_date < date:
+            continue
+        mask = result["trade_date"].between(date, end_date)
+        result.loc[mask, "policy_impulse_candidate"] = (
+            result.loc[mask, "policy_impulse_candidate"] | (float(policy_strength) >= 0.7)
+        )
+        result.loc[mask, "policy_strength"] = result.loc[mask, "policy_strength"].clip(lower=float(policy_strength))
     return result
+
+
+def _shift_trade_date(frame: pd.DataFrame, start_date: str, offset: int) -> str:
+    dates = frame["trade_date"].tolist()
+    if start_date not in dates:
+        later = [date for date in dates if date >= start_date]
+        return later[min(offset, len(later) - 1)] if later else start_date
+    index = dates.index(start_date)
+    return dates[min(index + offset, len(dates) - 1)]
 
 
 def _attach_raw_regime(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
-    result["market_regime_score"] = result["emotion_score_10d"]
-    result["raw_regime_state"] = result["market_regime_score"].map(_raw_regime_state)
+    base = result["emotion_score_10d"] + result["emotion_slope_5d"].clip(-20, 20) * 0.35
+    base = base - result["risk_high_days_5d"] * 2.0 + result["policy_strength"] * 8.0
+    result["market_regime_score"] = base.clip(0.0, 100.0)
+    result["raw_regime_state"] = result.apply(_raw_regime_state_from_row, axis=1)
     return result
 
 
-def _raw_regime_state(score: float) -> str:
+def _raw_regime_state_from_row(row: pd.Series) -> str:
+    if (
+        bool(row.get("policy_impulse_candidate"))
+        and row.get("emotion_slope_5d", 0.0) >= 15
+        and row.get("emotion_score", 0.0) >= 45
+    ):
+        return "bull_impulse"
+
+    score = float(row.get("market_regime_score", 50.0))
     if score < 35:
         return "bear"
     if score < 45:
@@ -128,9 +180,56 @@ def _raw_regime_state(score: float) -> str:
 
 def _attach_confirmed_regime(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
-    result["confirmed_regime_state"] = result["raw_regime_state"]
+    confirmed = []
+    reasons = []
+    current = str(result.iloc[0]["raw_regime_state"])
+    pending_state = current
+    pending_count = 0
+
+    for _, row in result.iterrows():
+        raw = str(row["raw_regime_state"])
+        if raw == current:
+            pending_state = raw
+            pending_count = 0
+            confirmed.append(current)
+            reasons.append("unchanged")
+            continue
+
+        raw_rank = REGIME_RANK.get(raw, 2)
+        current_rank = REGIME_RANK.get(current, 2)
+        if raw != pending_state:
+            pending_state = raw
+            pending_count = 1
+        else:
+            pending_count += 1
+
+        if raw == "bull_impulse" and pending_count >= 1:
+            current = "bull_impulse"
+            pending_count = 0
+            confirmed.append(current)
+            reasons.append("policy_impulse_confirmed")
+        elif current == "bull_impulse" and raw != "bull_impulse" and not bool(row.get("policy_impulse_candidate")):
+            current = "bull_trend" if raw_rank >= REGIME_RANK["neutral"] else "trend_decay"
+            pending_count = 0
+            confirmed.append(current)
+            reasons.append("policy_impulse_expired")
+        elif raw_rank > current_rank and pending_count >= 2:
+            current = "bull_trend" if current == "bull_impulse" and raw in {"bull_trend", "overheated"} else raw
+            pending_count = 0
+            confirmed.append(current)
+            reasons.append("upgrade_confirmed")
+        elif raw_rank < current_rank and pending_count >= 4:
+            current = "trend_decay" if current in {"bull_impulse", "bull_trend", "overheated"} and raw_rank >= 1 else raw
+            pending_count = 0
+            confirmed.append(current)
+            reasons.append("downgrade_confirmed")
+        else:
+            confirmed.append(current)
+            reasons.append("downgrade_wait_for_confirmation" if raw_rank < current_rank else "upgrade_wait_for_confirmation")
+
+    result["confirmed_regime_state"] = confirmed
     result["days_since_regime_change"] = _days_since_change(result["confirmed_regime_state"])
-    result["transition_reason"] = "raw_initial"
+    result["transition_reason"] = reasons
     return result
 
 
