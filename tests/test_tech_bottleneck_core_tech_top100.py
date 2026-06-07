@@ -9,6 +9,7 @@ from stock_research.tech_bottleneck_core_tech_top100 import (
     build_baseline_comparison,
     build_weekly_topn_candidates,
     run_core_tech_top100_from_files,
+    write_core_tech_top100_artifacts,
 )
 
 
@@ -252,3 +253,41 @@ def test_file_runner_writes_artifacts_and_manifest_counts(tmp_path: Path) -> Non
     assert manifest["new_p1_from_rank_51_100"] == 1
     assert manifest["new_p2_from_rank_51_100"] == 1
     assert "Top50 baseline P1 count: 1" in paths["baseline_comparison"].read_text(encoding="utf-8")
+
+
+def test_artifact_writer_accepts_planned_keyword_only_api(tmp_path: Path) -> None:
+    candidates_top100 = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688051",
+                "stock_name": "新增P1",
+                "trade_date": "2026-06-05",
+                "rank": 51,
+                "in_top50_baseline": False,
+                "p3_decision": "auto_approve",
+                "top100_increment_status": "new_p1_auto_promotion",
+            }
+        ]
+    )
+    comparison = {
+        "top50_vs_top100_diff": candidates_top100.copy(),
+        "baseline_comparison_md": "# Custom Comparison\n",
+        "manifest": {"top100_candidate_count": 1},
+    }
+    inputs = {"scores_csv": "scores.csv", "top_n": 100}
+
+    paths = write_core_tech_top100_artifacts(
+        candidates_top100=candidates_top100,
+        comparison=comparison,
+        output_dir=tmp_path,
+        inputs=inputs,
+    )
+
+    assert pd.read_csv(paths["candidates_top100"])["asset_id"].tolist() == ["CN:SH:688051"]
+    assert pd.read_csv(paths["top50_vs_top100_diff"])["top100_increment_status"].tolist() == [
+        "new_p1_auto_promotion"
+    ]
+    assert paths["baseline_comparison"].read_text(encoding="utf-8") == "# Custom Comparison\n"
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    assert manifest["inputs"] == inputs
+    assert manifest["files"]["candidates_top100"] == "candidates_top100.csv"

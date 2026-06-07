@@ -90,7 +90,7 @@ def run_core_tech_top100_from_files(
     quality_review = pd.read_csv(quality_review_csv)
     baseline_promotions = pd.read_csv(baseline_promotions_csv)
     candidates = build_weekly_topn_candidates(score_rows=score_rows, top_n=top_n)
-    outputs = build_baseline_comparison(
+    comparison = build_baseline_comparison(
         top100_candidates=candidates,
         quality_review=quality_review,
         baseline_promotions=baseline_promotions,
@@ -101,28 +101,34 @@ def run_core_tech_top100_from_files(
         "baseline_promotions_csv": str(baseline_promotions_csv),
         "top_n": top_n,
     }
-    return write_core_tech_top100_artifacts(outputs=outputs, output_dir=output_dir, inputs=inputs)
+    return write_core_tech_top100_artifacts(
+        candidates_top100=comparison["candidates_top100"],
+        comparison=comparison,
+        output_dir=output_dir,
+        inputs=inputs,
+    )
 
 
 def write_core_tech_top100_artifacts(
     *,
-    outputs: dict[str, Any],
+    candidates_top100: pd.DataFrame,
+    comparison: dict[str, Any],
     output_dir: Path,
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {key: output_dir / filename for key, filename in TOP100_ARTIFACT_FILES.items()}
 
-    candidates = outputs["candidates_top100"].copy()
-    diff = outputs["top50_vs_top100_diff"].copy()
-    manifest = dict(outputs.get("manifest") or _manifest(candidates, diff, pd.DataFrame()))
+    candidates = candidates_top100.copy()
+    diff = comparison["top50_vs_top100_diff"].copy()
+    manifest = dict(comparison.get("manifest") or _manifest(candidates, diff, pd.DataFrame()))
     manifest["inputs"] = inputs or {}
     manifest["files"] = {key: path.name for key, path in paths.items()}
 
     candidates.to_csv(paths["candidates_top100"], index=False)
     diff.to_csv(paths["top50_vs_top100_diff"], index=False)
     paths["baseline_comparison"].write_text(
-        outputs.get("baseline_comparison_md") or _render_markdown(manifest, diff),
+        comparison.get("baseline_comparison_md") or _render_markdown(manifest, diff),
         encoding="utf-8",
     )
     paths["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
