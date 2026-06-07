@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pandas as pd
 
@@ -40,6 +41,34 @@ REGIME_RANK = {
     "bull_impulse": 5,
     "overheated": 6,
 }
+
+SEGMENT_WINDOWS = [
+    ("pre_924_2024", "2024-01-01", "2024-09-23"),
+    ("policy_rally_2024", "2024-09-24", "2024-11-08"),
+    ("post_rally_2024", "2024-11-11", "2024-12-31"),
+    ("post_2025", "2025-01-01", "2099-12-31"),
+    ("full_period", "1900-01-01", "2099-12-31"),
+]
+
+SEGMENT_DIAGNOSTIC_COLUMNS = [
+    "segment_name",
+    "start_date",
+    "end_date",
+    "days",
+    "avg_target_exposure",
+    "dominant_regime",
+    "regime_changes",
+    "raw_confirmed_disagree_days",
+]
+
+TRANSITION_DIAGNOSTIC_COLUMNS = [
+    "trade_date",
+    "raw_regime_state",
+    "confirmed_regime_state",
+    "target_exposure",
+    "style_bias",
+    "transition_reason",
+]
 
 
 def build_market_regime_confirmation_from_frames(
@@ -287,3 +316,121 @@ def _style_bias(state: str) -> str:
         "trend_decay": "hold_leaders_reduce_new",
         "overheated": "growth_tight_risk",
     }.get(state, "balanced_mid_trend")
+
+
+def build_segment_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
+    normalized = _normalize_regime_for_diagnostics(regime)
+    rows = []
+    for name, start, end in SEGMENT_WINDOWS:
+        frame = normalized[normalized["trade_date"].between(start, end)].copy()
+        if frame.empty:
+            rows.append(
+                {
+                    "segment_name": name,
+                    "start_date": start,
+                    "end_date": end,
+                    "days": 0,
+                    "avg_target_exposure": 0.0,
+                    "dominant_regime": "",
+                    "regime_changes": 0,
+                    "raw_confirmed_disagree_days": 0,
+                }
+            )
+            continue
+
+        rows.append(
+            {
+                "segment_name": name,
+                "start_date": str(frame["trade_date"].min()),
+                "end_date": str(frame["trade_date"].max()),
+                "days": int(len(frame)),
+                "avg_target_exposure": float(frame["target_exposure"].mean()),
+                "dominant_regime": str(frame["confirmed_regime_state"].mode().iloc[0]),
+                "regime_changes": int(
+                    frame["confirmed_regime_state"].ne(frame["confirmed_regime_state"].shift()).sum()
+                ),
+                "raw_confirmed_disagree_days": int(
+                    frame["raw_regime_state"].ne(frame["confirmed_regime_state"]).sum()
+                ),
+            }
+        )
+    return pd.DataFrame(rows, columns=SEGMENT_DIAGNOSTIC_COLUMNS)
+
+
+def build_transition_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
+    normalized = _normalize_regime_for_diagnostics(regime)
+    if normalized.empty:
+        return pd.DataFrame(columns=TRANSITION_DIAGNOSTIC_COLUMNS)
+
+    changed = normalized["confirmed_regime_state"].ne(normalized["confirmed_regime_state"].shift())
+    return normalized.loc[changed, TRANSITION_DIAGNOSTIC_COLUMNS].reset_index(drop=True)
+
+
+def write_market_regime_confirmation_outputs(regime: pd.DataFrame, *, output_dir: str | Path) -> dict[str, Path]:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    normalized = _normalize_regime_for_diagnostics(regime)
+    segment = build_segment_diagnostics(normalized)
+    transitions = build_transition_diagnostics(normalized)
+    paths = {
+        "regime_path": output_path / "market_regime_confirmation_daily.csv",
+        "segment_diagnostics_path": output_path / "market_regime_segment_diagnostics.csv",
+        "transition_path": output_path / "market_regime_transitions.csv",
+        "report_path": output_path / "market_regime_confirmation_v1_report.md",
+    }
+
+    normalized.to_csv(paths["regime_path"], index=False)
+    segment.to_csv(paths["segment_diagnostics_path"], index=False)
+    transitions.to_csv(paths["transition_path"], index=False)
+    paths["report_path"].write_text(_render_report(normalized, segment, transitions), encoding="utf-8")
+    return paths
+
+
+def _normalize_regime_for_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
+    normalized = regime.copy()
+    for column in REGIME_COLUMNS:
+        if column not in normalized.columns:
+            normalized[column] = pd.NA
+    if normalized.empty:
+        return pd.DataFrame(columns=REGIME_COLUMNS)
+
+    trade_date = normalized["trade_date"].map(_normalize_trade_date_value)
+    normalized["trade_date"] = pd.to_datetime(trade_date, errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
+    normalized["target_exposure"] = pd.to_numeric(normalized["target_exposure"], errors="coerce").fillna(0.0)
+    normalized["raw_regime_state"] = normalized["raw_regime_state"].fillna("").astype(str)
+    normalized["confirmed_regime_state"] = normalized["confirmed_regime_state"].fillna("").astype(str)
+    normalized["style_bias"] = normalized["style_bias"].fillna("").astype(str)
+    normalized["transition_reason"] = normalized["transition_reason"].fillna("").astype(str)
+    normalized = normalized.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
+    return normalized[REGIME_COLUMNS]
+
+
+def _render_report(regime: pd.DataFrame, segment: pd.DataFrame, transitions: pd.DataFrame) -> str:
+    distribution = (
+        regime["confirmed_regime_state"].value_counts().rename_axis("state").reset_index(name="days")
+        if "confirmed_regime_state" in regime.columns
+        else pd.DataFrame(columns=["state", "days"])
+    )
+    sections = [
+        "# Market Regime Confirmation V1 Report",
+        "",
+        "## Segment Diagnostics",
+        _frame_to_markdown(segment),
+        "",
+        "## Confirmed Regime Distribution",
+        _frame_to_markdown(distribution),
+        "",
+        "## Transitions",
+        _frame_to_markdown(transitions),
+        "",
+    ]
+    return "\n".join(sections)
+
+
+def _frame_to_markdown(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "_No rows._"
+    try:
+        return frame.to_markdown(index=False)
+    except ImportError:
+        return f"```csv\n{frame.to_csv(index=False).rstrip()}\n```"
