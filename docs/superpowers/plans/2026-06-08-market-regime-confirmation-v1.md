@@ -224,7 +224,7 @@ def _attach_smoothed_features(frame: pd.DataFrame) -> pd.DataFrame:
     score = result["emotion_score"].astype(float)
     result["emotion_score_5d"] = score.rolling(5, min_periods=1).mean()
     result["emotion_score_10d"] = score.rolling(10, min_periods=1).mean()
-    result["emotion_slope_5d"] = score - score.shift(5).fillna(score.iloc[0])
+    result["emotion_slope_5d"] = score - score.shift(4).fillna(score.iloc[0])
     result["risk_high_days_5d"] = result["risk_state"].eq("high").rolling(5, min_periods=1).sum().astype(int)
     result["risk_high_days_10d"] = result["risk_state"].eq("high").rolling(10, min_periods=1).sum().astype(int)
     result["hot_or_euphoria_days_5d"] = (
