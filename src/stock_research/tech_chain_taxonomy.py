@@ -32,6 +32,20 @@ CHAIN_MAPPING_COLUMNS = [
     "product_exposure_quality",
 ]
 
+CHAIN_EVIDENCE_COLUMNS = [
+    "asset_id",
+    "stock_name",
+    "trade_date",
+    "chain_id",
+    "chain_name",
+    "evidence_type",
+    "bottleneck_dimension",
+    "matched_terms",
+    "evidence_quality",
+    "evidence_date",
+    "snippet",
+]
+
 CANDIDATE_TEXT_FIELDS = [
     "stock_name",
     "industry_name",
@@ -137,6 +151,62 @@ def build_chain_mapping(
     return pd.DataFrame(rows).reindex(columns=CHAIN_MAPPING_COLUMNS)
 
 
+def build_chain_evidence_review(
+    *,
+    mapping: pd.DataFrame,
+    evidence: pd.DataFrame | None,
+    taxonomy: TechChainTaxonomy,
+) -> pd.DataFrame:
+    normalized_mapping = _normalize_mapping(mapping)
+    normalized_evidence = _normalize_evidence(evidence)
+    rows: list[dict[str, Any]] = []
+    for item in normalized_mapping.to_dict("records"):
+        if not item["primary_chain_id"]:
+            continue
+        chain = taxonomy.chain_by_id(item["primary_chain_id"])
+        candidate_evidence = normalized_evidence[
+            normalized_evidence["asset_id"].eq(item["asset_id"])
+            & normalized_evidence["candidate_trade_date"].eq(item["trade_date"])
+            & normalized_evidence["as_of_safe"]
+        ].copy()
+        for evidence_row in candidate_evidence.to_dict("records"):
+            keyword_text = _compactible_text(evidence_row["matched_keyword"])
+            full_text = _compactible_text(
+                f"{evidence_row['matched_keyword']} {evidence_row['snippet']}"
+            )
+            text = (
+                keyword_text
+                if keyword_text
+                and any(
+                    _matched_terms(keyword_text, terms)
+                    for terms in chain.bottleneck_dimensions.values()
+                )
+                else full_text
+            )
+            for dimension, terms in chain.bottleneck_dimensions.items():
+                matched = _matched_terms(text, terms)
+                if not matched:
+                    continue
+                rows.append(
+                    {
+                        "asset_id": item["asset_id"],
+                        "stock_name": item["stock_name"],
+                        "trade_date": item["trade_date"],
+                        "chain_id": chain.chain_id,
+                        "chain_name": chain.display_name,
+                        "evidence_type": evidence_row["evidence_type"],
+                        "bottleneck_dimension": dimension,
+                        "matched_terms": "|".join(matched),
+                        "evidence_quality": _chain_evidence_quality(
+                            evidence_row, matched
+                        ),
+                        "evidence_date": evidence_row["evidence_date"],
+                        "snippet": evidence_row["snippet"],
+                    }
+                )
+    return pd.DataFrame(rows).reindex(columns=CHAIN_EVIDENCE_COLUMNS)
+
+
 def _candidate_chain_match(
     chain: TechChainDefinition, text: str, *, taxonomy_order: int
 ) -> dict[str, Any]:
@@ -182,8 +252,82 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
 
 
+def _normalize_mapping(mapping: pd.DataFrame) -> pd.DataFrame:
+    frame = mapping.copy()
+    for column in [
+        "asset_id",
+        "stock_name",
+        "trade_date",
+        "primary_chain_id",
+        "product_exposure_quality",
+    ]:
+        if column not in frame:
+            frame[column] = ""
+        frame[column] = _normalized_string_column(frame[column])
+    frame["trade_date"] = frame["trade_date"].map(_normalize_date)
+    return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
+
+
+def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
+    frame = evidence.copy() if evidence is not None else pd.DataFrame()
+    if "trade_date" not in frame and "candidate_trade_date" in frame:
+        frame = frame.rename(columns={"candidate_trade_date": "trade_date"})
+    if "candidate_trade_date" not in frame and "trade_date" in frame:
+        frame["candidate_trade_date"] = frame["trade_date"]
+    if "snippet" not in frame and "evidence_snippet" in frame:
+        frame = frame.rename(columns={"evidence_snippet": "snippet"})
+    if "matched_keyword" not in frame and "term" in frame:
+        frame = frame.rename(columns={"term": "matched_keyword"})
+    if "evidence_type" not in frame and "evidence_bucket" in frame:
+        frame = frame.rename(columns={"evidence_bucket": "evidence_type"})
+    for column in [
+        "asset_id",
+        "stock_name",
+        "candidate_trade_date",
+        "evidence_date",
+        "evidence_type",
+        "matched_keyword",
+        "snippet",
+    ]:
+        if column not in frame:
+            frame[column] = ""
+        frame[column] = _normalized_string_column(frame[column])
+    if "as_of_safe" not in frame:
+        frame["as_of_safe"] = True
+    frame["as_of_safe"] = frame["as_of_safe"].map(_bool_value)
+    frame["candidate_trade_date"] = frame["candidate_trade_date"].map(_normalize_date)
+    frame["evidence_date"] = frame["evidence_date"].map(_normalize_date)
+    return frame[
+        frame["asset_id"].ne("") & frame["candidate_trade_date"].ne("")
+    ].copy()
+
+
 def _normalized_string_column(column: pd.Series) -> pd.Series:
     return column.astype("string").fillna("").str.strip()
+
+
+def _bool_value(value: Any) -> bool:
+    if pd.isna(value):
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return bool(value)
+    return str(value).strip().casefold() in {"true", "1", "yes", "y"}
+
+
+def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> str:
+    text = _compactible_text(
+        f"{row.get('matched_keyword', '')} {row.get('snippet', '')}"
+    )
+    if len(matched_terms) >= 2:
+        return "strong"
+    if any(
+        term in text
+        for term in ["良率", "认证", "量产", "客户", "交付", "产能", "扩产"]
+    ):
+        return "strong"
+    return "medium"
 
 
 def _candidate_matching_text(candidate: dict[str, Any]) -> str:

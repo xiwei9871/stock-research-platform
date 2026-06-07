@@ -4,7 +4,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from stock_research.tech_chain_taxonomy import build_chain_mapping, load_taxonomy
+from stock_research.tech_chain_taxonomy import (
+    build_chain_evidence_review,
+    build_chain_mapping,
+    load_taxonomy,
+)
 
 
 def test_load_taxonomy_v1_contains_core_chains() -> None:
@@ -239,6 +243,55 @@ def test_build_chain_mapping_preserves_string_asset_ids_with_leading_zeroes() ->
     mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
 
     assert mapping.loc[0, "asset_id"] == "000001"
+
+
+def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "持续扩产备料并积极研发布局3.2T、CPO等",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-09-17",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "1.6T",
+                "evidence_snippet": "1.6T上量将进一步提升盈利",
+                "as_of_safe": False,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert len(review) == 1
+    row = review.iloc[0]
+    assert row["asset_id"] == "CN:SZ:300308"
+    assert row["chain_id"] == "ai_optical_interconnect"
+    assert row["bottleneck_dimension"] == "architecture_route"
+    assert row["matched_terms"] == "CPO"
+    assert row["evidence_quality"] == "strong"
 
 
 def _minimal_chain() -> dict[str, object]:
