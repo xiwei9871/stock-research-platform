@@ -4,6 +4,7 @@ import pandas as pd
 
 from stock_research.market_regime_confirmation_v1 import (
     REGIME_COLUMNS,
+    build_segment_diagnostics,
     build_market_regime_confirmation_from_frames,
     write_market_regime_confirmation_outputs,
 )
@@ -209,6 +210,9 @@ def test_write_outputs_includes_segment_diagnostics_transitions_and_markdown_rep
         "avg_target_exposure",
         "dominant_regime",
         "regime_changes",
+        "state_distribution",
+        "transition_dates",
+        "strategy_performance",
         "raw_confirmed_disagree_days",
     }.issubset(segment.columns)
     assert segment["segment_name"].tolist() == [
@@ -236,3 +240,70 @@ def test_write_outputs_includes_segment_diagnostics_transitions_and_markdown_rep
     assert "## Segment Diagnostics" in report
     assert "## Confirmed Regime Distribution" in report
     assert "## Transitions" in report
+
+
+def test_build_segment_diagnostics_serializes_state_transitions_and_optional_strategy_performance() -> None:
+    regime = pd.DataFrame(
+        [
+            {
+                "trade_date": "2024-09-24",
+                "raw_regime_state": "bear",
+                "confirmed_regime_state": "bear",
+                "target_exposure": 0.2,
+                "style_bias": "cash_defensive",
+                "transition_reason": "unchanged",
+            },
+            {
+                "trade_date": "2024-09-25",
+                "raw_regime_state": "bull_trend",
+                "confirmed_regime_state": "bull_trend",
+                "target_exposure": 1.0,
+                "style_bias": "growth_mid_trend",
+                "transition_reason": "upgrade_confirmed",
+            },
+            {
+                "trade_date": "2024-09-26",
+                "raw_regime_state": "bull_trend",
+                "confirmed_regime_state": "bull_trend",
+                "target_exposure": 1.0,
+                "style_bias": "growth_mid_trend",
+                "transition_reason": "unchanged",
+            },
+        ]
+    )
+    equity = pd.DataFrame(
+        [
+            {"trade_date": "2024-09-24", "strategy_family": "fixed_mid_trend", "daily_return": 0.10},
+            {"trade_date": "2024-09-25", "strategy_family": "fixed_mid_trend", "daily_return": -0.05},
+            {"trade_date": "2024-09-26", "strategy_family": "fixed_mid_trend", "daily_return": 0.02},
+            {"trade_date": "2024-09-24", "strategy_family": "regime_confirmed_exposure", "daily_return": 0.04},
+            {"trade_date": "2024-09-25", "strategy_family": "regime_confirmed_exposure", "daily_return": 0.03},
+        ]
+    )
+
+    segment = build_segment_diagnostics(regime, equity=equity)
+
+    rally = segment.loc[segment["segment_name"] == "policy_rally_2024"].iloc[0]
+    assert rally["state_distribution"] == "bull_trend:2;bear:1"
+    assert rally["transition_dates"] == "2024-09-25"
+    assert "fixed_mid_trend:ret=0.065900,dd=-0.050000,days=3" in rally["strategy_performance"]
+    assert "regime_confirmed_exposure:ret=0.071200,dd=0.000000,days=2" in rally["strategy_performance"]
+    assert "|" in rally["strategy_performance"]
+
+
+def test_build_segment_diagnostics_leaves_strategy_performance_empty_without_equity() -> None:
+    segment = build_segment_diagnostics(
+        pd.DataFrame(
+            [
+                {
+                    "trade_date": "2024-09-24",
+                    "raw_regime_state": "bear",
+                    "confirmed_regime_state": "bear",
+                    "target_exposure": 0.2,
+                }
+            ]
+        )
+    )
+
+    rally = segment.loc[segment["segment_name"] == "policy_rally_2024"].iloc[0]
+    assert rally["strategy_performance"] == ""

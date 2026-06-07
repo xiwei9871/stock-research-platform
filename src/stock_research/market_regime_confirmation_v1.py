@@ -58,6 +58,9 @@ SEGMENT_DIAGNOSTIC_COLUMNS = [
     "avg_target_exposure",
     "dominant_regime",
     "regime_changes",
+    "state_distribution",
+    "transition_dates",
+    "strategy_performance",
     "raw_confirmed_disagree_days",
 ]
 
@@ -318,8 +321,9 @@ def _style_bias(state: str) -> str:
     }.get(state, "balanced_mid_trend")
 
 
-def build_segment_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
+def build_segment_diagnostics(regime: pd.DataFrame, equity: pd.DataFrame | None = None) -> pd.DataFrame:
     normalized = _normalize_regime_for_diagnostics(regime)
+    normalized_equity = _normalize_equity_for_diagnostics(equity)
     rows = []
     for name, start, end in SEGMENT_WINDOWS:
         frame = normalized[normalized["trade_date"].between(start, end)].copy()
@@ -333,6 +337,9 @@ def build_segment_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
                     "avg_target_exposure": 0.0,
                     "dominant_regime": "",
                     "regime_changes": 0,
+                    "state_distribution": "",
+                    "transition_dates": "",
+                    "strategy_performance": "",
                     "raw_confirmed_disagree_days": 0,
                 }
             )
@@ -349,6 +356,9 @@ def build_segment_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
                 "regime_changes": int(
                     frame["confirmed_regime_state"].ne(frame["confirmed_regime_state"].shift()).sum()
                 ),
+                "state_distribution": _serialize_state_distribution(frame),
+                "transition_dates": _serialize_transition_dates(frame),
+                "strategy_performance": _serialize_strategy_performance(normalized_equity, start, end),
                 "raw_confirmed_disagree_days": int(
                     frame["raw_regime_state"].ne(frame["confirmed_regime_state"]).sum()
                 ),
@@ -366,11 +376,16 @@ def build_transition_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
     return normalized.loc[changed, TRANSITION_DIAGNOSTIC_COLUMNS].reset_index(drop=True)
 
 
-def write_market_regime_confirmation_outputs(regime: pd.DataFrame, *, output_dir: str | Path) -> dict[str, Path]:
+def write_market_regime_confirmation_outputs(
+    regime: pd.DataFrame,
+    *,
+    output_dir: str | Path,
+    equity: pd.DataFrame | None = None,
+) -> dict[str, Path]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     normalized = _normalize_regime_for_diagnostics(regime)
-    segment = build_segment_diagnostics(normalized)
+    segment = build_segment_diagnostics(normalized, equity=equity)
     transitions = build_transition_diagnostics(normalized)
     paths = {
         "regime_path": output_path / "market_regime_confirmation_daily.csv",
@@ -403,6 +418,83 @@ def _normalize_regime_for_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
     normalized["transition_reason"] = normalized["transition_reason"].fillna("").astype(str)
     normalized = normalized.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
     return normalized[REGIME_COLUMNS]
+
+
+def _normalize_equity_for_diagnostics(equity: pd.DataFrame | None) -> pd.DataFrame:
+    columns = ["trade_date", "strategy_family", "daily_return", "equity"]
+    if equity is None or equity.empty:
+        return pd.DataFrame(columns=columns)
+
+    normalized = equity.copy()
+    if "trade_date" not in normalized.columns and "date" in normalized.columns:
+        normalized["trade_date"] = normalized["date"]
+    if "strategy_family" not in normalized.columns:
+        normalized["strategy_family"] = ""
+    if "daily_return" not in normalized.columns:
+        normalized["daily_return"] = pd.NA
+    if "equity" not in normalized.columns:
+        normalized["equity"] = pd.NA
+
+    trade_date = normalized["trade_date"].map(_normalize_trade_date_value)
+    normalized["trade_date"] = pd.to_datetime(trade_date, errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
+    normalized["strategy_family"] = normalized["strategy_family"].fillna("").astype(str)
+    normalized["daily_return"] = pd.to_numeric(normalized["daily_return"], errors="coerce")
+    normalized["equity"] = pd.to_numeric(normalized["equity"], errors="coerce")
+    normalized = normalized.dropna(subset=["trade_date"]).sort_values(["trade_date", "strategy_family"]).reset_index(
+        drop=True
+    )
+    return normalized[columns]
+
+
+def _serialize_state_distribution(frame: pd.DataFrame) -> str:
+    counts = frame["confirmed_regime_state"].astype(str).value_counts()
+    return ";".join(f"{state}:{int(days)}" for state, days in counts.items() if state)
+
+
+def _serialize_transition_dates(frame: pd.DataFrame) -> str:
+    changed = frame["confirmed_regime_state"].ne(frame["confirmed_regime_state"].shift())
+    dates = frame.loc[changed & frame["confirmed_regime_state"].shift().notna(), "trade_date"].astype(str).tolist()
+    return ";".join(dates)
+
+
+def _serialize_strategy_performance(equity: pd.DataFrame, start: str, end: str) -> str:
+    if equity.empty:
+        return ""
+
+    frame = equity[equity["trade_date"].between(start, end)].copy()
+    if frame.empty:
+        return ""
+
+    parts = []
+    for strategy_family, group in frame.groupby("strategy_family", sort=True):
+        group = group.sort_values("trade_date")
+        days = int(len(group))
+        if not days:
+            continue
+
+        daily_return = group["daily_return"].dropna().astype(float)
+        if not daily_return.empty:
+            total_return = float((1.0 + daily_return).prod() - 1.0)
+            equity_curve = (1.0 + daily_return).cumprod()
+        else:
+            equity_curve = group["equity"].dropna().astype(float)
+            if equity_curve.empty:
+                continue
+            first = float(equity_curve.iloc[0])
+            total_return = float(equity_curve.iloc[-1] / first - 1.0) if first else 0.0
+
+        parts.append(
+            f"{strategy_family}:ret={total_return:.6f},dd={_max_drawdown(equity_curve):.6f},days={days}"
+        )
+    return "|".join(parts)
+
+
+def _max_drawdown(equity_curve: pd.Series) -> float:
+    if equity_curve.empty:
+        return 0.0
+    curve = pd.concat([pd.Series([1.0]), equity_curve.astype(float)], ignore_index=True)
+    drawdown = curve / curve.cummax() - 1.0
+    return float(drawdown.min())
 
 
 def _render_report(regime: pd.DataFrame, segment: pd.DataFrame, transitions: pd.DataFrame) -> str:
