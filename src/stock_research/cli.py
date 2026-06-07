@@ -162,6 +162,7 @@ from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
+from stock_research.tech_bottleneck_observation_outcome import run_observation_outcome_from_files
 from stock_research.tech_bottleneck_observation_pool import run_observation_pool_from_files
 from stock_research.tech_bottleneck_quality_review import run_quality_review_from_files
 from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
@@ -1439,6 +1440,17 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_observation_pool.add_argument("--pass-pool-csv")
     tech_bottleneck_observation_pool.add_argument("--source-manifest")
     tech_bottleneck_observation_pool.add_argument("--horizons", default="120,250,500")
+
+    tech_bottleneck_observation_outcome = subparsers.add_parser(
+        "tech-bottleneck-observation-outcome",
+        help="Build observation outcomes for tech bottleneck comparison groups from market bars.",
+    )
+    tech_bottleneck_observation_outcome.add_argument("--comparison-groups-csv", required=True)
+    tech_bottleneck_observation_outcome.add_argument("--bars-csv", required=True)
+    tech_bottleneck_observation_outcome.add_argument("--output-dir", required=True)
+    tech_bottleneck_observation_outcome.add_argument("--source-manifest")
+    tech_bottleneck_observation_outcome.add_argument("--benchmark-asset-id")
+    tech_bottleneck_observation_outcome.add_argument("--horizons", default="120,250,500")
 
     tech_bottleneck_product = subparsers.add_parser(
         "tech-bottleneck-official-disclosure-product-backfill",
@@ -4851,6 +4863,16 @@ def main_for_args(argv: list[str] | None = None) -> None:
             pass_pool_csv=Path(args.pass_pool_csv) if args.pass_pool_csv else None,
             output_dir=Path(args.output_dir),
             source_manifest_path=Path(args.source_manifest) if args.source_manifest else None,
+            horizons=[int(item.strip()) for item in str(args.horizons).split(",") if item.strip()],
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-observation-outcome":
+        paths = run_observation_outcome_from_files(
+            comparison_groups_csv=Path(args.comparison_groups_csv),
+            bars_csv=Path(args.bars_csv),
+            output_dir=Path(args.output_dir),
+            source_manifest_path=Path(args.source_manifest) if args.source_manifest else None,
+            benchmark_asset_id=args.benchmark_asset_id,
             horizons=[int(item.strip()) for item in str(args.horizons).split(",") if item.strip()],
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
