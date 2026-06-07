@@ -526,40 +526,80 @@ def _simulate_equal_weight_daily(
     if selected.empty:
         return pd.DataFrame(columns=EQUITY_COLUMNS)
 
-    computable_dates = set(price_returns.loc[price_returns["next_return"].notna(), "trade_date"])
-    equity = 1.0
-    rows = []
-    for trade_date, day in selected.groupby("trade_date", sort=True):
-        invested_weight = float(pd.to_numeric(day["invested_weight"], errors="coerce").fillna(0.0).max())
-        asset_ids = day["asset_id"].dropna().astype(str).tolist()
-        selected_holdings = len(asset_ids)
+    selected_frame = selected.copy()
+    selected_frame["trade_date"] = pd.to_datetime(
+        selected_frame["trade_date"], errors="coerce", format="mixed"
+    ).dt.strftime("%Y-%m-%d")
+    selected_frame = selected_frame.dropna(subset=["trade_date"])
+    if selected_frame.empty:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
 
-        if not asset_ids or invested_weight <= 0.0:
-            if trade_date not in computable_dates:
-                continue
-            daily_return = 0.0
-        else:
-            asset_returns = price_returns[
-                (price_returns["trade_date"] == trade_date) & (price_returns["asset_id"].isin(asset_ids))
-            ]["next_return"].dropna()
-            if asset_returns.empty:
-                continue
-            daily_return = float(asset_returns.mean()) * invested_weight
-        priced_holdings = 0 if not asset_ids or invested_weight <= 0.0 else int(len(asset_returns))
-        equity *= 1.0 + daily_return
-        rows.append(
-            {
-                "trade_date": trade_date,
-                "strategy_family": strategy_family,
-                "daily_return": daily_return,
-                "equity": equity,
-                "invested_weight": invested_weight,
-                "selected_holdings": selected_holdings,
-                "priced_holdings": priced_holdings,
-                "holdings": priced_holdings,
-            }
+    selected_frame["invested_weight"] = pd.to_numeric(
+        selected_frame["invested_weight"], errors="coerce"
+    ).fillna(0.0)
+    selected_frame["asset_id"] = selected_frame["asset_id"].where(
+        selected_frame["asset_id"].notna(), ""
+    ).astype(str)
+    selected_frame["_has_asset"] = selected_frame["asset_id"] != ""
+
+    daily_meta = (
+        selected_frame.groupby("trade_date", sort=True)
+        .agg(
+            invested_weight=("invested_weight", "max"),
+            selected_holdings=("_has_asset", "sum"),
         )
-    return pd.DataFrame(rows, columns=EQUITY_COLUMNS)
+        .reset_index()
+    )
+    computable_dates = price_returns.loc[price_returns["next_return"].notna(), ["trade_date"]].drop_duplicates()
+
+    asset_selection = selected_frame.loc[
+        selected_frame["_has_asset"] & (selected_frame["invested_weight"] > 0.0),
+        ["trade_date", "asset_id"],
+    ].drop_duplicates()
+    if asset_selection.empty:
+        daily_returns = pd.DataFrame(columns=["trade_date", "daily_return", "priced_holdings"])
+    else:
+        matched_returns = asset_selection.merge(
+            price_returns[["trade_date", "asset_id", "next_return"]],
+            on=["trade_date", "asset_id"],
+            how="left",
+        )
+        matched_returns = matched_returns.dropna(subset=["next_return"])
+        daily_returns = (
+            matched_returns.groupby("trade_date", sort=True)
+            .agg(
+                raw_daily_return=("next_return", "mean"),
+                priced_holdings=("next_return", "size"),
+            )
+            .reset_index()
+        )
+        daily_returns = daily_returns.merge(
+            daily_meta[["trade_date", "invested_weight"]],
+            on="trade_date",
+            how="left",
+        )
+        daily_returns["daily_return"] = daily_returns["raw_daily_return"] * daily_returns["invested_weight"]
+        daily_returns = daily_returns[["trade_date", "daily_return", "priced_holdings"]]
+
+    cash_returns = daily_meta.loc[
+        (daily_meta["selected_holdings"] == 0) | (daily_meta["invested_weight"] <= 0.0),
+        ["trade_date"],
+    ].merge(computable_dates, on="trade_date", how="inner")
+    if not cash_returns.empty:
+        cash_returns["daily_return"] = 0.0
+        cash_returns["priced_holdings"] = 0
+
+    daily_returns = pd.concat([daily_returns, cash_returns], ignore_index=True)
+    if daily_returns.empty:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
+
+    daily_returns = daily_returns.merge(daily_meta, on="trade_date", how="left")
+    daily_returns = daily_returns.sort_values("trade_date").reset_index(drop=True)
+    daily_returns["equity"] = (1.0 + daily_returns["daily_return"].astype(float)).cumprod()
+    daily_returns["strategy_family"] = strategy_family
+    daily_returns["holdings"] = daily_returns["priced_holdings"]
+
+    return daily_returns[EQUITY_COLUMNS]
 
 
 def _normalize_prices_with_forward_returns(prices: pd.DataFrame) -> pd.DataFrame:
