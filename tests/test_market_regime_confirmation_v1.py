@@ -65,3 +65,44 @@ def test_build_regime_features_normalizes_mixed_date_formats_and_drops_invalid_d
 
     assert result["trade_date"].tolist() == ["2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"]
     assert "1970-01-01" not in result["trade_date"].tolist()
+
+
+def test_policy_impulse_requires_market_response_and_accelerates_rerisk() -> None:
+    emotion = _emotion_rows(
+        [25, 26, 28, 32, 45, 58, 64],
+        states=["panic", "cold", "cold", "neutral", "hot", "hot", "euphoria"],
+        risks=["high", "high", "high", "medium", "medium", "low", "low"],
+    )
+    policy = pd.DataFrame(
+        [
+            {
+                "event_date": "2026-01-05",
+                "event_type": "financial_policy",
+                "policy_strength": 0.9,
+                "description": "liquidity support",
+                "source": "manual",
+            }
+        ]
+    )
+
+    result = build_market_regime_confirmation_from_frames(emotion, policy)
+
+    impulse_rows = result[result["confirmed_regime_state"] == "bull_impulse"]
+    assert impulse_rows["trade_date"].tolist() == ["2026-01-06", "2026-01-07"]
+    assert impulse_rows["target_exposure"].tolist() == [1.0, 1.0]
+    assert bool(result.loc[result["trade_date"] == "2026-01-05", "policy_impulse_candidate"].iloc[0]) is True
+
+
+def test_confirmed_regime_does_not_downgrade_on_one_bad_day() -> None:
+    emotion = _emotion_rows(
+        [70, 72, 74, 75, 73, 71, 30, 68, 67],
+        states=["hot", "hot", "euphoria", "euphoria", "hot", "hot", "panic", "hot", "hot"],
+        risks=["low", "low", "low", "low", "low", "low", "high", "low", "low"],
+    )
+
+    result = build_market_regime_confirmation_from_frames(emotion)
+
+    bad_day = result.loc[result["trade_date"] == "2026-01-08"].iloc[0]
+    assert bad_day["raw_regime_state"] in {"neutral", "weak_repair", "bear"}
+    assert bad_day["confirmed_regime_state"] in {"bull_trend", "overheated"}
+    assert bad_day["transition_reason"] == "downgrade_wait_for_confirmation"
