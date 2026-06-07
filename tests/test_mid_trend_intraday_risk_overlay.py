@@ -75,6 +75,37 @@ def test_high_only_new_entry_filter_ignores_watch_and_demotes_top_high_risk() ->
     assert filtered.loc[filtered["asset_id"].eq("B"), "intraday_risk_adjusted_rank"].iloc[0] == 10.0
 
 
+def test_high_only_new_entry_filter_can_veto_top_high_risk_to_buffer_end() -> None:
+    candidates = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-05", "asset_id": "A", "shadow_top10_rank": 1},
+            {"trade_date": "2026-01-05", "asset_id": "B", "shadow_top10_rank": 2},
+            {"trade_date": "2026-01-05", "asset_id": "C", "shadow_top10_rank": 3},
+            {"trade_date": "2026-01-05", "asset_id": "D", "shadow_top10_rank": 4},
+            {"trade_date": "2026-01-05", "asset_id": "E", "shadow_top10_rank": 5},
+            {"trade_date": "2026-01-05", "asset_id": "F", "shadow_top10_rank": 6},
+            {"trade_date": "2026-01-05", "asset_id": "G", "shadow_top10_rank": 7},
+        ]
+    )
+    states = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-05", "asset_id": "B", "midtrend_risk_level": "high"},
+            {"trade_date": "2026-01-05", "asset_id": "C", "midtrend_risk_level": "watch"},
+        ]
+    )
+
+    filtered = apply_intraday_risk_high_only_new_entry_filter(
+        candidates,
+        states,
+        top_n=5,
+        high_risk_action="veto",
+    )
+
+    assert filtered["asset_id"].tolist() == ["A", "C", "D", "E", "F", "G", "B"]
+    assert filtered.loc[filtered["asset_id"].eq("B"), "intraday_risk_rank_penalty"].iloc[0] == 6.0
+    assert filtered.loc[filtered["asset_id"].eq("C"), "intraday_risk_rank_penalty"].iloc[0] == 0.0
+
+
 def test_overlay_backtest_passes_hard_exclusions_to_weekly_simulation(monkeypatch) -> None:
     candidates = pd.DataFrame(
         [

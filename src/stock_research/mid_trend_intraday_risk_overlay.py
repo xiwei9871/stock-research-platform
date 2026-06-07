@@ -91,6 +91,7 @@ def apply_intraday_risk_high_only_new_entry_filter(
     *,
     top_n: int,
     high_rank_penalty: float = 8.0,
+    high_risk_action: str = "penalty",
 ) -> pd.DataFrame:
     if candidates.empty:
         return candidates.copy()
@@ -120,7 +121,16 @@ def apply_intraday_risk_high_only_new_entry_filter(
     is_top_candidate = merged["shadow_top10_rank"].le(int(top_n))
     is_high = merged["midtrend_risk_level"].eq("high")
     merged["intraday_risk_rank_penalty"] = 0.0
-    merged.loc[is_top_candidate & is_high, "intraday_risk_rank_penalty"] = float(high_rank_penalty)
+    penalized = is_top_candidate & is_high
+    if high_risk_action == "penalty":
+        merged.loc[penalized, "intraday_risk_rank_penalty"] = float(high_rank_penalty)
+    elif high_risk_action == "veto":
+        max_rank_by_date = merged.groupby("trade_date")["shadow_top10_rank"].transform("max")
+        merged.loc[penalized, "intraday_risk_rank_penalty"] = (
+            max_rank_by_date[penalized] - merged.loc[penalized, "shadow_top10_rank"] + 1.0
+        )
+    else:
+        raise ValueError(f"Unsupported high_risk_action: {high_risk_action}")
     merged["intraday_risk_adjusted_rank"] = (
         merged["shadow_top10_rank"] + merged["intraday_risk_rank_penalty"]
     )
@@ -155,6 +165,10 @@ def run_mid_trend_intraday_risk_overlay_backtest(
     intraday_freq: str = "5min",
     intraday_adjust_type: str = "raw",
     filter_mode: str = "high_only_new_entry",
+    tail_confirmation_zscore_threshold: float | None = None,
+    reversal_zscore_threshold: float | None = None,
+    high_rank_penalty: float = 8.0,
+    high_risk_action: str = "penalty",
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
     funnel_detail = pd.read_csv(funnel_detail_path, low_memory=False)
@@ -192,6 +206,10 @@ def run_mid_trend_intraday_risk_overlay_backtest(
         transaction_cost_bps=transaction_cost_bps,
         adjust_type=adjust_type,
         filter_mode=filter_mode,
+        tail_confirmation_zscore_threshold=tail_confirmation_zscore_threshold,
+        reversal_zscore_threshold=reversal_zscore_threshold,
+        high_rank_penalty=high_rank_penalty,
+        high_risk_action=high_risk_action,
     )
 
 
@@ -211,15 +229,29 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
     transaction_cost_bps: float = 20.0,
     adjust_type: str = "hfq",
     filter_mode: str = "high_only_new_entry",
+    tail_confirmation_zscore_threshold: float | None = None,
+    reversal_zscore_threshold: float | None = None,
+    high_rank_penalty: float = 8.0,
+    high_risk_action: str = "penalty",
 ) -> dict[str, Any]:
     preset = resolve_intraday_risk_control_v2_preset(risk_preset)
     hard_exclusions = _hard_exclusions_by_date(funnel_detail)
+    tail_threshold = (
+        tail_confirmation_zscore_threshold
+        if tail_confirmation_zscore_threshold is not None
+        else preset.get("tail_confirmation_zscore_threshold")
+    )
+    reversal_threshold = (
+        reversal_zscore_threshold
+        if reversal_zscore_threshold is not None
+        else preset.get("reversal_zscore_threshold")
+    )
     signals = build_intraday_risk_signals_v2(
         intraday_features,
         lookback=20,
         zscore_threshold=1.5,
-        tail_confirmation_zscore_threshold=preset.get("tail_confirmation_zscore_threshold"),
-        reversal_zscore_threshold=preset.get("reversal_zscore_threshold"),
+        tail_confirmation_zscore_threshold=tail_threshold,
+        reversal_zscore_threshold=reversal_threshold,
         reversal_afternoon_mode=str(preset.get("reversal_afternoon_mode", "zscore")),
     )
     states = build_midtrend_risk_states(
@@ -240,6 +272,8 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
             buffer,
             states,
             top_n=top_n,
+            high_rank_penalty=high_rank_penalty,
+            high_risk_action=high_risk_action,
         )
         filtered_variant_suffix = HIGH_ONLY_FILTERED_VARIANT_SUFFIX
     else:
@@ -297,6 +331,10 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
         end_date=end_date,
         risk_preset=risk_preset,
         filter_mode=filter_mode,
+        tail_confirmation_zscore_threshold=tail_threshold,
+        reversal_zscore_threshold=reversal_threshold,
+        high_rank_penalty=high_rank_penalty,
+        high_risk_action=high_risk_action,
     )
 
     result: dict[str, Any] = {
@@ -403,6 +441,10 @@ def _render_report(
     end_date: str,
     risk_preset: str,
     filter_mode: str,
+    tail_confirmation_zscore_threshold: Any,
+    reversal_zscore_threshold: Any,
+    high_rank_penalty: float,
+    high_risk_action: str,
 ) -> str:
     lines = [
         "# Mid Trend Intraday Risk Overlay Backtest",
@@ -411,6 +453,10 @@ def _render_report(
         f"- period: {start_date} to {end_date}",
         f"- intraday risk preset: {risk_preset}",
         f"- filter mode: {filter_mode}",
+        f"- tail confirmation zscore threshold: {tail_confirmation_zscore_threshold}",
+        f"- reversal zscore threshold: {reversal_zscore_threshold}",
+        f"- high risk action: {high_risk_action}",
+        f"- high rank penalty: {high_rank_penalty}",
         f"- base variant: {DEFAULT_BASE_VARIANT}",
         "",
         "## Summary",
