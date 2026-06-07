@@ -431,6 +431,63 @@ def write_targeted_backfill_artifacts(
     return paths
 
 
+def run_targeted_p2_backfill_from_files(
+    *,
+    human_review_assets_csv: Path,
+    quality_review_csv: Path,
+    evidence_csv: Path,
+    output_dir: Path,
+    run_id: str = "targeted-p2-backfill",
+) -> dict[str, Path]:
+    human_review_assets = pd.read_csv(human_review_assets_csv)
+    before_review = pd.read_csv(quality_review_csv)
+    evidence = pd.read_csv(evidence_csv, low_memory=False)
+
+    queue = normalize_p2_mapping_queue(human_review_assets)
+    audit = build_targeted_gap_audit(queue, evidence)
+    suggestions = build_bridge_suggestions(queue, evidence)
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=queue,
+        evidence=evidence,
+        suggestions=suggestions,
+        run_id=run_id,
+    )
+    combined_evidence = combine_evidence(
+        original_evidence=evidence,
+        bridge_evidence=bridge_evidence,
+    )
+    after_review = before_review.copy()
+    promotion_delta_md = render_promotion_delta(
+        before_review=before_review,
+        after_review=after_review,
+        bridge_evidence=bridge_evidence,
+    )
+    manifest = {
+        "run_id": run_id,
+        "p2_asset_count_before": len(_asset_ids(queue)),
+        "bridge_evidence_count": int(len(bridge_evidence)),
+        "bridgeable_count": int(suggestions["bridge_status"].eq("bridgeable").sum())
+        if "bridge_status" in suggestions.columns
+        else 0,
+        "inputs": {
+            "human_review_assets_csv": str(human_review_assets_csv),
+            "quality_review_csv": str(quality_review_csv),
+            "evidence_csv": str(evidence_csv),
+        },
+    }
+
+    return write_targeted_backfill_artifacts(
+        output_dir=output_dir,
+        audit=audit,
+        suggestions=suggestions,
+        bridge_evidence=bridge_evidence,
+        combined_evidence=combined_evidence,
+        review_after=after_review,
+        promotion_delta_md=promotion_delta_md,
+        manifest=manifest,
+    )
+
+
 def _copy_with_columns(frame: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
     copied = frame.copy()
     for column in columns:

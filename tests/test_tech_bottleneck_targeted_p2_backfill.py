@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 
 from stock_research.tech_bottleneck_evidence_backfill import EVIDENCE_COLUMNS
+from stock_research.cli import build_parser, main_for_args
+import stock_research.tech_bottleneck_targeted_p2_backfill as targeted_p2_module
 from stock_research.tech_bottleneck_targeted_p2_backfill import (
     build_bridge_suggestions,
     build_targeted_bridge_evidence,
@@ -14,6 +16,7 @@ from stock_research.tech_bottleneck_targeted_p2_backfill import (
     combine_evidence,
     normalize_p2_mapping_queue,
     render_promotion_delta,
+    run_targeted_p2_backfill_from_files,
     write_targeted_backfill_artifacts,
 )
 
@@ -857,3 +860,126 @@ def test_write_targeted_backfill_artifacts_writes_required_files(tmp_path: Path)
         assert path.exists()
     assert paths["promotion_delta"].read_text(encoding="utf-8") == "# Promotion Delta\n"
     assert json.loads(paths["manifest"].read_text(encoding="utf-8")) == manifest
+
+
+def test_run_targeted_p2_backfill_from_files_writes_artifacts_and_manifest(tmp_path: Path) -> None:
+    human_review_assets_csv = tmp_path / "human_review_assets.csv"
+    quality_review_csv = tmp_path / "quality_review.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    output_dir = tmp_path / "out"
+
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "stock_name": "洁美科技",
+                "trade_date": "2025-01-20",
+                "review_priority": "P2_mapping_review",
+            }
+        ]
+    ).to_csv(human_review_assets_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "stock_name": "洁美科技",
+                "p3_decision": "needs_product_family_mapping",
+                "next_evidence_need": "needs_product_family_mapping",
+            }
+        ]
+    ).to_csv(quality_review_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "candidate_trade_date": "2025-01-20",
+                "source_id": "jm-1",
+                "evidence_type": "customer_certification",
+                "matched_keyword": "载带",
+                "evidence_snippet": "载带和MLCC离型膜用于半导体封装客户认证并推进国产替代",
+                "as_of_safe": True,
+            }
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_targeted_p2_backfill_from_files(
+        human_review_assets_csv=human_review_assets_csv,
+        quality_review_csv=quality_review_csv,
+        evidence_csv=evidence_csv,
+        output_dir=output_dir,
+        run_id="targeted-run",
+    )
+
+    for path in paths.values():
+        assert path.exists()
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    assert manifest["run_id"] == "targeted-run"
+    assert manifest["p2_asset_count_before"] == 1
+    assert manifest["bridge_evidence_count"] == 1
+    assert manifest["bridgeable_count"] == 1
+    assert manifest["inputs"] == {
+        "human_review_assets_csv": str(human_review_assets_csv),
+        "quality_review_csv": str(quality_review_csv),
+        "evidence_csv": str(evidence_csv),
+    }
+
+
+def test_cli_parser_accepts_targeted_p2_backfill_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-targeted-p2-backfill",
+            "--human-review-assets-csv",
+            "human_review_assets.csv",
+            "--quality-review-csv",
+            "quality_review.csv",
+            "--evidence-csv",
+            "evidence.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "custom-run",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-targeted-p2-backfill"
+    assert args.human_review_assets_csv == "human_review_assets.csv"
+    assert args.quality_review_csv == "quality_review.csv"
+    assert args.evidence_csv == "evidence.csv"
+    assert args.output_dir == "out"
+    assert args.run_id == "custom-run"
+
+
+def test_cli_dispatches_targeted_p2_backfill(monkeypatch, capsys) -> None:
+    calls = {}
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return {"manifest": Path("out/manifest.json")}
+
+    monkeypatch.setattr(targeted_p2_module, "run_targeted_p2_backfill_from_files", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-targeted-p2-backfill",
+            "--human-review-assets-csv",
+            "human_review_assets.csv",
+            "--quality-review-csv",
+            "quality_review.csv",
+            "--evidence-csv",
+            "evidence.csv",
+            "--output-dir",
+            "out",
+            "--run-id",
+            "custom-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"manifest": "out/manifest.json"}
+    assert calls["runner_kwargs"] == {
+        "human_review_assets_csv": Path("human_review_assets.csv"),
+        "quality_review_csv": Path("quality_review.csv"),
+        "evidence_csv": Path("evidence.csv"),
+        "output_dir": Path("out"),
+        "run_id": "custom-run",
+    }

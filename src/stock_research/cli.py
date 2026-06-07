@@ -1430,6 +1430,16 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_quality_review.add_argument("--evidence-hits-csv")
     tech_bottleneck_quality_review.add_argument("--product-rows-csv")
 
+    tech_bottleneck_targeted_p2 = subparsers.add_parser(
+        "tech-bottleneck-targeted-p2-backfill",
+        help="Build targeted P2 product-family bridge evidence and review artifacts from CSV inputs.",
+    )
+    tech_bottleneck_targeted_p2.add_argument("--human-review-assets-csv", required=True)
+    tech_bottleneck_targeted_p2.add_argument("--quality-review-csv", required=True)
+    tech_bottleneck_targeted_p2.add_argument("--evidence-csv", required=True)
+    tech_bottleneck_targeted_p2.add_argument("--output-dir", required=True)
+    tech_bottleneck_targeted_p2.add_argument("--run-id", default="targeted-p2-backfill")
+
     tech_bottleneck_core_tech_gate = subparsers.add_parser(
         "tech-bottleneck-core-tech-gate",
         help="Apply the core technology gate to tech bottleneck candidates from CSV inputs.",
@@ -4872,6 +4882,17 @@ def main_for_args(argv: list[str] | None = None) -> None:
             output_dir=Path(args.output_dir),
             evidence_hits_csv=Path(args.evidence_hits_csv) if args.evidence_hits_csv else None,
             product_rows_csv=Path(args.product_rows_csv) if args.product_rows_csv else None,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-targeted-p2-backfill":
+        from stock_research.tech_bottleneck_targeted_p2_backfill import run_targeted_p2_backfill_from_files
+
+        paths = run_targeted_p2_backfill_from_files(
+            human_review_assets_csv=Path(args.human_review_assets_csv),
+            quality_review_csv=Path(args.quality_review_csv),
+            evidence_csv=Path(args.evidence_csv),
+            output_dir=Path(args.output_dir),
+            run_id=str(args.run_id),
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-core-tech-gate":
