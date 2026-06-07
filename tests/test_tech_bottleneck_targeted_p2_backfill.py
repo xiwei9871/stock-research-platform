@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from stock_research.tech_bottleneck_evidence_backfill import EVIDENCE_COLUMNS
 from stock_research.cli import build_parser, main_for_args
@@ -885,6 +886,12 @@ def test_run_targeted_p2_backfill_from_files_writes_artifacts_and_manifest(tmp_p
                 "stock_name": "洁美科技",
                 "p3_decision": "needs_product_family_mapping",
                 "next_evidence_need": "needs_product_family_mapping",
+            },
+            {
+                "asset_id": "CN:SH:600000",
+                "stock_name": "浦发银行",
+                "p3_decision": "needs_product_family_mapping",
+                "next_evidence_need": "needs_product_family_mapping",
             }
         ]
     ).to_csv(quality_review_csv, index=False)
@@ -915,13 +922,101 @@ def test_run_targeted_p2_backfill_from_files_writes_artifacts_and_manifest(tmp_p
     manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
     assert manifest["run_id"] == "targeted-run"
     assert manifest["p2_asset_count_before"] == 1
+    assert manifest["targeted_p2_asset_count_before"] == 1
+    assert manifest["quality_review_p2_asset_count_before"] == 2
     assert manifest["bridge_evidence_count"] == 1
     assert manifest["bridgeable_count"] == 1
+    assert manifest["quality_review_after_is_temporary_before_copy"] is True
     assert manifest["inputs"] == {
         "human_review_assets_csv": str(human_review_assets_csv),
         "quality_review_csv": str(quality_review_csv),
         "evidence_csv": str(evidence_csv),
     }
+    assert "quality_review_after_targeted_backfill.csv is a temporary before-review copy" in paths[
+        "promotion_delta"
+    ].read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("bad_input_name", "bad_frame", "expected_missing"),
+    [
+        (
+            "human_review_assets_csv",
+            pd.DataFrame(columns=["asset_id", "review_priority"]),
+            "candidate_trade_date or trade_date",
+        ),
+        (
+            "quality_review_csv",
+            pd.DataFrame(columns=["asset_id"]),
+            "p3_decision",
+        ),
+        (
+            "evidence_csv",
+            pd.DataFrame(columns=["asset_id", "source_id"]),
+            "candidate_trade_date or trade_date",
+        ),
+    ],
+)
+def test_run_targeted_p2_backfill_from_files_rejects_missing_required_columns(
+    tmp_path: Path,
+    bad_input_name: str,
+    bad_frame: pd.DataFrame,
+    expected_missing: str,
+) -> None:
+    human_review_assets_csv = tmp_path / "human_review_assets.csv"
+    quality_review_csv = tmp_path / "quality_review.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    output_dir = tmp_path / "out"
+
+    valid_frames = {
+        "human_review_assets_csv": pd.DataFrame(columns=["asset_id", "candidate_trade_date"]),
+        "quality_review_csv": pd.DataFrame(columns=["asset_id", "p3_decision"]),
+        "evidence_csv": pd.DataFrame(columns=["asset_id", "candidate_trade_date"]),
+    }
+    valid_frames[bad_input_name] = bad_frame
+    valid_frames["human_review_assets_csv"].to_csv(human_review_assets_csv, index=False)
+    valid_frames["quality_review_csv"].to_csv(quality_review_csv, index=False)
+    valid_frames["evidence_csv"].to_csv(evidence_csv, index=False)
+
+    with pytest.raises(ValueError, match=bad_input_name) as exc_info:
+        run_targeted_p2_backfill_from_files(
+            human_review_assets_csv=human_review_assets_csv,
+            quality_review_csv=quality_review_csv,
+            evidence_csv=evidence_csv,
+            output_dir=output_dir,
+        )
+
+    assert expected_missing in str(exc_info.value)
+
+
+def test_run_targeted_p2_backfill_from_files_accepts_header_only_required_inputs(tmp_path: Path) -> None:
+    human_review_assets_csv = tmp_path / "human_review_assets.csv"
+    quality_review_csv = tmp_path / "quality_review.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    output_dir = tmp_path / "out"
+
+    pd.DataFrame(columns=["asset_id", "trade_date"]).to_csv(human_review_assets_csv, index=False)
+    pd.DataFrame(columns=["asset_id", "p3_decision"]).to_csv(quality_review_csv, index=False)
+    pd.DataFrame(columns=["asset_id", "candidate_trade_date"]).to_csv(evidence_csv, index=False)
+
+    paths = run_targeted_p2_backfill_from_files(
+        human_review_assets_csv=human_review_assets_csv,
+        quality_review_csv=quality_review_csv,
+        evidence_csv=evidence_csv,
+        output_dir=output_dir,
+        run_id="header-only-run",
+    )
+
+    for path in paths.values():
+        assert path.exists()
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    assert manifest["run_id"] == "header-only-run"
+    assert manifest["p2_asset_count_before"] == 0
+    assert manifest["targeted_p2_asset_count_before"] == 0
+    assert manifest["quality_review_p2_asset_count_before"] == 0
+    assert manifest["bridge_evidence_count"] == 0
+    assert manifest["bridgeable_count"] == 0
+    assert manifest["quality_review_after_is_temporary_before_copy"] is True
 
 
 def test_cli_parser_accepts_targeted_p2_backfill_command() -> None:

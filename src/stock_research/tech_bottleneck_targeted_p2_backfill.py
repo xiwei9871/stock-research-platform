@@ -95,6 +95,10 @@ ASSET_POOL_DECISION_PRECEDENCE = {
     "needs_more_evidence": 2,
     "reject_or_noise": 3,
 }
+TEMPORARY_REVIEW_AFTER_NOTE = (
+    "Note: quality_review_after_targeted_backfill.csv is a temporary before-review copy; "
+    "rerun strict quality review with combined_evidence_after_targeted_backfill.csv."
+)
 
 
 def normalize_p2_mapping_queue(queue: pd.DataFrame) -> pd.DataFrame:
@@ -442,6 +446,23 @@ def run_targeted_p2_backfill_from_files(
     human_review_assets = pd.read_csv(human_review_assets_csv)
     before_review = pd.read_csv(quality_review_csv)
     evidence = pd.read_csv(evidence_csv, low_memory=False)
+    _validate_runner_input_schema(
+        input_name="human_review_assets_csv",
+        frame=human_review_assets,
+        required_columns=["asset_id"],
+        required_one_of_columns=["candidate_trade_date", "trade_date"],
+    )
+    _validate_runner_input_schema(
+        input_name="quality_review_csv",
+        frame=before_review,
+        required_columns=["asset_id", "p3_decision"],
+    )
+    _validate_runner_input_schema(
+        input_name="evidence_csv",
+        frame=evidence,
+        required_columns=["asset_id"],
+        required_one_of_columns=["candidate_trade_date", "trade_date"],
+    )
 
     queue = normalize_p2_mapping_queue(human_review_assets)
     audit = build_targeted_gap_audit(queue, evidence)
@@ -462,9 +483,17 @@ def run_targeted_p2_backfill_from_files(
         after_review=after_review,
         bridge_evidence=bridge_evidence,
     )
+    promotion_delta_md = f"{promotion_delta_md}\n{TEMPORARY_REVIEW_AFTER_NOTE}\n"
+    targeted_p2_asset_count_before = len(_asset_ids(queue))
+    quality_review_p2_asset_count_before = len(
+        _asset_ids(before_review[before_review["p3_decision"].eq("needs_product_family_mapping")])
+    )
     manifest = {
         "run_id": run_id,
-        "p2_asset_count_before": len(_asset_ids(queue)),
+        "p2_asset_count_before": targeted_p2_asset_count_before,
+        "targeted_p2_asset_count_before": targeted_p2_asset_count_before,
+        "quality_review_p2_asset_count_before": quality_review_p2_asset_count_before,
+        "quality_review_after_is_temporary_before_copy": True,
         "bridge_evidence_count": int(len(bridge_evidence)),
         "bridgeable_count": int(suggestions["bridge_status"].eq("bridgeable").sum())
         if "bridge_status" in suggestions.columns
@@ -486,6 +515,21 @@ def run_targeted_p2_backfill_from_files(
         promotion_delta_md=promotion_delta_md,
         manifest=manifest,
     )
+
+
+def _validate_runner_input_schema(
+    *,
+    input_name: str,
+    frame: pd.DataFrame,
+    required_columns: Iterable[str],
+    required_one_of_columns: Iterable[str] = (),
+) -> None:
+    missing = [column for column in required_columns if column not in frame.columns]
+    one_of_columns = list(required_one_of_columns)
+    if one_of_columns and not any(column in frame.columns for column in one_of_columns):
+        missing.append(" or ".join(one_of_columns))
+    if missing:
+        raise ValueError(f"{input_name} missing required column(s): {', '.join(missing)}")
 
 
 def _copy_with_columns(frame: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
