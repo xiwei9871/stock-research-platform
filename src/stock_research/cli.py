@@ -162,6 +162,7 @@ from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
+from stock_research.tech_bottleneck_quality_review import run_quality_review_from_files
 from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
 from stock_research.official_disclosure_product_backfill import run_official_disclosure_product_backfill
 from stock_research.official_product_data_alignment_audit import (
@@ -1417,6 +1418,15 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_evidence.add_argument("--end-date")
     tech_bottleneck_evidence.add_argument("--lookback-days", type=int, default=365)
     tech_bottleneck_evidence.add_argument("--service", default="stock_research")
+
+    tech_bottleneck_quality_review = subparsers.add_parser(
+        "tech-bottleneck-quality-review",
+        help="Classify tech bottleneck candidates by product-family linkage and evidence quality.",
+    )
+    tech_bottleneck_quality_review.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_quality_review.add_argument("--output-dir", required=True)
+    tech_bottleneck_quality_review.add_argument("--evidence-hits-csv")
+    tech_bottleneck_quality_review.add_argument("--product-rows-csv")
 
     tech_bottleneck_product = subparsers.add_parser(
         "tech-bottleneck-official-disclosure-product-backfill",
@@ -4812,6 +4822,14 @@ def main_for_args(argv: list[str] | None = None) -> None:
             end_date=args.end_date,
             lookback_days=args.lookback_days,
             service=args.service,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-quality-review":
+        paths = run_quality_review_from_files(
+            candidates_csv=Path(args.candidates_csv),
+            output_dir=Path(args.output_dir),
+            evidence_hits_csv=Path(args.evidence_hits_csv) if args.evidence_hits_csv else None,
+            product_rows_csv=Path(args.product_rows_csv) if args.product_rows_csv else None,
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-official-disclosure-product-backfill":
