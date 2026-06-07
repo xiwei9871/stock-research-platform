@@ -58,10 +58,12 @@ def build_baseline_comparison(
     top100_candidates: pd.DataFrame,
     quality_review: pd.DataFrame,
     baseline_promotions: pd.DataFrame,
+    core_tech_gate: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     candidates = _normalize_candidates(top100_candidates)
     review = _normalize_quality_review(quality_review)
     baseline = _normalize_baseline_promotions(baseline_promotions)
+    gate = _normalize_core_tech_gate(core_tech_gate)
 
     comparison = candidates.merge(review, on=JOIN_KEYS, how="left")
     comparison["p3_decision"] = comparison["p3_decision"].fillna("")
@@ -75,7 +77,14 @@ def build_baseline_comparison(
     )
     diff = comparison[~comparison["in_top50_baseline"]].copy().reset_index(drop=True)
     manifest = _manifest(comparison, diff, baseline)
-    markdown = _render_markdown(manifest, diff)
+    markdown = _render_markdown(
+        manifest,
+        diff,
+        quality_review=review,
+        candidates=candidates,
+        baseline_promotions=baseline,
+        core_tech_gate=gate,
+    )
 
     return {
         "candidates_top100": comparison.reset_index(drop=True),
@@ -180,8 +189,28 @@ def _normalize_baseline_promotions(baseline_promotions: pd.DataFrame) -> pd.Data
     normalized = baseline_promotions.copy()
     if "asset_id" not in normalized:
         normalized["asset_id"] = ""
+    if "stock_name" not in normalized:
+        normalized["stock_name"] = ""
     normalized["asset_id"] = normalized["asset_id"].fillna("").astype(str)
+    normalized["stock_name"] = normalized["stock_name"].fillna("").astype(str)
     return normalized
+
+
+def _normalize_core_tech_gate(core_tech_gate: pd.DataFrame | None) -> pd.DataFrame | None:
+    if core_tech_gate is None:
+        return None
+    normalized = core_tech_gate.copy()
+    for column in JOIN_KEYS:
+        if column not in normalized:
+            normalized[column] = ""
+    if "core_tech_gate" not in normalized:
+        normalized["core_tech_gate"] = ""
+
+    normalized["asset_id"] = normalized["asset_id"].fillna("").astype(str)
+    normalized["stock_name"] = normalized["stock_name"].fillna("").astype(str)
+    normalized["trade_date"] = normalized["trade_date"].map(_normalize_date)
+    normalized["core_tech_gate"] = normalized["core_tech_gate"].fillna("").astype(str)
+    return normalized[JOIN_KEYS + ["core_tech_gate"]].drop_duplicates(subset=JOIN_KEYS, keep="last")
 
 
 def _increment_status(row: pd.Series, *, existing_asset_ids: set[str] | None = None) -> str:
@@ -216,7 +245,15 @@ def _manifest(comparison: pd.DataFrame, diff: pd.DataFrame, baseline_promotions:
     }
 
 
-def _render_markdown(manifest: dict[str, Any], diff: pd.DataFrame) -> str:
+def _render_markdown(
+    manifest: dict[str, Any],
+    diff: pd.DataFrame,
+    *,
+    quality_review: pd.DataFrame | None = None,
+    candidates: pd.DataFrame | None = None,
+    baseline_promotions: pd.DataFrame | None = None,
+    core_tech_gate: pd.DataFrame | None = None,
+) -> str:
     p1_names = _names_for_status(diff, "new_p1_auto_promotion")
     p2_names = _names_for_status(diff, "new_p2_research_queue")
     lines = [
@@ -228,7 +265,100 @@ def _render_markdown(manifest: dict[str, Any], diff: pd.DataFrame) -> str:
         f"- New P1 from ranks 51-100: {manifest['new_p1_from_rank_51_100']} ({p1_names})",
         f"- New P2 from ranks 51-100: {manifest['new_p2_from_rank_51_100']} ({p2_names})",
     ]
+    lines.extend(_render_p2_evidence_gaps(quality_review))
+    lines.extend(_render_p3_rejection_reasons(quality_review))
+    lines.extend(_render_top50_gate_failures(candidates, core_tech_gate))
+    lines.extend(_render_baseline_p1_status(baseline_promotions, quality_review))
     return "\n".join(lines) + "\n"
+
+
+def _render_p2_evidence_gaps(quality_review: pd.DataFrame | None) -> list[str]:
+    lines = ["", "## P2 Evidence Gaps"]
+    if quality_review is None or quality_review.empty:
+        return lines + ["- none"]
+    review = quality_review.copy()
+    if "next_evidence_need" not in review:
+        review["next_evidence_need"] = ""
+    rows = review[review["p3_decision"].isin(P2_DECISIONS)].copy()
+    if rows.empty:
+        return lines + ["- none"]
+    lines.append(f"- Count: {len(rows)}")
+    for row in rows.to_dict("records"):
+        need = _display_value(row.get("next_evidence_need")) or "(unspecified)"
+        lines.append(f"- {_display_name(row)}: {need}")
+    return lines
+
+
+def _render_p3_rejection_reasons(quality_review: pd.DataFrame | None) -> list[str]:
+    lines = ["", "## P3 Rejection Reasons"]
+    if quality_review is None or quality_review.empty:
+        return lines + ["- none"]
+    review = quality_review.copy()
+    if "decision_reason" not in review:
+        review["decision_reason"] = ""
+    rows = review[review["p3_decision"].eq("reject_or_noise")].copy()
+    if rows.empty:
+        return lines + ["- none"]
+    lines.append(f"- Count: {len(rows)}")
+    for row in rows.to_dict("records"):
+        reason = _display_value(row.get("decision_reason")) or "(unspecified)"
+        lines.append(f"- {_display_name(row)}: {reason}")
+    return lines
+
+
+def _render_top50_gate_failures(candidates: pd.DataFrame | None, core_tech_gate: pd.DataFrame | None) -> list[str]:
+    lines = ["", "## Top50 Names Failing Core-Tech Gate"]
+    if core_tech_gate is None:
+        return lines + ["- (not provided)"]
+    if candidates is None or candidates.empty:
+        return lines + ["- none"]
+    top50 = candidates[candidates["in_top50_baseline"]].copy()
+    if top50.empty:
+        return lines + ["- none"]
+    merged = top50.merge(
+        core_tech_gate[JOIN_KEYS + ["core_tech_gate"]],
+        on=JOIN_KEYS,
+        how="left",
+    )
+    rows = merged[~merged["core_tech_gate"].fillna("").eq("pass")].copy()
+    if rows.empty:
+        return lines + ["- none"]
+    lines.append(f"- Count: {len(rows)}")
+    for row in rows.to_dict("records"):
+        gate = _display_value(row.get("core_tech_gate")) or "missing"
+        lines.append(f"- {_display_name(row)}: {gate}")
+    return lines
+
+
+def _render_baseline_p1_status(
+    baseline_promotions: pd.DataFrame | None,
+    quality_review: pd.DataFrame | None,
+) -> list[str]:
+    lines = ["", "## Baseline P1 Status"]
+    if baseline_promotions is None or baseline_promotions.empty:
+        return lines + ["- none"]
+    approved_ids: set[str] = set()
+    if quality_review is not None and not quality_review.empty:
+        approved_ids = set(quality_review.loc[quality_review["p3_decision"].isin(P1_DECISIONS), "asset_id"])
+    lines.append(f"- Count: {len(baseline_promotions)}")
+    for row in baseline_promotions.to_dict("records"):
+        status = "pass" if str(row.get("asset_id", "")) in approved_ids else "fail"
+        lines.append(f"- {_display_name(row)}: {status}")
+    return lines
+
+
+def _display_name(row: dict[str, Any]) -> str:
+    stock_name = _display_value(row.get("stock_name"))
+    asset_id = _display_value(row.get("asset_id"))
+    if stock_name and asset_id:
+        return f"{stock_name} ({asset_id})"
+    return stock_name or asset_id or "(unknown)"
+
+
+def _display_value(value: Any) -> str:
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
 
 
 def _names_for_status(diff: pd.DataFrame, status: str) -> str:

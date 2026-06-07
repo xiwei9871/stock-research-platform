@@ -162,6 +162,88 @@ def test_baseline_comparison_reports_new_top100_p1_p2_names_from_ranks_51_100() 
     assert "- New P2 from ranks 51-100: 2 (新增P2证据, 新增P2映射)" in outputs["baseline_comparison_md"]
 
 
+def test_baseline_comparison_markdown_includes_audit_sections_and_entries() -> None:
+    top100_candidates = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688001", "stock_name": "基线通过", "trade_date": "2026-06-05", "rank": 1},
+            {"asset_id": "CN:SH:688002", "stock_name": "基线缺失", "trade_date": "2026-06-05", "rank": 2},
+            {"asset_id": "CN:SH:688003", "stock_name": "门禁失败", "trade_date": "2026-06-05", "rank": 3},
+            {"asset_id": "CN:SH:688051", "stock_name": "证据缺口", "trade_date": "2026-06-05", "rank": 51},
+            {"asset_id": "CN:SH:688052", "stock_name": "拒绝样本", "trade_date": "2026-06-05", "rank": 52},
+        ]
+    )
+    quality_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688001",
+                "stock_name": "基线通过",
+                "trade_date": "2026-06-05",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "CN:SH:688003",
+                "stock_name": "门禁失败",
+                "trade_date": "2026-06-05",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "CN:SH:688051",
+                "stock_name": "证据缺口",
+                "trade_date": "2026-06-05",
+                "p3_decision": "needs_more_evidence",
+                "next_evidence_need": "补充客户验证",
+            },
+            {
+                "asset_id": "CN:SH:688052",
+                "stock_name": "拒绝样本",
+                "trade_date": "2026-06-05",
+                "p3_decision": "reject_or_noise",
+                "decision_reason": "业务偏消费电子",
+            },
+        ]
+    )
+    baseline_promotions = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688001", "stock_name": "基线通过", "trade_date": "2026-06-05"},
+            {"asset_id": "CN:SH:688002", "stock_name": "基线缺失", "trade_date": "2026-06-05"},
+        ]
+    )
+    core_tech_gate = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688001",
+                "stock_name": "基线通过",
+                "trade_date": "2026-06-05",
+                "core_tech_gate": "pass",
+            },
+            {
+                "asset_id": "CN:SH:688003",
+                "stock_name": "门禁失败",
+                "trade_date": "2026-06-05",
+                "core_tech_gate": "reject",
+            },
+        ]
+    )
+
+    outputs = build_baseline_comparison(
+        top100_candidates=top100_candidates,
+        quality_review=quality_review,
+        baseline_promotions=baseline_promotions,
+        core_tech_gate=core_tech_gate,
+    )
+
+    markdown = outputs["baseline_comparison_md"]
+    assert "## P2 Evidence Gaps" in markdown
+    assert "- 证据缺口 (CN:SH:688051): 补充客户验证" in markdown
+    assert "## P3 Rejection Reasons" in markdown
+    assert "- 拒绝样本 (CN:SH:688052): 业务偏消费电子" in markdown
+    assert "## Top50 Names Failing Core-Tech Gate" in markdown
+    assert "- 门禁失败 (CN:SH:688003): reject" in markdown
+    assert "## Baseline P1 Status" in markdown
+    assert "- 基线通过 (CN:SH:688001): pass" in markdown
+    assert "- 基线缺失 (CN:SH:688002): fail" in markdown
+
+
 def test_rank_51_100_increment_counts_exclude_top50_cohort_and_baseline_assets() -> None:
     top100_candidates = pd.DataFrame(
         [

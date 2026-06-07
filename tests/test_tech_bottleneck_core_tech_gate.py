@@ -176,6 +176,55 @@ def test_build_core_tech_gate_uses_point_in_time_evidence_per_candidate_date() -
     assert later["core_tech_category"] == "semiconductor_equipment"
 
 
+def test_build_core_tech_gate_normalizes_compact_dates_for_point_in_time_filtering() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "stock_name": "普通样本",
+                "trade_date": 20250620,
+                "rank": 1,
+                "industry_name": "综合",
+            },
+            {
+                "asset_id": "CN:SH:688124",
+                "stock_name": "浮点日期样本",
+                "trade_date": 20250620.0,
+                "rank": 2,
+                "industry_name": "综合",
+            },
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "evidence_date": 20250701,
+                "product_family": "semiconductor_equipment",
+                "evidence_snippet": "公司披露半导体设备核心技术。",
+                "matched_keyword": "半导体设备",
+            },
+            {
+                "asset_id": "CN:SH:688124",
+                "evidence_date": 20250620.0,
+                "product_family": "semiconductor_equipment",
+                "evidence_snippet": "公司披露半导体设备核心技术。",
+                "matched_keyword": "半导体设备",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=evidence)
+    rows = outputs["core_tech_gate"].set_index("asset_id")
+
+    assert rows.loc["CN:SH:688123", "trade_date"] == "2025-06-20"
+    assert rows.loc["CN:SH:688123", "core_tech_gate"] == "reject"
+    assert rows.loc["CN:SH:688123", "gate_reason"] == "no core technology evidence"
+    assert rows.loc["CN:SH:688124", "trade_date"] == "2025-06-20"
+    assert rows.loc["CN:SH:688124", "core_tech_gate"] == "pass"
+    assert rows.loc["CN:SH:688124", "core_tech_category"] == "semiconductor_equipment"
+
+
 def test_build_core_tech_gate_excludes_candidate_scoped_evidence_without_availability_date() -> None:
     candidates = pd.DataFrame(
         [

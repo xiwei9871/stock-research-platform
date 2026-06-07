@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
+from datetime import date, datetime
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -243,9 +246,25 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
 def _normalize_date(value: Any) -> str:
     if pd.isna(value):
         return ""
+    if isinstance(value, (datetime, date)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(value):
+        int_value = int(value)
+        if value == int_value:
+            compact_value = str(int_value)
+            if len(compact_value) == 8:
+                parsed_compact = pd.to_datetime(compact_value, format="%Y%m%d", errors="coerce")
+                if not pd.isna(parsed_compact):
+                    return parsed_compact.strftime("%Y-%m-%d")
+    if isinstance(value, str):
+        compact_value = value.strip()
+        if len(compact_value) == 8 and compact_value.isdigit():
+            parsed_compact = pd.to_datetime(compact_value, format="%Y%m%d", errors="coerce")
+            if not pd.isna(parsed_compact):
+                return parsed_compact.strftime("%Y-%m-%d")
     parsed = pd.to_datetime(value, errors="coerce")
     if pd.isna(parsed):
-        return str(value)
+        return ""
     return parsed.strftime("%Y-%m-%d")
 
 
@@ -288,12 +307,7 @@ def _is_explicit_false(value: Any) -> bool:
 
 
 def _normalize_valid_date(value: Any) -> str:
-    if pd.isna(value):
-        return ""
-    parsed = pd.to_datetime(value, errors="coerce")
-    if pd.isna(parsed):
-        return ""
-    return parsed.strftime("%Y-%m-%d")
+    return _normalize_date(value)
 
 
 def _evidence_text_for_candidate(evidence: pd.DataFrame, asset_id: str, candidate_trade_date: str) -> str:
