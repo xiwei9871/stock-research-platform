@@ -132,6 +132,48 @@ def test_build_core_tech_gate_rejects_excluded_industries_with_exact_reasons() -
     assert rows.loc["CN:SH:601006", "gate_reason"] == "excluded industry: infrastructure_or_cyclical"
 
 
+def test_build_core_tech_gate_uses_point_in_time_evidence_per_candidate_date() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "stock_name": "普通样本",
+                "trade_date": "2025-01-03",
+                "rank": 1,
+                "industry_name": "综合",
+            },
+            {
+                "asset_id": "CN:SH:688123",
+                "stock_name": "普通样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "综合",
+            },
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "candidate_trade_date": "2025-06-20",
+                "product_family": "semiconductor_equipment",
+                "evidence_snippet": "公司披露半导体设备核心技术。",
+                "matched_keyword": "半导体设备",
+            }
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=evidence)
+    rows = outputs["core_tech_gate"].set_index(["asset_id", "trade_date"])
+
+    early = rows.loc[("CN:SH:688123", "2025-01-03")]
+    later = rows.loc[("CN:SH:688123", "2025-06-20")]
+    assert early["core_tech_gate"] == "reject"
+    assert early["gate_reason"] == "no core technology evidence"
+    assert later["core_tech_gate"] == "pass"
+    assert later["core_tech_category"] == "semiconductor_equipment"
+
+
 def test_run_core_tech_gate_from_files_writes_required_artifacts_and_manifest_counts(tmp_path: Path) -> None:
     candidates_path = tmp_path / "candidates.csv"
     evidence_path = tmp_path / "evidence.csv"

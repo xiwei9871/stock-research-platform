@@ -119,13 +119,13 @@ REJECT_INDUSTRY_TERMS = {
 
 def build_core_tech_gate(*, candidates: pd.DataFrame, evidence: pd.DataFrame | None) -> dict[str, Any]:
     normalized_candidates = _normalize_candidates(candidates)
-    evidence_text_by_asset = _evidence_text_by_asset(evidence)
+    normalized_evidence = _normalize_evidence(evidence)
     rows: list[dict[str, Any]] = []
 
     for candidate in normalized_candidates.to_dict("records"):
         asset_id = candidate["asset_id"]
         industry_name = candidate["industry_name"]
-        evidence_text = evidence_text_by_asset.get(asset_id, "")
+        evidence_text = _evidence_text_for_candidate(normalized_evidence, asset_id, candidate["trade_date"])
         candidate_text = _candidate_text(candidate)
         combined_text = f"{candidate_text} {evidence_text}"
 
@@ -247,9 +247,9 @@ def _normalize_date(value: Any) -> str:
     return parsed.strftime("%Y-%m-%d")
 
 
-def _evidence_text_by_asset(evidence: pd.DataFrame | None) -> dict[str, str]:
+def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
     if evidence is None or evidence.empty or "asset_id" not in evidence:
-        return {}
+        return pd.DataFrame(columns=["asset_id", "_gate_text", "_evidence_date"])
 
     normalized = evidence.copy()
     for column in ["product_family", "evidence_snippet", "matched_keyword"]:
@@ -258,7 +258,45 @@ def _evidence_text_by_asset(evidence: pd.DataFrame | None) -> dict[str, str]:
     normalized["asset_id"] = normalized["asset_id"].fillna("").astype(str)
     text_columns = ["product_family", "evidence_snippet", "matched_keyword"]
     normalized["_gate_text"] = normalized[text_columns].astype("string").fillna("").agg(" ".join, axis=1)
-    return normalized.groupby("asset_id")["_gate_text"].apply(lambda values: " ".join(values)).to_dict()
+    normalized["_evidence_date"] = normalized.apply(_evidence_date, axis=1)
+    return normalized[["asset_id", "_gate_text", "_evidence_date"]].copy()
+
+
+def _evidence_date(row: pd.Series) -> str:
+    for column in ["candidate_trade_date", "trade_date", "published_at"]:
+        if column in row:
+            normalized = _normalize_valid_date(row[column])
+            if normalized:
+                return normalized
+    return ""
+
+
+def _normalize_valid_date(value: Any) -> str:
+    if pd.isna(value):
+        return ""
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.strftime("%Y-%m-%d")
+
+
+def _evidence_text_for_candidate(evidence: pd.DataFrame, asset_id: str, candidate_trade_date: str) -> str:
+    if evidence.empty:
+        return ""
+
+    asset_evidence = evidence[evidence["asset_id"].eq(asset_id)]
+    if asset_evidence.empty:
+        return ""
+
+    dated = asset_evidence[asset_evidence["_evidence_date"].ne("")]
+    if dated.empty:
+        matched = asset_evidence
+    else:
+        candidate_date = _normalize_valid_date(candidate_trade_date)
+        if not candidate_date:
+            return ""
+        matched = dated[dated["_evidence_date"].le(candidate_date)]
+    return " ".join(matched["_gate_text"].tolist())
 
 
 def _candidate_text(candidate: dict[str, Any]) -> str:
