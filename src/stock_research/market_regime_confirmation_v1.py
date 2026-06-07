@@ -428,6 +428,8 @@ def _normalize_equity_for_diagnostics(equity: pd.DataFrame | None) -> pd.DataFra
     normalized = equity.copy()
     if "trade_date" not in normalized.columns and "date" in normalized.columns:
         normalized["trade_date"] = normalized["date"]
+    if "trade_date" not in normalized.columns:
+        return pd.DataFrame(columns=columns)
     if "strategy_family" not in normalized.columns:
         normalized["strategy_family"] = ""
     if "daily_return" not in normalized.columns:
