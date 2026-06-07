@@ -35,7 +35,13 @@ def build_style_state_daily(emotion: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame(columns=STYLE_STATE_COLUMNS)
 
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.date.astype(str)
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce", format="mixed").dt.strftime(
+        "%Y-%m-%d"
+    )
+    frame = frame.dropna(subset=["trade_date"])
+    if frame.empty:
+        return pd.DataFrame(columns=STYLE_STATE_COLUMNS)
+
     frame["emotion_state"] = frame["emotion_state"].fillna("neutral").astype(str)
     frame["risk_state"] = frame["risk_state"].fillna("medium").astype(str)
     frame["emotion_score"] = pd.to_numeric(frame.get("emotion_score"), errors="coerce")
