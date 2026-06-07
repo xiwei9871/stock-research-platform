@@ -142,11 +142,20 @@ def build_rotation_balanced_candidates(
         defensive_rows = date_frame[date_frame["style_sleeve"] == "defensive_yield_proxy"].sort_values(
             ["style_rank", "asset_id"], ascending=[True, True]
         )
+        seen_assets = set()
         for rank in range(max(len(growth_rows), len(defensive_rows))):
             if rank < len(growth_rows):
-                ordered.append(growth_rows.iloc[rank].to_dict())
+                growth_row = growth_rows.iloc[rank].to_dict()
+                asset_id = growth_row.get("asset_id")
+                if asset_id not in seen_assets:
+                    ordered.append(growth_row)
+                    seen_assets.add(asset_id)
             if rank < len(defensive_rows):
-                ordered.append(defensive_rows.iloc[rank].to_dict())
+                defensive_row = defensive_rows.iloc[rank].to_dict()
+                asset_id = defensive_row.get("asset_id")
+                if asset_id not in seen_assets:
+                    ordered.append(defensive_row)
+                    seen_assets.add(asset_id)
 
     if not ordered:
         return pd.DataFrame(columns=[*FUNNEL_BASE_COLUMNS, "style_sleeve", "style_rank"])

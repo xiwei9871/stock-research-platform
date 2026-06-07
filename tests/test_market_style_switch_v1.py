@@ -140,9 +140,162 @@ def test_candidate_sleeves_rank_growth_and_defensive_separately() -> None:
 
     assert growth.iloc[0]["asset_id"] == "G1"
     assert defensive["asset_id"].tolist() == ["D1", "D2"]
+    assert rotation["asset_id"].tolist() == ["G1", "D1", "D2"]
     assert rotation["style_sleeve"].tolist() == [
         "growth_momentum",
         "defensive_yield_proxy",
-        "growth_momentum",
         "defensive_yield_proxy",
     ]
+
+
+def test_rotation_balanced_candidates_drop_duplicate_assets_per_date() -> None:
+    growth = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "DUP",
+                "stock_name": "重叠资产",
+                "industry_name": "电力",
+                "style_sleeve": "growth_momentum",
+                "style_rank": 1,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "G2",
+                "stock_name": "成长二号",
+                "industry_name": "软件",
+                "style_sleeve": "growth_momentum",
+                "style_rank": 2,
+            },
+        ]
+    )
+    defensive = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "DUP",
+                "stock_name": "重叠资产",
+                "industry_name": "电力",
+                "style_sleeve": "defensive_yield_proxy",
+                "style_rank": 1,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "D2",
+                "stock_name": "防御二号",
+                "industry_name": "银行",
+                "style_sleeve": "defensive_yield_proxy",
+                "style_rank": 2,
+            },
+        ]
+    )
+
+    rotation = build_rotation_balanced_candidates(growth, defensive, top_n=4)
+
+    assert rotation["asset_id"].tolist() == ["DUP", "G2", "D2"]
+    assert rotation["asset_id"].is_unique
+    assert rotation.iloc[0]["style_sleeve"] == "growth_momentum"
+
+
+def test_candidate_sleeves_handle_minimal_realish_funnel_columns() -> None:
+    funnel = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "G1",
+                "industry_name": "软件服务",
+                "mid_trend_funnel_score": 88,
+                "shadow_top10_rank": 1,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "D1",
+                "industry_name": "电力供应",
+                "mid_trend_funnel_score": 72,
+                "shadow_top10_rank": 6,
+            },
+        ]
+    )
+
+    growth = build_growth_momentum_candidates(funnel, top_n=2)
+    defensive = build_defensive_yield_proxy_candidates(funnel, top_n=2)
+
+    assert growth["asset_id"].tolist() == ["G1", "D1"]
+    assert defensive["asset_id"].tolist() == ["D1"]
+
+
+def test_defensive_candidates_with_no_keywords_do_not_match_empty_industries() -> None:
+    funnel = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "A1",
+                "industry_name": "",
+                "mid_trend_funnel_score": 80,
+                "shadow_top10_rank": 1,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "A2",
+                "industry_name": pd.NA,
+                "mid_trend_funnel_score": 75,
+                "shadow_top10_rank": 2,
+            },
+        ]
+    )
+
+    defensive = build_defensive_yield_proxy_candidates(funnel, defensive_industry_keywords=())
+
+    assert defensive.empty
+
+
+def test_equal_score_ties_are_ordered_by_asset_id() -> None:
+    funnel = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "B2",
+                "industry_name": "电力",
+                "mid_trend_funnel_score": 80,
+                "shadow_top10_rank": 2,
+                "volatility_20_score": 50,
+                "max_drawdown_20_score": 50,
+                "ma60_slope_score": 50,
+                "score_total": 50,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "asset_id": "A1",
+                "industry_name": "电力",
+                "mid_trend_funnel_score": 80,
+                "shadow_top10_rank": 2,
+                "volatility_20_score": 50,
+                "max_drawdown_20_score": 50,
+                "ma60_slope_score": 50,
+                "score_total": 50,
+            },
+        ]
+    )
+
+    growth = build_growth_momentum_candidates(funnel, top_n=2)
+    defensive = build_defensive_yield_proxy_candidates(funnel, top_n=2)
+
+    assert growth["asset_id"].tolist() == ["A1", "B2"]
+    assert defensive["asset_id"].tolist() == ["A1", "B2"]
+
+
+def test_candidate_builders_return_empty_for_empty_frames_and_non_positive_top_n() -> None:
+    empty = pd.DataFrame()
+    funnel = _funnel()
+    growth = build_growth_momentum_candidates(funnel, top_n=2)
+    defensive = build_defensive_yield_proxy_candidates(funnel, top_n=2)
+
+    assert build_growth_momentum_candidates(empty).empty
+    assert build_defensive_yield_proxy_candidates(empty).empty
+    assert build_rotation_balanced_candidates(empty, empty).empty
+    assert build_growth_momentum_candidates(funnel, top_n=0).empty
+    assert build_defensive_yield_proxy_candidates(funnel, top_n=0).empty
+    assert build_rotation_balanced_candidates(growth, defensive, top_n=0).empty
+    assert build_growth_momentum_candidates(funnel, top_n=-1).empty
+    assert build_defensive_yield_proxy_candidates(funnel, top_n=-1).empty
+    assert build_rotation_balanced_candidates(growth, defensive, top_n=-1).empty
