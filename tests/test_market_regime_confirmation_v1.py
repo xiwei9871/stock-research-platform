@@ -110,6 +110,27 @@ def test_policy_impulse_expiry_uses_downgrade_hysteresis_on_one_weak_day() -> No
     assert expired_day["transition_reason"] == "downgrade_wait_for_confirmation"
 
 
+def test_policy_impulse_to_overheated_trend_transition_is_explicit() -> None:
+    emotion = _emotion_rows(
+        [60, 60, 60, 60, 90, 100, 100, 100, 100],
+        states=["neutral", "neutral", "neutral", "neutral", "hot", "euphoria", "euphoria", "euphoria", "euphoria"],
+        risks=["low", "low", "low", "low", "low", "low", "low", "low", "low"],
+    )
+    policy = pd.DataFrame([{"event_date": "2026-01-06", "policy_strength": 0.9}])
+
+    result = build_market_regime_confirmation_from_frames(emotion, policy)
+
+    first_overheated = result.loc[result["trade_date"] == "2026-01-09"].iloc[0]
+    confirmed_transition = result.loc[result["trade_date"] == "2026-01-10"].iloc[0]
+    assert first_overheated["raw_regime_state"] == "overheated"
+    assert first_overheated["confirmed_regime_state"] == "bull_impulse"
+    assert first_overheated["transition_reason"] == "impulse_to_trend_wait_for_confirmation"
+    assert confirmed_transition["raw_regime_state"] == "overheated"
+    assert confirmed_transition["confirmed_regime_state"] == "bull_trend"
+    assert confirmed_transition["target_exposure"] == 1.0
+    assert confirmed_transition["transition_reason"] == "impulse_to_trend_confirmed"
+
+
 def test_confirmed_regime_does_not_downgrade_on_one_bad_day() -> None:
     emotion = _emotion_rows(
         [70, 72, 74, 75, 73, 71, 30, 68, 67],

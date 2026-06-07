@@ -208,6 +208,15 @@ def _attach_confirmed_regime(frame: pd.DataFrame) -> pd.DataFrame:
             pending_count = 0
             confirmed.append(current)
             reasons.append("policy_impulse_confirmed")
+        elif current == "bull_impulse" and raw in {"bull_trend", "overheated"}:
+            if pending_count >= 2:
+                current = "bull_trend"
+                pending_count = 0
+                confirmed.append(current)
+                reasons.append("impulse_to_trend_confirmed")
+            else:
+                confirmed.append(current)
+                reasons.append("impulse_to_trend_wait_for_confirmation")
         elif raw_rank > current_rank and pending_count >= 2:
             current = "bull_trend" if current == "bull_impulse" and raw in {"bull_trend", "overheated"} else raw
             pending_count = 0
