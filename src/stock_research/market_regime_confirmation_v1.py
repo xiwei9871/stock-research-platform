@@ -58,7 +58,8 @@ def _normalize_emotion(emotion: pd.DataFrame) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = default
 
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
+    trade_date = frame["trade_date"].where(frame["trade_date"].isna(), frame["trade_date"].astype(str).str.strip())
+    frame["trade_date"] = pd.to_datetime(trade_date, errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
     frame["emotion_score"] = pd.to_numeric(frame["emotion_score"], errors="coerce").fillna(50.0).clip(0.0, 100.0)
     frame["emotion_state"] = frame["emotion_state"].fillna("neutral").astype(str)
     frame["risk_state"] = frame["risk_state"].fillna("medium").astype(str)

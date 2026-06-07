@@ -54,7 +54,7 @@ def test_build_regime_features_normalizes_mixed_date_formats_and_drops_invalid_d
         [
             {"trade_date": "2026-01-02", "emotion_score": 50},
             {"trade_date": "2026/01/03", "emotion_score": 55},
-            {"trade_date": "20260104", "emotion_score": 60},
+            {"trade_date": 20260104, "emotion_score": 60},
             {"trade_date": "bad-date", "emotion_score": 65},
         ]
     )
@@ -62,3 +62,4 @@ def test_build_regime_features_normalizes_mixed_date_formats_and_drops_invalid_d
     result = build_market_regime_confirmation_from_frames(emotion)
 
     assert result["trade_date"].tolist() == ["2026-01-02", "2026-01-03", "2026-01-04"]
+    assert "1970-01-01" not in result["trade_date"].tolist()
