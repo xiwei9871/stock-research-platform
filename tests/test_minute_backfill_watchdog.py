@@ -693,3 +693,28 @@ def test_cron_jobs_include_minute_backfill_watchdog():
         item["pattern"] == "/Users/xiwei/stock_research/scripts/run_minute_backfill_watchdog_host.sh"
         for item in jarvis_allowlist
     )
+
+
+def test_cron_jobs_include_stock_daily_data_pipeline():
+    jobs = json.loads(Path("/Users/xiwei/.openclaw/cron/jobs.json").read_text())["jobs"]
+    job = next((item for item in jobs if item["name"] == "stock-daily-data-pipeline"), None)
+
+    assert job is not None
+    assert job["enabled"] is True
+    assert job["agentId"] == "agent_jarvis"
+    assert job["schedule"] == {
+        "kind": "cron",
+        "expr": "10 21 * * 1-5",
+        "tz": "Asia/Shanghai",
+    }
+    assert job["delivery"] == {"mode": "none"}
+    assert job["failureAlert"]["channel"] == "feishu"
+    assert job["payload"]["kind"] == "agentTurn"
+    assert job["payload"]["toolsAllow"] == ["exec"]
+    assert job["payload"]["timeoutSeconds"] == 7200
+    assert "/Users/xiwei/stock_research/scripts/run_stock_daily_data_pipeline.sh" in job["payload"]["message"]
+    assert "/approval" not in job["payload"]["message"]
+    assert "不要申请 approval" in job["payload"]["message"]
+    assert job["payload"]["message"].lower().count("approval") == 1
+    assert "飞书进度报告由脚本自己发送" in job["payload"]["message"]
+    assert job["sessionTarget"] == "isolated"

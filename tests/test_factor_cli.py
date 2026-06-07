@@ -77,6 +77,24 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.exact_window is True
 
 
+def test_cli_accepts_run_stock_daily_data_pipeline_command():
+    args = build_parser().parse_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert args.command == "run-stock-daily-data-pipeline"
+    assert args.trade_date == "2026-06-05"
+    assert args.output_dir == "outputs/daily/20260605"
+    assert args.no_feishu is True
+
+
 def test_cli_accepts_report_delivery_local_command():
     args = build_parser().parse_args(
         [
@@ -1144,6 +1162,8 @@ def test_cli_accepts_daily_incremental_command():
             "stock_qfq",
             "--industry-system",
             "sw",
+            "--label-start-date",
+            "2026-03-07",
             "--start-at",
             "build_factor_daily",
             "--dry-run",
@@ -1158,6 +1178,7 @@ def test_cli_accepts_daily_incremental_command():
     assert args.adjust_type == "qfq"
     assert args.source_service == "stock_qfq"
     assert args.industry_system == "sw"
+    assert args.label_start_date == "2026-03-07"
     assert args.start_at == "build_factor_daily"
     assert args.only_step is None
     assert args.dry_run is True
@@ -5253,6 +5274,112 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
     ]
 
 
+def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-05",
+            "output_dir": "outputs/daily/20260605",
+            "feishu_sender": None,
+            "send_feishu": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        lambda **kwargs: {"status": "partial_failed"},
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main_for_args(
+            [
+                "run-stock-daily-data-pipeline",
+                "--trade-date",
+                "2026-06-05",
+                "--output-dir",
+                "outputs/daily/20260605",
+                "--no-feishu",
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|partial_failed",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_wires_feishu_sender(monkeypatch, capsys):
+    sent_messages = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        kwargs["feishu_sender"]("hello")
+        return {"status": "success"}
+
+    def fake_send_openclaw_feishu_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+    monkeypatch.setattr(cli, "send_openclaw_feishu_message", fake_send_openclaw_feishu_message)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--feishu-target",
+            "chat:test",
+            "--feishu-account",
+            "jarvis",
+            "--openclaw-bin",
+            "openclaw-test",
+        ]
+    )
+
+    assert sent_messages == [
+        {
+            "message": "hello",
+            "target": "chat:test",
+            "account": "jarvis",
+            "openclaw_bin": "openclaw-test",
+            "dry_run": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
 def test_daily_incremental_cli_prints_step_status(monkeypatch, capsys):
     import sys
 
@@ -5325,6 +5452,8 @@ def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch,
             "run-daily-incremental",
             "--trade-date",
             "2026-05-12",
+            "--label-start-date",
+            "2026-03-07",
             "--start-at",
             "build_factor_daily",
         ],
@@ -5335,6 +5464,7 @@ def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch,
     assert calls[0] == "runners"
     assert "sync_core_assets" in calls[1]["step_runners"]
     assert calls[1]["start_at"] == "build_factor_daily"
+    assert calls[1]["label_start_date"] == "2026-03-07"
     assert calls[1]["dry_run"] is False
     assert calls[1]["freshness_checker"] is None
     assert capsys.readouterr().out.splitlines() == [
