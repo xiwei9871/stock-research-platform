@@ -197,8 +197,9 @@ def _attach_confirmed_regime(frame: pd.DataFrame) -> pd.DataFrame:
 
         raw_rank = REGIME_RANK.get(raw, 2)
         current_rank = REGIME_RANK.get(current, 2)
-        if raw != pending_state:
-            pending_state = raw
+        pending_key = _confirmation_pending_key(current, raw)
+        if pending_key != pending_state:
+            pending_state = pending_key
             pending_count = 1
         else:
             pending_count += 1
@@ -218,7 +219,7 @@ def _attach_confirmed_regime(frame: pd.DataFrame) -> pd.DataFrame:
                 confirmed.append(current)
                 reasons.append("impulse_to_trend_wait_for_confirmation")
         elif raw_rank > current_rank and pending_count >= 2:
-            current = "bull_trend" if current == "bull_impulse" and raw in {"bull_trend", "overheated"} else raw
+            current = raw
             pending_count = 0
             confirmed.append(current)
             reasons.append("upgrade_confirmed")
@@ -235,6 +236,12 @@ def _attach_confirmed_regime(frame: pd.DataFrame) -> pd.DataFrame:
     result["days_since_regime_change"] = _days_since_change(result["confirmed_regime_state"])
     result["transition_reason"] = reasons
     return result
+
+
+def _confirmation_pending_key(current: str, raw: str) -> str:
+    if current == "bull_impulse" and raw in {"bull_trend", "overheated"}:
+        return "impulse_trend_continuation"
+    return raw
 
 
 def _days_since_change(states: pd.Series) -> list[int]:
