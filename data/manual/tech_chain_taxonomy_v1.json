@@ -1,0 +1,323 @@
+{
+  "version": "tech_chain_taxonomy_v1",
+  "chains": [
+    {
+      "chain_id": "ai_optical_interconnect",
+      "display_name": "AI光模块/光通信",
+      "chain_context_terms": ["光模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络"],
+      "product_exposure_terms": ["800G光模块", "1.6T光模块", "高速光模块", "硅光模块", "光芯片", "光器件"],
+      "bottleneck_dimensions": {
+        "bandwidth_generation": ["800G", "1.6T", "3.2T", "高速光模块"],
+        "architecture_route": ["硅光", "CPO", "LPO", "NPO", "光引擎"],
+        "critical_components": ["EML", "CW", "FAU", "DSP", "光芯片", "光器件"],
+        "process_delivery": ["耦合", "封装", "良率", "低功耗", "高速率"],
+        "customer_delivery": ["北美CSP", "大客户导入", "份额", "交付", "产能爬坡"]
+      },
+      "technical_execution_terms": ["高速率", "低功耗", "封装", "耦合", "良率", "硅光"],
+      "commercial_validation_terms": ["客户导入", "北美CSP", "份额", "订单", "交付", "产能爬坡"],
+      "invalidation_terms": ["需求放缓", "客户砍单", "良率不及预期", "价格下行"],
+      "global_reference_entities": ["Coherent", "Lumentum", "Broadcom", "Marvell", "Nvidia"]
+    },
+    {
+      "chain_id": "ai_compute_chips",
+      "display_name": "AI芯片/计算加速器",
+      "chain_context_terms": ["GPU", "ASIC", "NPU", "AI加速器", "训练芯片", "推理芯片", "国产AI芯片"],
+      "product_exposure_terms": ["AI芯片", "GPU", "ASIC", "NPU", "推理卡", "训练卡", "加速卡"],
+      "bottleneck_dimensions": {
+        "process_and_architecture": ["先进制程", "chiplet", "互联架构", "片间互联"],
+        "memory_interface": ["HBM接口", "高带宽内存", "封装协同"],
+        "software_stack": ["编译器", "算子库", "推理框架", "生态适配"],
+        "qualification": ["客户验证", "集群部署", "云端产品线"]
+      },
+      "technical_execution_terms": ["先进制程", "chiplet", "编译器", "算子库", "生态适配"],
+      "commercial_validation_terms": ["客户验证", "集群部署", "云端产品线", "订单", "适配"],
+      "invalidation_terms": ["流片失败", "生态薄弱", "供应受限", "客户验证延迟"],
+      "global_reference_entities": ["Nvidia", "AMD", "Broadcom", "Google TPU"]
+    },
+    {
+      "chain_id": "hbm_high_end_memory",
+      "display_name": "HBM/高端存储",
+      "chain_context_terms": ["HBM3", "HBM3E", "HBM4", "高带宽内存", "AI加速器存储"],
+      "product_exposure_terms": ["HBM", "HBM3E", "HBM4", "高带宽内存", "存储堆叠"],
+      "bottleneck_dimensions": {
+        "memory_generation": ["HBM3E", "HBM4", "12Hi", "16Hi"],
+        "stacking_and_tsv": ["TSV", "堆叠", "base die", "micro bump"],
+        "packaging_linkage": ["CoWoS", "2.5D", "interposer"],
+        "qualification_and_yield": ["Nvidia认证", "客户验证", "良率", "后段产能"],
+        "supply_allocation": ["长协", "产能分配", "供给紧张", "sold out"]
+      },
+      "technical_execution_terms": ["TSV", "堆叠", "良率", "后段产能", "12Hi", "16Hi"],
+      "commercial_validation_terms": ["Nvidia认证", "客户验证", "长协", "产能分配", "供给紧张"],
+      "invalidation_terms": ["认证推迟", "良率不及预期", "供给过剩", "价格下跌"],
+      "global_reference_entities": ["Samsung", "SK hynix", "Micron"]
+    },
+    {
+      "chain_id": "advanced_packaging",
+      "display_name": "先进封装",
+      "chain_context_terms": ["2.5D封装", "3D封装", "CoWoS", "SoIC", "hybrid bonding", "chiplet集成"],
+      "product_exposure_terms": ["先进封装", "CoWoS", "SoIC", "FOPLP", "chiplet封装"],
+      "bottleneck_dimensions": {
+        "packaging_platform": ["CoWoS", "SoIC", "2.5D", "3D", "FOPLP"],
+        "interconnect": ["interposer", "RDL", "hybrid bonding", "micro bump"],
+        "materials_and_capacity": ["T-glass", "underfill", "封装基板", "先进封装产能"],
+        "yield_and_qualification": ["良率", "可靠性验证", "客户认证"]
+      },
+      "technical_execution_terms": ["RDL", "hybrid bonding", "micro bump", "良率", "可靠性验证"],
+      "commercial_validation_terms": ["客户认证", "先进封装产能", "订单", "扩产", "量产"],
+      "invalidation_terms": ["扩产延迟", "良率低", "客户认证失败", "需求下修"],
+      "global_reference_entities": ["TSMC", "ASE", "Amkor", "Nvidia"]
+    },
+    {
+      "chain_id": "abf_package_substrates",
+      "display_name": "ABF/高端封装基板",
+      "chain_context_terms": ["ABF基板", "高层数封装基板", "AI GPU基板", "ASIC基板"],
+      "product_exposure_terms": ["ABF", "高端封装基板", "高层数基板", "AI GPU基板"],
+      "bottleneck_dimensions": {
+        "substrate_grade": ["ABF", "高层数", "低翘曲", "大尺寸"],
+        "materials": ["玻纤布", "树脂", "低介电", "低损耗"],
+        "customer_linkage": ["AI GPU", "ASIC", "高端封装基板"],
+        "supply_tightness": ["扩产", "交期", "产能紧张"]
+      },
+      "technical_execution_terms": ["高层数", "低翘曲", "大尺寸", "低介电", "低损耗"],
+      "commercial_validation_terms": ["扩产", "交期", "产能紧张", "客户导入", "订单"],
+      "invalidation_terms": ["交期缩短", "产能过剩", "客户导入延迟", "价格下行"],
+      "global_reference_entities": ["Ibiden", "Unimicron", "Shinko", "Ajinomoto"]
+    },
+    {
+      "chain_id": "ai_server_pcb",
+      "display_name": "AI服务器PCB",
+      "chain_context_terms": ["AI服务器PCB", "高速PCB", "HDI", "高多层板", "交换机PCB", "背板"],
+      "product_exposure_terms": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
+      "bottleneck_dimensions": {
+        "product_grade": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
+        "materials": ["低损耗材料", "高速覆铜板", "高频高速板"],
+        "ai_linkage": ["AI服务器PCB", "AIPCB", "数据中心PCB"],
+        "delivery": ["高价值量产品", "订单", "客户导入", "产能爬坡"]
+      },
+      "technical_execution_terms": ["低损耗材料", "高频高速板", "高多层板", "高阶HDI", "产能爬坡"],
+      "commercial_validation_terms": ["订单", "客户导入", "高价值量产品", "量产", "交付"],
+      "invalidation_terms": ["订单延后", "客户降规", "材料成本上升", "产能利用率下降"],
+      "global_reference_entities": ["TTM", "Unimicron", "Compeq"]
+    },
+    {
+      "chain_id": "mlcc_high_end_passives",
+      "display_name": "MLCC/高端被动元件",
+      "chain_context_terms": ["MLCC", "高容陶瓷电容", "AI服务器供电", "GPU周边被动元件"],
+      "product_exposure_terms": ["MLCC", "高容量MLCC", "车规MLCC", "陶瓷电容", "被动元件"],
+      "bottleneck_dimensions": {
+        "power_density": ["AI server PDN", "GPU周边", "高瞬态电流"],
+        "product_grade": ["高容量", "高温", "高可靠", "小型化", "车规级"],
+        "materials_and_process": ["陶瓷粉体", "介质材料", "叠层", "烧结"],
+        "supply_concentration": ["Murata", "Samsung Electro-Mechanics", "Taiyo Yuden"],
+        "capacity_tightness": ["涨价", "交期", "满产", "长协"]
+      },
+      "technical_execution_terms": ["高容量", "高温", "高可靠", "叠层", "烧结", "陶瓷粉体"],
+      "commercial_validation_terms": ["涨价", "交期", "满产", "长协", "客户认证"],
+      "invalidation_terms": ["库存高企", "价格下跌", "交期缩短", "客户认证不足"],
+      "global_reference_entities": ["Murata", "Samsung Electro-Mechanics", "Taiyo Yuden"]
+    },
+    {
+      "chain_id": "power_delivery",
+      "display_name": "电源管理/供配电",
+      "chain_context_terms": ["PMIC", "DrMOS", "VRM", "服务器电源模块", "PDU", "UPS", "变压器", "母线"],
+      "product_exposure_terms": ["PMIC", "DrMOS", "VRM", "电源模块", "PDU", "UPS", "配电"],
+      "bottleneck_dimensions": {
+        "board_level_power": ["PMIC", "DrMOS", "VRM", "电源模块"],
+        "data_center_power": ["PDU", "UPS", "变压器", "母线", "配电"],
+        "efficiency_and_reliability": ["高效率", "高可靠", "大电流", "低损耗"],
+        "capacity": ["交付", "扩产", "客户认证"]
+      },
+      "technical_execution_terms": ["高效率", "高可靠", "大电流", "低损耗", "电源模块"],
+      "commercial_validation_terms": ["交付", "扩产", "客户认证", "订单", "数据中心导入"],
+      "invalidation_terms": ["交付延迟", "认证失败", "毛利下滑", "需求放缓"],
+      "global_reference_entities": ["Texas Instruments", "Infineon", "Delta Electronics"]
+    },
+    {
+      "chain_id": "liquid_cooling_thermal",
+      "display_name": "液冷/热管理",
+      "chain_context_terms": ["液冷", "冷板", "CDU", "泵阀", "快接头", "浸没式冷却", "热界面材料"],
+      "product_exposure_terms": ["液冷系统", "冷板", "CDU", "泵阀", "快接头", "热界面材料"],
+      "bottleneck_dimensions": {
+        "cooling_architecture": ["液冷", "冷板", "CDU", "浸没式"],
+        "components": ["泵阀", "快接头", "管路", "热界面材料"],
+        "deployment": ["数据中心", "AI服务器", "规模交付", "客户验证"]
+      },
+      "technical_execution_terms": ["冷板", "CDU", "泵阀", "热界面材料", "可靠性验证"],
+      "commercial_validation_terms": ["数据中心", "AI服务器", "规模交付", "客户验证", "订单"],
+      "invalidation_terms": ["部署延迟", "漏液风险", "成本过高", "客户验证失败"],
+      "global_reference_entities": ["Vertiv", "CoolIT", "Aavid"]
+    },
+    {
+      "chain_id": "data_center_interconnect",
+      "display_name": "数据中心光纤/高速连接器",
+      "chain_context_terms": ["光纤", "MPO", "MTP", "高速连接器", "DAC", "AEC", "交换机互联"],
+      "product_exposure_terms": ["MPO", "MTP", "高速连接器", "DAC", "AEC", "铜缆", "光纤"],
+      "bottleneck_dimensions": {
+        "interconnect_products": ["MPO", "MTP", "高速连接器", "DAC", "AEC"],
+        "signal_integrity": ["低损耗", "高速传输", "屏蔽", "散热"],
+        "data_center_linkage": ["交换机", "服务器互联", "AI集群"]
+      },
+      "technical_execution_terms": ["低损耗", "高速传输", "屏蔽", "散热", "连接可靠性"],
+      "commercial_validation_terms": ["交换机", "服务器互联", "AI集群", "客户导入", "订单"],
+      "invalidation_terms": ["规格迭代落后", "订单延迟", "价格竞争", "良率不足"],
+      "global_reference_entities": ["Amphenol", "TE Connectivity", "Molex"]
+    },
+    {
+      "chain_id": "semiconductor_equipment",
+      "display_name": "半导体设备",
+      "chain_context_terms": ["晶圆制造", "刻蚀", "薄膜沉积", "清洗", "离子注入", "量测", "CMP", "涂胶显影"],
+      "product_exposure_terms": ["刻蚀设备", "薄膜沉积设备", "清洗设备", "离子注入机", "量测设备", "CMP设备"],
+      "bottleneck_dimensions": {
+        "process_equipment": ["刻蚀", "薄膜沉积", "清洗", "离子注入", "热处理"],
+        "metrology_and_testing": ["量测", "检测", "探针台", "分选机"],
+        "domestic_replacement": ["国产替代", "客户验证", "先进制程"],
+        "platformization": ["平台型设备", "工艺覆盖", "设备组合"]
+      },
+      "technical_execution_terms": ["先进制程", "工艺覆盖", "平台型设备", "客户验证", "良率"],
+      "commercial_validation_terms": ["晶圆厂认证", "批量订单", "国产替代", "产能扩张", "设备导入"],
+      "invalidation_terms": ["验证延迟", "制程覆盖不足", "招标不及预期", "出口限制"],
+      "global_reference_entities": ["ASML", "Applied Materials", "Lam Research", "Tokyo Electron"]
+    },
+    {
+      "chain_id": "lithography_eda_ip",
+      "display_name": "光刻/EDA/半导体IP",
+      "chain_context_terms": ["光刻", "光刻胶", "EDA", "IP核", "设计验证", "先进节点设计流程"],
+      "product_exposure_terms": ["EDA", "验证工具", "仿真", "布线", "签核", "IP core", "光刻胶"],
+      "bottleneck_dimensions": {
+        "design_tools": ["EDA", "验证工具", "仿真", "布线", "签核"],
+        "ip": ["IP core", "接口IP", "处理器IP"],
+        "lithography_chain": ["EUV", "DUV", "光刻胶", "掩膜版"],
+        "qualification": ["先进节点", "流片", "客户导入"]
+      },
+      "technical_execution_terms": ["签核", "流片", "先进节点", "仿真", "接口IP"],
+      "commercial_validation_terms": ["客户导入", "流片验证", "授权", "订单", "生态适配"],
+      "invalidation_terms": ["流片失败", "兼容性不足", "授权放缓", "节点覆盖不足"],
+      "global_reference_entities": ["Synopsys", "Cadence", "Siemens EDA", "Arm", "ASML"]
+    },
+    {
+      "chain_id": "semiconductor_materials",
+      "display_name": "半导体材料",
+      "chain_context_terms": ["光刻胶", "电子特气", "湿电子化学品", "靶材", "CMP", "硅片", "掩膜版"],
+      "product_exposure_terms": ["硅片", "电子特气", "湿电子化学品", "光刻胶", "CMP抛光液", "靶材"],
+      "bottleneck_dimensions": {
+        "wafer_materials": ["硅片", "外延", "抛光片"],
+        "chemicals": ["电子特气", "湿电子化学品", "光刻胶"],
+        "cmp_and_targets": ["CMP抛光液", "抛光垫", "靶材"],
+        "qualification": ["晶圆厂认证", "批量供货", "国产替代"]
+      },
+      "technical_execution_terms": ["纯度", "稳定性", "晶圆厂认证", "批量供货", "国产替代"],
+      "commercial_validation_terms": ["批量供货", "客户认证", "国产替代", "订单", "长协"],
+      "invalidation_terms": ["认证失败", "批量不稳定", "价格下跌", "替代放缓"],
+      "global_reference_entities": ["Shin-Etsu", "JSR", "Entegris", "SUMCO"]
+    },
+    {
+      "chain_id": "power_semiconductors",
+      "display_name": "功率半导体",
+      "chain_context_terms": ["SiC", "GaN", "IGBT", "MOSFET", "功率模块", "车规认证", "工业认证"],
+      "product_exposure_terms": ["SiC衬底", "外延", "GaN", "IGBT", "MOSFET", "功率模块"],
+      "bottleneck_dimensions": {
+        "materials": ["SiC衬底", "外延", "GaN"],
+        "devices": ["IGBT", "MOSFET", "功率模块"],
+        "certification": ["车规", "工业认证", "客户定点"],
+        "capacity": ["8英寸", "产线", "良率"]
+      },
+      "technical_execution_terms": ["8英寸", "良率", "外延", "车规", "功率模块"],
+      "commercial_validation_terms": ["客户定点", "车规认证", "工业认证", "批量供货", "订单"],
+      "invalidation_terms": ["良率低", "定点延迟", "价格竞争", "产线爬坡不及预期"],
+      "global_reference_entities": ["Infineon", "STMicroelectronics", "Wolfspeed", "onsemi"]
+    },
+    {
+      "chain_id": "high_end_sensors",
+      "display_name": "高端传感器",
+      "chain_context_terms": ["CIS", "MEMS", "激光雷达", "红外", "工业视觉", "机器人感知", "汽车感知"],
+      "product_exposure_terms": ["CIS", "MEMS", "激光雷达", "红外传感器", "工业视觉", "传感器"],
+      "bottleneck_dimensions": {
+        "sensor_type": ["CIS", "MEMS", "激光雷达", "红外", "工业视觉"],
+        "performance": ["高精度", "高可靠", "低噪声", "高速"],
+        "qualification": ["车载", "机器人", "客户认证"]
+      },
+      "technical_execution_terms": ["高精度", "高可靠", "低噪声", "高速", "车载"],
+      "commercial_validation_terms": ["客户认证", "车载定点", "机器人客户", "批量供货", "订单"],
+      "invalidation_terms": ["认证延迟", "性能不达标", "价格下行", "客户项目取消"],
+      "global_reference_entities": ["Sony", "OmniVision", "Bosch", "Velodyne"]
+    },
+    {
+      "chain_id": "robotics_core_components",
+      "display_name": "机器人核心零部件",
+      "chain_context_terms": ["减速器", "丝杠", "滚柱丝杠", "力矩电机", "伺服", "控制器", "灵巧手", "力传感器"],
+      "product_exposure_terms": ["减速器", "丝杠", "力矩电机", "伺服系统", "控制器", "六维力传感器", "灵巧手"],
+      "bottleneck_dimensions": {
+        "motion_components": ["减速器", "丝杠", "力矩电机", "伺服"],
+        "control_and_sensing": ["控制器", "六维力传感器", "灵巧手"],
+        "manufacturing": ["精密加工", "一致性", "寿命", "良率"],
+        "customer_validation": ["机器人客户", "量产", "定点"]
+      },
+      "technical_execution_terms": ["精密加工", "一致性", "寿命", "良率", "控制器"],
+      "commercial_validation_terms": ["机器人客户", "量产", "定点", "订单", "客户验证"],
+      "invalidation_terms": ["寿命不足", "一致性差", "定点延迟", "量产不及预期"],
+      "global_reference_entities": ["Harmonic Drive", "Nabtesco", "THK", "Yaskawa"]
+    },
+    {
+      "chain_id": "industrial_software_control",
+      "display_name": "工业软件/控制系统",
+      "chain_context_terms": ["PLC", "DCS", "MES", "CAD", "CAE", "CAM", "工业操作系统", "实时控制"],
+      "product_exposure_terms": ["PLC", "DCS", "MES", "CAD", "CAE", "CAM", "工业操作系统"],
+      "bottleneck_dimensions": {
+        "control_systems": ["PLC", "DCS", "实时控制", "工业操作系统"],
+        "engineering_software": ["CAD", "CAE", "CAM", "MES"],
+        "replacement": ["国产替代", "自主可控", "客户迁移"],
+        "reliability": ["稳定性", "实时性", "生态适配"]
+      },
+      "technical_execution_terms": ["稳定性", "实时性", "生态适配", "自主可控", "客户迁移"],
+      "commercial_validation_terms": ["客户迁移", "国产替代", "项目中标", "授权", "续费"],
+      "invalidation_terms": ["迁移失败", "稳定性不足", "生态不兼容", "续费下降"],
+      "global_reference_entities": ["Siemens", "Rockwell", "Dassault Systemes", "Schneider Electric"]
+    },
+    {
+      "chain_id": "magnetic_inductor_materials",
+      "display_name": "高端磁性/电感材料",
+      "chain_context_terms": ["一体成型电感", "软磁粉芯", "纳米晶", "非晶", "AI服务器电源被动元件"],
+      "product_exposure_terms": ["一体成型电感", "功率电感", "软磁粉芯", "纳米晶", "非晶", "磁粉芯"],
+      "bottleneck_dimensions": {
+        "passive_power_components": ["一体成型电感", "功率电感", "软磁粉芯"],
+        "materials": ["纳米晶", "非晶", "磁粉芯"],
+        "ai_server_linkage": ["高频", "大电流", "低损耗", "电源周边"]
+      },
+      "technical_execution_terms": ["高频", "大电流", "低损耗", "软磁粉芯", "纳米晶"],
+      "commercial_validation_terms": ["AI服务器", "客户导入", "订单", "批量供货", "涨价"],
+      "invalidation_terms": ["导入延迟", "低端替代", "价格下跌", "性能不足"],
+      "global_reference_entities": ["TDK", "Murata", "Vishay", "Taiyo Yuden"]
+    },
+    {
+      "chain_id": "ceramics_electronic_materials",
+      "display_name": "高端陶瓷/电子材料",
+      "chain_context_terms": ["陶瓷基板", "氮化铝", "氧化铝", "LTCC", "MLCC粉体", "介电材料"],
+      "product_exposure_terms": ["陶瓷基板", "氮化铝", "氧化铝", "LTCC", "陶瓷粉体", "电容介质"],
+      "bottleneck_dimensions": {
+        "substrates": ["陶瓷基板", "氮化铝", "氧化铝", "LTCC"],
+        "mlcc_upstream": ["陶瓷粉体", "电容介质", "高介电"],
+        "reliability": ["高导热", "高可靠", "低损耗"]
+      },
+      "technical_execution_terms": ["高导热", "高可靠", "低损耗", "高介电", "陶瓷粉体"],
+      "commercial_validation_terms": ["客户认证", "批量供货", "国产替代", "订单", "扩产"],
+      "invalidation_terms": ["认证失败", "可靠性不足", "批量不稳定", "价格下行"],
+      "global_reference_entities": ["Kyocera", "Murata", "CoorsTek", "Maruwa"]
+    },
+    {
+      "chain_id": "power_grid_energy_infrastructure",
+      "display_name": "电网/能源基础设施",
+      "chain_context_terms": ["特高压", "变压器", "开关设备", "储能", "燃机", "数据中心电力接入"],
+      "product_exposure_terms": ["特高压", "变压器", "开关", "GIS", "GIL", "储能", "燃机", "配电"],
+      "bottleneck_dimensions": {
+        "grid_equipment": ["特高压", "变压器", "开关", "GIS", "GIL"],
+        "data_center_power": ["数据中心供电", "电力接入", "配电"],
+        "energy_balancing": ["储能", "燃机", "调峰"],
+        "qualification": ["中标", "国网", "南网", "批量交付"]
+      },
+      "technical_execution_terms": ["特高压", "批量交付", "电力接入", "调峰", "可靠性"],
+      "commercial_validation_terms": ["中标", "国网", "南网", "批量交付", "订单"],
+      "invalidation_terms": ["招标延迟", "交付延迟", "项目取消", "毛利下滑"],
+      "global_reference_entities": ["Hitachi Energy", "Siemens Energy", "Schneider Electric", "GE Vernova"]
+    }
+  ]
+}
