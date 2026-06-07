@@ -66,10 +66,7 @@ TEXT_EVIDENCE_GROUPS = {
     "customer_certification": CUSTOMER_CERTIFICATION_KEYWORDS,
     "technical_barrier": TECHNICAL_BARRIER_KEYWORDS,
     "news_or_announcement_catalyst": [
-        "公告",
         "中标",
-        "签订合同",
-        "重大合同",
         "量产",
         "批量供货",
         "定点",
@@ -78,7 +75,6 @@ TEXT_EVIDENCE_GROUPS = {
         "获批",
         "项目投产",
         "产线投产",
-        "订单",
         "在手订单",
         "商业化",
         "导入",

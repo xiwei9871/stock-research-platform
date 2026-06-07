@@ -201,6 +201,34 @@ def test_classify_text_evidence_emits_serenity_semantic_and_catalyst_evidence() 
     assert "news_or_announcement_catalyst" in evidence_types
 
 
+def test_classify_text_evidence_ignores_annual_report_boilerplate() -> None:
+    matches = classify_text_evidence(
+        text="报告期内公开披露过的所有公司文件正本及公告原稿。截至报告期末主要资产受限情况：不适用。",
+        source_type="official_disclosure_report_pdf",
+        source_id="annual",
+        source_title="年度报告",
+        source_date="2025-01-06",
+    )
+
+    evidence_types = {row["evidence_type"] for row in matches}
+    assert "bottleneck_keyword" not in evidence_types
+    assert "news_or_announcement_catalyst" not in evidence_types
+
+
+def test_classify_text_evidence_ignores_report_table_and_contract_section_boilerplate() -> None:
+    matches = classify_text_evidence(
+        text="无形资产情况：土地使用权 专利权 非专利技术 软件 合计。重大合同及其履行情况：不适用。",
+        source_type="official_disclosure_report_pdf",
+        source_id="annual",
+        source_title="年度报告",
+        source_date="2025-01-06",
+    )
+
+    evidence_types = {row["evidence_type"] for row in matches}
+    assert "technical_barrier" not in evidence_types
+    assert "news_or_announcement_catalyst" not in evidence_types
+
+
 def test_build_evidence_backfill_extracts_product_and_text_evidence() -> None:
     candidates = pd.DataFrame(
         [

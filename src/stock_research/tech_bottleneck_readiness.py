@@ -57,7 +57,6 @@ BOTTLENECK_KEYWORDS = [
     "关键设备",
     "核心零部件",
     "供应链安全",
-    "受限",
     "进口替代",
     "替代进口",
     "进口依赖",
@@ -116,9 +115,11 @@ CUSTOMER_CERTIFICATION_KEYWORDS = [
 ]
 
 TECHNICAL_BARRIER_KEYWORDS = [
-    "专利",
     "发明专利",
     "知识产权",
+    "授权专利",
+    "有效专利",
+    "专利证书",
     "技术壁垒",
     "工艺壁垒",
     "核心工艺",
