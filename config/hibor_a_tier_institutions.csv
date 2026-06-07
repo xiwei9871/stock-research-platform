@@ -1,0 +1,60 @@
+institution_name,alias,tier,group,region
+中信证券,中信证券,A,A1_domestic,domestic
+中金公司,中金公司,A,A1_domestic,domestic
+中金公司,中国国际金融,A,A1_domestic,domestic
+华泰证券,华泰证券,A,A1_domestic,domestic
+国泰君安,国泰君安,A,A1_domestic,domestic
+国泰海通证券,国泰海通证券,A,A1_domestic,domestic
+国泰海通证券,国泰海通,A,A1_domestic,domestic
+招商证券,招商证券,A,A1_domestic,domestic
+海通证券,海通证券,A,A1_domestic,domestic
+广发证券,广发证券,A,A1_domestic,domestic
+中信建投,中信建投,A,A1_domestic,domestic
+申万宏源,申万宏源,A,A1_domestic,domestic
+兴业证券,兴业证券,A,A1_domestic,domestic
+国信证券,国信证券,A,A1_domestic,domestic
+光大证券,光大证券,A,A1_domestic,domestic
+东吴证券,东吴证券,A,A1_domestic,domestic
+高盛,高盛,A,A2_foreign_hk_international,foreign
+高盛,Goldman Sachs,A,A2_foreign_hk_international,foreign
+摩根士丹利,摩根士丹利,A,A2_foreign_hk_international,foreign
+摩根士丹利,Morgan Stanley,A,A2_foreign_hk_international,foreign
+摩根士丹利,大摩,A,A2_foreign_hk_international,foreign
+摩根大通,摩根大通,A,A2_foreign_hk_international,foreign
+摩根大通,JPMorgan,A,A2_foreign_hk_international,foreign
+摩根大通,JP Morgan,A,A2_foreign_hk_international,foreign
+摩根大通,小摩,A,A2_foreign_hk_international,foreign
+花旗,花旗,A,A2_foreign_hk_international,foreign
+花旗,Citi,A,A2_foreign_hk_international,foreign
+花旗,Citigroup,A,A2_foreign_hk_international,foreign
+瑞银,瑞银,A,A2_foreign_hk_international,foreign
+瑞银,瑞银证券,A,A2_foreign_hk_international,foreign
+瑞银,UBS,A,A2_foreign_hk_international,foreign
+瑞信,瑞信,A,A2_foreign_hk_international,foreign
+瑞信,Credit Suisse,A,A2_foreign_hk_international,foreign
+美银证券,美银证券,A,A2_foreign_hk_international,foreign
+美银证券,BofA,A,A2_foreign_hk_international,foreign
+美银证券,Bank of America,A,A2_foreign_hk_international,foreign
+汇丰,汇丰,A,A2_foreign_hk_international,foreign
+汇丰,HSBC,A,A2_foreign_hk_international,foreign
+德意志银行,德意志银行,A,A2_foreign_hk_international,foreign
+德意志银行,Deutsche Bank,A,A2_foreign_hk_international,foreign
+野村,野村,A,A2_foreign_hk_international,foreign
+野村,Nomura,A,A2_foreign_hk_international,foreign
+麦格理,麦格理,A,A2_foreign_hk_international,foreign
+麦格理,Macquarie,A,A2_foreign_hk_international,foreign
+杰富瑞,杰富瑞,A,A2_foreign_hk_international,foreign
+杰富瑞,富瑞,A,A2_foreign_hk_international,foreign
+杰富瑞,Jefferies,A,A2_foreign_hk_international,foreign
+里昂证券,里昂证券,A,A2_foreign_hk_international,foreign
+里昂证券,CLSA,A,A2_foreign_hk_international,foreign
+Bernstein,Bernstein,A,A2_foreign_hk_international,foreign
+招银国际,招银国际,A,A2_foreign_hk_international,foreign
+招银国际,CMB International,A,A2_foreign_hk_international,foreign
+建银国际,建银国际,A,A2_foreign_hk_international,foreign
+建银国际,CCB International,A,A2_foreign_hk_international,foreign
+海通国际,海通国际,A,A2_foreign_hk_international,foreign
+中金国际,中金国际,A,A2_foreign_hk_international,foreign
+华兴证券,华兴证券,A,A2_foreign_hk_international,foreign
+华兴证券,China Renaissance,A,A2_foreign_hk_international,foreign
+交银国际,交银国际,A,A2_foreign_hk_international,foreign
