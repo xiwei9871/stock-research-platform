@@ -242,6 +242,60 @@ def test_write_outputs_includes_segment_diagnostics_transitions_and_markdown_rep
     assert "## Transitions" in report
 
 
+def test_write_outputs_passes_equity_into_segment_strategy_performance(tmp_path: Path) -> None:
+    regime = pd.DataFrame(
+        [
+            {
+                "trade_date": "2024-09-24",
+                "raw_regime_state": "bear",
+                "confirmed_regime_state": "bear",
+                "target_exposure": 0.2,
+            },
+            {
+                "trade_date": "2024-09-25",
+                "raw_regime_state": "bull_trend",
+                "confirmed_regime_state": "bull_trend",
+                "target_exposure": 1.0,
+            },
+        ]
+    )
+    equity = pd.DataFrame(
+        [
+            {"trade_date": "2024-09-24", "strategy_family": "fixed_mid_trend", "daily_return": 0.10},
+            {"trade_date": "2024-09-25", "strategy_family": "fixed_mid_trend", "daily_return": -0.05},
+        ]
+    )
+
+    paths = write_market_regime_confirmation_outputs(regime, output_dir=tmp_path, equity=equity)
+
+    segment = pd.read_csv(paths["segment_diagnostics_path"])
+    performance = segment.loc[segment["segment_name"] == "policy_rally_2024", "strategy_performance"].iloc[0]
+    assert "fixed_mid_trend:ret=0.045000" in performance
+    assert "dd=-0.050000" in performance
+
+
+def test_malformed_equity_without_date_columns_is_ignored_for_segment_performance(tmp_path: Path) -> None:
+    regime = pd.DataFrame(
+        [
+            {
+                "trade_date": "2024-09-24",
+                "raw_regime_state": "bear",
+                "confirmed_regime_state": "bear",
+                "target_exposure": 0.2,
+            }
+        ]
+    )
+    malformed_equity = pd.DataFrame(
+        [{"strategy_family": "fixed_mid_trend", "daily_return": 0.10, "some_other_date": "2024-09-24"}]
+    )
+
+    paths = write_market_regime_confirmation_outputs(regime, output_dir=tmp_path, equity=malformed_equity)
+
+    segment = pd.read_csv(paths["segment_diagnostics_path"]).fillna("")
+    performance = segment.loc[segment["segment_name"] == "policy_rally_2024", "strategy_performance"].iloc[0]
+    assert performance == ""
+
+
 def test_build_segment_diagnostics_serializes_state_transitions_and_optional_strategy_performance() -> None:
     regime = pd.DataFrame(
         [
