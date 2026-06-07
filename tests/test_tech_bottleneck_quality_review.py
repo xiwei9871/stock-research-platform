@@ -134,6 +134,27 @@ def test_build_quality_review_rejects_unlinked_generic_noise() -> None:
     assert row["catalyst_quality"] == "weak"
 
 
+def test_build_quality_review_handles_candidate_with_no_evidence_hits() -> None:
+    review = build_quality_review(
+        candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:600897",
+                    "stock_name": "空证据样本",
+                    "trade_date": "2025-10-24",
+                }
+            ]
+        ),
+        product_rows=pd.DataFrame(),
+        evidence_hits=pd.DataFrame(),
+    )
+
+    row = review.iloc[0]
+    assert row["p3_decision"] == "reject_or_noise"
+    assert row["product_linkage_quality"] == "missing"
+    assert row["evidence_quality_score"] == 0
+
+
 def test_build_quality_review_marks_unmapped_strong_candidate_for_product_family_mapping() -> None:
     review = build_quality_review(
         candidates=pd.DataFrame(

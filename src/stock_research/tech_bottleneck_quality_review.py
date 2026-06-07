@@ -274,13 +274,16 @@ def build_quality_review(
             normalized_hits["asset_id"].eq(key[0]) & normalized_hits["trade_date"].eq(key[1])
         ].copy()
         candidate_hits = pd.concat([candidate_hits, _candidate_wide_hits(candidate)], ignore_index=True)
-        semantic_text = " ".join(
-            candidate_hits[["evidence_bucket", "term", "snippet", "quality"]]
-            .astype("string")
-            .fillna("")
-            .agg(" ".join, axis=1)
-            .tolist()
-        )
+        if candidate_hits.empty:
+            semantic_text = ""
+        else:
+            semantic_text = " ".join(
+                candidate_hits[["evidence_bucket", "term", "snippet", "quality"]]
+                .astype("string")
+                .fillna("")
+                .agg(" ".join, axis=1)
+                .tolist()
+            )
         family = classify_product_family(product_text, semantic_text)
         qualities = {
             "product_linkage": _product_linkage_quality(product_text, semantic_text, family),
