@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -79,6 +80,97 @@ EMOTION_BREAKDOWN_COLUMNS = [
     "max_drawdown",
     "days",
 ]
+EQUITY_COLUMNS = [
+    "trade_date",
+    "strategy_family",
+    "daily_return",
+    "equity",
+    "invested_weight",
+    "holdings",
+]
+POSITION_BUDGET_WEIGHTS = {"full": 1.0, "reduced": 0.6, "light": 0.2}
+
+
+def run_style_switch_backtest_from_frames(
+    *,
+    emotion: pd.DataFrame,
+    funnel: pd.DataFrame,
+    prices: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path | None = None,
+    top_n: int = 5,
+    defensive_industry_keywords: tuple[str, ...] = DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS,
+) -> dict[str, Any]:
+    style_state = build_style_state_daily(emotion)
+    style_state = _filter_date_range(style_state, start_date, end_date)
+    growth = _filter_date_range(build_growth_momentum_candidates(funnel, top_n=max(top_n, 10)), start_date, end_date)
+    defensive = _filter_date_range(
+        build_defensive_yield_proxy_candidates(
+            funnel,
+            top_n=max(top_n, 10),
+            defensive_industry_keywords=defensive_industry_keywords,
+        ),
+        start_date,
+        end_date,
+    )
+    rotation = _filter_date_range(
+        build_rotation_balanced_candidates(growth, defensive, top_n=max(top_n, 10)),
+        start_date,
+        end_date,
+    )
+    anchor_diagnostics = build_anchor_diagnostics(defensive)
+    selections = {
+        "fixed_mid_trend": _build_strategy_selection(
+            style_state, growth, defensive, rotation, "fixed_mid_trend", top_n
+        ),
+        "emotion_budget_only": _build_strategy_selection(
+            style_state, growth, defensive, rotation, "emotion_budget_only", top_n
+        ),
+        "emotion_style_switch": _build_strategy_selection(
+            style_state, growth, defensive, rotation, "emotion_style_switch", top_n
+        ),
+    }
+    equity = pd.concat(
+        [
+            _simulate_equal_weight_daily(prices, selected, strategy_family=name)
+            for name, selected in selections.items()
+        ],
+        ignore_index=True,
+    )
+    summary = _summarize_equity(equity)
+    year_breakdown = _breakdown_equity(equity, style_state, group_cols=["year"])
+    emotion_breakdown = _breakdown_equity(
+        equity,
+        style_state,
+        group_cols=["emotion_state", "risk_state", "style_state"],
+    )
+    paths = {}
+    if output_dir is not None:
+        paths = write_market_style_switch_outputs(
+            style_state=style_state,
+            growth_candidates=growth,
+            defensive_candidates=defensive,
+            rotation_candidates=rotation,
+            anchor_diagnostics=anchor_diagnostics,
+            summary=summary,
+            year_breakdown=year_breakdown,
+            emotion_breakdown=emotion_breakdown,
+            output_dir=output_dir,
+        )
+    return {
+        "style_state": style_state,
+        "growth_candidates": growth,
+        "defensive_candidates": defensive,
+        "rotation_candidates": rotation,
+        "anchor_diagnostics": anchor_diagnostics,
+        "summary": summary,
+        "year_breakdown": year_breakdown,
+        "emotion_breakdown": emotion_breakdown,
+        "equity": equity,
+        "paths": paths,
+    }
+
 
 
 def build_style_state_daily(emotion: pd.DataFrame) -> pd.DataFrame:
@@ -288,6 +380,203 @@ def _position_budget_hint(row: pd.Series) -> str:
     if emotion_state in {"hot", "euphoria"} and risk_state == "low":
         return "full"
     return "reduced"
+
+
+def _filter_date_range(frame: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
+    if frame.empty or "trade_date" not in frame.columns:
+        return frame.copy()
+
+    filtered = frame.copy()
+    filtered["trade_date"] = pd.to_datetime(
+        filtered["trade_date"], errors="coerce", format="mixed"
+    ).dt.strftime("%Y-%m-%d")
+    filtered = filtered.dropna(subset=["trade_date"])
+    start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
+    end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
+    return filtered[(filtered["trade_date"] >= start) & (filtered["trade_date"] <= end)].reset_index(drop=True)
+
+
+def _build_strategy_selection(
+    style_state: pd.DataFrame,
+    growth: pd.DataFrame,
+    defensive: pd.DataFrame,
+    rotation: pd.DataFrame,
+    strategy_family: str,
+    top_n: int,
+) -> pd.DataFrame:
+    rows = []
+    sleeve_frames = {
+        "growth_momentum": growth,
+        "defensive_yield_proxy": defensive,
+        "rotation_balanced": rotation,
+    }
+    for state in style_state.to_dict("records"):
+        trade_date = state["trade_date"]
+        if strategy_family == "fixed_mid_trend":
+            sleeve_name = "growth_momentum"
+            invested_weight = 1.0
+        elif strategy_family == "emotion_budget_only":
+            sleeve_name = "growth_momentum"
+            invested_weight = POSITION_BUDGET_WEIGHTS.get(state.get("position_budget_hint"), 0.6)
+        else:
+            sleeve_name = str(state.get("style_state") or "rotation_balanced")
+            # V1 keeps style selection separate from exposure sizing. A wait/cash style means no
+            # holdings for the day; other style-switch sleeves stay fully invested.
+            invested_weight = 0.0 if sleeve_name == "cash_or_wait" else 1.0
+
+        sleeve = sleeve_frames.get(sleeve_name)
+        if sleeve is None or sleeve.empty or invested_weight <= 0.0 or top_n <= 0:
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "asset_id": pd.NA,
+                    "strategy_family": strategy_family,
+                    "selection_style": sleeve_name,
+                    "invested_weight": invested_weight,
+                }
+            )
+            continue
+
+        day = sleeve[sleeve["trade_date"] == trade_date].sort_values(["style_rank", "asset_id"]).head(top_n)
+        if day.empty:
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "asset_id": pd.NA,
+                    "strategy_family": strategy_family,
+                    "selection_style": sleeve_name,
+                    "invested_weight": invested_weight,
+                }
+            )
+            continue
+
+        for asset_id in day["asset_id"]:
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "asset_id": asset_id,
+                    "strategy_family": strategy_family,
+                    "selection_style": sleeve_name,
+                    "invested_weight": invested_weight,
+                }
+            )
+    return pd.DataFrame(
+        rows,
+        columns=["trade_date", "asset_id", "strategy_family", "selection_style", "invested_weight"],
+    )
+
+
+def _simulate_equal_weight_daily(
+    prices: pd.DataFrame,
+    selected: pd.DataFrame,
+    *,
+    strategy_family: str,
+) -> pd.DataFrame:
+    price_returns = _normalize_prices_with_forward_returns(prices)
+    if selected.empty:
+        return pd.DataFrame(columns=EQUITY_COLUMNS)
+
+    equity = 1.0
+    rows = []
+    for trade_date, day in selected.groupby("trade_date", sort=True):
+        invested_weight = float(pd.to_numeric(day["invested_weight"], errors="coerce").fillna(0.0).max())
+        asset_ids = day["asset_id"].dropna().astype(str).tolist()
+        asset_returns = price_returns[
+            (price_returns["trade_date"] == trade_date) & (price_returns["asset_id"].isin(asset_ids))
+        ]["next_return"].dropna()
+        if asset_returns.empty or invested_weight <= 0.0:
+            daily_return = 0.0
+        else:
+            daily_return = float(asset_returns.mean()) * invested_weight
+        equity *= 1.0 + daily_return
+        rows.append(
+            {
+                "trade_date": trade_date,
+                "strategy_family": strategy_family,
+                "daily_return": daily_return,
+                "equity": equity,
+                "invested_weight": invested_weight,
+                "holdings": len(asset_returns),
+            }
+        )
+    return pd.DataFrame(rows, columns=EQUITY_COLUMNS)
+
+
+def _normalize_prices_with_forward_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    frame = prices.copy()
+    if frame.empty:
+        return pd.DataFrame(columns=["trade_date", "asset_id", "close", "next_close", "next_return"])
+    for column in ["trade_date", "asset_id", "close"]:
+        if column not in frame.columns:
+            frame[column] = pd.NA
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce", format="mixed").dt.strftime(
+        "%Y-%m-%d"
+    )
+    frame["asset_id"] = frame["asset_id"].fillna("").astype(str)
+    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+    frame = frame.dropna(subset=["trade_date", "close"])
+    frame = frame[frame["asset_id"] != ""].sort_values(["asset_id", "trade_date"]).reset_index(drop=True)
+    frame["next_close"] = frame.groupby("asset_id")["close"].shift(-1)
+    frame["next_return"] = frame["next_close"] / frame["close"] - 1.0
+    return frame
+
+
+def _summarize_equity(equity: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for strategy_family, frame in equity.groupby("strategy_family", sort=True):
+        equity_curve = frame["equity"].astype(float)
+        days = int(len(frame))
+        total_return = float(equity_curve.iloc[-1] - 1.0) if days else 0.0
+        annualized_return = (1.0 + total_return) ** (252.0 / days) - 1.0 if days and total_return > -1.0 else 0.0
+        rows.append(
+            {
+                "strategy_family": strategy_family,
+                "total_return": total_return,
+                "annualized_return": float(annualized_return),
+                "max_drawdown": _max_drawdown(equity_curve),
+                "days": days,
+            }
+        )
+    return pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
+
+
+def _breakdown_equity(equity: pd.DataFrame, style_state: pd.DataFrame, *, group_cols: list[str]) -> pd.DataFrame:
+    if equity.empty:
+        if group_cols == ["year"]:
+            return pd.DataFrame(columns=YEAR_BREAKDOWN_COLUMNS)
+        return pd.DataFrame(columns=EMOTION_BREAKDOWN_COLUMNS)
+
+    frame = equity.merge(
+        style_state[["trade_date", "emotion_state", "risk_state", "style_state"]],
+        on="trade_date",
+        how="left",
+    )
+    frame["year"] = frame["trade_date"].str.slice(0, 4)
+    rows = []
+    for keys, group in frame.groupby([*group_cols, "strategy_family"], dropna=False, sort=True):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        key_values = dict(zip([*group_cols, "strategy_family"], keys, strict=True))
+        total_return = float((1.0 + group["daily_return"].astype(float)).prod() - 1.0)
+        row = {
+            **key_values,
+            "total_return": total_return,
+            "max_drawdown": _max_drawdown((1.0 + group["daily_return"].astype(float)).cumprod()),
+            "days": int(len(group)),
+        }
+        rows.append(row)
+
+    if group_cols == ["year"]:
+        return pd.DataFrame(rows, columns=YEAR_BREAKDOWN_COLUMNS)
+    return pd.DataFrame(rows, columns=EMOTION_BREAKDOWN_COLUMNS)
+
+
+def _max_drawdown(equity_curve: pd.Series) -> float:
+    if equity_curve.empty:
+        return 0.0
+    curve = equity_curve.astype(float)
+    drawdown = curve / curve.cummax() - 1.0
+    return float(drawdown.min())
 
 
 def _render_market_style_switch_report(

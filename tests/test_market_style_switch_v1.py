@@ -6,6 +6,7 @@ from stock_research.market_style_switch_v1 import (
     build_growth_momentum_candidates,
     build_rotation_balanced_candidates,
     build_style_state_daily,
+    run_style_switch_backtest_from_frames,
     write_market_style_switch_outputs,
 )
 
@@ -516,3 +517,37 @@ def test_writer_accepts_empty_frames_and_still_writes_all_files(tmp_path) -> Non
         "max_drawdown",
         "days",
     ]
+
+
+def test_run_style_switch_backtest_from_frames_returns_three_strategy_families(tmp_path) -> None:
+    emotion = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-02", "emotion_state": "euphoria", "risk_state": "low", "emotion_score": 85},
+            {"trade_date": "2026-01-03", "emotion_state": "neutral", "risk_state": "high", "emotion_score": 40},
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-02", "asset_id": "G1", "close": 10.0},
+            {"trade_date": "2026-01-03", "asset_id": "G1", "close": 9.0},
+            {"trade_date": "2026-01-02", "asset_id": "D1", "close": 10.0},
+            {"trade_date": "2026-01-03", "asset_id": "D1", "close": 10.2},
+        ]
+    )
+
+    result = run_style_switch_backtest_from_frames(
+        emotion=emotion,
+        funnel=_funnel(),
+        prices=prices,
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        output_dir=tmp_path,
+        top_n=1,
+    )
+
+    assert set(result["summary"]["strategy_family"]) == {
+        "fixed_mid_trend",
+        "emotion_budget_only",
+        "emotion_style_switch",
+    }
+    assert result["paths"]["summary_path"].exists()
