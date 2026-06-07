@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import json
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
 from stock_research.tech_bottleneck_targeted_p2_backfill import (
     build_bridge_suggestions,
+    build_targeted_bridge_evidence,
     build_targeted_gap_audit,
+    combine_evidence,
     normalize_p2_mapping_queue,
+    write_targeted_backfill_artifacts,
 )
 
 
@@ -458,3 +463,165 @@ def test_string_as_of_safe_values_filter_like_booleans() -> None:
 
     assert audit.iloc[0]["product_evidence_count"] == 1
     assert audit.iloc[0]["bottleneck_evidence_count"] == 1
+
+
+def test_build_targeted_bridge_evidence_marks_derived_proxy_rows() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "candidate_trade_date": "2025-03-05",
+                "as_of_date": "2025-03-05",
+                "evidence_date": "2025-03-04",
+                "source_type": "news",
+                "source_id": "tf-source-1",
+                "source_title": "天孚通信光通信器件进展",
+                "source_url": "https://example.test/tf",
+                "evidence_type": "customer_certification",
+                "matched_keyword": "客户导入",
+                "evidence_snippet": "公司光通信器件和高速光引擎客户导入推进，受益AI算力需求。",
+                "source_confidence": "high",
+                "is_proxy": False,
+                "as_of_safe": True,
+            }
+        ]
+    )
+    suggestions = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "candidate_trade_date": "2025-03-05",
+                "bridge_family": "optical_communication_components",
+                "matched_product_terms": "高速光引擎|光通信器件",
+                "matched_semantic_terms": "AI算力|客户导入",
+                "supporting_source_ids": "tf-source-1|tf-source-2",
+                "bridge_status": "bridgeable",
+            }
+        ]
+    )
+
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=queue,
+        evidence=evidence,
+        suggestions=suggestions,
+        run_id="targeted-run",
+    )
+
+    assert len(bridge_evidence) == 1
+    row = bridge_evidence.iloc[0]
+    assert row["run_id"] == "targeted-run"
+    assert row["asset_id"] == "CN:SZ:300394"
+    assert row["stock_name"] == "天孚通信"
+    assert row["candidate_trade_date"] == "2025-03-05"
+    assert row["as_of_date"] == "2025-03-05"
+    assert row["evidence_date"] == "2025-03-04"
+    assert row["source_type"] == "derived_product_family_bridge"
+    assert row["source_id"] == "CN:SZ:300394:2025-03-05:optical_communication_components:bridge"
+    assert row["source_title"] == "天孚通信光通信器件进展"
+    assert row["source_url"] == "https://example.test/tf"
+    assert row["evidence_type"] == "customer_certification"
+    assert row["evidence_snippet"] == "公司光通信器件和高速光引擎客户导入推进，受益AI算力需求。"
+    assert row["matched_keyword"].startswith("optical_communication_components:")
+    assert row["source_confidence"] == "medium"
+    assert row["is_proxy"] is True
+    assert row["as_of_safe"] is True
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["bridge_family"] == "optical_communication_components"
+    assert metadata["bridge_reason"] == "product_family_semantic_bridge"
+    assert metadata["supporting_source_ids"] == ["tf-source-1", "tf-source-2"]
+    assert metadata["source_candidate_trade_date"] == "2025-03-05"
+
+
+def test_build_targeted_bridge_evidence_ignores_non_bridgeable_suggestions() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "candidate_trade_date": "2025-03-05",
+                "source_id": "tf-source-1",
+                "evidence_snippet": "光通信器件客户导入推进",
+                "as_of_safe": True,
+            }
+        ]
+    )
+    suggestions = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "candidate_trade_date": "2025-03-05",
+                "bridge_family": "optical_communication_components",
+                "supporting_source_ids": "tf-source-1",
+                "bridge_status": "needs_more_source_evidence",
+            }
+        ]
+    )
+
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=queue,
+        evidence=evidence,
+        suggestions=suggestions,
+        run_id="targeted-run",
+    )
+
+    assert bridge_evidence.empty
+
+
+def test_write_targeted_backfill_artifacts_writes_required_files(tmp_path: Path) -> None:
+    audit = pd.DataFrame([{"asset_id": "CN:SZ:300394", "missing_bridge_side": "missing"}])
+    suggestions = pd.DataFrame([{"asset_id": "CN:SZ:300394", "bridge_status": "bridgeable"}])
+    bridge_evidence = pd.DataFrame([{"asset_id": "CN:SZ:300394", "source_id": "bridge"}])
+    combined_evidence = combine_evidence(
+        original_evidence=pd.DataFrame([{"asset_id": "CN:SZ:300394", "source_id": "original"}]),
+        bridge_evidence=bridge_evidence,
+    )
+    review_after = pd.DataFrame([{"asset_id": "CN:SZ:300394", "review_priority": "P3"}])
+    manifest = {"run_id": "targeted-run", "bridge_rows": 1}
+
+    paths = write_targeted_backfill_artifacts(
+        output_dir=tmp_path,
+        audit=audit,
+        suggestions=suggestions,
+        bridge_evidence=bridge_evidence,
+        combined_evidence=combined_evidence,
+        review_after=review_after,
+        promotion_delta_md="# Promotion Delta\n",
+        manifest=manifest,
+    )
+
+    expected_keys = {
+        "targeted_evidence_gap_audit",
+        "product_family_bridge_suggestions",
+        "targeted_backfill_evidence",
+        "combined_evidence_after_targeted_backfill",
+        "quality_review_after_targeted_backfill",
+        "promotion_delta",
+        "manifest",
+    }
+    assert set(paths) == expected_keys
+    for path in paths.values():
+        assert path.exists()
+    assert paths["promotion_delta"].read_text(encoding="utf-8") == "# Promotion Delta\n"
+    assert json.loads(paths["manifest"].read_text(encoding="utf-8")) == manifest

@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date, datetime
+import json
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
+
+from stock_research.tech_bottleneck_evidence_backfill import normalize_evidence_rows
 
 
 TARGET_ASSET_FAMILIES = {
@@ -211,6 +216,139 @@ def build_bridge_suggestions(queue: pd.DataFrame, evidence: pd.DataFrame) -> pd.
     return pd.DataFrame(rows, columns=BRIDGE_SUGGESTION_COLUMNS)
 
 
+def build_targeted_bridge_evidence(
+    *,
+    queue: pd.DataFrame,
+    evidence: pd.DataFrame,
+    suggestions: pd.DataFrame,
+    run_id: str,
+) -> pd.DataFrame:
+    normalized_queue = normalize_p2_mapping_queue(queue)
+    if normalized_queue.empty:
+        return normalize_evidence_rows(pd.DataFrame())
+
+    normalized_suggestions = _copy_with_columns(suggestions, BRIDGE_SUGGESTION_COLUMNS)
+    bridgeable_suggestions = normalized_suggestions[normalized_suggestions["bridge_status"].eq("bridgeable")].copy()
+    if bridgeable_suggestions.empty:
+        return normalize_evidence_rows(pd.DataFrame())
+
+    safe_evidence = _safe_evidence(evidence)
+    if safe_evidence.empty:
+        return normalize_evidence_rows(pd.DataFrame())
+
+    queue_candidates = {
+        (candidate["asset_id"], candidate["candidate_trade_date"], candidate["bridge_family"]): candidate
+        for candidate in normalized_queue.to_dict("records")
+    }
+
+    rows: list[dict[str, Any]] = []
+    for suggestion in bridgeable_suggestions.to_dict("records"):
+        asset_id = _safe_text(suggestion.get("asset_id"))
+        candidate_trade_date = _canonical_date_text(suggestion.get("candidate_trade_date"))
+        family = _safe_text(suggestion.get("bridge_family"))
+        candidate = queue_candidates.get((asset_id, candidate_trade_date, family))
+        if candidate is None or family not in BRIDGE_TARGETS:
+            continue
+
+        source_row = _bridge_source_evidence_row(
+            _candidate_evidence(safe_evidence, candidate),
+            family=family,
+        )
+        if source_row is None:
+            continue
+
+        product_terms = _matched_terms(pd.DataFrame([source_row]), BRIDGE_TARGETS[family]["product_terms"])
+        semantic_terms = _matched_terms(pd.DataFrame([source_row]), BRIDGE_TARGETS[family]["semantic_terms"])
+        rows.append(
+            {
+                "run_id": run_id,
+                "asset_id": candidate["asset_id"],
+                "stock_name": candidate["stock_name"],
+                "candidate_trade_date": candidate["candidate_trade_date"],
+                "as_of_date": candidate["candidate_trade_date"],
+                "evidence_date": _first_text(
+                    source_row,
+                    [
+                        "evidence_date",
+                        "publish_date",
+                        "published_at",
+                        "announcement_date",
+                        "announce_date",
+                        "disclosure_date",
+                    ],
+                ),
+                "source_type": "derived_product_family_bridge",
+                "source_id": f"{candidate['asset_id']}:{candidate['candidate_trade_date']}:{family}:bridge",
+                "source_title": _first_text(source_row, ["source_title", "source_name"]),
+                "source_url": _first_text(source_row, ["source_url", "url"]),
+                "evidence_type": source_row.get("evidence_type"),
+                "matched_keyword": f"{family}:product={_pipe_join(product_terms)};semantic={_pipe_join(semantic_terms)}",
+                "evidence_snippet": _first_text(source_row, ["evidence_snippet", "snippet"]),
+                "source_confidence": "medium",
+                "is_proxy": True,
+                "as_of_safe": True,
+                "metadata_json": {
+                    "bridge_family": family,
+                    "bridge_reason": "product_family_semantic_bridge",
+                    "supporting_source_ids": _split_pipe_text(suggestion.get("supporting_source_ids")),
+                    "source_candidate_trade_date": _canonical_date_text(source_row.get("candidate_trade_date")),
+                },
+            }
+        )
+
+    return normalize_evidence_rows(pd.DataFrame(rows))
+
+
+def combine_evidence(*, original_evidence: pd.DataFrame, bridge_evidence: pd.DataFrame) -> pd.DataFrame:
+    columns = list(original_evidence.columns)
+    columns.extend(column for column in bridge_evidence.columns if column not in columns)
+    return pd.concat(
+        [
+            original_evidence.reindex(columns=columns),
+            bridge_evidence.reindex(columns=columns),
+        ],
+        ignore_index=True,
+        sort=False,
+    )
+
+
+def write_targeted_backfill_artifacts(
+    *,
+    output_dir: Path,
+    audit: pd.DataFrame,
+    suggestions: pd.DataFrame,
+    bridge_evidence: pd.DataFrame,
+    combined_evidence: pd.DataFrame,
+    review_after: pd.DataFrame,
+    promotion_delta_md: str,
+    manifest: dict[str, Any],
+) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "targeted_evidence_gap_audit": output_dir / "targeted_evidence_gap_audit.csv",
+        "product_family_bridge_suggestions": output_dir / "product_family_bridge_suggestions.csv",
+        "targeted_backfill_evidence": output_dir / "targeted_backfill_evidence.csv",
+        "combined_evidence_after_targeted_backfill": output_dir
+        / "combined_evidence_after_targeted_backfill.csv",
+        "quality_review_after_targeted_backfill": output_dir / "quality_review_after_targeted_backfill.csv",
+        "promotion_delta": output_dir / "promotion_delta.md",
+        "manifest": output_dir / "manifest.json",
+    }
+
+    audit.to_csv(paths["targeted_evidence_gap_audit"], index=False)
+    suggestions.to_csv(paths["product_family_bridge_suggestions"], index=False)
+    bridge_evidence.to_csv(paths["targeted_backfill_evidence"], index=False)
+    combined_evidence.to_csv(paths["combined_evidence_after_targeted_backfill"], index=False)
+    review_after.to_csv(paths["quality_review_after_targeted_backfill"], index=False)
+    paths["promotion_delta"].write_text(promotion_delta_md, encoding="utf-8")
+    paths["manifest"].write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    return paths
+
+
 def _copy_with_columns(frame: pd.DataFrame, columns: Iterable[str]) -> pd.DataFrame:
     copied = frame.copy()
     for column in columns:
@@ -290,6 +428,36 @@ def _supporting_source_ids(evidence: pd.DataFrame) -> list[str]:
             seen.add(source_id)
             source_ids.append(source_id)
     return source_ids
+
+
+def _bridge_source_evidence_row(evidence: pd.DataFrame, *, family: str) -> dict[str, object] | None:
+    if evidence.empty:
+        return None
+
+    for row in evidence.to_dict("records"):
+        text = _joined_text(row, BRIDGE_TEXT_COLUMNS)
+        if _contains_any(text, BRIDGE_TARGETS[family]["product_terms"]) and _contains_any(
+            text,
+            BRIDGE_TARGETS[family]["semantic_terms"],
+        ):
+            return row
+    return None
+
+
+def _pipe_join(values: Iterable[str]) -> str:
+    return "|".join(value for value in values if value)
+
+
+def _split_pipe_text(value: object) -> list[str]:
+    return [part for part in _safe_text(value).split("|") if part]
+
+
+def _first_text(row: dict[str, object], columns: Iterable[str]) -> str:
+    for column in columns:
+        text = _safe_text(row.get(column))
+        if text:
+            return text
+    return ""
 
 
 def _joined_frame_text(frame: pd.DataFrame, columns: Iterable[str]) -> str:
