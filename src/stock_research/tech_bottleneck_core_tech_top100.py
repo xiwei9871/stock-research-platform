@@ -58,7 +58,14 @@ def build_baseline_comparison(
 
     comparison = candidates.merge(review, on=JOIN_KEYS, how="left")
     comparison["p3_decision"] = comparison["p3_decision"].fillna("")
-    comparison["top100_increment_status"] = comparison.apply(_increment_status, axis=1)
+    top50_asset_ids = set(candidates.loc[candidates["in_top50_baseline"], "asset_id"])
+    baseline_ids = set(baseline["asset_id"]) if "asset_id" in baseline else set()
+    existing_asset_ids = top50_asset_ids | baseline_ids
+    comparison["top100_increment_status"] = comparison.apply(
+        _increment_status,
+        axis=1,
+        existing_asset_ids=existing_asset_ids,
+    )
     diff = comparison[~comparison["in_top50_baseline"]].copy().reset_index(drop=True)
     manifest = _manifest(comparison, diff, baseline)
     markdown = _render_markdown(manifest, diff)
@@ -164,9 +171,11 @@ def _normalize_baseline_promotions(baseline_promotions: pd.DataFrame) -> pd.Data
     return normalized
 
 
-def _increment_status(row: pd.Series) -> str:
+def _increment_status(row: pd.Series, *, existing_asset_ids: set[str] | None = None) -> str:
     if _as_bool(row.get("in_top50_baseline")):
         return "top50_baseline_row"
+    if str(row.get("asset_id", "")) in (existing_asset_ids or set()):
+        return "existing_top50_or_baseline_asset"
     decision = str(row.get("p3_decision", ""))
     if decision in P1_DECISIONS:
         return "new_p1_auto_promotion"
@@ -216,6 +225,16 @@ def _names_for_status(diff: pd.DataFrame, status: str) -> str:
 def _normalize_date(value: Any) -> str:
     if pd.isna(value):
         return ""
+    if isinstance(value, int) and not isinstance(value, bool):
+        parsed_compact = pd.to_datetime(str(value), format="%Y%m%d", errors="coerce")
+        if not pd.isna(parsed_compact):
+            return parsed_compact.strftime("%Y-%m-%d")
+    if isinstance(value, str):
+        compact_value = value.strip()
+        if len(compact_value) == 8 and compact_value.isdigit():
+            parsed_compact = pd.to_datetime(compact_value, format="%Y%m%d", errors="coerce")
+            if not pd.isna(parsed_compact):
+                return parsed_compact.strftime("%Y-%m-%d")
     parsed = pd.to_datetime(value, errors="coerce")
     if pd.isna(parsed):
         return str(value)

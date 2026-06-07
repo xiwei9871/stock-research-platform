@@ -38,6 +38,22 @@ def test_top100_selection_keeps_top100_per_date_and_marks_top50_boundary() -> No
     assert "CN:SH:000105" not in set(candidates["asset_id"])
 
 
+def test_top100_selection_normalizes_integer_yyyymmdd_dates_and_ranks_by_date() -> None:
+    score_rows = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688002", "stock_name": "低分", "trade_date": 20260605, "score": 10},
+            {"asset_id": "CN:SH:688001", "stock_name": "高分", "trade_date": 20260605, "score": 20},
+            {"asset_id": "CN:SH:688003", "stock_name": "次日", "trade_date": 20260606, "score": 30},
+        ]
+    )
+
+    candidates = build_weekly_topn_candidates(score_rows=score_rows, top_n=100)
+
+    assert candidates["trade_date"].tolist() == ["2026-06-05", "2026-06-05", "2026-06-06"]
+    assert candidates["asset_id"].tolist() == ["CN:SH:688001", "CN:SH:688002", "CN:SH:688003"]
+    assert candidates["rank"].tolist() == [1, 2, 1]
+
+
 def test_baseline_comparison_reports_new_top100_p1_p2_names_from_ranks_51_100() -> None:
     top100_candidates = pd.DataFrame(
         [
@@ -107,6 +123,56 @@ def test_baseline_comparison_reports_new_top100_p1_p2_names_from_ranks_51_100() 
     assert outputs["manifest"]["new_p2_from_rank_51_100"] == 2
     assert "- New P1 from ranks 51-100: 1 (新增P1)" in outputs["baseline_comparison_md"]
     assert "- New P2 from ranks 51-100: 2 (新增P2证据, 新增P2映射)" in outputs["baseline_comparison_md"]
+
+
+def test_rank_51_100_increment_counts_exclude_top50_cohort_and_baseline_assets() -> None:
+    top100_candidates = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688040", "stock_name": "A", "trade_date": "2026-06-05", "rank": 40},
+            {"asset_id": "CN:SH:688040", "stock_name": "A", "trade_date": "2026-06-12", "rank": 70},
+            {"asset_id": "CN:SH:688075", "stock_name": "B", "trade_date": "2026-06-12", "rank": 75},
+            {"asset_id": "CN:SH:688080", "stock_name": "基线", "trade_date": "2026-06-12", "rank": 80},
+        ]
+    )
+    quality_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688040",
+                "stock_name": "A",
+                "trade_date": "2026-06-12",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "CN:SH:688075",
+                "stock_name": "B",
+                "trade_date": "2026-06-12",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "CN:SH:688080",
+                "stock_name": "基线",
+                "trade_date": "2026-06-12",
+                "p3_decision": "auto_approve",
+            },
+        ]
+    )
+    baseline_promotions = pd.DataFrame(
+        [{"asset_id": "CN:SH:688080", "stock_name": "基线", "trade_date": "2026-06-05"}]
+    )
+
+    outputs = build_baseline_comparison(
+        top100_candidates=top100_candidates,
+        quality_review=quality_review,
+        baseline_promotions=baseline_promotions,
+    )
+
+    diff = outputs["top50_vs_top100_diff"].set_index("asset_id")
+    assert diff.loc["CN:SH:688040", "top100_increment_status"] == "existing_top50_or_baseline_asset"
+    assert diff.loc["CN:SH:688075", "top100_increment_status"] == "new_p1_auto_promotion"
+    assert diff.loc["CN:SH:688080", "top100_increment_status"] == "existing_top50_or_baseline_asset"
+    assert outputs["manifest"]["new_p1_from_rank_51_100"] == 1
+    assert outputs["manifest"]["new_p2_from_rank_51_100"] == 0
+    assert "- New P1 from ranks 51-100: 1 (B)" in outputs["baseline_comparison_md"]
 
 
 def test_file_runner_writes_artifacts_and_manifest_counts(tmp_path: Path) -> None:
