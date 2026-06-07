@@ -176,7 +176,11 @@ def build_bridge_suggestions(queue: pd.DataFrame, evidence: pd.DataFrame) -> pd.
         bridge_targets = BRIDGE_TARGETS[family]
         matched_product_terms = _matched_terms(candidate_evidence, bridge_targets["product_terms"])
         matched_semantic_terms = _matched_terms(candidate_evidence, bridge_targets["semantic_terms"])
-        supporting_source_ids = _supporting_source_ids(candidate_evidence)
+        supporting_evidence = _bridge_supporting_evidence(
+            candidate_evidence,
+            [*bridge_targets["product_terms"], *bridge_targets["semantic_terms"]],
+        )
+        supporting_source_ids = _supporting_source_ids(supporting_evidence)
 
         rows.append(
             {
@@ -240,6 +244,15 @@ def _missing_bridge_side(*, product_count: int, bottleneck_count: int, technical
 def _matched_terms(evidence: pd.DataFrame, terms: Iterable[str]) -> list[str]:
     text = _joined_frame_text(evidence, BRIDGE_TEXT_COLUMNS)
     return [term for term in terms if term in text]
+
+
+def _bridge_supporting_evidence(evidence: pd.DataFrame, terms: Iterable[str]) -> pd.DataFrame:
+    if evidence.empty:
+        return evidence
+
+    return evidence[
+        evidence.apply(lambda row: _contains_any(_joined_text(row.to_dict(), BRIDGE_TEXT_COLUMNS), terms), axis=1)
+    ].copy()
 
 
 def _supporting_source_ids(evidence: pd.DataFrame) -> list[str]:

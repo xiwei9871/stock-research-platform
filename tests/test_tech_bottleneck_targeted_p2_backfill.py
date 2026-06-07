@@ -210,3 +210,38 @@ def test_build_bridge_suggestions_requires_product_and_semantic_terms() -> None:
     assert product_only["matched_product_terms"] == "光模块"
     assert product_only["matched_semantic_terms"] == ""
     assert product_only["bridge_status"] == "needs_more_source_evidence"
+
+
+def test_build_bridge_suggestions_limits_supporting_sources_to_matching_evidence() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "stock_name": "洁美科技",
+                "trade_date": "2025-01-20",
+                "review_priority": "P2_mapping_review",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "candidate_trade_date": "2025-01-20",
+                "source_id": "supporting",
+                "evidence_snippet": "载带产品推进半导体封装客户认证",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:002859",
+                "candidate_trade_date": "2025-01-20",
+                "source_id": "irrelevant",
+                "evidence_snippet": "办公楼租赁合同续签",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    suggestions = build_bridge_suggestions(queue, evidence)
+
+    assert suggestions.iloc[0]["supporting_source_ids"] == "supporting"
