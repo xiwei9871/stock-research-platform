@@ -47,3 +47,18 @@ def test_build_regime_features_smooths_daily_emotion_and_preserves_schema() -> N
     assert int(last["risk_high_days_5d"]) == 1
     assert int(last["hot_or_euphoria_days_5d"]) == 2
     assert int(last["panic_or_cold_days_5d"]) == 1
+
+
+def test_build_regime_features_normalizes_mixed_date_formats_and_drops_invalid_dates() -> None:
+    emotion = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-02", "emotion_score": 50},
+            {"trade_date": "2026/01/03", "emotion_score": 55},
+            {"trade_date": "20260104", "emotion_score": 60},
+            {"trade_date": "bad-date", "emotion_score": 65},
+        ]
+    )
+
+    result = build_market_regime_confirmation_from_frames(emotion)
+
+    assert result["trade_date"].tolist() == ["2026-01-02", "2026-01-03", "2026-01-04"]
