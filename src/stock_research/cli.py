@@ -160,8 +160,6 @@ from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
-from stock_research.tech_bottleneck_core_tech_gate import run_core_tech_gate_from_files
-from stock_research.tech_bottleneck_core_tech_top100 import run_core_tech_top100_from_files
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
 from stock_research.tech_bottleneck_observation_outcome import run_observation_outcome_from_files
@@ -4877,6 +4875,8 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-core-tech-gate":
+        from stock_research.tech_bottleneck_core_tech_gate import run_core_tech_gate_from_files
+
         paths = run_core_tech_gate_from_files(
             candidates_csv=Path(args.candidates_csv),
             evidence_csv=Path(args.evidence_csv) if args.evidence_csv else None,
@@ -4884,6 +4884,8 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-core-tech-top100":
+        from stock_research.tech_bottleneck_core_tech_top100 import run_core_tech_top100_from_files
+
         paths = run_core_tech_top100_from_files(
             scores_csv=Path(args.scores_csv),
             quality_review_csv=Path(args.quality_review_csv),

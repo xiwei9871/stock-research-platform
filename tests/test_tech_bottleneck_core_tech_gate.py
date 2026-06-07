@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import stock_research.tech_bottleneck_core_tech_gate as core_tech_gate_module
 from stock_research.cli import build_parser, main_for_args
 from stock_research.tech_bottleneck_core_tech_gate import (
     build_core_tech_gate,
@@ -393,7 +394,7 @@ def test_cli_dispatches_core_tech_gate(monkeypatch, capsys) -> None:
         calls["runner_kwargs"] = kwargs
         return {"gate": Path("out/core_tech_gate.csv")}
 
-    monkeypatch.setattr("stock_research.cli.run_core_tech_gate_from_files", fake_runner)
+    monkeypatch.setattr(core_tech_gate_module, "run_core_tech_gate_from_files", fake_runner)
 
     main_for_args(
         [
@@ -423,7 +424,7 @@ def test_cli_dispatches_core_tech_gate_without_evidence_csv(monkeypatch, capsys)
         calls["runner_kwargs"] = kwargs
         return {"gate": Path("out/core_tech_gate.csv")}
 
-    monkeypatch.setattr("stock_research.cli.run_core_tech_gate_from_files", fake_runner)
+    monkeypatch.setattr(core_tech_gate_module, "run_core_tech_gate_from_files", fake_runner)
 
     main_for_args(
         [

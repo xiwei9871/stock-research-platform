@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import stock_research.tech_bottleneck_core_tech_top100 as core_tech_top100_module
 from stock_research.cli import build_parser, main_for_args
 from stock_research.tech_bottleneck_core_tech_top100 import (
     build_baseline_comparison,
@@ -415,7 +416,7 @@ def test_cli_dispatches_core_tech_top100(monkeypatch, capsys) -> None:
         calls["runner_kwargs"] = kwargs
         return {"candidates_top100": Path("out/candidates_top100.csv")}
 
-    monkeypatch.setattr("stock_research.cli.run_core_tech_top100_from_files", fake_runner)
+    monkeypatch.setattr(core_tech_top100_module, "run_core_tech_top100_from_files", fake_runner)
 
     main_for_args(
         [
