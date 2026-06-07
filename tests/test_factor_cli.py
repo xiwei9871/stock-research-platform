@@ -77,6 +77,24 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.exact_window is True
 
 
+def test_cli_accepts_run_stock_daily_data_pipeline_command():
+    args = build_parser().parse_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert args.command == "run-stock-daily-data-pipeline"
+    assert args.trade_date == "2026-06-05"
+    assert args.output_dir == "outputs/daily/20260605"
+    assert args.no_feishu is True
+
+
 def test_cli_accepts_report_delivery_local_command():
     args = build_parser().parse_args(
         [
@@ -1144,6 +1162,8 @@ def test_cli_accepts_daily_incremental_command():
             "stock_qfq",
             "--industry-system",
             "sw",
+            "--label-start-date",
+            "2026-03-07",
             "--start-at",
             "build_factor_daily",
             "--dry-run",
@@ -1158,6 +1178,7 @@ def test_cli_accepts_daily_incremental_command():
     assert args.adjust_type == "qfq"
     assert args.source_service == "stock_qfq"
     assert args.industry_system == "sw"
+    assert args.label_start_date == "2026-03-07"
     assert args.start_at == "build_factor_daily"
     assert args.only_step is None
     assert args.dry_run is True
@@ -5253,6 +5274,112 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
     ]
 
 
+def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-05",
+            "output_dir": "outputs/daily/20260605",
+            "feishu_sender": None,
+            "send_feishu": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        lambda **kwargs: {"status": "partial_failed"},
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main_for_args(
+            [
+                "run-stock-daily-data-pipeline",
+                "--trade-date",
+                "2026-06-05",
+                "--output-dir",
+                "outputs/daily/20260605",
+                "--no-feishu",
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|partial_failed",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_wires_feishu_sender(monkeypatch, capsys):
+    sent_messages = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        kwargs["feishu_sender"]("hello")
+        return {"status": "success"}
+
+    def fake_send_openclaw_feishu_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+    monkeypatch.setattr(cli, "send_openclaw_feishu_message", fake_send_openclaw_feishu_message)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--feishu-target",
+            "chat:test",
+            "--feishu-account",
+            "jarvis",
+            "--openclaw-bin",
+            "openclaw-test",
+        ]
+    )
+
+    assert sent_messages == [
+        {
+            "message": "hello",
+            "target": "chat:test",
+            "account": "jarvis",
+            "openclaw_bin": "openclaw-test",
+            "dry_run": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
 def test_daily_incremental_cli_prints_step_status(monkeypatch, capsys):
     import sys
 
@@ -5325,6 +5452,8 @@ def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch,
             "run-daily-incremental",
             "--trade-date",
             "2026-05-12",
+            "--label-start-date",
+            "2026-03-07",
             "--start-at",
             "build_factor_daily",
         ],
@@ -5335,6 +5464,7 @@ def test_daily_incremental_cli_uses_default_runners_for_non_dry_run(monkeypatch,
     assert calls[0] == "runners"
     assert "sync_core_assets" in calls[1]["step_runners"]
     assert calls[1]["start_at"] == "build_factor_daily"
+    assert calls[1]["label_start_date"] == "2026-03-07"
     assert calls[1]["dry_run"] is False
     assert calls[1]["freshness_checker"] is None
     assert capsys.readouterr().out.splitlines() == [
@@ -6853,3 +6983,125 @@ def test_sync_asset_lifecycle_cli_prints_count(monkeypatch, capsys):
     cli.main()
 
     assert capsys.readouterr().out.strip() == "asset_lifecycle_synced|rows|100"
+
+
+def test_cli_accepts_free_enrichment_backfill_command():
+    args = build_parser().parse_args(
+        [
+            "free-enrichment-backfill",
+            "--dataset",
+            "holder",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+            "--output-dir",
+            "outputs/free",
+            "--batch-size",
+            "25",
+            "--sleep-seconds",
+            "0.25",
+            "--limit",
+            "7",
+            "--dry-run",
+            "--service",
+            "research_test",
+        ]
+    )
+
+    assert args.command == "free-enrichment-backfill"
+    assert args.dataset == "holder"
+    assert args.start_date == "2026-05-01"
+    assert args.end_date == "2026-05-31"
+    assert args.output_dir == "outputs/free"
+    assert args.batch_size == 25
+    assert args.sleep_seconds == 0.25
+    assert args.limit == 7
+    assert args.dry_run is True
+    assert args.service == "research_test"
+
+    default_args = build_parser().parse_args(
+        [
+            "free-enrichment-backfill",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+        ]
+    )
+
+    assert default_args.dataset == "all"
+    assert default_args.output_dir == "/Users/xiwei/stock_research/outputs/research/free_enrichment"
+    assert default_args.batch_size == 100
+    assert default_args.sleep_seconds == 1.0
+    assert default_args.limit is None
+    assert default_args.dry_run is False
+    assert default_args.service == cli.SETTINGS.research_service
+
+
+def test_free_enrichment_backfill_cli_dispatches_and_prints_artifacts(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+
+    def fake_run_free_enrichment_backfill(**kwargs):
+        calls.append(kwargs)
+        print("free_enrichment_batch|dataset=holder|batch=1/1")
+        return {
+            "summary_path": "outputs/free/run_summary.json",
+            "coverage_path": "outputs/free/dataset_coverage.csv",
+            "failures_path": "outputs/free/dataset_failures.csv",
+            "results": [object(), object()],
+        }
+
+    monkeypatch.setattr(cli, "run_free_enrichment_backfill", fake_run_free_enrichment_backfill)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "free-enrichment-backfill",
+            "--dataset",
+            "holder",
+            "--start-date",
+            "2026-05-01",
+            "--end-date",
+            "2026-05-31",
+            "--output-dir",
+            "outputs/free",
+            "--batch-size",
+            "25",
+            "--sleep-seconds",
+            "0.25",
+            "--limit",
+            "7",
+            "--dry-run",
+            "--service",
+            "research_test",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "dataset": "holder",
+            "start_date": "2026-05-01",
+            "end_date": "2026-05-31",
+            "output_dir": "outputs/free",
+            "batch_size": 25,
+            "sleep_seconds": 0.25,
+            "limit": 7,
+            "dry_run": True,
+            "service": "research_test",
+        }
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "free_enrichment_batch|dataset=holder|batch=1/1",
+        "free_enrichment_backfill|summary|outputs/free/run_summary.json",
+        "free_enrichment_backfill|coverage|outputs/free/dataset_coverage.csv",
+        "free_enrichment_backfill|failures|outputs/free/dataset_failures.csv",
+        "free_enrichment_backfill|datasets|2",
+    ]

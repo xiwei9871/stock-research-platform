@@ -32,11 +32,14 @@ CREATE SCHEMA IF NOT EXISTS raw_baostock;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS finance;
+CREATE SCHEMA IF NOT EXISTS fundamental;
+CREATE SCHEMA IF NOT EXISTS event;
 CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS research;
 CREATE SCHEMA IF NOT EXISTS simulation;
 """
 
@@ -238,12 +241,186 @@ CREATE SCHEMA IF NOT EXISTS raw_baostock;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS finance;
+CREATE SCHEMA IF NOT EXISTS fundamental;
+CREATE SCHEMA IF NOT EXISTS event;
 CREATE SCHEMA IF NOT EXISTS market;
 CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS research;
 CREATE SCHEMA IF NOT EXISTS simulation;
+
+CREATE TABLE IF NOT EXISTS research.stock_report_source (
+    report_id text PRIMARY KEY,
+    source_type text NOT NULL,
+    source_name text,
+    broker text,
+    analyst text,
+    report_title text NOT NULL,
+    publish_date date,
+    source_url text NOT NULL,
+    public_access boolean NOT NULL DEFAULT true,
+    copyright_note text,
+    source_confidence numeric,
+    raw_summary text,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_event (
+    report_id text NOT NULL REFERENCES research.stock_report_source(report_id) ON DELETE CASCADE,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    report_date date,
+    rating text,
+    rating_change text,
+    target_price numeric,
+    target_upside numeric,
+    forecast_revenue text,
+    forecast_profit text,
+    industry_view text,
+    company_view text,
+    risk_summary text,
+    effective_start_date date,
+    effective_end_date date,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (report_id, ts_code)
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_manual_review (
+    review_id text PRIMARY KEY,
+    report_id text REFERENCES research.stock_report_source(report_id) ON DELETE SET NULL,
+    trade_date date,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    candidate_source text NOT NULL,
+    candidate_rank integer,
+    mid_trend_funnel_score numeric,
+    fundamental_hard_risk text,
+    research_view text,
+    broker_report_count_90d integer,
+    latest_rating text,
+    target_price numeric,
+    target_upside numeric,
+    institution_names text,
+    industry_position_note text,
+    product_position_note text,
+    moat_or_scarcity_note text,
+    negative_research_note text,
+    valuation_note text,
+    evidence_summary text,
+    confidence text,
+    review_status text NOT NULL DEFAULT 'pending',
+    human_reviewer text,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_search_task (
+    task_id text PRIMARY KEY,
+    trade_date date NOT NULL,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    candidate_rank integer,
+    query_type text NOT NULL,
+    source_domain text NOT NULL,
+    search_query text NOT NULL,
+    search_url text NOT NULL,
+    priority integer NOT NULL DEFAULT 100,
+    status text NOT NULL DEFAULT 'pending',
+    last_error text,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_feature_daily (
+    trade_date date NOT NULL,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    report_count_30d integer NOT NULL DEFAULT 0,
+    report_count_90d integer NOT NULL DEFAULT 0,
+    latest_report_days integer,
+    positive_rating_count integer NOT NULL DEFAULT 0,
+    rating_upgrade_count integer NOT NULL DEFAULT 0,
+    target_price_median numeric,
+    target_upside_median numeric,
+    target_price_dispersion numeric,
+    broker_coverage_count integer NOT NULL DEFAULT 0,
+    top_broker_coverage_count integer NOT NULL DEFAULT 0,
+    negative_report_flag boolean NOT NULL DEFAULT false,
+    research_support_score numeric,
+    source_count integer NOT NULL DEFAULT 0,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, ts_code)
+);
+
+CREATE TABLE IF NOT EXISTS research.news_event_source (
+    source_event_id text PRIMARY KEY,
+    source_name text NOT NULL,
+    source_channel text,
+    title text NOT NULL,
+    content text,
+    published_at timestamptz NOT NULL,
+    collected_at timestamptz NOT NULL DEFAULT now(),
+    language text NOT NULL DEFAULT 'zh',
+    url text,
+    hash_key text NOT NULL,
+    source_status text NOT NULL CHECK (source_status IN ('available', 'permission_denied', 'disabled')),
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS research.news_event_mention (
+    mention_id bigserial PRIMARY KEY,
+    source_event_id text NOT NULL REFERENCES research.news_event_source(source_event_id),
+    asset_id text,
+    ts_code text,
+    stock_name text,
+    mention_role text,
+    mention_confidence double precision,
+    theme_name text,
+    theme_confidence double precision,
+    mapping_method text NOT NULL,
+    trade_date date
+);
+
+CREATE TABLE IF NOT EXISTS research.news_feature_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    ts_code text,
+    news_count_1d integer NOT NULL DEFAULT 0,
+    news_count_3d integer NOT NULL DEFAULT 0,
+    news_count_5d integer NOT NULL DEFAULT 0,
+    major_news_count_3d integer NOT NULL DEFAULT 0,
+    source_diversity_3d integer NOT NULL DEFAULT 0,
+    overnight_news_count integer NOT NULL DEFAULT 0,
+    preopen_news_count integer NOT NULL DEFAULT 0,
+    headline_keyword_positive_count_3d integer NOT NULL DEFAULT 0,
+    headline_keyword_risk_count_3d integer NOT NULL DEFAULT 0,
+    theme_news_burst_flag boolean NOT NULL DEFAULT false,
+    news_first_seen_gap integer,
+    news_attention_level text NOT NULL DEFAULT 'low',
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (trade_date, asset_id)
+);
 
 CREATE TABLE IF NOT EXISTS core.asset_master (
     asset_id text PRIMARY KEY,
@@ -539,6 +716,171 @@ CREATE TABLE IF NOT EXISTS raw_akshare.finance_payload (
     payload jsonb NOT NULL,
     fetched_at timestamptz NOT NULL DEFAULT now(),
     payload_hash text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS raw_akshare.enrichment_payload (
+    id bigserial PRIMARY KEY,
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    asset_id text,
+    ts_code text,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.shareholder_count (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_date date NOT NULL,
+    announcement_date date,
+    shareholder_count numeric,
+    shareholder_count_change numeric,
+    shareholder_count_change_pct numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_date, source)
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.top10_holder (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    holder_name text NOT NULL,
+    holder_type text,
+    hold_amount numeric,
+    hold_ratio numeric,
+    hold_change numeric,
+    rank integer,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, holder_name, source)
+);
+
+CREATE TABLE IF NOT EXISTS fundamental.top10_float_holder (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    holder_name text NOT NULL,
+    holder_type text,
+    hold_amount numeric,
+    hold_ratio numeric,
+    hold_change numeric,
+    rank integer,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, holder_name, source)
+);
+
+CREATE TABLE IF NOT EXISTS event.shareholder_trade (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date,
+    announcement_date date,
+    holder_name text,
+    trade_type text,
+    trade_amount numeric,
+    trade_ratio numeric,
+    trade_price numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.stock_repurchase (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date,
+    progress_date date,
+    progress text,
+    repurchase_amount numeric,
+    repurchase_amount_min numeric,
+    repurchase_amount_max numeric,
+    repurchase_price_min numeric,
+    repurchase_price_max numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.institution_survey (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    survey_date date,
+    announcement_date date,
+    institution_count numeric,
+    institution_names text,
+    survey_type text,
+    summary text,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.earnings_forecast (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date NOT NULL,
+    report_period date,
+    forecast_type text,
+    forecast_np_min numeric,
+    forecast_np_max numeric,
+    forecast_np_change_min numeric,
+    forecast_np_change_max numeric,
+    summary text,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS event.earnings_express (
+    event_id text PRIMARY KEY,
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    announcement_date date NOT NULL,
+    report_period date,
+    revenue numeric,
+    revenue_yoy numeric,
+    np_parent numeric,
+    np_parent_yoy numeric,
+    eps_basic numeric,
+    roe_weighted numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS finance.main_business_composition (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    report_period date NOT NULL,
+    classify_type text NOT NULL,
+    item_name text NOT NULL,
+    revenue numeric,
+    revenue_ratio numeric,
+    cost numeric,
+    gross_profit numeric,
+    gross_margin numeric,
+    source text NOT NULL,
+    source_endpoint text NOT NULL,
+    payload_hash text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, report_period, classify_type, item_name, source)
 );
 
 CREATE TABLE IF NOT EXISTS raw_baostock.finance_payload (
@@ -1546,6 +1888,30 @@ CREATE INDEX IF NOT EXISTS idx_finance_balance_sheet_pit
 CREATE INDEX IF NOT EXISTS idx_finance_cash_flow_pit
     ON finance.cash_flow (asset_id, announcement_date DESC, report_period DESC);
 
+CREATE INDEX IF NOT EXISTS idx_raw_akshare_enrichment_payload_endpoint
+    ON raw_akshare.enrichment_payload (source_endpoint, fetched_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fundamental_shareholder_count_asset_date
+    ON fundamental.shareholder_count (asset_id, report_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_shareholder_trade_asset_date
+    ON event.shareholder_trade (asset_id, trade_date DESC, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_stock_repurchase_asset_date
+    ON event.stock_repurchase (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_institution_survey_asset_date
+    ON event.institution_survey (asset_id, survey_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_earnings_forecast_asset_date
+    ON event.earnings_forecast (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_event_earnings_express_asset_date
+    ON event.earnings_express (asset_id, announcement_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_finance_main_business_composition_asset_period
+    ON finance.main_business_composition (asset_id, report_period DESC);
+
 CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
     ON core.industry_membership (asset_id, industry_system, start_date, end_date);
 
@@ -1671,6 +2037,30 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_watchlist_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_watchlist_source_replay
     ON ops.operator_shadow_watchlist_candidate (replay_result_id, source_p11_replay_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_source_publish
+    ON research.stock_report_source (publish_date DESC, source_type);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_event_asset_date
+    ON research.stock_report_event (ts_code, report_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_manual_review_status
+    ON research.stock_report_manual_review (review_status, trade_date DESC, candidate_rank);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_manual_review_asset
+    ON research.stock_report_manual_review (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_search_task_status
+    ON research.stock_report_search_task (status, trade_date DESC, priority, source_domain);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_search_task_asset
+    ON research.stock_report_search_task (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_feature_daily_score
+    ON research.stock_report_feature_daily (trade_date DESC, research_support_score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_feature_daily_asset
+    ON research.stock_report_feature_daily (ts_code, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_outcome_run_date
     ON ops.operator_shadow_watchlist_outcome_run (review_date DESC, updated_at DESC);

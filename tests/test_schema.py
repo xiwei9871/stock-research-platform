@@ -69,6 +69,50 @@ def test_research_extension_creates_watchlist_tables():
     assert "CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal" in sql
 
 
+def test_research_extension_creates_stock_report_research_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE SCHEMA IF NOT EXISTS research;" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_source" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_event" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_manual_review" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_search_task" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_feature_daily" in sql
+    assert "report_id text PRIMARY KEY" in sql
+    assert "source_url text NOT NULL" in sql
+    assert "target_price numeric" in sql
+    assert "moat_or_scarcity_note text" in sql
+    assert "research_support_score numeric" in sql
+    assert "auto_trade_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_research_stock_report_event_asset_date" in sql
+    assert "idx_research_stock_report_manual_review_status" in sql
+    assert "idx_research_stock_report_search_task_status" in sql
+    assert "idx_research_stock_report_feature_daily_score" in sql
+
+
+def test_research_extension_includes_free_enrichment_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE SCHEMA IF NOT EXISTS fundamental;" in sql
+    assert "CREATE SCHEMA IF NOT EXISTS event;" in sql
+    assert "CREATE TABLE IF NOT EXISTS raw_akshare.enrichment_payload" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.shareholder_count" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.top10_holder" in sql
+    assert "CREATE TABLE IF NOT EXISTS fundamental.top10_float_holder" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.shareholder_trade" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.stock_repurchase" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.institution_survey" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.earnings_forecast" in sql
+    assert "CREATE TABLE IF NOT EXISTS event.earnings_express" in sql
+    assert "CREATE TABLE IF NOT EXISTS finance.main_business_composition" in sql
+    assert "payload_hash text NOT NULL" in sql
+    assert "UNIQUE (source_endpoint, payload_hash)" not in sql
+    assert "idx_raw_akshare_enrichment_payload_endpoint" in sql
+    assert "idx_event_shareholder_trade_asset_date" in sql
+    assert "idx_event_stock_repurchase_asset_date" in sql
+    assert "idx_finance_main_business_composition_asset_period" in sql
+
+
 def test_research_extension_includes_unified_stock_minute_bar_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS market.stock_minute_bar" in sql

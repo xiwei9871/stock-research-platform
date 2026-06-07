@@ -1,4 +1,5 @@
 import datetime as dt
+from contextlib import contextmanager
 
 from stock_research import minute_backfill
 from stock_research.minute_backfill import (
@@ -26,6 +27,11 @@ def asset_rows():
         {"asset_id": "CN:SH:600000", "ts_code": "600000.SH", "baostock_code": "sh.600000"},
         {"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "baostock_code": "sz.000001"},
     ]
+
+
+@contextmanager
+def fake_connect(service):
+    yield FakeConnection()
 
 
 def test_month_ranges_split_date_window_by_calendar_month():
@@ -80,6 +86,10 @@ def test_run_backfill_skips_success_jobs_and_executes_pending(monkeypatch):
         },
     ]
 
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
     monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: [jobs[1]])
     monkeypatch.setattr(minute_backfill, "mark_job_success", lambda job_id, row_count_market, row_count_staging: marked.append(("success", job_id, row_count_market, row_count_staging)))
     monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda job_id, error: marked.append(("failed", job_id, error)))
@@ -124,7 +134,10 @@ def test_run_backfill_retries_failed_jobs_only_when_enabled(monkeypatch):
         seen_retry_flags.append(kwargs["retry_failed"])
         return []
 
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
     monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
     monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", fake_claim_backfill_jobs)
 
     minute_backfill.run_baostock_minute_backfill(max_jobs=5, retry_failed=False)
@@ -135,7 +148,10 @@ def test_run_backfill_retries_failed_jobs_only_when_enabled(monkeypatch):
 
 def test_run_backfill_resets_stale_running_jobs_before_claim(monkeypatch):
     calls = []
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
     monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: calls.append("reset") or 1)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
     monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: calls.append("claim") or [])
 
     minute_backfill.run_baostock_minute_backfill(max_jobs=1)
@@ -145,7 +161,10 @@ def test_run_backfill_resets_stale_running_jobs_before_claim(monkeypatch):
 
 def test_run_backfill_can_skip_internal_stale_reset(monkeypatch):
     calls = []
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
     monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: calls.append("reset") or 1)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
     monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: calls.append("claim") or [])
 
     minute_backfill.run_baostock_minute_backfill(max_jobs=1, reset_stale_before_run=False)
@@ -196,6 +215,8 @@ def test_run_backfill_parallel_workers_aggregate_results(monkeypatch):
         def submit(self, fn, job, sleep_seconds):
             return FakeFuture(fn(job, sleep_seconds))
 
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
     monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: jobs)
     monkeypatch.setattr(minute_backfill, "mark_job_success", lambda job_id, row_count_market, row_count_staging: marked.append(("success", job_id, row_count_market, row_count_staging)))
     monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda job_id, error: marked.append(("failed", job_id, error)))

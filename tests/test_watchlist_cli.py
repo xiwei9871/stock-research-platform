@@ -299,6 +299,8 @@ def test_review_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, cap
         return {
             "detail_csv_path": "/tmp/watchlist_effectiveness_detail.csv",
             "summary_csv_path": "/tmp/watchlist_effectiveness_summary.csv",
+            "short_horizon_summary_csv_path": "/tmp/watchlist_short_horizon_summary.csv",
+            "strong_winner_horizon_summary_csv_path": "/tmp/watchlist_strong_winner_horizon_summary.csv",
             "markdown_path": "/tmp/watchlist_effectiveness.md",
         }
 
@@ -324,6 +326,8 @@ def test_review_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, cap
     lines = capsys.readouterr().out.splitlines()
     assert "watchlist_effectiveness|detail_csv|/tmp/watchlist_effectiveness_detail.csv" in lines
     assert "watchlist_effectiveness|summary_csv|/tmp/watchlist_effectiveness_summary.csv" in lines
+    assert "watchlist_effectiveness|short_horizon_summary_csv|/tmp/watchlist_short_horizon_summary.csv" in lines
+    assert "watchlist_effectiveness|strong_winner_horizon_summary_csv|/tmp/watchlist_strong_winner_horizon_summary.csv" in lines
     assert "watchlist_effectiveness|markdown|/tmp/watchlist_effectiveness.md" in lines
     assert calls["run"] == {
         "diagnostics_dir": "/tmp/diag",
@@ -477,6 +481,15 @@ def test_build_watchlist_diagnostics_snapshot_orchestrates_top_scores_and_inputs
     monkeypatch.setattr("stock_research.watchlist.workflow.load_top_scores", fake_load_top_scores)
     monkeypatch.setattr("stock_research.watchlist.workflow.load_feature_snapshot", fake_load_feature_snapshot)
     monkeypatch.setattr("stock_research.watchlist.workflow.build_watchlist_diagnostics", fake_build_watchlist_diagnostics)
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_asset_identity_map",
+        lambda asset_ids: pd.DataFrame(
+            [
+                {"asset_id": "A", "ts_code": "000001.SZ", "stock_name": "Alpha"},
+                {"asset_id": "B", "ts_code": "000002.SZ", "stock_name": "Beta"},
+            ]
+        ),
+    )
     monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_lhb_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_event_frame", lambda **kwargs: pd.DataFrame())
