@@ -651,6 +651,62 @@ def test_build_targeted_bridge_evidence_dedupes_duplicate_bridgeable_suggestions
     ]
 
 
+def test_build_targeted_bridge_evidence_rejects_risk_disclosure_sources() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300567",
+                "stock_name": "精测电子",
+                "trade_date": "2025-12-31",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300567",
+                "candidate_trade_date": "2025-12-31",
+                "source_id": "risk-row",
+                "evidence_type": "invalidation",
+                "evidence_snippet": "面板检测行业竞争加剧、半导体业务验证进展不及预期风险。",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:300567",
+                "candidate_trade_date": "2025-12-31",
+                "source_id": "product-only",
+                "evidence_type": "product_revenue_exposure",
+                "evidence_snippet": "公司面板检测业务收入增长。",
+                "as_of_safe": True,
+            },
+        ]
+    )
+    suggestions = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300567",
+                "stock_name": "精测电子",
+                "candidate_trade_date": "2025-12-31",
+                "bridge_family": "semiconductor_testing_metrology",
+                "matched_product_terms": "面板检测",
+                "matched_semantic_terms": "半导体",
+                "supporting_source_ids": "risk-row|product-only",
+                "bridge_status": "bridgeable",
+            }
+        ]
+    )
+
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=queue,
+        evidence=evidence,
+        suggestions=suggestions,
+        run_id="targeted-run",
+    )
+
+    assert bridge_evidence.empty
+
+
 def test_empty_targeted_bridge_evidence_has_normalized_evidence_schema() -> None:
     bridge_evidence = build_targeted_bridge_evidence(
         queue=pd.DataFrame(

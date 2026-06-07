@@ -89,6 +89,16 @@ CAPACITY_TERMS = ["capacity", "产能", "扩产", "量产"]
 CUSTOMER_TERMS = ["customer", "客户", "认证", "导入"]
 TECHNICAL_TEXT_TERMS = ["技术壁垒", "专利", "工艺", "良率"]
 TECHNICAL_TYPE_TERMS = ["technical", "patent", "barrier"]
+INVALIDATING_BRIDGE_SOURCE_TERMS = [
+    "风险",
+    "不及预期",
+    "承压",
+    "竞争加剧",
+    "贸易摩擦",
+    "波动",
+    "下滑",
+    "亏损",
+]
 ASSET_POOL_DECISION_PRECEDENCE = {
     "auto_approve": 0,
     "needs_product_family_mapping": 1,
@@ -701,12 +711,19 @@ def _bridge_source_evidence_row(evidence: pd.DataFrame, *, family: str) -> dict[
 
     for row in evidence.to_dict("records"):
         text = _joined_text(row, BRIDGE_TEXT_COLUMNS)
+        if _is_invalidating_bridge_source(row, text):
+            continue
         if _contains_any(text, BRIDGE_TARGETS[family]["product_terms"]) and _contains_any(
             text,
             BRIDGE_TARGETS[family]["semantic_terms"],
         ):
             return row
     return None
+
+
+def _is_invalidating_bridge_source(row: dict[str, object], text: str) -> bool:
+    evidence_type = _safe_text(row.get("evidence_type")).lower()
+    return "invalidation" in evidence_type or _contains_any(text, INVALIDATING_BRIDGE_SOURCE_TERMS)
 
 
 def _pipe_join(values: Iterable[str]) -> str:
