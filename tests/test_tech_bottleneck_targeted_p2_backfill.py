@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pandas as pd
 
 from stock_research.tech_bottleneck_targeted_p2_backfill import (
@@ -145,7 +147,7 @@ def test_build_targeted_gap_audit_counts_existing_family_evidence() -> None:
 
     row = audit.iloc[0]
     assert row["candidate_bridge_family"] == "semiconductor_testing_metrology"
-    assert row["product_evidence_count"] == 1
+    assert row["product_evidence_count"] == 2
     assert row["bottleneck_evidence_count"] == 3
     assert row["capacity_evidence_count"] == 2
     assert row["customer_evidence_count"] == 1
@@ -245,3 +247,154 @@ def test_build_bridge_suggestions_limits_supporting_sources_to_matching_evidence
     suggestions = build_bridge_suggestions(queue, evidence)
 
     assert suggestions.iloc[0]["supporting_source_ids"] == "supporting"
+
+
+def test_mixed_date_types_match_candidate_evidence() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "stock_name": "洁美科技",
+                "candidate_trade_date": date(2025, 1, 20),
+                "review_priority": "P2_mapping_review",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002859",
+                "candidate_trade_date": pd.Timestamp("2025-01-20"),
+                "evidence_type": "product_revenue",
+                "evidence_snippet": "载带收入增长",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:002859",
+                "candidate_trade_date": "2025-01-20",
+                "evidence_type": "technical_barrier",
+                "evidence_snippet": "客户认证形成技术壁垒",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    audit = build_targeted_gap_audit(queue, evidence)
+
+    assert audit.iloc[0]["candidate_trade_date"] == "2025-01-20"
+    assert audit.iloc[0]["product_evidence_count"] == 1
+    assert audit.iloc[0]["technical_evidence_count"] == 1
+
+
+def test_product_terms_in_text_count_product_evidence_without_product_type() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "candidate_trade_date": "2025-03-05",
+                "evidence_type": "news",
+                "product_name": "光模块",
+                "snippet": "高速光引擎客户导入推进",
+                "as_of_safe": True,
+            }
+        ]
+    )
+
+    audit = build_targeted_gap_audit(queue, evidence)
+
+    assert audit.iloc[0]["product_evidence_count"] == 1
+
+
+def test_bridge_suggestions_match_common_repo_text_fields() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300567",
+                "stock_name": "精测电子",
+                "trade_date": "2025-02-10",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300567",
+                "candidate_trade_date": "2025-02-10",
+                "source_id": "common-fields",
+                "product": "半导体检测",
+                "business_item": "客户导入",
+                "item_name": "量测设备",
+                "snippet": "产能进入量产阶段",
+                "as_of_safe": True,
+            }
+        ]
+    )
+
+    suggestions = build_bridge_suggestions(queue, evidence)
+
+    row = suggestions.iloc[0]
+    assert row["matched_product_terms"] == "半导体检测|量测设备"
+    assert row["matched_semantic_terms"] == "客户导入|产能|量产|半导体"
+    assert row["supporting_source_ids"] == "common-fields"
+    assert row["bridge_status"] == "bridgeable"
+
+
+def test_string_as_of_safe_values_filter_like_booleans() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002371",
+                "stock_name": "北方华创",
+                "trade_date": "2025-01-20",
+                "review_priority": "P2_mapping_review",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002371",
+                "candidate_trade_date": "2025-01-20",
+                "evidence_type": "product_revenue",
+                "evidence_snippet": "刻蚀设备收入增长",
+                "as_of_safe": "true",
+            },
+            {
+                "asset_id": "CN:SZ:002371",
+                "candidate_trade_date": "2025-01-20",
+                "evidence_type": "technical_barrier",
+                "evidence_snippet": "先进制程客户导入",
+                "as_of_safe": "1",
+            },
+            {
+                "asset_id": "CN:SZ:002371",
+                "candidate_trade_date": "2025-01-20",
+                "evidence_type": "product_revenue",
+                "evidence_snippet": "清洗设备旧证据",
+                "as_of_safe": "False",
+            },
+            {
+                "asset_id": "CN:SZ:002371",
+                "candidate_trade_date": "2025-01-20",
+                "evidence_type": "product_revenue",
+                "evidence_snippet": "PVD旧证据",
+                "as_of_safe": "no",
+            },
+        ]
+    )
+
+    audit = build_targeted_gap_audit(queue, evidence)
+
+    assert audit.iloc[0]["product_evidence_count"] == 1
+    assert audit.iloc[0]["bottleneck_evidence_count"] == 1

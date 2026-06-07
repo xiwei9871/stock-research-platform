@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date, datetime
 
 import pandas as pd
 
@@ -68,10 +69,14 @@ BRIDGE_SUGGESTION_COLUMNS = [
 
 BRIDGE_TEXT_COLUMNS = [
     "evidence_snippet",
+    "snippet",
     "matched_keyword",
     "source_title",
     "source_name",
+    "product",
     "product_name",
+    "business_item",
+    "item_name",
     "business_scope",
 ]
 
@@ -95,9 +100,14 @@ def normalize_p2_mapping_queue(queue: pd.DataFrame) -> pd.DataFrame:
     if normalized.empty:
         return pd.DataFrame(columns=NORMALIZED_QUEUE_COLUMNS)
 
-    missing_candidate_date = normalized["candidate_trade_date"].map(_is_blank)
-    normalized.loc[missing_candidate_date, "candidate_trade_date"] = normalized.loc[missing_candidate_date, "trade_date"]
-    normalized["candidate_trade_date"] = normalized["candidate_trade_date"].map(_safe_text)
+    normalized["candidate_trade_date"] = [
+        _canonical_date_text(candidate_date if not _is_blank(candidate_date) else trade_date)
+        for candidate_date, trade_date in zip(
+            normalized["candidate_trade_date"],
+            normalized["trade_date"],
+            strict=True,
+        )
+    ]
     normalized["bridge_family"] = normalized["asset_id"].map(TARGET_ASSET_FAMILIES)
 
     return (
@@ -128,9 +138,14 @@ def build_targeted_gap_audit(queue: pd.DataFrame, evidence: pd.DataFrame) -> pd.
         for evidence_row in candidate_evidence.to_dict("records"):
             evidence_type = _safe_text(evidence_row.get("evidence_type")).lower()
             snippet_keyword_text = _joined_text(evidence_row, ["evidence_snippet", "matched_keyword"])
+            bridge_text = _joined_text(evidence_row, BRIDGE_TEXT_COLUMNS)
             typed_and_snippet_text = " ".join([evidence_type, snippet_keyword_text])
 
-            if "product" in evidence_type or "revenue" in evidence_type:
+            if (
+                "product" in evidence_type
+                or "revenue" in evidence_type
+                or _contains_any(bridge_text, BRIDGE_TARGETS[family]["product_terms"])
+            ):
                 product_count += 1
             if "bottleneck" in evidence_type or _contains_any(snippet_keyword_text, semantic_terms):
                 bottleneck_count += 1
@@ -213,11 +228,16 @@ def _safe_evidence(evidence: pd.DataFrame) -> pd.DataFrame:
     if safe_evidence.empty:
         return safe_evidence
 
-    missing_candidate_date = safe_evidence["candidate_trade_date"].map(_is_blank)
-    safe_evidence.loc[missing_candidate_date, "candidate_trade_date"] = safe_evidence.loc[missing_candidate_date, "trade_date"]
-    safe_evidence["candidate_trade_date"] = safe_evidence["candidate_trade_date"].map(_safe_text)
+    safe_evidence["candidate_trade_date"] = [
+        _canonical_date_text(candidate_date if not _is_blank(candidate_date) else trade_date)
+        for candidate_date, trade_date in zip(
+            safe_evidence["candidate_trade_date"],
+            safe_evidence["trade_date"],
+            strict=True,
+        )
+    ]
     if "as_of_safe" in evidence.columns:
-        safe_evidence = safe_evidence[safe_evidence["as_of_safe"].eq(True)].copy()  # noqa: E712
+        safe_evidence = safe_evidence[safe_evidence["as_of_safe"].map(_is_truthy_as_of_safe)].copy()
     return safe_evidence
 
 
@@ -294,6 +314,37 @@ def _safe_text(value: object) -> str:
     if _is_blank(value):
         return ""
     return str(value)
+
+
+def _canonical_date_text(value: object) -> str:
+    if _is_blank(value):
+        return ""
+    if isinstance(value, pd.Timestamp):
+        return value.date().isoformat()
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+
+    text = _safe_text(value).strip()
+    parsed = pd.to_datetime(text, errors="coerce")
+    if not pd.isna(parsed):
+        return parsed.date().isoformat()
+    return text
+
+
+def _is_truthy_as_of_safe(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 1
+
+    text = _safe_text(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "t"}:
+        return True
+    if text in {"false", "0", "no", "n", "f", ""}:
+        return False
+    return False
 
 
 def _is_blank(value: object) -> bool:
