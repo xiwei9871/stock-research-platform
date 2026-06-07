@@ -87,6 +87,8 @@ PASS_TERMS = {
     ],
 }
 
+DATE_LIKE_EVIDENCE_COLUMNS = ["candidate_trade_date", "evidence_date", "published_at", "trade_date"]
+
 REJECT_INDUSTRY_TERMS = {
     "financials": [
         "银行",
@@ -261,7 +263,7 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
     normalized["_evidence_date"] = normalized.apply(_evidence_date, axis=1)
     if "as_of_safe" in normalized:
         normalized = normalized[~normalized["as_of_safe"].map(_is_explicit_false)].copy()
-    if any(column in normalized for column in ["evidence_date", "published_at"]):
+    if any(column in normalized for column in DATE_LIKE_EVIDENCE_COLUMNS):
         normalized = normalized[normalized["_evidence_date"].ne("")].copy()
     return normalized[["asset_id", "_gate_text", "_evidence_date"]].copy()
 

@@ -174,6 +174,46 @@ def test_build_core_tech_gate_uses_point_in_time_evidence_per_candidate_date() -
     assert later["core_tech_category"] == "semiconductor_equipment"
 
 
+def test_build_core_tech_gate_excludes_candidate_scoped_evidence_without_availability_date() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "stock_name": "普通样本",
+                "trade_date": "2025-01-03",
+                "rank": 1,
+                "industry_name": "综合",
+            },
+            {
+                "asset_id": "CN:SH:688123",
+                "stock_name": "普通样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "综合",
+            },
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688123",
+                "candidate_trade_date": "2025-06-20",
+                "product_family": "semiconductor_equipment",
+                "evidence_snippet": "公司披露半导体设备核心技术。",
+                "matched_keyword": "半导体设备",
+            }
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=evidence)
+
+    assert outputs["core_tech_gate"]["core_tech_gate"].tolist() == ["reject", "reject"]
+    assert outputs["core_tech_gate"]["gate_reason"].tolist() == [
+        "no core technology evidence",
+        "no core technology evidence",
+    ]
+
+
 def test_build_core_tech_gate_uses_pit_safe_source_availability_dates() -> None:
     candidates = pd.DataFrame(
         [
