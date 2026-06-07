@@ -299,30 +299,32 @@ def run_lhb_sample_import(
 
 def load_lhb_from_db(
     *,
-    ts_codes: list[str],
+    ts_codes: list[str] | None,
     start_date: str,
     end_date: str,
     service: str = SETTINGS.research_service,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    if not ts_codes:
-        return pd.DataFrame(columns=TOP_LIST_COLUMNS), pd.DataFrame(columns=TOP_INST_COLUMNS)
-    placeholders = ",".join(["%s"] * len(ts_codes))
+    code_filter = ""
+    params = [start_date, end_date]
+    if ts_codes:
+        placeholders = ",".join(["%s"] * len(ts_codes))
+        code_filter = f"AND ts_code IN ({placeholders})"
+        params.extend(ts_codes)
     top_list_sql = f"""
         SELECT trade_date::text, ts_code, name, close, pct_change, turnover_rate, amount,
                l_sell, l_buy, l_amount, net_amount, net_rate, amount_rate, float_values, reason, source
         FROM market.lhb_top_list_daily
         WHERE trade_date BETWEEN %s::date AND %s::date
-          AND ts_code IN ({placeholders})
+          {code_filter}
         ORDER BY trade_date, ts_code
     """
     top_inst_sql = f"""
         SELECT trade_date::text, ts_code, exalter, buy, buy_rate, sell, sell_rate, net_buy, reason, source
         FROM market.lhb_top_inst_daily
         WHERE trade_date BETWEEN %s::date AND %s::date
-          AND ts_code IN ({placeholders})
+          {code_filter}
         ORDER BY trade_date, ts_code
     """
-    params = [start_date, end_date, *ts_codes]
     with connect(service) as conn:
         top_list = pd.DataFrame(fetch_all(conn, top_list_sql, params))
         top_inst = pd.DataFrame(fetch_all(conn, top_inst_sql, params))

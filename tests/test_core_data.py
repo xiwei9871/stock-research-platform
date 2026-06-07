@@ -4,10 +4,15 @@ from stock_research import core_data
 class FakeConnection:
     def __init__(self):
         self.executed = []
+        self.executed_many = []
 
 
 def fake_execute(conn, sql, params=None):
     conn.executed.append((sql, params))
+
+
+def fake_execute_many(conn, sql, rows):
+    conn.executed_many.append((sql, list(rows)))
 
 
 def test_sync_core_asset_master_maps_existing_public_assets(monkeypatch):
@@ -25,6 +30,38 @@ def test_sync_core_asset_master_maps_existing_public_assets(monkeypatch):
     assert "exchange = 'SZ' AND symbol ~ '^(300|301|302)'" in sql
     assert "ON CONFLICT (asset_id) DO UPDATE" in sql
     assert params is None
+
+
+def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypatch):
+    conn = FakeConnection()
+
+    class FakeAk:
+        @staticmethod
+        def stock_info_a_code_name():
+            import pandas as pd
+
+            return pd.DataFrame(
+                [
+                    {"code": "002484", "name": "江海股份"},
+                    {"code": "600183", "name": "生益科技"},
+                ]
+            )
+
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "ak", FakeAk)
+
+    count = core_data.sync_chinese_stock_names_from_akshare(conn)
+
+    assert count == 2
+    assert len(conn.executed_many) == 2
+    public_sql, public_rows = conn.executed_many[0]
+    core_sql, core_rows = conn.executed_many[1]
+    assert "UPDATE asset_master" in public_sql
+    assert "name = data.name" in public_sql
+    assert "UPDATE core.asset_master" in core_sql
+    assert "ts_code = data.ts_code" in core_sql
+    assert public_rows[0] == ("002484", "江海股份", "002484.SZ")
+    assert core_rows[1] == ("600183", "生益科技", "600183.SH")
 
 
 def test_build_asset_status_daily_uses_point_in_time_daily_bars(monkeypatch):

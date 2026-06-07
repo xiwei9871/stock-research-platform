@@ -8,6 +8,8 @@ dependencies = [
   "baostock",
   "pandas",
   "psycopg[binary]",
+  "pypdf",
+  "requests",
 ]
 
 [project.optional-dependencies]

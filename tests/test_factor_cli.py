@@ -77,6 +77,24 @@ def test_cli_accepts_backfill_factor_daily_command():
     assert args.exact_window is True
 
 
+def test_cli_accepts_run_stock_daily_data_pipeline_command():
+    args = build_parser().parse_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert args.command == "run-stock-daily-data-pipeline"
+    assert args.trade_date == "2026-06-05"
+    assert args.output_dir == "outputs/daily/20260605"
+    assert args.no_feishu is True
+
+
 def test_cli_accepts_report_delivery_local_command():
     args = build_parser().parse_args(
         [
@@ -119,6 +137,32 @@ def test_cli_accepts_report_delivery_local_command():
     )
 
     assert non_dry_run_args.dry_run is False
+
+
+def test_cli_accepts_stock_report_bing_site_search_adapter():
+    for adapter in ["bing_site_search", "sina_report_page", "sohu_jlp_rating", "cfi_ybyl"]:
+        args = build_parser().parse_args(
+            [
+                "collect-stock-report-web-sources",
+                "--adapter",
+                adapter,
+                "--workers",
+                "4",
+                "--progress-every",
+                "25",
+                "--request-sleep-seconds",
+                "2.5",
+                "--stop-after-consecutive-fetch-errors",
+                "30",
+            ]
+        )
+
+        assert args.command == "collect-stock-report-web-sources"
+        assert args.adapter == adapter
+        assert args.workers == 4
+        assert args.progress_every == 25
+        assert args.request_sleep_seconds == 2.5
+        assert args.stop_after_consecutive_fetch_errors == 30
 
 
 def test_cli_accepts_report_delivery_openclaw_export_command():
@@ -291,6 +335,382 @@ def test_cli_accepts_factor_validation_review_command():
     assert args.horizons == [5, 10]
     assert args.primary_horizon == 5
     assert args.output_dir == "outputs/factor_validation"
+
+
+def test_cli_accepts_intraday_factor_eval_command():
+    args = build_parser().parse_args(
+        [
+            "intraday-factor-eval",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--horizons",
+            "5,10",
+            "--features",
+            "last_30m_return,amount_tail_1h_ratio",
+            "--freq",
+            "5min",
+            "--adjust-type",
+            "raw",
+            "--industry-system",
+            "csrc",
+            "--output-dir",
+            "outputs/intraday_eval",
+            "--quantiles",
+            "5",
+            "--top-n",
+            "30",
+        ]
+    )
+
+    assert args.command == "intraday-factor-eval"
+    assert args.start_date == "2025-01-02"
+    assert args.end_date == "2026-06-05"
+    assert args.horizons == [5, 10]
+    assert args.features == ["last_30m_return", "amount_tail_1h_ratio"]
+    assert args.freq == "5min"
+    assert args.adjust_type == "raw"
+    assert args.industry_system == "csrc"
+    assert args.output_dir == "outputs/intraday_eval"
+    assert args.quantiles == 5
+    assert args.top_n == 30
+
+
+def test_intraday_factor_eval_cli_dispatches_and_prints_report_paths(monkeypatch, capsys):
+    import sys
+
+    calls = []
+
+    def fake_run_intraday_factor_eval(**kwargs):
+        calls.append(kwargs)
+        return {
+            "summary": pd.DataFrame(
+                [
+                    {
+                        "feature_name": "last_30m_return",
+                        "horizon": 5,
+                        "recommendation": "candidate_long",
+                    }
+                ]
+            ),
+            "paths": {
+                "summary_csv_path": "outputs/intraday_eval/intraday_factor_eval_summary.csv",
+                "markdown_path": "outputs/intraday_eval/intraday_factor_eval.md",
+            },
+        }
+
+    monkeypatch.setattr(cli, "run_intraday_factor_eval", fake_run_intraday_factor_eval)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "intraday-factor-eval",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--horizons",
+            "5,10",
+            "--features",
+            "last_30m_return,amount_tail_1h_ratio",
+            "--freq",
+            "5min",
+            "--adjust-type",
+            "raw",
+            "--industry-system",
+            "csrc",
+            "--output-dir",
+            "outputs/intraday_eval",
+            "--quantiles",
+            "5",
+            "--top-n",
+            "30",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2025-01-02",
+            "end_date": "2026-06-05",
+            "horizons": [5, 10],
+            "output_dir": "outputs/intraday_eval",
+            "feature_names": ["last_30m_return", "amount_tail_1h_ratio"],
+            "freq": "5min",
+            "adjust_type": "raw",
+            "industry_system": "csrc",
+            "quantiles": 5,
+            "top_n": 30,
+        }
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "intraday_factor_eval|summary|outputs/intraday_eval/intraday_factor_eval_summary.csv",
+        "intraday_factor_eval|markdown|outputs/intraday_eval/intraday_factor_eval.md",
+        "intraday_factor_eval|rows|1",
+    ]
+
+
+def test_cli_accepts_intraday_risk_filter_backtest_command():
+    args = build_parser().parse_args(
+        [
+            "intraday-risk-filter-backtest",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--score-version",
+            "manual_v2",
+            "--top-n-values",
+            "10,20,30",
+            "--rebalance-frequency",
+            "weekly",
+            "--transaction-cost-bps",
+            "15.5",
+            "--score-adjust-type",
+            "qfq",
+            "--intraday-freq",
+            "15min",
+            "--intraday-adjust-type",
+            "raw",
+            "--output-dir",
+            "outputs/intraday_risk",
+        ]
+    )
+
+    assert args.command == "intraday-risk-filter-backtest"
+    assert args.start_date == "2025-01-02"
+    assert args.end_date == "2026-06-05"
+    assert args.score_version == "manual_v2"
+    assert args.top_n_values == [10, 20, 30]
+    assert args.rebalance_frequency == "weekly"
+    assert args.transaction_cost_bps == 15.5
+    assert args.score_adjust_type == "qfq"
+    assert args.intraday_freq == "15min"
+    assert args.intraday_adjust_type == "raw"
+    assert args.output_dir == "outputs/intraday_risk"
+
+
+def test_intraday_risk_filter_backtest_cli_dispatches(monkeypatch, capsys):
+    import sys
+
+    calls = []
+
+    def fake_run_intraday_risk_filter_backtest(**kwargs):
+        calls.append(kwargs)
+        return {
+            "summary": pd.DataFrame(
+                [
+                    {
+                        "top_n": 10,
+                        "variant_name": "baseline_topn",
+                    },
+                    {
+                        "top_n": 10,
+                        "variant_name": "exclude_high_risk",
+                    },
+                ]
+            ),
+            "paths": {
+                "summary": "outputs/intraday_risk/intraday_risk_filter_variant_summary.csv",
+                "report": "outputs/intraday_risk/intraday_risk_filter_report.md",
+            },
+        }
+
+    monkeypatch.setattr(cli, "run_intraday_risk_filter_backtest", fake_run_intraday_risk_filter_backtest)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "intraday-risk-filter-backtest",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--score-version",
+            "manual_v2",
+            "--top-n-values",
+            "10,20,30",
+            "--rebalance-frequency",
+            "weekly",
+            "--transaction-cost-bps",
+            "15.5",
+            "--score-adjust-type",
+            "qfq",
+            "--intraday-freq",
+            "15min",
+            "--intraday-adjust-type",
+            "hfq",
+            "--output-dir",
+            "outputs/intraday_risk",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2025-01-02",
+            "end_date": "2026-06-05",
+            "output_dir": "outputs/intraday_risk",
+            "score_version": "manual_v2",
+            "top_n_values": [10, 20, 30],
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 15.5,
+            "score_adjust_type": "qfq",
+            "intraday_freq": "15min",
+            "intraday_adjust_type": "hfq",
+        }
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "intraday_risk_filter_backtest|summary|outputs/intraday_risk/intraday_risk_filter_variant_summary.csv",
+        "intraday_risk_filter_backtest|report|outputs/intraday_risk/intraday_risk_filter_report.md",
+        "intraday_risk_filter_backtest|rows|2",
+    ]
+
+
+def test_cli_accepts_intraday_risk_control_v2_backtest_command():
+    args = build_parser().parse_args(
+        [
+            "intraday-risk-control-v2-backtest",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--score-version",
+            "manual_v2",
+            "--top-n-values",
+            "10,20,30",
+            "--rebalance-frequency",
+            "weekly",
+            "--transaction-cost-bps",
+            "15.5",
+            "--score-adjust-type",
+            "qfq",
+            "--intraday-freq",
+            "15min",
+            "--intraday-adjust-type",
+            "raw",
+            "--lookback",
+            "30",
+            "--zscore-threshold",
+            "2.0",
+            "--risk-preset",
+            "v2_2_midband",
+            "--output-dir",
+            "outputs/intraday_risk_v2",
+        ]
+    )
+
+    assert args.command == "intraday-risk-control-v2-backtest"
+    assert args.start_date == "2025-01-02"
+    assert args.end_date == "2026-06-05"
+    assert args.score_version == "manual_v2"
+    assert args.top_n_values == [10, 20, 30]
+    assert args.rebalance_frequency == "weekly"
+    assert args.transaction_cost_bps == 15.5
+    assert args.score_adjust_type == "qfq"
+    assert args.intraday_freq == "15min"
+    assert args.intraday_adjust_type == "raw"
+    assert args.lookback == 30
+    assert args.zscore_threshold == 2.0
+    assert args.risk_preset == "v2_2_midband"
+    assert args.output_dir == "outputs/intraday_risk_v2"
+
+
+def test_intraday_risk_control_v2_backtest_cli_dispatches(monkeypatch, capsys):
+    import sys
+
+    calls = []
+
+    def fake_run_intraday_risk_control_v2_backtest(**kwargs):
+        calls.append(kwargs)
+        return {
+            "summary": pd.DataFrame(
+                [
+                    {
+                        "top_n": 10,
+                        "variant_name": "baseline_topn",
+                    },
+                    {
+                        "top_n": 10,
+                        "variant_name": "trend_new_entry_penalty",
+                    },
+                ]
+            ),
+            "paths": {
+                "summary": "outputs/intraday_risk_v2/intraday_risk_control_v2_summary.csv",
+                "report": "outputs/intraday_risk_v2/intraday_risk_control_v2_report.md",
+            },
+        }
+
+    monkeypatch.setattr(
+        cli,
+        "run_intraday_risk_control_v2_backtest",
+        fake_run_intraday_risk_control_v2_backtest,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "intraday-risk-control-v2-backtest",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2026-06-05",
+            "--score-version",
+            "manual_v2",
+            "--top-n-values",
+            "10,20,30",
+            "--rebalance-frequency",
+            "weekly",
+            "--transaction-cost-bps",
+            "15.5",
+            "--score-adjust-type",
+            "qfq",
+            "--intraday-freq",
+            "15min",
+            "--intraday-adjust-type",
+            "hfq",
+            "--lookback",
+            "30",
+            "--zscore-threshold",
+            "2.0",
+            "--risk-preset",
+            "v2_2_midband",
+            "--output-dir",
+            "outputs/intraday_risk_v2",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "start_date": "2025-01-02",
+            "end_date": "2026-06-05",
+            "output_dir": "outputs/intraday_risk_v2",
+            "score_version": "manual_v2",
+            "top_n_values": [10, 20, 30],
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 15.5,
+            "score_adjust_type": "qfq",
+            "intraday_freq": "15min",
+            "intraday_adjust_type": "hfq",
+            "lookback": 30,
+            "zscore_threshold": 2.0,
+            "risk_preset": "v2_2_midband",
+        }
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "intraday_risk_control_v2_backtest|summary|outputs/intraday_risk_v2/intraday_risk_control_v2_summary.csv",
+        "intraday_risk_control_v2_backtest|report|outputs/intraday_risk_v2/intraday_risk_control_v2_report.md",
+        "intraday_risk_control_v2_backtest|rows|2",
+    ]
 
 
 def test_cli_accepts_technical_feature_performance_review_command():
@@ -5250,6 +5670,124 @@ def test_daily_factor_pipeline_cli_prints_summary(monkeypatch, capsys):
         "daily_factor_pipeline|factor_rows|100",
         "daily_factor_pipeline|score_rows|20",
         "daily_factor_pipeline|top_scores|3",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        fake_run_stock_daily_data_pipeline,
+    )
+
+    cli.main(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-05",
+            "output_dir": "outputs/daily/20260605",
+            "feishu_sender": None,
+            "send_feishu": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        lambda **kwargs: {"status": "partial_failed"},
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(
+            [
+                "run-stock-daily-data-pipeline",
+                "--trade-date",
+                "2026-06-05",
+                "--output-dir",
+                "outputs/daily/20260605",
+                "--no-feishu",
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|partial_failed",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
+    ]
+
+
+def test_cli_run_stock_daily_data_pipeline_wires_feishu_sender(monkeypatch, capsys):
+    sent_messages = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        kwargs["feishu_sender"]("hello")
+        return {"status": "success"}
+
+    def fake_send_openclaw_feishu_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr(
+        cli,
+        "run_stock_daily_data_pipeline",
+        fake_run_stock_daily_data_pipeline,
+    )
+    monkeypatch.setattr(
+        cli,
+        "send_openclaw_feishu_message",
+        fake_send_openclaw_feishu_message,
+    )
+
+    cli.main(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/20260605",
+            "--feishu-target",
+            "chat:test",
+            "--feishu-account",
+            "jarvis",
+            "--openclaw-bin",
+            "openclaw-test",
+        ]
+    )
+
+    assert sent_messages == [
+        {
+            "message": "hello",
+            "target": "chat:test",
+            "account": "jarvis",
+            "openclaw_bin": "openclaw-test",
+            "dry_run": False,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
     ]
 
 

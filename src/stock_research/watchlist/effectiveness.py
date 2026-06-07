@@ -9,7 +9,10 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
 
-RETURN_HORIZONS = [1, 3, 5]
+SHORT_RETURN_HORIZONS = [1, 3, 5]
+STRONG_WINNER_RETURN_HORIZONS = [5, 10, 20, 30, 40, 60]
+RETURN_HORIZONS = sorted(set(SHORT_RETURN_HORIZONS + STRONG_WINNER_RETURN_HORIZONS))
+MAX_DRAWDOWN_HORIZONS = [5, 10, 20, 30, 40, 60]
 
 
 def build_watchlist_diagnostics_effectiveness_detail(
@@ -23,12 +26,18 @@ def build_watchlist_diagnostics_effectiveness_detail(
     detail = diagnostics_rows.copy()
     for horizon in RETURN_HORIZONS:
         detail[f"future_{horizon}d_return"] = pd.NA
-    detail["future_5d_max_drawdown"] = pd.NA
+    for horizon in MAX_DRAWDOWN_HORIZONS:
+        detail[f"future_{horizon}d_max_drawdown"] = pd.NA
+    detail["max_return_within_60d"] = pd.NA
+    detail["hit_double_within_60d"] = False
 
     normalized_bars = bars.copy()
     normalized_bars["trade_date"] = pd.to_datetime(normalized_bars["trade_date"])
     normalized_bars["close"] = pd.to_numeric(normalized_bars["close"], errors="coerce")
     normalized_bars["low"] = pd.to_numeric(normalized_bars["low"], errors="coerce")
+    if "high" not in normalized_bars.columns:
+        normalized_bars["high"] = normalized_bars["close"]
+    normalized_bars["high"] = pd.to_numeric(normalized_bars["high"], errors="coerce")
     grouped_bars = {
         str(asset_id): group.sort_values("trade_date").reset_index(drop=True)
         for asset_id, group in normalized_bars.groupby("asset_id", dropna=False)
@@ -56,11 +65,20 @@ def build_watchlist_diagnostics_effectiveness_detail(
                 if not pd.isna(future_close):
                     detail.at[row_index, f"future_{horizon}d_return"] = float(future_close) / float(base_close) - 1.0
 
-        future_window = asset_bars.iloc[event_index + 1 : event_index + 6]
-        if not future_window.empty:
-            min_low = future_window["low"].min()
-            if not pd.isna(min_low):
-                detail.at[row_index, "future_5d_max_drawdown"] = min(float(min_low) / float(base_close) - 1.0, 0.0)
+        for horizon in MAX_DRAWDOWN_HORIZONS:
+            future_window = asset_bars.iloc[event_index + 1 : event_index + horizon + 1]
+            if not future_window.empty:
+                min_low = future_window["low"].min()
+                if not pd.isna(min_low):
+                    detail.at[row_index, f"future_{horizon}d_max_drawdown"] = min(float(min_low) / float(base_close) - 1.0, 0.0)
+
+        strong_window = asset_bars.iloc[event_index + 1 : event_index + 61]
+        if not strong_window.empty:
+            max_high = strong_window["high"].max()
+            if not pd.isna(max_high):
+                max_return = float(max_high) / float(base_close) - 1.0
+                detail.at[row_index, "max_return_within_60d"] = max_return
+                detail.at[row_index, "hit_double_within_60d"] = bool(max_return >= 1.0)
 
     return detail
 
@@ -69,6 +87,7 @@ def build_watchlist_diagnostics_effectiveness_summary(detail: pd.DataFrame) -> p
     if detail.empty:
         return pd.DataFrame(
             columns=[
+                "evaluation_layer",
                 "summary_level",
                 "watch_group",
                 "event_structure",
@@ -77,26 +96,53 @@ def build_watchlist_diagnostics_effectiveness_summary(detail: pd.DataFrame) -> p
                 "future_3d_return_mean",
                 "future_5d_return_mean",
                 "future_5d_max_drawdown_mean",
+                "future_10d_return_mean",
+                "future_20d_return_mean",
+                "future_30d_return_mean",
+                "future_40d_return_mean",
+                "future_60d_return_mean",
+                "future_20d_max_drawdown_mean",
+                "future_30d_max_drawdown_mean",
+                "future_60d_max_drawdown_mean",
+                "max_return_within_60d_mean",
+                "hit_double_within_60d_rate",
             ]
         )
 
     normalized = detail.copy()
-    for column in [
-        "future_1d_return",
-        "future_3d_return",
-        "future_5d_return",
-        "future_5d_max_drawdown",
+    _ensure_numeric_columns(normalized)
+    frames = []
+    for evaluation_layer, metric_columns in [
+        ("short_horizon", _short_horizon_metric_columns()),
+        ("strong_winner_horizon", _strong_winner_metric_columns()),
     ]:
-        normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
-    frames = [
-        _summary_frame(normalized, group_columns=["watch_group"], summary_level="watch_group"),
-        _summary_frame(
-            normalized[normalized["event_structure"].fillna("").ne("")],
-            group_columns=["event_structure"],
-            summary_level="event_structure",
-        ),
-    ]
+        frames.extend(
+            [
+                _summary_frame(
+                    normalized,
+                    group_columns=["watch_group"],
+                    summary_level="watch_group",
+                    evaluation_layer=evaluation_layer,
+                    metric_columns=metric_columns,
+                ),
+                _summary_frame(
+                    normalized[normalized["event_structure"].fillna("").ne("")],
+                    group_columns=["event_structure"],
+                    summary_level="event_structure",
+                    evaluation_layer=evaluation_layer,
+                    metric_columns=metric_columns,
+                ),
+            ]
+        )
     return pd.concat(frames, ignore_index=True)
+
+
+def split_watchlist_diagnostics_effectiveness_summary(summary: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if summary.empty or "evaluation_layer" not in summary.columns:
+        return summary.copy(), summary.copy()
+    short = summary[summary["evaluation_layer"].eq("short_horizon")].reset_index(drop=True)
+    strong = summary[summary["evaluation_layer"].eq("strong_winner_horizon")].reset_index(drop=True)
+    return short, strong
 
 
 def run_watchlist_diagnostics_effectiveness_review(
@@ -124,56 +170,88 @@ def run_watchlist_diagnostics_effectiveness_review(
         bars=bars,
     )
     summary = build_watchlist_diagnostics_effectiveness_summary(detail)
+    short_summary, strong_summary = split_watchlist_diagnostics_effectiveness_summary(summary)
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     detail_csv_path = output_path / "watchlist_diagnostics_effectiveness_detail.csv"
     summary_csv_path = output_path / "watchlist_diagnostics_effectiveness_summary.csv"
+    short_horizon_summary_csv_path = output_path / "watchlist_diagnostics_short_horizon_summary.csv"
+    strong_winner_horizon_summary_csv_path = output_path / "watchlist_diagnostics_strong_winner_horizon_summary.csv"
     markdown_path = output_path / "watchlist_diagnostics_effectiveness.md"
     detail.to_csv(detail_csv_path, index=False)
     summary.to_csv(summary_csv_path, index=False)
+    short_summary.to_csv(short_horizon_summary_csv_path, index=False)
+    strong_summary.to_csv(strong_winner_horizon_summary_csv_path, index=False)
     markdown_path.write_text(_render_markdown(summary), encoding="utf-8")
     return {
         "detail_csv_path": str(detail_csv_path),
         "summary_csv_path": str(summary_csv_path),
+        "short_horizon_summary_csv_path": str(short_horizon_summary_csv_path),
+        "strong_winner_horizon_summary_csv_path": str(strong_winner_horizon_summary_csv_path),
         "markdown_path": str(markdown_path),
     }
 
 
-def _summary_frame(detail: pd.DataFrame, *, group_columns: list[str], summary_level: str) -> pd.DataFrame:
-    metric_columns = [
+def _summary_frame(
+    detail: pd.DataFrame,
+    *,
+    group_columns: list[str],
+    summary_level: str,
+    evaluation_layer: str,
+    metric_columns: list[str],
+) -> pd.DataFrame:
+    grouped = detail.groupby(group_columns, dropna=False)
+    summary = grouped[metric_columns].mean(numeric_only=True).reset_index()
+    counts = grouped.size().reset_index(name="sample_count")
+    summary = counts.merge(summary, on=group_columns, how="left")
+    summary.insert(0, "evaluation_layer", evaluation_layer)
+    summary.insert(0, "summary_level", summary_level)
+    for column in ["watch_group", "event_structure"]:
+        if column not in summary.columns:
+            summary[column] = ""
+    output_columns = ["evaluation_layer", "summary_level", "watch_group", "event_structure", "sample_count"]
+    output_columns.extend(metric_columns)
+    renamed = summary[output_columns].rename(columns={column: _summary_metric_name(column) for column in metric_columns})
+    return renamed
+
+
+def _ensure_numeric_columns(frame: pd.DataFrame) -> None:
+    for column in sorted(set(_short_horizon_metric_columns() + _strong_winner_metric_columns())):
+        if column not in frame.columns:
+            frame[column] = pd.NA
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+
+def _short_horizon_metric_columns() -> list[str]:
+    return [
         "future_1d_return",
         "future_3d_return",
         "future_5d_return",
         "future_5d_max_drawdown",
     ]
-    grouped = detail.groupby(group_columns, dropna=False)
-    summary = grouped[metric_columns].mean(numeric_only=True).reset_index()
-    counts = grouped.size().reset_index(name="sample_count")
-    summary = counts.merge(summary, on=group_columns, how="left")
-    summary.insert(0, "summary_level", summary_level)
-    for column in ["watch_group", "event_structure"]:
-        if column not in summary.columns:
-            summary[column] = ""
-    return summary[
-        [
-            "summary_level",
-            "watch_group",
-            "event_structure",
-            "sample_count",
-            "future_1d_return",
-            "future_3d_return",
-            "future_5d_return",
-            "future_5d_max_drawdown",
-        ]
-    ].rename(
-        columns={
-            "future_1d_return": "future_1d_return_mean",
-            "future_3d_return": "future_3d_return_mean",
-            "future_5d_return": "future_5d_return_mean",
-            "future_5d_max_drawdown": "future_5d_max_drawdown_mean",
-        }
-    )
+
+
+def _strong_winner_metric_columns() -> list[str]:
+    return [
+        "future_5d_return",
+        "future_10d_return",
+        "future_20d_return",
+        "future_30d_return",
+        "future_40d_return",
+        "future_60d_return",
+        "future_20d_max_drawdown",
+        "future_30d_max_drawdown",
+        "future_60d_max_drawdown",
+        "max_return_within_60d",
+        "hit_double_within_60d",
+    ]
+
+
+def _summary_metric_name(column: str) -> str:
+    if column == "hit_double_within_60d":
+        return "hit_double_within_60d_rate"
+    return f"{column}_mean"
 
 
 def _load_diagnostics_rows(diagnostics_dir: str | Path) -> pd.DataFrame:
@@ -219,7 +297,7 @@ def _load_market_bars_for_effectiveness(
     start_date = str(pd.to_datetime(diagnostics_rows["trade_date"]).min().date())
     placeholders = ", ".join(["%s"] * len(asset_ids))
     sql = f"""
-        SELECT asset_id, trade_date::text AS trade_date, close, low
+        SELECT asset_id, trade_date::text AS trade_date, close, high, low
         FROM market_daily_bar
         WHERE adjust_type = %s
           AND trade_date >= %s
@@ -228,7 +306,7 @@ def _load_market_bars_for_effectiveness(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [adjust_type, start_date, *asset_ids])
-    return pd.DataFrame(rows, columns=["asset_id", "trade_date", "close", "low"])
+    return pd.DataFrame(rows, columns=["asset_id", "trade_date", "close", "high", "low"])
 
 
 def _render_markdown(summary: pd.DataFrame) -> str:

@@ -133,6 +133,29 @@ def test_run_daily_incremental_pipeline_can_run_only_one_step():
     assert [step["step"] for step in result["steps"]] == ["score_approved_factors"]
 
 
+def test_compute_labels_step_uses_label_start_date(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        daily_incremental,
+        "compute_and_store_labels",
+        lambda **kwargs: calls.append(kwargs) or 23,
+    )
+
+    result = daily_incremental.run_daily_incremental_pipeline(
+        trade_date="2026-06-05",
+        only_step="compute_labels",
+        label_start_date="2026-03-07",
+        step_runners=daily_incremental.build_default_step_runners(),
+    )
+
+    assert result["status"] == "success"
+    assert result["steps"] == [
+        {"step": "compute_labels", "status": "success", "result": {"rows": 23}}
+    ]
+    assert calls == [{"end_date": "2026-06-05", "start_date": "2026-03-07"}]
+
+
 def test_run_daily_incremental_pipeline_rejects_unknown_resume_step():
     with pytest.raises(ValueError, match="Unknown daily incremental step"):
         daily_incremental.run_daily_incremental_pipeline(

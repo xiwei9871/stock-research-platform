@@ -39,6 +39,7 @@ CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS research;
 CREATE SCHEMA IF NOT EXISTS simulation;
 """
 
@@ -247,7 +248,179 @@ CREATE SCHEMA IF NOT EXISTS factor;
 CREATE SCHEMA IF NOT EXISTS backtest;
 CREATE SCHEMA IF NOT EXISTS ingest;
 CREATE SCHEMA IF NOT EXISTS ops;
+CREATE SCHEMA IF NOT EXISTS research;
 CREATE SCHEMA IF NOT EXISTS simulation;
+
+CREATE TABLE IF NOT EXISTS research.stock_report_source (
+    report_id text PRIMARY KEY,
+    source_type text NOT NULL,
+    source_name text,
+    broker text,
+    analyst text,
+    report_title text NOT NULL,
+    publish_date date,
+    source_url text NOT NULL,
+    public_access boolean NOT NULL DEFAULT true,
+    copyright_note text,
+    source_confidence numeric,
+    raw_summary text,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_event (
+    report_id text NOT NULL REFERENCES research.stock_report_source(report_id) ON DELETE CASCADE,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    report_date date,
+    rating text,
+    rating_change text,
+    target_price numeric,
+    target_upside numeric,
+    forecast_revenue text,
+    forecast_profit text,
+    industry_view text,
+    company_view text,
+    risk_summary text,
+    effective_start_date date,
+    effective_end_date date,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (report_id, ts_code)
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_manual_review (
+    review_id text PRIMARY KEY,
+    report_id text REFERENCES research.stock_report_source(report_id) ON DELETE SET NULL,
+    trade_date date,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    candidate_source text NOT NULL,
+    candidate_rank integer,
+    mid_trend_funnel_score numeric,
+    fundamental_hard_risk text,
+    research_view text,
+    broker_report_count_90d integer,
+    latest_rating text,
+    target_price numeric,
+    target_upside numeric,
+    institution_names text,
+    industry_position_note text,
+    product_position_note text,
+    moat_or_scarcity_note text,
+    negative_research_note text,
+    valuation_note text,
+    evidence_summary text,
+    confidence text,
+    review_status text NOT NULL DEFAULT 'pending',
+    human_reviewer text,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_search_task (
+    task_id text PRIMARY KEY,
+    trade_date date NOT NULL,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    industry_name text,
+    candidate_rank integer,
+    query_type text NOT NULL,
+    source_domain text NOT NULL,
+    search_query text NOT NULL,
+    search_url text NOT NULL,
+    priority integer NOT NULL DEFAULT 100,
+    status text NOT NULL DEFAULT 'pending',
+    last_error text,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS research.stock_report_feature_daily (
+    trade_date date NOT NULL,
+    asset_id text,
+    ts_code text NOT NULL,
+    stock_name text,
+    report_count_30d integer NOT NULL DEFAULT 0,
+    report_count_90d integer NOT NULL DEFAULT 0,
+    latest_report_days integer,
+    positive_rating_count integer NOT NULL DEFAULT 0,
+    rating_upgrade_count integer NOT NULL DEFAULT 0,
+    target_price_median numeric,
+    target_upside_median numeric,
+    target_price_dispersion numeric,
+    broker_coverage_count integer NOT NULL DEFAULT 0,
+    top_broker_coverage_count integer NOT NULL DEFAULT 0,
+    negative_report_flag boolean NOT NULL DEFAULT false,
+    research_support_score numeric,
+    source_count integer NOT NULL DEFAULT 0,
+    auto_trade_enabled boolean NOT NULL DEFAULT false,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, ts_code)
+);
+
+CREATE TABLE IF NOT EXISTS research.news_event_source (
+    source_event_id text PRIMARY KEY,
+    source_name text NOT NULL,
+    source_channel text,
+    title text NOT NULL,
+    content text,
+    published_at timestamptz NOT NULL,
+    collected_at timestamptz NOT NULL DEFAULT now(),
+    language text NOT NULL DEFAULT 'zh',
+    url text,
+    hash_key text NOT NULL,
+    source_status text NOT NULL CHECK (source_status IN ('available', 'permission_denied', 'disabled')),
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS research.news_event_mention (
+    mention_id bigserial PRIMARY KEY,
+    source_event_id text NOT NULL REFERENCES research.news_event_source(source_event_id),
+    asset_id text,
+    ts_code text,
+    stock_name text,
+    mention_role text,
+    mention_confidence double precision,
+    theme_name text,
+    theme_confidence double precision,
+    mapping_method text NOT NULL,
+    trade_date date
+);
+
+CREATE TABLE IF NOT EXISTS research.news_feature_daily (
+    trade_date date NOT NULL,
+    asset_id text NOT NULL,
+    ts_code text,
+    news_count_1d integer NOT NULL DEFAULT 0,
+    news_count_3d integer NOT NULL DEFAULT 0,
+    news_count_5d integer NOT NULL DEFAULT 0,
+    major_news_count_3d integer NOT NULL DEFAULT 0,
+    source_diversity_3d integer NOT NULL DEFAULT 0,
+    overnight_news_count integer NOT NULL DEFAULT 0,
+    preopen_news_count integer NOT NULL DEFAULT 0,
+    headline_keyword_positive_count_3d integer NOT NULL DEFAULT 0,
+    headline_keyword_risk_count_3d integer NOT NULL DEFAULT 0,
+    theme_news_burst_flag boolean NOT NULL DEFAULT false,
+    news_first_seen_gap integer,
+    news_attention_level text NOT NULL DEFAULT 'low',
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (trade_date, asset_id)
+);
 
 CREATE TABLE IF NOT EXISTS core.asset_master (
     asset_id text PRIMARY KEY,
@@ -1864,6 +2037,30 @@ CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_watchlist_asset_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_watchlist_source_replay
     ON ops.operator_shadow_watchlist_candidate (replay_result_id, source_p11_replay_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_source_publish
+    ON research.stock_report_source (publish_date DESC, source_type);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_event_asset_date
+    ON research.stock_report_event (ts_code, report_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_manual_review_status
+    ON research.stock_report_manual_review (review_status, trade_date DESC, candidate_rank);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_manual_review_asset
+    ON research.stock_report_manual_review (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_search_task_status
+    ON research.stock_report_search_task (status, trade_date DESC, priority, source_domain);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_search_task_asset
+    ON research.stock_report_search_task (ts_code, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_feature_daily_score
+    ON research.stock_report_feature_daily (trade_date DESC, research_support_score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_research_stock_report_feature_daily_asset
+    ON research.stock_report_feature_daily (ts_code, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_shadow_outcome_run_date
     ON ops.operator_shadow_watchlist_outcome_run (review_date DESC, updated_at DESC);

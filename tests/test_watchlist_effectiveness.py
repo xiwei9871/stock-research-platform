@@ -43,6 +43,45 @@ def test_build_watchlist_diagnostics_effectiveness_detail_computes_future_return
     assert round(float(row["future_5d_max_drawdown"]), 6) == 0.0
 
 
+def test_build_watchlist_diagnostics_effectiveness_detail_computes_strong_winner_horizons():
+    diagnostics = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "watch_group": "candidate",
+                "event_structure": "trend_continuation_candidate",
+            }
+        ]
+    )
+    bars = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "trade_date": (pd.Timestamp("2026-01-01") + pd.Timedelta(days=index)).strftime("%Y-%m-%d"),
+                "close": 10.0 + index * 0.1,
+                "high": 10.0 + index * 0.1,
+                "low": 9.5 + index * 0.05,
+            }
+            for index in range(61)
+        ]
+    )
+    bars.loc[60, "close"] = 18.0
+    bars.loc[60, "high"] = 21.0
+
+    detail = build_watchlist_diagnostics_effectiveness_detail(
+        diagnostics_rows=diagnostics,
+        bars=bars,
+    )
+
+    row = detail.iloc[0]
+    assert round(float(row["future_20d_return"]), 6) == 0.2
+    assert round(float(row["future_30d_return"]), 6) == 0.3
+    assert round(float(row["future_60d_return"]), 6) == 0.8
+    assert round(float(row["max_return_within_60d"]), 6) == 1.1
+    assert bool(row["hit_double_within_60d"]) is True
+
+
 def test_build_watchlist_diagnostics_effectiveness_summary_groups_by_watch_group_and_structure():
     detail = pd.DataFrame(
         [
@@ -75,12 +114,54 @@ def test_build_watchlist_diagnostics_effectiveness_summary_groups_by_watch_group
 
     summary = build_watchlist_diagnostics_effectiveness_summary(detail)
 
-    watch_group_rows = summary[summary["summary_level"] == "watch_group"].set_index("watch_group")
+    watch_group_rows = summary[
+        (summary["evaluation_layer"] == "short_horizon")
+        & (summary["summary_level"] == "watch_group")
+    ].set_index("watch_group")
     assert watch_group_rows.loc["risk_watch", "sample_count"] == 1
     assert watch_group_rows.loc["opportunity_watch", "sample_count"] == 2
-    structure_rows = summary[summary["summary_level"] == "event_structure"].set_index("event_structure")
+    structure_rows = summary[
+        (summary["evaluation_layer"] == "short_horizon")
+        & (summary["summary_level"] == "event_structure")
+    ].set_index("event_structure")
     assert structure_rows.loc["second_wave_candidate", "sample_count"] == 1
     assert structure_rows.loc["trend_continuation_candidate", "sample_count"] == 1
+
+
+def test_build_watchlist_diagnostics_effectiveness_summary_has_two_evaluation_layers():
+    detail = pd.DataFrame(
+        [
+            {
+                "watch_group": "candidate",
+                "event_structure": "trend_continuation_candidate",
+                "future_1d_return": 0.01,
+                "future_3d_return": 0.03,
+                "future_5d_return": 0.05,
+                "future_10d_return": 0.10,
+                "future_20d_return": 0.20,
+                "future_30d_return": 0.30,
+                "future_40d_return": 0.40,
+                "future_60d_return": 0.60,
+                "future_5d_max_drawdown": -0.02,
+                "future_20d_max_drawdown": -0.08,
+                "future_30d_max_drawdown": -0.10,
+                "future_60d_max_drawdown": -0.15,
+                "max_return_within_60d": 1.2,
+                "hit_double_within_60d": True,
+            }
+        ]
+    )
+
+    summary = build_watchlist_diagnostics_effectiveness_summary(detail)
+
+    assert {"short_horizon", "strong_winner_horizon"} <= set(summary["evaluation_layer"])
+    strong = summary[
+        (summary["evaluation_layer"] == "strong_winner_horizon")
+        & (summary["summary_level"] == "event_structure")
+    ].iloc[0]
+    assert strong["future_20d_return_mean"] == 0.20
+    assert strong["future_30d_return_mean"] == 0.30
+    assert strong["hit_double_within_60d_rate"] == 1.0
 
 
 def test_run_watchlist_diagnostics_effectiveness_review_writes_artifacts(tmp_path, monkeypatch):
@@ -121,6 +202,8 @@ def test_run_watchlist_diagnostics_effectiveness_review_writes_artifacts(tmp_pat
 
     assert Path(result["detail_csv_path"]).exists()
     assert Path(result["summary_csv_path"]).exists()
+    assert Path(result["short_horizon_summary_csv_path"]).exists()
+    assert Path(result["strong_winner_horizon_summary_csv_path"]).exists()
     assert Path(result["markdown_path"]).exists()
 
 

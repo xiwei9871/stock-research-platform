@@ -1,5 +1,11 @@
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
+from stock_research.db import execute_many
+
+try:
+    import akshare as ak
+except Exception:  # pragma: no cover - dependency is optional for non-sync tests
+    ak = None
 
 
 def sync_core_asset_master_for_service(
@@ -73,6 +79,72 @@ def sync_core_asset_master(conn) -> None:
         updated_at = now()
     """
     execute(conn, sql)
+
+
+def sync_chinese_stock_names_from_akshare_for_service(
+    service: str = SETTINGS.research_service,
+) -> int:
+    with connect(service) as conn:
+        return sync_chinese_stock_names_from_akshare(conn)
+
+
+def sync_chinese_stock_names_from_akshare(conn) -> int:
+    if ak is None:
+        raise RuntimeError("akshare package is required to sync Chinese stock names")
+    frame = ak.stock_info_a_code_name()
+    rows = _normalize_akshare_code_name_rows(frame)
+    if not rows:
+        return 0
+    public_sql = """
+    UPDATE asset_master AS a
+    SET
+        name = data.name,
+        updated_at = now()
+    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
+    WHERE a.symbol = data.symbol
+      AND (a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name)
+    """
+    core_sql = """
+    UPDATE core.asset_master AS a
+    SET
+        name = data.name,
+        ts_code = data.ts_code,
+        updated_at = now()
+    FROM (VALUES (%s, %s, %s)) AS data(symbol, name, ts_code)
+    WHERE a.symbol = data.symbol
+      AND (
+          a.name IS NULL OR a.name = '' OR a.name = a.symbol OR a.name <> data.name
+          OR a.ts_code IS NULL OR a.ts_code = ''
+      )
+    """
+    execute_many(conn, public_sql, rows)
+    execute_many(conn, core_sql, rows)
+    return len(rows)
+
+
+def _normalize_akshare_code_name_rows(frame) -> list[tuple[str, str, str]]:
+    if frame is None or frame.empty:
+        return []
+    code_column = "code" if "code" in frame.columns else "代码"
+    name_column = "name" if "name" in frame.columns else "名称"
+    if code_column not in frame.columns or name_column not in frame.columns:
+        return []
+    rows = []
+    for row in frame[[code_column, name_column]].dropna().to_dict("records"):
+        symbol = str(row[code_column]).strip().zfill(6)
+        name = str(row[name_column]).strip()
+        if not symbol or not name or name == symbol:
+            continue
+        if symbol.startswith(("600", "601", "603", "605", "688", "689")):
+            exchange = "SH"
+        elif symbol.startswith(("000", "001", "002", "003", "300", "301", "302")):
+            exchange = "SZ"
+        elif symbol.startswith(("43", "83", "87", "92")):
+            exchange = "BJ"
+        else:
+            continue
+        rows.append((symbol, name, f"{symbol}.{exchange}"))
+    return rows
 
 
 def build_asset_status_daily_for_service(
