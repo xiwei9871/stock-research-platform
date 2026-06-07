@@ -280,10 +280,80 @@ def test_cninfo_client_normalizes_exchange_suffixes(ts_code, expected_stock, exp
         end_date="2025-12-31",
     )
 
-    assert len(request_bodies) == 2
-    assert {body["stock"][0] for body in request_bodies} == {expected_stock}
+    assert len(request_bodies) == 4
+    primary_bodies = request_bodies[:2]
+    fallback_bodies = request_bodies[2:]
+    assert {body["stock"][0] for body in primary_bodies} == {expected_stock}
+    assert {body.get("stock", [""])[0] for body in fallback_bodies} == {""}
+    assert {body["searchkey"][0] for body in fallback_bodies} == {expected_stock.split(",", 1)[0]}
     assert {body["column"][0] for body in request_bodies} == {expected_column}
     assert {body["plate"][0] for body in request_bodies} == {expected_plate}
+
+
+def test_cninfo_client_falls_back_to_code_search_when_stock_org_query_is_empty():
+    request_bodies = []
+
+    def opener(request, timeout):
+        body = parse_qs(request.data.decode("utf-8"))
+        request_bodies.append(body)
+        if body.get("stock") == ["002595,gssz0002595"]:
+            return FakeResponse({"announcements": []})
+        assert body.get("searchkey") == ["002595"]
+        assert body.get("stock", [""])[0] == ""
+        return FakeResponse(
+            {
+                "announcements": [
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": 1742227200000,
+                        "announcementId": "1222823238",
+                        "adjunctUrl": "finalpage/2025-03-18/1222823238.PDF",
+                        "secCode": "002595",
+                        "secName": "豪迈科技",
+                    },
+                    {
+                        "announcementTitle": "2024年年度报告",
+                        "announcementTime": 1742227200000,
+                        "announcementId": "unrelated",
+                        "adjunctUrl": "finalpage/2025-03-18/unrelated.PDF",
+                        "secCode": "301207",
+                        "secName": "华兰疫苗",
+                    },
+                    {
+                        "announcementTitle": "2024年年度报告摘要",
+                        "announcementTime": 1742227200000,
+                        "announcementId": "summary",
+                        "adjunctUrl": "finalpage/2025-03-18/summary.PDF",
+                        "secCode": "002595",
+                        "secName": "豪迈科技",
+                    },
+                ]
+            }
+        )
+
+    manifest = CninfoDisclosureIndexClient(opener=opener).query_asset(
+        asset_id="CN:SZ:002595",
+        ts_code="002595.SZ",
+        start_date="2023-01-01",
+        end_date="2025-12-31",
+    )
+
+    assert len(request_bodies) == 4
+    assert request_bodies[0]["stock"] == ["002595,gssz0002595"]
+    assert request_bodies[2]["searchkey"] == ["002595"]
+    assert manifest.to_dict("records") == [
+        {
+            "asset_id": "CN:SZ:002595",
+            "ts_code": "002595.SZ",
+            "publish_date": pd.Timestamp("2025-03-18").date(),
+            "report_period": pd.Timestamp("2024-12-31").date(),
+            "announcement_title": "2024年年度报告",
+            "source_document_id": "1222823238",
+            "source_document_url": "http://static.cninfo.com.cn/finalpage/2025-03-18/1222823238.PDF",
+            "disclosure_type": "annual",
+            "is_supported_product_disclosure": True,
+        }
+    ]
 
 
 @pytest.mark.parametrize("ts_code", ["", "600000", "600000.BJ", "CN:BJ:600000", "CN:SH", "CN:SH:"])

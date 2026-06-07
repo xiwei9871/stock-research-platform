@@ -135,28 +135,26 @@ class CninfoDisclosureIndexClient:
                 category_errors.append((category, exc))
                 continue
 
-            announcements = response_payload.get("announcements", [])
-            if not isinstance(announcements, list):
-                continue
-            for announcement in announcements:
-                if not isinstance(announcement, dict):
-                    continue
-                publish_date = _announcement_time_to_date(announcement.get("announcementTime"))
-                title = _safe_text(announcement.get("announcementTitle"))
-                rows.append(
-                    {
-                        "asset_id": asset_id,
-                        "ts_code": ts_code,
-                        "publish_date": publish_date,
-                        "report_period": _infer_report_period_from_title(title, publish_date),
-                        "announcement_title": title,
-                        "source_document_id": announcement.get("announcementId"),
-                        "source_document_url": _cninfo_static_url(announcement.get("adjunctUrl")),
-                    }
+            rows.extend(
+                _announcement_rows(
+                    asset_id=asset_id,
+                    ts_code=ts_code,
+                    announcements=response_payload.get("announcements", []),
                 )
+            )
 
         if not rows and len(category_errors) == len(CNINFO_CATEGORIES):
             raise CninfoDisclosureQueryError(_cninfo_category_error_message(category_errors))
+        if not rows:
+            rows = self._query_asset_by_code_search(
+                asset_id=asset_id,
+                ts_code=ts_code,
+                stock_code=stock_code,
+                column=column,
+                plate=plate,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
         manifest = normalize_disclosure_manifest(rows)
         manifest = manifest[manifest["is_supported_product_disclosure"]].copy()
@@ -180,6 +178,81 @@ class CninfoDisclosureIndexClient:
         body = parse.urlencode(
             {
                 "stock": f"{stock_code},{stock_org_id}",
+                "tabName": "fulltext",
+                "pageSize": "30",
+                "pageNum": "1",
+                "column": column,
+                "category": category,
+                "plate": plate,
+                "seDate": f"{_safe_text(start_date)}~{_safe_text(end_date)}",
+                "isHLtitle": "true",
+            }
+        ).encode("utf-8")
+        cninfo_request = request.Request(
+            CNINFO_QUERY_URL,
+            data=body,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Referer": "http://www.cninfo.com.cn/new/commonUrl/pageOfSearch",
+            },
+            method="POST",
+        )
+        with self._opener(cninfo_request, timeout=self._timeout_seconds) as response:
+            try:
+                payload = json.loads(response.read().decode("utf-8"))
+            except json.JSONDecodeError:
+                return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _query_asset_by_code_search(
+        self,
+        *,
+        asset_id: object,
+        ts_code: object,
+        stock_code: str,
+        column: str,
+        plate: str,
+        start_date: object,
+        end_date: object,
+    ) -> list[dict[str, Any]]:
+        rows = []
+        for category in CNINFO_CATEGORIES:
+            try:
+                response_payload = self._query_search_category(
+                    stock_code=stock_code,
+                    column=column,
+                    plate=plate,
+                    category=category,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            except Exception:
+                continue
+            rows.extend(
+                _announcement_rows(
+                    asset_id=asset_id,
+                    ts_code=ts_code,
+                    announcements=response_payload.get("announcements", []),
+                    required_sec_code=stock_code,
+                )
+            )
+        return rows
+
+    def _query_search_category(
+        self,
+        *,
+        stock_code: str,
+        column: str,
+        plate: str,
+        category: str,
+        start_date: object,
+        end_date: object,
+    ) -> dict[str, Any]:
+        body = parse.urlencode(
+            {
+                "stock": "",
+                "searchkey": stock_code,
                 "tabName": "fulltext",
                 "pageSize": "30",
                 "pageNum": "1",
@@ -629,6 +702,37 @@ def _exchange_suffix(ts_code: object) -> tuple[str, str]:
 def _cninfo_stock_org_id(*, stock_code: str, exchange: str) -> str:
     org_prefix = "gssh" if exchange == "SH" else "gssz"
     return f"{org_prefix}{int(stock_code):07d}"
+
+
+def _announcement_rows(
+    *,
+    asset_id: object,
+    ts_code: object,
+    announcements: object,
+    required_sec_code: str | None = None,
+) -> list[dict[str, Any]]:
+    if not isinstance(announcements, list):
+        return []
+    rows = []
+    for announcement in announcements:
+        if not isinstance(announcement, dict):
+            continue
+        if required_sec_code is not None and _safe_text(announcement.get("secCode")) != required_sec_code:
+            continue
+        publish_date = _announcement_time_to_date(announcement.get("announcementTime"))
+        title = _safe_text(announcement.get("announcementTitle"))
+        rows.append(
+            {
+                "asset_id": asset_id,
+                "ts_code": ts_code,
+                "publish_date": publish_date,
+                "report_period": _infer_report_period_from_title(title, publish_date),
+                "announcement_title": title,
+                "source_document_id": announcement.get("announcementId"),
+                "source_document_url": _cninfo_static_url(announcement.get("adjunctUrl")),
+            }
+        )
+    return rows
 
 
 def _announcement_time_to_date(value: object) -> dt.date | None:
