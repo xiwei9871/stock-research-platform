@@ -151,6 +151,7 @@ from stock_research.loaders.baostock_ingestion import (
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
 from stock_research.market_data import load_market_daily_bars
+from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
 from stock_research.minute_backfill import (
     load_backfill_status,
@@ -1901,6 +1902,17 @@ def build_parser() -> argparse.ArgumentParser:
     intraday_risk_control_v2_backtest.add_argument("--lookback", type=int, default=20)
     intraday_risk_control_v2_backtest.add_argument("--zscore-threshold", type=float, default=1.5)
     intraday_risk_control_v2_backtest.add_argument("--output-dir", required=True)
+
+    market_emotion_state_v1 = subparsers.add_parser("market-emotion-state-v1-backfill")
+    market_emotion_state_v1.add_argument("--start-date", required=True)
+    market_emotion_state_v1.add_argument("--end-date", required=True)
+    market_emotion_state_v1.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="hfq",
+    )
+    market_emotion_state_v1.add_argument("--output-dir", required=True)
+    market_emotion_state_v1.add_argument("--mid-trend-equity-path")
 
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
@@ -4241,6 +4253,17 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"intraday_risk_control_v2_backtest|summary|{paths['summary']}")
         print(f"intraday_risk_control_v2_backtest|report|{paths['report']}")
         print(f"intraday_risk_control_v2_backtest|rows|{len(summary)}")
+    elif args.command == "market-emotion-state-v1-backfill":
+        result = run_market_emotion_state_v1_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+            mid_trend_equity_path=args.mid_trend_equity_path,
+        )
+        print(f"market_emotion_state|rows|{len(result['daily'])}")
+        for key, path in result["paths"].items():
+            print(f"market_emotion_state|{key}|{path}")
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,
