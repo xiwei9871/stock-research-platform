@@ -1199,6 +1199,16 @@ def build_parser() -> argparse.ArgumentParser:
     historical_top10_news_backfill.add_argument("--sample-trade-dates", type=int)
     historical_top10_news_backfill.add_argument("--output-dir")
 
+    market_style_switch = subparsers.add_parser("market-style-switch-v1-backtest")
+    market_style_switch.add_argument("--start-date", required=True)
+    market_style_switch.add_argument("--end-date", required=True)
+    market_style_switch.add_argument("--emotion-path", required=True)
+    market_style_switch.add_argument("--funnel-detail-path", required=True)
+    market_style_switch.add_argument("--output-dir", required=True)
+    market_style_switch.add_argument("--top-n", type=int, default=5)
+    market_style_switch.add_argument("--defensive-industry-keywords")
+    market_style_switch.add_argument("--adjust-type", choices=["raw", "qfq", "hfq"], default="hfq")
+
     news_feature_backfill = subparsers.add_parser("news-feature-backfill")
     news_feature_backfill.add_argument("--events-path", required=True)
     news_feature_backfill.add_argument("--start-date", required=True)
@@ -3783,6 +3793,35 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"historical_top10_news_backfill|candidates|{result['paths']['candidates']}")
         print(f"historical_top10_news_backfill|source_events|{result['paths']['source_events']}")
         print(f"historical_top10_news_backfill|source_rows|{len(result['source_events'])}")
+    elif args.command == "market-style-switch-v1-backtest":
+        from stock_research.market_style_switch_v1 import (
+            DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS,
+            run_market_style_switch_v1_backtest,
+        )
+
+        keywords = (
+            tuple(keyword.strip() for keyword in args.defensive_industry_keywords.split(",") if keyword.strip())
+            if args.defensive_industry_keywords
+            else DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS
+        )
+        result = run_market_style_switch_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            emotion_path=args.emotion_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            defensive_industry_keywords=keywords,
+            adjust_type=args.adjust_type,
+        )
+        print(f"market_style_switch|summary|{result['paths']['summary_path']}")
+        print(f"market_style_switch|style_state_rows|{len(result['style_state'])}")
+        print(f"market_style_switch|growth_rows|{len(result['growth_candidates'])}")
+        print(f"market_style_switch|defensive_rows|{len(result['defensive_candidates'])}")
+        print(f"market_style_switch|rotation_rows|{len(result['rotation_candidates'])}")
+        print(f"market_style_switch|equity_rows|{len(result['equity'])}")
+        print(f"market_style_switch|output_dir|{args.output_dir}")
+        return 0
     elif args.command == "news-feature-backfill":
         result = run_news_feature_backfill(
             events_path=args.events_path,
