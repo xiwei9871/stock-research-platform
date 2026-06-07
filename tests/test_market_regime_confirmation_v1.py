@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import pandas as pd
 
 from stock_research.market_regime_confirmation_v1 import (
     REGIME_COLUMNS,
     build_market_regime_confirmation_from_frames,
+    write_market_regime_confirmation_outputs,
 )
 
 
@@ -174,3 +177,62 @@ def test_confirmed_regime_does_not_downgrade_on_one_bad_day() -> None:
     assert bad_day["raw_regime_state"] in {"neutral", "weak_repair", "bear"}
     assert bad_day["confirmed_regime_state"] in {"bull_trend", "overheated"}
     assert bad_day["transition_reason"] == "downgrade_wait_for_confirmation"
+
+
+def test_write_outputs_includes_segment_diagnostics_transitions_and_markdown_report(tmp_path: Path) -> None:
+    regime = build_market_regime_confirmation_from_frames(
+        pd.DataFrame(
+            [
+                {"trade_date": "2024-09-23", "emotion_score": 30, "emotion_state": "cold", "risk_state": "high"},
+                {"trade_date": "2024-09-24", "emotion_score": 45, "emotion_state": "neutral", "risk_state": "medium"},
+                {"trade_date": "2024-09-25", "emotion_score": 60, "emotion_state": "hot", "risk_state": "low"},
+                {"trade_date": "2024-11-11", "emotion_score": 55, "emotion_state": "neutral", "risk_state": "medium"},
+            ]
+        ),
+        pd.DataFrame([{"event_date": "2024-09-24", "policy_strength": 0.9}]),
+    )
+
+    paths = write_market_regime_confirmation_outputs(regime, output_dir=tmp_path)
+
+    assert paths["regime_path"].name == "market_regime_confirmation_daily.csv"
+    assert paths["segment_diagnostics_path"].name == "market_regime_segment_diagnostics.csv"
+    assert paths["transition_path"].name == "market_regime_transitions.csv"
+    assert paths["report_path"].name == "market_regime_confirmation_v1_report.md"
+    assert pd.read_csv(paths["regime_path"]).columns.tolist() == REGIME_COLUMNS
+
+    segment = pd.read_csv(paths["segment_diagnostics_path"])
+    assert {
+        "segment_name",
+        "start_date",
+        "end_date",
+        "days",
+        "avg_target_exposure",
+        "dominant_regime",
+        "regime_changes",
+        "raw_confirmed_disagree_days",
+    }.issubset(segment.columns)
+    assert segment["segment_name"].tolist() == [
+        "pre_924_2024",
+        "policy_rally_2024",
+        "post_rally_2024",
+        "post_2025",
+        "full_period",
+    ]
+    assert int(segment.loc[segment["segment_name"] == "policy_rally_2024", "days"].iloc[0]) == 2
+
+    transitions = pd.read_csv(paths["transition_path"])
+    assert transitions.columns.tolist() == [
+        "trade_date",
+        "raw_regime_state",
+        "confirmed_regime_state",
+        "target_exposure",
+        "style_bias",
+        "transition_reason",
+    ]
+    assert transitions["trade_date"].iloc[0] == "2024-09-23"
+
+    report = paths["report_path"].read_text(encoding="utf-8")
+    assert report.startswith("# Market Regime Confirmation V1 Report")
+    assert "## Segment Diagnostics" in report
+    assert "## Confirmed Regime Distribution" in report
+    assert "## Transitions" in report
