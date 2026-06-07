@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from stock_research.cli import build_parser, main_for_args
 from stock_research.tech_bottleneck_core_tech_top100 import (
     build_baseline_comparison,
     build_weekly_topn_candidates,
@@ -361,3 +362,83 @@ def test_artifact_writer_accepts_planned_keyword_only_api(tmp_path: Path) -> Non
     manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
     assert manifest["inputs"] == inputs
     assert manifest["files"]["candidates_top100"] == "candidates_top100.csv"
+
+
+def test_cli_parser_accepts_core_tech_top100_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-core-tech-top100",
+            "--scores-csv",
+            "scores.csv",
+            "--quality-review-csv",
+            "quality_review.csv",
+            "--baseline-promotions-csv",
+            "baseline_promotions.csv",
+            "--output-dir",
+            "out",
+            "--top-n",
+            "75",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-core-tech-top100"
+    assert args.scores_csv == "scores.csv"
+    assert args.quality_review_csv == "quality_review.csv"
+    assert args.baseline_promotions_csv == "baseline_promotions.csv"
+    assert args.output_dir == "out"
+    assert args.top_n == 75
+
+
+def test_cli_parser_defaults_core_tech_top100_top_n_to_100() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-core-tech-top100",
+            "--scores-csv",
+            "scores.csv",
+            "--quality-review-csv",
+            "quality_review.csv",
+            "--baseline-promotions-csv",
+            "baseline_promotions.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-core-tech-top100"
+    assert args.top_n == 100
+
+
+def test_cli_dispatches_core_tech_top100(monkeypatch, capsys) -> None:
+    calls = {}
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return {"candidates_top100": Path("out/candidates_top100.csv")}
+
+    monkeypatch.setattr("stock_research.cli.run_core_tech_top100_from_files", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-core-tech-top100",
+            "--scores-csv",
+            "scores.csv",
+            "--quality-review-csv",
+            "quality_review.csv",
+            "--baseline-promotions-csv",
+            "baseline_promotions.csv",
+            "--output-dir",
+            "out",
+            "--top-n",
+            "75",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"candidates_top100": "out/candidates_top100.csv"}
+    assert calls["runner_kwargs"] == {
+        "scores_csv": Path("scores.csv"),
+        "quality_review_csv": Path("quality_review.csv"),
+        "baseline_promotions_csv": Path("baseline_promotions.csv"),
+        "output_dir": Path("out"),
+        "top_n": 75,
+    }

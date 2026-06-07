@@ -160,6 +160,8 @@ from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
+from stock_research.tech_bottleneck_core_tech_gate import run_core_tech_gate_from_files
+from stock_research.tech_bottleneck_core_tech_top100 import run_core_tech_top100_from_files
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
 from stock_research.tech_bottleneck_observation_outcome import run_observation_outcome_from_files
@@ -1429,6 +1431,24 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_quality_review.add_argument("--output-dir", required=True)
     tech_bottleneck_quality_review.add_argument("--evidence-hits-csv")
     tech_bottleneck_quality_review.add_argument("--product-rows-csv")
+
+    tech_bottleneck_core_tech_gate = subparsers.add_parser(
+        "tech-bottleneck-core-tech-gate",
+        help="Apply the core technology gate to tech bottleneck candidates from CSV inputs.",
+    )
+    tech_bottleneck_core_tech_gate.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_core_tech_gate.add_argument("--evidence-csv")
+    tech_bottleneck_core_tech_gate.add_argument("--output-dir", required=True)
+
+    tech_bottleneck_core_tech_top100 = subparsers.add_parser(
+        "tech-bottleneck-core-tech-top100",
+        help="Compare core-tech Top100 candidates with quality review and baseline promotions.",
+    )
+    tech_bottleneck_core_tech_top100.add_argument("--scores-csv", required=True)
+    tech_bottleneck_core_tech_top100.add_argument("--quality-review-csv", required=True)
+    tech_bottleneck_core_tech_top100.add_argument("--baseline-promotions-csv", required=True)
+    tech_bottleneck_core_tech_top100.add_argument("--output-dir", required=True)
+    tech_bottleneck_core_tech_top100.add_argument("--top-n", type=int, default=100)
 
     tech_bottleneck_observation_pool = subparsers.add_parser(
         "tech-bottleneck-observation-pool",
@@ -4854,6 +4874,22 @@ def main_for_args(argv: list[str] | None = None) -> None:
             output_dir=Path(args.output_dir),
             evidence_hits_csv=Path(args.evidence_hits_csv) if args.evidence_hits_csv else None,
             product_rows_csv=Path(args.product_rows_csv) if args.product_rows_csv else None,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-core-tech-gate":
+        paths = run_core_tech_gate_from_files(
+            candidates_csv=Path(args.candidates_csv),
+            evidence_csv=Path(args.evidence_csv) if args.evidence_csv else None,
+            output_dir=Path(args.output_dir),
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-core-tech-top100":
+        paths = run_core_tech_top100_from_files(
+            scores_csv=Path(args.scores_csv),
+            quality_review_csv=Path(args.quality_review_csv),
+            baseline_promotions_csv=Path(args.baseline_promotions_csv),
+            output_dir=Path(args.output_dir),
+            top_n=args.top_n,
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-observation-pool":

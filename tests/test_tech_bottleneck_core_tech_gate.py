@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from stock_research.cli import build_parser, main_for_args
 from stock_research.tech_bottleneck_core_tech_gate import (
     build_core_tech_gate,
     run_core_tech_gate_from_files,
@@ -349,3 +350,94 @@ def test_run_core_tech_gate_from_files_writes_required_artifacts_and_manifest_co
         "semiconductor_testing_metrology": 1,
     }
     assert "core technology gate" in paths["summary"].read_text(encoding="utf-8")
+
+
+def test_cli_parser_accepts_core_tech_gate_command() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-core-tech-gate",
+            "--candidates-csv",
+            "candidates.csv",
+            "--evidence-csv",
+            "evidence.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-core-tech-gate"
+    assert args.candidates_csv == "candidates.csv"
+    assert args.evidence_csv == "evidence.csv"
+    assert args.output_dir == "out"
+
+
+def test_cli_parser_defaults_core_tech_gate_evidence_csv_to_none() -> None:
+    args = build_parser().parse_args(
+        [
+            "tech-bottleneck-core-tech-gate",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    assert args.command == "tech-bottleneck-core-tech-gate"
+    assert args.evidence_csv is None
+
+
+def test_cli_dispatches_core_tech_gate(monkeypatch, capsys) -> None:
+    calls = {}
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return {"gate": Path("out/core_tech_gate.csv")}
+
+    monkeypatch.setattr("stock_research.cli.run_core_tech_gate_from_files", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-core-tech-gate",
+            "--candidates-csv",
+            "candidates.csv",
+            "--evidence-csv",
+            "evidence.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"gate": "out/core_tech_gate.csv"}
+    assert calls["runner_kwargs"] == {
+        "candidates_csv": Path("candidates.csv"),
+        "evidence_csv": Path("evidence.csv"),
+        "output_dir": Path("out"),
+    }
+
+
+def test_cli_dispatches_core_tech_gate_without_evidence_csv(monkeypatch, capsys) -> None:
+    calls = {}
+
+    def fake_runner(**kwargs):
+        calls["runner_kwargs"] = kwargs
+        return {"gate": Path("out/core_tech_gate.csv")}
+
+    monkeypatch.setattr("stock_research.cli.run_core_tech_gate_from_files", fake_runner)
+
+    main_for_args(
+        [
+            "tech-bottleneck-core-tech-gate",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    capsys.readouterr()
+    assert calls["runner_kwargs"] == {
+        "candidates_csv": Path("candidates.csv"),
+        "evidence_csv": None,
+        "output_dir": Path("out"),
+    }
