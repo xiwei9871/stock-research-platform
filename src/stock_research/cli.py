@@ -26,6 +26,7 @@ from stock_research.corporate_actions import (
 from stock_research.core_data import (
     build_asset_status_daily_for_service,
     build_industry_daily_bars_for_service,
+    sync_chinese_stock_names_from_akshare_for_service,
     sync_core_asset_master_for_service,
 )
 from stock_research.data_audit import format_audit_line, run_data_audit
@@ -98,6 +99,7 @@ from stock_research.daily_incremental import (
     check_market_data_freshness,
     run_daily_incremental_pipeline,
 )
+from stock_research.daily_data_pipeline import run_stock_daily_data_pipeline
 from stock_research.daily_job_run_store import (
     apply_daily_job_run_schema,
     record_daily_job_run,
@@ -1005,6 +1007,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("apply-research-schema")
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
+    subparsers.add_parser("sync-stock-chinese-names")
 
     dashboard_api = subparsers.add_parser("dashboard-api")
     dashboard_api.add_argument("--host", default="127.0.0.1")
@@ -1618,6 +1621,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    stock_daily_data_pipeline = subparsers.add_parser("run-stock-daily-data-pipeline")
+    stock_daily_data_pipeline.add_argument("--trade-date", required=True)
+    stock_daily_data_pipeline.add_argument("--output-dir", required=True)
+    stock_daily_data_pipeline.add_argument("--feishu-target")
+    stock_daily_data_pipeline.add_argument("--feishu-account", default="jarvis")
+    stock_daily_data_pipeline.add_argument("--openclaw-bin", default="openclaw")
+    stock_daily_data_pipeline.add_argument("--no-feishu", action="store_true")
+
     technical_features_daily = subparsers.add_parser("build-technical-features-daily")
     technical_features_daily.add_argument("--trade-date", required=True)
     technical_features_daily.add_argument("--lookback-bars", type=int, default=260)
@@ -1935,6 +1946,7 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--adjust-type", default="hfq")
     daily_incremental.add_argument("--source-service", default="stock_hfq")
     daily_incremental.add_argument("--industry-system", default="csrc")
+    daily_incremental.add_argument("--label-start-date")
     daily_incremental_resume = daily_incremental.add_mutually_exclusive_group()
     daily_incremental_resume.add_argument("--start-at")
     daily_incremental_resume.add_argument("--only-step")
@@ -2616,6 +2628,9 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "sync-core-assets":
         sync_core_asset_master_for_service()
         print("core_asset_master_synced")
+    elif args.command == "sync-stock-chinese-names":
+        count = sync_chinese_stock_names_from_akshare_for_service()
+        print(f"stock_chinese_names_synced|{count}")
     elif args.command == "dashboard-api":
         run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "data-audit":
@@ -3021,6 +3036,28 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"daily_factor_pipeline|factor_rows|{result['factor_rows']}")
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
+    elif args.command == "run-stock-daily-data-pipeline":
+        sender = None
+        if args.feishu_target:
+            def sender(message: str) -> None:
+                send_openclaw_feishu_message(
+                    message=message,
+                    target=args.feishu_target,
+                    account=args.feishu_account,
+                    openclaw_bin=args.openclaw_bin,
+                    dry_run=False,
+                )
+
+        result = run_stock_daily_data_pipeline(
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+            feishu_sender=sender,
+            send_feishu=not args.no_feishu,
+        )
+        print(f"stock_daily_data_pipeline|status|{result['status']}")
+        print(f"stock_daily_data_pipeline|summary|{args.output_dir}/run_summary.json")
+        if result["status"] != "success":
+            raise SystemExit(1)
     elif args.command == "build-technical-features-daily":
         count = build_and_store_stock_technical_features_daily(
             trade_date=args.trade_date,
@@ -3541,6 +3578,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
             adjust_type=args.adjust_type,
             source_service=args.source_service,
             industry_system=args.industry_system,
+            label_start_date=args.label_start_date,
             dry_run=args.dry_run,
             step_runners=None if args.dry_run else build_default_step_runners(),
             freshness_checker=None,

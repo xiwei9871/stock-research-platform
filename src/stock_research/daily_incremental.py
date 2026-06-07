@@ -157,7 +157,10 @@ def _build_industry_bars_step(context: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compute_labels_step(context: dict[str, Any]) -> dict[str, Any]:
-    rows = compute_and_store_labels(end_date=context["trade_date"])
+    rows = compute_and_store_labels(
+        end_date=context["trade_date"],
+        start_date=context.get("label_start_date"),
+    )
     return {"rows": rows}
 
 
@@ -198,6 +201,7 @@ def run_daily_incremental_pipeline(
     adjust_type: str = "hfq",
     source_service: str = SETTINGS.hfq_service,
     industry_system: str = "csrc",
+    label_start_date: str | None = None,
     dry_run: bool = False,
     step_runners: dict[str, StepRunner] | None = None,
     freshness_checker: FreshnessChecker | None = None,
@@ -215,6 +219,7 @@ def run_daily_incremental_pipeline(
         "adjust_type": adjust_type,
         "source_service": source_service,
         "industry_system": industry_system,
+        "label_start_date": label_start_date,
         "start_at": start_at,
         "only_step": only_step,
     }
