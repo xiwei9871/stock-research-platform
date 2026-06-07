@@ -55,6 +55,18 @@ def test_top100_selection_normalizes_integer_yyyymmdd_dates_and_ranks_by_date() 
     assert candidates["rank"].tolist() == [1, 2, 1]
 
 
+def test_top100_selection_normalizes_float_yyyymmdd_dates() -> None:
+    score_rows = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688001", "stock_name": "浮点日期", "trade_date": 20260605.0, "score": 20},
+        ]
+    )
+
+    candidates = build_weekly_topn_candidates(score_rows=score_rows, top_n=100)
+
+    assert candidates["trade_date"].tolist() == ["2026-06-05"]
+
+
 def test_top100_selection_drops_rows_with_invalid_required_inputs() -> None:
     score_rows = pd.DataFrame(
         [
@@ -196,6 +208,42 @@ def test_rank_51_100_increment_counts_exclude_top50_cohort_and_baseline_assets()
     assert outputs["manifest"]["new_p1_from_rank_51_100"] == 1
     assert outputs["manifest"]["new_p2_from_rank_51_100"] == 0
     assert "- New P1 from ranks 51-100: 1 (B)" in outputs["baseline_comparison_md"]
+
+
+def test_rank_101_auto_approve_is_outside_rank_51_100_increment_window() -> None:
+    top100_candidates = pd.DataFrame(
+        [
+            {"asset_id": "CN:SH:688051", "stock_name": "新增P1", "trade_date": "2026-06-05", "rank": 51},
+            {"asset_id": "CN:SH:688101", "stock_name": "窗外P1", "trade_date": "2026-06-05", "rank": 101},
+        ]
+    )
+    quality_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688051",
+                "stock_name": "新增P1",
+                "trade_date": "2026-06-05",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "CN:SH:688101",
+                "stock_name": "窗外P1",
+                "trade_date": "2026-06-05",
+                "p3_decision": "auto_approve",
+            },
+        ]
+    )
+
+    outputs = build_baseline_comparison(
+        top100_candidates=top100_candidates,
+        quality_review=quality_review,
+        baseline_promotions=pd.DataFrame(),
+    )
+
+    diff = outputs["top50_vs_top100_diff"].set_index("asset_id")
+    assert diff.loc["CN:SH:688051", "top100_increment_status"] == "new_p1_auto_promotion"
+    assert diff.loc["CN:SH:688101", "top100_increment_status"] == "outside_rank_51_100"
+    assert outputs["manifest"]["new_p1_from_rank_51_100"] == 1
 
 
 def test_file_runner_writes_artifacts_and_manifest_counts(tmp_path: Path) -> None:

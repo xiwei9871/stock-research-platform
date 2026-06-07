@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import math
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +187,9 @@ def _normalize_baseline_promotions(baseline_promotions: pd.DataFrame) -> pd.Data
 def _increment_status(row: pd.Series, *, existing_asset_ids: set[str] | None = None) -> str:
     if _as_bool(row.get("in_top50_baseline")):
         return "top50_baseline_row"
+    rank = pd.to_numeric(row.get("rank"), errors="coerce")
+    if pd.isna(rank) or rank <= 50 or rank > 100:
+        return "outside_rank_51_100"
     if str(row.get("asset_id", "")) in (existing_asset_ids or set()):
         return "existing_top50_or_baseline_asset"
     decision = str(row.get("p3_decision", ""))
@@ -236,10 +241,14 @@ def _names_for_status(diff: pd.DataFrame, status: str) -> str:
 def _normalize_date(value: Any) -> str:
     if pd.isna(value):
         return ""
-    if isinstance(value, int) and not isinstance(value, bool):
-        parsed_compact = pd.to_datetime(str(value), format="%Y%m%d", errors="coerce")
-        if not pd.isna(parsed_compact):
-            return parsed_compact.strftime("%Y-%m-%d")
+    if isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(value):
+        int_value = int(value)
+        if value == int_value:
+            compact_value = str(int_value)
+            if len(compact_value) == 8:
+                parsed_compact = pd.to_datetime(compact_value, format="%Y%m%d", errors="coerce")
+                if not pd.isna(parsed_compact):
+                    return parsed_compact.strftime("%Y-%m-%d")
     if isinstance(value, str):
         compact_value = value.strip()
         if len(compact_value) == 8 and compact_value.isdigit():
