@@ -186,6 +186,21 @@ def test_classify_text_evidence_emits_expected_evidence_types() -> None:
     }.issubset(evidence_types)
 
 
+def test_classify_text_evidence_emits_serenity_semantic_and_catalyst_evidence() -> None:
+    matches = classify_text_evidence(
+        text="公司产品打破国外垄断，国产化率持续提升，拥有多项发明专利，并已进入量产订单阶段。",
+        source_type="research.stock_report_event",
+        source_id="r2",
+        source_title="高端材料国产化跟踪",
+        source_date="2025-01-06",
+    )
+
+    evidence_types = {row["evidence_type"] for row in matches}
+    assert "bottleneck_keyword" in evidence_types
+    assert "technical_barrier" in evidence_types
+    assert "news_or_announcement_catalyst" in evidence_types
+
+
 def test_build_evidence_backfill_extracts_product_and_text_evidence() -> None:
     candidates = pd.DataFrame(
         [
