@@ -259,16 +259,30 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
     text_columns = ["product_family", "evidence_snippet", "matched_keyword"]
     normalized["_gate_text"] = normalized[text_columns].astype("string").fillna("").agg(" ".join, axis=1)
     normalized["_evidence_date"] = normalized.apply(_evidence_date, axis=1)
+    if "as_of_safe" in normalized:
+        normalized = normalized[~normalized["as_of_safe"].map(_is_explicit_false)].copy()
+    if any(column in normalized for column in ["evidence_date", "published_at"]):
+        normalized = normalized[normalized["_evidence_date"].ne("")].copy()
     return normalized[["asset_id", "_gate_text", "_evidence_date"]].copy()
 
 
 def _evidence_date(row: pd.Series) -> str:
-    for column in ["candidate_trade_date", "trade_date", "published_at"]:
+    for column in ["evidence_date", "published_at"]:
         if column in row:
             normalized = _normalize_valid_date(row[column])
             if normalized:
                 return normalized
     return ""
+
+
+def _is_explicit_false(value: Any) -> bool:
+    if pd.isna(value):
+        return False
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 0
+    return str(value).strip().casefold() in {"false", "0", "no"}
 
 
 def _normalize_valid_date(value: Any) -> str:

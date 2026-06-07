@@ -155,7 +155,7 @@ def test_build_core_tech_gate_uses_point_in_time_evidence_per_candidate_date() -
         [
             {
                 "asset_id": "CN:SH:688123",
-                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-06-20",
                 "product_family": "semiconductor_equipment",
                 "evidence_snippet": "公司披露半导体设备核心技术。",
                 "matched_keyword": "半导体设备",
@@ -172,6 +172,73 @@ def test_build_core_tech_gate_uses_point_in_time_evidence_per_candidate_date() -
     assert early["gate_reason"] == "no core technology evidence"
     assert later["core_tech_gate"] == "pass"
     assert later["core_tech_category"] == "semiconductor_equipment"
+
+
+def test_build_core_tech_gate_uses_pit_safe_source_availability_dates() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688201",
+                "stock_name": "未来披露样本",
+                "trade_date": "2025-06-20",
+                "rank": 1,
+                "industry_name": "综合",
+            },
+            {
+                "asset_id": "CN:SH:688202",
+                "stock_name": "非安全样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "综合",
+            },
+            {
+                "asset_id": "CN:SH:688203",
+                "stock_name": "安全样本",
+                "trade_date": "2025-06-20",
+                "rank": 3,
+                "industry_name": "综合",
+            },
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688201",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-07-01",
+                "as_of_safe": True,
+                "product_family": "semiconductor_equipment",
+                "evidence_snippet": "公司披露半导体设备核心技术。",
+                "matched_keyword": "半导体设备",
+            },
+            {
+                "asset_id": "CN:SH:688202",
+                "evidence_date": "2025-06-01",
+                "as_of_safe": "False",
+                "product_family": "optical_communication_components",
+                "evidence_snippet": "公司披露光模块核心技术。",
+                "matched_keyword": "光模块",
+            },
+            {
+                "asset_id": "CN:SH:688203",
+                "evidence_date": "2025-06-01",
+                "as_of_safe": True,
+                "product_family": "medical_imaging",
+                "evidence_snippet": "公司披露医学影像核心技术。",
+                "matched_keyword": "医学影像",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=evidence)
+    rows = outputs["core_tech_gate"].set_index("asset_id")
+
+    assert rows.loc["CN:SH:688201", "core_tech_gate"] == "reject"
+    assert rows.loc["CN:SH:688201", "gate_reason"] == "no core technology evidence"
+    assert rows.loc["CN:SH:688202", "core_tech_gate"] == "reject"
+    assert rows.loc["CN:SH:688202", "gate_reason"] == "no core technology evidence"
+    assert rows.loc["CN:SH:688203", "core_tech_gate"] == "pass"
+    assert rows.loc["CN:SH:688203", "core_tech_category"] == "medical_imaging"
 
 
 def test_run_core_tech_gate_from_files_writes_required_artifacts_and_manifest_counts(tmp_path: Path) -> None:
