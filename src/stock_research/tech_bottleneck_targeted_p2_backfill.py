@@ -242,6 +242,7 @@ def build_targeted_bridge_evidence(
     }
 
     rows: list[dict[str, Any]] = []
+    emitted_source_ids: set[str] = set()
     for suggestion in bridgeable_suggestions.to_dict("records"):
         asset_id = _safe_text(suggestion.get("asset_id"))
         candidate_trade_date = _canonical_date_text(suggestion.get("candidate_trade_date"))
@@ -259,6 +260,10 @@ def build_targeted_bridge_evidence(
 
         product_terms = _matched_terms(pd.DataFrame([source_row]), BRIDGE_TARGETS[family]["product_terms"])
         semantic_terms = _matched_terms(pd.DataFrame([source_row]), BRIDGE_TARGETS[family]["semantic_terms"])
+        source_id = f"{candidate['asset_id']}:{candidate['candidate_trade_date']}:{family}:bridge"
+        if source_id in emitted_source_ids:
+            continue
+        emitted_source_ids.add(source_id)
         rows.append(
             {
                 "run_id": run_id,
@@ -278,7 +283,7 @@ def build_targeted_bridge_evidence(
                     ],
                 ),
                 "source_type": "derived_product_family_bridge",
-                "source_id": f"{candidate['asset_id']}:{candidate['candidate_trade_date']}:{family}:bridge",
+                "source_id": source_id,
                 "source_title": _first_text(source_row, ["source_title", "source_name"]),
                 "source_url": _first_text(source_row, ["source_url", "url"]),
                 "evidence_type": source_row.get("evidence_type"),

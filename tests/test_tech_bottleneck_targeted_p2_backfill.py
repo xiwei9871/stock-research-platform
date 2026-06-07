@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from stock_research.tech_bottleneck_evidence_backfill import EVIDENCE_COLUMNS
 from stock_research.tech_bottleneck_targeted_p2_backfill import (
     build_bridge_suggestions,
     build_targeted_bridge_evidence,
@@ -587,6 +588,112 @@ def test_build_targeted_bridge_evidence_ignores_non_bridgeable_suggestions() -> 
     )
 
     assert bridge_evidence.empty
+
+
+def test_build_targeted_bridge_evidence_dedupes_duplicate_bridgeable_suggestions() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "candidate_trade_date": "2025-03-05",
+                "source_id": "tf-source-1",
+                "evidence_snippet": "公司光通信器件客户导入推进。",
+                "as_of_safe": True,
+            }
+        ]
+    )
+    suggestions = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "candidate_trade_date": "2025-03-05",
+                "bridge_family": "optical_communication_components",
+                "supporting_source_ids": "tf-source-1",
+                "bridge_status": "bridgeable",
+            },
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "candidate_trade_date": "2025-03-05",
+                "bridge_family": "optical_communication_components",
+                "supporting_source_ids": "tf-source-1",
+                "bridge_status": "bridgeable",
+            },
+        ]
+    )
+
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=queue,
+        evidence=evidence,
+        suggestions=suggestions,
+        run_id="targeted-run",
+    )
+
+    assert len(bridge_evidence) == 1
+    assert bridge_evidence["source_id"].tolist() == [
+        "CN:SZ:300394:2025-03-05:optical_communication_components:bridge"
+    ]
+
+
+def test_empty_targeted_bridge_evidence_has_normalized_evidence_schema() -> None:
+    bridge_evidence = build_targeted_bridge_evidence(
+        queue=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SZ:300394",
+                    "stock_name": "天孚通信",
+                    "trade_date": "2025-03-05",
+                    "p3_decision": "needs_product_family_mapping",
+                }
+            ]
+        ),
+        evidence=pd.DataFrame(),
+        suggestions=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SZ:300394",
+                    "stock_name": "天孚通信",
+                    "candidate_trade_date": "2025-03-05",
+                    "bridge_family": "optical_communication_components",
+                    "bridge_status": "bridgeable",
+                }
+            ]
+        ),
+        run_id="targeted-run",
+    )
+
+    assert bridge_evidence.empty
+    assert list(bridge_evidence.columns) == EVIDENCE_COLUMNS
+
+
+def test_combine_evidence_preserves_original_then_bridge_row_order_and_count() -> None:
+    original_evidence = pd.DataFrame(
+        [
+            {"source_id": "original-1", "asset_id": "CN:SZ:300394"},
+            {"source_id": "original-2", "asset_id": "CN:SZ:002859"},
+        ]
+    )
+    bridge_evidence = pd.DataFrame(
+        [
+            {"source_id": "bridge-1", "source_type": "derived_product_family_bridge"},
+        ]
+    )
+
+    combined = combine_evidence(original_evidence=original_evidence, bridge_evidence=bridge_evidence)
+
+    assert len(combined) == 3
+    assert combined["source_id"].tolist() == ["original-1", "original-2", "bridge-1"]
 
 
 def test_write_targeted_backfill_artifacts_writes_required_files(tmp_path: Path) -> None:
