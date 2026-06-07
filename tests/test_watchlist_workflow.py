@@ -226,6 +226,14 @@ def test_build_watchlist_diagnostics_snapshot_sets_watchlist_identity(monkeypatc
             "must_watch": pd.DataFrame([{"asset_id": "A", "watch_group": "opportunity_watch"}]),
         },
     )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_asset_identity_map",
+        lambda asset_ids: pd.DataFrame([{"asset_id": "A", "ts_code": "000001.SZ", "stock_name": "Alpha"}]),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_watchlist_factor_frame",
+        lambda **kwargs: pd.DataFrame(),
+    )
     monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_lhb_frame", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr("stock_research.watchlist.workflow._load_event_frame", lambda **kwargs: pd.DataFrame())
