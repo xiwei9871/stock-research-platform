@@ -752,7 +752,7 @@ def _decision(qualities: dict[str, str], family: str) -> tuple[str, str, str]:
             return (
                 "needs_product_family_mapping",
                 "product and evidence are not linked by current product-family dictionary, but core evidence is not weak",
-                "add or refine product-family mapping, then rerun quality review",
+                "needs_product_family_mapping",
             )
         return (
             "reject_or_noise",
@@ -775,7 +775,7 @@ def _decision(qualities: dict[str, str], family: str) -> tuple[str, str, str]:
         return (
             "needs_more_evidence",
             reason,
-            "supplement cleaner customer certification/order/capacity/catalyst evidence before auto approval",
+            _next_support_evidence_need(qualities),
         )
     return (
         "reject_or_noise",
@@ -814,6 +814,17 @@ def _review_priority(row: pd.Series) -> str:
 
 def _core_evidence_ok(qualities: dict[str, str]) -> bool:
     return qualities["bottleneck"] in {"strong", "medium"} and qualities["technical"] in {"strong", "medium"}
+
+
+def _next_support_evidence_need(qualities: dict[str, str]) -> str:
+    needs = []
+    if qualities["customer"] in {"missing", "weak"}:
+        needs.append("needs_customer_or_certification_evidence")
+    if qualities["capacity"] in {"missing", "weak"}:
+        needs.append("needs_capacity_evidence")
+    if qualities["catalyst"] in {"missing", "weak"}:
+        needs.append("needs_catalyst_evidence")
+    return "|".join(needs) if needs else "needs_pit_safe_source"
 
 
 def _quality_score(value: str) -> int:

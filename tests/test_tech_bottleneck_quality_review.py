@@ -216,7 +216,40 @@ def test_build_quality_review_marks_unmapped_strong_candidate_for_product_family
     row = review.iloc[0]
     assert row["p3_decision"] == "needs_product_family_mapping"
     assert row["product_linkage_quality"] == "missing"
-    assert "product-family mapping" in row["next_evidence_need"]
+    assert row["next_evidence_need"] == "needs_product_family_mapping"
+
+
+def test_build_quality_review_labels_missing_support_evidence_needs() -> None:
+    review = build_quality_review(
+        candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:688777",
+                    "stock_name": "支撑缺口样本",
+                    "trade_date": "2025-04-11",
+                    "product_snippet": "半导体设备 薄膜沉积设备 刻蚀设备",
+                }
+            ]
+        ),
+        product_rows=pd.DataFrame(),
+        evidence_hits=pd.DataFrame(
+            [
+                _hit("CN:SH:688777", "2025-04-11", "bottleneck", "国产替代", "半导体设备国产替代需求明确，薄膜沉积设备打破进口依赖"),
+                _hit("CN:SH:688777", "2025-04-11", "technical_barrier", "核心技术", "刻蚀设备等半导体设备具备核心技术和先进制程工艺积累"),
+            ]
+        ),
+    )
+
+    row = review.iloc[0]
+    assert row["p3_decision"] == "needs_more_evidence"
+    assert row["product_family"] == "semiconductor_equipment"
+    assert row["customer_quality"] == "missing"
+    assert row["capacity_quality"] == "missing"
+    assert row["catalyst_quality"] == "missing"
+    assert (
+        row["next_evidence_need"]
+        == "needs_customer_or_certification_evidence|needs_capacity_evidence|needs_catalyst_evidence"
+    )
 
 
 def test_build_quality_review_rejects_low_tech_consumer_goods_even_when_mapped() -> None:
