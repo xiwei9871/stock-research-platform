@@ -162,6 +162,7 @@ from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.tech_bottleneck_discovery import run_tech_bottleneck_discovery_from_files
 from stock_research.tech_bottleneck_evidence_backfill import run_evidence_backfill_from_files
 from stock_research.tech_bottleneck_experiment import run_historical_rescore_from_files
+from stock_research.tech_bottleneck_observation_pool import run_observation_pool_from_files
 from stock_research.tech_bottleneck_quality_review import run_quality_review_from_files
 from stock_research.tech_bottleneck_readiness import run_readiness_audit_from_files
 from stock_research.official_disclosure_product_backfill import run_official_disclosure_product_backfill
@@ -1427,6 +1428,17 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_quality_review.add_argument("--output-dir", required=True)
     tech_bottleneck_quality_review.add_argument("--evidence-hits-csv")
     tech_bottleneck_quality_review.add_argument("--product-rows-csv")
+
+    tech_bottleneck_observation_pool = subparsers.add_parser(
+        "tech-bottleneck-observation-pool",
+        help="Build an observation pool and comparison groups from tech bottleneck quality review outputs.",
+    )
+    tech_bottleneck_observation_pool.add_argument("--promotion-assets-csv", required=True)
+    tech_bottleneck_observation_pool.add_argument("--candidates-csv", required=True)
+    tech_bottleneck_observation_pool.add_argument("--output-dir", required=True)
+    tech_bottleneck_observation_pool.add_argument("--pass-pool-csv")
+    tech_bottleneck_observation_pool.add_argument("--source-manifest")
+    tech_bottleneck_observation_pool.add_argument("--horizons", default="120,250,500")
 
     tech_bottleneck_product = subparsers.add_parser(
         "tech-bottleneck-official-disclosure-product-backfill",
@@ -4830,6 +4842,16 @@ def main_for_args(argv: list[str] | None = None) -> None:
             output_dir=Path(args.output_dir),
             evidence_hits_csv=Path(args.evidence_hits_csv) if args.evidence_hits_csv else None,
             product_rows_csv=Path(args.product_rows_csv) if args.product_rows_csv else None,
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-bottleneck-observation-pool":
+        paths = run_observation_pool_from_files(
+            promotion_assets_csv=Path(args.promotion_assets_csv),
+            candidates_csv=Path(args.candidates_csv),
+            pass_pool_csv=Path(args.pass_pool_csv) if args.pass_pool_csv else None,
+            output_dir=Path(args.output_dir),
+            source_manifest_path=Path(args.source_manifest) if args.source_manifest else None,
+            horizons=[int(item.strip()) for item in str(args.horizons).split(",") if item.strip()],
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
     elif args.command == "tech-bottleneck-official-disclosure-product-backfill":
