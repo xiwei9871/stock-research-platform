@@ -141,11 +141,7 @@ def build_targeted_gap_audit(queue: pd.DataFrame, evidence: pd.DataFrame) -> pd.
             bridge_text = _joined_text(evidence_row, BRIDGE_TEXT_COLUMNS)
             typed_and_snippet_text = " ".join([evidence_type, snippet_keyword_text])
 
-            if (
-                "product" in evidence_type
-                or "revenue" in evidence_type
-                or _contains_any(bridge_text, BRIDGE_TARGETS[family]["product_terms"])
-            ):
+            if _contains_any(bridge_text, BRIDGE_TARGETS[family]["product_terms"]):
                 product_count += 1
             if "bottleneck" in evidence_type or _contains_any(snippet_keyword_text, semantic_terms):
                 bottleneck_count += 1
@@ -263,7 +259,7 @@ def _missing_bridge_side(*, product_count: int, bottleneck_count: int, technical
 
 def _matched_terms(evidence: pd.DataFrame, terms: Iterable[str]) -> list[str]:
     text = _joined_frame_text(evidence, BRIDGE_TEXT_COLUMNS)
-    return [term for term in terms if term in text]
+    return [term for term in terms if term.lower() in text.lower()]
 
 
 def _bridge_supporting_evidence(evidence: pd.DataFrame, terms: Iterable[str]) -> pd.DataFrame:

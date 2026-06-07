@@ -315,6 +315,35 @@ def test_product_terms_in_text_count_product_evidence_without_product_type() -> 
     assert audit.iloc[0]["product_evidence_count"] == 1
 
 
+def test_product_revenue_type_without_targeted_product_term_does_not_count_product_evidence() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "candidate_trade_date": "2025-03-05",
+                "evidence_type": "product_revenue",
+                "evidence_snippet": "办公租赁收入保持稳定",
+                "matched_keyword": "租赁",
+                "as_of_safe": True,
+            }
+        ]
+    )
+
+    audit = build_targeted_gap_audit(queue, evidence)
+
+    assert audit.iloc[0]["product_evidence_count"] == 0
+
+
 def test_bridge_suggestions_match_common_repo_text_fields() -> None:
     queue = pd.DataFrame(
         [
@@ -348,6 +377,37 @@ def test_bridge_suggestions_match_common_repo_text_fields() -> None:
     assert row["matched_semantic_terms"] == "客户导入|产能|量产|半导体"
     assert row["supporting_source_ids"] == "common-fields"
     assert row["bridge_status"] == "bridgeable"
+
+
+def test_bridge_suggestions_match_lowercase_acronym_evidence_with_canonical_output() -> None:
+    queue = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-03-05",
+                "p3_decision": "needs_product_family_mapping",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300394",
+                "candidate_trade_date": "2025-03-05",
+                "source_id": "tf-lowercase",
+                "evidence_snippet": "cpo光通信器件客户导入推进",
+                "as_of_safe": True,
+            }
+        ]
+    )
+
+    suggestions = build_bridge_suggestions(queue, evidence)
+
+    row = suggestions.iloc[0]
+    assert row["matched_product_terms"] == "CPO|光通信器件"
+    assert row["matched_semantic_terms"] == "客户导入"
+    assert row["supporting_source_ids"] == "tf-lowercase"
 
 
 def test_string_as_of_safe_values_filter_like_booleans() -> None:
