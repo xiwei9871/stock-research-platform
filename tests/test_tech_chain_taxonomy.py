@@ -172,6 +172,75 @@ def test_build_chain_mapping_identifies_chain_context_and_product_exposure() -> 
     assert rows.loc["CN:SZ:300476", "primary_chain_id"] == "ai_server_pcb"
 
 
+def test_build_chain_mapping_uses_wide_candidate_fields_and_strips_blank_ids() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "  CN:SZ:300308  ",
+                "stock_name": "中际旭创",
+                "trade_date": 20250620,
+                "industry_name": "通信设备",
+                "product_snippet": "",
+                "technical_snippet": "CPO 光引擎 光通信模块",
+            },
+            {
+                "asset_id": "   ",
+                "stock_name": "空白ID",
+                "trade_date": "2025-06-20",
+                "industry_name": "通信设备",
+                "product_snippet": "",
+                "technical_snippet": "CPO 光引擎 光通信模块",
+            },
+        ]
+    )
+
+    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+
+    assert mapping["asset_id"].tolist() == ["CN:SZ:300308"]
+    assert mapping.loc[0, "trade_date"] == "2025-06-20"
+    assert mapping.loc[0, "primary_chain_id"] == "ai_optical_interconnect"
+
+
+def test_build_chain_mapping_prefers_product_chain_over_overlapping_memory_terms() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "stock_name": "寒武纪",
+                "trade_date": "2025-08-22",
+                "industry_name": "半导体",
+                "product_snippet": "AI芯片 GPU HBM3E 高带宽内存",
+            },
+        ]
+    )
+
+    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+
+    assert mapping.loc[0, "primary_chain_id"] == "ai_compute_chips"
+    assert "hbm_high_end_memory" in mapping.loc[0, "matched_chain_ids"].split("|")
+
+
+def test_build_chain_mapping_preserves_string_asset_ids_with_leading_zeroes() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "000001",
+                "stock_name": "MLCC供应商",
+                "trade_date": "2025-06-20",
+                "industry_name": "电子元件",
+                "product_snippet": "MLCC 多层陶瓷电容器",
+            },
+        ]
+    )
+
+    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+
+    assert mapping.loc[0, "asset_id"] == "000001"
+
+
 def _minimal_chain() -> dict[str, object]:
     return {
         "chain_id": "hbm_high_end_memory",

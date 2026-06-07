@@ -32,6 +32,23 @@ CHAIN_MAPPING_COLUMNS = [
     "product_exposure_quality",
 ]
 
+CANDIDATE_TEXT_FIELDS = [
+    "stock_name",
+    "industry_name",
+    "product_snippet",
+    "product_family",
+    "bottleneck_keyword",
+    "bottleneck_snippet",
+    "technical_keyword",
+    "technical_snippet",
+    "customer_keyword",
+    "customer_snippet",
+    "capacity_keyword",
+    "capacity_snippet",
+    "catalyst_keyword",
+    "catalyst_snippet",
+]
+
 
 @dataclass(frozen=True)
 class TechChainDefinition:
@@ -81,23 +98,20 @@ def build_chain_mapping(
     normalized = _normalize_candidates(candidates)
     rows: list[dict[str, Any]] = []
     for candidate in normalized.to_dict("records"):
-        text = _compactible_text(
-            " ".join(
-                [
-                    candidate["stock_name"],
-                    candidate["industry_name"],
-                    candidate["product_snippet"],
-                ]
-            )
-        )
-        matches = [_candidate_chain_match(chain, text) for chain in taxonomy.chains]
+        text = _candidate_matching_text(candidate)
+        matches = [
+            _candidate_chain_match(chain, text, taxonomy_order=index)
+            for index, chain in enumerate(taxonomy.chains)
+        ]
         matches = [match for match in matches if match["score"] > 0]
         matches = sorted(
             matches,
             key=lambda item: (
-                item["product_hits"],
-                item["context_hits"],
+                item["product_hits"] > 0,
+                item["distinct_product_hits"] > 0,
+                item["context_hits"] > 0,
                 item["score"],
+                -item["taxonomy_order"],
             ),
             reverse=True,
         )
@@ -123,9 +137,15 @@ def build_chain_mapping(
     return pd.DataFrame(rows).reindex(columns=CHAIN_MAPPING_COLUMNS)
 
 
-def _candidate_chain_match(chain: TechChainDefinition, text: str) -> dict[str, Any]:
+def _candidate_chain_match(
+    chain: TechChainDefinition, text: str, *, taxonomy_order: int
+) -> dict[str, Any]:
     context_terms = _matched_terms(text, chain.chain_context_terms)
     product_terms = _matched_terms(text, chain.product_exposure_terms)
+    context_compacts = {_compactible_text(term) for term in context_terms}
+    distinct_product_hits = len(
+        [term for term in product_terms if _compactible_text(term) not in context_compacts]
+    )
     context_hits = len(context_terms)
     product_hits = len(product_terms)
     return {
@@ -135,7 +155,13 @@ def _candidate_chain_match(chain: TechChainDefinition, text: str) -> dict[str, A
         "product_terms": product_terms,
         "context_hits": context_hits,
         "product_hits": product_hits,
-        "score": context_hits + product_hits * 3,
+        "distinct_product_hits": distinct_product_hits,
+        "taxonomy_order": taxonomy_order,
+        "score": (
+            _matched_term_length(product_terms) * 3
+            + _matched_term_length(context_terms)
+            + distinct_product_hits * 10
+        ),
     }
 
 
@@ -143,19 +169,27 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     frame = candidates.copy()
     for column in [
         "asset_id",
-        "stock_name",
         "trade_date",
-        "industry_name",
-        "product_snippet",
+        *CANDIDATE_TEXT_FIELDS,
     ]:
         if column not in frame:
             frame[column] = ""
-    frame["asset_id"] = frame["asset_id"].astype("string").fillna("")
-    frame["stock_name"] = frame["stock_name"].astype("string").fillna("")
-    frame["industry_name"] = frame["industry_name"].astype("string").fillna("")
-    frame["product_snippet"] = frame["product_snippet"].astype("string").fillna("")
+    # Preserve string asset ids such as "000001"; CSV readers should pass dtype=str.
+    frame["asset_id"] = _normalized_string_column(frame["asset_id"])
+    for column in CANDIDATE_TEXT_FIELDS:
+        frame[column] = _normalized_string_column(frame[column])
     frame["trade_date"] = frame["trade_date"].map(_normalize_date)
     return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
+
+
+def _normalized_string_column(column: pd.Series) -> pd.Series:
+    return column.astype("string").fillna("").str.strip()
+
+
+def _candidate_matching_text(candidate: dict[str, Any]) -> str:
+    return _compactible_text(
+        " ".join(str(candidate[field]) for field in CANDIDATE_TEXT_FIELDS)
+    )
 
 
 def _normalize_date(value: Any) -> str:
@@ -177,7 +211,25 @@ def _normalize_date(value: Any) -> str:
 
 def _matched_terms(text: str, terms: list[str]) -> list[str]:
     compact_text = _compactible_text(text)
-    return [term for term in terms if _compactible_text(term) in compact_text]
+    matched = [
+        (term, _compactible_text(term))
+        for term in terms
+        if _compactible_text(term) in compact_text
+    ]
+    return [
+        term
+        for term, compact_term in matched
+        if not any(
+            compact_term != other_compact
+            and compact_term in other_compact
+            and len(compact_term) < len(other_compact)
+            for _, other_compact in matched
+        )
+    ]
+
+
+def _matched_term_length(terms: list[str]) -> int:
+    return sum(len(_compactible_text(term)) for term in terms)
 
 
 def _compactible_text(value: str) -> str:
