@@ -316,7 +316,12 @@ def build_quality_review(
     return pd.DataFrame(rows).reindex(columns=QUALITY_REVIEW_COLUMNS)
 
 
-def write_quality_review_artifacts(*, review: pd.DataFrame, output_dir: Path) -> dict[str, Path]:
+def write_quality_review_artifacts(
+    *,
+    review: pd.DataFrame,
+    output_dir: Path,
+    inputs: dict[str, str] | None = None,
+) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / "quality_review.csv"
     json_path = output_dir / "quality_review.json"
@@ -355,6 +360,8 @@ def write_quality_review_artifacts(*, review: pd.DataFrame, output_dir: Path) ->
         "rejected_assets_count": int(len(asset_queues["rejected_assets"])),
         "quality_score_mean": float(review["evidence_quality_score"].mean()) if "evidence_quality_score" in review and not review.empty else 0.0,
     }
+    if inputs:
+        payload["inputs"] = inputs
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     summary_path.write_text(_render_summary(review, payload), encoding="utf-8")
     action_plan_path.write_text(_render_action_plan(payload, asset_queues), encoding="utf-8")
@@ -402,7 +409,12 @@ def run_quality_review_from_files(
     evidence_hits = pd.read_csv(evidence_hits_csv) if evidence_hits_csv else pd.DataFrame()
     product_rows = pd.read_csv(product_rows_csv) if product_rows_csv else pd.DataFrame()
     review = build_quality_review(candidates=candidates, product_rows=product_rows, evidence_hits=evidence_hits)
-    return write_quality_review_artifacts(review=review, output_dir=output_dir)
+    inputs = {
+        "candidates_csv": str(candidates_csv),
+        "evidence_hits_csv": str(evidence_hits_csv) if evidence_hits_csv else "",
+        "product_rows_csv": str(product_rows_csv) if product_rows_csv else "",
+    }
+    return write_quality_review_artifacts(review=review, output_dir=output_dir, inputs=inputs)
 
 
 def build_operational_queues(review: pd.DataFrame) -> dict[str, pd.DataFrame]:

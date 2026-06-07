@@ -193,6 +193,7 @@ def test_build_quality_review_rejects_low_tech_consumer_goods_even_when_mapped()
 def test_write_and_run_quality_review_from_files(tmp_path: Path) -> None:
     candidates_csv = tmp_path / "candidates.csv"
     evidence_csv = tmp_path / "evidence.csv"
+    product_csv = tmp_path / "product.csv"
     pd.DataFrame(
         [
             {
@@ -210,12 +211,23 @@ def test_write_and_run_quality_review_from_files(tmp_path: Path) -> None:
             _hit("CN:SH:603067", "2025-04-30", "capacity", "产能", "优势产能延伸，高纯氧化铬绿、金属铬取得批量订单"),
         ]
     ).to_csv(evidence_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:603067",
+                "trade_date": "2025-04-30",
+                "item_name": "铬的氧化物",
+                "evidence_snippet": "2024年年度报告披露铬的氧化物，收入占比0.42%",
+                "as_of_safe": True,
+            }
+        ]
+    ).to_csv(product_csv, index=False)
 
     paths = run_quality_review_from_files(
         candidates_csv=candidates_csv,
         output_dir=tmp_path / "out",
         evidence_hits_csv=evidence_csv,
-        product_rows_csv=None,
+        product_rows_csv=product_csv,
     )
 
     assert paths["csv"].exists()
@@ -225,6 +237,14 @@ def test_write_and_run_quality_review_from_files(tmp_path: Path) -> None:
     assert rows.iloc[0]["p3_decision"] == "auto_approve"
     payload = json.loads(paths["json"].read_text(encoding="utf-8"))
     assert payload["decision_counts"] == {"auto_approve": 1}
+    expected_inputs = {
+        "candidates_csv": str(candidates_csv),
+        "evidence_hits_csv": str(evidence_csv),
+        "product_rows_csv": str(product_csv),
+    }
+    assert payload["inputs"] == expected_inputs
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    assert manifest["inputs"] == expected_inputs
 
 
 def test_write_quality_review_artifacts_outputs_decision_summary(tmp_path: Path) -> None:
