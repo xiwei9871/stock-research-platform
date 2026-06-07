@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from stock_research.tech_chain_taxonomy import (
+    CHAIN_EVIDENCE_COLUMNS,
     build_chain_evidence_review,
     build_chain_mapping,
     load_taxonomy,
@@ -292,6 +293,48 @@ def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -
     assert row["bottleneck_dimension"] == "architecture_route"
     assert row["matched_terms"] == "CPO"
     assert row["evidence_quality"] == "strong"
+
+
+def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence_without_flag = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "持续扩产备料并积极研发布局CPO",
+            },
+        ]
+    )
+
+    review_without_flag = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence_without_flag, taxonomy=taxonomy
+    )
+
+    assert review_without_flag.empty
+    assert review_without_flag.columns.tolist() == CHAIN_EVIDENCE_COLUMNS
+
+    evidence_with_flag = evidence_without_flag.assign(as_of_safe=True)
+
+    review_with_flag = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence_with_flag, taxonomy=taxonomy
+    )
+
+    assert len(review_with_flag) == 1
 
 
 def _minimal_chain() -> dict[str, object]:

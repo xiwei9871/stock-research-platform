@@ -293,7 +293,7 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
             frame[column] = ""
         frame[column] = _normalized_string_column(frame[column])
     if "as_of_safe" not in frame:
-        frame["as_of_safe"] = True
+        frame["as_of_safe"] = False
     frame["as_of_safe"] = frame["as_of_safe"].map(_bool_value)
     frame["candidate_trade_date"] = frame["candidate_trade_date"].map(_normalize_date)
     frame["evidence_date"] = frame["evidence_date"].map(_normalize_date)
