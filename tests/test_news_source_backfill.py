@@ -6,6 +6,7 @@ import hashlib
 from stock_research import cli
 from stock_research.news_source_backfill import (
     NEWS_SOURCE_COLUMNS,
+    _fetch_cninfo_disclosure_announcement_rows,
     fetch_news_rows,
     normalize_historical_source_rows,
     normalize_news_source_rows,
@@ -184,6 +185,49 @@ def test_normalize_cninfo_disclosure_rows() -> None:
     assert events.iloc[0]["content"] == ""
     assert events.iloc[0]["published_at"] == pd.Timestamp("2025-01-24 00:00:00")
     assert events.iloc[0]["metadata"]["provider"] == "cninfo_disclosure_announcement"
+
+
+def test_fetch_cninfo_disclosure_announcement_rows_treats_known_empty_keyerror_as_no_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAk:
+        @staticmethod
+        def stock_zh_a_disclosure_report_cninfo(
+            *, symbol: str, market: str, start_date: str, end_date: str
+        ):
+            raise KeyError(
+                "None of [Index(['代码', '简称', '公告标题', '公告时间', 'announcementId', 'orgId'], dtype='str')] are in the [columns]"
+            )
+
+    monkeypatch.setattr("stock_research.news_source_backfill.ak", FakeAk(), raising=False)
+
+    rows = _fetch_cninfo_disclosure_announcement_rows(
+        symbol="600919",
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+    )
+
+    assert rows == []
+
+
+def test_fetch_cninfo_disclosure_announcement_rows_does_not_swallow_unrelated_keyerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAk:
+        @staticmethod
+        def stock_zh_a_disclosure_report_cninfo(
+            *, symbol: str, market: str, start_date: str, end_date: str
+        ):
+            raise KeyError("unexpected missing column")
+
+    monkeypatch.setattr("stock_research.news_source_backfill.ak", FakeAk(), raising=False)
+
+    with pytest.raises(KeyError, match="unexpected missing column"):
+        _fetch_cninfo_disclosure_announcement_rows(
+            symbol="600919",
+            start_date="2025-01-01",
+            end_date="2025-01-31",
+        )
 
 
 def test_historical_fallback_source_event_id_normalizes_date_shape() -> None:

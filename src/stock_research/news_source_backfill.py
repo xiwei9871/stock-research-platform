@@ -161,6 +161,23 @@ def _frame_records(frame: pd.DataFrame | None) -> list[dict[str, object]]:
     return [dict(row) for row in frame.to_dict(orient="records")]
 
 
+def _is_cninfo_empty_result_keyerror(exc: KeyError) -> bool:
+    message = str(exc)
+    return all(
+        token in message
+        for token in (
+            "None of [Index([",
+            "代码",
+            "简称",
+            "公告标题",
+            "公告时间",
+            "announcementId",
+            "orgId",
+            "are in the [columns]",
+        )
+    )
+
+
 def _date_compact(value: str) -> str:
     timestamp = pd.to_datetime(value, errors="coerce")
     if pd.isna(timestamp):
@@ -392,12 +409,17 @@ def _fetch_cninfo_disclosure_announcement_rows(
     if ak is None:
         raise RuntimeError("akshare is not installed")
 
-    frame = ak.stock_zh_a_disclosure_report_cninfo(
-        symbol=symbol,
-        market="沪深京",
-        start_date=_date_compact(start_date) or None,
-        end_date=_date_compact(end_date) or None,
-    )
+    try:
+        frame = ak.stock_zh_a_disclosure_report_cninfo(
+            symbol=symbol,
+            market="沪深京",
+            start_date=_date_compact(start_date) or None,
+            end_date=_date_compact(end_date) or None,
+        )
+    except KeyError as exc:
+        if _is_cninfo_empty_result_keyerror(exc):
+            return []
+        raise
     return _frame_records(frame)
 
 
