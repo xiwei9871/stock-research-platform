@@ -363,7 +363,36 @@ from stock_research.watchlist.diagnostics import DIAGNOSTICS_RULE_VERSION
 from stock_research.watchlist.effectiveness import (
     run_watchlist_diagnostics_effectiveness_review,
 )
+from stock_research.watchlist.context_cross_review import run_watchlist_context_cross_review
+from stock_research.watchlist.dual_strategy_review import run_dual_strategy_effectiveness_review
+from stock_research.watchlist.trend_template_validation import (
+    run_trend_discovery_template_validation,
+)
+from stock_research.watchlist.trend_discovery_v2_replay import run_trend_discovery_v2_replay
+from stock_research.watchlist.trend_discovery_v2_purity import (
+    run_trend_discovery_v2_purity_audit,
+)
+from stock_research.watchlist.trend_discovery_v2_2_replay import (
+    run_trend_discovery_v2_2_replay,
+)
+from stock_research.watchlist.trend_discovery_v2_2_stability import (
+    run_trend_discovery_v2_2_stability_review,
+)
+from stock_research.watchlist.risk_split import run_risk_watch_split_review
+from stock_research.watchlist.fundamental_coverage import (
+    run_watchlist_fundamental_coverage_audit,
+)
+from stock_research.watchlist.fundamental_pit_context import (
+    run_watchlist_fundamental_pit_context_build,
+)
 from stock_research.strong_winner_miss_analysis import run_strong_winner_miss_analysis
+from stock_research.strong_winner_capture_gap import run_strong_winner_capture_gap_analysis
+from stock_research.strong_winner_taxonomy import run_strong_winner_taxonomy_v2
+from stock_research.strong_winner_topn_attribution import run_strong_winner_topn_attribution
+from stock_research.strong_winner_discovery_pool import run_strong_winner_discovery_pool
+from stock_research.diagnostics_candidate_source_audit import (
+    run_diagnostics_candidate_source_audit,
+)
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -2539,6 +2568,115 @@ def build_parser() -> argparse.ArgumentParser:
     review_watchlist_diagnostics.add_argument("--end-date")
     review_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
 
+    review_risk_watch_split = subparsers.add_parser("review-risk-watch-split")
+    review_risk_watch_split.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_diagnostics_effectiveness_detail.csv",
+    )
+    review_risk_watch_split.add_argument("--output-dir", default="outputs/research")
+
+    review_watchlist_context_cross = subparsers.add_parser("review-watchlist-context-cross")
+    review_watchlist_context_cross.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_diagnostics_effectiveness_detail.csv",
+    )
+    review_watchlist_context_cross.add_argument("--fundamental-context-path")
+    review_watchlist_context_cross.add_argument("--output-dir", default="outputs/research")
+
+    review_dual_strategy_effectiveness = subparsers.add_parser(
+        "review-dual-strategy-effectiveness"
+    )
+    review_dual_strategy_effectiveness.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_context_cross_detail.csv",
+    )
+    review_dual_strategy_effectiveness.add_argument("--output-dir", default="outputs/research")
+
+    validate_trend_discovery_templates = subparsers.add_parser(
+        "validate-trend-discovery-templates"
+    )
+    validate_trend_discovery_templates.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_context_cross_detail.csv",
+    )
+    validate_trend_discovery_templates.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    validate_trend_discovery_templates.add_argument("--output-dir", default="outputs/research")
+
+    replay_trend_discovery_v2 = subparsers.add_parser("replay-trend-discovery-v2")
+    replay_trend_discovery_v2.add_argument(
+        "--template-detail",
+        default="outputs/research/trend_discovery_template_detail.csv",
+    )
+    replay_trend_discovery_v2.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    replay_trend_discovery_v2.add_argument("--output-dir", default="outputs/research")
+
+    audit_trend_discovery_v2_purity = subparsers.add_parser(
+        "audit-trend-discovery-v2-purity"
+    )
+    audit_trend_discovery_v2_purity.add_argument(
+        "--v2-detail",
+        default="outputs/research/trend_discovery_v2_replay_detail.csv",
+    )
+    audit_trend_discovery_v2_purity.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    audit_trend_discovery_v2_purity.add_argument("--output-dir", default="outputs/research")
+
+    replay_trend_discovery_v2_2 = subparsers.add_parser("replay-trend-discovery-v2-2")
+    replay_trend_discovery_v2_2.add_argument(
+        "--v2-detail",
+        default="outputs/research/trend_discovery_v2_purity_detail.csv",
+    )
+    replay_trend_discovery_v2_2.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    replay_trend_discovery_v2_2.add_argument("--output-dir", default="outputs/research")
+
+    review_trend_discovery_v2_2_stability = subparsers.add_parser(
+        "review-trend-discovery-v2-2-stability"
+    )
+    review_trend_discovery_v2_2_stability.add_argument(
+        "--detail-path",
+        default="outputs/research/trend_discovery_v2_2_replay_detail.csv",
+    )
+    review_trend_discovery_v2_2_stability.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_miss_analysis_2025_to_now.csv",
+    )
+    review_trend_discovery_v2_2_stability.add_argument(
+        "--output-dir",
+        default="outputs/research",
+    )
+
+    audit_watchlist_fundamental_coverage = subparsers.add_parser(
+        "audit-watchlist-fundamental-coverage"
+    )
+    audit_watchlist_fundamental_coverage.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_diagnostics_effectiveness_detail.csv",
+    )
+    audit_watchlist_fundamental_coverage.add_argument("--output-dir", default="outputs/research")
+
+    build_watchlist_fundamental_pit_context = subparsers.add_parser(
+        "build-watchlist-fundamental-pit-context"
+    )
+    build_watchlist_fundamental_pit_context.add_argument(
+        "--detail-path",
+        default="outputs/research/watchlist_diagnostics_effectiveness_detail.csv",
+    )
+    build_watchlist_fundamental_pit_context.add_argument(
+        "--output-dir",
+        default="outputs/research",
+    )
+
     strong_winner_miss_analysis = subparsers.add_parser("analyze-strong-winner-misses")
     strong_winner_miss_analysis.add_argument("--start-date", required=True)
     strong_winner_miss_analysis.add_argument("--end-date", required=True)
@@ -2547,6 +2685,42 @@ def build_parser() -> argparse.ArgumentParser:
     strong_winner_miss_analysis.add_argument("--threshold", type=float, default=1.0)
     strong_winner_miss_analysis.add_argument("--diagnostics-dir", default="outputs/research")
     strong_winner_miss_analysis.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_taxonomy_v2 = subparsers.add_parser("analyze-strong-winner-taxonomy-v2")
+    strong_winner_taxonomy_v2.add_argument("--start-date", required=True)
+    strong_winner_taxonomy_v2.add_argument("--end-date", required=True)
+    strong_winner_taxonomy_v2.add_argument("--adjust-type", default="qfq")
+    strong_winner_taxonomy_v2.add_argument(
+        "--v2-detail-path",
+        default="outputs/research/trend_discovery_v2_2_replay_detail.csv",
+    )
+    strong_winner_taxonomy_v2.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_capture_gap = subparsers.add_parser("analyze-strong-winner-capture-gap")
+    strong_winner_capture_gap.add_argument(
+        "--taxonomy-path",
+        default="outputs/research/strong_winner_taxonomy_v2_2025_to_now.csv",
+    )
+    strong_winner_capture_gap.add_argument(
+        "--v2-detail-path",
+        default="outputs/research/trend_discovery_v2_2_replay_detail.csv",
+    )
+    strong_winner_capture_gap.add_argument("--output-dir", default="outputs/research")
+
+    diagnostics_candidate_source_audit = subparsers.add_parser(
+        "audit-diagnostics-candidate-source"
+    )
+    diagnostics_candidate_source_audit.add_argument(
+        "--gap-detail-path",
+        default="outputs/research/strong_winner_capture_gap_detail.csv",
+    )
+    diagnostics_candidate_source_audit.add_argument(
+        "--v2-detail-path",
+        default="outputs/research/trend_discovery_v2_2_replay_detail.csv",
+    )
+    diagnostics_candidate_source_audit.add_argument("--score-version", default="manual_v1")
+    diagnostics_candidate_source_audit.add_argument("--diagnostics-top-n", type=int, default=50)
+    diagnostics_candidate_source_audit.add_argument("--output-dir", default="outputs/research")
 
     strong_winner_topn_source = subparsers.add_parser("analyze-strong-winner-topn-source")
     strong_winner_topn_source.add_argument(
@@ -2560,6 +2734,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=[50, 100, 200, 500],
     )
     strong_winner_topn_source.add_argument("--output-dir", default="outputs/research")
+
+    strong_winner_discovery_pool = subparsers.add_parser("build-strong-winner-discovery-pool")
+    strong_winner_discovery_pool.add_argument("--start-date", required=True)
+    strong_winner_discovery_pool.add_argument("--end-date", required=True)
+    strong_winner_discovery_pool.add_argument("--score-version", default="manual_v1")
+    strong_winner_discovery_pool.add_argument("--adjust-type", default="qfq")
+    strong_winner_discovery_pool.add_argument(
+        "--topn-thresholds",
+        type=parse_topn_thresholds,
+        default=[50, 100, 200, 500],
+    )
+    strong_winner_discovery_pool.add_argument(
+        "--strong-winner-path",
+        default="outputs/research/strong_winner_taxonomy_v2_2025_to_now.csv",
+    )
+    strong_winner_discovery_pool.add_argument("--output-dir", default="outputs/research")
 
     watchlist_report = subparsers.add_parser("watchlist-report")
     watchlist_report.add_argument("--trade-date", required=True)
@@ -4925,7 +5115,166 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         print(f"watchlist_effectiveness|detail_csv|{review_paths['detail_csv_path']}")
         print(f"watchlist_effectiveness|summary_csv|{review_paths['summary_csv_path']}")
+        if "short_horizon_summary_csv_path" in review_paths:
+            print(
+                "watchlist_effectiveness|short_horizon_summary_csv|"
+                f"{review_paths['short_horizon_summary_csv_path']}"
+            )
+        if "strong_winner_horizon_summary_csv_path" in review_paths:
+            print(
+                "watchlist_effectiveness|strong_winner_horizon_summary_csv|"
+                f"{review_paths['strong_winner_horizon_summary_csv_path']}"
+            )
         print(f"watchlist_effectiveness|markdown|{review_paths['markdown_path']}")
+    elif args.command == "review-risk-watch-split":
+        result = run_risk_watch_split_review(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"risk_watch_split|detail|{result['paths']['detail']}")
+        print(f"risk_watch_split|summary|{result['paths']['summary']}")
+        print(f"risk_watch_split|reason_summary|{result['paths']['reason_summary']}")
+        print(f"risk_watch_split|report|{result['paths']['report']}")
+        print(f"risk_watch_split|rows|{len(result['detail'])}")
+    elif args.command == "review-watchlist-context-cross":
+        result = run_watchlist_context_cross_review(
+            detail_path=args.detail_path,
+            fundamental_context_path=args.fundamental_context_path,
+            output_dir=args.output_dir,
+        )
+        print(f"watchlist_context_cross|detail|{result['paths']['detail']}")
+        print(
+            "watchlist_context_cross|short_horizon_summary|"
+            f"{result['paths']['short_horizon_summary']}"
+        )
+        print(
+            "watchlist_context_cross|strong_horizon_summary|"
+            f"{result['paths']['strong_horizon_summary']}"
+        )
+        print(f"watchlist_context_cross|layer_summary|{result['paths']['layer_summary']}")
+        print(f"watchlist_context_cross|industry_summary|{result['paths']['industry_summary']}")
+        print(
+            "watchlist_context_cross|fundamental_summary|"
+            f"{result['paths']['fundamental_summary']}"
+        )
+        print(f"watchlist_context_cross|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"watchlist_context_cross|warning|{warning}")
+        print(f"watchlist_context_cross|rows|{len(result['detail'])}")
+    elif args.command == "review-dual-strategy-effectiveness":
+        result = run_dual_strategy_effectiveness_review(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"dual_strategy_review|short_event_summary|{result['paths']['short_event_summary']}")
+        print(
+            "dual_strategy_review|trend_discovery_summary|"
+            f"{result['paths']['trend_discovery_summary']}"
+        )
+        print(f"dual_strategy_review|comparison|{result['paths']['comparison']}")
+        print(f"dual_strategy_review|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"dual_strategy_review|warning|{warning}")
+    elif args.command == "validate-trend-discovery-templates":
+        result = run_trend_discovery_template_validation(
+            detail_path=args.detail_path,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"trend_template_validation|detail|{result['paths']['detail']}")
+        print(f"trend_template_validation|summary|{result['paths']['summary']}")
+        print(f"trend_template_validation|strong_winner_capture|{result['paths']['strong_winner_capture']}")
+        print(f"trend_template_validation|recommendations|{result['paths']['recommendations']}")
+        print(f"trend_template_validation|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"trend_template_validation|warning|{warning}")
+    elif args.command == "replay-trend-discovery-v2":
+        result = run_trend_discovery_v2_replay(
+            template_detail_path=args.template_detail,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"trend_discovery_v2_replay|detail|{result['paths']['detail']}")
+        print(f"trend_discovery_v2_replay|layer_effectiveness|{result['paths']['layer_effectiveness']}")
+        print(f"trend_discovery_v2_replay|vs_existing|{result['paths']['vs_existing']}")
+        print(f"trend_discovery_v2_replay|strong_winner_capture|{result['paths']['strong_winner_capture']}")
+        print(f"trend_discovery_v2_replay|recommendations|{result['paths']['recommendations']}")
+        print(f"trend_discovery_v2_replay|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"trend_discovery_v2_replay|warning|{warning}")
+    elif args.command == "audit-trend-discovery-v2-purity":
+        result = run_trend_discovery_v2_purity_audit(
+            v2_detail_path=args.v2_detail,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"trend_discovery_v2_purity|purity_slice|{result['paths']['purity_slice']}")
+        print(f"trend_discovery_v2_purity|bad_slice_audit|{result['paths']['bad_slice_audit']}")
+        print(
+            "trend_discovery_v2_purity|high_elasticity_slice|"
+            f"{result['paths']['high_elasticity_slice']}"
+        )
+        print(
+            "trend_discovery_v2_purity|v2_1_candidate_effectiveness|"
+            f"{result['paths']['v2_1_candidate_effectiveness']}"
+        )
+        print(f"trend_discovery_v2_purity|missed_winner_audit|{result['paths']['missed_winner_audit']}")
+        print(f"trend_discovery_v2_purity|recommendations|{result['paths']['recommendations']}")
+        print(f"trend_discovery_v2_purity|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"trend_discovery_v2_purity|warning|{warning}")
+    elif args.command == "replay-trend-discovery-v2-2":
+        result = run_trend_discovery_v2_2_replay(
+            v2_detail_path=args.v2_detail,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"trend_discovery_v2_2_replay|detail|{result['paths']['detail']}")
+        print(f"trend_discovery_v2_2_replay|layer_effectiveness|{result['paths']['layer_effectiveness']}")
+        print(f"trend_discovery_v2_2_replay|vs_existing|{result['paths']['vs_existing']}")
+        print(f"trend_discovery_v2_2_replay|strong_winner_capture|{result['paths']['strong_winner_capture']}")
+        print(f"trend_discovery_v2_2_replay|recommendations|{result['paths']['recommendations']}")
+        print(f"trend_discovery_v2_2_replay|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"trend_discovery_v2_2_replay|warning|{warning}")
+    elif args.command == "review-trend-discovery-v2-2-stability":
+        result = run_trend_discovery_v2_2_stability_review(
+            detail_path=args.detail_path,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"trend_discovery_v2_2_stability|by_period|{result['paths']['by_period']}")
+        print(f"trend_discovery_v2_2_stability|by_regime|{result['paths']['by_regime']}")
+        print(f"trend_discovery_v2_2_stability|by_industry|{result['paths']['by_industry']}")
+        print(
+            "trend_discovery_v2_2_stability|high_elasticity_short_horizon|"
+            f"{result['paths']['high_elasticity_short_horizon']}"
+        )
+        print(
+            "trend_discovery_v2_2_stability|strong_winner_capture|"
+            f"{result['paths']['strong_winner_capture']}"
+        )
+        print(f"trend_discovery_v2_2_stability|decision|{result['paths']['decision']}")
+        print(f"trend_discovery_v2_2_stability|report|{result['paths']['report']}")
+        for warning in result.get("warnings", []):
+            print(f"trend_discovery_v2_2_stability|warning|{warning}")
+    elif args.command == "audit-watchlist-fundamental-coverage":
+        result = run_watchlist_fundamental_coverage_audit(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"watchlist_fundamental_coverage|summary|{result['paths']['summary']}")
+        print(f"watchlist_fundamental_coverage|date_summary|{result['paths']['date_summary']}")
+        print(f"watchlist_fundamental_coverage|report|{result['paths']['report']}")
+    elif args.command == "build-watchlist-fundamental-pit-context":
+        result = run_watchlist_fundamental_pit_context_build(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"watchlist_fundamental_pit_context|context|{result['paths']['context']}")
+        print(f"watchlist_fundamental_pit_context|summary|{result['paths']['summary']}")
+        print(f"watchlist_fundamental_pit_context|report|{result['paths']['report']}")
+        print(f"watchlist_fundamental_pit_context|rows|{len(result['context'])}")
     elif args.command == "analyze-strong-winner-misses":
         result = run_strong_winner_miss_analysis(
             start_date=args.start_date,
@@ -4941,11 +5290,51 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"strong_winner_miss_analysis|summary|{result['paths']['summary']}")
         print(f"strong_winner_miss_analysis|report|{result['paths']['report']}")
         print(f"strong_winner_miss_analysis|rows|{len(result['miss_analysis'])}")
-    elif args.command == "analyze-strong-winner-topn-source":
-        from stock_research.strong_winner_topn_attribution import (
-            run_strong_winner_topn_attribution,
+    elif args.command == "analyze-strong-winner-taxonomy-v2":
+        result = run_strong_winner_taxonomy_v2(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            v2_detail_path=args.v2_detail_path,
+            output_dir=args.output_dir,
         )
-
+        print(f"strong_winner_taxonomy_v2|taxonomy|{result['paths']['taxonomy']}")
+        print(f"strong_winner_taxonomy_v2|summary|{result['paths']['summary']}")
+        print(f"strong_winner_taxonomy_v2|v2_2_capture|{result['paths']['v2_2_capture']}")
+        print(f"strong_winner_taxonomy_v2|report|{result['paths']['report']}")
+        print(f"strong_winner_taxonomy_v2|rows|{len(result.get('taxonomy', []))}")
+        for warning in result.get("warnings", []):
+            print(f"strong_winner_taxonomy_v2|warning|{warning}")
+    elif args.command == "analyze-strong-winner-capture-gap":
+        result = run_strong_winner_capture_gap_analysis(
+            taxonomy_path=args.taxonomy_path,
+            v2_detail_path=args.v2_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_capture_gap|detail|{result['paths']['detail']}")
+        print(f"strong_winner_capture_gap|summary|{result['paths']['summary']}")
+        print(f"strong_winner_capture_gap|by_type|{result['paths']['by_type']}")
+        print(f"strong_winner_capture_gap|sample|{result['paths']['sample']}")
+        print(f"strong_winner_capture_gap|report|{result['paths']['report']}")
+        print(f"strong_winner_capture_gap|rows|{len(result.get('detail', []))}")
+        for warning in result.get("warnings", []):
+            print(f"strong_winner_capture_gap|warning|{warning}")
+    elif args.command == "audit-diagnostics-candidate-source":
+        result = run_diagnostics_candidate_source_audit(
+            gap_detail_path=args.gap_detail_path,
+            v2_detail_path=args.v2_detail_path,
+            score_version=args.score_version,
+            diagnostics_top_n=args.diagnostics_top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"diagnostics_candidate_source_audit|detail|{result['paths']['detail']}")
+        print(f"diagnostics_candidate_source_audit|summary|{result['paths']['summary']}")
+        print(f"diagnostics_candidate_source_audit|by_type|{result['paths']['by_type']}")
+        print(f"diagnostics_candidate_source_audit|report|{result['paths']['report']}")
+        print(f"diagnostics_candidate_source_audit|rows|{len(result.get('detail', []))}")
+        for warning in result.get("warnings", []):
+            print(f"diagnostics_candidate_source_audit|warning|{warning}")
+    elif args.command == "analyze-strong-winner-topn-source":
         result = run_strong_winner_topn_attribution(
             miss_analysis_path=args.miss_analysis_path,
             score_version=args.score_version,
@@ -4960,6 +5349,24 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"strong_winner_topn_source|component_gap|{result['paths']['component_gap']}")
         print(f"strong_winner_topn_source|report|{result['paths']['report']}")
         print(f"strong_winner_topn_source|rows|{len(result['attribution'])}")
+    elif args.command == "build-strong-winner-discovery-pool":
+        result = run_strong_winner_discovery_pool(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            score_version=args.score_version,
+            adjust_type=args.adjust_type,
+            topn_thresholds=args.topn_thresholds,
+            strong_winner_path=args.strong_winner_path,
+            output_dir=args.output_dir,
+        )
+        print(f"strong_winner_discovery_pool|detail|{result['paths']['detail']}")
+        print(
+            "strong_winner_discovery_pool|pool_effectiveness|"
+            f"{result['paths']['pool_effectiveness']}"
+        )
+        print(f"strong_winner_discovery_pool|capture_by_type|{result['paths']['capture_by_type']}")
+        print(f"strong_winner_discovery_pool|report|{result['paths']['report']}")
+        print(f"strong_winner_discovery_pool|rows|{len(result['detail'])}")
     elif args.command == "watchlist-report":
         rows = load_watchlist_daily_signals(args.watchlist_id, trade_date=args.trade_date)
         report_paths = write_watchlist_report(rows, output_dir=args.output_dir)
