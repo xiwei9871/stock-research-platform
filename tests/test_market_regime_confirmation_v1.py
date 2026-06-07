@@ -6,6 +6,7 @@ from stock_research.market_regime_confirmation_v1 import (
     REGIME_COLUMNS,
     build_segment_diagnostics,
     build_market_regime_confirmation_from_frames,
+    run_regime_confirmation_backtest_from_frames,
     write_market_regime_confirmation_outputs,
 )
 
@@ -361,3 +362,56 @@ def test_build_segment_diagnostics_leaves_strategy_performance_empty_without_equ
 
     rally = segment.loc[segment["segment_name"] == "policy_rally_2024"].iloc[0]
     assert rally["strategy_performance"] == ""
+
+
+def _funnel_for_dates(dates: list[str]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "trade_date": date,
+                "asset_id": "G1",
+                "stock_name": "科技A",
+                "industry_name": "软件",
+                "mid_trend_funnel_score": 90,
+                "shadow_top10_rank": 1,
+                "volatility_20_score": 60,
+                "max_drawdown_20_score": 60,
+                "ma60_slope_score": 80,
+                "score_total": 90,
+            }
+            for date in dates
+        ]
+    )
+
+
+def test_regime_backtest_applies_confirmed_exposure_to_mid_trend_returns() -> None:
+    emotion = _emotion_rows(
+        [20, 20, 20, 70, 72],
+        states=["panic", "panic", "panic", "hot", "hot"],
+        risks=["high", "high", "high", "low", "low"],
+    )
+    dates = emotion["trade_date"].tolist()
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-02", "asset_id": "G1", "close": 100.0},
+            {"trade_date": "2026-01-03", "asset_id": "G1", "close": 90.0},
+            {"trade_date": "2026-01-04", "asset_id": "G1", "close": 81.0},
+            {"trade_date": "2026-01-05", "asset_id": "G1", "close": 89.1},
+            {"trade_date": "2026-01-06", "asset_id": "G1", "close": 98.01},
+            {"trade_date": "2026-01-07", "asset_id": "G1", "close": 107.811},
+        ]
+    )
+
+    result = run_regime_confirmation_backtest_from_frames(
+        emotion=emotion,
+        funnel=_funnel_for_dates(dates),
+        prices=prices,
+        start_date="2026-01-02",
+        end_date="2026-01-06",
+        top_n=1,
+    )
+
+    summary = result["summary"].set_index("strategy_family")
+    assert "fixed_mid_trend" in summary.index
+    assert "regime_confirmed_exposure" in summary.index
+    assert summary.loc["regime_confirmed_exposure", "max_drawdown"] > summary.loc["fixed_mid_trend", "max_drawdown"]

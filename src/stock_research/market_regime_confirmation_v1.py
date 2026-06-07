@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -399,6 +400,74 @@ def write_market_regime_confirmation_outputs(
     transitions.to_csv(paths["transition_path"], index=False)
     paths["report_path"].write_text(_render_report(normalized, segment, transitions), encoding="utf-8")
     return paths
+
+
+def run_regime_confirmation_backtest_from_frames(
+    *,
+    emotion: pd.DataFrame,
+    funnel: pd.DataFrame,
+    prices: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+    policy_events: pd.DataFrame | None = None,
+    top_n: int = 5,
+    output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    from stock_research.market_style_switch_v1 import (
+        _build_strategy_selection,
+        _filter_date_range,
+        _simulate_equal_weight_daily,
+        _summarize_equity,
+        build_growth_momentum_candidates,
+    )
+
+    regime = build_market_regime_confirmation_from_frames(emotion, policy_events)
+    regime = _filter_date_range(regime, start_date, end_date)
+    growth = _filter_date_range(build_growth_momentum_candidates(funnel, top_n=max(top_n, 10)), start_date, end_date)
+
+    style_state = regime[["trade_date", "emotion_state", "risk_state", "emotion_score"]].copy()
+    style_state["style_state"] = "growth_momentum"
+    style_state["position_budget_hint"] = "full"
+    empty_candidates = pd.DataFrame(columns=growth.columns)
+
+    fixed_selection = _build_strategy_selection(
+        style_state,
+        growth,
+        empty_candidates,
+        empty_candidates,
+        "fixed_mid_trend",
+        top_n,
+    )
+    regime_selection = fixed_selection.copy()
+    exposure_by_date = regime.set_index("trade_date")["target_exposure"].to_dict()
+    regime_selection["strategy_family"] = "regime_confirmed_exposure"
+    regime_selection["invested_weight"] = (
+        regime_selection["trade_date"].map(exposure_by_date).astype(float).fillna(0.6)
+    )
+
+    equity = pd.concat(
+        [
+            _simulate_equal_weight_daily(prices, fixed_selection, strategy_family="fixed_mid_trend"),
+            _simulate_equal_weight_daily(
+                prices,
+                regime_selection,
+                strategy_family="regime_confirmed_exposure",
+            ),
+        ],
+        ignore_index=True,
+    )
+    summary = _summarize_equity(equity)
+
+    paths: dict[str, Path] = {}
+    if output_dir is not None:
+        output_path = Path(output_dir)
+        paths = write_market_regime_confirmation_outputs(regime, output_dir=output_path, equity=equity)
+        paths["equity_path"] = output_path / "market_regime_backtest_equity.csv"
+        paths["summary_path"] = output_path / "market_regime_backtest_summary.csv"
+        equity.to_csv(paths["equity_path"], index=False)
+        summary.to_csv(paths["summary_path"], index=False)
+
+    return {"regime": regime, "equity": equity, "summary": summary, "paths": paths}
 
 
 def _normalize_regime_for_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
