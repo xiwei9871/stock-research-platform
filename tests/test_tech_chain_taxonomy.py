@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -91,3 +92,57 @@ def test_load_taxonomy_rejects_non_list_chains(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="chains must be a list"):
         load_taxonomy(path)
+
+
+def test_load_taxonomy_rejects_missing_or_invalid_version(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing_version.json"
+    missing_path.write_text(json.dumps({"chains": []}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="version must be a non-empty string"):
+        load_taxonomy(missing_path)
+
+    numeric_path = tmp_path / "numeric_version.json"
+    numeric_path.write_text(json.dumps({"version": 1, "chains": []}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="version must be a non-empty string"):
+        load_taxonomy(numeric_path)
+
+
+def test_load_taxonomy_rejects_invalid_term_entries(tmp_path: Path) -> None:
+    path = tmp_path / "taxonomy.json"
+    payload = {"version": "x", "chains": [_minimal_chain()]}
+    payload["chains"][0]["chain_context_terms"] = [None, ""]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="chain_context_terms entries must be non-empty strings",
+    ):
+        load_taxonomy(path)
+
+
+def test_load_taxonomy_rejects_invalid_dimension_entries(tmp_path: Path) -> None:
+    path = tmp_path / "taxonomy.json"
+    payload = {"version": "x", "chains": [_minimal_chain()]}
+    payload["chains"][0]["bottleneck_dimensions"]["memory_generation"] = ["HBM3E", None]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="bottleneck_dimensions entries must be non-empty strings",
+    ):
+        load_taxonomy(path)
+
+
+def _minimal_chain() -> dict[str, object]:
+    return {
+        "chain_id": "hbm_high_end_memory",
+        "display_name": "HBM High End Memory",
+        "chain_context_terms": ["HBM"],
+        "product_exposure_terms": ["HBM3E"],
+        "bottleneck_dimensions": {"memory_generation": ["HBM3E"]},
+        "technical_execution_terms": ["TSV"],
+        "commercial_validation_terms": ["qualification"],
+        "invalidation_terms": ["commodity DRAM"],
+        "global_reference_entities": ["SK hynix"],
+    }

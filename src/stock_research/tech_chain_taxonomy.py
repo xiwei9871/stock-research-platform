@@ -55,29 +55,47 @@ def load_taxonomy(path: Path | str) -> TechChainTaxonomy:
         seen_chain_ids.add(chain_id)
         chains.append(_chain_from_payload(item))
 
-    return TechChainTaxonomy(version=str(payload.get("version", "")), chains=chains)
+    return TechChainTaxonomy(version=payload["version"].strip(), chains=chains)
 
 
 def _chain_from_payload(item: dict[str, Any]) -> TechChainDefinition:
     return TechChainDefinition(
         chain_id=item["chain_id"].strip(),
         display_name=item["display_name"].strip(),
-        chain_context_terms=_string_list(item.get("chain_context_terms")),
-        product_exposure_terms=_string_list(item.get("product_exposure_terms")),
+        chain_context_terms=_string_list(
+            item.get("chain_context_terms"), "chain_context_terms"
+        ),
+        product_exposure_terms=_string_list(
+            item.get("product_exposure_terms"), "product_exposure_terms"
+        ),
         bottleneck_dimensions={
-            str(key): _string_list(value)
+            key.strip(): _string_list(value, "bottleneck_dimensions")
             for key, value in item["bottleneck_dimensions"].items()
         },
-        technical_execution_terms=_string_list(item.get("technical_execution_terms")),
-        commercial_validation_terms=_string_list(item.get("commercial_validation_terms")),
-        invalidation_terms=_string_list(item.get("invalidation_terms")),
-        global_reference_entities=_string_list(item.get("global_reference_entities")),
+        technical_execution_terms=_string_list(
+            item.get("technical_execution_terms"), "technical_execution_terms"
+        ),
+        commercial_validation_terms=_string_list(
+            item.get("commercial_validation_terms"), "commercial_validation_terms"
+        ),
+        invalidation_terms=_string_list(
+            item.get("invalidation_terms"), "invalidation_terms"
+        ),
+        global_reference_entities=_string_list(
+            item.get("global_reference_entities"), "global_reference_entities"
+        ),
     )
 
 
 def _validate_taxonomy_payload(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise ValueError("taxonomy payload must be an object")
+    if (
+        "version" not in payload
+        or not isinstance(payload["version"], str)
+        or not payload["version"].strip()
+    ):
+        raise ValueError("version must be a non-empty string")
     if "chains" not in payload:
         raise ValueError("chains is required")
     if not isinstance(payload["chains"], list):
@@ -95,16 +113,25 @@ def _validate_chain_payload(item: Any, index: int) -> None:
     for field in REQUIRED_LIST_FIELDS:
         if field not in item or not isinstance(item[field], list):
             raise ValueError(f"chain {item['chain_id']} field {field} must be a list")
+        _string_list(item[field], field)
 
     dimensions = item.get("bottleneck_dimensions")
     if not isinstance(dimensions, dict):
         raise ValueError(f"chain {item['chain_id']} field bottleneck_dimensions must be a dict")
     for key, value in dimensions.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("bottleneck_dimensions keys must be non-empty strings")
         if not isinstance(value, list):
             raise ValueError(
                 f"chain {item['chain_id']} bottleneck_dimensions.{key} must be a list"
             )
+        _string_list(value, "bottleneck_dimensions")
 
 
-def _string_list(value: Any) -> list[str]:
-    return [str(item) for item in value if str(item)]
+def _string_list(value: Any, field: str) -> list[str]:
+    entries = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{field} entries must be non-empty strings")
+        entries.append(item.strip())
+    return entries
