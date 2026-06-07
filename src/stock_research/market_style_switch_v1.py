@@ -86,6 +86,8 @@ EQUITY_COLUMNS = [
     "daily_return",
     "equity",
     "invested_weight",
+    "selected_holdings",
+    "priced_holdings",
     "holdings",
 ]
 POSITION_BUDGET_WEIGHTS = {"full": 1.0, "reduced": 0.6, "light": 0.2}
@@ -476,18 +478,26 @@ def _simulate_equal_weight_daily(
     if selected.empty:
         return pd.DataFrame(columns=EQUITY_COLUMNS)
 
+    computable_dates = set(price_returns.loc[price_returns["next_return"].notna(), "trade_date"])
     equity = 1.0
     rows = []
     for trade_date, day in selected.groupby("trade_date", sort=True):
         invested_weight = float(pd.to_numeric(day["invested_weight"], errors="coerce").fillna(0.0).max())
         asset_ids = day["asset_id"].dropna().astype(str).tolist()
-        asset_returns = price_returns[
-            (price_returns["trade_date"] == trade_date) & (price_returns["asset_id"].isin(asset_ids))
-        ]["next_return"].dropna()
-        if asset_returns.empty or invested_weight <= 0.0:
+        selected_holdings = len(asset_ids)
+
+        if not asset_ids or invested_weight <= 0.0:
+            if trade_date not in computable_dates:
+                continue
             daily_return = 0.0
         else:
+            asset_returns = price_returns[
+                (price_returns["trade_date"] == trade_date) & (price_returns["asset_id"].isin(asset_ids))
+            ]["next_return"].dropna()
+            if asset_returns.empty:
+                continue
             daily_return = float(asset_returns.mean()) * invested_weight
+        priced_holdings = 0 if not asset_ids or invested_weight <= 0.0 else int(len(asset_returns))
         equity *= 1.0 + daily_return
         rows.append(
             {
@@ -496,7 +506,9 @@ def _simulate_equal_weight_daily(
                 "daily_return": daily_return,
                 "equity": equity,
                 "invested_weight": invested_weight,
-                "holdings": len(asset_returns),
+                "selected_holdings": selected_holdings,
+                "priced_holdings": priced_holdings,
+                "holdings": priced_holdings,
             }
         )
     return pd.DataFrame(rows, columns=EQUITY_COLUMNS)
@@ -574,7 +586,7 @@ def _breakdown_equity(equity: pd.DataFrame, style_state: pd.DataFrame, *, group_
 def _max_drawdown(equity_curve: pd.Series) -> float:
     if equity_curve.empty:
         return 0.0
-    curve = equity_curve.astype(float)
+    curve = pd.concat([pd.Series([1.0]), equity_curve.astype(float)], ignore_index=True)
     drawdown = curve / curve.cummax() - 1.0
     return float(drawdown.min())
 
