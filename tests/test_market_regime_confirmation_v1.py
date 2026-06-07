@@ -131,6 +131,36 @@ def test_policy_impulse_to_overheated_trend_transition_is_explicit() -> None:
     assert confirmed_transition["transition_reason"] == "impulse_to_trend_confirmed"
 
 
+def test_policy_impulse_trend_continuation_counts_bull_and_overheated_as_one_group() -> None:
+    emotion = _emotion_rows(
+        [60, 60, 60, 60, 90, 100, 100, 100, 70, 100, 70, 100],
+        states=[
+            "neutral",
+            "neutral",
+            "neutral",
+            "neutral",
+            "hot",
+            "euphoria",
+            "euphoria",
+            "euphoria",
+            "hot",
+            "euphoria",
+            "hot",
+            "euphoria",
+        ],
+        risks=["low"] * 12,
+    )
+    policy = pd.DataFrame([{"event_date": "2026-01-06", "policy_strength": 0.9}])
+
+    result = build_market_regime_confirmation_from_frames(emotion, policy)
+
+    alternating = result.loc[result["trade_date"].isin(["2026-01-09", "2026-01-10", "2026-01-11", "2026-01-12"])]
+    assert alternating["raw_regime_state"].tolist() == ["overheated", "bull_trend", "overheated", "bull_trend"]
+    confirmed_transition = result.loc[result["trade_date"] == "2026-01-10"].iloc[0]
+    assert confirmed_transition["confirmed_regime_state"] == "bull_trend"
+    assert confirmed_transition["transition_reason"] == "impulse_to_trend_confirmed"
+
+
 def test_confirmed_regime_does_not_downgrade_on_one_bad_day() -> None:
     emotion = _emotion_rows(
         [70, 72, 74, 75, 73, 71, 30, 68, 67],
