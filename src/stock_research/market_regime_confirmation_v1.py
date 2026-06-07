@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
 
@@ -58,13 +60,23 @@ def _normalize_emotion(emotion: pd.DataFrame) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = default
 
-    trade_date = frame["trade_date"].where(frame["trade_date"].isna(), frame["trade_date"].astype(str).str.strip())
+    trade_date = frame["trade_date"].map(_normalize_trade_date_value)
     frame["trade_date"] = pd.to_datetime(trade_date, errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")
     frame["emotion_score"] = pd.to_numeric(frame["emotion_score"], errors="coerce").fillna(50.0).clip(0.0, 100.0)
     frame["emotion_state"] = frame["emotion_state"].fillna("neutral").astype(str)
     frame["risk_state"] = frame["risk_state"].fillna("medium").astype(str)
     frame = frame.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
     return frame[["trade_date", "emotion_score", "emotion_state", "risk_state"]]
+
+
+def _normalize_trade_date_value(value: object) -> object:
+    if pd.isna(value):
+        return pd.NA
+    if isinstance(value, pd.Timestamp):
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
 
 
 def _attach_smoothed_features(frame: pd.DataFrame) -> pd.DataFrame:
