@@ -15,7 +15,11 @@ from stock_research.intraday_risk_control_v2 import (
 )
 from stock_research.mid_trend_shadow_backtest import _load_prices
 from stock_research.mid_trend_shadow_top10 import build_mid_trend_shadow_top10_from_frame
-from stock_research.mid_trend_shadow_weekly_control import _simulate_variant
+from stock_research.mid_trend_shadow_weekly_control import (
+    _attach_st_status_flags,
+    _hard_exclusions_by_date,
+    _simulate_variant,
+)
 from stock_research.mid_trend_shadow_weekly_optimization import _prices_for_shadow
 
 
@@ -98,6 +102,12 @@ def run_mid_trend_intraday_risk_overlay_backtest(
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
     funnel_detail = pd.read_csv(funnel_detail_path, low_memory=False)
+    funnel_detail = _attach_st_status_flags(
+        funnel_detail,
+        start_date=start_date,
+        end_date=end_date,
+        service=service,
+    )
     prices = _load_prices(
         start_date=start_date,
         end_date=end_date,
@@ -145,6 +155,7 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
     adjust_type: str = "hfq",
 ) -> dict[str, Any]:
     preset = resolve_intraday_risk_control_v2_preset(risk_preset)
+    hard_exclusions = _hard_exclusions_by_date(funnel_detail)
     signals = build_intraday_risk_signals_v2(
         intraday_features,
         lookback=20,
@@ -185,6 +196,7 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
         max_weekly_replacements=max_weekly_replacements,
         peak_drawdown_exit=0.12,
         transaction_cost_bps=transaction_cost_bps,
+        hard_exclusions=hard_exclusions,
     )
     filtered = _simulate_variant(
         filtered_primary,
@@ -198,6 +210,7 @@ def build_mid_trend_intraday_risk_overlay_backtest_from_frames(
         max_weekly_replacements=max_weekly_replacements,
         peak_drawdown_exit=0.12,
         transaction_cost_bps=transaction_cost_bps,
+        hard_exclusions=hard_exclusions,
     )
     filtered_variant_name = f"{base_variant_name}_{FILTERED_VARIANT_SUFFIX}"
     _rename_result_variant(filtered, filtered_variant_name)
