@@ -470,7 +470,7 @@ def run_targeted_p2_backfill_from_files(
     _validate_runner_input_schema(
         input_name="evidence_csv",
         frame=evidence,
-        required_columns=["asset_id"],
+        required_columns=["asset_id", "as_of_safe"],
         required_one_of_columns=["candidate_trade_date", "trade_date"],
     )
 

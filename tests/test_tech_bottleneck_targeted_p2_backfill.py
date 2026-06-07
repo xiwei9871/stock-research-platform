@@ -1011,6 +1011,11 @@ def test_run_targeted_p2_backfill_from_files_writes_artifacts_and_manifest(tmp_p
             pd.DataFrame(columns=["asset_id", "source_id"]),
             "candidate_trade_date or trade_date",
         ),
+        (
+            "evidence_csv",
+            pd.DataFrame(columns=["asset_id", "candidate_trade_date", "source_id"]),
+            "as_of_safe",
+        ),
     ],
 )
 def test_run_targeted_p2_backfill_from_files_rejects_missing_required_columns(
@@ -1027,7 +1032,7 @@ def test_run_targeted_p2_backfill_from_files_rejects_missing_required_columns(
     valid_frames = {
         "human_review_assets_csv": pd.DataFrame(columns=["asset_id", "candidate_trade_date"]),
         "quality_review_csv": pd.DataFrame(columns=["asset_id", "p3_decision"]),
-        "evidence_csv": pd.DataFrame(columns=["asset_id", "candidate_trade_date"]),
+        "evidence_csv": pd.DataFrame(columns=["asset_id", "candidate_trade_date", "as_of_safe"]),
     }
     valid_frames[bad_input_name] = bad_frame
     valid_frames["human_review_assets_csv"].to_csv(human_review_assets_csv, index=False)
@@ -1053,7 +1058,7 @@ def test_run_targeted_p2_backfill_from_files_accepts_header_only_required_inputs
 
     pd.DataFrame(columns=["asset_id", "trade_date"]).to_csv(human_review_assets_csv, index=False)
     pd.DataFrame(columns=["asset_id", "p3_decision"]).to_csv(quality_review_csv, index=False)
-    pd.DataFrame(columns=["asset_id", "candidate_trade_date"]).to_csv(evidence_csv, index=False)
+    pd.DataFrame(columns=["asset_id", "candidate_trade_date", "as_of_safe"]).to_csv(evidence_csv, index=False)
 
     paths = run_targeted_p2_backfill_from_files(
         human_review_assets_csv=human_review_assets_csv,
