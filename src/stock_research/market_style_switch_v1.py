@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 
 
@@ -31,6 +33,7 @@ STYLE_MAPPING = {
 
 
 DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS = ("电力", "热力", "煤炭", "银行", "金融", "食品", "饮料", "酒", "家电", "公用")
+ANCHOR_NAMES = ("长江电力", "中国神华", "农业银行", "伊利股份", "贵州茅台")
 
 FUNNEL_BASE_COLUMNS = [
     "trade_date",
@@ -166,6 +169,70 @@ def build_rotation_balanced_candidates(
     return _ordered_candidate_columns(rotation)
 
 
+def build_anchor_diagnostics(defensive_candidates: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    frame = defensive_candidates.copy()
+    if frame.empty or "trade_date" not in frame.columns:
+        return pd.DataFrame(columns=["trade_date", "anchor_name", "anchor_present"])
+
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce", format="mixed").dt.strftime(
+        "%Y-%m-%d"
+    )
+    frame = frame.dropna(subset=["trade_date"])
+    for trade_date, day in frame.groupby("trade_date", sort=True):
+        names = set(day.get("stock_name", pd.Series(dtype=object)).fillna("").astype(str))
+        assets = set(day.get("asset_id", pd.Series(dtype=object)).fillna("").astype(str))
+        for anchor in ANCHOR_NAMES:
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "anchor_name": anchor,
+                    "anchor_present": anchor in names or anchor in assets,
+                }
+            )
+    return pd.DataFrame(rows, columns=["trade_date", "anchor_name", "anchor_present"])
+
+
+def write_market_style_switch_outputs(
+    *,
+    style_state: pd.DataFrame,
+    growth_candidates: pd.DataFrame,
+    defensive_candidates: pd.DataFrame,
+    rotation_candidates: pd.DataFrame,
+    anchor_diagnostics: pd.DataFrame,
+    summary: pd.DataFrame,
+    year_breakdown: pd.DataFrame,
+    emotion_breakdown: pd.DataFrame,
+    output_dir: str | Path,
+) -> dict[str, Path]:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "style_state_path": output_path / "market_style_state_daily.csv",
+        "growth_candidates_path": output_path / "growth_momentum_candidates.csv",
+        "defensive_candidates_path": output_path / "defensive_yield_proxy_candidates.csv",
+        "rotation_candidates_path": output_path / "rotation_balanced_candidates.csv",
+        "anchor_diagnostics_path": output_path / "anchor_diagnostics.csv",
+        "summary_path": output_path / "style_switch_backtest_summary.csv",
+        "year_breakdown_path": output_path / "style_switch_year_breakdown.csv",
+        "emotion_breakdown_path": output_path / "style_switch_emotion_breakdown.csv",
+        "report_path": output_path / "market_style_switch_v1_report.md",
+    }
+    style_state.to_csv(paths["style_state_path"], index=False)
+    growth_candidates.to_csv(paths["growth_candidates_path"], index=False)
+    defensive_candidates.to_csv(paths["defensive_candidates_path"], index=False)
+    rotation_candidates.to_csv(paths["rotation_candidates_path"], index=False)
+    anchor_diagnostics.to_csv(paths["anchor_diagnostics_path"], index=False)
+    summary.to_csv(paths["summary_path"], index=False)
+    year_breakdown.to_csv(paths["year_breakdown_path"], index=False)
+    emotion_breakdown.to_csv(paths["emotion_breakdown_path"], index=False)
+    paths["report_path"].write_text(
+        _render_market_style_switch_report(summary, year_breakdown, emotion_breakdown),
+        encoding="utf-8",
+    )
+    return paths
+
+
 def _position_budget_hint(row: pd.Series) -> str:
     emotion_state = str(row.get("emotion_state") or "")
     risk_state = str(row.get("risk_state") or "")
@@ -176,6 +243,33 @@ def _position_budget_hint(row: pd.Series) -> str:
     if emotion_state in {"hot", "euphoria"} and risk_state == "low":
         return "full"
     return "reduced"
+
+
+def _render_market_style_switch_report(
+    summary: pd.DataFrame,
+    year_breakdown: pd.DataFrame,
+    emotion_breakdown: pd.DataFrame,
+) -> str:
+    sections = [
+        "# Market Style Switch V1 Report",
+        "",
+        "## Backtest Summary",
+        _frame_to_markdown(summary),
+        "",
+        "## Year Breakdown",
+        _frame_to_markdown(year_breakdown),
+        "",
+        "## Emotion Breakdown",
+        _frame_to_markdown(emotion_breakdown),
+        "",
+    ]
+    return "\n".join(sections)
+
+
+def _frame_to_markdown(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "_No rows._"
+    return frame.to_markdown(index=False)
 
 
 def _normalize_funnel(funnel: pd.DataFrame) -> pd.DataFrame:

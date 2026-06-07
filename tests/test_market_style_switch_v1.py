@@ -1,10 +1,12 @@
 import pandas as pd
 
 from stock_research.market_style_switch_v1 import (
+    build_anchor_diagnostics,
     build_defensive_yield_proxy_candidates,
     build_growth_momentum_candidates,
     build_rotation_balanced_candidates,
     build_style_state_daily,
+    write_market_style_switch_outputs,
 )
 
 
@@ -299,3 +301,82 @@ def test_candidate_builders_return_empty_for_empty_frames_and_non_positive_top_n
     assert build_growth_momentum_candidates(funnel, top_n=-1).empty
     assert build_defensive_yield_proxy_candidates(funnel, top_n=-1).empty
     assert build_rotation_balanced_candidates(growth, defensive, top_n=-1).empty
+
+
+def test_anchor_diagnostics_and_writer(tmp_path) -> None:
+    style = build_style_state_daily(
+        pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-01-02",
+                    "emotion_state": "neutral",
+                    "risk_state": "high",
+                    "emotion_score": 40,
+                }
+            ]
+        )
+    )
+    growth = build_growth_momentum_candidates(_funnel(), top_n=2)
+    defensive = build_defensive_yield_proxy_candidates(_funnel(), top_n=3)
+    rotation = build_rotation_balanced_candidates(growth, defensive, top_n=4)
+    anchors = build_anchor_diagnostics(defensive)
+
+    paths = write_market_style_switch_outputs(
+        style_state=style,
+        growth_candidates=growth,
+        defensive_candidates=defensive,
+        rotation_candidates=rotation,
+        anchor_diagnostics=anchors,
+        summary=pd.DataFrame([{"strategy_family": "fixed_mid_trend", "total_return": 0.0}]),
+        year_breakdown=pd.DataFrame(
+            [{"year": "2026", "strategy_family": "fixed_mid_trend", "total_return": 0.0}]
+        ),
+        emotion_breakdown=pd.DataFrame(
+            [
+                {
+                    "emotion_state": "neutral",
+                    "risk_state": "high",
+                    "strategy_family": "fixed_mid_trend",
+                    "total_return": 0.0,
+                }
+            ]
+        ),
+        output_dir=tmp_path,
+    )
+
+    expected_files = {
+        "style_state_path": "market_style_state_daily.csv",
+        "growth_candidates_path": "growth_momentum_candidates.csv",
+        "defensive_candidates_path": "defensive_yield_proxy_candidates.csv",
+        "rotation_candidates_path": "rotation_balanced_candidates.csv",
+        "anchor_diagnostics_path": "anchor_diagnostics.csv",
+        "summary_path": "style_switch_backtest_summary.csv",
+        "year_breakdown_path": "style_switch_year_breakdown.csv",
+        "emotion_breakdown_path": "style_switch_emotion_breakdown.csv",
+        "report_path": "market_style_switch_v1_report.md",
+    }
+    assert {key: path.name for key, path in paths.items()} == expected_files
+    assert all(path.exists() for path in paths.values())
+    report = paths["report_path"].read_text(encoding="utf-8")
+    assert "# Market Style Switch V1 Report" in report
+    assert "fixed_mid_trend" in report
+    assert "neutral" in report
+    assert anchors["anchor_present"].any()
+    assert set(anchors.loc[anchors["anchor_present"], "anchor_name"]) & {"长江电力", "农业银行"}
+
+
+def test_writer_accepts_empty_frames_and_still_writes_all_files(tmp_path) -> None:
+    paths = write_market_style_switch_outputs(
+        style_state=pd.DataFrame(),
+        growth_candidates=pd.DataFrame(),
+        defensive_candidates=pd.DataFrame(),
+        rotation_candidates=pd.DataFrame(),
+        anchor_diagnostics=pd.DataFrame(),
+        summary=pd.DataFrame(),
+        year_breakdown=pd.DataFrame(),
+        emotion_breakdown=pd.DataFrame(),
+        output_dir=tmp_path,
+    )
+
+    assert all(path.exists() for path in paths.values())
+    assert paths["report_path"].read_text(encoding="utf-8").startswith("# Market Style Switch V1 Report")
