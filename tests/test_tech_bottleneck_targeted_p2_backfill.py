@@ -13,6 +13,7 @@ from stock_research.tech_bottleneck_targeted_p2_backfill import (
     build_targeted_gap_audit,
     combine_evidence,
     normalize_p2_mapping_queue,
+    render_promotion_delta,
     write_targeted_backfill_artifacts,
 )
 
@@ -694,6 +695,73 @@ def test_combine_evidence_preserves_original_then_bridge_row_order_and_count() -
 
     assert len(combined) == 3
     assert combined["source_id"].tolist() == ["original-1", "original-2", "bridge-1"]
+
+
+def test_render_promotion_delta_lists_promoted_and_blocked_assets() -> None:
+    before_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "p3_decision": "needs_product_family_mapping",
+            },
+            {
+                "asset_id": "B",
+                "stock_name": "Beta",
+                "p3_decision": "needs_product_family_mapping",
+            },
+        ]
+    )
+    after_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "p3_decision": "auto_approve",
+            },
+            {
+                "asset_id": "B",
+                "stock_name": "Beta",
+                "p3_decision": "needs_product_family_mapping",
+            },
+        ]
+    )
+    bridge_evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "source_type": "derived_product_family_bridge",
+                "evidence_type": "customer_certification",
+                "metadata_json": json.dumps({"bridge_family": "optical_communication_components"}),
+            }
+        ]
+    )
+
+    report = render_promotion_delta(
+        before_review=before_review,
+        after_review=after_review,
+        bridge_evidence=bridge_evidence,
+    )
+
+    assert "P2 asset count before: 2" in report
+    assert "P1 asset count after: 1" in report
+    assert "Alpha (A)" in report
+    assert "Beta (B): needs_product_family_mapping" in report
+    assert "optical_communication_components" in report
+    assert report.endswith("\n")
+
+
+def test_render_promotion_delta_handles_empty_missing_column_inputs() -> None:
+    report = render_promotion_delta(
+        before_review=pd.DataFrame(),
+        after_review=pd.DataFrame([{"asset_id": "A"}]),
+        bridge_evidence=pd.DataFrame([{"metadata_json": None}]),
+    )
+
+    assert "P2 asset count before: 0" in report
+    assert "P1 asset count before: 0" in report
+    assert "P1 asset count after: 0" in report
+    assert report.endswith("\n")
 
 
 def test_write_targeted_backfill_artifacts_writes_required_files(tmp_path: Path) -> None:

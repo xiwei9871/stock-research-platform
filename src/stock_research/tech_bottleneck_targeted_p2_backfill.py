@@ -317,6 +317,68 @@ def combine_evidence(*, original_evidence: pd.DataFrame, bridge_evidence: pd.Dat
     )
 
 
+def render_promotion_delta(
+    *,
+    before_review: pd.DataFrame,
+    after_review: pd.DataFrame,
+    bridge_evidence: pd.DataFrame,
+) -> str:
+    before = _copy_with_columns(before_review, ["asset_id", "stock_name", "p3_decision", "next_evidence_need"])
+    after = _copy_with_columns(after_review, ["asset_id", "stock_name", "p3_decision", "next_evidence_need"])
+    bridge = _copy_with_columns(bridge_evidence, ["metadata_json", "source_type", "evidence_type"])
+
+    before_p2 = before[before["p3_decision"].eq("needs_product_family_mapping")].copy()
+    before_p1 = before[before["p3_decision"].eq("auto_approve")].copy()
+    after_p1 = after[after["p3_decision"].eq("auto_approve")].copy()
+
+    before_p2_assets = _asset_records_by_id(before_p2)
+    before_p1_asset_ids = _asset_ids(before_p1)
+    after_p1_asset_ids = _asset_ids(after_p1)
+    after_by_asset = _asset_records_by_id(after)
+
+    promoted_asset_ids = sorted(set(before_p2_assets) & after_p1_asset_ids)
+    blocked_decisions = {"needs_product_family_mapping", "needs_more_evidence", "reject_or_noise"}
+    blocked_assets = []
+    for asset_id, before_record in before_p2_assets.items():
+        after_record = after_by_asset.get(asset_id)
+        if after_record is None:
+            continue
+        after_decision = _safe_text(after_record.get("p3_decision"))
+        if after_decision not in blocked_decisions:
+            continue
+        next_evidence_need = _safe_text(after_record.get("next_evidence_need"))
+        display_record = _fill_blank_values(after_record, before_record)
+        blocked_assets.append((_asset_label(display_record), next_evidence_need or after_decision))
+    blocked_assets.sort(key=lambda item: item[0])
+
+    bridge_family_rows = _bridge_family_rows(bridge)
+
+    lines = [
+        "# Promotion Delta",
+        "",
+        f"P2 asset count before: {len(before_p2_assets)}",
+        f"P1 asset count before: {len(before_p1_asset_ids)}",
+        f"P1 asset count after: {len(after_p1_asset_ids)}",
+        "",
+        "## Promoted Assets",
+    ]
+    lines.extend(f"- {_asset_label(before_p2_assets[asset_id])}" for asset_id in promoted_asset_ids)
+    if not promoted_asset_ids:
+        lines.append("- None")
+
+    lines.extend(["", "## Still Blocked Before-P2 Assets"])
+    lines.extend(f"- {asset_label}: {reason}" for asset_label, reason in blocked_assets)
+    if not blocked_assets:
+        lines.append("- None")
+
+    lines.extend(["", "## Added Bridge Evidence Families"])
+    lines.extend(f"- {family}: {source_type}/{evidence_type}" for family, source_type, evidence_type in bridge_family_rows)
+    if not bridge_family_rows:
+        lines.append("- None")
+
+    return "\n".join(lines) + "\n"
+
+
 def write_targeted_backfill_artifacts(
     *,
     output_dir: Path,
@@ -360,6 +422,64 @@ def _copy_with_columns(frame: pd.DataFrame, columns: Iterable[str]) -> pd.DataFr
         if column not in copied.columns:
             copied[column] = ""
     return copied
+
+
+def _asset_records_by_id(frame: pd.DataFrame) -> dict[str, dict[str, object]]:
+    records: dict[str, dict[str, object]] = {}
+    for row in _copy_with_columns(frame, ["asset_id", "stock_name"]).to_dict("records"):
+        asset_id = _safe_text(row.get("asset_id"))
+        if asset_id:
+            records[asset_id] = row
+    return dict(sorted(records.items()))
+
+
+def _asset_ids(frame: pd.DataFrame) -> set[str]:
+    if "asset_id" not in frame.columns:
+        return set()
+    return {_safe_text(asset_id) for asset_id in frame["asset_id"].tolist() if _safe_text(asset_id)}
+
+
+def _asset_label(row: dict[str, object]) -> str:
+    asset_id = _safe_text(row.get("asset_id"))
+    stock_name = _safe_text(row.get("stock_name")) or asset_id
+    return f"{stock_name} ({asset_id})" if asset_id else stock_name
+
+
+def _fill_blank_values(primary: dict[str, object], fallback: dict[str, object]) -> dict[str, object]:
+    merged = primary.copy()
+    for key, value in fallback.items():
+        if not _safe_text(merged.get(key)):
+            merged[key] = value
+    return merged
+
+
+def _bridge_family_rows(bridge_evidence: pd.DataFrame) -> list[tuple[str, str, str]]:
+    family_rows = set()
+    for row in bridge_evidence.to_dict("records"):
+        family = _metadata_bridge_family(row.get("metadata_json"))
+        if not family:
+            continue
+        source_type = _safe_text(row.get("source_type")) or "unknown_source_type"
+        evidence_type = _safe_text(row.get("evidence_type")) or "unknown_evidence_type"
+        family_rows.add((family, source_type, evidence_type))
+    return sorted(family_rows)
+
+
+def _metadata_bridge_family(metadata_json: object) -> str:
+    if isinstance(metadata_json, dict):
+        return _safe_text(metadata_json.get("bridge_family"))
+
+    text = _safe_text(metadata_json)
+    if not text:
+        return ""
+
+    try:
+        metadata = json.loads(text)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(metadata, dict):
+        return ""
+    return _safe_text(metadata.get("bridge_family"))
 
 
 def _safe_evidence(evidence: pd.DataFrame) -> pd.DataFrame:
