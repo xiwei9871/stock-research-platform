@@ -159,6 +159,17 @@ from stock_research.minute_backfill import (
 )
 from stock_research.minute_backfill_watchdog import run_minute_backfill_watchdog
 from stock_research.minute_data import sync_baostock_stock_minute_bars
+from stock_research.news_source_backfill import (
+    HISTORICAL_TOP10_NEWS_PROVIDERS,
+    run_historical_top10_news_backfill,
+    run_news_source_backfill,
+    run_topn_news_source_backfill,
+)
+from stock_research.news_features import (
+    run_news_feature_backfill,
+    run_news_feature_diagnostics,
+)
+from stock_research.topn_news_enrichment import run_topn_news_enrichment
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.p2.artifact_rollup import (
     build_p2_artifact_rollup,
@@ -341,6 +352,33 @@ from stock_research.technical_feature_audit import (
 from stock_research.technical_feature_watchdog import (
     run_technical_feature_backfill_watchdog,
 )
+from stock_research.stock_report_backfill import (
+    load_stock_report_asset_universe,
+    run_stock_report_feature_backfill,
+    run_stock_report_backfill_plan,
+    run_stock_report_backfill_run,
+)
+from stock_research.stock_report_backfill_watchdog import run_stock_report_backfill_watchdog
+from stock_research.stock_report_pdf_backfill import (
+    run_stock_report_pdf_backfill_watchdog,
+    run_stock_report_pdf_field_backfill,
+)
+from stock_research.stock_report_research import run_stock_report_workpack
+from stock_research.stock_report_web_collection import (
+    run_stock_report_feature_build,
+    run_stock_report_search_plan,
+    run_stock_report_web_source_collection,
+)
+from stock_research.hibor_reports import (
+    build_hibor_a_tier_backfill_plan,
+    build_hibor_download_queue,
+    download_hibor_report_pdfs,
+    import_hibor_report_pdfs,
+    run_hibor_a_tier_backfill,
+    watch_hibor_downloads,
+)
+from stock_research.hibor_ui_download import run_hibor_ui_download_backfill
+from stock_research.yanbaoke_reports import run_yanbaoke_report_backfill
 from stock_research.alpha191_pilot_validation import (
     run_validate_alpha191_expanded,
     run_validate_alpha191_pilot,
@@ -1017,6 +1055,55 @@ def build_parser() -> argparse.ArgumentParser:
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
     subparsers.add_parser("finance-audit")
+
+    news_source_backfill = subparsers.add_parser("news-source-backfill")
+    news_source_backfill.add_argument("--start-date", required=True)
+    news_source_backfill.add_argument("--end-date", required=True)
+    news_source_backfill.add_argument("--provider", default="tushare")
+    news_source_backfill.add_argument("--token")
+    news_source_backfill.add_argument("--output-dir")
+
+    topn_news_source_backfill = subparsers.add_parser("topn-news-source-backfill")
+    topn_news_source_backfill.add_argument("--candidates-path", required=True)
+    topn_news_source_backfill.add_argument(
+        "--provider",
+        choices=["akshare_stock_news_em"],
+        required=True,
+    )
+    topn_news_source_backfill.add_argument("--trade-date", required=True)
+    topn_news_source_backfill.add_argument("--output-dir")
+
+    historical_top10_news_backfill = subparsers.add_parser("historical-top10-news-backfill")
+    historical_top10_news_backfill.add_argument("--top10-path", required=True)
+    historical_top10_news_backfill.add_argument("--start-date", required=True)
+    historical_top10_news_backfill.add_argument("--end-date", required=True)
+    historical_top10_news_backfill.add_argument(
+        "--providers",
+        nargs="+",
+        choices=HISTORICAL_TOP10_NEWS_PROVIDERS,
+        default=[
+            "eastmoney_individual_notice",
+            "eastmoney_research_report",
+        ],
+    )
+    historical_top10_news_backfill.add_argument("--sample-trade-dates", type=int)
+    historical_top10_news_backfill.add_argument("--output-dir")
+
+    news_feature_backfill = subparsers.add_parser("news-feature-backfill")
+    news_feature_backfill.add_argument("--events-path", required=True)
+    news_feature_backfill.add_argument("--start-date", required=True)
+    news_feature_backfill.add_argument("--end-date", required=True)
+    news_feature_backfill.add_argument("--mode", choices=["replay", "live"], default="replay")
+    news_feature_backfill.add_argument("--output-dir")
+
+    news_feature_diagnostics = subparsers.add_parser("news-feature-diagnostics")
+    news_feature_diagnostics.add_argument("--feature-path", required=True)
+    news_feature_diagnostics.add_argument("--output-dir")
+
+    topn_news_enrichment = subparsers.add_parser("topn-news-enrichment")
+    topn_news_enrichment.add_argument("--candidates-path", required=True)
+    topn_news_enrichment.add_argument("--news-features-path", required=True)
+    topn_news_enrichment.add_argument("--output-dir")
 
     free_enrichment_backfill = subparsers.add_parser("free-enrichment-backfill")
     free_enrichment_backfill.add_argument(
@@ -1958,6 +2045,198 @@ def build_parser() -> argparse.ArgumentParser:
     daily_incremental.add_argument("--apply-daily-run-schema", action="store_true")
     daily_incremental.add_argument("--record-run", action="store_true")
 
+    stock_report_workpack = subparsers.add_parser("build-stock-report-workpack")
+    stock_report_workpack.add_argument(
+        "--research-packet-path",
+        default="outputs/research/mid_trend_research_packet_20260602/mid_trend_research_packet_candidates.csv",
+    )
+    stock_report_workpack.add_argument("--trade-date")
+    stock_report_workpack.add_argument("--output-dir", default="outputs/research")
+
+    stock_report_search_plan = subparsers.add_parser("build-stock-report-search-plan")
+    stock_report_search_plan.add_argument(
+        "--research-packet-path",
+        default="outputs/research/mid_trend_research_packet_20260602/mid_trend_research_packet_candidates.csv",
+    )
+    stock_report_search_plan.add_argument("--trade-date")
+    stock_report_search_plan.add_argument("--output-dir", default="outputs/research")
+
+    stock_report_web_sources = subparsers.add_parser("collect-stock-report-web-sources")
+    stock_report_web_sources.add_argument(
+        "--search-plan-path",
+        default="outputs/research/stock_report_web_collection_20260602/stock_report_search_plan.csv",
+    )
+    stock_report_web_sources.add_argument("--output-dir", default="outputs/research")
+    stock_report_web_sources.add_argument("--dry-run", action="store_true")
+    stock_report_web_sources.add_argument(
+        "--adapter",
+        choices=["mock", "web", "eastmoney_research"],
+        default="mock",
+    )
+    stock_report_web_sources.add_argument("--max-fetches", type=int)
+    stock_report_web_sources.add_argument("--write-db", action="store_true")
+    stock_report_web_sources.add_argument("--service", default=SETTINGS.research_service)
+    stock_report_web_sources.add_argument("--http-timeout-seconds", type=float, default=8.0)
+    stock_report_web_sources.add_argument("--request-sleep-seconds", type=float, default=0.0)
+    stock_report_web_sources.add_argument("--stop-after-consecutive-fetch-errors", type=int)
+    stock_report_web_sources.add_argument("--start-date")
+    stock_report_web_sources.add_argument("--end-date")
+
+    stock_report_features = subparsers.add_parser("build-stock-report-features")
+    stock_report_features.add_argument("--events-path", required=True)
+    stock_report_features.add_argument("--trade-date", required=True)
+    stock_report_features.add_argument("--output-dir", default="outputs/research")
+    stock_report_features.add_argument("--write-db", action="store_true")
+
+    stock_report_backfill_plan = subparsers.add_parser("stock-report-backfill-plan")
+    stock_report_backfill_plan.add_argument("--start-date", required=True)
+    stock_report_backfill_plan.add_argument("--end-date", required=True)
+    stock_report_backfill_plan.add_argument("--sample-size", type=int)
+    stock_report_backfill_plan.add_argument("--output-dir", default="outputs/research")
+
+    stock_report_backfill_run = subparsers.add_parser("stock-report-backfill-run")
+    stock_report_backfill_run.add_argument("--tasks-path", required=True)
+    stock_report_backfill_run.add_argument("--start-date", required=True)
+    stock_report_backfill_run.add_argument("--end-date", required=True)
+    stock_report_backfill_run.add_argument("--batch-size", type=int, default=100)
+    stock_report_backfill_run.add_argument("--sleep-seconds", type=float, default=0.5)
+    stock_report_backfill_run.add_argument("--sample-size", type=int)
+    stock_report_backfill_run.add_argument("--output-dir", default="outputs/research")
+    stock_report_backfill_run.add_argument("--write-db", action="store_true")
+
+    stock_report_backfill_watchdog = subparsers.add_parser("stock-report-backfill-watchdog")
+    stock_report_backfill_watchdog.add_argument("--output-dir", default="outputs/research")
+    stock_report_backfill_watchdog.add_argument("--stale-after-minutes", type=int, default=30)
+    stock_report_backfill_watchdog.add_argument("--run-timeout-seconds", type=int, default=60)
+    stock_report_backfill_watchdog.add_argument("--report-target", required=True)
+    stock_report_backfill_watchdog.add_argument("--report-account", default="jarvis")
+    stock_report_backfill_watchdog.add_argument("--openclaw-bin", default="openclaw")
+    stock_report_backfill_watchdog.add_argument("--report-dry-run", action="store_true")
+
+    stock_report_feature_backfill = subparsers.add_parser("stock-report-feature-backfill")
+    stock_report_feature_backfill.add_argument("--start-date", required=True)
+    stock_report_feature_backfill.add_argument("--end-date", required=True)
+    stock_report_feature_backfill.add_argument("--events-path")
+    stock_report_feature_backfill.add_argument("--output-dir", default="outputs/research")
+    stock_report_feature_backfill.add_argument("--write-db", action="store_true")
+
+    stock_report_pdf_field_backfill = subparsers.add_parser("stock-report-pdf-field-backfill")
+    stock_report_pdf_field_backfill.add_argument("--source-path")
+    stock_report_pdf_field_backfill.add_argument("--start-date")
+    stock_report_pdf_field_backfill.add_argument("--end-date")
+    stock_report_pdf_field_backfill.add_argument("--offset", type=int, default=0)
+    stock_report_pdf_field_backfill.add_argument("--limit", type=int)
+    stock_report_pdf_field_backfill.add_argument("--batch-size", type=int, default=100)
+    stock_report_pdf_field_backfill.add_argument("--sleep-seconds", type=float, default=0.0)
+    stock_report_pdf_field_backfill.add_argument("--output-dir", default="outputs/research")
+    stock_report_pdf_field_backfill.add_argument("--resume", action="store_true", default=True)
+    stock_report_pdf_field_backfill.add_argument("--no-resume", dest="resume", action="store_false")
+    stock_report_pdf_field_backfill.add_argument("--write-db", action="store_true")
+
+    stock_report_pdf_backfill_watchdog = subparsers.add_parser("stock-report-pdf-backfill-watchdog")
+    stock_report_pdf_backfill_watchdog.add_argument("--output-dir", default="outputs/research")
+    stock_report_pdf_backfill_watchdog.add_argument("--stale-after-minutes", type=int, default=30)
+    stock_report_pdf_backfill_watchdog.add_argument("--run-timeout-seconds", type=int, default=60)
+    stock_report_pdf_backfill_watchdog.add_argument("--report-target", required=True)
+    stock_report_pdf_backfill_watchdog.add_argument("--report-account", default="jarvis")
+    stock_report_pdf_backfill_watchdog.add_argument("--openclaw-bin", default="openclaw")
+    stock_report_pdf_backfill_watchdog.add_argument("--report-dry-run", action="store_true")
+
+    hibor_download_queue = subparsers.add_parser("build-hibor-download-queue")
+    hibor_download_queue.add_argument("--candidates-path", required=True)
+    hibor_download_queue.add_argument("--start-date", required=True)
+    hibor_download_queue.add_argument("--end-date", required=True)
+    hibor_download_queue.add_argument("--output-dir", default="outputs/research/hibor_download_queue")
+    hibor_download_queue.add_argument("--broker", action="append", dest="brokers")
+
+    hibor_download = subparsers.add_parser("download-hibor-report-pdfs")
+    hibor_download.add_argument("--candidates-path", required=True)
+    hibor_download.add_argument("--start-date", required=True)
+    hibor_download.add_argument("--end-date", required=True)
+    hibor_download.add_argument("--download-dir", default="data/manual/hibor_reports/inbox")
+    hibor_download.add_argument("--broker", action="append", dest="brokers")
+    hibor_download.add_argument("--max-reports-per-candidate", type=int, default=1)
+
+    hibor_import = subparsers.add_parser("import-hibor-report-pdfs")
+    hibor_import.add_argument("--input-dir", required=True)
+    hibor_import.add_argument("--output-dir", default="outputs/research/hibor_report_import")
+    hibor_import.add_argument("--write-db", action="store_true")
+    hibor_import.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
+    hibor_import.add_argument("--feature-trade-date")
+    hibor_import.set_defaults(run_pdf_backfill=True)
+
+    hibor_watch = subparsers.add_parser("watch-hibor-downloads")
+    hibor_watch.add_argument("--input-dir", required=True)
+    hibor_watch.add_argument("--output-dir", default="outputs/research/hibor_report_import")
+    hibor_watch.add_argument("--poll-seconds", type=float, default=5.0)
+    hibor_watch.add_argument("--max-cycles", type=int)
+    hibor_watch.add_argument("--write-db", action="store_true")
+
+    hibor_a_tier_plan = subparsers.add_parser("build-hibor-a-tier-backfill-plan")
+    hibor_a_tier_plan.add_argument("--start-date", default="2024-10-01")
+    hibor_a_tier_plan.add_argument("--end-date", required=True)
+    hibor_a_tier_plan.add_argument("--output-dir", default="outputs/research/hibor_a_tier_backfill")
+    hibor_a_tier_plan.add_argument("--sample-size", type=int)
+    hibor_a_tier_plan.add_argument("--service", default=SETTINGS.research_service)
+
+    hibor_a_tier_run = subparsers.add_parser("run-hibor-a-tier-backfill")
+    hibor_a_tier_run.add_argument("--tasks-path", required=True)
+    hibor_a_tier_run.add_argument("--output-dir", default="outputs/research/hibor_a_tier_backfill")
+    hibor_a_tier_run.add_argument("--config-path", default="config/hibor_institutions.csv")
+    hibor_a_tier_run.add_argument("--download-dir")
+    hibor_a_tier_run.add_argument("--review-threshold", type=int, default=50)
+    hibor_a_tier_run.add_argument("--max-tasks", type=int)
+    hibor_a_tier_run.add_argument("--max-detail-attempts", type=int)
+    hibor_a_tier_run.add_argument("--fallback-tier", default="B")
+    hibor_a_tier_run.add_argument("--retry-attempts", type=int, default=3)
+    hibor_a_tier_run.add_argument("--retry-sleep-seconds", type=float, default=2.0)
+    hibor_a_tier_run.add_argument("--write-db", action="store_true")
+    hibor_a_tier_run.add_argument("--service", default=SETTINGS.research_service)
+    hibor_a_tier_run.add_argument("--no-import", dest="import_pdfs", action="store_false")
+    hibor_a_tier_run.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
+    hibor_a_tier_run.add_argument("--feature-trade-date")
+    hibor_a_tier_run.set_defaults(import_pdfs=True, run_pdf_backfill=True)
+
+    hibor_ui_run = subparsers.add_parser("run-hibor-ui-download-backfill")
+    hibor_ui_run.add_argument("--tasks-path", required=True)
+    hibor_ui_run.add_argument("--output-dir", default="outputs/research/hibor_ui_download")
+    hibor_ui_run.add_argument("--download-dir", default="data/manual/hibor_ui_reports")
+    hibor_ui_run.add_argument("--staging-dir")
+    hibor_ui_run.add_argument("--max-tasks", type=int)
+    hibor_ui_run.add_argument("--wait-timeout-seconds", type=float, default=45.0)
+    hibor_ui_run.add_argument("--poll-seconds", type=float, default=1.0)
+    hibor_ui_run.add_argument("--skip-open-legacy-search", dest="open_legacy_search", action="store_false")
+    hibor_ui_run.add_argument("--time-filter", choices=["all", "one_year"], default="all")
+    hibor_ui_run.add_argument("--write-db", action="store_true")
+    hibor_ui_run.add_argument("--service", default=SETTINGS.research_service)
+    hibor_ui_run.add_argument("--no-import", dest="import_pdfs", action="store_false")
+    hibor_ui_run.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
+    hibor_ui_run.add_argument("--feature-trade-date")
+    hibor_ui_run.set_defaults(open_legacy_search=True, import_pdfs=True, run_pdf_backfill=True)
+
+    yanbaoke_run = subparsers.add_parser("run-yanbaoke-report-backfill")
+    yanbaoke_run.add_argument("--tasks-path", required=True)
+    yanbaoke_run.add_argument("--output-dir", default="outputs/research/yanbaoke_backfill")
+    yanbaoke_run.add_argument("--download-dir")
+    yanbaoke_run.add_argument("--api-key")
+    yanbaoke_run.add_argument("--institutions-path", default="config/hibor_institutions.csv")
+    yanbaoke_run.add_argument("--fallback-tier", default="B")
+    yanbaoke_run.add_argument("--max-tasks", type=int)
+    yanbaoke_run.add_argument("--max-downloads", type=int)
+    yanbaoke_run.add_argument("--monthly-budget", type=int)
+    yanbaoke_run.add_argument("--base-budget", type=int)
+    yanbaoke_run.add_argument("--top-budget", type=int)
+    yanbaoke_run.add_argument("--reserve-budget", type=int)
+    yanbaoke_run.add_argument("--top-ts-code", action="append", dest="top_ts_codes")
+    yanbaoke_run.add_argument("--position-ts-code", action="append", dest="position_ts_codes")
+    yanbaoke_run.add_argument("--max-broker-share", type=float)
+    yanbaoke_run.add_argument("--write-db", action="store_true")
+    yanbaoke_run.add_argument("--service", default=SETTINGS.research_service)
+    yanbaoke_run.add_argument("--no-import", dest="import_pdfs", action="store_false")
+    yanbaoke_run.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
+    yanbaoke_run.add_argument("--feature-trade-date")
+    yanbaoke_run.set_defaults(import_pdfs=True, run_pdf_backfill=True)
+
     daily_health = subparsers.add_parser("daily-health")
     daily_health.add_argument("--trade-date", required=True)
     daily_health.add_argument("--ingest-datasets", type=parse_ingest_datasets)
@@ -2639,6 +2918,67 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "news-source-backfill":
+        result = run_news_source_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            provider=args.provider,
+            token=args.token,
+            output_dir=args.output_dir,
+        )
+        print(f"news_source_backfill|events|{result['paths']['events']}")
+        print(f"news_source_backfill|report|{result['paths']['report']}")
+        print(f"news_source_backfill|source_status|{result['source_status']}")
+    elif args.command == "topn-news-source-backfill":
+        result = run_topn_news_source_backfill(
+            candidates_path=args.candidates_path,
+            provider=args.provider,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"topn_news_source_backfill|events|{result['paths']['events']}")
+        print(f"topn_news_source_backfill|report|{result['paths']['report']}")
+        print(f"topn_news_source_backfill|rows|{len(result['events'])}")
+    elif args.command == "historical-top10-news-backfill":
+        result = run_historical_top10_news_backfill(
+            top10_path=args.top10_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            providers=args.providers,
+            output_dir=args.output_dir,
+            sample_trade_dates=args.sample_trade_dates,
+        )
+        print(f"historical_top10_news_backfill|candidates|{result['paths']['candidates']}")
+        print(f"historical_top10_news_backfill|source_events|{result['paths']['source_events']}")
+        print(f"historical_top10_news_backfill|source_rows|{len(result['source_events'])}")
+    elif args.command == "news-feature-backfill":
+        result = run_news_feature_backfill(
+            events_path=args.events_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            mode=args.mode,
+            output_dir=args.output_dir,
+        )
+        print(f"news_feature_backfill|mentions|{result['paths']['mentions']}")
+        print(f"news_feature_backfill|features|{result['paths']['features']}")
+    elif args.command == "news-feature-diagnostics":
+        result = run_news_feature_diagnostics(
+            feature_path=args.feature_path,
+            output_dir=args.output_dir,
+        )
+        print(f"news_feature_diagnostics|bucket_summary|{result['paths']['bucket_summary']}")
+        print(f"news_feature_diagnostics|regime_summary|{result['paths']['regime_summary']}")
+        print(f"news_feature_diagnostics|report|{result['paths']['report']}")
+        print(f"news_feature_diagnostics|warnings|{len(result.get('warnings', []))}")
+        for warning in result.get("warnings", []):
+            print(f"news_feature_diagnostics|warning|{warning}")
+    elif args.command == "topn-news-enrichment":
+        result = run_topn_news_enrichment(
+            candidates_path=args.candidates_path,
+            news_features_path=args.news_features_path,
+            output_dir=args.output_dir,
+        )
+        print(f"topn_news_enrichment|enrichment|{result['paths']['enrichment']}")
     elif args.command == "free-enrichment-backfill":
         result = run_free_enrichment_backfill(
             dataset=args.dataset,
@@ -3593,6 +3933,307 @@ def main_for_args(argv: list[str] | None = None) -> None:
             print(f"daily_incremental_step|{step['step']}|{step['status']}")
             if "error" in step:
                 print(f"daily_incremental_step_error|{step['step']}|{step['error']}")
+    elif args.command == "build-stock-report-workpack":
+        result = run_stock_report_workpack(
+            research_packet_path=args.research_packet_path,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"stock_report_workpack|workpack|{result['paths']['workpack']}")
+        print(f"stock_report_workpack|import_template|{result['paths']['import_template']}")
+        print(f"stock_report_workpack|report|{result['paths']['report']}")
+        print(f"stock_report_workpack|rows|{len(result['workpack'])}")
+    elif args.command == "build-stock-report-search-plan":
+        result = run_stock_report_search_plan(
+            research_packet_path=args.research_packet_path,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"stock_report_search_plan|search_plan|{result['paths']['search_plan']}")
+        print(f"stock_report_search_plan|report|{result['paths']['report']}")
+        print(f"stock_report_search_plan|rows|{len(result['search_plan'])}")
+    elif args.command == "collect-stock-report-web-sources":
+        result = run_stock_report_web_source_collection(
+            search_plan_path=args.search_plan_path,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
+            adapter=args.adapter,
+            max_fetches=args.max_fetches,
+            write_db=args.write_db,
+            service=args.service,
+            http_timeout_seconds=args.http_timeout_seconds,
+            request_sleep_seconds=args.request_sleep_seconds,
+            stop_after_consecutive_fetch_errors=args.stop_after_consecutive_fetch_errors,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        print(f"stock_report_web_sources|collection|{result['paths']['collection']}")
+        print(f"stock_report_web_sources|sources|{result['paths']['sources']}")
+        print(f"stock_report_web_sources|events|{result['paths']['events']}")
+        print(f"stock_report_web_sources|report|{result['paths']['report']}")
+        print(f"stock_report_web_sources|rows|{len(result['collection'])}")
+    elif args.command == "build-stock-report-features":
+        result = run_stock_report_feature_build(
+            events_path=args.events_path,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+            write_db=args.write_db,
+        )
+        print(f"stock_report_features|features|{result['paths']['features']}")
+        print(f"stock_report_features|report|{result['paths']['report']}")
+        print(f"stock_report_features|rows|{len(result['features'])}")
+    elif args.command == "stock-report-backfill-plan":
+        result = run_stock_report_backfill_plan(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            sample_size=args.sample_size,
+            output_dir=args.output_dir,
+        )
+        print(f"stock_report_backfill_plan|tasks|{result['paths']['tasks']}")
+        print(f"stock_report_backfill_plan|report|{result['paths']['report']}")
+        print(f"stock_report_backfill_plan|rows|{len(result['tasks'])}")
+    elif args.command == "stock-report-backfill-run":
+        result = run_stock_report_backfill_run(
+            tasks_path=args.tasks_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            batch_size=args.batch_size,
+            sleep_seconds=args.sleep_seconds,
+            sample_size=args.sample_size,
+            output_dir=args.output_dir,
+            write_db=args.write_db,
+        )
+        print(f"stock_report_backfill_run|tasks_csv|{result['paths']['tasks']}")
+        print(f"stock_report_backfill_run|sources|{result['paths']['sources']}")
+        print(f"stock_report_backfill_run|events|{result['paths']['events']}")
+        print(f"stock_report_backfill_run|report|{result['paths']['report']}")
+        print(f"stock_report_backfill_run|tasks|{len(result['status'])}")
+        print(f"stock_report_backfill_run|events_rows|{len(result['events'])}")
+    elif args.command == "stock-report-backfill-watchdog":
+        result = run_stock_report_backfill_watchdog(
+            output_dir=args.output_dir,
+            stale_after_minutes=args.stale_after_minutes,
+            run_timeout_seconds=args.run_timeout_seconds,
+            report_target=args.report_target,
+            report_account=args.report_account,
+            openclaw_bin=args.openclaw_bin,
+            report_dry_run=args.report_dry_run,
+        )
+        status = result["status"]
+        summary = result["post_summary"]
+        print(f"stock_report_backfill_watchdog|action|{status.watchdog_action}")
+        print(f"stock_report_backfill_watchdog|work_remaining|{status.work_remaining}")
+        print(f"stock_report_backfill_watchdog|done|{summary.success_tasks}")
+        print(f"stock_report_backfill_watchdog|no_report|{summary.skipped_tasks}")
+        print(f"stock_report_backfill_watchdog|fetch_error|{summary.failed_tasks}")
+        print(f"stock_report_backfill_watchdog|pending|{summary.pending_tasks}")
+        print(f"stock_report_backfill_watchdog|report_rows|{summary.total_rows_written}")
+    elif args.command == "stock-report-feature-backfill":
+        result = run_stock_report_feature_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            events_path=args.events_path,
+            output_dir=args.output_dir,
+            write_db=args.write_db,
+        )
+        print(f"stock_report_feature_backfill|features|{result['paths']['features']}")
+        print(f"stock_report_feature_backfill|report|{result['paths']['report']}")
+        print(f"stock_report_feature_backfill|rows|{len(result['features'])}")
+    elif args.command == "stock-report-pdf-field-backfill":
+        result = run_stock_report_pdf_field_backfill(
+            source_path=args.source_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            offset=args.offset,
+            limit=args.limit,
+            batch_size=args.batch_size,
+            sleep_seconds=args.sleep_seconds,
+            output_dir=args.output_dir,
+            resume=args.resume,
+            write_db=args.write_db,
+        )
+        print(f"stock_report_pdf_field_backfill|fields|{result['paths']['fields']}")
+        print(f"stock_report_pdf_field_backfill|summary|{result['paths']['summary']}")
+        print(f"stock_report_pdf_field_backfill|report|{result['paths']['report']}")
+        print(f"stock_report_pdf_field_backfill|rows|{len(result['fields'])}")
+    elif args.command == "stock-report-pdf-backfill-watchdog":
+        result = run_stock_report_pdf_backfill_watchdog(
+            output_dir=args.output_dir,
+            stale_after_minutes=args.stale_after_minutes,
+            run_timeout_seconds=args.run_timeout_seconds,
+            report_target=args.report_target,
+            report_account=args.report_account,
+            openclaw_bin=args.openclaw_bin,
+            report_dry_run=args.report_dry_run,
+        )
+        status = result["status"]
+        summary = result["post_summary"]
+        print(f"stock_report_pdf_backfill_watchdog|action|{status.watchdog_action}")
+        print(f"stock_report_pdf_backfill_watchdog|work_remaining|{status.work_remaining}")
+        print(f"stock_report_pdf_backfill_watchdog|parsed_or_empty|{summary.success_tasks}")
+        print(f"stock_report_pdf_backfill_watchdog|parse_error|{summary.failed_tasks}")
+        print(f"stock_report_pdf_backfill_watchdog|pending|{summary.pending_tasks}")
+        print(f"stock_report_pdf_backfill_watchdog|target_price_rows|{summary.total_rows_written}")
+    elif args.command == "build-hibor-download-queue":
+        pandas_module = __import__("pandas")
+        candidates = pandas_module.read_csv(args.candidates_path, low_memory=False)
+        result = build_hibor_download_queue(
+            candidates,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            brokers=args.brokers,
+        )
+        print(f"hibor_download_queue|queue|{result['paths']['queue']}")
+        print(f"hibor_download_queue|report|{result['paths']['report']}")
+        print(f"hibor_download_queue|rows|{len(result['queue'])}")
+    elif args.command == "download-hibor-report-pdfs":
+        pandas_module = __import__("pandas")
+        candidates = pandas_module.read_csv(args.candidates_path, low_memory=False)
+        result = download_hibor_report_pdfs(
+            candidates,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            download_dir=args.download_dir,
+            brokers=args.brokers,
+            max_reports_per_candidate=args.max_reports_per_candidate,
+        )
+        print(f"hibor_report_download|downloads|{result['paths']['downloads']}")
+        print(f"hibor_report_download|download_dir|{result['paths']['download_dir']}")
+        print(f"hibor_report_download|attempted|{result['summary']['attempted_count']}")
+        print(f"hibor_report_download|downloaded|{result['summary']['downloaded_count']}")
+    elif args.command == "import-hibor-report-pdfs":
+        result = import_hibor_report_pdfs(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            write_db=args.write_db,
+            run_pdf_backfill=args.run_pdf_backfill,
+            feature_trade_date=args.feature_trade_date,
+        )
+        print(f"hibor_report_import|sources|{result['paths']['sources']}")
+        print(f"hibor_report_import|events|{result['paths']['events']}")
+        if "fields" in result["paths"]:
+            print(f"hibor_report_import|fields|{result['paths']['fields']}")
+        if "features" in result["paths"]:
+            print(f"hibor_report_import|features|{result['paths']['features']}")
+        print(f"hibor_report_import|report|{result['paths']['report']}")
+        print(f"hibor_report_import|pdf_count|{result['summary']['pdf_count']}")
+    elif args.command == "watch-hibor-downloads":
+        result = watch_hibor_downloads(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            poll_seconds=args.poll_seconds,
+            max_cycles=args.max_cycles,
+            write_db=args.write_db,
+        )
+        print(f"hibor_download_watch|sources|{result['paths']['sources']}")
+        print(f"hibor_download_watch|events|{result['paths']['events']}")
+        if "fields" in result["paths"]:
+            print(f"hibor_download_watch|fields|{result['paths']['fields']}")
+        print(f"hibor_download_watch|report|{result['paths']['report']}")
+        print(f"hibor_download_watch|pdf_count|{result['summary']['pdf_count']}")
+        print(f"hibor_download_watch|cycles|{result['summary']['watch_cycles']}")
+    elif args.command == "build-hibor-a-tier-backfill-plan":
+        assets = load_stock_report_asset_universe(service=args.service)
+        if args.sample_size is not None:
+            assets = assets.head(args.sample_size).copy()
+        result = build_hibor_a_tier_backfill_plan(
+            assets,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"hibor_a_tier_backfill_plan|tasks|{result['paths']['tasks']}")
+        print(f"hibor_a_tier_backfill_plan|report|{result['paths']['report']}")
+        print(f"hibor_a_tier_backfill_plan|rows|{len(result['tasks'])}")
+    elif args.command == "run-hibor-a-tier-backfill":
+        result = run_hibor_a_tier_backfill(
+            tasks_path=args.tasks_path,
+            output_dir=args.output_dir,
+            config_path=args.config_path,
+            download_dir=args.download_dir,
+            review_threshold=args.review_threshold,
+            max_tasks=args.max_tasks,
+            max_detail_attempts=args.max_detail_attempts,
+            fallback_tier=args.fallback_tier,
+            write_db=args.write_db,
+            service=args.service,
+            import_pdfs=args.import_pdfs,
+            run_pdf_backfill=args.run_pdf_backfill,
+            feature_trade_date=args.feature_trade_date,
+            retry_attempts=args.retry_attempts,
+            retry_sleep_seconds=args.retry_sleep_seconds,
+        )
+        print(f"hibor_a_tier_backfill|tasks|{result['paths']['tasks']}")
+        print(f"hibor_a_tier_backfill|discovered|{result['paths']['discovered']}")
+        print(f"hibor_a_tier_backfill|filtered|{result['paths']['filtered']}")
+        print(f"hibor_a_tier_backfill|downloads|{result['paths']['downloads']}")
+        print(f"hibor_a_tier_backfill|report|{result['paths']['report']}")
+        if "import_report" in result["paths"]:
+            print(f"hibor_a_tier_backfill|import_report|{result['paths']['import_report']}")
+        print(f"hibor_a_tier_backfill|processed_tasks|{result['summary']['processed_tasks']}")
+        print(f"hibor_a_tier_backfill|detail_attempts|{result['summary']['detail_attempts']}")
+        print(f"hibor_a_tier_backfill|done_tasks|{result['summary']['done_tasks']}")
+        print(f"hibor_a_tier_backfill|needs_review_tasks|{result['summary']['needs_review_tasks']}")
+        print(f"hibor_a_tier_backfill|downloaded|{result['summary']['downloaded_count']}")
+    elif args.command == "run-hibor-ui-download-backfill":
+        result = run_hibor_ui_download_backfill(
+            tasks_path=args.tasks_path,
+            output_dir=args.output_dir,
+            download_dir=args.download_dir,
+            staging_dir=args.staging_dir,
+            max_tasks=args.max_tasks,
+            wait_timeout_seconds=args.wait_timeout_seconds,
+            poll_seconds=args.poll_seconds,
+            open_legacy_search=args.open_legacy_search,
+            time_filter=args.time_filter,
+            write_db=args.write_db,
+            service=args.service,
+            import_pdfs=args.import_pdfs,
+            run_pdf_backfill=args.run_pdf_backfill,
+            feature_trade_date=args.feature_trade_date,
+        )
+        print(f"hibor_ui_download|tasks|{result['paths']['tasks']}")
+        print(f"hibor_ui_download|downloads|{result['paths']['downloads']}")
+        print(f"hibor_ui_download|report|{result['paths']['report']}")
+        if "import_report" in result["paths"]:
+            print(f"hibor_ui_download|import_report|{result['paths']['import_report']}")
+        print(f"hibor_ui_download|processed_tasks|{result['summary']['processed_tasks']}")
+        print(f"hibor_ui_download|done_tasks|{result['summary']['done_tasks']}")
+        print(f"hibor_ui_download|timeout_tasks|{result['summary']['timeout_tasks']}")
+        print(f"hibor_ui_download|ui_error_tasks|{result['summary']['ui_error_tasks']}")
+        print(f"hibor_ui_download|downloaded|{result['summary']['downloaded_count']}")
+    elif args.command == "run-yanbaoke-report-backfill":
+        result = run_yanbaoke_report_backfill(
+            tasks_path=args.tasks_path,
+            output_dir=args.output_dir,
+            download_dir=args.download_dir,
+            api_key=args.api_key,
+            institutions_path=args.institutions_path,
+            fallback_tier=args.fallback_tier,
+            max_tasks=args.max_tasks,
+            max_downloads=args.max_downloads,
+            monthly_budget=args.monthly_budget,
+            base_budget=args.base_budget,
+            top_budget=args.top_budget,
+            reserve_budget=args.reserve_budget,
+            top_ts_codes=set(args.top_ts_codes or []),
+            position_ts_codes=set(args.position_ts_codes or []),
+            max_broker_share=args.max_broker_share,
+            write_db=args.write_db,
+            service=args.service,
+            import_pdfs=args.import_pdfs,
+            run_pdf_backfill=args.run_pdf_backfill,
+            feature_trade_date=args.feature_trade_date,
+        )
+        print(f"yanbaoke_backfill|tasks|{result['paths']['tasks']}")
+        print(f"yanbaoke_backfill|discovered|{result['paths']['discovered']}")
+        print(f"yanbaoke_backfill|filtered|{result['paths']['filtered']}")
+        print(f"yanbaoke_backfill|downloads|{result['paths']['downloads']}")
+        print(f"yanbaoke_backfill|report|{result['paths']['report']}")
+        print(f"yanbaoke_backfill|processed_tasks|{result['summary']['processed_tasks']}")
+        print(f"yanbaoke_backfill|done_tasks|{result['summary']['done_tasks']}")
+        print(f"yanbaoke_backfill|downloaded|{result['summary']['downloaded_count']}")
     elif args.command == "daily-health":
         result = summarize_operational_health(
             trade_date=args.trade_date,
@@ -5018,8 +5659,8 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
 
 
-def main() -> None:
-    main_for_args()
+def main(argv: list[str] | None = None) -> None:
+    main_for_args(argv)
 
 
 if __name__ == "__main__":

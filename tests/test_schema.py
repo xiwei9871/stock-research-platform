@@ -69,6 +69,27 @@ def test_research_extension_creates_watchlist_tables():
     assert "CREATE TABLE IF NOT EXISTS watchlist.watchlist_daily_signal" in sql
 
 
+def test_research_extension_creates_stock_report_research_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE SCHEMA IF NOT EXISTS research;" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_source" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_event" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_manual_review" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_search_task" in sql
+    assert "CREATE TABLE IF NOT EXISTS research.stock_report_feature_daily" in sql
+    assert "report_id text PRIMARY KEY" in sql
+    assert "source_url text NOT NULL" in sql
+    assert "target_price numeric" in sql
+    assert "moat_or_scarcity_note text" in sql
+    assert "research_support_score numeric" in sql
+    assert "auto_trade_enabled boolean NOT NULL DEFAULT false" in sql
+    assert "idx_research_stock_report_event_asset_date" in sql
+    assert "idx_research_stock_report_manual_review_status" in sql
+    assert "idx_research_stock_report_search_task_status" in sql
+    assert "idx_research_stock_report_feature_daily_score" in sql
+
+
 def test_research_extension_includes_free_enrichment_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
 
