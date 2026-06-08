@@ -214,6 +214,16 @@ def _render_markdown(
         )
         for fact in observation.data_facts:
             lines.append(f"- Fact: {fact}")
+    issues = review_result.get("issues", [])
+    if issues:
+        lines.extend(["", "## Review Issues"])
+        for issue in issues:
+            lines.append(
+                "- "
+                f"{issue.get('severity', 'unknown')}: "
+                f"{issue.get('code', 'unknown_issue')} "
+                f"{issue.get('message', '')}"
+            )
     if warnings:
         lines.extend(["", "## Warnings"])
         lines.extend(f"- {warning}" for warning in warnings)

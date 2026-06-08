@@ -54,3 +54,23 @@ def test_run_internal_skill_review_writes_review_artifacts(tmp_path):
         "watchlist",
         "review",
     }
+
+
+def test_run_internal_skill_review_writes_rejected_artifact_when_evidence_missing(tmp_path):
+    result = run_internal_skill_review(
+        trade_date="2026-06-08",
+        artifact_paths=[],
+        output_dir=tmp_path / "outputs",
+    )
+
+    assert result.status == "rejected"
+    assert result.review_agent_status == "rejected"
+    assert result.observation_count == 3
+
+    review_payload = json.loads(Path(result.review_agent_result_path).read_text(encoding="utf-8"))
+    issue_codes = {issue["code"] for issue in review_payload["issues"]}
+    assert "missing_evidence" in issue_codes
+    assert "missing_data_facts" not in issue_codes
+
+    markdown = Path(result.markdown_path).read_text(encoding="utf-8")
+    assert "missing_evidence" in markdown
