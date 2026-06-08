@@ -422,11 +422,25 @@ def run_regime_confirmation_backtest_from_frames(
         _simulate_equal_weight_daily,
         _summarize_equity,
         build_growth_momentum_candidates,
+        run_style_switch_backtest_from_frames,
     )
 
     regime = build_market_regime_confirmation_from_frames(emotion, policy_events)
     regime = _filter_date_range(regime, start_date, end_date)
-    growth = _filter_date_range(build_growth_momentum_candidates(funnel, top_n=max(top_n, 10)), start_date, end_date)
+    style_backtest = run_style_switch_backtest_from_frames(
+        emotion=emotion,
+        funnel=funnel,
+        prices=prices,
+        start_date=start_date,
+        end_date=end_date,
+        output_dir=None,
+        top_n=top_n,
+    )
+    growth = _filter_date_range(
+        build_growth_momentum_candidates(funnel, top_n=max(top_n, 10)),
+        start_date,
+        end_date,
+    )
 
     style_state = regime[["trade_date", "emotion_state", "risk_state", "emotion_score"]].copy()
     style_state["style_state"] = "growth_momentum"
@@ -442,7 +456,7 @@ def run_regime_confirmation_backtest_from_frames(
         top_n,
     )
     regime_selection = fixed_selection.copy()
-    exposure_by_date = regime.set_index("trade_date")["target_exposure"].to_dict()
+    exposure_by_date = _weekly_effective_exposure(regime).to_dict()
     regime_selection["strategy_family"] = "regime_confirmed_exposure"
     regime_selection["invested_weight"] = (
         regime_selection["trade_date"].map(exposure_by_date).astype(float).fillna(0.6)
@@ -450,7 +464,7 @@ def run_regime_confirmation_backtest_from_frames(
 
     equity = pd.concat(
         [
-            _simulate_equal_weight_daily(prices, fixed_selection, strategy_family="fixed_mid_trend"),
+            style_backtest["equity"],
             _simulate_equal_weight_daily(
                 prices,
                 regime_selection,
@@ -471,6 +485,34 @@ def run_regime_confirmation_backtest_from_frames(
         summary.to_csv(paths["summary_path"], index=False)
 
     return {"regime": regime, "equity": equity, "summary": summary, "paths": paths}
+
+
+def _weekly_effective_exposure(regime: pd.DataFrame) -> pd.Series:
+    if regime.empty or "trade_date" not in regime.columns:
+        return pd.Series(dtype=float)
+
+    frame = regime.copy()
+    frame["trade_date"] = pd.to_datetime(
+        frame["trade_date"].map(_normalize_trade_date_value), errors="coerce", format="mixed"
+    ).dt.strftime("%Y-%m-%d")
+    frame["target_exposure"] = pd.to_numeric(frame.get("target_exposure"), errors="coerce")
+    if "rebalance_allowed" not in frame.columns:
+        frame["rebalance_allowed"] = False
+    frame["rebalance_allowed"] = frame["rebalance_allowed"].fillna(False).astype(bool)
+    frame = frame.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
+    if frame.empty:
+        return pd.Series(dtype=float)
+
+    first_targets = frame["target_exposure"].dropna()
+    current = float(first_targets.iloc[0]) if not first_targets.empty else 0.6
+    effective = []
+    for row in frame.to_dict("records"):
+        target = row.get("target_exposure")
+        if bool(row.get("rebalance_allowed")) and not pd.isna(target):
+            current = float(target)
+        effective.append(current)
+
+    return pd.Series(effective, index=frame["trade_date"].astype(str), dtype=float)
 
 
 def run_market_regime_confirmation_v1_backtest(

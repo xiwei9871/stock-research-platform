@@ -420,6 +420,99 @@ def test_regime_backtest_applies_confirmed_exposure_to_mid_trend_returns() -> No
     assert summary.loc["regime_confirmed_exposure", "max_drawdown"] > summary.loc["fixed_mid_trend", "max_drawdown"]
 
 
+def test_regime_backtest_returns_style_switch_baselines_and_diagnostics(tmp_path: Path) -> None:
+    emotion = pd.DataFrame(
+        [
+            {"trade_date": "2024-09-24", "emotion_score": 72, "emotion_state": "hot", "risk_state": "low"},
+            {"trade_date": "2024-09-25", "emotion_score": 55, "emotion_state": "neutral", "risk_state": "medium"},
+            {"trade_date": "2024-09-26", "emotion_score": 30, "emotion_state": "panic", "risk_state": "high"},
+            {"trade_date": "2024-09-27", "emotion_score": 68, "emotion_state": "hot", "risk_state": "low"},
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2024-09-24", "asset_id": "G1", "close": 100.0},
+            {"trade_date": "2024-09-25", "asset_id": "G1", "close": 101.0},
+            {"trade_date": "2024-09-26", "asset_id": "G1", "close": 102.0},
+            {"trade_date": "2024-09-27", "asset_id": "G1", "close": 103.0},
+            {"trade_date": "2024-09-30", "asset_id": "G1", "close": 104.0},
+        ]
+    )
+
+    result = run_regime_confirmation_backtest_from_frames(
+        emotion=emotion,
+        funnel=_funnel_for_dates(emotion["trade_date"].tolist()),
+        prices=prices,
+        start_date="2024-09-24",
+        end_date="2024-09-27",
+        output_dir=tmp_path,
+        top_n=1,
+    )
+
+    expected_families = {
+        "fixed_mid_trend",
+        "emotion_budget_only",
+        "emotion_style_switch",
+        "regime_confirmed_exposure",
+    }
+    assert set(result["summary"]["strategy_family"]) == expected_families
+    assert set(result["equity"]["strategy_family"]) == expected_families
+
+    segment = pd.read_csv(result["paths"]["segment_diagnostics_path"])
+    performance = segment.loc[segment["segment_name"] == "policy_rally_2024", "strategy_performance"].iloc[0]
+    for family in expected_families:
+        assert f"{family}:ret=" in performance
+
+
+def test_regime_confirmed_exposure_holds_weight_between_weekly_rebalances(monkeypatch) -> None:
+    dates = [
+        "2026-01-05",
+        "2026-01-06",
+        "2026-01-07",
+        "2026-01-08",
+        "2026-01-09",
+        "2026-01-12",
+    ]
+    regime = pd.DataFrame(
+        {
+            "trade_date": dates,
+            "target_exposure": [0.2, 1.0, 0.5, 0.7, 0.8, 0.3],
+            "rebalance_allowed": [False, False, False, False, True, False],
+            "emotion_state": ["neutral"] * len(dates),
+            "risk_state": ["medium"] * len(dates),
+            "emotion_score": [50] * len(dates),
+        }
+    )
+    prices = pd.DataFrame(
+        [{"trade_date": date, "asset_id": "G1", "close": 100.0 + index} for index, date in enumerate(dates)]
+        + [{"trade_date": "2026-01-13", "asset_id": "G1", "close": 106.0}]
+    )
+
+    import stock_research.market_regime_confirmation_v1 as module
+
+    monkeypatch.setattr(
+        module,
+        "build_market_regime_confirmation_from_frames",
+        lambda emotion, policy_events=None: regime,
+    )
+
+    result = run_regime_confirmation_backtest_from_frames(
+        emotion=regime[["trade_date", "emotion_score", "emotion_state", "risk_state"]],
+        funnel=_funnel_for_dates(dates),
+        prices=prices,
+        start_date="2026-01-05",
+        end_date="2026-01-12",
+        top_n=1,
+    )
+
+    confirmed = result["equity"].loc[
+        result["equity"]["strategy_family"] == "regime_confirmed_exposure",
+        ["trade_date", "invested_weight"],
+    ]
+    assert confirmed["trade_date"].tolist() == dates
+    assert confirmed["invested_weight"].tolist() == [0.2, 0.2, 0.2, 0.2, 0.8, 0.8]
+
+
 def test_file_level_runner_reads_csvs_loads_prices_and_runs_backtest(tmp_path: Path, monkeypatch) -> None:
     emotion_path = tmp_path / "emotion.csv"
     funnel_path = tmp_path / "funnel.csv"
