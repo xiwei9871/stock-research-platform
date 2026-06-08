@@ -269,6 +269,129 @@ def build_chain_quality_review(
     return pd.DataFrame(rows).reindex(columns=CHAIN_QUALITY_COLUMNS)
 
 
+def run_tech_chain_taxonomy_review_from_files(
+    *,
+    candidates_csv: Path,
+    evidence_csv: Path | None,
+    taxonomy_json: Path,
+    output_dir: Path,
+) -> dict[str, Path]:
+    taxonomy = load_taxonomy(taxonomy_json)
+    candidates = pd.read_csv(candidates_csv, dtype=str)
+    evidence = _read_evidence_csv(evidence_csv)
+    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+    chain_evidence = build_chain_evidence_review(
+        mapping=mapping,
+        evidence=evidence,
+        taxonomy=taxonomy,
+    )
+    quality = build_chain_quality_review(
+        mapping=mapping,
+        chain_evidence=chain_evidence,
+    )
+    return write_tech_chain_taxonomy_artifacts(
+        mapping=mapping,
+        chain_evidence=chain_evidence,
+        quality=quality,
+        output_dir=output_dir,
+        inputs={
+            "candidates_csv": str(candidates_csv),
+            "evidence_csv": str(evidence_csv) if evidence_csv else "",
+            "taxonomy_json": str(taxonomy_json),
+        },
+    )
+
+
+def write_tech_chain_taxonomy_artifacts(
+    *,
+    mapping: pd.DataFrame,
+    chain_evidence: pd.DataFrame,
+    quality: pd.DataFrame,
+    output_dir: Path,
+    inputs: dict[str, str],
+) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "chain_mapping": output_dir / "chain_mapping.csv",
+        "chain_evidence_review": output_dir / "chain_evidence_review.csv",
+        "chain_quality_review": output_dir / "chain_quality_review.csv",
+        "manifest": output_dir / "manifest.json",
+        "summary": output_dir / "summary.md",
+    }
+
+    mapping.to_csv(paths["chain_mapping"], index=False)
+    chain_evidence.to_csv(paths["chain_evidence_review"], index=False)
+    quality.to_csv(paths["chain_quality_review"], index=False)
+
+    manifest = {
+        "candidate_count": int(len(mapping)),
+        "mapped_chain_assets": _mapped_chain_asset_count(mapping),
+        "chain_evidence_rows": int(len(chain_evidence)),
+        "chain_quality_decision_counts": _decision_counts(quality),
+        "inputs": inputs,
+        "files": {key: path.name for key, path in paths.items()},
+    }
+    paths["manifest"].write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    paths["summary"].write_text(
+        _render_chain_summary(manifest),
+        encoding="utf-8",
+    )
+    return paths
+
+
+def _read_evidence_csv(evidence_csv: Path | None) -> pd.DataFrame:
+    if evidence_csv is None:
+        return pd.DataFrame()
+    evidence = pd.read_csv(evidence_csv, dtype=str)
+    if "as_of_safe" in evidence:
+        evidence["as_of_safe"] = evidence["as_of_safe"].map(_csv_bool)
+    return evidence
+
+
+def _csv_bool(value: Any) -> Any:
+    if value == "True":
+        return True
+    if value == "False":
+        return False
+    return value
+
+
+def _mapped_chain_asset_count(mapping: pd.DataFrame) -> int:
+    if mapping.empty or "primary_chain_id" not in mapping or "asset_id" not in mapping:
+        return 0
+    has_chain = _normalized_string_column(mapping["primary_chain_id"]).ne("")
+    return int(_normalized_string_column(mapping.loc[has_chain, "asset_id"]).nunique())
+
+
+def _decision_counts(quality: pd.DataFrame) -> dict[str, int]:
+    if quality.empty or "chain_decision" not in quality:
+        return {}
+    counts = quality["chain_decision"].value_counts()
+    return {str(decision): int(count) for decision, count in counts.items()}
+
+
+def _render_chain_summary(manifest: dict[str, Any]) -> str:
+    lines = [
+        "# Tech Chain Taxonomy Review",
+        "",
+        f"- Candidates: {manifest['candidate_count']}",
+        f"- Mapped chain assets: {manifest['mapped_chain_assets']}",
+        f"- Chain evidence rows: {manifest['chain_evidence_rows']}",
+        "",
+        "## Decisions",
+    ]
+    counts = manifest.get("chain_quality_decision_counts", {})
+    if counts:
+        for decision, count in counts.items():
+            lines.append(f"- {decision}: {count}")
+    else:
+        lines.append("- none: 0")
+    return "\n".join(lines) + "\n"
+
+
 def _candidate_chain_match(
     chain: TechChainDefinition, text: str, *, taxonomy_order: int
 ) -> dict[str, Any]:

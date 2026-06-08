@@ -1468,6 +1468,18 @@ def build_parser() -> argparse.ArgumentParser:
     tech_bottleneck_core_leader_miss_audit.add_argument("--quality-review-csv", required=True)
     tech_bottleneck_core_leader_miss_audit.add_argument("--output-dir", required=True)
 
+    tech_chain_taxonomy = subparsers.add_parser(
+        "tech-chain-taxonomy-review",
+        help="Map candidates and evidence to configurable hard-tech chain taxonomy dimensions.",
+    )
+    tech_chain_taxonomy.add_argument("--candidates-csv", required=True)
+    tech_chain_taxonomy.add_argument("--evidence-csv")
+    tech_chain_taxonomy.add_argument(
+        "--taxonomy-json",
+        default="data/manual/tech_chain_taxonomy_v1.json",
+    )
+    tech_chain_taxonomy.add_argument("--output-dir", required=True)
+
     tech_bottleneck_observation_pool = subparsers.add_parser(
         "tech-bottleneck-observation-pool",
         help="Build an observation pool and comparison groups from tech bottleneck quality review outputs.",
@@ -4933,6 +4945,16 @@ def main_for_args(argv: list[str] | None = None) -> None:
             candidates_csv=Path(args.candidates_csv),
             gate_csv=Path(args.gate_csv),
             quality_review_csv=Path(args.quality_review_csv),
+            output_dir=Path(args.output_dir),
+        )
+        print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))
+    elif args.command == "tech-chain-taxonomy-review":
+        from stock_research.tech_chain_taxonomy import run_tech_chain_taxonomy_review_from_files
+
+        paths = run_tech_chain_taxonomy_review_from_files(
+            candidates_csv=Path(args.candidates_csv),
+            evidence_csv=Path(args.evidence_csv) if args.evidence_csv else None,
+            taxonomy_json=Path(args.taxonomy_json),
             output_dir=Path(args.output_dir),
         )
         print(json.dumps({key: str(value) for key, value in paths.items()}, ensure_ascii=False, indent=2))

@@ -13,6 +13,7 @@ from stock_research.tech_chain_taxonomy import (
     build_chain_mapping,
     build_chain_quality_review,
     load_taxonomy,
+    run_tech_chain_taxonomy_review_from_files,
 )
 
 
@@ -55,6 +56,105 @@ def test_load_taxonomy_v1_contains_core_chains() -> None:
     assert "AI server PDN" in mlcc.bottleneck_dimensions["power_density"]
     assert "陶瓷粉体" in mlcc.bottleneck_dimensions["materials_process"]
     assert "Murata" in mlcc.global_reference_entities
+
+
+def test_run_tech_chain_taxonomy_review_from_files_writes_outputs(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "000001",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "industry_name": "通信设备",
+                "product_snippet": "光通信模块 CPO",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "000001",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "研发3.2T、CPO等高速光模块",
+                "as_of_safe": True,
+            }
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    assert set(paths) == {
+        "chain_mapping",
+        "chain_evidence_review",
+        "chain_quality_review",
+        "manifest",
+        "summary",
+    }
+    assert paths["chain_mapping"].exists()
+    assert paths["chain_evidence_review"].exists()
+    assert paths["chain_quality_review"].exists()
+    assert paths["summary"].exists()
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert mapping.loc[0, "asset_id"] == "000001"
+    manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+    assert manifest["candidate_count"] == 1
+    assert manifest["mapped_chain_assets"] == 1
+    assert manifest["chain_evidence_rows"] == 3
+    assert manifest["chain_quality_decision_counts"] == {"needs_more_evidence": 1}
+    assert manifest["inputs"] == {
+        "candidates_csv": str(candidates_csv),
+        "evidence_csv": str(evidence_csv),
+        "taxonomy_json": str(taxonomy_path),
+    }
+    assert manifest["files"] == {
+        "chain_mapping": "chain_mapping.csv",
+        "chain_evidence_review": "chain_evidence_review.csv",
+        "chain_quality_review": "chain_quality_review.csv",
+        "manifest": "manifest.json",
+        "summary": "summary.md",
+    }
+    summary = paths["summary"].read_text(encoding="utf-8")
+    assert "Candidates: 1" in summary
+    assert "Mapped chain assets: 1" in summary
+    assert "Chain evidence rows: 3" in summary
+    assert "needs_more_evidence: 1" in summary
+
+
+def test_tech_chain_taxonomy_review_cli_parser_defaults() -> None:
+    from stock_research.cli import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "tech-chain-taxonomy-review",
+            "--candidates-csv",
+            "candidates.csv",
+            "--output-dir",
+            "out",
+        ]
+    )
+
+    assert args.command == "tech-chain-taxonomy-review"
+    assert args.candidates_csv == "candidates.csv"
+    assert args.evidence_csv is None
+    assert args.taxonomy_json == "data/manual/tech_chain_taxonomy_v1.json"
+    assert args.output_dir == "out"
 
 
 def test_load_taxonomy_rejects_duplicate_chain_id(tmp_path: Path) -> None:
