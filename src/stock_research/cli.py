@@ -172,6 +172,12 @@ from stock_research.news_features import (
     run_news_feature_backfill,
     run_news_feature_diagnostics,
 )
+from stock_research.serenity_tight3b_c2_experiment import (
+    run_serenity_tight3b_c2_experiment,
+)
+from stock_research.serenity_source_backed_evidence_fill import (
+    run_serenity_source_backed_evidence_fill,
+)
 from stock_research.topn_news_enrichment import run_topn_news_enrichment
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.p2.artifact_rollup import (
@@ -2464,6 +2470,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mid_trend_shadow_weekly_optimization.add_argument("--adjust-type", default="hfq")
     mid_trend_shadow_weekly_optimization.add_argument("--output-dir", default="outputs/research")
+
+    serenity_tight3b_c2 = subparsers.add_parser("serenity-tight3b-c2-experiment")
+    serenity_tight3b_c2.add_argument(
+        "--candidates-path",
+        default=(
+            "outputs/tech_bottleneck_discovery/core_tech_top100_20250101_20260605/"
+            "strict_153_performance_20250101_20260605/strict_153_performance_details.csv"
+        ),
+    )
+    serenity_tight3b_c2.add_argument(
+        "--market-exposure-path",
+        default=(
+            "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/"
+            "market_regime_confirmation_daily.csv"
+        ),
+    )
+    serenity_tight3b_c2.add_argument("--start-date", required=True)
+    serenity_tight3b_c2.add_argument("--end-date", required=True)
+    serenity_tight3b_c2.add_argument("--universe-name", default="strict_153")
+    serenity_tight3b_c2.add_argument(
+        "--top-n-values",
+        type=lambda value: parse_int_list(value, "--top-n-values"),
+        default="5,8,10",
+    )
+    serenity_tight3b_c2.add_argument(
+        "--rebalance-frequencies",
+        type=lambda value: [item.strip() for item in value.split(",") if item.strip()],
+        default="monthly,biweekly,weekly",
+    )
+    serenity_tight3b_c2.add_argument("--transaction-cost-bps", type=float, default=20.0)
+    serenity_tight3b_c2.add_argument("--adjust-type", default="hfq")
+    serenity_tight3b_c2.add_argument("--output-dir", default="outputs/research")
+
+    serenity_source_backed_evidence = subparsers.add_parser("serenity-source-backed-evidence-fill")
+    serenity_source_backed_evidence.add_argument("--structured-detail-path", required=True)
+    serenity_source_backed_evidence.add_argument("--evidence-seed-path")
+    serenity_source_backed_evidence.add_argument("--output-dir", required=True)
+    serenity_source_backed_evidence.add_argument("--run-id", default="serenity_source_backed_evidence_fill")
 
     mid_trend_shadow_weekly_control = subparsers.add_parser(
         "review-mid-trend-shadow-weekly-control"
@@ -5183,6 +5227,54 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"mid_trend_shadow_weekly_optimization|best_trades|{result['paths']['best_trades']}")
         print(f"mid_trend_shadow_weekly_optimization|report|{result['paths']['report']}")
         print(f"mid_trend_shadow_weekly_optimization|rows|{len(result.get('summary', []))}")
+    elif args.command == "serenity-tight3b-c2-experiment":
+        top_n_values = (
+            parse_int_list(args.top_n_values, "--top-n-values")
+            if isinstance(args.top_n_values, str)
+            else args.top_n_values
+        )
+        rebalance_frequencies = (
+            [item.strip() for item in args.rebalance_frequencies.split(",") if item.strip()]
+            if isinstance(args.rebalance_frequencies, str)
+            else args.rebalance_frequencies
+        )
+        result = run_serenity_tight3b_c2_experiment(
+            candidates_path=args.candidates_path,
+            market_exposure_path=args.market_exposure_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            universe_name=args.universe_name,
+            top_n_values=top_n_values,
+            rebalance_frequencies=rebalance_frequencies,
+            transaction_cost_bps=args.transaction_cost_bps,
+            adjust_type=args.adjust_type,
+        )
+        print(f"serenity_tight3b_c2|summary|{result['paths']['summary']}")
+        print(f"serenity_tight3b_c2|equity|{result['paths']['equity']}")
+        print(f"serenity_tight3b_c2|positions|{result['paths']['positions']}")
+        print(f"serenity_tight3b_c2|trades|{result['paths']['trades']}")
+        if "best_equity" in result["paths"]:
+            print(f"serenity_tight3b_c2|best_equity|{result['paths']['best_equity']}")
+            print(f"serenity_tight3b_c2|best_positions|{result['paths']['best_positions']}")
+            print(f"serenity_tight3b_c2|best_trades|{result['paths']['best_trades']}")
+        print(f"serenity_tight3b_c2|report|{result['paths']['report']}")
+        print(f"serenity_tight3b_c2|rows|{len(result.get('summary', []))}")
+    elif args.command == "serenity-source-backed-evidence-fill":
+        result = run_serenity_source_backed_evidence_fill(
+            structured_detail_path=args.structured_detail_path,
+            evidence_seed_path=args.evidence_seed_path,
+            output_dir=args.output_dir,
+            run_id=args.run_id,
+        )
+        print(f"serenity_source_backed_evidence|detail|{result['paths']['detail']}")
+        print(f"serenity_source_backed_evidence|long|{result['paths']['long']}")
+        print(f"serenity_source_backed_evidence|summary|{result['paths']['summary']}")
+        print(f"serenity_source_backed_evidence|manual_queue|{result['paths']['manual_queue']}")
+        print(f"serenity_source_backed_evidence|report|{result['paths']['report']}")
+        print(f"serenity_source_backed_evidence|summary_rows|{len(result.get('summary', []))}")
+        print(f"serenity_source_backed_evidence|manual_queue_rows|{len(result.get('manual_queue', []))}")
+
     elif args.command == "review-mid-trend-shadow-weekly-control":
         result = run_mid_trend_shadow_weekly_control_review(
             funnel_detail_path=args.funnel_detail_path,
