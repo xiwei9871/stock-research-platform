@@ -109,6 +109,13 @@ def test_classify_product_family_links_core_leader_product_aliases() -> None:
 def test_classify_product_family_links_taxonomy_chain_terms() -> None:
     assert (
         classify_product_family(
+            "光通信模块 1.6T CPO 硅光",
+            "数据中心客户认证 高速光模块批量交付",
+        )
+        == "ai_optical_interconnect"
+    )
+    assert (
+        classify_product_family(
             "HBM3E TSV 堆叠 高带宽内存",
             "Nvidia认证 客户验证 后段产能 良率",
         )
@@ -120,6 +127,20 @@ def test_classify_product_family_links_taxonomy_chain_terms() -> None:
             "AI server PDN GPU周边 高瞬态电流 满产",
         )
         == "mlcc_high_end_passives"
+    )
+
+
+def test_classify_product_family_prioritizes_hbm_over_ai_compute_on_tie() -> None:
+    assert classify_product_family("HBM AI芯片", "HBM AI芯片") == "hbm_high_end_memory"
+
+
+def test_classify_product_family_does_not_link_mlcc_on_broad_quality_terms_only() -> None:
+    assert (
+        classify_product_family(
+            "高可靠 大电流 电源模块",
+            "高可靠 客户认证 批量供货",
+        )
+        != "mlcc_high_end_passives"
     )
 
 
