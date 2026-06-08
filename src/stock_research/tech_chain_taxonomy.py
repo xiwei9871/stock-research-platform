@@ -185,6 +185,10 @@ def build_chain_evidence_review(
             normalized_evidence["asset_id"].eq(item["asset_id"])
             & normalized_evidence["candidate_trade_date"].eq(item["trade_date"])
             & normalized_evidence["as_of_safe"]
+            & (
+                normalized_evidence["chain_id"].eq("")
+                | normalized_evidence["chain_id"].eq(item["primary_chain_id"])
+            )
         ].copy()
         for evidence_row in candidate_evidence.to_dict("records"):
             full_text = _compactible_text(
@@ -225,6 +229,7 @@ def build_chain_quality_review(
         candidate_evidence = evidence[
             evidence["asset_id"].eq(item["asset_id"])
             & evidence["trade_date"].eq(item["trade_date"])
+            & evidence["chain_id"].eq(item["primary_chain_id"])
         ]
         dimensions = sorted(
             {
@@ -341,6 +346,7 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
     for column in [
         "asset_id",
         "stock_name",
+        "chain_id",
         "candidate_trade_date",
         "evidence_date",
         "evidence_type",
@@ -367,6 +373,7 @@ def _normalize_chain_quality_evidence(evidence: pd.DataFrame | None) -> pd.DataF
     for column in [
         "asset_id",
         "trade_date",
+        "chain_id",
         "bottleneck_dimension",
         "evidence_quality",
     ]:
@@ -374,6 +381,7 @@ def _normalize_chain_quality_evidence(evidence: pd.DataFrame | None) -> pd.DataF
             frame[column] = ""
         frame[column] = _normalized_string_column(frame[column])
     frame["trade_date"] = frame["trade_date"].map(_normalize_date)
+    frame["evidence_quality"] = frame["evidence_quality"].str.casefold()
     return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
 
 
@@ -425,7 +433,7 @@ def _chain_decision(
             "no recognized tech chain context",
             "needs_chain_context_evidence",
         )
-    if product_quality == "missing":
+    if str(product_quality).strip().casefold() != "strong":
         return (
             "needs_product_family_mapping",
             "tech chain is mapped but PIT-safe product exposure is incomplete",

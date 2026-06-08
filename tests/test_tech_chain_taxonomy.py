@@ -571,6 +571,53 @@ def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None
     assert len(review_with_flag) == 1
 
 
+def test_build_chain_evidence_review_filters_raw_evidence_scoped_to_other_chain() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "chain_id": "ai_compute_chips",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "CPO 1.6T 大客户导入",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "chain_id": " ",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "CPO 1.6T 大客户导入",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert not review.empty
+    assert len(review) == 3
+    assert set(review["matched_evidence_term"]) == {"CPO", "1.6T", "大客户导入"}
+
+
 def test_build_chain_quality_review_routes_chain_candidates_without_generic_bottleneck_terms() -> None:
     mapping = pd.DataFrame(
         [
@@ -616,6 +663,124 @@ def test_build_chain_quality_review_routes_chain_candidates_without_generic_bott
     assert rows.loc["CN:SZ:300394", "chain_decision"] == "needs_product_family_mapping"
 
 
+def test_build_chain_quality_review_filters_evidence_scoped_to_other_chain() -> None:
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "primary_chain_name": "AI光模块/光通信",
+                "product_exposure_quality": "strong",
+            },
+        ]
+    )
+    evidence_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_compute_chips",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": "strong",
+            }
+        ]
+    )
+
+    review = build_chain_quality_review(mapping=mapping, chain_evidence=evidence_review)
+
+    assert review.loc[0, "bottleneck_dimension_count"] == 0
+    assert review.loc[0, "strong_bottleneck_dimension_count"] == 0
+    assert review.loc[0, "chain_decision"] == "needs_more_evidence"
+    assert (
+        review.loc[0, "decision_reason"]
+        == "product exposure is mapped but chain-specific bottleneck evidence is incomplete"
+    )
+
+
+def test_build_chain_quality_review_normalizes_evidence_quality_case_and_blanks() -> None:
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "primary_chain_name": "AI光模块/光通信",
+                "product_exposure_quality": "strong",
+            },
+        ]
+    )
+    evidence_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": " Strong ",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "customer_delivery",
+                "evidence_quality": "STRONG",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "architecture_route",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "customer_delivery",
+                "evidence_quality": " ",
+            },
+        ]
+    )
+
+    review = build_chain_quality_review(mapping=mapping, chain_evidence=evidence_review)
+
+    assert review.loc[0, "bottleneck_dimension_count"] == 2
+    assert review.loc[0, "strong_bottleneck_dimension_count"] == 2
+
+
+@pytest.mark.parametrize("product_quality", ["", "MISSING", "Missing", None])
+def test_build_chain_quality_review_routes_incomplete_product_quality_to_mapping(
+    product_quality: object,
+) -> None:
+    mapping_item = {
+        "asset_id": "CN:SZ:300308",
+        "stock_name": "中际旭创",
+        "trade_date": "2025-06-20",
+        "primary_chain_id": "ai_optical_interconnect",
+        "primary_chain_name": "AI光模块/光通信",
+    }
+    if product_quality is not None:
+        mapping_item["product_exposure_quality"] = product_quality
+    mapping = pd.DataFrame([mapping_item])
+    evidence_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": "strong",
+            }
+        ]
+    )
+
+    review = build_chain_quality_review(mapping=mapping, chain_evidence=evidence_review)
+
+    assert review.loc[0, "chain_decision"] == "needs_product_family_mapping"
+
+
 def test_build_chain_quality_review_counts_unique_strong_bottleneck_dimensions() -> None:
     mapping = pd.DataFrame(
         [
@@ -634,6 +799,7 @@ def test_build_chain_quality_review_counts_unique_strong_bottleneck_dimensions()
             {
                 "asset_id": "CN:SZ:300308",
                 "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
                 "bottleneck_dimension": "architecture_route",
                 "evidence_quality": "strong",
                 "matched_evidence_term": "CPO",
@@ -641,6 +807,7 @@ def test_build_chain_quality_review_counts_unique_strong_bottleneck_dimensions()
             {
                 "asset_id": "CN:SZ:300308",
                 "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
                 "bottleneck_dimension": "architecture_route",
                 "evidence_quality": "strong",
                 "matched_evidence_term": "LPO",
@@ -648,6 +815,7 @@ def test_build_chain_quality_review_counts_unique_strong_bottleneck_dimensions()
             {
                 "asset_id": "CN:SZ:300308",
                 "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
                 "bottleneck_dimension": "customer_delivery",
                 "evidence_quality": "medium",
                 "matched_evidence_term": "交付",
