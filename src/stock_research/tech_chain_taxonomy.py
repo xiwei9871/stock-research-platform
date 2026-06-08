@@ -465,6 +465,11 @@ def _candidate_chain_match(
 ) -> dict[str, Any]:
     context_terms = _matched_terms(text, chain.chain_context_terms)
     product_terms = _matched_terms(text, chain.product_exposure_terms)
+    bottleneck_terms, bottleneck_dimension_count = _matched_dimension_terms(
+        text, chain.bottleneck_dimensions
+    )
+    if bottleneck_dimension_count >= 2:
+        context_terms = [*context_terms, *bottleneck_terms]
     context_compacts = {_compactible_text(term) for term in context_terms}
     distinct_product_hits = len(
         [term for term in product_terms if _compactible_text(term) not in context_compacts]
@@ -484,6 +489,7 @@ def _candidate_chain_match(
             _matched_term_length(product_terms) * 3
             + _matched_term_length(context_terms)
             + distinct_product_hits * 10
+            + max(0, bottleneck_dimension_count - 1) * 5
         ),
     }
 
@@ -684,6 +690,23 @@ def _matched_terms(text: str, terms: list[str]) -> list[str]:
             for _, other_compact in matched
         )
     ]
+
+
+def _matched_dimension_terms(text: str, dimensions: dict[str, list[str]]) -> tuple[list[str], int]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    dimension_count = 0
+    for values in dimensions.values():
+        matched = _matched_terms(text, values)
+        if matched:
+            dimension_count += 1
+        for term in matched:
+            compact = _compactible_text(term)
+            if compact in seen:
+                continue
+            seen.add(compact)
+            terms.append(term)
+    return terms, dimension_count
 
 
 def _matched_term_length(terms: list[str]) -> int:

@@ -4,7 +4,7 @@
     {
       "chain_id": "ai_optical_interconnect",
       "display_name": "AI光模块/光通信",
-      "chain_context_terms": ["光通信", "光模块", "光通信模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络", "800G", "1.6T", "3.2T", "CPO", "硅光"],
+      "chain_context_terms": ["光通信", "光模块", "光通信模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络", "800G光模块", "1.6T光模块", "3.2T光模块", "CPO光模块", "CPO光引擎", "硅光", "硅光模块"],
       "product_exposure_terms": ["800G光模块", "1.6T光模块", "高速光模块", "硅光模块", "光通信模块", "光通信收发模块", "光芯片", "光器件"],
       "bottleneck_dimensions": {
         "bandwidth_generation": ["800G", "1.6T", "3.2T", "高速光模块"],

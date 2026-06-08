@@ -170,7 +170,7 @@ def test_run_tech_chain_taxonomy_review_from_files_maps_candidates_from_pit_safe
                 "evidence_date": "2025-05-22",
                 "evidence_type": "capacity",
                 "matched_keyword": "CPO",
-                "evidence_snippet": "持续扩产备料并积极研发布局3.2T、CPO等高速光模块",
+                "evidence_snippet": "持续扩产备料并积极研发布局3.2T、CPO等",
                 "as_of_safe": True,
             },
             {
@@ -271,6 +271,51 @@ def test_run_tech_chain_taxonomy_review_from_files_ignores_negative_evidence_for
                 "evidence_type": "invalidation",
                 "matched_keyword": "800G光模块",
                 "evidence_snippet": "800G光模块需求不及预期，1.6T光模块产品降价",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert pd.isna(mapping.loc[0, "primary_chain_id"])
+
+
+def test_run_tech_chain_taxonomy_review_from_files_does_not_map_ai_optical_from_bare_speed_terms(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300003",
+                "stock_name": "交换芯片样本",
+                "trade_date": "2025-06-20",
+                "industry_name": "电子元件",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300003",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-06-19",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "3.2T",
+                "evidence_snippet": "3.2T交换芯片吞吐和800G SerDes能力提升",
                 "as_of_safe": True,
             },
         ]
