@@ -3060,6 +3060,26 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    current_mid_trend_strategy_v1 = subparsers.add_parser(
+        "current-mid-trend-strategy-v1-backtest"
+    )
+    current_mid_trend_strategy_v1.add_argument("--start-date", required=True)
+    current_mid_trend_strategy_v1.add_argument("--end-date", required=True)
+    current_mid_trend_strategy_v1.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/market_regime_confirmation_daily.csv",
+    )
+    current_mid_trend_strategy_v1.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20230103_20260605_aligned/mid_trend_watch_funnel_detail.csv",
+    )
+    current_mid_trend_strategy_v1.add_argument("--top-n", type=int, default=5)
+    current_mid_trend_strategy_v1.add_argument("--adjust-type", default="hfq")
+    current_mid_trend_strategy_v1.add_argument(
+        "--output-dir",
+        default="outputs/research/current_mid_trend_strategy_v1",
+    )
+
     industry_focus_backtest = subparsers.add_parser("industry-focus-backtest")
     industry_focus_backtest.add_argument("--start-date", required=True)
     industry_focus_backtest.add_argument("--end-date", required=True)
@@ -3851,6 +3871,29 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"market_regime_confirmation|regime_rows|{len(result['regime'])}")
         print(f"market_regime_confirmation|equity_rows|{len(result['equity'])}")
         print(f"market_regime_confirmation|output_dir|{args.output_dir}")
+        return 0
+    elif args.command == "current-mid-trend-strategy-v1-backtest":
+        from stock_research.current_mid_trend_strategy_v1 import (
+            run_current_mid_trend_strategy_v1_backtest,
+        )
+
+        result = run_current_mid_trend_strategy_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+        )
+        print(f"current_mid_trend_strategy_v1|summary|{result['paths'].get('summary')}")
+        print(f"current_mid_trend_strategy_v1|equity|{result['paths'].get('equity')}")
+        print(f"current_mid_trend_strategy_v1|holdings|{result['paths'].get('holdings')}")
+        print(f"current_mid_trend_strategy_v1|trades|{result['paths'].get('trades')}")
+        print(f"current_mid_trend_strategy_v1|report|{result['paths'].get('report')}")
+        print(f"current_mid_trend_strategy_v1|equity_rows|{len(result['equity'])}")
+        print(f"current_mid_trend_strategy_v1|trade_rows|{len(result['trades'])}")
+        print(f"current_mid_trend_strategy_v1|protection_events|{len(result['protection_events'])}")
         return 0
     elif args.command == "news-feature-backfill":
         result = run_news_feature_backfill(
