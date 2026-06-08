@@ -4,7 +4,7 @@
     {
       "chain_id": "ai_optical_interconnect",
       "display_name": "AI光模块/光通信",
-      "chain_context_terms": ["光通信", "光模块", "光通信模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络"],
+      "chain_context_terms": ["光通信", "光模块", "光通信模块", "光器件", "光引擎", "光互联", "数据中心互联", "AI集群网络", "800G", "1.6T", "3.2T", "CPO", "硅光"],
       "product_exposure_terms": ["800G光模块", "1.6T光模块", "高速光模块", "硅光模块", "光通信模块", "光通信收发模块", "光芯片", "光器件"],
       "bottleneck_dimensions": {
         "bandwidth_generation": ["800G", "1.6T", "3.2T", "高速光模块"],
@@ -86,12 +86,12 @@
     {
       "chain_id": "ai_server_pcb",
       "display_name": "AI服务器PCB",
-      "chain_context_terms": ["AI服务器PCB", "高速PCB", "HDI", "高多层板", "交换机PCB", "背板", "PCB制造技术制高点", "数据中心升级"],
+      "chain_context_terms": ["AI服务器PCB", "高速PCB", "HDI", "高多层板", "交换机PCB", "背板", "PCB制造技术制高点"],
       "product_exposure_terms": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
       "bottleneck_dimensions": {
         "product_grade": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
         "materials": ["低损耗材料", "高速覆铜板", "高频高速板"],
-        "ai_linkage": ["AI服务器PCB", "AIPCB", "数据中心PCB", "数据中心升级"],
+        "ai_linkage": ["AI服务器PCB", "AIPCB", "数据中心PCB"],
         "delivery": ["高价值量产品", "订单", "客户导入", "产能爬坡"]
       },
       "technical_execution_terms": ["低损耗材料", "高频高速板", "高多层板", "高阶HDI", "产能爬坡"],

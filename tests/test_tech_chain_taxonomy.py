@@ -59,7 +59,8 @@ def test_load_taxonomy_v1_contains_core_chains() -> None:
 
     pcb = taxonomy.chain_by_id("ai_server_pcb")
     assert "PCB制造技术制高点" in pcb.chain_context_terms
-    assert "数据中心升级" in pcb.bottleneck_dimensions["ai_linkage"]
+    assert "数据中心升级" not in pcb.chain_context_terms
+    assert "数据中心升级" not in pcb.bottleneck_dimensions["ai_linkage"]
 
 
 def test_run_tech_chain_taxonomy_review_from_files_writes_outputs(
@@ -239,6 +240,188 @@ def test_run_tech_chain_taxonomy_review_from_files_maps_pcb_chain_from_datacente
 
     mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
     assert mapping.loc[0, "primary_chain_id"] == "ai_server_pcb"
+
+
+def test_run_tech_chain_taxonomy_review_from_files_ignores_negative_evidence_for_mapping(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300001",
+                "stock_name": "样本公司",
+                "trade_date": "2025-06-20",
+                "industry_name": "电子元件",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300001",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-06-19",
+                "evidence_type": "invalidation",
+                "matched_keyword": "800G光模块",
+                "evidence_snippet": "800G光模块需求不及预期，1.6T光模块产品降价",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert pd.isna(mapping.loc[0, "primary_chain_id"])
+
+
+def test_run_tech_chain_taxonomy_review_from_files_maps_support_source_title(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "stock_name": "寒武纪",
+                "trade_date": "2025-08-22",
+                "industry_name": "半导体",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "candidate_trade_date": "2025-08-22",
+                "evidence_date": "2025-08-21",
+                "evidence_type": "technical_barrier",
+                "source_title": "国内领先的AI芯片供应商，2025Q1扣非净利润迎拐点",
+                "matched_keyword": "技术壁垒",
+                "evidence_snippet": "公司掌握的核心技术具有一定技术壁垒",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert mapping.loc[0, "primary_chain_id"] == "ai_compute_chips"
+
+
+def test_run_tech_chain_taxonomy_review_from_files_ignores_negative_source_title_for_mapping(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "stock_name": "样本公司",
+                "trade_date": "2025-08-22",
+                "industry_name": "半导体",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:688256",
+                "candidate_trade_date": "2025-08-22",
+                "evidence_date": "2025-08-21",
+                "evidence_type": "invalidation",
+                "source_title": "国产AI芯片需求放缓风险",
+                "matched_keyword": "竞争加剧",
+                "evidence_snippet": "行业竞争加剧",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert pd.isna(mapping.loc[0, "primary_chain_id"])
+
+
+def test_run_tech_chain_taxonomy_review_from_files_does_not_map_pcb_from_generic_datacenter_upgrade(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300002",
+                "stock_name": "数据中心样本",
+                "trade_date": "2025-07-04",
+                "industry_name": "电子元件",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300002",
+                "candidate_trade_date": "2025-07-04",
+                "evidence_date": "2025-07-03",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "数据中心升级",
+                "evidence_snippet": "数据中心升级浪潮带来历史新机遇",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert pd.isna(mapping.loc[0, "primary_chain_id"])
 
 
 def test_tech_chain_taxonomy_review_cli_parser_defaults() -> None:

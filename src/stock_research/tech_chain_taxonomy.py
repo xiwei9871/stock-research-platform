@@ -364,13 +364,19 @@ def _augment_candidates_with_evidence_text(
     normalized_evidence = _normalize_evidence(evidence)
     if normalized_evidence.empty:
         return candidates.copy()
-    normalized_evidence = normalized_evidence[normalized_evidence["as_of_safe"]].copy()
+    evidence_type = normalized_evidence["evidence_type"].str.casefold()
+    support_evidence = ~evidence_type.str.contains("invalidation|risk", na=False)
+    normalized_evidence = normalized_evidence[
+        normalized_evidence["as_of_safe"] & support_evidence
+    ].copy()
     if normalized_evidence.empty:
         return candidates.copy()
 
     evidence_text = normalized_evidence.assign(
         _mapping_text=(
-            normalized_evidence["matched_keyword"]
+            normalized_evidence["source_title"]
+            + " "
+            + normalized_evidence["matched_keyword"]
             + " "
             + normalized_evidence["snippet"]
         )
@@ -535,6 +541,7 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
         "candidate_trade_date",
         "evidence_date",
         "evidence_type",
+        "source_title",
         "source_type",
         "source_url",
         "matched_keyword",
