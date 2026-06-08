@@ -48,6 +48,21 @@ CHAIN_EVIDENCE_COLUMNS = [
     "snippet",
 ]
 
+CHAIN_QUALITY_COLUMNS = [
+    "asset_id",
+    "stock_name",
+    "trade_date",
+    "primary_chain_id",
+    "primary_chain_name",
+    "chain_decision",
+    "product_exposure_quality",
+    "bottleneck_dimension_count",
+    "strong_bottleneck_dimension_count",
+    "matched_bottleneck_dimensions",
+    "decision_reason",
+    "next_evidence_need",
+]
+
 CANDIDATE_TEXT_FIELDS = [
     "stock_name",
     "industry_name",
@@ -200,6 +215,55 @@ def build_chain_evidence_review(
     return pd.DataFrame(rows).reindex(columns=CHAIN_EVIDENCE_COLUMNS)
 
 
+def build_chain_quality_review(
+    *, mapping: pd.DataFrame, chain_evidence: pd.DataFrame
+) -> pd.DataFrame:
+    normalized_mapping = _normalize_mapping(mapping)
+    evidence = _normalize_chain_quality_evidence(chain_evidence)
+    rows: list[dict[str, Any]] = []
+    for item in normalized_mapping.to_dict("records"):
+        candidate_evidence = evidence[
+            evidence["asset_id"].eq(item["asset_id"])
+            & evidence["trade_date"].eq(item["trade_date"])
+        ]
+        dimensions = sorted(
+            {
+                dimension
+                for dimension in candidate_evidence["bottleneck_dimension"].tolist()
+                if dimension
+            }
+        )
+        strong_dimensions = sorted(
+            {
+                row["bottleneck_dimension"]
+                for row in candidate_evidence.to_dict("records")
+                if row["bottleneck_dimension"] and row["evidence_quality"] == "strong"
+            }
+        )
+        decision, reason, next_need = _chain_decision(
+            chain_id=item["primary_chain_id"],
+            product_quality=item["product_exposure_quality"],
+            strong_dimension_count=len(strong_dimensions),
+        )
+        rows.append(
+            {
+                "asset_id": item["asset_id"],
+                "stock_name": item["stock_name"],
+                "trade_date": item["trade_date"],
+                "primary_chain_id": item["primary_chain_id"],
+                "primary_chain_name": item.get("primary_chain_name", ""),
+                "chain_decision": decision,
+                "product_exposure_quality": item["product_exposure_quality"],
+                "bottleneck_dimension_count": len(dimensions),
+                "strong_bottleneck_dimension_count": len(strong_dimensions),
+                "matched_bottleneck_dimensions": "|".join(dimensions),
+                "decision_reason": reason,
+                "next_evidence_need": next_need,
+            }
+        )
+    return pd.DataFrame(rows).reindex(columns=CHAIN_QUALITY_COLUMNS)
+
+
 def _candidate_chain_match(
     chain: TechChainDefinition, text: str, *, taxonomy_order: int
 ) -> dict[str, Any]:
@@ -252,6 +316,7 @@ def _normalize_mapping(mapping: pd.DataFrame) -> pd.DataFrame:
         "stock_name",
         "trade_date",
         "primary_chain_id",
+        "primary_chain_name",
         "product_exposure_quality",
     ]:
         if column not in frame:
@@ -297,6 +362,21 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
     ].copy()
 
 
+def _normalize_chain_quality_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
+    frame = evidence.copy() if evidence is not None else pd.DataFrame()
+    for column in [
+        "asset_id",
+        "trade_date",
+        "bottleneck_dimension",
+        "evidence_quality",
+    ]:
+        if column not in frame:
+            frame[column] = ""
+        frame[column] = _normalized_string_column(frame[column])
+    frame["trade_date"] = frame["trade_date"].map(_normalize_date)
+    return frame[frame["asset_id"].ne("") & frame["trade_date"].ne("")].copy()
+
+
 def _normalized_string_column(column: pd.Series) -> pd.Series:
     return column.astype("string").fillna("").str.strip()
 
@@ -334,6 +414,34 @@ def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> st
     ):
         return "strong"
     return "medium"
+
+
+def _chain_decision(
+    *, chain_id: str, product_quality: str, strong_dimension_count: int
+) -> tuple[str, str, str]:
+    if not chain_id:
+        return (
+            "reject_or_noise",
+            "no recognized tech chain context",
+            "needs_chain_context_evidence",
+        )
+    if product_quality == "missing":
+        return (
+            "needs_product_family_mapping",
+            "tech chain is mapped but PIT-safe product exposure is incomplete",
+            "needs_pit_safe_product_exposure",
+        )
+    if strong_dimension_count <= 0:
+        return (
+            "needs_more_evidence",
+            "product exposure is mapped but chain-specific bottleneck evidence is incomplete",
+            "needs_chain_bottleneck_dimension_evidence",
+        )
+    return (
+        "needs_more_evidence",
+        "chain bottleneck is mapped but support evidence is incomplete",
+        "needs_customer_capacity_or_catalyst_evidence",
+    )
 
 
 def _candidate_matching_text(candidate: dict[str, Any]) -> str:

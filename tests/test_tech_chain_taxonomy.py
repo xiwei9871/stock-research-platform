@@ -7,9 +7,11 @@ import pytest
 
 from stock_research.tech_chain_taxonomy import (
     CHAIN_EVIDENCE_COLUMNS,
+    CHAIN_QUALITY_COLUMNS,
     _explicit_true,
     build_chain_evidence_review,
     build_chain_mapping,
+    build_chain_quality_review,
     load_taxonomy,
 )
 
@@ -567,6 +569,101 @@ def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None
     )
 
     assert len(review_with_flag) == 1
+
+
+def test_build_chain_quality_review_routes_chain_candidates_without_generic_bottleneck_terms() -> None:
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "primary_chain_name": "AI光模块/光通信",
+                "product_exposure_quality": "strong",
+            },
+            {
+                "asset_id": "CN:SZ:300394",
+                "stock_name": "天孚通信",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "primary_chain_name": "AI光模块/光通信",
+                "product_exposure_quality": "missing",
+            },
+        ]
+    )
+    evidence_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "chain_id": "ai_optical_interconnect",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": "strong",
+            }
+        ]
+    )
+
+    review = build_chain_quality_review(mapping=mapping, chain_evidence=evidence_review)
+    rows = review.set_index("asset_id")
+
+    assert rows.loc["CN:SZ:300308", "chain_decision"] == "needs_more_evidence"
+    assert (
+        rows.loc["CN:SZ:300308", "decision_reason"]
+        == "chain bottleneck is mapped but support evidence is incomplete"
+    )
+    assert rows.loc["CN:SZ:300394", "chain_decision"] == "needs_product_family_mapping"
+
+
+def test_build_chain_quality_review_counts_unique_strong_bottleneck_dimensions() -> None:
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "primary_chain_name": "AI光模块/光通信",
+                "product_exposure_quality": "strong",
+            },
+        ]
+    )
+    evidence_review = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": "strong",
+                "matched_evidence_term": "CPO",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "bottleneck_dimension": "architecture_route",
+                "evidence_quality": "strong",
+                "matched_evidence_term": "LPO",
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "trade_date": "2025-06-20",
+                "bottleneck_dimension": "customer_delivery",
+                "evidence_quality": "medium",
+                "matched_evidence_term": "交付",
+            },
+        ]
+    )
+
+    review = build_chain_quality_review(mapping=mapping, chain_evidence=evidence_review)
+
+    assert review.columns.tolist() == CHAIN_QUALITY_COLUMNS
+    assert review.loc[0, "bottleneck_dimension_count"] == 2
+    assert review.loc[0, "strong_bottleneck_dimension_count"] == 1
+    assert (
+        review.loc[0, "matched_bottleneck_dimensions"]
+        == "architecture_route|customer_delivery"
+    )
 
 
 def _minimal_chain() -> dict[str, object]:
