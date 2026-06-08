@@ -279,7 +279,11 @@ def run_tech_chain_taxonomy_review_from_files(
     taxonomy = load_taxonomy(taxonomy_json)
     candidates = pd.read_csv(candidates_csv, dtype=str)
     evidence = _read_evidence_csv(evidence_csv)
-    mapping = build_chain_mapping(candidates=candidates, taxonomy=taxonomy)
+    mapping_candidates = _augment_candidates_with_evidence_text(
+        candidates=candidates,
+        evidence=evidence,
+    )
+    mapping = build_chain_mapping(candidates=mapping_candidates, taxonomy=taxonomy)
     chain_evidence = build_chain_evidence_review(
         mapping=mapping,
         evidence=evidence,
@@ -349,6 +353,64 @@ def _read_evidence_csv(evidence_csv: Path | None) -> pd.DataFrame:
     if "as_of_safe" in evidence:
         evidence["as_of_safe"] = evidence["as_of_safe"].map(_csv_bool)
     return evidence
+
+
+def _augment_candidates_with_evidence_text(
+    *, candidates: pd.DataFrame, evidence: pd.DataFrame
+) -> pd.DataFrame:
+    if candidates.empty or evidence.empty:
+        return candidates.copy()
+
+    normalized_evidence = _normalize_evidence(evidence)
+    if normalized_evidence.empty:
+        return candidates.copy()
+    normalized_evidence = normalized_evidence[normalized_evidence["as_of_safe"]].copy()
+    if normalized_evidence.empty:
+        return candidates.copy()
+
+    evidence_text = normalized_evidence.assign(
+        _mapping_text=(
+            normalized_evidence["matched_keyword"]
+            + " "
+            + normalized_evidence["snippet"]
+        )
+    )
+    evidence_text = (
+        evidence_text.groupby(["asset_id", "candidate_trade_date"], dropna=False)[
+            "_mapping_text"
+        ]
+        .agg(lambda values: " ".join(value for value in values if value))
+        .reset_index()
+        .rename(columns={"candidate_trade_date": "trade_date"})
+    )
+
+    frame = candidates.copy()
+    frame["_mapping_asset_id"] = _normalized_string_column(frame.get("asset_id", pd.Series(dtype=str)))
+    frame["_mapping_trade_date"] = frame.get("trade_date", pd.Series(dtype=str)).map(
+        _normalize_date
+    )
+    evidence_text = evidence_text.rename(
+        columns={
+            "asset_id": "_mapping_asset_id",
+            "trade_date": "_mapping_trade_date",
+        }
+    )
+    frame = frame.merge(
+        evidence_text,
+        on=["_mapping_asset_id", "_mapping_trade_date"],
+        how="left",
+    )
+    if "technical_snippet" not in frame:
+        frame["technical_snippet"] = ""
+    frame["technical_snippet"] = (
+        _normalized_string_column(frame["technical_snippet"])
+        + " "
+        + _normalized_string_column(frame["_mapping_text"])
+    ).str.strip()
+    return frame.drop(
+        columns=["_mapping_asset_id", "_mapping_trade_date", "_mapping_text"],
+        errors="ignore",
+    )
 
 
 def _csv_bool(value: Any) -> Any:

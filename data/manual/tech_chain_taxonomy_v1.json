@@ -86,12 +86,12 @@
     {
       "chain_id": "ai_server_pcb",
       "display_name": "AI服务器PCB",
-      "chain_context_terms": ["AI服务器PCB", "高速PCB", "HDI", "高多层板", "交换机PCB", "背板"],
+      "chain_context_terms": ["AI服务器PCB", "高速PCB", "HDI", "高多层板", "交换机PCB", "背板", "PCB制造技术制高点", "数据中心升级"],
       "product_exposure_terms": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
       "bottleneck_dimensions": {
         "product_grade": ["高速PCB", "高阶HDI", "高多层板", "背板", "交换机PCB"],
         "materials": ["低损耗材料", "高速覆铜板", "高频高速板"],
-        "ai_linkage": ["AI服务器PCB", "AIPCB", "数据中心PCB"],
+        "ai_linkage": ["AI服务器PCB", "AIPCB", "数据中心PCB", "数据中心升级"],
         "delivery": ["高价值量产品", "订单", "客户导入", "产能爬坡"]
       },
       "technical_execution_terms": ["低损耗材料", "高频高速板", "高多层板", "高阶HDI", "产能爬坡"],

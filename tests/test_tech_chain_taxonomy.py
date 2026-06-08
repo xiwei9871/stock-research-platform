@@ -57,6 +57,10 @@ def test_load_taxonomy_v1_contains_core_chains() -> None:
     assert "陶瓷粉体" in mlcc.bottleneck_dimensions["materials_process"]
     assert "Murata" in mlcc.global_reference_entities
 
+    pcb = taxonomy.chain_by_id("ai_server_pcb")
+    assert "PCB制造技术制高点" in pcb.chain_context_terms
+    assert "数据中心升级" in pcb.bottleneck_dimensions["ai_linkage"]
+
 
 def test_run_tech_chain_taxonomy_review_from_files_writes_outputs(
     tmp_path: Path,
@@ -135,6 +139,106 @@ def test_run_tech_chain_taxonomy_review_from_files_writes_outputs(
     assert "Mapped chain assets: 1" in summary
     assert "Chain evidence rows: 3" in summary
     assert "needs_more_evidence: 1" in summary
+
+
+def test_run_tech_chain_taxonomy_review_from_files_maps_candidates_from_pit_safe_evidence(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "industry_name": "通信设备",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "capacity",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "持续扩产备料并积极研发布局3.2T、CPO等高速光模块",
+                "as_of_safe": True,
+            },
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-09-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "MLU",
+                "evidence_snippet": "未来才披露的智能计算芯片 MLU",
+                "as_of_safe": False,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert mapping.loc[0, "primary_chain_id"] == "ai_optical_interconnect"
+    assert "ai_compute_chips" not in mapping.loc[0, "matched_chain_ids"]
+
+
+def test_run_tech_chain_taxonomy_review_from_files_maps_pcb_chain_from_datacenter_evidence(
+    tmp_path: Path,
+) -> None:
+    taxonomy_path = tmp_path / "taxonomy.json"
+    taxonomy_path.write_text(
+        Path("data/manual/tech_chain_taxonomy_v1.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    candidates_csv = tmp_path / "candidates.csv"
+    evidence_csv = tmp_path / "evidence.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300476",
+                "stock_name": "胜宏科技",
+                "trade_date": "2025-07-04",
+                "industry_name": "电子元件",
+            }
+        ]
+    ).to_csv(candidates_csv, index=False)
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300476",
+                "candidate_trade_date": "2025-07-04",
+                "evidence_date": "2025-07-03",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "技术优势",
+                "evidence_snippet": "数据中心升级浪潮带来历史新机遇，占据全球PCB制造技术制高点",
+                "as_of_safe": True,
+            },
+        ]
+    ).to_csv(evidence_csv, index=False)
+
+    paths = run_tech_chain_taxonomy_review_from_files(
+        candidates_csv=candidates_csv,
+        evidence_csv=evidence_csv,
+        taxonomy_json=taxonomy_path,
+        output_dir=tmp_path / "out",
+    )
+
+    mapping = pd.read_csv(paths["chain_mapping"], dtype=str)
+    assert mapping.loc[0, "primary_chain_id"] == "ai_server_pcb"
 
 
 def test_tech_chain_taxonomy_review_cli_parser_defaults() -> None:
