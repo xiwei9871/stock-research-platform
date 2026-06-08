@@ -418,10 +418,56 @@ def _core_tech_match(text: str) -> tuple[str, list[str]]:
     best_matches: list[str] = []
     for category, terms in PASS_TERMS.items():
         term_matches = _matched_terms(text, {category: terms})
+        if term_matches and not _passes_category_minimum(category, term_matches):
+            continue
         if len(term_matches) > len(best_matches):
             best_category = category
             best_matches = term_matches
     return best_category, best_matches
+
+
+def _passes_category_minimum(category: str, matches: list[str]) -> bool:
+    compact_matches = {_compact_text(match) for match in matches}
+    if category == "ai_optical_interconnect":
+        optical_terms = {"光通信模块", "高速光模块", "光引擎", "硅光"}
+        generation_terms = {"800g", "1.6t", "3.2t", "cpo", "硅光"}
+        return _has_any(compact_matches, optical_terms) and _has_any(
+            compact_matches, generation_terms
+        )
+    if category == "optical_communication_components":
+        return _has_any(
+            compact_matches,
+            {"光通信器件", "光通信模块", "光通信收发模块", "光模块", "光器件", "光芯片"},
+        )
+    if category == "hbm_high_end_memory":
+        return (
+            _has_any(compact_matches, {"hbm3e", "hbm4"})
+            or (
+                "hbm" in compact_matches
+                and _has_any(compact_matches, {"tsv", "高带宽内存", "后段产能"})
+            )
+        )
+    if category == "ai_server_high_speed_pcb":
+        return _has_any(
+            compact_matches,
+            {"ai服务器pcb", "服务器pcb", "数据中心pcb", "高速pcb", "高阶hdi", "高多层板"},
+        )
+    if category == "mlcc_high_end_passives":
+        return "mlcc" in compact_matches and _has_any(
+            compact_matches,
+            {"高容量mlcc", "高可靠mlcc", "多层陶瓷电容器", "aiserverpdn"},
+        )
+    if category == "electronic_ceramics_mlcc":
+        return _has_any(compact_matches, {"电子陶瓷", "陶瓷材料", "多层陶瓷电容器"}) or (
+            "mlcc" in compact_matches
+            and _has_any(compact_matches, {"电容器", "被动元件"})
+        )
+    return True
+
+
+def _has_any(compact_matches: set[str], terms: set[str]) -> bool:
+    compact_terms = {_compact_text(term) for term in terms}
+    return bool(compact_matches & compact_terms)
 
 
 def _matched_terms(text: str, term_groups: dict[str, list[str]]) -> list[str]:

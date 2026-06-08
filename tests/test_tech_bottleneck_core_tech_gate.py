@@ -173,6 +173,104 @@ def test_build_core_tech_gate_does_not_pass_mlcc_on_broad_quality_terms_only() -
     assert row["core_tech_category"] == "no_core_technology_evidence"
 
 
+def test_build_core_tech_gate_rejects_bare_taxonomy_terms_without_category_context() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "bare_800g",
+                "stock_name": "裸800G样本",
+                "trade_date": "2025-06-20",
+                "rank": 1,
+                "industry_name": "电子元件",
+                "product_snippet": "800G SerDes 吞吐能力",
+            },
+            {
+                "asset_id": "bare_cpo",
+                "stock_name": "裸CPO样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "电子元件",
+                "product_snippet": "CPO 架构讨论",
+            },
+            {
+                "asset_id": "bare_hbm",
+                "stock_name": "裸HBM样本",
+                "trade_date": "2025-06-20",
+                "rank": 3,
+                "industry_name": "半导体",
+                "product_snippet": "HBM 需求变化",
+            },
+            {
+                "asset_id": "bare_mlcc",
+                "stock_name": "裸MLCC样本",
+                "trade_date": "2025-06-20",
+                "rank": 4,
+                "industry_name": "电子元件",
+                "product_snippet": "MLCC 普通被动元件",
+            },
+            {
+                "asset_id": "bare_pcb",
+                "stock_name": "裸PCB制造样本",
+                "trade_date": "2025-06-20",
+                "rank": 5,
+                "industry_name": "电子元件",
+                "product_snippet": "PCB制造 工艺改善",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=pd.DataFrame())
+
+    assert outputs["core_tech_gate"]["core_tech_gate"].tolist() == ["reject"] * 5
+
+
+def test_build_core_tech_gate_passes_taxonomy_terms_with_category_context() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "optical",
+                "stock_name": "光模块样本",
+                "trade_date": "2025-06-20",
+                "rank": 1,
+                "industry_name": "电子元件",
+                "product_snippet": "光通信模块 1.6T CPO 硅光",
+            },
+            {
+                "asset_id": "hbm",
+                "stock_name": "HBM样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "半导体",
+                "product_snippet": "HBM TSV 高带宽内存 后段产能",
+            },
+            {
+                "asset_id": "mlcc",
+                "stock_name": "MLCC样本",
+                "trade_date": "2025-06-20",
+                "rank": 3,
+                "industry_name": "电子元件",
+                "product_snippet": "MLCC 高可靠MLCC AI server PDN",
+            },
+            {
+                "asset_id": "pcb",
+                "stock_name": "PCB样本",
+                "trade_date": "2025-06-20",
+                "rank": 4,
+                "industry_name": "电子元件",
+                "product_snippet": "PCB制造 AI服务器PCB 高阶HDI",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=pd.DataFrame())
+    rows = outputs["core_tech_gate"].set_index("asset_id")
+
+    assert rows.loc["optical", "core_tech_category"] == "ai_optical_interconnect"
+    assert rows.loc["hbm", "core_tech_category"] == "hbm_high_end_memory"
+    assert rows.loc["mlcc", "core_tech_category"] == "mlcc_high_end_passives"
+    assert rows.loc["pcb", "core_tech_category"] == "ai_server_high_speed_pcb"
+
+
 def test_build_core_tech_gate_rejects_excluded_industries_with_exact_reasons() -> None:
     candidates = pd.DataFrame(
         [
