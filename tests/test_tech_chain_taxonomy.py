@@ -267,7 +267,7 @@ def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -
                 "evidence_date": "2025-05-22",
                 "evidence_type": "technical_barrier",
                 "matched_keyword": "CPO",
-                "evidence_snippet": "持续扩产备料并积极研发布局3.2T、CPO等",
+                "evidence_snippet": "持续扩产备料并积极研发布局CPO等",
                 "as_of_safe": True,
             },
             {
@@ -293,6 +293,117 @@ def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -
     assert row["bottleneck_dimension"] == "architecture_route"
     assert row["matched_terms"] == "CPO"
     assert row["evidence_quality"] == "strong"
+
+
+def test_build_chain_evidence_review_maps_multiple_dimensions_from_full_text() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "3.2T CPO 客户导入 产能爬坡",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert set(review["bottleneck_dimension"]) >= {
+        "architecture_route",
+        "bandwidth_generation",
+        "customer_delivery",
+    }
+
+
+def test_chain_evidence_quality_downgrades_invalidation_context() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "invalidation",
+                "matched_keyword": "大客户导入",
+                "evidence_snippet": "大客户导入不及预期 认证进度延后",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert not review.empty
+    assert set(review["evidence_quality"]) == {"weak"}
+
+
+def test_chain_evidence_review_rejects_non_one_numeric_as_of_safe() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "technical_barrier",
+                "matched_keyword": "CPO",
+                "evidence_snippet": "CPO",
+                "as_of_safe": 2,
+            },
+        ]
+    )
+
+    review_with_two = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+    review_with_one = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence.assign(as_of_safe=1), taxonomy=taxonomy
+    )
+
+    assert review_with_two.empty
+    assert not review_with_one.empty
 
 
 def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None:

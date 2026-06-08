@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import json
 import math
+import numbers
 from pathlib import Path
 from typing import Any
 
@@ -170,21 +171,11 @@ def build_chain_evidence_review(
             & normalized_evidence["as_of_safe"]
         ].copy()
         for evidence_row in candidate_evidence.to_dict("records"):
-            keyword_text = _compactible_text(evidence_row["matched_keyword"])
             full_text = _compactible_text(
                 f"{evidence_row['matched_keyword']} {evidence_row['snippet']}"
             )
-            text = (
-                keyword_text
-                if keyword_text
-                and any(
-                    _matched_terms(keyword_text, terms)
-                    for terms in chain.bottleneck_dimensions.values()
-                )
-                else full_text
-            )
             for dimension, terms in chain.bottleneck_dimensions.items():
-                matched = _matched_terms(text, terms)
+                matched = _matched_terms(full_text, terms)
                 if not matched:
                     continue
                 rows.append(
@@ -311,8 +302,8 @@ def _bool_value(value: Any) -> bool:
         return False
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return bool(value)
+    if isinstance(value, numbers.Number):
+        return value == 1
     return str(value).strip().casefold() in {"true", "1", "yes", "y"}
 
 
@@ -320,6 +311,22 @@ def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> st
     text = _compactible_text(
         f"{row.get('matched_keyword', '')} {row.get('snippet', '')}"
     )
+    evidence_type = str(row.get("evidence_type", "")).casefold()
+    negative_terms = [
+        "不及预期",
+        "风险",
+        "延后",
+        "下降",
+        "无法满足",
+        "短缺导致",
+        "竞争加剧",
+        "降价",
+    ]
+    has_negative_term = any(_compactible_text(term) in text for term in negative_terms)
+    if "invalidation" in evidence_type or has_negative_term:
+        if len(matched_terms) >= 2 and not has_negative_term:
+            return "strong"
+        return "weak"
     if len(matched_terms) >= 2:
         return "strong"
     if any(
