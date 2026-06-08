@@ -113,3 +113,5 @@
 - 外部项目只提供方法、接口、模块边界和验证思路
 - 不做大段复制，不做整仓替换
 - LLMQuant 只作为方法参考和外部雷达，不作为并行平台；每个 LLMQuant-inspired artifact 都必须说明它增强了哪个本仓库模块
+- LLMQuant 及相关 Finance Agent 项目的季度观察清单见：
+  `docs/llmquant-fusion/external-radar.md`

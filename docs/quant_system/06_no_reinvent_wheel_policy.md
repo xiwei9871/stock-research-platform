@@ -264,6 +264,8 @@ LLMQuant 只能作为方法参考，不作为并行平台。任何 LLMQuant-insp
 
 LLMQuant Data / data-mcp 未来如果接入，只能作为外部上下文源，例如 FRED、SEC、13F、论文或百科搜索。外部返回必须先写成 artifact，再转换为本地 evidence unit，并标注为 `external_context`；不得替代 A 股行情、财务、因子、评分或交易日历。
 
+外部上下文 adapter 必须输出 `source`、`query`、`retrieved_at`、`available_at`、`payload_path`、`summary`、`evidence_units`、`warnings`。允许的第一阶段来源仅限 FRED 宏观、SEC filings、13F holdings、external paper search、external wiki/reference search；禁止接入 A 股价格、A 股财务行、A 股因子分、交易信号、broker/order/account/cash/position/fill/execution 数据。
+
 ## 9. 必须自己做的内容
 
 以下内容不能外包给开源项目，必须围绕你自己的 A 股数据库与研究流程自建：

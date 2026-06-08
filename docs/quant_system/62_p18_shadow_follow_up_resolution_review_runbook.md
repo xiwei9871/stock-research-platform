@@ -14,6 +14,8 @@ P18 is review-only.
 - No mutation of P17 follow-up queue rows.
 - All rows remain manual-review required.
 
+Internal risk or position review skills may summarize P18 resolution evidence only when they follow `docs/llmquant-fusion/internal-skill-template.md`, cite local artifacts, and pass the existing review boundary. They cannot change resolution labels, close items, promote candidates, mutate P17 rows, or create production state.
+
 ## Build Artifact
 
 Use a P17 follow-up queue JSON artifact:

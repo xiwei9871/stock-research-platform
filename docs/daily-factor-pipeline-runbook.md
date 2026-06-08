@@ -208,6 +208,10 @@ Run the same report through the main `stock-research` CLI:
 The module enriches TopN candidates from `core.industry_membership` before risk alert generation, so sector weakness checks use point-in-time industry context.
 Use `--apply-report-run-schema --record-run` to initialize `report.report_run` and persist the generated report paths.
 
+## Internal Skill Review Insertion Point
+
+After the daily report bundle is generated and before OpenClaw or Feishu delivery, an internal skill review may summarize local artifacts for human review. Use `docs/llmquant-fusion/internal-skill-template.md` as the required contract. The skill may read report bundles, TopN reports, risk alerts, market state, position review, run cards, and local evidence units. It must output review artifacts only, pass the existing `ReviewAgent`, and must not change factor scores, TopN ranks, watchlist state, dashboard state, or delivery routing.
+
 Generate a cron entry for review:
 
 ```python

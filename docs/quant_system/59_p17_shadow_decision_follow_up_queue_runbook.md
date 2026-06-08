@@ -26,6 +26,8 @@ Required safety fields:
 - `production_watchlist_enabled = false`
 - `production_write_enabled = false`
 
+Internal watchlist memo skills may propose follow-up questions for P17 only when they follow `docs/llmquant-fusion/internal-skill-template.md`, cite local artifacts, and keep conclusions review-only. They cannot promote candidates, alter follow-up status, write production watchlists, or bypass operator review.
+
 ## Build Artifact
 
 ```bash

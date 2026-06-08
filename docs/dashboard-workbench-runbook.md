@@ -32,3 +32,5 @@ http://127.0.0.1:5174
 ## Operating Boundary
 
 The dashboard does not create trading instructions. It only displays existing research outputs for human review.
+
+Internal skill outputs that follow `docs/llmquant-fusion/internal-skill-template.md` are review artifacts. The dashboard may display them only after they are written as local artifacts and pass the existing review boundary. They must not mutate dashboard state, watchlist state, scores, broker/order/account/cash/position state, or production approvals.
