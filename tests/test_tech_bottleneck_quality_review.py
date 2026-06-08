@@ -144,6 +144,15 @@ def test_classify_product_family_does_not_link_mlcc_on_broad_quality_terms_only(
     )
 
 
+def test_classify_product_family_does_not_link_ai_optical_on_broad_datacenter_terms_only() -> None:
+    assert classify_product_family("数据中心", "") != "ai_optical_interconnect"
+    assert classify_product_family("批量交付", "") != "ai_optical_interconnect"
+    assert (
+        classify_product_family("数据中心基础设施", "客户认证 批量交付")
+        != "ai_optical_interconnect"
+    )
+
+
 def test_classify_product_family_links_advanced_medical_devices_terms() -> None:
     family = classify_product_family("数字化X线探测器 骨科植入物 医疗器械", "国产替代 注册证 核心技术 客户认证")
 

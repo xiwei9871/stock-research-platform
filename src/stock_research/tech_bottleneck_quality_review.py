@@ -252,8 +252,8 @@ PRODUCT_FAMILIES = {
         "CPO",
         "硅光",
         "光引擎",
-        "数据中心",
-        "批量交付",
+        "数据中心客户认证",
+        "高速光模块批量交付",
     ],
     "optical_communication_components": [
         "光通信器件",
