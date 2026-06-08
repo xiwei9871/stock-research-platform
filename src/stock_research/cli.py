@@ -1209,6 +1209,16 @@ def build_parser() -> argparse.ArgumentParser:
     market_style_switch.add_argument("--defensive-industry-keywords")
     market_style_switch.add_argument("--adjust-type", choices=["raw", "qfq", "hfq"], default="hfq")
 
+    market_regime_confirmation = subparsers.add_parser("market-regime-confirmation-v1-backtest")
+    market_regime_confirmation.add_argument("--start-date", required=True)
+    market_regime_confirmation.add_argument("--end-date", required=True)
+    market_regime_confirmation.add_argument("--emotion-path", required=True)
+    market_regime_confirmation.add_argument("--funnel-detail-path", required=True)
+    market_regime_confirmation.add_argument("--output-dir", required=True)
+    market_regime_confirmation.add_argument("--policy-event-path")
+    market_regime_confirmation.add_argument("--top-n", type=int, default=5)
+    market_regime_confirmation.add_argument("--adjust-type", choices=["raw", "qfq", "hfq"], default="hfq")
+
     news_feature_backfill = subparsers.add_parser("news-feature-backfill")
     news_feature_backfill.add_argument("--events-path", required=True)
     news_feature_backfill.add_argument("--start-date", required=True)
@@ -3821,6 +3831,26 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"market_style_switch|rotation_rows|{len(result['rotation_candidates'])}")
         print(f"market_style_switch|equity_rows|{len(result['equity'])}")
         print(f"market_style_switch|output_dir|{args.output_dir}")
+        return 0
+    elif args.command == "market-regime-confirmation-v1-backtest":
+        from stock_research.market_regime_confirmation_v1 import (
+            run_market_regime_confirmation_v1_backtest,
+        )
+
+        result = run_market_regime_confirmation_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            emotion_path=args.emotion_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            policy_event_path=args.policy_event_path,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+        )
+        print(f"market_regime_confirmation|summary|{result['paths'].get('regime_path')}")
+        print(f"market_regime_confirmation|regime_rows|{len(result['regime'])}")
+        print(f"market_regime_confirmation|equity_rows|{len(result['equity'])}")
+        print(f"market_regime_confirmation|output_dir|{args.output_dir}")
         return 0
     elif args.command == "news-feature-backfill":
         result = run_news_feature_backfill(
