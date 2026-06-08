@@ -64,6 +64,7 @@ from stock_research.industry_regime_gated_backtest import (
 from stock_research.industry_exposure_risk_control import (
     run_industry_exposure_risk_control,
 )
+from stock_research.internal_skill_review import run_internal_skill_review
 from stock_research.intraday_risk_control_v2 import run_intraday_risk_control_v2_backtest
 from stock_research.intraday_risk_filter_backtest import run_intraday_risk_filter_backtest
 from stock_research.features import (
@@ -2966,6 +2967,19 @@ def build_parser() -> argparse.ArgumentParser:
     daily_research_report.add_argument("--apply-report-run-schema", action="store_true")
     daily_research_report.add_argument("--record-run", action="store_true")
 
+    internal_skill_review = subparsers.add_parser("run-internal-skill-review")
+    internal_skill_review.add_argument("--trade-date", required=True)
+    internal_skill_review.add_argument(
+        "--artifact-path",
+        action="append",
+        default=[],
+        help="Local Markdown/JSON/CSV artifact path to include in the offline review.",
+    )
+    internal_skill_review.add_argument(
+        "--output-dir",
+        default="outputs/internal_skill_review",
+    )
+
     trend_lifecycle_v1 = subparsers.add_parser("trend-lifecycle-v1")
     trend_lifecycle_v1.add_argument("--start-date", required=True)
     trend_lifecycle_v1.add_argument("--end-date", required=True)
@@ -5799,6 +5813,19 @@ def main_for_args(argv: list[str] | None = None) -> None:
         report_paths = result["report_paths"]
         for key in ("bundle", "topn", "market_state", "sector_strength", "risk_alerts", "position_review"):
             print(f"daily_research_report|{key}|{report_paths[key]['markdown_path']}")
+    elif args.command == "run-internal-skill-review":
+        result = run_internal_skill_review(
+            trade_date=args.trade_date,
+            artifact_paths=args.artifact_path,
+            output_dir=args.output_dir,
+        )
+        print(f"internal_skill_review|status|{result.status}")
+        print(f"internal_skill_review|review_agent_status|{result.review_agent_status}")
+        print(f"internal_skill_review|observations|{result.observation_count}")
+        print(f"internal_skill_review|json|{result.agent_report_json_path}")
+        print(f"internal_skill_review|markdown|{result.markdown_path}")
+        print(f"internal_skill_review|review_agent_result|{result.review_agent_result_path}")
+        return 0 if result.status == "passed" else 2
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
             start_date=args.start_date,

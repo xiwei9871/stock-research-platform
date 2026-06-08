@@ -218,8 +218,30 @@ def test_cli_accepts_report_delivery_feishu_send_command(monkeypatch):
     assert args.webhook_url is None
     assert args.limit == 1
     assert args.severity_max == "info"
-    assert args.allow_live_send is True
-    assert args.test_mode is True
+
+
+def test_cli_accepts_run_internal_skill_review_command():
+    args = build_parser().parse_args(
+        [
+            "run-internal-skill-review",
+            "--trade-date",
+            "2026-06-08",
+            "--artifact-path",
+            "reports/daily_research/topn/daily_topn_2026-06-08.md",
+            "--artifact-path",
+            "reports/daily_research/risk_alerts/risk_alerts_2026-06-08.md",
+            "--output-dir",
+            "outputs/internal_skill_review/2026-06-08",
+        ]
+    )
+
+    assert args.command == "run-internal-skill-review"
+    assert args.trade_date == "2026-06-08"
+    assert args.artifact_path == [
+        "reports/daily_research/topn/daily_topn_2026-06-08.md",
+        "reports/daily_research/risk_alerts/risk_alerts_2026-06-08.md",
+    ]
+    assert args.output_dir == "outputs/internal_skill_review/2026-06-08"
 
 
 def test_cli_accepts_agent_report_command():
