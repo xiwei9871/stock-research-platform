@@ -127,8 +127,10 @@ PASS_TERMS = {
     "mlcc_high_end_passives": [
         "MLCC",
         "多层陶瓷电容器",
-        "高容量",
-        "高可靠",
+        "高容量MLCC",
+        "高可靠MLCC",
+        "高容量电容",
+        "高可靠电容",
         "AI server PDN",
     ],
     "advanced_medical_devices": [

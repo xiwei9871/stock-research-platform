@@ -152,6 +152,27 @@ def test_build_core_tech_gate_passes_chain_taxonomy_terms_without_generic_domest
     assert rows.loc["CN:SH:688999", "core_tech_category"] == "hbm_high_end_memory"
 
 
+def test_build_core_tech_gate_does_not_pass_mlcc_on_broad_quality_terms_only() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300001",
+                "stock_name": "电源模块样本",
+                "trade_date": "2025-06-20",
+                "rank": 1,
+                "industry_name": "电子元件",
+                "product_snippet": "高可靠 大电流 低损耗 电源模块",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=pd.DataFrame())
+    row = outputs["core_tech_gate"].iloc[0]
+
+    assert row["core_tech_gate"] == "reject"
+    assert row["core_tech_category"] == "no_core_technology_evidence"
+
+
 def test_build_core_tech_gate_rejects_excluded_industries_with_exact_reasons() -> None:
     candidates = pd.DataFrame(
         [
