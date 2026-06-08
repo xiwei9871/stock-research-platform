@@ -106,6 +106,23 @@ def test_classify_product_family_links_core_leader_product_aliases() -> None:
     )
 
 
+def test_classify_product_family_links_taxonomy_chain_terms() -> None:
+    assert (
+        classify_product_family(
+            "HBM3E TSV 堆叠 高带宽内存",
+            "Nvidia认证 客户验证 后段产能 良率",
+        )
+        == "hbm_high_end_memory"
+    )
+    assert (
+        classify_product_family(
+            "MLCC 高容量 高可靠 小型化",
+            "AI server PDN GPU周边 高瞬态电流 满产",
+        )
+        == "mlcc_high_end_passives"
+    )
+
+
 def test_classify_product_family_links_advanced_medical_devices_terms() -> None:
     family = classify_product_family("数字化X线探测器 骨科植入物 医疗器械", "国产替代 注册证 核心技术 客户认证")
 

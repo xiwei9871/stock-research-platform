@@ -27,9 +27,12 @@ PASS_PRODUCT_FAMILIES = [
     "semiconductor_testing_metrology",
     "semiconductor_materials_components",
     "oled_display_materials",
+    "ai_optical_interconnect",
     "optical_communication_components",
+    "hbm_high_end_memory",
     "ai_compute_chips",
     "ai_server_high_speed_pcb",
+    "mlcc_high_end_passives",
     "electronic_ceramics_mlcc",
     "advanced_medical_devices",
     "advanced_fluorochemicals_materials",
@@ -65,6 +68,16 @@ PASS_TERMS = {
         "靶材",
         "封装材料",
     ],
+    "ai_optical_interconnect": [
+        "光通信模块",
+        "高速光模块",
+        "800G",
+        "1.6T",
+        "3.2T",
+        "CPO",
+        "硅光",
+        "光引擎",
+    ],
     "optical_communication_components": [
         "光模块",
         "高速光模块",
@@ -78,6 +91,14 @@ PASS_TERMS = {
         "4.25G以上",
         "CPO",
         "光引擎",
+    ],
+    "hbm_high_end_memory": [
+        "HBM",
+        "HBM3E",
+        "HBM4",
+        "TSV",
+        "高带宽内存",
+        "后段产能",
     ],
     "ai_compute_chips": [
         "AI芯片",
@@ -102,6 +123,13 @@ PASS_TERMS = {
         "高多层板",
         "高价值量PCB",
         "PCB制造",
+    ],
+    "mlcc_high_end_passives": [
+        "MLCC",
+        "多层陶瓷电容器",
+        "高容量",
+        "高可靠",
+        "AI server PDN",
     ],
     "advanced_medical_devices": [
         "医学影像",
@@ -384,11 +412,14 @@ def _core_tech_match(text: str) -> tuple[str, list[str]]:
             if _contains_term(text, family):
                 return family, family_terms
 
+    best_category = ""
+    best_matches: list[str] = []
     for category, terms in PASS_TERMS.items():
         term_matches = _matched_terms(text, {category: terms})
-        if term_matches:
-            return category, term_matches
-    return "", []
+        if len(term_matches) > len(best_matches):
+            best_category = category
+            best_matches = term_matches
+    return best_category, best_matches
 
 
 def _matched_terms(text: str, term_groups: dict[str, list[str]]) -> list[str]:

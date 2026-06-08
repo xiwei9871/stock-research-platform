@@ -122,6 +122,36 @@ def test_build_core_tech_gate_passes_core_leader_coverage_terms() -> None:
     assert rows.loc["CN:SZ:002371", "core_tech_category"] == "semiconductor_equipment"
 
 
+def test_build_core_tech_gate_passes_chain_taxonomy_terms_without_generic_domestic_substitution() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "rank": 1,
+                "industry_name": "通信设备",
+                "product_snippet": "光通信模块 1.6T CPO 硅光",
+            },
+            {
+                "asset_id": "CN:SH:688999",
+                "stock_name": "HBM样本",
+                "trade_date": "2025-06-20",
+                "rank": 2,
+                "industry_name": "半导体",
+                "product_snippet": "HBM3E TSV 堆叠 后段产能",
+            },
+        ]
+    )
+
+    outputs = build_core_tech_gate(candidates=candidates, evidence=pd.DataFrame())
+    rows = outputs["core_tech_gate"].set_index("asset_id")
+
+    assert rows.loc["CN:SZ:300308", "core_tech_gate"] == "pass"
+    assert rows.loc["CN:SZ:300308", "core_tech_category"] == "ai_optical_interconnect"
+    assert rows.loc["CN:SH:688999", "core_tech_category"] == "hbm_high_end_memory"
+
+
 def test_build_core_tech_gate_rejects_excluded_industries_with_exact_reasons() -> None:
     candidates = pd.DataFrame(
         [
