@@ -151,6 +151,7 @@ from stock_research.loaders.baostock_ingestion import (
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
 from stock_research.market_data import load_market_daily_bars
+from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
 from stock_research.minute_backfill import (
     load_backfill_status,
@@ -1198,6 +1199,26 @@ def build_parser() -> argparse.ArgumentParser:
     historical_top10_news_backfill.add_argument("--sample-trade-dates", type=int)
     historical_top10_news_backfill.add_argument("--output-dir")
 
+    market_style_switch = subparsers.add_parser("market-style-switch-v1-backtest")
+    market_style_switch.add_argument("--start-date", required=True)
+    market_style_switch.add_argument("--end-date", required=True)
+    market_style_switch.add_argument("--emotion-path", required=True)
+    market_style_switch.add_argument("--funnel-detail-path", required=True)
+    market_style_switch.add_argument("--output-dir", required=True)
+    market_style_switch.add_argument("--top-n", type=int, default=5)
+    market_style_switch.add_argument("--defensive-industry-keywords")
+    market_style_switch.add_argument("--adjust-type", choices=["raw", "qfq", "hfq"], default="hfq")
+
+    market_regime_confirmation = subparsers.add_parser("market-regime-confirmation-v1-backtest")
+    market_regime_confirmation.add_argument("--start-date", required=True)
+    market_regime_confirmation.add_argument("--end-date", required=True)
+    market_regime_confirmation.add_argument("--emotion-path", required=True)
+    market_regime_confirmation.add_argument("--funnel-detail-path", required=True)
+    market_regime_confirmation.add_argument("--output-dir", required=True)
+    market_regime_confirmation.add_argument("--policy-event-path")
+    market_regime_confirmation.add_argument("--top-n", type=int, default=5)
+    market_regime_confirmation.add_argument("--adjust-type", choices=["raw", "qfq", "hfq"], default="hfq")
+
     news_feature_backfill = subparsers.add_parser("news-feature-backfill")
     news_feature_backfill.add_argument("--events-path", required=True)
     news_feature_backfill.add_argument("--start-date", required=True)
@@ -1901,6 +1922,17 @@ def build_parser() -> argparse.ArgumentParser:
     intraday_risk_control_v2_backtest.add_argument("--lookback", type=int, default=20)
     intraday_risk_control_v2_backtest.add_argument("--zscore-threshold", type=float, default=1.5)
     intraday_risk_control_v2_backtest.add_argument("--output-dir", required=True)
+
+    market_emotion_state_v1 = subparsers.add_parser("market-emotion-state-v1-backfill")
+    market_emotion_state_v1.add_argument("--start-date", required=True)
+    market_emotion_state_v1.add_argument("--end-date", required=True)
+    market_emotion_state_v1.add_argument(
+        "--adjust-type",
+        choices=["raw", "qfq", "hfq"],
+        default="hfq",
+    )
+    market_emotion_state_v1.add_argument("--output-dir", required=True)
+    market_emotion_state_v1.add_argument("--mid-trend-equity-path")
 
     daily_factor_pipeline = subparsers.add_parser("run-daily-factor-pipeline")
     daily_factor_pipeline.add_argument("--trade-date", required=True)
@@ -3028,6 +3060,26 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/reports",
     )
 
+    current_mid_trend_strategy_v1 = subparsers.add_parser(
+        "current-mid-trend-strategy-v1-backtest"
+    )
+    current_mid_trend_strategy_v1.add_argument("--start-date", required=True)
+    current_mid_trend_strategy_v1.add_argument("--end-date", required=True)
+    current_mid_trend_strategy_v1.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/market_regime_confirmation_daily.csv",
+    )
+    current_mid_trend_strategy_v1.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20230103_20260605_aligned/mid_trend_watch_funnel_detail.csv",
+    )
+    current_mid_trend_strategy_v1.add_argument("--top-n", type=int, default=5)
+    current_mid_trend_strategy_v1.add_argument("--adjust-type", default="hfq")
+    current_mid_trend_strategy_v1.add_argument(
+        "--output-dir",
+        default="outputs/research/current_mid_trend_strategy_v1",
+    )
+
     industry_focus_backtest = subparsers.add_parser("industry-focus-backtest")
     industry_focus_backtest.add_argument("--start-date", required=True)
     industry_focus_backtest.add_argument("--end-date", required=True)
@@ -3771,6 +3823,78 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"historical_top10_news_backfill|candidates|{result['paths']['candidates']}")
         print(f"historical_top10_news_backfill|source_events|{result['paths']['source_events']}")
         print(f"historical_top10_news_backfill|source_rows|{len(result['source_events'])}")
+    elif args.command == "market-style-switch-v1-backtest":
+        from stock_research.market_style_switch_v1 import (
+            DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS,
+            run_market_style_switch_v1_backtest,
+        )
+
+        keywords = (
+            tuple(keyword.strip() for keyword in args.defensive_industry_keywords.split(",") if keyword.strip())
+            if args.defensive_industry_keywords
+            else DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS
+        )
+        result = run_market_style_switch_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            emotion_path=args.emotion_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            defensive_industry_keywords=keywords,
+            adjust_type=args.adjust_type,
+        )
+        print(f"market_style_switch|summary|{result['paths']['summary_path']}")
+        print(f"market_style_switch|style_state_rows|{len(result['style_state'])}")
+        print(f"market_style_switch|growth_rows|{len(result['growth_candidates'])}")
+        print(f"market_style_switch|defensive_rows|{len(result['defensive_candidates'])}")
+        print(f"market_style_switch|rotation_rows|{len(result['rotation_candidates'])}")
+        print(f"market_style_switch|equity_rows|{len(result['equity'])}")
+        print(f"market_style_switch|output_dir|{args.output_dir}")
+        return 0
+    elif args.command == "market-regime-confirmation-v1-backtest":
+        from stock_research.market_regime_confirmation_v1 import (
+            run_market_regime_confirmation_v1_backtest,
+        )
+
+        result = run_market_regime_confirmation_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            emotion_path=args.emotion_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            policy_event_path=args.policy_event_path,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+        )
+        print(f"market_regime_confirmation|summary|{result['paths'].get('summary_path')}")
+        print(f"market_regime_confirmation|regime_rows|{len(result['regime'])}")
+        print(f"market_regime_confirmation|equity_rows|{len(result['equity'])}")
+        print(f"market_regime_confirmation|output_dir|{args.output_dir}")
+        return 0
+    elif args.command == "current-mid-trend-strategy-v1-backtest":
+        from stock_research.current_mid_trend_strategy_v1 import (
+            run_current_mid_trend_strategy_v1_backtest,
+        )
+
+        result = run_current_mid_trend_strategy_v1_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            top_n=args.top_n,
+            adjust_type=args.adjust_type,
+        )
+        print(f"current_mid_trend_strategy_v1|summary|{result['paths'].get('summary')}")
+        print(f"current_mid_trend_strategy_v1|equity|{result['paths'].get('equity')}")
+        print(f"current_mid_trend_strategy_v1|holdings|{result['paths'].get('holdings')}")
+        print(f"current_mid_trend_strategy_v1|trades|{result['paths'].get('trades')}")
+        print(f"current_mid_trend_strategy_v1|report|{result['paths'].get('report')}")
+        print(f"current_mid_trend_strategy_v1|equity_rows|{len(result['equity'])}")
+        print(f"current_mid_trend_strategy_v1|trade_rows|{len(result['trades'])}")
+        print(f"current_mid_trend_strategy_v1|protection_events|{len(result['protection_events'])}")
+        return 0
     elif args.command == "news-feature-backfill":
         result = run_news_feature_backfill(
             events_path=args.events_path,
@@ -4241,6 +4365,17 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"intraday_risk_control_v2_backtest|summary|{paths['summary']}")
         print(f"intraday_risk_control_v2_backtest|report|{paths['report']}")
         print(f"intraday_risk_control_v2_backtest|rows|{len(summary)}")
+    elif args.command == "market-emotion-state-v1-backfill":
+        result = run_market_emotion_state_v1_backfill(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+            mid_trend_equity_path=args.mid_trend_equity_path,
+        )
+        print(f"market_emotion_state|rows|{len(result['daily'])}")
+        for key, path in result["paths"].items():
+            print(f"market_emotion_state|{key}|{path}")
     elif args.command == "run-daily-factor-pipeline":
         result = run_daily_factor_pipeline(
             trade_date=args.trade_date,
