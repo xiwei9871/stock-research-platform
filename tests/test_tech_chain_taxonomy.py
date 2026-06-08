@@ -266,6 +266,8 @@ def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -
                 "candidate_trade_date": "2025-06-20",
                 "evidence_date": "2025-05-22",
                 "evidence_type": "technical_barrier",
+                "source_type": "broker_report",
+                "source_url": "https://example.com/cpo",
                 "matched_keyword": "CPO",
                 "evidence_snippet": "持续扩产备料并积极研发布局CPO等",
                 "as_of_safe": True,
@@ -287,12 +289,28 @@ def test_build_chain_evidence_review_maps_dimensions_and_filters_future_rows() -
     )
 
     assert len(review) == 1
+    assert review.columns.tolist() == [
+        "asset_id",
+        "stock_name",
+        "trade_date",
+        "chain_id",
+        "chain_name",
+        "bottleneck_dimension",
+        "matched_evidence_term",
+        "evidence_quality",
+        "evidence_date",
+        "source_type",
+        "source_url",
+        "snippet",
+    ]
     row = review.iloc[0]
     assert row["asset_id"] == "CN:SZ:300308"
     assert row["chain_id"] == "ai_optical_interconnect"
     assert row["bottleneck_dimension"] == "architecture_route"
-    assert row["matched_terms"] == "CPO"
+    assert row["matched_evidence_term"] == "CPO"
     assert row["evidence_quality"] == "strong"
+    assert row["source_type"] == "broker_report"
+    assert row["source_url"] == "https://example.com/cpo"
 
 
 def test_build_chain_evidence_review_maps_multiple_dimensions_from_full_text() -> None:
@@ -368,7 +386,7 @@ def test_chain_evidence_quality_downgrades_invalidation_context() -> None:
     assert set(review["evidence_quality"]) == {"weak"}
 
 
-def test_chain_evidence_review_rejects_non_one_numeric_as_of_safe() -> None:
+def test_chain_evidence_review_rejects_malformed_as_of_safe_values() -> None:
     taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
     mapping = pd.DataFrame(
         [
@@ -381,29 +399,30 @@ def test_chain_evidence_review_rejects_non_one_numeric_as_of_safe() -> None:
             }
         ]
     )
-    evidence = pd.DataFrame(
-        [
-            {
-                "asset_id": "CN:SZ:300308",
-                "candidate_trade_date": "2025-06-20",
-                "evidence_date": "2025-05-22",
-                "evidence_type": "technical_barrier",
-                "matched_keyword": "CPO",
-                "evidence_snippet": "CPO",
-                "as_of_safe": 2,
-            },
-        ]
-    )
+    base_evidence = {
+        "asset_id": "CN:SZ:300308",
+        "candidate_trade_date": "2025-06-20",
+        "evidence_date": "2025-05-22",
+        "evidence_type": "technical_barrier",
+        "matched_keyword": "CPO",
+        "evidence_snippet": "CPO",
+    }
 
-    review_with_two = build_chain_evidence_review(
-        mapping=mapping, evidence=evidence, taxonomy=taxonomy
-    )
-    review_with_one = build_chain_evidence_review(
-        mapping=mapping, evidence=evidence.assign(as_of_safe=1), taxonomy=taxonomy
-    )
+    for malformed_value in [1, "true", "yes", "y", "1", "TRUE"]:
+        evidence = pd.DataFrame([{**base_evidence, "as_of_safe": malformed_value}])
 
-    assert review_with_two.empty
-    assert not review_with_one.empty
+        review = build_chain_evidence_review(
+            mapping=mapping, evidence=evidence, taxonomy=taxonomy
+        )
+
+        assert review.empty, f"accepted malformed as_of_safe={malformed_value!r}"
+
+    valid_review = build_chain_evidence_review(
+        mapping=mapping,
+        evidence=pd.DataFrame([{**base_evidence, "as_of_safe": True}]),
+        taxonomy=taxonomy,
+    )
+    assert not valid_review.empty
 
 
 def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None:

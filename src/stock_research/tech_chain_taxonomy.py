@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import json
 import math
-import numbers
 from pathlib import Path
 from typing import Any
 
@@ -39,11 +38,12 @@ CHAIN_EVIDENCE_COLUMNS = [
     "trade_date",
     "chain_id",
     "chain_name",
-    "evidence_type",
     "bottleneck_dimension",
-    "matched_terms",
+    "matched_evidence_term",
     "evidence_quality",
     "evidence_date",
+    "source_type",
+    "source_url",
     "snippet",
 ]
 
@@ -178,23 +178,24 @@ def build_chain_evidence_review(
                 matched = _matched_terms(full_text, terms)
                 if not matched:
                     continue
-                rows.append(
-                    {
-                        "asset_id": item["asset_id"],
-                        "stock_name": item["stock_name"],
-                        "trade_date": item["trade_date"],
-                        "chain_id": chain.chain_id,
-                        "chain_name": chain.display_name,
-                        "evidence_type": evidence_row["evidence_type"],
-                        "bottleneck_dimension": dimension,
-                        "matched_terms": "|".join(matched),
-                        "evidence_quality": _chain_evidence_quality(
-                            evidence_row, matched
-                        ),
-                        "evidence_date": evidence_row["evidence_date"],
-                        "snippet": evidence_row["snippet"],
-                    }
-                )
+                quality = _chain_evidence_quality(evidence_row, matched)
+                for matched_term in matched:
+                    rows.append(
+                        {
+                            "asset_id": item["asset_id"],
+                            "stock_name": item["stock_name"],
+                            "trade_date": item["trade_date"],
+                            "chain_id": chain.chain_id,
+                            "chain_name": chain.display_name,
+                            "bottleneck_dimension": dimension,
+                            "matched_evidence_term": matched_term,
+                            "evidence_quality": quality,
+                            "evidence_date": evidence_row["evidence_date"],
+                            "source_type": evidence_row["source_type"],
+                            "source_url": evidence_row["source_url"],
+                            "snippet": evidence_row["snippet"],
+                        }
+                    )
     return pd.DataFrame(rows).reindex(columns=CHAIN_EVIDENCE_COLUMNS)
 
 
@@ -277,6 +278,8 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
         "candidate_trade_date",
         "evidence_date",
         "evidence_type",
+        "source_type",
+        "source_url",
         "matched_keyword",
         "snippet",
     ]:
@@ -285,7 +288,7 @@ def _normalize_evidence(evidence: pd.DataFrame | None) -> pd.DataFrame:
         frame[column] = _normalized_string_column(frame[column])
     if "as_of_safe" not in frame:
         frame["as_of_safe"] = False
-    frame["as_of_safe"] = frame["as_of_safe"].map(_bool_value)
+    frame["as_of_safe"] = frame["as_of_safe"].map(_explicit_true)
     frame["candidate_trade_date"] = frame["candidate_trade_date"].map(_normalize_date)
     frame["evidence_date"] = frame["evidence_date"].map(_normalize_date)
     return frame[
@@ -297,14 +300,8 @@ def _normalized_string_column(column: pd.Series) -> pd.Series:
     return column.astype("string").fillna("").str.strip()
 
 
-def _bool_value(value: Any) -> bool:
-    if pd.isna(value):
-        return False
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, numbers.Number):
-        return value == 1
-    return str(value).strip().casefold() in {"true", "1", "yes", "y"}
+def _explicit_true(value: Any) -> bool:
+    return value is True
 
 
 def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> str:
