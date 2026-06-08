@@ -244,6 +244,42 @@ def test_cli_accepts_run_internal_skill_review_command():
     assert args.output_dir == "outputs/internal_skill_review/2026-06-08"
 
 
+def test_cli_run_internal_skill_review_prints_debate_artifact(monkeypatch, capsys):
+    def fake_run_internal_skill_review(*, trade_date, artifact_paths, output_dir):
+        assert trade_date == "2026-06-08"
+        assert artifact_paths == ["reports/topn.md"]
+        assert output_dir == "outputs/internal_skill_review/2026-06-08"
+        return SimpleNamespace(
+            status="passed",
+            review_agent_status="passed",
+            observation_count=3,
+            agent_report_json_path="outputs/internal_skill_review/2026-06-08/agent_report.json",
+            markdown_path="outputs/internal_skill_review/2026-06-08/internal_skill_review.md",
+            review_agent_result_path="outputs/internal_skill_review/2026-06-08/review_agent_result.json",
+            debate_review_json_path="outputs/internal_skill_review/2026-06-08/internal_debate_review.json",
+        )
+
+    monkeypatch.setattr(cli, "run_internal_skill_review", fake_run_internal_skill_review)
+
+    cli.main(
+        [
+            "run-internal-skill-review",
+            "--trade-date",
+            "2026-06-08",
+            "--artifact-path",
+            "reports/topn.md",
+            "--output-dir",
+            "outputs/internal_skill_review/2026-06-08",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert (
+        "internal_skill_review|debate_review|"
+        "outputs/internal_skill_review/2026-06-08/internal_debate_review.json"
+    ) in output
+
+
 def test_cli_accepts_agent_report_command():
     args = build_parser().parse_args(
         [

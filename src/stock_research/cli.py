@@ -5825,6 +5825,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"internal_skill_review|json|{result.agent_report_json_path}")
         print(f"internal_skill_review|markdown|{result.markdown_path}")
         print(f"internal_skill_review|review_agent_result|{result.review_agent_result_path}")
+        print(f"internal_skill_review|debate_review|{result.debate_review_json_path}")
         return 0 if result.status == "passed" else 2
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
