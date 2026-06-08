@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from stock_research.tech_chain_taxonomy import (
     CHAIN_EVIDENCE_COLUMNS,
+    _explicit_true,
     build_chain_evidence_review,
     build_chain_mapping,
     load_taxonomy,
@@ -386,6 +388,41 @@ def test_chain_evidence_quality_downgrades_invalidation_context() -> None:
     assert set(review["evidence_quality"]) == {"weak"}
 
 
+def test_chain_evidence_quality_downgrades_multi_term_invalidation_context() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "invalidation",
+                "matched_keyword": "800G",
+                "evidence_snippet": "800G 1.6T",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert set(review["matched_evidence_term"]) == {"800G", "1.6T"}
+    assert set(review["evidence_quality"]) == {"weak"}
+
+
 def test_chain_evidence_review_rejects_malformed_as_of_safe_values() -> None:
     taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
     mapping = pd.DataFrame(
@@ -423,6 +460,36 @@ def test_chain_evidence_review_rejects_malformed_as_of_safe_values() -> None:
         taxonomy=taxonomy,
     )
     assert not valid_review.empty
+
+    pandas_bool_review = build_chain_evidence_review(
+        mapping=mapping,
+        evidence=pd.DataFrame(
+            [
+                {
+                    **base_evidence,
+                    "as_of_safe": pd.Series([True], dtype="boolean").iloc[0],
+                }
+            ]
+        ),
+        taxonomy=taxonomy,
+    )
+    assert not pandas_bool_review.empty
+
+    numpy_bool_review = build_chain_evidence_review(
+        mapping=mapping,
+        evidence=pd.DataFrame([{**base_evidence, "as_of_safe": np.bool_(True)}]),
+        taxonomy=taxonomy,
+    )
+    assert not numpy_bool_review.empty
+
+
+def test_explicit_true_accepts_boolean_scalars_but_rejects_numbers_and_strings() -> None:
+    assert _explicit_true(True)
+    assert _explicit_true(pd.Series([True], dtype="boolean").iloc[0])
+    assert _explicit_true(np.bool_(True))
+
+    for malformed_value in [False, np.bool_(False), 1, "true", "yes", "1"]:
+        assert not _explicit_true(malformed_value)
 
 
 def test_build_chain_evidence_review_requires_explicit_as_of_safe_flag() -> None:

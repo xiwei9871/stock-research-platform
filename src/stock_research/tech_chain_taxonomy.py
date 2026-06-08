@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
@@ -301,7 +302,7 @@ def _normalized_string_column(column: pd.Series) -> pd.Series:
 
 
 def _explicit_true(value: Any) -> bool:
-    return value is True
+    return isinstance(value, (bool, np.bool_)) and bool(value)
 
 
 def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> str:
@@ -321,8 +322,6 @@ def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> st
     ]
     has_negative_term = any(_compactible_text(term) in text for term in negative_terms)
     if "invalidation" in evidence_type or has_negative_term:
-        if len(matched_terms) >= 2 and not has_negative_term:
-            return "strong"
         return "weak"
     if len(matched_terms) >= 2:
         return "strong"
