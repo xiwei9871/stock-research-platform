@@ -26,6 +26,13 @@ This is offline-only:
   --output-dir outputs/internal_skill_review/YYYY-MM-DD
 ```
 
+## Outputs
+
+- `agent_report.json`: existing agent contract payload passed to `ReviewAgent`.
+- `review_agent_result.json`: safety and evidence validation result.
+- `internal_debate_review.json`: deterministic bull, bear, risk-manager, and portfolio-review synthesis.
+- `internal_skill_review.md`: human-readable review packet with observations, review issues, debate sections, missing evidence, and operator questions.
+
 ## Five-Day Evaluation
 
 Run the command for five recent report dates with existing artifacts.
@@ -36,6 +43,10 @@ Record:
 - ReviewAgent rejection count
 - missing evidence count
 - artifacts cited per observation
+- bull case evidence count
+- bear case evidence count
+- risk-manager notes count
+- portfolio-review summary usefulness: `useful`, `mixed`, `not_useful`
 - minutes spent reviewing the original bundle
 - minutes spent reviewing the internal skill artifact
 - operator usefulness label: `useful`, `mixed`, `not_useful`
