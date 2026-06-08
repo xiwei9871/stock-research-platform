@@ -321,7 +321,10 @@ def _chain_evidence_quality(row: dict[str, Any], matched_terms: list[str]) -> st
         "降价",
     ]
     has_negative_term = any(_compactible_text(term) in text for term in negative_terms)
-    if "invalidation" in evidence_type or has_negative_term:
+    weak_evidence_type = any(
+        marker in evidence_type for marker in ("invalidation", "risk")
+    )
+    if weak_evidence_type or has_negative_term:
         return "weak"
     if len(matched_terms) >= 2:
         return "strong"

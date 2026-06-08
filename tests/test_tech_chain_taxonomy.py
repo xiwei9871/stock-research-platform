@@ -423,6 +423,41 @@ def test_chain_evidence_quality_downgrades_multi_term_invalidation_context() -> 
     assert set(review["evidence_quality"]) == {"weak"}
 
 
+def test_chain_evidence_quality_downgrades_multi_term_risk_context() -> None:
+    taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
+    mapping = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "stock_name": "中际旭创",
+                "trade_date": "2025-06-20",
+                "primary_chain_id": "ai_optical_interconnect",
+                "product_exposure_quality": "strong",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:300308",
+                "candidate_trade_date": "2025-06-20",
+                "evidence_date": "2025-05-22",
+                "evidence_type": "risk",
+                "matched_keyword": "800G",
+                "evidence_snippet": "800G 1.6T",
+                "as_of_safe": True,
+            },
+        ]
+    )
+
+    review = build_chain_evidence_review(
+        mapping=mapping, evidence=evidence, taxonomy=taxonomy
+    )
+
+    assert set(review["matched_evidence_term"]) == {"800G", "1.6T"}
+    assert set(review["evidence_quality"]) == {"weak"}
+
+
 def test_chain_evidence_review_rejects_malformed_as_of_safe_values() -> None:
     taxonomy = load_taxonomy(Path("data/manual/tech_chain_taxonomy_v1.json"))
     mapping = pd.DataFrame(
