@@ -507,3 +507,68 @@ def test_market_regime_confirmation_v1_backtest_cli_help_lists_required_inputs()
     assert "--output-dir" in result.stdout
     assert "--top-n" in result.stdout
     assert "--adjust-type" in result.stdout
+
+
+def test_market_regime_confirmation_v1_backtest_cli_dispatch_prints_summary_path(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    import stock_research.cli as cli
+    import stock_research.market_regime_confirmation_v1 as module
+
+    output_dir = tmp_path / "out"
+
+    def fake_run_market_regime_confirmation_v1_backtest(**kwargs):
+        assert kwargs["start_date"] == "2026-01-02"
+        assert kwargs["end_date"] == "2026-01-03"
+        assert kwargs["emotion_path"] == "emotion.csv"
+        assert kwargs["funnel_detail_path"] == "funnel.csv"
+        assert kwargs["policy_event_path"] == "policy.csv"
+        assert kwargs["output_dir"] == str(output_dir)
+        assert kwargs["top_n"] == 2
+        assert kwargs["adjust_type"] == "qfq"
+        return {
+            "regime": pd.DataFrame([{"trade_date": "2026-01-02"}, {"trade_date": "2026-01-03"}]),
+            "equity": pd.DataFrame([{"trade_date": "2026-01-02"}]),
+            "paths": {
+                "regime_path": output_dir / "regime.csv",
+                "summary_path": output_dir / "summary.csv",
+            },
+        }
+
+    monkeypatch.setattr(
+        module,
+        "run_market_regime_confirmation_v1_backtest",
+        fake_run_market_regime_confirmation_v1_backtest,
+    )
+
+    result = cli.main_for_args(
+        [
+            "market-regime-confirmation-v1-backtest",
+            "--start-date",
+            "2026-01-02",
+            "--end-date",
+            "2026-01-03",
+            "--emotion-path",
+            "emotion.csv",
+            "--funnel-detail-path",
+            "funnel.csv",
+            "--policy-event-path",
+            "policy.csv",
+            "--output-dir",
+            str(output_dir),
+            "--top-n",
+            "2",
+            "--adjust-type",
+            "qfq",
+        ]
+    )
+
+    assert result == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"market_regime_confirmation|summary|{output_dir / 'summary.csv'}",
+        "market_regime_confirmation|regime_rows|2",
+        "market_regime_confirmation|equity_rows|1",
+        f"market_regime_confirmation|output_dir|{output_dir}",
+    ]

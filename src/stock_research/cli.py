@@ -3847,7 +3847,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
             top_n=args.top_n,
             adjust_type=args.adjust_type,
         )
-        print(f"market_regime_confirmation|summary|{result['paths'].get('regime_path')}")
+        print(f"market_regime_confirmation|summary|{result['paths'].get('summary_path')}")
         print(f"market_regime_confirmation|regime_rows|{len(result['regime'])}")
         print(f"market_regime_confirmation|equity_rows|{len(result['equity'])}")
         print(f"market_regime_confirmation|output_dir|{args.output_dir}")
