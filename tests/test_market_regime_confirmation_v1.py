@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 
 import pandas as pd
 
@@ -6,6 +8,7 @@ from stock_research.market_regime_confirmation_v1 import (
     REGIME_COLUMNS,
     build_segment_diagnostics,
     build_market_regime_confirmation_from_frames,
+    run_market_regime_confirmation_v1_backtest,
     run_regime_confirmation_backtest_from_frames,
     write_market_regime_confirmation_outputs,
 )
@@ -415,3 +418,92 @@ def test_regime_backtest_applies_confirmed_exposure_to_mid_trend_returns() -> No
     assert "fixed_mid_trend" in summary.index
     assert "regime_confirmed_exposure" in summary.index
     assert summary.loc["regime_confirmed_exposure", "max_drawdown"] > summary.loc["fixed_mid_trend", "max_drawdown"]
+
+
+def test_file_level_runner_reads_csvs_loads_prices_and_runs_backtest(tmp_path: Path, monkeypatch) -> None:
+    emotion_path = tmp_path / "emotion.csv"
+    funnel_path = tmp_path / "funnel.csv"
+    policy_path = tmp_path / "policy.csv"
+    output_dir = tmp_path / "out"
+    _emotion_rows([50]).to_csv(emotion_path, index=False)
+    _funnel_for_dates(["2026-01-02"]).to_csv(funnel_path, index=False)
+    pd.DataFrame([{"event_date": "2026-01-02", "policy_strength": 0.8}]).to_csv(policy_path, index=False)
+    prices = pd.DataFrame([{"trade_date": "2026-01-02", "asset_id": "G1", "close": 100.0}])
+    captured: dict[str, object] = {}
+
+    def fake_load_prices(start_date: str, end_date: str, *, adjust_type: str, service: str) -> pd.DataFrame:
+        captured["load_prices"] = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "adjust_type": adjust_type,
+            "service": service,
+        }
+        return prices
+
+    def fake_run_backtest_from_frames(**kwargs):
+        captured["backtest"] = kwargs
+        return {
+            "regime": pd.DataFrame([{"trade_date": "2026-01-02"}]),
+            "equity": pd.DataFrame([{"trade_date": "2026-01-02"}]),
+            "paths": {"regime_path": output_dir / "market_regime_confirmation_daily.csv"},
+        }
+
+    import stock_research.market_regime_confirmation_v1 as module
+
+    monkeypatch.setattr(module, "load_style_switch_prices", fake_load_prices)
+    monkeypatch.setattr(module, "run_regime_confirmation_backtest_from_frames", fake_run_backtest_from_frames)
+
+    result = run_market_regime_confirmation_v1_backtest(
+        start_date="2026-01-02",
+        end_date="2026-01-03",
+        emotion_path=emotion_path,
+        funnel_detail_path=funnel_path,
+        policy_event_path=policy_path,
+        output_dir=output_dir,
+        top_n=3,
+        adjust_type="qfq",
+        service="test_service",
+    )
+
+    assert result["paths"]["regime_path"].name == "market_regime_confirmation_daily.csv"
+    assert captured["load_prices"] == {
+        "start_date": "2026-01-02",
+        "end_date": "2026-01-03",
+        "adjust_type": "qfq",
+        "service": "test_service",
+    }
+    backtest = captured["backtest"]
+    assert backtest["start_date"] == "2026-01-02"
+    assert backtest["end_date"] == "2026-01-03"
+    assert backtest["top_n"] == 3
+    assert backtest["output_dir"] == output_dir
+    assert backtest["prices"].equals(prices)
+    assert backtest["emotion"]["emotion_score"].tolist() == [50]
+    assert backtest["funnel"]["asset_id"].tolist() == ["G1"]
+    assert backtest["policy_events"]["policy_strength"].tolist() == [0.8]
+
+
+def test_market_regime_confirmation_v1_backtest_cli_help_lists_required_inputs() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "stock_research.cli",
+            "market-regime-confirmation-v1-backtest",
+            "--help",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "market-regime-confirmation-v1-backtest" in result.stdout
+    assert "--start-date" in result.stdout
+    assert "--end-date" in result.stdout
+    assert "--emotion-path" in result.stdout
+    assert "--funnel-detail-path" in result.stdout
+    assert "--policy-event-path" in result.stdout
+    assert "--output-dir" in result.stdout
+    assert "--top-n" in result.stdout
+    assert "--adjust-type" in result.stdout

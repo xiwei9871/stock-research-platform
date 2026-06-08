@@ -6,6 +6,9 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.config import SETTINGS
+from stock_research.market_style_switch_v1 import load_style_switch_prices
+
 
 REGIME_COLUMNS = [
     "trade_date",
@@ -468,6 +471,34 @@ def run_regime_confirmation_backtest_from_frames(
         summary.to_csv(paths["summary_path"], index=False)
 
     return {"regime": regime, "equity": equity, "summary": summary, "paths": paths}
+
+
+def run_market_regime_confirmation_v1_backtest(
+    *,
+    start_date: str,
+    end_date: str,
+    emotion_path: str | Path,
+    funnel_detail_path: str | Path,
+    output_dir: str | Path,
+    policy_event_path: str | Path | None = None,
+    top_n: int = 5,
+    adjust_type: str = "hfq",
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    emotion = pd.read_csv(emotion_path, low_memory=False)
+    funnel = pd.read_csv(funnel_detail_path, low_memory=False)
+    policy_events = pd.read_csv(policy_event_path, low_memory=False) if policy_event_path else None
+    prices = load_style_switch_prices(start_date, end_date, adjust_type=adjust_type, service=service)
+    return run_regime_confirmation_backtest_from_frames(
+        emotion=emotion,
+        funnel=funnel,
+        prices=prices,
+        start_date=start_date,
+        end_date=end_date,
+        policy_events=policy_events,
+        top_n=top_n,
+        output_dir=output_dir,
+    )
 
 
 def _normalize_regime_for_diagnostics(regime: pd.DataFrame) -> pd.DataFrame:
