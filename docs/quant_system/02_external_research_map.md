@@ -14,6 +14,12 @@
 | QuantsPlaybook | https://github.com/hugo2046/QuantsPlaybook | 待确认 | 券商金工研报复现策略；RSRS；QRS；筹码分布；凸显性因子；多因子模型；组合优化 | 不直接相信外部收益结论；不把研报复现代码原样迁入主项目 | Factor Research；Candidate Factor Library；Strategy Materials | P1 | 否 | 否 | 只能作为“候选素材库”，所有策略必须用自有数据库重验 |
 | AKShare | https://github.com/akfamily/akshare | 待确认 | 辅助数据采集；行情、财务、指数、行业、资金流、公告新闻等补充源 | 不作为唯一正式数据源；不允许只调用接口不落库 | Data Layer；Supplemental Data Sources | P0 | 否 | 否 | 风险在于接口漂移和数据质量波动，必须配套原始 payload 落库和质量检查 |
 | TA-Lib / pandas-ta | https://github.com/TA-Lib/ta-lib-python | BSD-2-Clause | MACD、RSI、BOLL、ATR、ADX、KDJ、均线、波动率、蜡烛图形态等基础指标 | 不要自己重复手写整套基础技术指标库；不要把库 API 直接泄漏到业务层 | Factor Layer；Technical Feature Layer | P0 | 否 | 是 | 需要加一层统一指标适配接口，避免未来库替换成本高 |
+| LLMQuant Skills | https://github.com/LLMQuant/skills | MIT | 金融 Agent workflow 组织方式；router `SKILL.md` + workflow 清单；证据约束；风险、组合、股票、宏观复核模板 | 不直接安装为生产 skills；不创建第二套 Agent 输出结构；不允许绕过 `AgentObservation` 和 `ReviewAgent` | AI Agent Research Layer；Report Layer；Watchlist Review；Risk Review | P1 | 否 | 否 | 只能作为内部 skill 草案参考，所有输出必须映射到本仓库 agent contract 和 evidence trail |
+| LLMQuant Data / data-mcp | https://github.com/LLMQuant/data-mcp | 待确认 | FRED、SEC、13F、论文/百科搜索等外部上下文源；MCP 工具描述方式 | 不替换 A 股行情、财务、因子、评分、交易日历或 PIT 主库；不直接把外部返回写入研究结论 | External Context；Report Artifacts；Research Evidence | P2 | 否 | 是 | 未来只允许通过 adapter 写 artifact，再转成本地 evidence；第一阶段不接生产数据源 |
+| LLMQuant QuantMind | https://github.com/LLMQuant/quant-mind | 待确认 | 非结构化 papers/news/reports 的 evidence unit、语义检索、RAG/知识抽取思路 | 不新建独立知识图谱产品；不复制内容库；不绕过本地来源、可用时间和缺失标注 | Research Signal Layer；Stock Report Research；News Enrichment | P1 | 否 | 部分需要 | 借鉴 schema 和流程，不迁移外部运行时；所有材料必须保留 source_path 和 available_at |
+| LLMQuant Awesome Trading Agents | https://github.com/LLMQuant/awesome-trading-agents | MIT | Finance Agent / MCP / Skills 外部雷达分类；项目发现清单 | 不按榜单盲目引入；不把列表项目升级为依赖前跳过本地边界评估 | External Research Map；No-Reinvent-Wheel Governance | P1 | 否 | 否 | 仅作为季度观察源，每个候选项目必须绑定本仓库 anchor 后再评估 |
+| LLMQuant Magents | https://github.com/LLMQuant/Magents | 待确认 | 多策略仿真、risk/slippage/order lifecycle 等回测约束概念 | 不替换当前 TopN / portfolio / retention 回测；不引入订单、账户、券商或自动执行状态 | Backtest Quality Checklist；Simulation Notes | P2 | 否 | 否 | 只记录为未来真实交易约束参考，不进入当前评分和 watchlist 主链 |
+| LLMQuant Finance Context / Docs | https://github.com/LLMQuant/docs | 待确认 | 华尔街投研流程、晨会、thesis tracking、catalyst calendar、复核清单等报告方法 | 不复制内容进入商业知识库；不让海外市场流程覆盖 A 股交易约束 | Report Layer；Runbooks；Research Review Templates | P2 | 否 | 否 | 只借鉴报告结构和复核语言，必须本地化到 A 股数据和人工复核边界 |
 
 ## 逐项落地判断
 
@@ -30,6 +36,12 @@
 
 - daily-stock-analysis：
   优先借鉴 watchlist / 日报 / 推送结构。
+- LLMQuant Skills：
+  优先借鉴 risk / portfolio / equities / macro 的 workflow 结构，但要改写为本仓库内部 skill 草案，并映射到 `AgentObservation`、`ReviewAgent`、report bundle、run_card 和 watchlist evidence。
+- LLMQuant QuantMind：
+  借鉴 evidence unit 和非结构化材料抽取思路，用于后续研报、新闻、论文、公告的统一证据层；第一阶段不做独立知识图谱产品。
+- LLMQuant Awesome Trading Agents：
+  作为外部项目雷达来源，不作为依赖来源。
 - AlphaSift：
   用于全市场扫描与 auditable opportunity discovery。
 - AlphaEvo：
@@ -42,6 +54,15 @@
   用于补回测真实约束，不用于立刻重写引擎。
 - QuantsPlaybook：
   用于候选因子素材库。
+
+### P2：只做观察或补充设计
+
+- LLMQuant Data / data-mcp：
+  只作为 FRED、SEC、13F、论文/百科搜索等外部上下文候选源；不得替代 A 股主数据，未来必须通过 artifact 和 evidence unit 适配层进入报告。
+- LLMQuant Magents：
+  只记录其 risk/slippage/order lifecycle 概念，用于未来回测质量检查表，不替换现有回测。
+- LLMQuant Finance Context / Docs：
+  只借鉴投研工作流和报告复核清单，不复制内容库。
 
 ### 本仓库对应关系
 
@@ -65,6 +86,14 @@
 - 报告与推送：
   `src/stock_research/reports/`
   `src/stock_research/feishu_notify.py`
+- Agent 合约与复核：
+  `src/stock_research/agents/contracts.py`
+  `src/stock_research/agents/review.py`
+- 研报、新闻和叙事证据：
+  `src/stock_research/stock_report_research.py`
+  `src/stock_research/news_features.py`
+  `src/stock_research/topn_news_enrichment.py`
+  `src/stock_research/research_narrative.py`
 
 ## 结论
 
@@ -83,3 +112,4 @@
 - 以现有 `stock_research` 仓库为主线
 - 外部项目只提供方法、接口、模块边界和验证思路
 - 不做大段复制，不做整仓替换
+- LLMQuant 只作为方法参考和外部雷达，不作为并行平台；每个 LLMQuant-inspired artifact 都必须说明它增强了哪个本仓库模块

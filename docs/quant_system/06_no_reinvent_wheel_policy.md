@@ -228,17 +228,41 @@
 - TradingAgents-CN
   - 中文多 Agent 投研角色
   - 技术面 / 基本面 / 新闻 / 风险 / 组合经理 等报告结构
+- LLMQuant Skills
+  - 金融 Agent workflow 组织方式
+  - 证据约束和输出 guardrails
+  - 风险复核、组合复核、股票研究、宏观复核等 skill 模板思路
 
 ### 8.2 严格限制
 
 - 不复制 `app/`、`frontend/` 等专有或受限代码。
 - 只借鉴角色设计和报告结构。
+- 不直接把 LLMQuant skills 安装为生产 skill。
+- 不创建第二套 Agent schema。
+- 所有 Agent 输出必须映射到：
+  `src/stock_research/agents/contracts.py`
+  和 `src/stock_research/agents/review.py`。
 
 ### 8.3 不重复造轮子原则
 
 - AI Agent 是研究助理，不是交易负责人。
 - 不自己发明一套没有证据约束的“智能投顾话术系统”。
 - Agent 层必须建立在数据、因子、回测和 run_card 之上。
+
+### 8.4 LLMQuant 融合边界
+
+LLMQuant 只能作为方法参考，不作为并行平台。任何 LLMQuant-inspired artifact 都必须说明它增强了本仓库哪个已有 anchor：
+
+- `AgentObservation` / `ReviewAgent`
+- `run_card` / evidence trail
+- `reports/` 和 report delivery
+- `watchlist/` 与 shadow review
+- `news_features`、`topn_news_enrichment`、`stock_report_research`、`research_narrative`
+- `market_regime_confirmation_v1`、`market_style_switch_v1`、`risk_alert_report`
+
+第一阶段只允许做内部 skill 草案、文档治理和 Agent 合约测试。不得引入 LLMQuant 生产依赖，不得联网试跑 MCP，不得改动 A 股主数据、评分、回测、watchlist 结果或 dashboard 状态。
+
+LLMQuant Data / data-mcp 未来如果接入，只能作为外部上下文源，例如 FRED、SEC、13F、论文或百科搜索。外部返回必须先写成 artifact，再转换为本地 evidence unit，并标注为 `external_context`；不得替代 A 股行情、财务、因子、评分或交易日历。
 
 ## 9. 必须自己做的内容
 
@@ -254,6 +278,7 @@
 - A 股中低频策略约束
 - 你自己的交易偏好和风控规则
 - OpenClaw / 飞书内部工作流适配
+- LLMQuant-inspired skill 与 evidence unit 的本地 schema 适配
 
 ## 10. 禁止事项
 
@@ -264,6 +289,8 @@
 - 不直接自动下单。
 - 不做高频 Tick。
 - 不在代码里硬编码数据库密码、token、券商账号。
+- 不把 LLMQuant 或其他外部 Agent 项目改造成第二套平台主线。
+- 不让外部 MCP 返回绕过本仓库 artifact、PIT 和 evidence review。
 
 ## 结论
 
