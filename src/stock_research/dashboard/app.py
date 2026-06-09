@@ -21,6 +21,16 @@ from stock_research.dashboard.shadow_review_decisions import load_shadow_review_
 from stock_research.dashboard.shadow_follow_up_queue import load_shadow_follow_up_queue_summary
 from stock_research.dashboard.shadow_follow_up_resolution import load_shadow_follow_up_resolution_summary
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
+from stock_research.dashboard.strategy_validation import (
+    build_strategy_validation_replay,
+    list_strategy_validation_artifacts,
+    list_strategy_validation_metrics,
+    list_strategy_validation_positions,
+    list_strategy_validation_runs,
+    list_strategy_validation_signals,
+    list_strategy_validation_trades,
+    load_strategy_validation_run,
+)
 from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
@@ -309,6 +319,79 @@ def create_app() -> FastAPI:
     @app.get("/api/reports")
     def reports(trade_date: str):
         return {"trade_date": trade_date, "items": load_report_links(trade_date)}
+
+    @app.get("/api/strategy-validation/runs")
+    def strategy_validation_runs(strategy_id: str | None = None):
+        return {"items": list_strategy_validation_runs(strategy_id)}
+
+    @app.get("/api/strategy-validation/runs/{run_id}")
+    def strategy_validation_run(run_id: str):
+        run = load_strategy_validation_run(run_id)
+        if run is None:
+            raise HTTPException(
+                status_code=404,
+                detail="strategy validation run not found",
+            )
+        return {"item": run}
+
+    @app.get("/api/strategy-validation/runs/{run_id}/signals")
+    def strategy_validation_signals(
+        run_id: str,
+        asset_id: str | None = None,
+        signal_bucket: str | None = None,
+        risk_bucket: str | None = None,
+    ):
+        return {
+            "run_id": run_id,
+            "items": list_strategy_validation_signals(
+                run_id,
+                asset_id=asset_id,
+                signal_bucket=signal_bucket,
+                risk_bucket=risk_bucket,
+            ),
+        }
+
+    @app.get("/api/strategy-validation/runs/{run_id}/trades")
+    def strategy_validation_trades(run_id: str, asset_id: str | None = None):
+        return {
+            "run_id": run_id,
+            "items": list_strategy_validation_trades(run_id, asset_id=asset_id),
+        }
+
+    @app.get("/api/strategy-validation/runs/{run_id}/positions")
+    def strategy_validation_positions(run_id: str, asset_id: str | None = None):
+        return {
+            "run_id": run_id,
+            "items": list_strategy_validation_positions(run_id, asset_id=asset_id),
+        }
+
+    @app.get("/api/strategy-validation/runs/{run_id}/metrics")
+    def strategy_validation_metrics(run_id: str, metric_level: str | None = None):
+        return {
+            "run_id": run_id,
+            "items": list_strategy_validation_metrics(
+                run_id,
+                metric_level=metric_level,
+            ),
+        }
+
+    @app.get("/api/strategy-validation/runs/{run_id}/artifacts")
+    def strategy_validation_artifacts(run_id: str):
+        return {
+            "run_id": run_id,
+            "items": list_strategy_validation_artifacts(run_id),
+        }
+
+    @app.get("/api/strategy-validation/runs/{run_id}/assets/{asset_id}/replay")
+    def strategy_validation_asset_replay(
+        run_id: str,
+        asset_id: str,
+        start_date: str,
+        end_date: str,
+        adjust_type: str = "qfq",
+    ):
+        bars = load_daily_bars(asset_id, start_date, end_date, adjust_type)
+        return build_strategy_validation_replay(run_id, asset_id, bars)
 
     return app
 

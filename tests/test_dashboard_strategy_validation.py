@@ -1,3 +1,6 @@
+from fastapi.testclient import TestClient
+
+from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard.strategy_validation import (
     StrategyEvidenceArtifact,
     StrategyMetricRow,
@@ -304,3 +307,142 @@ def test_strategy_validation_store_from_frames_maps_representative_artifacts():
     assert store["trades"][0]["entry_reason"] == "phase16_follow_candidate"
     assert store["metrics"][0]["group_key"] == "support"
     assert store["artifacts"][0]["title"] == "LHB Artifact Report"
+
+
+def test_strategy_validation_runs_route(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_runs",
+        lambda strategy_id=None: [
+            {
+                "run_id": "lhb_shortline:fixture:phase16",
+                "strategy_id": strategy_id or "lhb_shortline",
+                "strategy_name": "LHB Shortline",
+            }
+        ],
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/strategy-validation/runs?strategy_id=lhb_shortline")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["run_id"] == "lhb_shortline:fixture:phase16"
+    assert response.json()["items"][0]["strategy_id"] == "lhb_shortline"
+
+
+def test_strategy_validation_run_route_returns_404(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_strategy_validation_run",
+        lambda run_id: None,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/strategy-validation/runs/missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "strategy validation run not found"
+
+
+def test_strategy_validation_run_child_routes(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_signals",
+        lambda run_id, asset_id=None, signal_bucket=None, risk_bucket=None: [
+            {
+                "run_id": run_id,
+                "asset_id": asset_id,
+                "signal_bucket": signal_bucket,
+                "risk_bucket": risk_bucket,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_trades",
+        lambda run_id, asset_id=None: [{"run_id": run_id, "asset_id": asset_id}],
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_positions",
+        lambda run_id, asset_id=None: [{"run_id": run_id, "asset_id": asset_id}],
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_metrics",
+        lambda run_id, metric_level=None: [
+            {"run_id": run_id, "metric_level": metric_level}
+        ],
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_strategy_validation_artifacts",
+        lambda run_id: [{"run_id": run_id, "title": "Artifact"}],
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    signals = client.get(
+        "/api/strategy-validation/runs/run-1/signals"
+        "?asset_id=000001.SZ&signal_bucket=support&risk_bucket=normal"
+    )
+    trades = client.get("/api/strategy-validation/runs/run-1/trades?asset_id=000001.SZ")
+    positions = client.get(
+        "/api/strategy-validation/runs/run-1/positions?asset_id=000001.SZ"
+    )
+    metrics = client.get(
+        "/api/strategy-validation/runs/run-1/metrics?metric_level=signal_bucket"
+    )
+    artifacts = client.get("/api/strategy-validation/runs/run-1/artifacts")
+
+    assert signals.json()["items"][0] == {
+        "run_id": "run-1",
+        "asset_id": "000001.SZ",
+        "signal_bucket": "support",
+        "risk_bucket": "normal",
+    }
+    assert trades.json()["items"][0]["asset_id"] == "000001.SZ"
+    assert positions.json()["items"][0]["asset_id"] == "000001.SZ"
+    assert metrics.json()["items"][0]["metric_level"] == "signal_bucket"
+    assert artifacts.json()["items"][0]["title"] == "Artifact"
+
+
+def test_strategy_validation_replay_route_combines_bars(monkeypatch):
+    captured = {}
+
+    def fake_load_daily_bars(asset_id, start_date, end_date, adjust_type):
+        captured["bars_args"] = [asset_id, start_date, end_date, adjust_type]
+        return [
+            {
+                "time": "2026-06-03",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+                "volume": 100,
+                "amount": 1000,
+            }
+        ]
+
+    def fake_replay(run_id, asset_id, bars):
+        captured["replay_args"] = [run_id, asset_id, bars]
+        return {
+            "run": {"run_id": run_id},
+            "asset_id": asset_id,
+            "bars": bars,
+            "signals": [],
+            "trades": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "load_daily_bars", fake_load_daily_bars)
+    monkeypatch.setattr(dashboard_app, "build_strategy_validation_replay", fake_replay)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/strategy-validation/runs/run-1/assets/000001.SZ/replay"
+        "?start_date=2026-06-01&end_date=2026-06-08&adjust_type=hfq"
+    )
+
+    assert response.status_code == 200
+    assert captured["bars_args"] == ["000001.SZ", "2026-06-01", "2026-06-08", "hfq"]
+    assert captured["replay_args"][0:2] == ["run-1", "000001.SZ"]
+    assert response.json()["bars"][0]["time"] == "2026-06-03"
