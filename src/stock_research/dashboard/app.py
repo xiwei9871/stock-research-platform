@@ -7,6 +7,7 @@ from stock_research.dashboard.experiment_replay import load_experiment_replay_su
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
+from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.scores import (
     load_asset_detail,
@@ -49,6 +50,10 @@ def create_app() -> FastAPI:
         top_n: int = 30,
     ):
         return build_dashboard_overview(trade_date, score_version, watchlist_id, top_n)
+
+    @app.get("/api/platform/summary")
+    def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
+        return load_platform_summary(score_version=score_version, top_n=top_n)
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):
