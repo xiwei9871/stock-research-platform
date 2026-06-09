@@ -73,14 +73,14 @@ def test_strategy_backtest_params_defaults():
 def test_manual_v1_builder_preserves_manual_score_order():
     manual = pd.DataFrame(
         [
-            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 2, "score_total": 80.0},
-            {"trade_date": "2026-01-01", "asset_id": "B", "rank": 1, "score_total": 90.0},
+            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 1, "score_total": 80.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "rank": 2, "score_total": 90.0},
         ]
     )
 
     scores = build_manual_v1_scores_from_frame(manual)
 
-    assert list(scores["asset_id"]) == ["B", "A"]
+    assert list(scores["asset_id"]) == ["A", "B"]
     assert list(scores["rank"]) == [1, 2]
 
 

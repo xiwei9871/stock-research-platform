@@ -85,10 +85,42 @@ def _bool(series: pd.Series) -> pd.Series:
 
 
 def build_manual_v1_scores_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    return normalize_strategy_scores(
+    normalized = normalize_strategy_scores(
         frame[["trade_date", "asset_id", "score_total"]].copy(),
         strategy_id="manual_v1_topn_rotation",
     )
+    if "rank" not in frame.columns:
+        return normalized
+
+    manual_ranks = frame[["trade_date", "asset_id", "rank", "score_total"]].copy()
+    manual_ranks["score_total"] = pd.to_numeric(manual_ranks["score_total"], errors="coerce")
+    manual_ranks["rank"] = pd.to_numeric(manual_ranks["rank"], errors="coerce")
+    manual_ranks = manual_ranks.dropna(subset=["trade_date", "asset_id", "rank", "score_total"])
+    manual_ranks["trade_date"] = pd.to_datetime(manual_ranks["trade_date"]).dt.strftime("%Y-%m-%d")
+    manual_ranks["asset_id"] = manual_ranks["asset_id"].astype(str)
+
+    normalized = normalized.drop(columns=["rank"]).merge(
+        manual_ranks[["trade_date", "asset_id", "rank"]],
+        on=["trade_date", "asset_id"],
+        how="inner",
+    )
+    normalized = normalized.sort_values(
+        ["trade_date", "rank", "asset_id"],
+        ascending=[True, True, True],
+    ).reset_index(drop=True)
+    return normalized[
+        [
+            "trade_date",
+            "asset_id",
+            "rank",
+            "score_total",
+            "score_components",
+            "strategy_id",
+            "eligibility",
+            "eligibility_reason",
+            "exposure_scale",
+        ]
+    ]
 
 
 def build_lhb_shortline_scores_from_frames(lhb: pd.DataFrame, technical: pd.DataFrame | None = None) -> pd.DataFrame:
