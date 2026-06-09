@@ -560,6 +560,122 @@ body {
   gap: 4px;
 }
 
+.backtest-lab-workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.backtest-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+  border-bottom: 1px solid #d9dee7;
+  padding-bottom: 12px;
+}
+
+.backtest-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.backtest-controls span,
+.backtest-catalog-row small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.backtest-controls select,
+.backtest-controls input,
+.backtest-controls button {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.backtest-controls button {
+  cursor: pointer;
+}
+
+.backtest-controls button:disabled {
+  cursor: not-allowed;
+  color: #98a2b3;
+}
+
+.backtest-catalog {
+  display: grid;
+  gap: 8px;
+}
+
+.backtest-catalog-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+  gap: 12px;
+  border-top: 1px solid #eef1f5;
+  padding-top: 10px;
+  min-width: 0;
+}
+
+.backtest-catalog-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.backtest-catalog-row p {
+  margin: 4px 0;
+}
+
+.backtest-catalog-row strong,
+.backtest-catalog-row small {
+  overflow-wrap: anywhere;
+}
+
+.backtest-catalog-meta {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.backtest-catalog-meta span {
+  justify-self: start;
+  border: 1px solid #cfd6e2;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #202936;
+  background: #f7f9fc;
+  font-size: 12px;
+}
+
+.backtest-results {
+  min-width: 0;
+}
+
+.backtest-result-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.backtest-result-section h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.backtest-result-table {
+  min-width: 620px;
+}
+
+.backtest-summary-table {
+  max-width: 520px;
+}
+
 .data-chart-panel {
   min-width: 0;
 }
@@ -579,6 +695,10 @@ body {
   }
 
   .factor-lab-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .backtest-catalog-row {
     grid-template-columns: 1fr;
   }
 

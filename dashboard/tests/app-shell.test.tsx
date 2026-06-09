@@ -49,7 +49,9 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
-  fetchStrategyValidationReplay: vi.fn()
+  fetchStrategyValidationReplay: vi.fn(),
+  fetchBacktestStrategies: vi.fn(),
+  runBacktest: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -562,6 +564,29 @@ describe('dashboard app shell', () => {
         primary_action: 'Run backtest'
       }
     ]);
+    apiMocks.fetchBacktestStrategies.mockResolvedValue([
+      {
+        strategy_id: 'manual_v1_topn_rotation',
+        strategy_name: 'Manual V1 TopN Rotation',
+        status: 'runnable',
+        description: 'TopN rotation',
+        factor_groups: ['momentum'],
+        signal_inputs: ['factor.stock_score_daily'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
+    apiMocks.runBacktest.mockResolvedValue({
+      strategy_id: 'manual_v1_topn_rotation',
+      strategy_name: 'Manual V1 TopN Rotation',
+      read_only: true,
+      config: {},
+      summary: {},
+      equity_curve: [],
+      positions: [],
+      trades: []
+    });
     apiMocks.fetchOverview.mockResolvedValue(makeOverview());
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
