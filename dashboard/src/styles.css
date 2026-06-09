@@ -634,6 +634,14 @@ body {
   color: #98a2b3;
 }
 
+.backtest-run-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #8a4b00;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .backtest-catalog {
   display: grid;
   gap: 8px;

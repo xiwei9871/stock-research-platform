@@ -144,6 +144,11 @@ describe('BacktestLabWorkspace', () => {
     fireEvent.change(strategySelect, { target: { value: 'lhb_shortline' } });
 
     expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
+    expect(
+      screen.getByText(
+        'LHB Shortline is replay-only. Use Strategy Validation to inspect evidence; Backtest Lab currently runs Manual V1 TopN Rotation only.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('disables Run Backtest for backend-invalid inputs', async () => {

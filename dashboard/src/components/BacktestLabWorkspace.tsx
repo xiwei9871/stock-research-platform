@@ -37,6 +37,10 @@ function getTableColumns(rows: ResultRow[]) {
   return columns;
 }
 
+function formatStrategyStatus(status: string) {
+  return status.replace(/_/g, '-');
+}
+
 function ResultTable({ emptyText, rows }: { emptyText: string; rows: ResultRow[] }) {
   const columns = getTableColumns(rows);
 
@@ -156,6 +160,12 @@ export function BacktestLabWorkspace() {
     maxPositions > 0 &&
     (rebalanceFrequency === 'daily' || rebalanceFrequency === 'weekly');
   const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning;
+  const runDisabledReason =
+    selectedStrategy && selectedStrategy.status !== 'runnable'
+      ? `${selectedStrategy.strategy_name} is ${formatStrategyStatus(
+          selectedStrategy.status
+        )}. Use Strategy Validation to inspect evidence; Backtest Lab currently runs Manual V1 TopN Rotation only.`
+      : null;
 
   const invalidateRun = () => {
     runRequestIdRef.current += 1;
@@ -315,6 +325,7 @@ export function BacktestLabWorkspace() {
         <button type="button" disabled={!canRun} onClick={submitBacktest}>
           {isRunning ? 'Running...' : 'Run Backtest'}
         </button>
+        {runDisabledReason ? <p className="backtest-run-note">{runDisabledReason}</p> : null}
       </section>
 
       {catalogError ? <p className="error-text">{catalogError}</p> : null}
