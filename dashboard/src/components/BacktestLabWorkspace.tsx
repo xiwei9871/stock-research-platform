@@ -145,7 +145,59 @@ export function BacktestLabWorkspace() {
     () => strategies.find((strategy) => strategy.strategy_id === strategyId) ?? null,
     [strategies, strategyId]
   );
-  const canRun = selectedStrategy?.status === 'runnable' && !isRunning;
+  const hasValidConfig =
+    startDate.trim() !== '' &&
+    endDate.trim() !== '' &&
+    Number.isInteger(topN) &&
+    topN > 0 &&
+    Number.isFinite(transactionCostBps) &&
+    transactionCostBps >= 0 &&
+    Number.isInteger(maxPositions) &&
+    maxPositions > 0 &&
+    (rebalanceFrequency === 'daily' || rebalanceFrequency === 'weekly');
+  const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning;
+
+  const invalidateRun = () => {
+    runRequestIdRef.current += 1;
+    setResult(null);
+    setRunError(null);
+    setIsRunning(false);
+  };
+
+  const updateStrategyId = (nextStrategyId: string) => {
+    setStrategyId(nextStrategyId);
+    invalidateRun();
+  };
+
+  const updateStartDate = (nextStartDate: string) => {
+    setStartDate(nextStartDate);
+    invalidateRun();
+  };
+
+  const updateEndDate = (nextEndDate: string) => {
+    setEndDate(nextEndDate);
+    invalidateRun();
+  };
+
+  const updateTopN = (nextTopN: number) => {
+    setTopN(nextTopN);
+    invalidateRun();
+  };
+
+  const updateRebalanceFrequency = (nextRebalanceFrequency: RebalanceFrequency) => {
+    setRebalanceFrequency(nextRebalanceFrequency);
+    invalidateRun();
+  };
+
+  const updateTransactionCostBps = (nextTransactionCostBps: number) => {
+    setTransactionCostBps(nextTransactionCostBps);
+    invalidateRun();
+  };
+
+  const updateMaxPositions = (nextMaxPositions: number) => {
+    setMaxPositions(nextMaxPositions);
+    invalidateRun();
+  };
 
   const submitBacktest = () => {
     if (!canRun) {
@@ -197,7 +249,7 @@ export function BacktestLabWorkspace() {
       <section className="backtest-controls" aria-label="Backtest controls">
         <label>
           <span>Strategy</span>
-          <select aria-label="strategy" value={strategyId} onChange={(event) => setStrategyId(event.target.value)}>
+          <select aria-label="strategy" value={strategyId} onChange={(event) => updateStrategyId(event.target.value)}>
             {strategies.length === 0 ? <option value={DEFAULT_STRATEGY_ID}>manual_v1_topn_rotation</option> : null}
             {strategies.map((strategy) => (
               <option key={strategy.strategy_id} value={strategy.strategy_id}>
@@ -212,12 +264,12 @@ export function BacktestLabWorkspace() {
             aria-label="start date"
             type="date"
             value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
+            onChange={(event) => updateStartDate(event.target.value)}
           />
         </label>
         <label>
           <span>End Date</span>
-          <input aria-label="end date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          <input aria-label="end date" type="date" value={endDate} onChange={(event) => updateEndDate(event.target.value)} />
         </label>
         <label>
           <span>Top N</span>
@@ -226,7 +278,7 @@ export function BacktestLabWorkspace() {
             min="1"
             type="number"
             value={topN}
-            onChange={(event) => setTopN(Number(event.target.value))}
+            onChange={(event) => updateTopN(Number(event.target.value))}
           />
         </label>
         <label>
@@ -234,7 +286,7 @@ export function BacktestLabWorkspace() {
           <select
             aria-label="rebalance frequency"
             value={rebalanceFrequency}
-            onChange={(event) => setRebalanceFrequency(event.target.value === 'daily' ? 'daily' : 'weekly')}
+            onChange={(event) => updateRebalanceFrequency(event.target.value === 'daily' ? 'daily' : 'weekly')}
           >
             <option value="weekly">weekly</option>
             <option value="daily">daily</option>
@@ -247,7 +299,7 @@ export function BacktestLabWorkspace() {
             min="0"
             type="number"
             value={transactionCostBps}
-            onChange={(event) => setTransactionCostBps(Number(event.target.value))}
+            onChange={(event) => updateTransactionCostBps(Number(event.target.value))}
           />
         </label>
         <label>
@@ -257,7 +309,7 @@ export function BacktestLabWorkspace() {
             min="1"
             type="number"
             value={maxPositions}
-            onChange={(event) => setMaxPositions(Number(event.target.value))}
+            onChange={(event) => updateMaxPositions(Number(event.target.value))}
           />
         </label>
         <button type="button" disabled={!canRun} onClick={submitBacktest}>

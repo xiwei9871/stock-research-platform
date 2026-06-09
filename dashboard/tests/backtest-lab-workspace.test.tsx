@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../src/components/AppShell';
 import { BacktestLabWorkspace } from '../src/components/BacktestLabWorkspace';
@@ -74,6 +74,16 @@ function makeRunResult(): BacktestRunResult {
   };
 }
 
+function deferredRunResult() {
+  let resolve!: (result: BacktestRunResult) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<BacktestRunResult>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('BacktestLabWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchBacktestStrategies.mockResolvedValue(makeStrategies());
@@ -134,6 +144,39 @@ describe('BacktestLabWorkspace', () => {
     fireEvent.change(strategySelect, { target: { value: 'lhb_shortline' } });
 
     expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
+  });
+
+  it('disables Run Backtest for backend-invalid inputs', async () => {
+    render(<BacktestLabWorkspace />);
+    await screen.findAllByText('Manual V1 TopN Rotation');
+
+    fireEvent.change(screen.getByLabelText('top n'), { target: { value: '0' } });
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('top n'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('max positions'), { target: { value: '-1' } });
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('max positions'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('transaction cost bps'), { target: { value: '-1' } });
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
+  });
+
+  it('ignores pending run responses after inputs change', async () => {
+    const pendingRun = deferredRunResult();
+    apiMocks.runBacktest.mockReturnValueOnce(pendingRun.promise);
+
+    render(<BacktestLabWorkspace />);
+    await screen.findAllByText('Manual V1 TopN Rotation');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
+    fireEvent.change(screen.getByLabelText('top n'), { target: { value: '10' } });
+
+    await act(async () => {
+      pendingRun.resolve(makeRunResult());
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Read-only backtest' })).not.toBeInTheDocument();
   });
 
   it('opens Backtest Lab from AppShell side navigation', async () => {
