@@ -461,6 +461,62 @@ def test_build_watchlist_diagnostics_snapshot_selects_latest_recent_lhb_event_fo
     )
 
 
+def test_build_watchlist_diagnostics_snapshot_passes_lhb_shortline_watchlist(monkeypatch, tmp_path):
+    shortline_path = tmp_path / "daily_lhb_shortline_watchlist_20260520.csv"
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-05-20",
+                "ts_code": "000017.SZ",
+                "stock_name": "深中华A",
+                "watch_group": "avoid_watch",
+                "watch_reason": "withdrawal_lhb",
+                "exit_signal": "hard_exit",
+                "exit_reason": "withdrawal_lhb,failure_structure",
+            }
+        ]
+    ).to_csv(shortline_path, index=False)
+
+    def fake_fetch_all(conn, sql, params):
+        assert "FROM core.asset_master" in sql
+        return [{"asset_id": "CN:SZ:000017", "ts_code": "000017.SZ", "name": "深中华A"}]
+
+    def fake_build_watchlist_diagnostics(**kwargs):
+        shortline = kwargs["lhb_shortline_frame"]
+        assert len(shortline) == 1
+        row = shortline.iloc[0]
+        assert row["asset_id"] == "CN:SZ:000017"
+        assert row["watch_group"] == "avoid_watch"
+        assert row["exit_signal"] == "hard_exit"
+        return {
+            "full": pd.DataFrame([{"asset_id": row["asset_id"], "watch_group": "risk_watch"}]),
+            "must_watch": pd.DataFrame([{"asset_id": row["asset_id"], "watch_group": "risk_watch"}]),
+        }
+
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_top_scores",
+        lambda **kwargs: [{"trade_date": "2026-05-20", "asset_id": "CN:SZ:000017", "rank": 1, "score_total": 91.0}],
+    )
+    monkeypatch.setattr("stock_research.watchlist.workflow.connect", lambda service: _Context(object()))
+    monkeypatch.setattr("stock_research.watchlist.workflow.fetch_all", fake_fetch_all)
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_watchlist_factor_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_dragon_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_lhb_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_event_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr("stock_research.watchlist.workflow._load_market_frame", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.build_watchlist_diagnostics",
+        fake_build_watchlist_diagnostics,
+    )
+
+    build_watchlist_diagnostics_snapshot(
+        trade_date="2026-05-20",
+        score_version="manual_v1",
+        top_n=5,
+        lhb_shortline_path=shortline_path,
+    )
+
+
 def test_load_feature_snapshot_queries_watchlist_owned_snapshot_sql(monkeypatch):
     calls = []
 

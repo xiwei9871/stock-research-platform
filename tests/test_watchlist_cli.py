@@ -54,6 +54,7 @@ def test_cli_accepts_watchlist_commands():
     assert diagnostics_args.top_n == 50
     assert diagnostics_args.risk_watch_n == 10
     assert diagnostics_args.opportunity_watch_n == 10
+    assert diagnostics_args.lhb_shortline_path is None
     assert diagnostics_args.output_dir == "outputs/research"
     assert review_args.command == "review-watchlist-diagnostics"
     assert report_args.command == "watchlist-report"
@@ -210,6 +211,8 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
             "7",
             "--opportunity-watch-n",
             "3",
+            "--lhb-shortline-path",
+            "/tmp/daily_lhb_shortline_watchlist_20260520.csv",
             "--output-dir",
             "/tmp/research",
         ]
@@ -225,6 +228,7 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
         "top_n": 17,
         "risk_watch_n": 7,
         "opportunity_watch_n": 3,
+        "lhb_shortline_path": "/tmp/daily_lhb_shortline_watchlist_20260520.csv",
     }
     assert calls["report"] == {
         "full_rows": full_frame,
@@ -404,6 +408,7 @@ def test_build_watchlist_diagnostics_range_skips_matching_cached_outputs(tmp_pat
             "top_n": 50,
             "risk_watch_n": 10,
             "opportunity_watch_n": 10,
+            "lhb_shortline_path": None,
         }
     ]
     assert "watchlist_diagnostics_range|skipped|2026-05-19" in lines
