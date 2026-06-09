@@ -101,7 +101,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         </div>
       </section>
 
-      <section className="workspace-band">
+      <section className="workspace-panel">
         <div className="section-heading">
           <h2>Built-in Strategies</h2>
           {isLoading ? <span className="muted">Loading...</span> : null}
@@ -123,7 +123,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         </div>
       </section>
 
-      <section className="workspace-band">
+      <section className="workspace-panel">
         <div className="section-heading">
           <h2>TopN Preview</h2>
           <span className="muted">candidate pool, not buy signal</span>

@@ -105,6 +105,11 @@ body {
   gap: 10px;
 }
 
+.workspace-panel {
+  display: grid;
+  gap: 10px;
+}
+
 .section-heading {
   display: flex;
   flex-wrap: wrap;
