@@ -233,6 +233,215 @@ def sync_tushare_stock_auction_bars(
     return counts
 
 
+def load_lhb_auction_backfill_universe(
+    *,
+    candidate_paths: list[str | Path],
+    start_date: str,
+    end_date: str,
+) -> list[str]:
+    start = pd.Timestamp(start_date)
+    end = pd.Timestamp(end_date)
+    values: set[str] = set()
+    for path_value in candidate_paths:
+        path = Path(path_value)
+        frame = pd.read_csv(path, low_memory=False)
+        if frame.empty or "ts_code" not in frame.columns:
+            continue
+        data = frame.copy()
+        if "trade_date" in data.columns:
+            dates = pd.to_datetime(data["trade_date"], errors="coerce")
+            data = data[dates.between(start, end)]
+        codes = data["ts_code"].dropna().astype(str).str.strip().str.upper()
+        values.update(code for code in codes if code and code != "NAN")
+    return sorted(values)
+
+
+def build_lhb_auction_backfill_plan(
+    *,
+    trade_dates: list[str],
+    ts_codes: list[str],
+    auction_phases: list[str],
+    existing_coverage: pd.DataFrame,
+) -> pd.DataFrame:
+    selected_codes = sorted({str(code).strip().upper() for code in ts_codes if str(code).strip()})
+    coverage = existing_coverage.copy()
+    if coverage.empty:
+        coverage = pd.DataFrame(columns=["trade_date", "ts_code", "auction_phase"])
+    coverage["trade_date"] = pd.to_datetime(coverage["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    coverage["ts_code"] = coverage["ts_code"].astype(str).str.strip().str.upper()
+    coverage["auction_phase"] = coverage["auction_phase"].astype(str).str.strip()
+
+    rows: list[dict[str, object]] = []
+    for trade_date in sorted(set(trade_dates)):
+        normalized_date = pd.Timestamp(trade_date).strftime("%Y-%m-%d")
+        for phase in auction_phases:
+            existing_rows = coverage[
+                coverage["trade_date"].eq(normalized_date)
+                & coverage["auction_phase"].eq(phase)
+                & coverage["ts_code"].isin(selected_codes)
+            ]["ts_code"].nunique()
+            missing_rows = max(len(selected_codes) - int(existing_rows), 0)
+            if missing_rows <= 0:
+                continue
+            rows.append(
+                {
+                    "trade_date": normalized_date,
+                    "auction_phase": phase,
+                    "selected_ts_codes": len(selected_codes),
+                    "existing_rows": int(existing_rows),
+                    "missing_rows": missing_rows,
+                    "should_query": True,
+                }
+            )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "trade_date",
+            "auction_phase",
+            "selected_ts_codes",
+            "existing_rows",
+            "missing_rows",
+            "should_query",
+        ],
+    )
+
+
+def load_existing_lhb_auction_coverage(
+    *,
+    start_date: str,
+    end_date: str,
+    ts_codes: list[str],
+    auction_phases: list[str],
+    research_service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    SELECT trade_date::text AS trade_date, ts_code, auction_phase
+    FROM market.stock_auction_bar
+    WHERE trade_date BETWEEN %s AND %s
+      AND ts_code = ANY(%s)
+      AND auction_phase = ANY(%s)
+      AND source = 'tushare'
+    ORDER BY trade_date, auction_phase, ts_code
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, ts_codes, auction_phases])
+    return pd.DataFrame(rows, columns=["trade_date", "ts_code", "auction_phase"])
+
+
+def write_lhb_auction_backfill_plan_report(
+    *,
+    plan: pd.DataFrame,
+    output_dir: str | Path,
+    start_date: str,
+    end_date: str,
+    ts_codes: list[str],
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    suffix = f"{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+    selected_codes = sorted({str(code).strip().upper() for code in ts_codes if str(code).strip()})
+    plan_path = output / f"lhb_auction_backfill_plan_{suffix}.csv"
+    universe_path = output / f"lhb_auction_backfill_universe_{suffix}.csv"
+    report_path = output / f"lhb_auction_backfill_plan_{suffix}.md"
+
+    plan.to_csv(plan_path, index=False)
+    pd.DataFrame({"ts_code": selected_codes}).to_csv(universe_path, index=False)
+
+    missing_series = pd.to_numeric(plan.get("missing_rows", pd.Series(dtype=float)), errors="coerce").fillna(0)
+    planned_calls = int(len(plan))
+    planned_missing_rows = int(missing_series.sum())
+    phase_counts = plan["auction_phase"].value_counts().to_dict() if "auction_phase" in plan.columns else {}
+    lines = [
+        "# LHB Auction Backfill Plan",
+        "",
+        f"- Window: `{start_date}` to `{end_date}`",
+        f"- Universe size: `{len(selected_codes)}`",
+        f"- Planned calls: `{planned_calls}`",
+        f"- Planned missing rows: `{planned_missing_rows}`",
+        f"- Phase counts: `{phase_counts}`",
+        "",
+        "This is a dry-run plan. It does not call Tushare.",
+        "",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "plan": plan,
+        "summary": {
+            "planned_calls": planned_calls,
+            "planned_missing_rows": planned_missing_rows,
+            "phase_counts": phase_counts,
+            "ts_code_count": len(selected_codes),
+        },
+        "paths": {
+            "plan": str(plan_path),
+            "universe": str(universe_path),
+            "markdown_report": str(report_path),
+        },
+    }
+
+
+def run_lhb_auction_backfill_plan(
+    *,
+    plan: pd.DataFrame,
+    ts_codes: list[str],
+    max_calls: int,
+    token: str | None = None,
+    sleep_seconds: float = 1.3,
+) -> dict[str, Any]:
+    selected_ts_codes = {str(code).strip().upper() for code in ts_codes if str(code).strip()}
+    client = tushare_client(token=token)
+    executed_rows: list[dict[str, Any]] = []
+    ordered_plan = plan.sort_values(["trade_date", "auction_phase"]).head(max_calls)
+    for _, task in ordered_plan.iterrows():
+        phase = str(task["auction_phase"])
+        trade_date = dt.date.fromisoformat(str(task["trade_date"]))
+        endpoint = auction_endpoint_for_phase(phase)
+        raw_rows = query_tushare_auction_rows_for_trade_date(
+            client,
+            trade_date=trade_date,
+            auction_phase=phase,
+        )
+        selected_rows = [
+            row for row in raw_rows if str(row.get("ts_code")).strip().upper() in selected_ts_codes
+        ]
+        params = {
+            "trade_date": trade_date.strftime("%Y%m%d"),
+            "auction_phase": phase,
+            "ts_codes": sorted(selected_ts_codes),
+            "executor": "lhb_auction_backfill_plan_v1",
+        }
+        upserted = upsert_stock_auction_bars(
+            selected_rows,
+            auction_phase=phase,
+            source_endpoint=endpoint,
+            params=params,
+        )
+        executed_rows.append(
+            {
+                "trade_date": trade_date.strftime("%Y-%m-%d"),
+                "auction_phase": phase,
+                "queried_rows": len(raw_rows),
+                "selected_rows": len(selected_rows),
+                "upserted_rows": upserted,
+            }
+        )
+        if sleep_seconds:
+            time.sleep(sleep_seconds)
+
+    executed_calls = len(executed_rows)
+    return {
+        "executed": pd.DataFrame(
+            executed_rows,
+            columns=["trade_date", "auction_phase", "queried_rows", "selected_rows", "upserted_rows"],
+        ),
+        "summary": {
+            "executed_calls": executed_calls,
+            "remaining_calls": max(len(plan) - executed_calls, 0),
+            "upserted_rows": int(sum(row["upserted_rows"] for row in executed_rows)),
+        },
+    }
+
+
 def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     num = pd.to_numeric(numerator, errors="coerce")
     den = pd.to_numeric(denominator, errors="coerce")

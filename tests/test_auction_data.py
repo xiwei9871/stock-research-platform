@@ -1,5 +1,6 @@
 import datetime as dt
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -220,6 +221,184 @@ def test_sync_tushare_stock_auction_bars_requires_selected_ts_codes():
             auction_phases=["open_call"],
             ts_codes=None,
         )
+
+
+def test_load_lhb_auction_backfill_universe_reads_unique_ts_codes(tmp_path):
+    path = tmp_path / "lhb_candidates.csv"
+    pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "ts_code": "600023.SH"},
+            {"trade_date": "2025-01-03", "ts_code": "600023.SH"},
+            {"trade_date": "2025-01-03", "ts_code": "000001.SZ"},
+            {"trade_date": "2024-12-31", "ts_code": "300001.SZ"},
+            {"trade_date": "2025-01-04", "ts_code": ""},
+        ]
+    ).to_csv(path, index=False)
+
+    universe = auction_data.load_lhb_auction_backfill_universe(
+        candidate_paths=[path],
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+    )
+
+    assert universe == ["000001.SZ", "600023.SH"]
+
+
+def test_build_lhb_auction_backfill_plan_skips_complete_date_phase():
+    trade_dates = ["2025-01-02", "2025-01-03"]
+    ts_codes = ["000001.SZ", "600023.SH"]
+    existing = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "ts_code": "000001.SZ", "auction_phase": "open_call"},
+            {"trade_date": "2025-01-02", "ts_code": "600023.SH", "auction_phase": "open_call"},
+            {"trade_date": "2025-01-02", "ts_code": "000001.SZ", "auction_phase": "close_call"},
+        ]
+    )
+
+    plan = auction_data.build_lhb_auction_backfill_plan(
+        trade_dates=trade_dates,
+        ts_codes=ts_codes,
+        auction_phases=["open_call", "close_call"],
+        existing_coverage=existing,
+    )
+
+    assert plan.to_dict("records") == [
+        {
+            "trade_date": "2025-01-02",
+            "auction_phase": "close_call",
+            "selected_ts_codes": 2,
+            "existing_rows": 1,
+            "missing_rows": 1,
+            "should_query": True,
+        },
+        {
+            "trade_date": "2025-01-03",
+            "auction_phase": "open_call",
+            "selected_ts_codes": 2,
+            "existing_rows": 0,
+            "missing_rows": 2,
+            "should_query": True,
+        },
+        {
+            "trade_date": "2025-01-03",
+            "auction_phase": "close_call",
+            "selected_ts_codes": 2,
+            "existing_rows": 0,
+            "missing_rows": 2,
+            "should_query": True,
+        },
+    ]
+
+
+def test_load_existing_lhb_auction_coverage_queries_selected_scope(monkeypatch):
+    recorded = {}
+
+    def fake_fetch_all(conn, sql, params):
+        recorded["sql"] = sql
+        recorded["params"] = params
+        return [
+            {"trade_date": "2025-01-02", "ts_code": "600023.SH", "auction_phase": "open_call"},
+        ]
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "fetch_all", fake_fetch_all)
+
+    coverage = auction_data.load_existing_lhb_auction_coverage(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        ts_codes=["600023.SH"],
+        auction_phases=["open_call"],
+    )
+
+    assert "FROM market.stock_auction_bar" in recorded["sql"]
+    assert recorded["params"] == ["2025-01-01", "2025-01-31", ["600023.SH"], ["open_call"]]
+    assert coverage.to_dict("records") == [
+        {"trade_date": "2025-01-02", "ts_code": "600023.SH", "auction_phase": "open_call"}
+    ]
+
+
+def test_write_lhb_auction_backfill_plan_report_writes_csv_markdown_and_universe(tmp_path):
+    plan = pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "auction_phase": "open_call",
+                "selected_ts_codes": 2,
+                "existing_rows": 0,
+                "missing_rows": 2,
+                "should_query": True,
+            },
+            {
+                "trade_date": "2025-01-02",
+                "auction_phase": "close_call",
+                "selected_ts_codes": 2,
+                "existing_rows": 1,
+                "missing_rows": 1,
+                "should_query": True,
+            },
+        ]
+    )
+
+    result = auction_data.write_lhb_auction_backfill_plan_report(
+        plan=plan,
+        output_dir=tmp_path,
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        ts_codes=["600023.SH", "000001.SZ"],
+    )
+
+    assert result["summary"]["planned_calls"] == 2
+    assert result["summary"]["planned_missing_rows"] == 3
+    assert result["summary"]["ts_code_count"] == 2
+    assert pd.read_csv(result["paths"]["universe"])["ts_code"].tolist() == ["000001.SZ", "600023.SH"]
+    assert "This is a dry-run plan" in Path(result["paths"]["markdown_report"]).read_text(encoding="utf-8")
+
+
+def test_run_lhb_auction_backfill_plan_respects_max_calls(monkeypatch):
+    calls = []
+    plan = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "auction_phase": "open_call"},
+            {"trade_date": "2025-01-02", "auction_phase": "close_call"},
+            {"trade_date": "2025-01-03", "auction_phase": "open_call"},
+        ]
+    )
+
+    def fake_query(client, trade_date, auction_phase):
+        calls.append((trade_date.strftime("%Y-%m-%d"), auction_phase))
+        return [
+            {
+                **raw_auction_row(),
+                "ts_code": "600023.SH",
+                "trade_date": trade_date.strftime("%Y%m%d"),
+            },
+            {
+                **raw_auction_row(),
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date.strftime("%Y%m%d"),
+            },
+        ]
+
+    monkeypatch.setattr(auction_data, "tushare_client", lambda token=None: "client")
+    monkeypatch.setattr(auction_data, "query_tushare_auction_rows_for_trade_date", fake_query)
+    monkeypatch.setattr(
+        auction_data,
+        "upsert_stock_auction_bars",
+        lambda rows, auction_phase, source_endpoint, params: len(rows),
+    )
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    executed = auction_data.run_lhb_auction_backfill_plan(
+        plan=plan,
+        ts_codes=["600023.SH"],
+        max_calls=2,
+        sleep_seconds=0.1,
+    )
+
+    assert calls == [("2025-01-02", "close_call"), ("2025-01-02", "open_call")]
+    assert executed["summary"]["executed_calls"] == 2
+    assert executed["summary"]["remaining_calls"] == 1
+    assert executed["summary"]["upserted_rows"] == 2
 
 
 def test_build_lhb_auction_observation_detail_joins_signal_close_and_entry_open():

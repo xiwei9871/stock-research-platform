@@ -10,12 +10,17 @@ import pandas as pd
 
 from stock_research.assets import sync_asset_master
 from stock_research.auction_data import (
+    build_lhb_auction_backfill_plan,
     build_lhb_auction_enhanced_rule_scan_report_v1,
     build_lhb_auction_observation_report_v1,
     build_lhb_auction_topn_rerank_comparison_report_v1,
     build_lhb_phase18d_close_auction_lifecycle_report_v1,
     build_lhb_phase18e_joint_exit_diagnostics_report_v1,
+    load_existing_lhb_auction_coverage,
+    load_lhb_auction_backfill_universe,
+    run_lhb_auction_backfill_plan,
     sync_tushare_stock_auction_bars,
+    write_lhb_auction_backfill_plan_report,
 )
 from stock_research.config import SETTINGS
 from stock_research.backtest import run_top20_backtest
@@ -630,6 +635,10 @@ def parse_auction_phases(value: str) -> list[str]:
 
 def parse_ts_codes(value: str) -> list[str]:
     return parse_str_list(value, "--ts-codes")
+
+
+def parse_candidate_paths(value: str) -> list[str]:
+    return parse_str_list(value, "--candidate-paths")
 
 
 def parse_trade_dates(value: str) -> list[str]:
@@ -1469,6 +1478,26 @@ def build_parser() -> argparse.ArgumentParser:
     tushare_auction.add_argument("--ts-codes", type=parse_ts_codes, required=True)
     tushare_auction.add_argument("--trade-dates", type=parse_trade_dates)
     tushare_auction.add_argument("--sleep-seconds", type=float, default=1.3)
+
+    lhb_auction_backfill_plan = subparsers.add_parser("lhb-auction-backfill-plan-v1")
+    lhb_auction_backfill_plan.add_argument("--candidate-paths", type=parse_candidate_paths, required=True)
+    lhb_auction_backfill_plan.add_argument("--start-date", required=True)
+    lhb_auction_backfill_plan.add_argument("--end-date", required=True)
+    lhb_auction_backfill_plan.add_argument(
+        "--auction-phases",
+        type=parse_auction_phases,
+        default=["open_call", "close_call"],
+    )
+    lhb_auction_backfill_plan.add_argument("--trade-dates", type=parse_trade_dates, required=True)
+    lhb_auction_backfill_plan.add_argument("--output-dir", required=True)
+
+    lhb_auction_backfill_run = subparsers.add_parser("lhb-auction-backfill-run-v1")
+    lhb_auction_backfill_run.add_argument("--plan-path", required=True)
+    lhb_auction_backfill_run.add_argument("--ts-codes-path", required=True)
+    lhb_auction_backfill_run.add_argument("--max-calls", type=int, default=500)
+    lhb_auction_backfill_run.add_argument("--sleep-seconds", type=float, default=1.3)
+    lhb_auction_backfill_run.add_argument("--token")
+    lhb_auction_backfill_run.add_argument("--output-dir", required=True)
 
     lhb_auction_observation = subparsers.add_parser("lhb-auction-observation-v1")
     lhb_auction_observation.add_argument("--trades-path", required=True)
@@ -7509,6 +7538,57 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         for phase, count in counts.items():
             print(f"stock_auction_bars_synced|{phase}|{count}")
+    elif args.command == "lhb-auction-backfill-plan-v1":
+        ts_codes = load_lhb_auction_backfill_universe(
+            candidate_paths=args.candidate_paths,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        coverage = load_existing_lhb_auction_coverage(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+            auction_phases=args.auction_phases,
+        )
+        plan = build_lhb_auction_backfill_plan(
+            trade_dates=args.trade_dates,
+            ts_codes=ts_codes,
+            auction_phases=args.auction_phases,
+            existing_coverage=coverage,
+        )
+        result = write_lhb_auction_backfill_plan_report(
+            plan=plan,
+            output_dir=args.output_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=ts_codes,
+        )
+        print(f"lhb_auction_backfill_plan_v1|plan|{result['paths']['plan']}")
+        print(f"lhb_auction_backfill_plan_v1|universe|{result['paths']['universe']}")
+        print(f"lhb_auction_backfill_plan_v1|report|{result['paths']['markdown_report']}")
+        print(f"lhb_auction_backfill_plan_v1|planned_calls|{result['summary']['planned_calls']}")
+        print(f"lhb_auction_backfill_plan_v1|ts_code_count|{result['summary']['ts_code_count']}")
+        return 0
+    elif args.command == "lhb-auction-backfill-run-v1":
+        plan = pd.read_csv(args.plan_path, low_memory=False)
+        universe = pd.read_csv(args.ts_codes_path, low_memory=False)
+        ts_codes = sorted(universe["ts_code"].dropna().astype(str).str.strip().str.upper().unique())
+        result = run_lhb_auction_backfill_plan(
+            plan=plan,
+            ts_codes=ts_codes,
+            max_calls=args.max_calls,
+            token=args.token,
+            sleep_seconds=args.sleep_seconds,
+        )
+        output = Path(args.output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        executed_path = output / "lhb_auction_backfill_executed_latest.csv"
+        result["executed"].to_csv(executed_path, index=False)
+        print(f"lhb_auction_backfill_run_v1|executed|{executed_path}")
+        print(f"lhb_auction_backfill_run_v1|executed_calls|{result['summary']['executed_calls']}")
+        print(f"lhb_auction_backfill_run_v1|remaining_calls|{result['summary']['remaining_calls']}")
+        print(f"lhb_auction_backfill_run_v1|upserted_rows|{result['summary']['upserted_rows']}")
+        return 0
     elif args.command == "lhb-auction-observation-v1":
         result = build_lhb_auction_observation_report_v1(
             trades_path=args.trades_path,

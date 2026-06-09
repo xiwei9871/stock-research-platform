@@ -702,6 +702,47 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert phase18f_args.adjust_type == "raw"
     assert phase18f_args.output_dir == "outputs/research/lhb_phase18f"
 
+    auction_backfill_plan_args = build_parser().parse_args(
+        [
+            "lhb-auction-backfill-plan-v1",
+            "--candidate-paths",
+            "selected.csv,phase18.csv",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-09",
+            "--auction-phases",
+            "open_call,close_call",
+            "--trade-dates",
+            "2025-01-02,2025-01-03",
+            "--output-dir",
+            "outputs/research/lhb_auction_backfill_20250101",
+        ]
+    )
+    assert auction_backfill_plan_args.command == "lhb-auction-backfill-plan-v1"
+    assert auction_backfill_plan_args.candidate_paths == ["selected.csv", "phase18.csv"]
+    assert auction_backfill_plan_args.auction_phases == ["open_call", "close_call"]
+    assert auction_backfill_plan_args.trade_dates == ["2025-01-02", "2025-01-03"]
+
+    auction_backfill_run_args = build_parser().parse_args(
+        [
+            "lhb-auction-backfill-run-v1",
+            "--plan-path",
+            "plan.csv",
+            "--ts-codes-path",
+            "universe.csv",
+            "--max-calls",
+            "500",
+            "--sleep-seconds",
+            "1.3",
+            "--output-dir",
+            "outputs/research/lhb_auction_backfill_20250101",
+        ]
+    )
+    assert auction_backfill_run_args.command == "lhb-auction-backfill-run-v1"
+    assert auction_backfill_run_args.max_calls == 500
+    assert auction_backfill_run_args.sleep_seconds == 1.3
+
     plan_args = build_parser().parse_args(
         [
             "plan-baostock-minute-backfill",
