@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from stock_research import cli
 from stock_research import auction_data
 from stock_research.auction_data import (
     auction_market_row,
@@ -399,6 +400,58 @@ def test_run_lhb_auction_backfill_plan_respects_max_calls(monkeypatch):
     assert executed["summary"]["executed_calls"] == 2
     assert executed["summary"]["remaining_calls"] == 1
     assert executed["summary"]["upserted_rows"] == 2
+
+
+def test_lhb_auction_backfill_run_cli_reads_plan_and_universe(monkeypatch, tmp_path, capsys):
+    plan_path = tmp_path / "plan.csv"
+    universe_path = tmp_path / "universe.csv"
+    pd.DataFrame([{"trade_date": "2025-01-02", "auction_phase": "open_call"}]).to_csv(
+        plan_path,
+        index=False,
+    )
+    pd.DataFrame([{"ts_code": "600023.SH"}]).to_csv(universe_path, index=False)
+    recorded = {}
+
+    def fake_run_lhb_auction_backfill_plan(**kwargs):
+        recorded.update(kwargs)
+        return {
+            "executed": pd.DataFrame(
+                [
+                    {
+                        "trade_date": "2025-01-02",
+                        "auction_phase": "open_call",
+                        "queried_rows": 2,
+                        "selected_rows": 1,
+                        "upserted_rows": 1,
+                    }
+                ]
+            ),
+            "summary": {"executed_calls": 1, "remaining_calls": 0, "upserted_rows": 1},
+        }
+
+    monkeypatch.setattr(cli, "run_lhb_auction_backfill_plan", fake_run_lhb_auction_backfill_plan)
+
+    exit_code = cli.main_for_args(
+        [
+            "lhb-auction-backfill-run-v1",
+            "--plan-path",
+            str(plan_path),
+            "--ts-codes-path",
+            str(universe_path),
+            "--max-calls",
+            "1",
+            "--sleep-seconds",
+            "0",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert recorded["ts_codes"] == ["600023.SH"]
+    assert recorded["max_calls"] == 1
+    assert recorded["sleep_seconds"] == 0
+    assert "lhb_auction_backfill_run_v1|executed_calls|1" in capsys.readouterr().out
 
 
 def test_build_lhb_auction_observation_detail_joins_signal_close_and_entry_open():

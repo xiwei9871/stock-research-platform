@@ -4886,7 +4886,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"{row['primary_horizon']}|{row['eval_run_id']}"
             )
     elif args.command == "factor-validation-review":
-        import pandas as pd
 
         factors = pd.read_csv(args.factors, low_memory=False)
         returns = pd.read_csv(args.returns, low_memory=False)
@@ -5192,7 +5191,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"p2_artifact_rollup|json|{paths['json_path']}")
         print(f"p2_artifact_rollup|markdown|{paths['markdown_path']}")
     elif args.command == "p2-simulation-review":
-        import pandas as pd
 
         states = load_simulation_states(args.simulation_state)
         advice = pd.read_csv(args.trade_advice) if args.trade_advice else None
@@ -5249,7 +5247,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 f"{dataset_name}|rows|{rows}|{result['files'][dataset_name]}"
             )
     elif args.command == "p7-decision-journal":
-        import pandas as pd
 
         events = pd.read_csv(args.input_csv)
         try:
@@ -5336,7 +5333,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         for run_id in result["run_ids"]:
             print(f"p9_outcome_analytics_import|run_id|{run_id}")
     elif args.command == "p10-experiment-proposals":
-        import pandas as pd
 
         proposal_events = pd.read_csv(args.input_csv)
         review = build_experiment_proposal_review(
@@ -5357,7 +5353,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         for run_id in result["run_ids"]:
             print(f"p10_experiment_proposals_import|run_id|{run_id}")
     elif args.command == "p11-experiment-replay":
-        import pandas as pd
 
         proposal_payload = json.loads(Path(args.proposals_json).read_text(encoding="utf-8"))
         proposals = pd.DataFrame(proposal_payload.get("proposals", []))
@@ -5382,7 +5377,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         for run_id in result["run_ids"]:
             print(f"p11_experiment_replay_import|run_id|{run_id}")
     elif args.command == "p12-shadow-watchlist":
-        import pandas as pd
 
         replay_payload = json.loads(Path(args.replay_json).read_text(encoding="utf-8"))
         replay_results = pd.DataFrame(replay_payload.get("results", []))
@@ -5406,7 +5400,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         for run_id in result["run_ids"]:
             print(f"p12_shadow_watchlist_import|run_id|{run_id}")
     elif args.command == "p13-shadow-outcome-review":
-        import pandas as pd
 
         shadow_rows = load_shadow_watchlist_read_model_rows(args.shadow_json)
         shadow_candidates = pd.DataFrame(shadow_rows["candidates"])
@@ -5430,7 +5423,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         for run_id in result["run_ids"]:
             print(f"p13_shadow_outcome_import|run_id|{run_id}")
     elif args.command == "p14-shadow-outcome-analytics":
-        import pandas as pd
 
         rows = load_shadow_outcome_read_model_rows(args.shadow_outcomes_json)
         shadow_outcomes = pd.DataFrame(rows["candidates"])
@@ -6797,7 +6789,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"dragon_case_source_backfill_compare|delta|{result['paths']['delta']}")
         print(f"dragon_case_source_backfill_compare|warnings|{len(result['warnings'])}")
     elif args.command == "dragon-case-source-backfill-workpack":
-        import pandas as pd
 
         tasks = pd.read_csv(args.tasks_path, low_memory=False)
         result = build_source_backfill_workpack(tasks, top_n=args.top_n, output_dir=args.output_dir)
@@ -6806,7 +6797,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"dragon_case_source_backfill_workpack|next_commands|{result['paths']['next_commands']}")
         print(f"dragon_case_source_backfill_workpack|rows|{len(result['workpack'])}")
     elif args.command == "dragon-case-source-backfill-check":
-        import pandas as pd
 
         apply_summary = pd.read_csv(args.apply_summary, low_memory=False)
         delta_summary = pd.read_csv(args.delta_summary, low_memory=False)
@@ -8116,7 +8106,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"simulate_portfolio|states_csv|{review_paths['states_csv_path']}")
         print(f"simulate_portfolio|markdown|{review_paths['markdown_path']}")
     elif args.command == "generate-trade-advice":
-        import pandas as pd
 
         simulation_state = json.loads(Path(args.simulation_state).read_text(encoding="utf-8"))
         candidates = pd.read_csv(args.candidates)
