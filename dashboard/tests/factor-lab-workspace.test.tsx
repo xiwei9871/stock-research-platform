@@ -100,6 +100,7 @@ describe('FactorLabWorkspace', () => {
     await waitFor(() => expect(screen.getByRole('cell', { name: 'ret_20' })).toBeInTheDocument());
     const ret20Row = screen.getByRole('row', { name: /ret_20/ });
     expect(within(ret20Row).getByRole('cell', { name: 'momentum' })).toBeInTheDocument();
+    expect(within(ret20Row).getByRole('cell', { name: 'active' })).toBeInTheDocument();
     expect(within(ret20Row).getByRole('cell', { name: 'higher' })).toBeInTheDocument();
     expect(within(ret20Row).getByText('Manual V1')).toBeInTheDocument();
     expect(within(ret20Row).getByText('Weight 1')).toBeInTheDocument();

@@ -153,6 +153,7 @@ export function FactorLabWorkspace() {
                     <th>Select</th>
                     <th>Factor</th>
                     <th>Group</th>
+                    <th>Status</th>
                     <th>Direction</th>
                     <th>Manual V1</th>
                     <th>Latest</th>
@@ -176,6 +177,7 @@ export function FactorLabWorkspace() {
                           <strong>{row.factor_name}</strong>
                         </td>
                         <td>{row.factor_group}</td>
+                        <td>{formatValue(row.status)}</td>
                         <td>
                           {selection ? (
                             <select
