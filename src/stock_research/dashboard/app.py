@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
+from stock_research.dashboard.asset_profile import build_asset_profile
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
@@ -112,6 +113,24 @@ def create_app() -> FastAPI:
             "asset_id": asset_id,
             "item": load_asset_score_for_dashboard(asset_id, trade_date, score_version),
         }
+
+    @app.get("/api/assets/{asset_id}/profile")
+    def asset_profile_route(
+        asset_id: str,
+        trade_date: str,
+        start_date: str,
+        end_date: str,
+        score_version: str = "manual_v1",
+        adjust_type: str = "qfq",
+    ):
+        return build_asset_profile(
+            asset_id=asset_id,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            score_version=score_version,
+            adjust_type=adjust_type,
+        )
 
     @app.get("/api/assets/{asset_id}/signals")
     def asset_signals(asset_id: str, trade_date: str):
