@@ -475,6 +475,91 @@ body {
   vertical-align: top;
 }
 
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.factor-lab-workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.factor-lab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  border-bottom: 1px solid #d9dee7;
+  padding-bottom: 12px;
+}
+
+.factor-lab-toolbar div {
+  display: grid;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.factor-lab-toolbar span,
+.factor-library-table small,
+.selected-factor-list span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.factor-lab-toolbar button,
+.factor-library-table select,
+.selected-factor-list input {
+  min-height: 34px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.factor-lab-toolbar button {
+  cursor: pointer;
+}
+
+.factor-lab-toolbar button:disabled {
+  cursor: not-allowed;
+  color: #98a2b3;
+}
+
+.factor-lab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 12px;
+  min-width: 0;
+}
+
+.factor-library-panel,
+.selected-factor-panel {
+  min-width: 0;
+}
+
+.factor-library-table {
+  min-width: 760px;
+}
+
+.factor-library-table strong,
+.factor-library-table small {
+  display: block;
+}
+
+.selected-factor-list {
+  display: grid;
+  gap: 10px;
+}
+
+.selected-factor-list label {
+  display: grid;
+  gap: 4px;
+}
+
 .data-chart-panel {
   min-width: 0;
 }
@@ -490,6 +575,10 @@ body {
   }
 
   .workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .factor-lab-grid {
     grid-template-columns: 1fr;
   }
 

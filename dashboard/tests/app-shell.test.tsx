@@ -46,6 +46,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
   fetchShadowWatchlist: vi.fn(),
+  fetchFactorLibrary: vi.fn(),
+  fetchFactorScorePreview: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn()
 }));
@@ -576,6 +578,8 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowReviewDecisions.mockResolvedValue(makeShadowReviewDecisions());
     apiMocks.fetchShadowFollowUpQueue.mockResolvedValue(makeShadowFollowUpQueue());
     apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
+    apiMocks.fetchFactorLibrary.mockResolvedValue([]);
+    apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
   });
 
   afterEach(() => {

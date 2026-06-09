@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DataExplorerWorkspace } from './DataExplorerWorkspace';
+import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { HomeCockpit } from './HomeCockpit';
 import { StrategyValidationWorkspace } from './StrategyValidationWorkspace';
 
@@ -45,7 +46,7 @@ export function AppShell() {
       <section className="platform-workspace">
         {workspaceMode === 'home' ? <HomeCockpit onNavigate={setWorkspaceMode} /> : null}
         {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}
-        {workspaceMode === 'factors' ? <PlaceholderWorkspace title="Factor Lab" /> : null}
+        {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
         {workspaceMode === 'backtests' ? <PlaceholderWorkspace title="Backtest Lab" /> : null}
         {workspaceMode === 'strategy' ? <StrategyValidationWorkspace /> : null}
         {workspaceMode === 'reports' ? <PlaceholderWorkspace title="Reports" /> : null}
