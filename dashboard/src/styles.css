@@ -56,13 +56,12 @@ body {
 }
 
 .home-cockpit,
-.placeholder-workspace {
+.reports-workspace {
   display: grid;
   gap: 14px;
 }
 
-.workspace-header h1,
-.placeholder-workspace h1 {
+.workspace-header h1 {
   margin: 0 0 4px;
   font-size: 24px;
   line-height: 1.2;
@@ -72,6 +71,32 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
+}
+
+.reports-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.reports-toolbar input {
+  height: 34px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  padding: 0 8px;
+  font: inherit;
+}
+
+.reports-toolbar button {
+  min-height: 34px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
 }
 
 .cockpit-grid {

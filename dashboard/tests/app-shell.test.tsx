@@ -633,7 +633,7 @@ describe('dashboard app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Reports workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Reports' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
   });
 
   it('switches from cockpit to strategy validation mode', async () => {

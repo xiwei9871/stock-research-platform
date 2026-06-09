@@ -3,6 +3,7 @@ import { BacktestLabWorkspace } from './BacktestLabWorkspace';
 import { DataExplorerWorkspace } from './DataExplorerWorkspace';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { HomeCockpit } from './HomeCockpit';
+import { ReportsWorkspace } from './ReportsWorkspace';
 import { StrategyValidationWorkspace } from './StrategyValidationWorkspace';
 
 type WorkspaceMode = 'home' | 'data' | 'factors' | 'backtests' | 'strategy' | 'reports';
@@ -15,14 +16,6 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'strategy', label: 'Strategy Validation' },
   { mode: 'reports', label: 'Reports' }
 ];
-
-function PlaceholderWorkspace({ title }: { title: string }) {
-  return (
-    <section className="placeholder-workspace">
-      <h1>{title}</h1>
-    </section>
-  );
-}
 
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
@@ -50,7 +43,7 @@ export function AppShell() {
         {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
         {workspaceMode === 'backtests' ? <BacktestLabWorkspace /> : null}
         {workspaceMode === 'strategy' ? <StrategyValidationWorkspace /> : null}
-        {workspaceMode === 'reports' ? <PlaceholderWorkspace title="Reports" /> : null}
+        {workspaceMode === 'reports' ? <ReportsWorkspace /> : null}
       </section>
     </main>
   );

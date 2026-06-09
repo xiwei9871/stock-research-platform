@@ -64,6 +64,22 @@ describe('AppShell and HomeCockpit', () => {
         primary_action: 'Run backtest'
       }
     ]);
+    vi.mocked(api.fetchOverview).mockResolvedValue({
+      trade_date: '2026-06-08',
+      score_version: 'manual_v1',
+      watchlist_id: 'default',
+      top_scores: [],
+      watchlist_signals: [],
+      reports: [
+        {
+          report_type: 'daily',
+          title: 'Daily Market Review',
+          path: '/reports/daily-market-review.md',
+          format: 'markdown',
+          trade_date: '2026-06-08'
+        }
+      ]
+    });
     vi.mocked(api.fetchAssetProfile).mockResolvedValue({
       asset_id: '000001.SZ',
       canonical_asset_id: 'CN:SZ:000001',
@@ -124,5 +140,44 @@ describe('AppShell and HomeCockpit', () => {
       'page'
     );
     expect(screen.getByRole('button', { name: 'Open Strategy Validation workspace' })).toBeVisible();
+  });
+
+  it('navigates to Reports workspace and loads reports for the default trade date', async () => {
+    render(<AppShell />);
+    await screen.findByRole('heading', { name: 'Research Cockpit' });
+
+    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Reports workspace' }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible());
+    expect(screen.getByText('Local research artifacts and generated reports.')).toBeVisible();
+    expect(api.fetchOverview).toHaveBeenCalledWith({
+      tradeDate: '2026-06-08',
+      scoreVersion: 'manual_v1',
+      watchlistId: 'default',
+      topN: 5
+    });
+    expect(await screen.findByText('Daily Market Review')).toBeVisible();
+  });
+
+  it('loads reports for the selected report date', async () => {
+    render(<AppShell />);
+    await screen.findByRole('heading', { name: 'Research Cockpit' });
+
+    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Reports workspace' }));
+    await screen.findByRole('heading', { name: 'Reports', level: 1 });
+
+    fireEvent.change(screen.getByLabelText('report trade date'), { target: { value: '2026-06-05' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Reports' }));
+
+    await waitFor(() =>
+      expect(api.fetchOverview).toHaveBeenLastCalledWith({
+        tradeDate: '2026-06-05',
+        scoreVersion: 'manual_v1',
+        watchlistId: 'default',
+        topN: 5
+      })
+    );
   });
 });
