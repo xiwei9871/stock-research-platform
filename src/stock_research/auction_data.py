@@ -27,6 +27,10 @@ def asset_id_from_ts_code(ts_code: str) -> str:
     return f"CN:{exchange.upper()}:{symbol}"
 
 
+def symbol_from_ts_code(ts_code: str) -> str:
+    return str(ts_code).split(".", 1)[0]
+
+
 def auction_endpoint_for_phase(auction_phase: str) -> str:
     try:
         return AUCTION_PHASE_ENDPOINTS[auction_phase]
@@ -168,6 +172,288 @@ def upsert_stock_auction_bars(
         execute_many(conn, staging_sql, staging_params)
         execute_many(conn, market_sql, market_rows)
     return len(market_rows)
+
+
+def parse_eastmoney_minute_time(value: Any) -> dt.datetime:
+    timestamp = pd.to_datetime(value, errors="raise")
+    return timestamp.to_pydatetime().replace(tzinfo=None)
+
+
+def _first_present(raw: dict[str, Any], keys: list[str]) -> Any:
+    for key in keys:
+        if key in raw:
+            return raw[key]
+    return None
+
+
+def open_auction_minute_market_row(
+    raw: dict[str, Any],
+    ts_code: str,
+    source: str = "eastmoney_pre_min",
+) -> dict[str, Any]:
+    trade_time = parse_eastmoney_minute_time(_first_present(raw, ["时间", "trade_time"]))
+    return {
+        "asset_id": asset_id_from_ts_code(ts_code),
+        "ts_code": ts_code,
+        "trade_date": trade_time.date(),
+        "trade_time": trade_time,
+        "auction_phase": "open_call",
+        "freq": "1min",
+        "open": parse_float(_first_present(raw, ["开盘", "open"])),
+        "high": parse_float(_first_present(raw, ["最高", "high"])),
+        "low": parse_float(_first_present(raw, ["最低", "low"])),
+        "close": parse_float(_first_present(raw, ["收盘", "close"])),
+        "latest": parse_float(_first_present(raw, ["最新价", "latest", "close", "收盘"])),
+        "volume": parse_float(_first_present(raw, ["成交量", "volume", "vol"])),
+        "amount": parse_float(_first_present(raw, ["成交额", "amount"])),
+        "source": source,
+    }
+
+
+def open_auction_minute_staging_row(
+    raw: dict[str, Any],
+    ts_code: str,
+    source_endpoint: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = {str(key): value for key, value in raw.items()}
+    trade_time = parse_eastmoney_minute_time(_first_present(payload, ["时间", "trade_time"]))
+    market_row = open_auction_minute_market_row(payload, ts_code=ts_code)
+    return {
+        "source_endpoint": source_endpoint,
+        "request_params": params or {},
+        "ts_code": ts_code,
+        "raw_trade_time": str(_first_present(payload, ["时间", "trade_time"])),
+        "trade_date": trade_time.date(),
+        "trade_time": trade_time,
+        "auction_phase": "open_call",
+        "freq": "1min",
+        "open": market_row["open"],
+        "high": market_row["high"],
+        "low": market_row["low"],
+        "close": market_row["close"],
+        "latest": market_row["latest"],
+        "volume": market_row["volume"],
+        "amount": market_row["amount"],
+        "payload": payload,
+        "payload_hash": payload_hash(payload),
+    }
+
+
+def query_eastmoney_open_auction_minute_rows(
+    symbol: str,
+    start_time: str,
+    end_time: str,
+) -> list[dict[str, Any]]:
+    import akshare as ak
+
+    frame = ak.stock_zh_a_hist_pre_min_em(
+        symbol=symbol,
+        start_time=start_time,
+        end_time=end_time,
+    )
+    return list(frame.to_dict("records"))
+
+
+def upsert_stock_open_auction_minute_bars(
+    rows: list[dict[str, Any]],
+    ts_code: str,
+    source_endpoint: str = "stock_zh_a_hist_pre_min_em",
+    research_service: str = SETTINGS.research_service,
+    params: dict[str, Any] | None = None,
+) -> int:
+    if not rows:
+        return 0
+
+    staging_rows = [
+        open_auction_minute_staging_row(
+            row,
+            ts_code=ts_code,
+            source_endpoint=source_endpoint,
+            params=params,
+        )
+        for row in rows
+    ]
+    market_rows = [open_auction_minute_market_row(row, ts_code=ts_code) for row in rows]
+    staging_sql = """
+    INSERT INTO staging.eastmoney_stock_auction_minute_bar (
+        source_endpoint, request_params, ts_code, raw_trade_time, trade_date, trade_time,
+        auction_phase, freq, open, high, low, close, latest, volume, amount, payload, payload_hash
+    )
+    VALUES (
+        %(source_endpoint)s, %(request_params)s::jsonb, %(ts_code)s, %(raw_trade_time)s,
+        %(trade_date)s, %(trade_time)s, %(auction_phase)s, %(freq)s, %(open)s, %(high)s,
+        %(low)s, %(close)s, %(latest)s, %(volume)s, %(amount)s, %(payload)s::jsonb, %(payload_hash)s
+    )
+    ON CONFLICT (source_endpoint, ts_code, trade_time, auction_phase, freq)
+    DO UPDATE SET
+        request_params = EXCLUDED.request_params,
+        raw_trade_time = EXCLUDED.raw_trade_time,
+        trade_date = EXCLUDED.trade_date,
+        open = EXCLUDED.open,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        close = EXCLUDED.close,
+        latest = EXCLUDED.latest,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        payload = EXCLUDED.payload,
+        payload_hash = EXCLUDED.payload_hash,
+        fetched_at = now()
+    """
+    market_sql = """
+    INSERT INTO market.stock_auction_minute_bar (
+        asset_id, ts_code, trade_date, trade_time, auction_phase, freq,
+        open, high, low, close, latest, volume, amount, source
+    )
+    VALUES (
+        %(asset_id)s, %(ts_code)s, %(trade_date)s, %(trade_time)s, %(auction_phase)s, %(freq)s,
+        %(open)s, %(high)s, %(low)s, %(close)s, %(latest)s, %(volume)s, %(amount)s, %(source)s
+    )
+    ON CONFLICT (trade_time, asset_id, auction_phase, freq, source)
+    DO UPDATE SET
+        ts_code = EXCLUDED.ts_code,
+        trade_date = EXCLUDED.trade_date,
+        open = EXCLUDED.open,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        close = EXCLUDED.close,
+        latest = EXCLUDED.latest,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        updated_at = now()
+    """
+    staging_params = [
+        {
+            **row,
+            "request_params": canonical_json(row["request_params"]),
+            "payload": canonical_json(row["payload"]),
+        }
+        for row in staging_rows
+    ]
+    with connect(research_service) as conn:
+        execute_many(conn, staging_sql, staging_params)
+        execute_many(conn, market_sql, market_rows)
+    return len(market_rows)
+
+
+def load_open_auction_minute_universe(universe_path: str | Path) -> list[str]:
+    frame = pd.read_csv(universe_path, low_memory=False)
+    if "ts_code" in frame.columns:
+        series = frame["ts_code"]
+    elif "symbol" in frame.columns:
+        raise ValueError("universe_path must include ts_code for exchange-safe collection")
+    else:
+        raise ValueError("universe_path must include ts_code")
+    codes = series.dropna().astype(str).str.strip().str.upper()
+    return sorted(code for code in codes.unique() if code and code != "NAN")
+
+
+def collect_open_auction_minute_bars(
+    trade_date: str | dt.date,
+    ts_codes: list[str],
+    start_time: str = "09:15:00",
+    end_time: str = "09:25:00",
+    sleep_seconds: float = 0.2,
+    max_symbols: int | None = None,
+) -> dict[str, Any]:
+    target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
+    selected_codes = sorted(ts_codes)[:max_symbols] if max_symbols else sorted(ts_codes)
+    detail_rows: list[dict[str, Any]] = []
+    total_upserted = 0
+    for ts_code in selected_codes:
+        symbol = symbol_from_ts_code(ts_code)
+        error = ""
+        rows: list[dict[str, Any]] = []
+        selected_rows: list[dict[str, Any]] = []
+        upserted = 0
+        try:
+            rows = query_eastmoney_open_auction_minute_rows(
+                symbol=symbol,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            selected_rows = [
+                row
+                for row in rows
+                if parse_eastmoney_minute_time(_first_present(row, ["时间", "trade_time"])).date() == target_date
+            ]
+            params = {
+                "symbol": symbol,
+                "ts_code": ts_code,
+                "trade_date": target_date.isoformat(),
+                "start_time": start_time,
+                "end_time": end_time,
+            }
+            upserted = upsert_stock_open_auction_minute_bars(
+                selected_rows,
+                ts_code=ts_code,
+                source_endpoint="stock_zh_a_hist_pre_min_em",
+                params=params,
+            )
+            total_upserted += upserted
+        except Exception as exc:  # pragma: no cover - exercised in integration runs.
+            error = str(exc)
+        detail_rows.append(
+            {
+                "trade_date": target_date.isoformat(),
+                "ts_code": ts_code,
+                "symbol": symbol,
+                "queried_rows": len(rows),
+                "selected_rows": len(selected_rows),
+                "upserted_rows": upserted,
+                "error": error,
+            }
+        )
+        if sleep_seconds:
+            time.sleep(sleep_seconds)
+    detail = pd.DataFrame(detail_rows)
+    return {
+        "detail": detail,
+        "summary": {
+            "trade_date": target_date.isoformat(),
+            "symbols_requested": len(selected_codes),
+            "symbols_failed": int((detail["error"] != "").sum()) if not detail.empty else 0,
+            "upserted_rows": total_upserted,
+        },
+    }
+
+
+def write_open_auction_minute_collect_report(
+    result: dict[str, Any],
+    output_dir: str | Path,
+    trade_date: str | dt.date,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    date_text = str(trade_date)
+    detail_path = output / f"open_auction_minute_collect_{date_text}.csv"
+    latest_path = output / "open_auction_minute_collect_latest.csv"
+    report_path = output / f"open_auction_minute_collect_{date_text}.md"
+    result["detail"].to_csv(detail_path, index=False)
+    result["detail"].to_csv(latest_path, index=False)
+    summary = result["summary"]
+    report_path.write_text(
+        "\n".join(
+            [
+                f"# Open Auction Minute Collect {date_text}",
+                "",
+                f"- symbols_requested: {summary['symbols_requested']}",
+                f"- symbols_failed: {summary['symbols_failed']}",
+                f"- upserted_rows: {summary['upserted_rows']}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "paths": {
+            "detail": detail_path,
+            "latest": latest_path,
+            "markdown_report": report_path,
+        },
+        "summary": summary,
+    }
 
 
 def tushare_client(token: str | None = None) -> Any:

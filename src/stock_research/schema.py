@@ -662,6 +662,48 @@ CREATE TABLE IF NOT EXISTS market.stock_auction_bar (
     PRIMARY KEY (trade_date, asset_id, auction_phase, source)
 );
 
+CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_auction_minute_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    ts_code text NOT NULL,
+    raw_trade_time text NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    freq text NOT NULL CHECK (freq IN ('1min')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    latest numeric,
+    volume numeric,
+    amount numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_time, auction_phase, freq)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    trade_time timestamp NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    freq text NOT NULL CHECK (freq IN ('1min')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    latest numeric,
+    volume numeric,
+    amount numeric,
+    source text NOT NULL CHECK (source IN ('eastmoney_pre_min')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)
+);
+
 CREATE TABLE IF NOT EXISTS finance.income_statement (
     asset_id text NOT NULL,
     report_period date NOT NULL,
@@ -2006,6 +2048,15 @@ CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_date_phase
 
 CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_asset_date
     ON market.stock_auction_bar (asset_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_staging_eastmoney_stock_auction_minute_bar_date
+    ON staging.eastmoney_stock_auction_minute_bar (trade_date, auction_phase, freq);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_date_phase
+    ON market.stock_auction_minute_bar (trade_date, auction_phase, freq);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_asset_time
+    ON market.stock_auction_minute_bar (asset_id, trade_time DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);

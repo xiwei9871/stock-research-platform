@@ -1,4 +1,5 @@
 import argparse
+import datetime as dt
 import json
 import math
 import os
@@ -16,10 +17,13 @@ from stock_research.auction_data import (
     build_lhb_auction_topn_rerank_comparison_report_v1,
     build_lhb_phase18d_close_auction_lifecycle_report_v1,
     build_lhb_phase18e_joint_exit_diagnostics_report_v1,
+    collect_open_auction_minute_bars,
     load_existing_lhb_auction_coverage,
     load_lhb_auction_backfill_universe,
+    load_open_auction_minute_universe,
     run_lhb_auction_backfill_plan,
     sync_tushare_stock_auction_bars,
+    write_open_auction_minute_collect_report,
     write_lhb_auction_backfill_plan_report,
 )
 from stock_research.config import SETTINGS
@@ -258,6 +262,7 @@ from stock_research.operator_decision.shadow_analytics_review import (
     build_shadow_analytics_review,
     write_shadow_analytics_review,
 )
+from stock_research.open_auction_minute_cron import build_open_auction_minute_cron_entries
 from stock_research.operator_decision.shadow_review_decisions import (
     build_shadow_review_decisions,
     write_shadow_review_decisions,
@@ -1499,6 +1504,31 @@ def build_parser() -> argparse.ArgumentParser:
     lhb_auction_backfill_run.add_argument("--sleep-seconds", type=float, default=1.3)
     lhb_auction_backfill_run.add_argument("--token")
     lhb_auction_backfill_run.add_argument("--output-dir", required=True)
+
+    open_auction_minute_collect = subparsers.add_parser("collect-open-auction-minute-v1")
+    open_auction_minute_collect.add_argument("--trade-date", default="auto")
+    open_auction_minute_collect.add_argument("--universe-path", required=True)
+    open_auction_minute_collect.add_argument("--start-time", default="09:15:00")
+    open_auction_minute_collect.add_argument("--end-time", default="09:25:00")
+    open_auction_minute_collect.add_argument("--sleep-seconds", type=float, default=0.2)
+    open_auction_minute_collect.add_argument("--max-symbols", type=int)
+    open_auction_minute_collect.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/open_auction_minute_collect",
+    )
+
+    open_auction_minute_cron = subparsers.add_parser("open-auction-minute-cron-entry")
+    open_auction_minute_cron.add_argument("--project-dir", default="/Users/xiwei/stock_research")
+    open_auction_minute_cron.add_argument("--universe-path", required=True)
+    open_auction_minute_cron.add_argument(
+        "--output-dir",
+        default="outputs/research/open_auction_minute_collect",
+    )
+    open_auction_minute_cron.add_argument("--log-path", default="logs/open_auction_minute_collect.log")
+    open_auction_minute_cron.add_argument("--primary-hour", type=int, default=9)
+    open_auction_minute_cron.add_argument("--primary-minute", type=int, default=40)
+    open_auction_minute_cron.add_argument("--retry-hour", type=int, default=15)
+    open_auction_minute_cron.add_argument("--retry-minute", type=int, default=10)
 
     lhb_auction_observation = subparsers.add_parser("lhb-auction-observation-v1")
     lhb_auction_observation.add_argument("--trades-path", required=True)
@@ -7580,6 +7610,42 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"lhb_auction_backfill_run_v1|executed_calls|{result['summary']['executed_calls']}")
         print(f"lhb_auction_backfill_run_v1|remaining_calls|{result['summary']['remaining_calls']}")
         print(f"lhb_auction_backfill_run_v1|upserted_rows|{result['summary']['upserted_rows']}")
+        return 0
+    elif args.command == "collect-open-auction-minute-v1":
+        trade_date = dt.date.today().isoformat() if args.trade_date == "auto" else args.trade_date
+        ts_codes = load_open_auction_minute_universe(args.universe_path)
+        result = collect_open_auction_minute_bars(
+            trade_date=trade_date,
+            ts_codes=ts_codes,
+            start_time=args.start_time,
+            end_time=args.end_time,
+            sleep_seconds=args.sleep_seconds,
+            max_symbols=args.max_symbols,
+        )
+        report = write_open_auction_minute_collect_report(
+            result=result,
+            output_dir=args.output_dir,
+            trade_date=trade_date,
+        )
+        print(f"open_auction_minute_collect_v1|detail|{report['paths']['detail']}")
+        print(f"open_auction_minute_collect_v1|latest|{report['paths']['latest']}")
+        print(f"open_auction_minute_collect_v1|report|{report['paths']['markdown_report']}")
+        print(f"open_auction_minute_collect_v1|symbols_requested|{report['summary']['symbols_requested']}")
+        print(f"open_auction_minute_collect_v1|symbols_failed|{report['summary']['symbols_failed']}")
+        print(f"open_auction_minute_collect_v1|upserted_rows|{report['summary']['upserted_rows']}")
+        return 0
+    elif args.command == "open-auction-minute-cron-entry":
+        for entry in build_open_auction_minute_cron_entries(
+            project_dir=args.project_dir,
+            universe_path=args.universe_path,
+            output_dir=args.output_dir,
+            log_path=args.log_path,
+            primary_hour=args.primary_hour,
+            primary_minute=args.primary_minute,
+            retry_hour=args.retry_hour,
+            retry_minute=args.retry_minute,
+        ):
+            print(entry)
         return 0
     elif args.command == "lhb-auction-observation-v1":
         result = build_lhb_auction_observation_report_v1(

@@ -18,8 +18,11 @@ from stock_research.auction_data import (
     build_lhb_close_auction_trade_summary,
     build_lhb_phase18e_joint_exit_rule_scan_v1,
     build_lhb_phase18e_joint_exit_state_detail_v1,
+    collect_open_auction_minute_bars,
+    open_auction_minute_market_row,
     query_tushare_auction_rows_for_trade_date,
     sync_tushare_stock_auction_bars,
+    upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
 )
 
@@ -46,6 +49,19 @@ def raw_auction_row() -> dict:
         "vol": 457800.0,
         "amount": 2495009.92,
         "vwap": 5.45,
+    }
+
+
+def raw_open_auction_minute_row() -> dict:
+    return {
+        "时间": "2026-06-09 09:24:00",
+        "开盘": 10.1,
+        "收盘": 10.24,
+        "最高": 10.3,
+        "最低": 10.0,
+        "成交量": 120000,
+        "成交额": 1234567.89,
+        "最新价": 10.24,
     }
 
 
@@ -222,6 +238,79 @@ def test_sync_tushare_stock_auction_bars_requires_selected_ts_codes():
             auction_phases=["open_call"],
             ts_codes=None,
         )
+
+
+def test_open_auction_minute_market_row_normalizes_eastmoney_payload():
+    row = open_auction_minute_market_row(raw_open_auction_minute_row(), ts_code="600023.SH")
+
+    assert row["asset_id"] == "CN:SH:600023"
+    assert row["ts_code"] == "600023.SH"
+    assert row["trade_date"] == dt.date(2026, 6, 9)
+    assert row["trade_time"] == dt.datetime(2026, 6, 9, 9, 24)
+    assert row["auction_phase"] == "open_call"
+    assert row["freq"] == "1min"
+    assert row["open"] == 10.1
+    assert row["close"] == 10.24
+    assert row["latest"] == 10.24
+    assert row["volume"] == 120000
+    assert row["amount"] == 1234567.89
+    assert row["source"] == "eastmoney_pre_min"
+
+
+def test_upsert_stock_open_auction_minute_bars_writes_staging_and_market(monkeypatch):
+    calls = []
+
+    def fake_execute_many(conn, sql, rows):
+        calls.append((conn, sql, list(rows)))
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "execute_many", fake_execute_many)
+
+    count = upsert_stock_open_auction_minute_bars(
+        [raw_open_auction_minute_row()],
+        ts_code="600023.SH",
+        params={"symbol": "600023"},
+    )
+
+    assert count == 1
+    assert len(calls) == 2
+    assert "INSERT INTO staging.eastmoney_stock_auction_minute_bar" in calls[0][1]
+    assert "INSERT INTO market.stock_auction_minute_bar" in calls[1][1]
+    assert "ON CONFLICT (trade_time, asset_id, auction_phase, freq, source)" in calls[1][1]
+    assert calls[1][2][0]["trade_time"] == dt.datetime(2026, 6, 9, 9, 24)
+
+
+def test_collect_open_auction_minute_bars_filters_target_date_and_upserts(monkeypatch):
+    query_calls = []
+    upsert_calls = []
+
+    def fake_query(symbol, start_time, end_time):
+        query_calls.append((symbol, start_time, end_time))
+        return [
+            raw_open_auction_minute_row(),
+            {**raw_open_auction_minute_row(), "时间": "2026-06-08 09:24:00"},
+        ]
+
+    def fake_upsert(rows, ts_code, source_endpoint, params):
+        upsert_calls.append((rows, ts_code, source_endpoint, params))
+        return len(rows)
+
+    monkeypatch.setattr(auction_data, "query_eastmoney_open_auction_minute_rows", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_open_auction_minute_bars", fake_upsert)
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    result = collect_open_auction_minute_bars(
+        trade_date="2026-06-09",
+        ts_codes=["600023.SH"],
+        sleep_seconds=0,
+    )
+
+    assert query_calls == [("600023", "09:15:00", "09:25:00")]
+    assert upsert_calls[0][0] == [raw_open_auction_minute_row()]
+    assert upsert_calls[0][1] == "600023.SH"
+    assert upsert_calls[0][3]["trade_date"] == "2026-06-09"
+    assert result["summary"]["upserted_rows"] == 1
+    assert result["detail"].to_dict("records")[0]["queried_rows"] == 2
 
 
 def test_load_lhb_auction_backfill_universe_reads_unique_ts_codes(tmp_path):
