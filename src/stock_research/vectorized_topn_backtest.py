@@ -92,7 +92,10 @@ def load_vectorized_topn_inputs(
     ORDER BY trade_date, rank, asset_id
     """
     price_sql = """
-    SELECT trade_date, asset_id, open, close, amount, trade_status, is_limit_up, is_limit_down, is_suspended
+    SELECT trade_date, asset_id, open, close, amount, trade_status,
+           false AS is_limit_up,
+           false AS is_limit_down,
+           trade_status <> '1' AS is_suspended
     FROM market_daily_bar
     WHERE adjust_type = %s
       AND trade_date BETWEEN %s AND %s

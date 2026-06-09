@@ -56,6 +56,8 @@ def test_load_platform_summary_combines_coverage_and_topn(monkeypatch):
     assert result["factor_count"] == 43
     assert result["score_versions"] == ["manual_v1"]
     assert result["topn_preview"][0]["asset_id"] == "CN:SZ:300951"
+    factor_sql = next(sql for sql in calls if "FROM factor.factor_daily" in sql)
+    assert "WHERE trade_date = (SELECT max(trade_date) FROM factor.factor_daily)" in factor_sql
 
 
 def test_platform_summary_route(monkeypatch):

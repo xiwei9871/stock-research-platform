@@ -109,12 +109,17 @@ def parse_factor_selection(text: str) -> list[dict[str, Any]]:
 
 def _factor_coverage(service: str) -> dict[str, dict[str, Any]]:
     sql = """
+    WITH latest AS (
+        SELECT max(trade_date) AS latest_date
+        FROM factor.factor_daily
+    )
     SELECT
         daily.factor_name,
         max(daily.trade_date)::text AS latest_available_date,
         count(*) AS coverage_count,
         max(approval.status) AS approval_status
     FROM factor.factor_daily daily
+    JOIN latest ON daily.trade_date = latest.latest_date
     LEFT JOIN factor.factor_approval approval
       ON approval.factor_name = daily.factor_name
      AND approval.calc_version = daily.calc_version

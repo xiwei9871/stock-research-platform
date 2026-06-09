@@ -42,6 +42,7 @@ def load_platform_summary(
             SELECT count(DISTINCT factor_name) AS factor_count,
                    max(trade_date) AS latest_factor_date
             FROM factor.factor_daily
+            WHERE trade_date = (SELECT max(trade_date) FROM factor.factor_daily)
             """,
         )[0]
         versions = fetch_all(

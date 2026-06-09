@@ -886,7 +886,9 @@ def test_load_vectorized_topn_inputs_queries_scores_and_prices(monkeypatch):
     assert "FROM market_daily_bar" in calls[1][0]
     assert calls[1][1] == ["hfq", "2026-01-01", "2026-01-31"]
     assert "open" in calls[1][0]
-    assert "is_limit_up" in calls[1][0]
+    assert "false AS is_limit_up" in calls[1][0]
+    assert "false AS is_limit_down" in calls[1][0]
+    assert "trade_status <> '1' AS is_suspended" in calls[1][0]
 
 
 class _context:

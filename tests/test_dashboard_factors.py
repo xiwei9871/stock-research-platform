@@ -19,10 +19,13 @@ class FakeConnect:
 
 
 def test_list_factor_library_marks_manual_v1_weights(monkeypatch):
+    calls = []
+
     def fake_connect(service):
         return FakeConnect()
 
     def fake_fetch_all(conn, sql, params=None):
+        calls.append(sql)
         return [
             {
                 "factor_name": "ret_20",
@@ -45,6 +48,9 @@ def test_list_factor_library_marks_manual_v1_weights(monkeypatch):
     assert ret_20["latest_available_date"] == "2026-06-08"
     assert ret_20["coverage_count"] == 5207
     assert ret_20["status"] == "rejected"
+    coverage_sql = calls[0]
+    assert "WITH latest AS" in coverage_sql
+    assert "JOIN latest ON daily.trade_date = latest.latest_date" in coverage_sql
 
 
 def test_build_factor_score_preview_scores_selected_factors(monkeypatch):
