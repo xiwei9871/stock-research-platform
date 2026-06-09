@@ -1,7 +1,9 @@
 import pandas as pd
 import pytest
 
+from stock_research.dashboard import strategy_backtest_adapters as adapters
 from stock_research.dashboard.strategy_backtest_adapters import (
+    LHBShortlineAdapter,
     STRATEGY_BACKTEST_REGISTRY,
     StrategyBacktestParams,
     build_lhb_shortline_scores_from_frames,
@@ -84,6 +86,11 @@ def test_manual_v1_builder_preserves_manual_score_order():
     assert list(scores["rank"]) == [1, 2]
 
 
+def test_manual_v1_builder_rejects_empty_frame_with_value_error():
+    with pytest.raises(ValueError, match="no manual_v1_topn_rotation strategy scores found"):
+        build_manual_v1_scores_from_frame(pd.DataFrame())
+
+
 def test_lhb_shortline_builder_ranks_positive_support_above_risky_rows():
     lhb = pd.DataFrame(
         [
@@ -124,3 +131,91 @@ def test_lhb_shortline_builder_ranks_positive_support_above_risky_rows():
     assert scores.iloc[0]["score_total"] > scores.iloc[1]["score_total"]
     assert scores.iloc[1]["eligibility"] is False
     assert "pump_risk" in scores.iloc[1]["eligibility_reason"]
+
+
+def test_lhb_shortline_builder_deduplicates_date_asset_rows_before_scoring():
+    lhb = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": 0.10,
+                "lhb_net_buy_amount": 20_000_000,
+                "institution_net_buy": 5_000_000,
+                "repeat_on_list_count_3d": 1,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.10,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": 0.30,
+                "lhb_net_buy_amount": 60_000_000,
+                "institution_net_buy": 15_000_000,
+                "repeat_on_list_count_3d": 2,
+                "lhb_after_reversal": True,
+                "lhb_one_day_pump_risk": 0.40,
+            },
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "amount_vs_20d": 1.1, "high_to_close_drawdown": 0.02},
+            {"trade_date": "2026-01-01", "asset_id": "A", "amount_vs_20d": 1.8, "high_to_close_drawdown": 0.08},
+        ]
+    )
+
+    scores = build_lhb_shortline_scores_from_frames(lhb, technical)
+
+    assert len(scores[(scores["trade_date"] == "2026-01-01") & (scores["asset_id"] == "A")]) == 1
+
+
+def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
+    lhb = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": 0.22,
+                "lhb_net_buy_amount": 80_000_000,
+                "institution_net_buy": 20_000_000,
+                "repeat_on_list_count_3d": 2,
+                "lhb_after_reversal": True,
+                "lhb_one_day_pump_risk": 0.10,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": -0.05,
+                "lhb_net_buy_amount": -5_000_000,
+                "institution_net_buy": -2_000_000,
+                "repeat_on_list_count_3d": 1,
+                "lhb_after_reversal": False,
+                "lhb_one_day_pump_risk": 0.90,
+            },
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "amount_vs_20d": 1.5, "high_to_close_drawdown": 0.03},
+            {"trade_date": "2026-01-01", "asset_id": "B", "amount_vs_20d": 0.3, "high_to_close_drawdown": 0.16},
+        ]
+    )
+
+    def fake_fetch_frame(sql, params):
+        if "factor.lhb_event_features_daily" in sql:
+            return lhb
+        return technical
+
+    monkeypatch.setattr(adapters, "_fetch_frame", fake_fetch_frame)
+
+    scores = LHBShortlineAdapter().load_scores(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
+    )
+
+    assert list(scores["asset_id"]) == ["A"]
+    assert scores.iloc[0]["eligibility"] is True

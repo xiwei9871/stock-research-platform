@@ -85,9 +85,13 @@ def _bool(series: pd.Series) -> pd.Series:
 
 
 def build_manual_v1_scores_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    strategy_id = "manual_v1_topn_rotation"
+    if frame is None or frame.empty:
+        return normalize_strategy_scores(frame, strategy_id=strategy_id)
+
     normalized = normalize_strategy_scores(
-        frame[["trade_date", "asset_id", "score_total"]].copy(),
-        strategy_id="manual_v1_topn_rotation",
+        frame.copy(),
+        strategy_id=strategy_id,
     )
     if "rank" not in frame.columns:
         return normalized
@@ -123,13 +127,57 @@ def build_manual_v1_scores_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
     ]
 
 
+def _deduplicate_lhb_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    grouped = frame.copy()
+    group_keys = ["trade_date", "asset_id"]
+    numeric_columns = [
+        "lhb_net_buy_ratio",
+        "lhb_net_buy_amount",
+        "institution_net_buy",
+        "repeat_on_list_count_3d",
+        "lhb_one_day_pump_risk",
+    ]
+    bool_columns = ["on_lhb", "lhb_after_reversal"]
+    aggregations: dict[str, str] = {}
+
+    for column in numeric_columns:
+        if column in grouped.columns:
+            grouped[column] = pd.to_numeric(grouped[column], errors="coerce")
+            aggregations[column] = "max"
+    for column in bool_columns:
+        if column in grouped.columns:
+            grouped[column] = grouped[column].fillna(False).astype(bool)
+            aggregations[column] = "max"
+
+    if not aggregations:
+        return grouped[group_keys].drop_duplicates().reset_index(drop=True)
+    return grouped.groupby(group_keys, as_index=False, sort=False).agg(aggregations)
+
+
+def _deduplicate_technical_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    grouped = frame.copy()
+    group_keys = ["trade_date", "asset_id"]
+    aggregations: dict[str, str] = {}
+    for column in ["amount_vs_20d", "high_to_close_drawdown"]:
+        if column in grouped.columns:
+            grouped[column] = pd.to_numeric(grouped[column], errors="coerce")
+            aggregations[column] = "max"
+
+    if not aggregations:
+        return grouped[group_keys].drop_duplicates().reset_index(drop=True)
+    return grouped.groupby(group_keys, as_index=False, sort=False).agg(aggregations)
+
+
 def build_lhb_shortline_scores_from_frames(lhb: pd.DataFrame, technical: pd.DataFrame | None = None) -> pd.DataFrame:
     if lhb is None or lhb.empty:
         return normalize_strategy_scores(pd.DataFrame(), strategy_id="lhb_shortline")
-    frame = lhb.copy()
+    frame = _deduplicate_lhb_frame(lhb)
     if technical is not None and not technical.empty:
+        technical = _deduplicate_technical_frame(
+            technical[["trade_date", "asset_id", "amount_vs_20d", "high_to_close_drawdown"]]
+        )
         frame = frame.merge(
-            technical[["trade_date", "asset_id", "amount_vs_20d", "high_to_close_drawdown"]],
+            technical,
             on=["trade_date", "asset_id"],
             how="left",
         )
@@ -211,7 +259,8 @@ class LHBShortlineAdapter:
         """
         lhb = _fetch_frame(lhb_sql, [params.start_date, params.end_date])
         technical = _fetch_frame(technical_sql, [params.adjust_type, params.start_date, params.end_date])
-        return build_lhb_shortline_scores_from_frames(lhb, technical)
+        scores = build_lhb_shortline_scores_from_frames(lhb, technical)
+        return scores[scores["eligibility"].map(bool)].reset_index(drop=True)
 
 
 class MidTrendAdapter:
