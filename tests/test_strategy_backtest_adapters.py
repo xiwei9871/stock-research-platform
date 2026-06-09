@@ -40,6 +40,27 @@ def test_normalize_strategy_scores_rejects_empty_signal_set():
         normalize_strategy_scores(pd.DataFrame(), strategy_id="unit_strategy")
 
 
+def test_normalize_strategy_scores_drops_missing_values_before_formatting_dates():
+    raw = pd.DataFrame(
+        [
+            {
+                "trade_date": pd.Timestamp("2026-01-01"),
+                "asset_id": "A",
+                "score_total": 90.0,
+            },
+            {"trade_date": None, "asset_id": "B", "score_total": 80.0},
+            {"trade_date": "2026-01-01", "asset_id": None, "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "C", "score_total": float("nan")},
+        ]
+    )
+
+    scores = normalize_strategy_scores(raw, strategy_id="unit_strategy")
+
+    assert len(scores) == 1
+    assert scores.loc[0, "trade_date"] == "2026-01-01"
+    assert scores.loc[0, "asset_id"] == "A"
+
+
 def test_strategy_backtest_params_defaults():
     params = StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08")
 

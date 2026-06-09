@@ -33,12 +33,13 @@ def normalize_strategy_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataF
         raise ValueError(f"{strategy_id} scores missing columns: {', '.join(sorted(missing))}")
 
     normalized = frame.copy()
-    normalized["trade_date"] = normalized["trade_date"].astype(str)
-    normalized["asset_id"] = normalized["asset_id"].astype(str)
     normalized["score_total"] = pd.to_numeric(normalized["score_total"], errors="coerce")
     normalized = normalized.dropna(subset=["trade_date", "asset_id", "score_total"])
     if normalized.empty:
         raise ValueError(f"no {strategy_id} strategy scores found for selected range")
+
+    normalized["trade_date"] = pd.to_datetime(normalized["trade_date"]).dt.strftime("%Y-%m-%d")
+    normalized["asset_id"] = normalized["asset_id"].astype(str)
 
     normalized = normalized.sort_values(
         ["trade_date", "score_total", "asset_id"],
