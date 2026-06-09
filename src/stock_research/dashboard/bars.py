@@ -5,6 +5,18 @@ from stock_research.dashboard.schemas import BarPoint
 from stock_research.db import connect, fetch_all
 
 
+def normalize_market_asset_id(asset_id: str) -> str:
+    text = str(asset_id or "").strip().upper()
+    if text.startswith("CN:"):
+        return text
+    if "." not in text:
+        return text
+    code, exchange = text.split(".", 1)
+    if exchange in {"SH", "SZ", "BJ"} and len(code) == 6 and code.isdigit():
+        return f"CN:{exchange}:{code}"
+    return text
+
+
 def load_daily_bars(
     asset_id: str,
     start_date: str,
@@ -28,7 +40,11 @@ def load_daily_bars(
     ORDER BY trade_date
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [asset_id, start_date, end_date, adjust_type])
+        rows = fetch_all(
+            conn,
+            sql,
+            [normalize_market_asset_id(asset_id), start_date, end_date, adjust_type],
+        )
     return [_bar_point(row).to_dict() for row in rows]
 
 
@@ -62,7 +78,14 @@ def load_minute_bars(
         rows = fetch_all(
             conn,
             sql,
-            [asset_id, start_time, end_time, freq, adjust_type, source],
+            [
+                normalize_market_asset_id(asset_id),
+                start_time,
+                end_time,
+                freq,
+                adjust_type,
+                source,
+            ],
         )
     return [_bar_point(row).to_dict() for row in rows]
 
