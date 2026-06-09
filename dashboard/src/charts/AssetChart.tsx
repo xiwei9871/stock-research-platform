@@ -16,7 +16,9 @@ type AssetChartProps = {
   markers?: SeriesMarker<Time>[];
 };
 
-export function AssetChart({ bars, markers = [] }: AssetChartProps) {
+const EMPTY_MARKERS: SeriesMarker<Time>[] = [];
+
+export function AssetChart({ bars, markers }: AssetChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -25,6 +27,7 @@ export function AssetChart({ bars, markers = [] }: AssetChartProps) {
       return;
     }
 
+    const chartMarkers = markers ?? EMPTY_MARKERS;
     const chart = createChart(containerRef.current, {
       height: 460,
       width: containerRef.current.clientWidth,
@@ -52,8 +55,8 @@ export function AssetChart({ bars, markers = [] }: AssetChartProps) {
       wickDownColor: '#d64545'
     });
     candleSeries.setData(toCandlestickData(bars));
-    if (markers.length > 0) {
-      createSeriesMarkers(candleSeries, markers);
+    if (chartMarkers.length > 0) {
+      createSeriesMarkers(candleSeries, chartMarkers);
     }
 
     const volumeSeries = chart.addSeries(HistogramSeries, {

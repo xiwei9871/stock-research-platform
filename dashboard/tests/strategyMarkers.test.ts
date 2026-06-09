@@ -1,6 +1,46 @@
-import { describe, expect, it } from 'vitest';
+import { cleanup, render } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AssetChart } from '../src/charts/AssetChart';
 import { toStrategyChartMarkers } from '../src/charts/strategyMarkers';
-import type { StrategySignal, StrategyTrade } from '../src/api/types';
+import type { BarPoint, StrategySignal, StrategyTrade } from '../src/api/types';
+
+const chartMocks = vi.hoisted(() => {
+  const candleSeries = {
+    setData: vi.fn()
+  };
+  const volumeSeries = {
+    priceScale: vi.fn(() => ({
+      applyOptions: vi.fn()
+    })),
+    setData: vi.fn()
+  };
+  const chart = {
+    addSeries: vi.fn((seriesType) => (seriesType === 'HistogramSeries' ? volumeSeries : candleSeries)),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+    timeScale: vi.fn(() => ({
+      fitContent: vi.fn()
+    }))
+  };
+
+  return {
+    CandlestickSeries: 'CandlestickSeries',
+    createChart: vi.fn(() => chart),
+    createSeriesMarkers: vi.fn(),
+    HistogramSeries: 'HistogramSeries'
+  };
+});
+
+vi.mock('lightweight-charts', () => chartMocks);
+
+class TestResizeObserver {
+  constructor(_callback: ResizeObserverCallback) {}
+
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
 
 function signal(overrides: Partial<StrategySignal> = {}): StrategySignal {
   return {
@@ -44,6 +84,28 @@ function trade(overrides: Partial<StrategyTrade> = {}): StrategyTrade {
   };
 }
 
+function bar(overrides: Partial<BarPoint> = {}): BarPoint {
+  return {
+    time: '2026-06-03',
+    open: 10,
+    high: 11,
+    low: 9,
+    close: 10.5,
+    volume: 100,
+    amount: 1000,
+    ...overrides
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  globalThis.ResizeObserver = TestResizeObserver;
+});
+
+afterEach(() => {
+  cleanup();
+});
+
 describe('strategy chart markers', () => {
   it('converts signals and trades into stable marker view models', () => {
     const markers = toStrategyChartMarkers([signal()], [trade()]);
@@ -77,5 +139,14 @@ describe('strategy chart markers', () => {
     const markers = toStrategyChartMarkers([], [trade({ entry_time: null, exit_time: null })]);
 
     expect(markers).toEqual([]);
+  });
+
+  it('does not recreate the chart when optional markers are omitted across rerenders', () => {
+    const bars = [bar()];
+    const { rerender } = render(createElement(AssetChart, { bars }));
+
+    rerender(createElement(AssetChart, { bars }));
+
+    expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
   });
 });
