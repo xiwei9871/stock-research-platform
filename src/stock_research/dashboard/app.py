@@ -4,6 +4,11 @@ from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
+from stock_research.dashboard.factors import (
+    build_factor_score_preview,
+    list_factor_library,
+    parse_factor_selection,
+)
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
@@ -329,6 +334,22 @@ def create_app() -> FastAPI:
     @app.get("/api/strategies/catalog")
     def strategies_catalog():
         return {"items": list_strategy_catalog()}
+
+    @app.get("/api/factors/library")
+    def factor_library():
+        return {"items": list_factor_library()}
+
+    @app.get("/api/factors/score-preview")
+    def factor_score_preview(trade_date: str, factors: str, top_n: int = 30):
+        try:
+            selected_factors = parse_factor_selection(factors)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return build_factor_score_preview(
+            trade_date=trade_date,
+            selected_factors=selected_factors,
+            top_n=top_n,
+        )
 
     @app.get("/api/strategy-validation/runs")
     def strategy_validation_runs(strategy_id: str | None = None):
