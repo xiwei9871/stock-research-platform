@@ -363,6 +363,122 @@ body {
   min-height: 460px;
 }
 
+.data-explorer-workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.data-explorer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  border-bottom: 1px solid #d9dee7;
+  padding-bottom: 12px;
+}
+
+.data-explorer-toolbar label {
+  display: grid;
+  gap: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.data-explorer-toolbar input,
+.data-explorer-toolbar select,
+.data-explorer-toolbar button {
+  min-height: 34px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 7px 10px;
+  font: inherit;
+}
+
+.data-explorer-toolbar input,
+.data-explorer-toolbar select {
+  min-width: 150px;
+}
+
+.data-explorer-toolbar button {
+  cursor: pointer;
+}
+
+.data-explorer-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.data-explorer-summary div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d9dee7;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.data-explorer-summary span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.data-explorer-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.data-explorer-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.data-kv-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.data-kv-list div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.data-kv-list dt {
+  color: #667085;
+}
+
+.data-kv-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.data-table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.data-table th,
+.data-table td {
+  border: 1px solid #d9dee7;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-chart-panel {
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   .platform-shell {
     grid-template-columns: 1fr;
@@ -533,5 +649,20 @@ body {
 
   .strategy-tabs button {
     min-width: 0;
+  }
+
+  .data-explorer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-explorer-toolbar input,
+  .data-explorer-toolbar select,
+  .data-explorer-toolbar button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .data-explorer-toolbar label {
+    width: 100%;
   }
 }

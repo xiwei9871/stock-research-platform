@@ -9,6 +9,7 @@ vi.mock('../src/api/client', () => ({
   fetchStrategyCatalog: vi.fn(),
   fetchOverview: vi.fn(),
   fetchDailyBars: vi.fn(),
+  fetchAssetProfile: vi.fn(),
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
   fetchAssetDecisions: vi.fn(),
@@ -63,6 +64,25 @@ describe('AppShell and HomeCockpit', () => {
         primary_action: 'Run backtest'
       }
     ]);
+    vi.mocked(api.fetchAssetProfile).mockResolvedValue({
+      asset_id: '000001.SZ',
+      canonical_asset_id: 'CN:SZ:000001',
+      asset: {
+        asset_id: '000001.SZ',
+        symbol: '000001',
+        name: '平安银行',
+        exchange: 'SZ',
+        board: 'main',
+        is_active: true
+      },
+      bars: [],
+      score: null,
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: [],
+      coverage: {}
+    });
   });
 
   afterEach(() => {
