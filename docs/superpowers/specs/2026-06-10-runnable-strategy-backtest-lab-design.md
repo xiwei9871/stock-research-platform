@@ -209,15 +209,24 @@ Frontend tests:
 
 - every catalog strategy enables `Run Backtest`
 - running LHB calls the backend with `strategy_id: lhb_shortline`
+- `Run Comparison` calls every runnable catalog strategy with the same date range and risk parameters
 - comparison mode renders one row per strategy
 - failed comparison rows show an error without hiding successful rows
+
+Per-strategy unit tests are required before a strategy is marked runnable:
+
+- `ManualV1TopNAdapter` preserves existing manual score loading behavior.
+- `LHBShortlineAdapter` ranks positive LHB support/follow candidates above weak or risky LHB rows.
+- `MidTrendAdapter` ranks stronger trend candidates above weak trend or high-risk rows.
+- `TechBottleneckAdapter` ranks bottleneck/continuation candidates above generic manual-score rows.
+- `PositionControlAdapter` reduces or reranks risky base candidates instead of simply copying manual TopN output.
 
 Playwright tests:
 
 - open Backtest Lab
 - run Manual V1 for `2026-01-01` to `2026-06-08`, TopN 20
 - run LHB Shortline for the same range
-- run all-strategy comparison
+- click `Run Comparison` for all runnable strategies
 - verify the comparison table and at least one detailed result panel render
 
 ### Implementation Phasing
@@ -232,7 +241,9 @@ Phase 3 should run Playwright against the live local API and refine UX copy for 
 
 - All five strategies appear as runnable in Backtest Lab.
 - `Run Backtest` is enabled for every strategy when parameters are valid.
+- `Run Comparison` is available and runs every runnable strategy with identical date range, TopN, rebalance, cost, max position, and adjust-type parameters.
 - The backend rejects no catalog strategy as unsupported.
 - Each strategy returns summary, equity curve, positions, and trades in the existing result shape.
+- Each strategy adapter has its own unit tests covering score construction, ranking, and empty-data behavior.
 - The user can compare all strategies over `2026-01-01` through `2026-06-08` with TopN 20.
 - Tests cover backend routing, adapter output, frontend enablement, and comparison rendering.
