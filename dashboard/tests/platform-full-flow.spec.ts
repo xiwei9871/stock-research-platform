@@ -55,6 +55,7 @@ const validationRun = {
 };
 
 async function mockPlatformApi(page: Page) {
+  const unhandledRoutes: string[] = [];
   await page.route('/api/**', async (route) => {
     const url = new URL(route.request().url());
 
@@ -186,8 +187,10 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
-    await route.fulfill({ status: 404, json: { error: `Unhandled test API route: ${url.pathname}` } });
+    unhandledRoutes.push(url.pathname);
+    await route.abort('failed');
   });
+  return unhandledRoutes;
 }
 
 function makeAssetProfile() {
@@ -374,12 +377,14 @@ async function assertNoHorizontalOverflow(page: Page) {
 }
 
 test('platform full flow covers all research workspaces with mocked API responses', async ({ page }) => {
-  await mockPlatformApi(page);
+  const unhandledRoutes = await mockPlatformApi(page);
 
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Data Explorer workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Data Explorer' })).toBeVisible();
@@ -387,6 +392,8 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByText('CN:SZ:000001')).toBeVisible();
   await expect(page.getByText('Score 88.5')).toBeVisible();
   await expect(page.getByRole('cell', { name: 'ret_20' })).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Factor Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Factor Lab' })).toBeVisible();
@@ -394,6 +401,8 @@ test('platform full flow covers all research workspaces with mocked API response
   await page.getByLabel('select ret_20').check();
   await page.getByRole('button', { name: 'Preview Scores' }).click();
   await expect(page.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Backtest Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
@@ -402,16 +411,21 @@ test('platform full flow covers all research workspaces with mocked API response
   await page.getByRole('button', { name: 'Run Backtest' }).click();
   await expect(page.getByRole('heading', { name: 'Read-only backtest' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'CN:SZ:300951' }).first()).toBeVisible();
+  const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
+  await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByText('support confirmed')).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Reports workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
   await expect(page.getByText('Daily TopN')).toBeVisible();
-
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
+  expect(unhandledRoutes).toEqual([]);
 });
