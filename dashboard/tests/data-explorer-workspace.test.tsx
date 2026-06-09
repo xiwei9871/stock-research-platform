@@ -48,8 +48,12 @@ function makeProfile(overrides: Partial<AssetProfile> = {}): AssetProfile {
       {
         trade_date: '2026-06-08',
         asset_id: '000001.SZ',
-        ret_20: 0.1234,
-        vol_20: 0.0456
+        factor_group: 'momentum',
+        factor_name: 'ret_20',
+        factor_value: 0.1234,
+        calc_version: 'v1',
+        source: 'unit',
+        source_data_version: '20260608'
       }
     ],
     coverage: {
@@ -109,7 +113,10 @@ describe('DataExplorerWorkspace', () => {
     );
     expect(screen.getByText('CN:SZ:000001')).toBeInTheDocument();
     expect(screen.getByText('Score 88.5')).toBeInTheDocument();
-    expect(screen.getByText('ret_20')).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'momentum' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'ret_20' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '0.1234' })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: 'factor_name' })).not.toBeInTheDocument();
     expect(screen.getByText('1991-04-03')).toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
   });

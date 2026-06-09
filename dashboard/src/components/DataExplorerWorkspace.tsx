@@ -32,9 +32,26 @@ function formatScore(profile: AssetProfile | null) {
   return typeof score === 'number' ? score.toFixed(1) : '-';
 }
 
-function getFactorRows(profile: AssetProfile | null) {
-  const latestFactors = profile?.factor_values[0] ?? {};
-  return Object.entries(latestFactors).filter(([key]) => key !== 'asset_id' && key !== 'trade_date');
+type FactorDisplayRow = {
+  group: string;
+  name: string;
+  value: unknown;
+};
+
+function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
+  const rows = profile?.factor_values ?? [];
+  if (rows.some((row) => 'factor_name' in row)) {
+    return rows.map((row) => ({
+      group: formatValue(row.factor_group),
+      name: formatValue(row.factor_name),
+      value: row.factor_value
+    }));
+  }
+
+  const latestFactors = rows[0] ?? {};
+  return Object.entries(latestFactors)
+    .filter(([key]) => key !== 'asset_id' && key !== 'trade_date')
+    .map(([key, value]) => ({ group: '-', name: key, value }));
 }
 
 export function DataExplorerWorkspace() {
@@ -161,15 +178,17 @@ export function DataExplorerWorkspace() {
                 <table className="data-table">
                   <thead>
                     <tr>
+                      <th>Group</th>
                       <th>Factor</th>
                       <th>Value</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {factorRows.map(([key, value]) => (
-                      <tr key={key}>
-                        <td>{key}</td>
-                        <td>{formatValue(value)}</td>
+                    {factorRows.map((row) => (
+                      <tr key={`${row.group}-${row.name}`}>
+                        <td>{row.group}</td>
+                        <td>{row.name}</td>
+                        <td>{formatValue(row.value)}</td>
                       </tr>
                     ))}
                   </tbody>
