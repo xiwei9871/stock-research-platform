@@ -373,6 +373,99 @@ export type DashboardOverview = {
   reports: ReportLink[];
 };
 
+export type PlatformSummary = {
+  latest_market_date: string;
+  latest_score_date: string;
+  latest_factor_date: string;
+  market_asset_count: number;
+  score_asset_count: number;
+  factor_count: number;
+  score_versions: string[];
+  topn_preview: ScoreRow[];
+};
+
+export type StrategyCatalogItem = {
+  strategy_id: string;
+  strategy_name: string;
+  status: 'runnable' | 'replay_only' | 'planned' | string;
+  description: string;
+  factor_groups: string[];
+  signal_inputs: string[];
+  default_parameters: Record<string, unknown>;
+  latest_evidence: string;
+  primary_action: string;
+};
+
+export type FactorLibraryRow = {
+  factor_name: string;
+  factor_group: string;
+  direction: 'higher' | 'lower' | string;
+  description: string;
+  source: string;
+  calc_version: string;
+  status: string;
+  availability_start_date: string | null;
+  availability_reason: string | null;
+  latest_available_date: string | null;
+  coverage_count: number;
+  used_in_manual_v1: boolean;
+  manual_v1_weight: number | null;
+};
+
+export type FactorSelection = {
+  factor_name: string;
+  direction: 'higher' | 'lower';
+  weight: number;
+};
+
+export type FactorScorePreview = {
+  trade_date: string;
+  selected_factors: FactorSelection[];
+  items: Array<{
+    trade_date: string;
+    asset_id: string;
+    rank: number;
+    score_total: number;
+    score_components: Record<string, number | null>;
+  }>;
+};
+
+export type AssetProfile = {
+  asset_id: string;
+  canonical_asset_id: string;
+  asset: AssetSummary | null;
+  bars: BarPoint[];
+  score: ScoreRow | null;
+  signals: WatchlistSignalRow[];
+  decisions: DecisionEventRow[];
+  outcomes: DecisionOutcomeRow[];
+  factor_values: Array<Record<string, unknown>>;
+  coverage: Record<string, unknown>;
+};
+
+export type BacktestRunRequest = {
+  strategy_id: string;
+  start_date: string;
+  end_date: string;
+  score_version: string;
+  top_n: number;
+  rebalance_frequency: 'daily' | 'weekly';
+  transaction_cost_bps: number;
+  max_positions: number | null;
+  adjust_type: string;
+};
+
+export type BacktestRunResult = {
+  strategy_id: string;
+  strategy_name: string;
+  read_only: boolean;
+  config: Record<string, unknown>;
+  summary: Record<string, number | string | null>;
+  equity_curve: Array<Record<string, number | string | null>>;
+  positions: Array<Record<string, number | string | null>>;
+  trades: Array<Record<string, number | string | null>>;
+};
+
 export type StrategyValidationRun = {
   run_id: string;
   strategy_id: string;

@@ -1,11 +1,18 @@
 import type {
+  AssetProfile,
   BarPoint,
+  BacktestRunRequest,
+  BacktestRunResult,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  FactorLibraryRow,
+  FactorScorePreview,
+  FactorSelection,
   OutcomeAnalyticsRow,
+  PlatformSummary,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -14,6 +21,7 @@ import type {
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
+  StrategyCatalogItem,
   StrategyEvidenceArtifact,
   StrategyMetricRow,
   StrategyPositionSnapshot,
@@ -314,6 +322,66 @@ export async function fetchStrategyValidationReplay(
       `/assets/${encodeURIComponent(assetId)}/replay?start_date=${encodeURIComponent(startDate)}` +
       `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}`
   );
+}
+
+export async function fetchPlatformSummary(): Promise<PlatformSummary> {
+  return getJson<PlatformSummary>('/api/platform/summary');
+}
+
+export async function fetchStrategyCatalog(): Promise<StrategyCatalogItem[]> {
+  const payload = await getJson<{ items: StrategyCatalogItem[] }>('/api/strategies/catalog');
+  return payload.items;
+}
+
+export async function fetchFactorLibrary(): Promise<FactorLibraryRow[]> {
+  const payload = await getJson<{ items: FactorLibraryRow[] }>('/api/factors/library');
+  return payload.items;
+}
+
+export async function fetchFactorScorePreview(
+  tradeDate: string,
+  factors: FactorSelection[],
+  topN: number
+): Promise<FactorScorePreview> {
+  const encodedFactors = factors
+    .map((factor) => `${factor.factor_name}:${factor.direction}:${factor.weight}`)
+    .join(',');
+  return getJson<FactorScorePreview>(
+    `/api/factors/score-preview?trade_date=${encodeURIComponent(tradeDate)}` +
+      `&factors=${encodeURIComponent(encodedFactors)}&top_n=${topN}`
+  );
+}
+
+export async function fetchAssetProfile(
+  assetId: string,
+  tradeDate: string,
+  startDate: string,
+  endDate: string,
+  scoreVersion = 'manual_v1',
+  adjustType = 'qfq'
+): Promise<AssetProfile> {
+  return getJson<AssetProfile>(
+    `/api/assets/${encodeURIComponent(assetId)}/profile?trade_date=${encodeURIComponent(tradeDate)}` +
+      `&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}` +
+      `&score_version=${encodeURIComponent(scoreVersion)}&adjust_type=${encodeURIComponent(adjustType)}`
+  );
+}
+
+export async function fetchBacktestStrategies(): Promise<StrategyCatalogItem[]> {
+  const payload = await getJson<{ items: StrategyCatalogItem[] }>('/api/backtests/strategies');
+  return payload.items;
+}
+
+export async function runBacktest(request: BacktestRunRequest): Promise<BacktestRunResult> {
+  const response = await fetch('/api/backtests/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) {
+    throw new Error(`POST /api/backtests/run failed with ${response.status}`);
+  }
+  return response.json() as Promise<BacktestRunResult>;
 }
 
 async function getJson<T>(url: string): Promise<T> {
