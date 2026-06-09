@@ -624,6 +624,44 @@ CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job (
     UNIQUE (ts_code, start_date, end_date, freq, adjust_type, source)
 );
 
+CREATE TABLE IF NOT EXISTS staging.tushare_stock_auction_bar (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    ts_code text NOT NULL,
+    raw_trade_date text NOT NULL,
+    trade_date date NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    vwap numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_date, auction_phase)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_auction_bar (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call')),
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    volume numeric,
+    amount numeric,
+    vwap numeric,
+    source text NOT NULL CHECK (source IN ('tushare')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, auction_phase, source)
+);
+
 CREATE TABLE IF NOT EXISTS finance.income_statement (
     asset_id text NOT NULL,
     report_period date NOT NULL,
@@ -1959,6 +1997,15 @@ CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_status
 
 CREATE INDEX IF NOT EXISTS idx_market_minute_bar_backfill_job_period
     ON market.minute_bar_backfill_job (start_date, end_date, freq, adjust_type, source);
+
+CREATE INDEX IF NOT EXISTS idx_staging_tushare_stock_auction_bar_date_phase
+    ON staging.tushare_stock_auction_bar (trade_date, auction_phase);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_date_phase
+    ON market.stock_auction_bar (trade_date, auction_phase);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_auction_bar_asset_date
+    ON market.stock_auction_bar (asset_id, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ingest_batch_job_status
     ON ingest.batch_job (dataset, status, year, quarter, offset_value);

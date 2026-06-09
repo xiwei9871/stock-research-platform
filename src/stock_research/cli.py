@@ -9,6 +9,14 @@ from uuid import uuid4
 import pandas as pd
 
 from stock_research.assets import sync_asset_master
+from stock_research.auction_data import (
+    build_lhb_auction_enhanced_rule_scan_report_v1,
+    build_lhb_auction_observation_report_v1,
+    build_lhb_auction_topn_rerank_comparison_report_v1,
+    build_lhb_phase18d_close_auction_lifecycle_report_v1,
+    build_lhb_phase18e_joint_exit_diagnostics_report_v1,
+    sync_tushare_stock_auction_bars,
+)
 from stock_research.config import SETTINGS
 from stock_research.backtest import run_top20_backtest
 from stock_research.backfill_runs import (
@@ -135,14 +143,45 @@ from stock_research.ingest_jobs import (
 )
 from stock_research.labels import compute_and_store_labels, derive_label_backfill_window
 from stock_research.lhb_data import (
+    run_daily_lhb_shortline_watchlist_v1,
     run_dragon_case_lhb_alignment_audit,
     run_dragon_case_lhb_summary_report,
     run_lhb_diagnostics_after_failure_rule_v21,
+    run_lhb_full_market_pool_backtest_v1,
+    run_lhb_intraday_filtered_topn_comparison_v1,
     run_lhb_coverage_and_failure_rule_plan,
+    run_lhb_exit_rule_audit_v1,
+    run_lhb_follow_avoid_rule_audit_v1,
+    run_lhb_follow_exit_replay_v1,
+    run_lhb_shortline_daily_pipeline_v1,
+    run_lhb_shortline_manual_review_v1,
+    run_lhb_phase12a_multi_context_decision_v1,
+    run_lhb_phase12a_rule_decision_v1,
+    run_lhb_phase12a_real_entry_backtest_v1,
+    run_lhb_phase12b_signal_exit_v1,
+    run_lhb_phase13_two_stage_follow_pool_v1,
+    run_lhb_phase13b_topn_filter_v1,
+    run_lhb_phase14_lifecycle_exit_v1,
+    run_lhb_phase14b_threshold_scan_v1,
+    run_lhb_phase14c_lifecycle_portfolio_v1,
+    run_lhb_phase14e_limit_lock_filter_v1,
+    run_lhb_phase15_cash_account_backtest_v1,
+    run_lhb_phase16_quality_improvement_diagnostics_v1,
+    run_lhb_phase16b_limit_break_failed_exit_replay_v1,
+    run_lhb_phase16c_limit_break_failed_rule_scan_v1,
+    run_lhb_phase16d_limit_break_failed_indicator_discovery_v1,
+    run_lhb_phase16e_limit_break_failed_indicator_rule_scan_v1,
+    run_lhb_phase18c_auction_enhanced_cash_account_backtest_v1,
+    run_lhb_phase18f_tradable_joint_exit_replay_v1,
     run_lhb_risk_feature_diagnostics,
     run_lhb_case_difference_report,
     run_lhb_event_features_build,
     run_lhb_sample_import,
+    run_lhb_shortline_event_replay_v1,
+    run_lhb_shortline_intraday_confirmation_v1,
+    run_lhb_shortline_rule_calibration_v1,
+    run_lhb_shortline_shadow_backtest_v1,
+    run_lhb_shortline_strategy_effectiveness_v1,
 )
 from stock_research.loaders.baostock_ingestion import (
     sync_index_daily_bars,
@@ -177,6 +216,9 @@ from stock_research.serenity_tight3b_c2_experiment import (
 )
 from stock_research.serenity_source_backed_evidence_fill import (
     run_serenity_source_backed_evidence_fill,
+)
+from stock_research.top10_historical_news_effectiveness_review import (
+    run_top10_historical_news_effectiveness_review,
 )
 from stock_research.topn_news_enrichment import run_topn_news_enrichment
 from stock_research.portfolio_backtest import run_portfolio_backtest
@@ -575,6 +617,29 @@ def parse_adjust_types(value: str) -> list[str]:
     return adjust_types
 
 
+def parse_auction_phases(value: str) -> list[str]:
+    phases = parse_str_list(value, "--auction-phases")
+    allowed = {"open_call", "close_call"}
+    invalid = [item for item in phases if item not in allowed]
+    if invalid:
+        raise argparse.ArgumentTypeError(
+            "--auction-phases values must be one of open_call, close_call"
+        )
+    return phases
+
+
+def parse_ts_codes(value: str) -> list[str]:
+    return parse_str_list(value, "--ts-codes")
+
+
+def parse_trade_dates(value: str) -> list[str]:
+    return parse_str_list(value, "--trade-dates")
+
+
+def parse_thresholds(value: str) -> list[float]:
+    return [float(item) for item in parse_str_list(value, "--thresholds")]
+
+
 def parse_ingest_datasets(value: str) -> list[str]:
     return parse_str_list(value, "--ingest-datasets")
 
@@ -765,6 +830,25 @@ def print_ingest_progress(event: dict) -> None:
         )
     elif event["event"] == "failed":
         print(f"{prefix} failed {event['job_id']} error={event['error']}", flush=True)
+
+
+def _append_lhb_daily_watchlist_diagnostics_summary(
+    *,
+    summary_path: str | Path,
+    report_paths: dict[str, str],
+) -> None:
+    path = Path(summary_path)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        payload = {"summary": {}, "paths": {}}
+    payload.setdefault("paths", {})
+    payload["paths"]["watchlist_diagnostics"] = report_paths["full_csv_path"]
+    payload["paths"]["watchlist_diagnostics_must_watch"] = report_paths["must_watch_csv_path"]
+    payload["paths"]["watchlist_diagnostics_markdown"] = report_paths["markdown_path"]
+    payload.setdefault("summary", {})
+    payload["summary"]["watchlist_diagnostics_built"] = True
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1205,6 +1289,13 @@ def build_parser() -> argparse.ArgumentParser:
     historical_top10_news_backfill.add_argument("--sample-trade-dates", type=int)
     historical_top10_news_backfill.add_argument("--output-dir")
 
+    review_top10_historical_news_effectiveness = subparsers.add_parser(
+        "review-top10-historical-news-effectiveness"
+    )
+    review_top10_historical_news_effectiveness.add_argument("--base-dir", required=True)
+    review_top10_historical_news_effectiveness.add_argument("--adjust-type", default="qfq")
+    review_top10_historical_news_effectiveness.add_argument("--output-dir", required=True)
+
     market_style_switch = subparsers.add_parser("market-style-switch-v1-backtest")
     market_style_switch.add_argument("--start-date", required=True)
     market_style_switch.add_argument("--end-date", required=True)
@@ -1366,6 +1457,112 @@ def build_parser() -> argparse.ArgumentParser:
     baostock_minutes.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
     baostock_minutes.add_argument("--limit-assets", type=int)
     baostock_minutes.add_argument("--sleep-seconds", type=float, default=0.0)
+
+    tushare_auction = subparsers.add_parser("sync-tushare-auction-bars")
+    tushare_auction.add_argument("--start-date", required=True)
+    tushare_auction.add_argument("--end-date", required=True)
+    tushare_auction.add_argument(
+        "--auction-phases",
+        type=parse_auction_phases,
+        default=["open_call", "close_call"],
+    )
+    tushare_auction.add_argument("--ts-codes", type=parse_ts_codes, required=True)
+    tushare_auction.add_argument("--trade-dates", type=parse_trade_dates)
+    tushare_auction.add_argument("--sleep-seconds", type=float, default=1.3)
+
+    lhb_auction_observation = subparsers.add_parser("lhb-auction-observation-v1")
+    lhb_auction_observation.add_argument("--trades-path", required=True)
+    lhb_auction_observation.add_argument("--start-date", required=True)
+    lhb_auction_observation.add_argument("--end-date", required=True)
+    lhb_auction_observation.add_argument("--ts-codes", type=parse_ts_codes, required=True)
+    lhb_auction_observation.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18_auction_scan = subparsers.add_parser("lhb-phase18-auction-rule-scan-v1")
+    lhb_phase18_auction_scan.add_argument("--detail-path", required=True)
+    lhb_phase18_auction_scan.add_argument("--rule-layer", default="follow_pool_core")
+    lhb_phase18_auction_scan.add_argument(
+        "--thresholds",
+        type=parse_thresholds,
+        default=[0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07],
+    )
+    lhb_phase18_auction_scan.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18b_topn_rerank = subparsers.add_parser("lhb-phase18b-auction-topn-rerank-v1")
+    lhb_phase18b_topn_rerank.add_argument("--detail-path", required=True)
+    lhb_phase18b_topn_rerank.add_argument(
+        "--top-n",
+        type=lambda value: parse_int_list(value, "--top-n"),
+        default=[5, 10],
+    )
+    lhb_phase18b_topn_rerank.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18c_cash = subparsers.add_parser("lhb-phase18c-auction-cash-account-v1")
+    lhb_phase18c_cash.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase18c_cash.add_argument("--scored-candidates-path", required=True)
+    lhb_phase18c_cash.add_argument(
+        "--top-n",
+        type=lambda value: parse_int_list(value, "--top-n"),
+        default=[3, 5, 10],
+    )
+    lhb_phase18c_cash.add_argument("--max-positions", type=int, default=10)
+    lhb_phase18c_cash.add_argument("--position-pct", type=float, default=0.10)
+    lhb_phase18c_cash.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18d_close_auction = subparsers.add_parser(
+        "lhb-phase18d-close-auction-lifecycle-v1"
+    )
+    lhb_phase18d_close_auction.add_argument("--trades-path", required=True)
+    lhb_phase18d_close_auction.add_argument("--strategy")
+    lhb_phase18d_close_auction.add_argument("--top-n", type=int)
+    lhb_phase18d_close_auction.add_argument("--start-date")
+    lhb_phase18d_close_auction.add_argument("--end-date")
+    lhb_phase18d_close_auction.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18e_joint_exit = subparsers.add_parser(
+        "lhb-phase18e-joint-exit-diagnostics-v1"
+    )
+    lhb_phase18e_joint_exit.add_argument("--account-trades-path", required=True)
+    lhb_phase18e_joint_exit.add_argument("--auction-observation-path", required=True)
+    lhb_phase18e_joint_exit.add_argument("--close-lifecycle-path", required=True)
+    lhb_phase18e_joint_exit.add_argument("--intraday-indicator-path")
+    lhb_phase18e_joint_exit.add_argument("--strategy")
+    lhb_phase18e_joint_exit.add_argument("--top-n", type=int)
+    lhb_phase18e_joint_exit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase18f_tradable_exit = subparsers.add_parser(
+        "lhb-phase18f-tradable-joint-exit-replay-v1"
+    )
+    lhb_phase18f_tradable_exit.add_argument("--account-trades-path", required=True)
+    lhb_phase18f_tradable_exit.add_argument("--joint-state-detail-path", required=True)
+    lhb_phase18f_tradable_exit.add_argument("--close-lifecycle-detail-path", required=True)
+    lhb_phase18f_tradable_exit.add_argument("--minute-bars-path")
+    lhb_phase18f_tradable_exit.add_argument("--selected-trades-path")
+    lhb_phase18f_tradable_exit.add_argument("--strategy")
+    lhb_phase18f_tradable_exit.add_argument("--top-n", type=int)
+    lhb_phase18f_tradable_exit.add_argument("--freq", default="5min")
+    lhb_phase18f_tradable_exit.add_argument("--adjust-type", default="raw")
+    lhb_phase18f_tradable_exit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
 
     plan_minute_backfill = subparsers.add_parser("plan-baostock-minute-backfill")
     plan_minute_backfill.add_argument("--start-date", required=True)
@@ -3414,6 +3611,313 @@ def build_parser() -> argparse.ArgumentParser:
         default="/Users/xiwei/stock_research/outputs/research",
     )
 
+    lhb_follow_exit_replay = subparsers.add_parser("lhb-follow-exit-replay-v1")
+    lhb_follow_exit_replay.add_argument("--case-path", required=True)
+    lhb_follow_exit_replay.add_argument("--lhb-features-path", required=True)
+    lhb_follow_exit_replay.add_argument("--alignment-path", required=True)
+    lhb_follow_exit_replay.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_event_replay = subparsers.add_parser("lhb-shortline-event-replay-v1")
+    lhb_shortline_event_replay.add_argument("--case-path", required=True)
+    lhb_shortline_event_replay.add_argument("--lhb-features-path", required=True)
+    lhb_shortline_event_replay.add_argument("--alignment-path", required=True)
+    lhb_shortline_event_replay.add_argument("--market-path")
+    lhb_shortline_event_replay.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_follow_avoid_rule_audit = subparsers.add_parser("lhb-follow-avoid-rule-audit-v1")
+    lhb_follow_avoid_rule_audit.add_argument(
+        "--event-replay-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_event_replay_v1.csv",
+    )
+    lhb_follow_avoid_rule_audit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_exit_rule_audit = subparsers.add_parser("lhb-exit-rule-audit-v1")
+    lhb_exit_rule_audit.add_argument(
+        "--event-replay-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_event_replay_v1.csv",
+    )
+    lhb_exit_rule_audit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    daily_lhb_shortline_watchlist = subparsers.add_parser("daily-lhb-shortline-watchlist-v1")
+    daily_lhb_shortline_watchlist.add_argument(
+        "--event-replay-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_event_replay_v1.csv",
+    )
+    daily_lhb_shortline_watchlist.add_argument(
+        "--rule-recommendations-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_follow_avoid_rule_recommendations_v1.csv",
+    )
+    daily_lhb_shortline_watchlist.add_argument("--rule-registry-path")
+    daily_lhb_shortline_watchlist.add_argument("--trade-date", required=True)
+    daily_lhb_shortline_watchlist.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_strategy_effectiveness = subparsers.add_parser("lhb-shortline-strategy-effectiveness-v1")
+    lhb_shortline_strategy_effectiveness.add_argument(
+        "--event-replay-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_event_replay_v1.csv",
+    )
+    lhb_shortline_strategy_effectiveness.add_argument("--daily-watchlist-path")
+    lhb_shortline_strategy_effectiveness.add_argument("--min-sample-count", type=int, default=10)
+    lhb_shortline_strategy_effectiveness.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_rule_calibration = subparsers.add_parser("lhb-shortline-rule-calibration-v1")
+    lhb_shortline_rule_calibration.add_argument(
+        "--follow-combo-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_follow_combo_effectiveness_v1.csv",
+    )
+    lhb_shortline_rule_calibration.add_argument(
+        "--exit-combo-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_exit_combo_effectiveness_v1.csv",
+    )
+    lhb_shortline_rule_calibration.add_argument("--rule-version", default="lhb_shortline_rules_v1_1")
+    lhb_shortline_rule_calibration.add_argument("--min-sample-count", type=int, default=10)
+    lhb_shortline_rule_calibration.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_shadow_backtest = subparsers.add_parser("lhb-shortline-shadow-backtest-v1")
+    lhb_shortline_shadow_backtest.add_argument(
+        "--event-replay-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_event_replay_v1.csv",
+    )
+    lhb_shortline_shadow_backtest.add_argument("--start-date", required=True)
+    lhb_shortline_shadow_backtest.add_argument("--end-date", required=True)
+    lhb_shortline_shadow_backtest.add_argument("--top-n", default="5,10,20")
+    lhb_shortline_shadow_backtest.add_argument("--pool-mode", default="strict_second_wave")
+    lhb_shortline_shadow_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_intraday_confirmation = subparsers.add_parser("lhb-shortline-intraday-confirmation-v1")
+    lhb_shortline_intraday_confirmation.add_argument(
+        "--candidate-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_shortline_shadow_backtest_selected_trades_20250101_20260608_v1.csv",
+    )
+    lhb_shortline_intraday_confirmation.add_argument("--minute-bars-path", required=True)
+    lhb_shortline_intraday_confirmation.add_argument("--freq", default="5min")
+    lhb_shortline_intraday_confirmation.add_argument("--adjust-type", default="raw")
+    lhb_shortline_intraday_confirmation.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_full_market_pool_backtest = subparsers.add_parser("lhb-full-market-pool-backtest-v1")
+    lhb_full_market_pool_backtest.add_argument(
+        "--lhb-features-path",
+        default="/Users/xiwei/stock_research/outputs/research/lhb_feature_full_gap_fill_20260606/lhb_event_features_daily_sample.csv",
+    )
+    lhb_full_market_pool_backtest.add_argument("--daily-bars-path", required=True)
+    lhb_full_market_pool_backtest.add_argument("--start-date", required=True)
+    lhb_full_market_pool_backtest.add_argument("--end-date", required=True)
+    lhb_full_market_pool_backtest.add_argument("--top-n", default="5,10,20")
+    lhb_full_market_pool_backtest.add_argument("--pool-mode", default="raw_lhb_positive")
+    lhb_full_market_pool_backtest.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_intraday_filtered_topn = subparsers.add_parser("lhb-intraday-filtered-topn-comparison-v1")
+    lhb_intraday_filtered_topn.add_argument("--selected-trades-path", required=True)
+    lhb_intraday_filtered_topn.add_argument("--intraday-detail-path", required=True)
+    lhb_intraday_filtered_topn.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase12a_multi_context = subparsers.add_parser("lhb-phase12a-multi-context-decision-v1")
+    lhb_phase12a_multi_context.add_argument("--selected-trades-path", required=True)
+    lhb_phase12a_multi_context.add_argument("--minute-bars-path", required=True)
+    lhb_phase12a_multi_context.add_argument("--intraday-detail-path", required=True)
+    lhb_phase12a_multi_context.add_argument("--pre-context-days", type=int, default=2)
+    lhb_phase12a_multi_context.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase12a_rule = subparsers.add_parser("lhb-phase12a-rule-decision-v1")
+    lhb_phase12a_rule.add_argument("--phase12a-decision-path", required=True)
+    lhb_phase12a_rule.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase12a_real_entry = subparsers.add_parser("lhb-phase12a-real-entry-backtest-v1")
+    lhb_phase12a_real_entry.add_argument("--rule-decision-path", required=True)
+    lhb_phase12a_real_entry.add_argument("--minute-bars-path", required=True)
+    lhb_phase12a_real_entry.add_argument("--daily-bars-path", required=True)
+    lhb_phase12a_real_entry.add_argument("--entry-start-time", default="10:30:00")
+    lhb_phase12a_real_entry.add_argument("--slippage-bps", type=float, default=0.0)
+    lhb_phase12a_real_entry.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase12b_signal_exit = subparsers.add_parser("lhb-phase12b-signal-exit-v1")
+    lhb_phase12b_signal_exit.add_argument("--entry-trades-path", required=True)
+    lhb_phase12b_signal_exit.add_argument("--minute-bars-path", required=True)
+    lhb_phase12b_signal_exit.add_argument("--max-hold-days", type=int, default=5)
+    lhb_phase12b_signal_exit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase13_two_stage = subparsers.add_parser("lhb-phase13-two-stage-follow-pool-v1")
+    lhb_phase13_two_stage.add_argument("--event-features-path", required=True)
+    lhb_phase13_two_stage.add_argument("--t1-features-path", required=True)
+    lhb_phase13_two_stage.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase13b_topn = subparsers.add_parser("lhb-phase13b-topn-filter-v1")
+    lhb_phase13b_topn.add_argument("--phase13-decision-path", required=True)
+    lhb_phase13b_topn.add_argument("--top-n", default="5,10,20")
+    lhb_phase13b_topn.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase14_lifecycle_exit = subparsers.add_parser("lhb-phase14-lifecycle-exit-v1")
+    lhb_phase14_lifecycle_exit.add_argument("--entry-trades-path", required=True)
+    lhb_phase14_lifecycle_exit.add_argument("--minute-bars-path", required=True)
+    lhb_phase14_lifecycle_exit.add_argument("--max-hold-days", type=int, default=5)
+    lhb_phase14_lifecycle_exit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase14b_threshold_scan = subparsers.add_parser("lhb-phase14b-threshold-scan-v1")
+    lhb_phase14b_threshold_scan.add_argument("--entry-trades-path", required=True)
+    lhb_phase14b_threshold_scan.add_argument("--minute-bars-path", required=True)
+    lhb_phase14b_threshold_scan.add_argument("--max-hold-days", type=int, default=5)
+    lhb_phase14b_threshold_scan.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase14c_lifecycle_portfolio = subparsers.add_parser("lhb-phase14c-lifecycle-portfolio-v1")
+    lhb_phase14c_lifecycle_portfolio.add_argument("--entry-trades-path", required=True)
+    lhb_phase14c_lifecycle_portfolio.add_argument("--minute-bars-path", required=True)
+    lhb_phase14c_lifecycle_portfolio.add_argument("--max-hold-days", type=int, default=5)
+    lhb_phase14c_lifecycle_portfolio.add_argument("--threshold-profile", default="sensitive_entry_buffer")
+    lhb_phase14c_lifecycle_portfolio.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase14e_limit_lock_filter = subparsers.add_parser("lhb-phase14e-limit-lock-filter-v1")
+    lhb_phase14e_limit_lock_filter.add_argument("--entry-trades-path", required=True)
+    lhb_phase14e_limit_lock_filter.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase14e_limit_lock_filter.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase15_cash_account = subparsers.add_parser("lhb-phase15-cash-account-backtest-v1")
+    lhb_phase15_cash_account.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase15_cash_account.add_argument("--max-positions", type=int, default=10)
+    lhb_phase15_cash_account.add_argument("--position-pct", type=float, default=0.10)
+    lhb_phase15_cash_account.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase16_quality = subparsers.add_parser("lhb-phase16-quality-improvement-diagnostics-v1")
+    lhb_phase16_quality.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase16_quality.add_argument("--real-entry-trades-path", required=True)
+    lhb_phase16_quality.add_argument("--selected-trades-path", required=True)
+    lhb_phase16_quality.add_argument("--min-group-count", type=int, default=20)
+    lhb_phase16_quality.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase16b_limit_break = subparsers.add_parser("lhb-phase16b-limit-break-failed-exit-replay-v1")
+    lhb_phase16b_limit_break.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase16b_limit_break.add_argument("--real-entry-trades-path", required=True)
+    lhb_phase16b_limit_break.add_argument("--selected-trades-path", required=True)
+    lhb_phase16b_limit_break.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase16c_limit_break = subparsers.add_parser("lhb-phase16c-limit-break-failed-rule-scan-v1")
+    lhb_phase16c_limit_break.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase16c_limit_break.add_argument("--real-entry-trades-path", required=True)
+    lhb_phase16c_limit_break.add_argument("--selected-trades-path", required=True)
+    lhb_phase16c_limit_break.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase16d_indicator = subparsers.add_parser("lhb-phase16d-limit-break-failed-indicator-discovery-v1")
+    lhb_phase16d_indicator.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase16d_indicator.add_argument("--real-entry-trades-path", required=True)
+    lhb_phase16d_indicator.add_argument("--selected-trades-path", required=True)
+    lhb_phase16d_indicator.add_argument("--minute-bars-path", required=True)
+    lhb_phase16d_indicator.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_phase16e_indicator_rule = subparsers.add_parser("lhb-phase16e-limit-break-failed-indicator-rule-scan-v1")
+    lhb_phase16e_indicator_rule.add_argument("--lifecycle-trades-path", required=True)
+    lhb_phase16e_indicator_rule.add_argument("--real-entry-trades-path", required=True)
+    lhb_phase16e_indicator_rule.add_argument("--selected-trades-path", required=True)
+    lhb_phase16e_indicator_rule.add_argument("--minute-bars-path", required=True)
+    lhb_phase16e_indicator_rule.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_daily = subparsers.add_parser("run-lhb-shortline-daily-v1")
+    lhb_shortline_daily.add_argument("--case-path", required=True)
+    lhb_shortline_daily.add_argument("--lhb-features-path", required=True)
+    lhb_shortline_daily.add_argument("--alignment-path", required=True)
+    lhb_shortline_daily.add_argument("--market-path")
+    lhb_shortline_daily.add_argument("--trade-date", required=True)
+    lhb_shortline_daily.add_argument("--rule-version", default="lhb_shortline_rules_v1_1")
+    lhb_shortline_daily.add_argument("--min-sample-count", type=int, default=10)
+    lhb_shortline_daily.add_argument("--build-watchlist-diagnostics", action="store_true")
+    lhb_shortline_daily.add_argument("--score-version", default="manual_v1")
+    lhb_shortline_daily.add_argument("--top-n", type=int, default=50)
+    lhb_shortline_daily.add_argument("--risk-watch-n", type=int, default=10)
+    lhb_shortline_daily.add_argument("--opportunity-watch-n", type=int, default=10)
+    lhb_shortline_daily.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
+    lhb_shortline_manual_review = subparsers.add_parser("lhb-shortline-manual-review-v1")
+    lhb_shortline_manual_review.add_argument("--daily-watchlist-path", required=True)
+    lhb_shortline_manual_review.add_argument("--effectiveness-detail-path")
+    lhb_shortline_manual_review.add_argument("--manual-review-path")
+    lhb_shortline_manual_review.add_argument("--trade-date", required=True)
+    lhb_shortline_manual_review.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+
     lhb_coverage_failure_plan = subparsers.add_parser("lhb-coverage-failure-plan")
     lhb_coverage_failure_plan.add_argument(
         "--coverage-gap-path",
@@ -3567,6 +4071,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_watchlist_diagnostics.add_argument("--top-n", type=int, default=50)
     build_watchlist_diagnostics.add_argument("--risk-watch-n", type=int, default=10)
     build_watchlist_diagnostics.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics.add_argument("--lhb-shortline-path")
     build_watchlist_diagnostics.add_argument("--output-dir", default="outputs/research")
 
     build_watchlist_diagnostics_range = subparsers.add_parser("build-watchlist-diagnostics-range")
@@ -3576,6 +4081,7 @@ def build_parser() -> argparse.ArgumentParser:
     build_watchlist_diagnostics_range.add_argument("--top-n", type=int, default=50)
     build_watchlist_diagnostics_range.add_argument("--risk-watch-n", type=int, default=10)
     build_watchlist_diagnostics_range.add_argument("--opportunity-watch-n", type=int, default=10)
+    build_watchlist_diagnostics_range.add_argument("--lhb-shortline-path")
     build_watchlist_diagnostics_range.add_argument("--output-dir", default="outputs/research")
     build_watchlist_diagnostics_range.add_argument("--force", action="store_true")
 
@@ -3867,6 +4373,30 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"historical_top10_news_backfill|candidates|{result['paths']['candidates']}")
         print(f"historical_top10_news_backfill|source_events|{result['paths']['source_events']}")
         print(f"historical_top10_news_backfill|source_rows|{len(result['source_events'])}")
+    elif args.command == "review-top10-historical-news-effectiveness":
+        result = run_top10_historical_news_effectiveness_review(
+            base_dir=args.base_dir,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"review_top10_historical_news_effectiveness|base_dir|{result['paths']['base_dir']}")
+        print(
+            "review_top10_historical_news_effectiveness|candidates|"
+            f"{result['paths']['candidates']}"
+        )
+        print(
+            "review_top10_historical_news_effectiveness|features|"
+            f"{result['paths']['features']}"
+        )
+        print(
+            "review_top10_historical_news_effectiveness|enrichment|"
+            f"{result['paths']['enrichment']}"
+        )
+        print(
+            "review_top10_historical_news_effectiveness|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+        return 0
     elif args.command == "market-style-switch-v1-backtest":
         from stock_research.market_style_switch_v1 import (
             DEFAULT_DEFENSIVE_INDUSTRY_KEYWORDS,
@@ -5274,7 +5804,6 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"serenity_source_backed_evidence|report|{result['paths']['report']}")
         print(f"serenity_source_backed_evidence|summary_rows|{len(result.get('summary', []))}")
         print(f"serenity_source_backed_evidence|manual_queue_rows|{len(result.get('manual_queue', []))}")
-
     elif args.command == "review-mid-trend-shadow-weekly-control":
         result = run_mid_trend_shadow_weekly_control_review(
             funnel_detail_path=args.funnel_detail_path,
@@ -6430,6 +6959,362 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"lhb_risk_feature_diagnostics|coverage_gap_recommendations|{result['paths']['coverage_gap_recommendations']}")
         print(f"lhb_risk_feature_diagnostics|report|{result['paths']['markdown_report']}")
         print(f"lhb_risk_feature_diagnostics|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-follow-exit-replay-v1":
+        result = run_lhb_follow_exit_replay_v1(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_follow_exit_replay_v1|replay_detail|{result['paths']['replay_detail']}")
+        print(f"lhb_follow_exit_replay_v1|replay_effectiveness|{result['paths']['replay_effectiveness']}")
+        print(f"lhb_follow_exit_replay_v1|report|{result['paths']['markdown_report']}")
+        print(f"lhb_follow_exit_replay_v1|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-shortline-event-replay-v1":
+        result = run_lhb_shortline_event_replay_v1(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            output_dir=args.output_dir,
+            market_path=args.market_path,
+        )
+        print(f"lhb_shortline_event_replay_v1|event_replay|{result['paths']['event_replay']}")
+        print(f"lhb_shortline_event_replay_v1|report|{result['paths']['markdown_report']}")
+        print(f"lhb_shortline_event_replay_v1|warnings|{len(result['warnings'])}")
+    elif args.command == "lhb-follow-avoid-rule-audit-v1":
+        result = run_lhb_follow_avoid_rule_audit_v1(
+            event_replay_path=args.event_replay_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_follow_avoid_rule_audit_v1|action_effectiveness|{result['paths']['action_effectiveness']}")
+        print(f"lhb_follow_avoid_rule_audit_v1|rule_matrix|{result['paths']['rule_matrix']}")
+        print(f"lhb_follow_avoid_rule_audit_v1|rule_recommendations|{result['paths']['rule_recommendations']}")
+        print(f"lhb_follow_avoid_rule_audit_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-exit-rule-audit-v1":
+        result = run_lhb_exit_rule_audit_v1(
+            event_replay_path=args.event_replay_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_exit_rule_audit_v1|exit_signal_effectiveness|{result['paths']['exit_signal_effectiveness']}")
+        print(f"lhb_exit_rule_audit_v1|exit_reason_effectiveness|{result['paths']['exit_reason_effectiveness']}")
+        print(f"lhb_exit_rule_audit_v1|false_positive_audit|{result['paths']['false_positive_audit']}")
+        print(f"lhb_exit_rule_audit_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "daily-lhb-shortline-watchlist-v1":
+        result = run_daily_lhb_shortline_watchlist_v1(
+            event_replay_path=args.event_replay_path,
+            rule_recommendations_path=args.rule_recommendations_path,
+            rule_registry_path=args.rule_registry_path,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"daily_lhb_shortline_watchlist_v1|watchlist|{result['paths']['watchlist']}")
+        print(f"daily_lhb_shortline_watchlist_v1|report|{result['paths']['markdown_report']}")
+        print(f"daily_lhb_shortline_watchlist_v1|rows|{len(result['watchlist'])}")
+    elif args.command == "lhb-shortline-strategy-effectiveness-v1":
+        result = run_lhb_shortline_strategy_effectiveness_v1(
+            event_replay_path=args.event_replay_path,
+            daily_watchlist_path=args.daily_watchlist_path,
+            min_sample_count=args.min_sample_count,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_strategy_effectiveness_v1|detail|{result['paths']['detail']}")
+        print(f"lhb_shortline_strategy_effectiveness_v1|summary|{result['paths']['summary']}")
+        print(
+            "lhb_shortline_strategy_effectiveness_v1|follow_combo|"
+            f"{result['paths']['follow_combo_effectiveness']}"
+        )
+        print(
+            "lhb_shortline_strategy_effectiveness_v1|exit_combo|"
+            f"{result['paths']['exit_combo_effectiveness']}"
+        )
+        print(f"lhb_shortline_strategy_effectiveness_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-shortline-rule-calibration-v1":
+        result = run_lhb_shortline_rule_calibration_v1(
+            follow_combo_path=args.follow_combo_path,
+            exit_combo_path=args.exit_combo_path,
+            rule_version=args.rule_version,
+            min_sample_count=args.min_sample_count,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_rule_calibration_v1|rule_registry|{result['paths']['rule_registry']}")
+        print(f"lhb_shortline_rule_calibration_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-shortline-shadow-backtest-v1":
+        top_n_values = [int(value.strip()) for value in str(args.top_n).split(",") if value.strip()]
+        result = run_lhb_shortline_shadow_backtest_v1(
+            event_replay_path=args.event_replay_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n_values=top_n_values,
+            pool_mode=args.pool_mode,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_shadow_backtest_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_shortline_shadow_backtest_v1|selected_trades|{result['paths']['selected_trades']}")
+        print(f"lhb_shortline_shadow_backtest_v1|daily_curve|{result['paths']['daily_curve']}")
+        print(f"lhb_shortline_shadow_backtest_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-shortline-intraday-confirmation-v1":
+        result = run_lhb_shortline_intraday_confirmation_v1(
+            candidate_path=args.candidate_path,
+            minute_bars_path=args.minute_bars_path,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_intraday_confirmation_v1|detail|{result['paths']['detail']}")
+        print(f"lhb_shortline_intraday_confirmation_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_shortline_intraday_confirmation_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-full-market-pool-backtest-v1":
+        top_n_values = [int(value.strip()) for value in str(args.top_n).split(",") if value.strip()]
+        result = run_lhb_full_market_pool_backtest_v1(
+            lhb_features_path=args.lhb_features_path,
+            daily_bars_path=args.daily_bars_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            top_n_values=top_n_values,
+            pool_mode=args.pool_mode,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_full_market_pool_backtest_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_full_market_pool_backtest_v1|selected_trades|{result['paths']['selected_trades']}")
+        print(f"lhb_full_market_pool_backtest_v1|daily_curve|{result['paths']['daily_curve']}")
+        print(f"lhb_full_market_pool_backtest_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-intraday-filtered-topn-comparison-v1":
+        result = run_lhb_intraday_filtered_topn_comparison_v1(
+            selected_trades_path=args.selected_trades_path,
+            intraday_detail_path=args.intraday_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_intraday_filtered_topn_comparison_v1|comparison|{result['paths']['comparison']}")
+        print(
+            "lhb_intraday_filtered_topn_comparison_v1|action_effectiveness|"
+            f"{result['paths']['action_effectiveness']}"
+        )
+        print(f"lhb_intraday_filtered_topn_comparison_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase12a-multi-context-decision-v1":
+        result = run_lhb_phase12a_multi_context_decision_v1(
+            selected_trades_path=args.selected_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            intraday_detail_path=args.intraday_detail_path,
+            pre_context_days=args.pre_context_days,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase12a_multi_context_decision_v1|decision|{result['paths']['decision']}")
+        print(f"lhb_phase12a_multi_context_decision_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase12a_multi_context_decision_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase12a-rule-decision-v1":
+        result = run_lhb_phase12a_rule_decision_v1(
+            phase12a_decision_path=args.phase12a_decision_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase12a_rule_decision_v1|rule_decision|{result['paths']['rule_decision']}")
+        print(f"lhb_phase12a_rule_decision_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase12a_rule_decision_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase12a-real-entry-backtest-v1":
+        result = run_lhb_phase12a_real_entry_backtest_v1(
+            rule_decision_path=args.rule_decision_path,
+            minute_bars_path=args.minute_bars_path,
+            daily_bars_path=args.daily_bars_path,
+            entry_start_time=args.entry_start_time,
+            slippage_bps=args.slippage_bps,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase12a_real_entry_backtest_v1|trades|{result['paths']['trades']}")
+        print(f"lhb_phase12a_real_entry_backtest_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase12a_real_entry_backtest_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase12b-signal-exit-v1":
+        result = run_lhb_phase12b_signal_exit_v1(
+            entry_trades_path=args.entry_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            max_hold_days=args.max_hold_days,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase12b_signal_exit_v1|exit_trades|{result['paths']['exit_trades']}")
+        print(f"lhb_phase12b_signal_exit_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase12b_signal_exit_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase13-two-stage-follow-pool-v1":
+        result = run_lhb_phase13_two_stage_follow_pool_v1(
+            event_features_path=args.event_features_path,
+            t1_features_path=args.t1_features_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase13_two_stage_follow_pool_v1|observe_pool|{result['paths']['observe_pool']}")
+        print(f"lhb_phase13_two_stage_follow_pool_v1|follow_pool|{result['paths']['follow_pool']}")
+        print(f"lhb_phase13_two_stage_follow_pool_v1|reject_pool|{result['paths']['reject_pool']}")
+        print(f"lhb_phase13_two_stage_follow_pool_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase13_two_stage_follow_pool_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase13b-topn-filter-v1":
+        result = run_lhb_phase13b_topn_filter_v1(
+            phase13_decision_path=args.phase13_decision_path,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase13b_topn_filter_v1|scored|{result['paths']['scored']}")
+        print(f"lhb_phase13b_topn_filter_v1|selected|{result['paths']['selected']}")
+        print(f"lhb_phase13b_topn_filter_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase13b_topn_filter_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase14-lifecycle-exit-v1":
+        result = run_lhb_phase14_lifecycle_exit_v1(
+            entry_trades_path=args.entry_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            max_hold_days=args.max_hold_days,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase14_lifecycle_exit_v1|lifecycle_trades|{result['paths']['lifecycle_trades']}")
+        print(f"lhb_phase14_lifecycle_exit_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase14_lifecycle_exit_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase14b-threshold-scan-v1":
+        result = run_lhb_phase14b_threshold_scan_v1(
+            entry_trades_path=args.entry_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            max_hold_days=args.max_hold_days,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase14b_threshold_scan_v1|profile_ranking|{result['paths']['profile_ranking']}")
+        print(f"lhb_phase14b_threshold_scan_v1|threshold_summary|{result['paths']['threshold_summary']}")
+        print(f"lhb_phase14b_threshold_scan_v1|best_lifecycle_trades|{result['paths']['best_lifecycle_trades']}")
+        print(f"lhb_phase14b_threshold_scan_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase14c-lifecycle-portfolio-v1":
+        result = run_lhb_phase14c_lifecycle_portfolio_v1(
+            entry_trades_path=args.entry_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            max_hold_days=args.max_hold_days,
+            threshold_profile=args.threshold_profile,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase14c_lifecycle_portfolio_v1|lifecycle_trades|{result['paths']['lifecycle_trades']}")
+        print(f"lhb_phase14c_lifecycle_portfolio_v1|daily_curve|{result['paths']['daily_curve']}")
+        print(f"lhb_phase14c_lifecycle_portfolio_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase14c_lifecycle_portfolio_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase14e-limit-lock-filter-v1":
+        result = run_lhb_phase14e_limit_lock_filter_v1(
+            entry_trades_path=args.entry_trades_path,
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase14e_limit_lock_filter_v1|risk_audit|{result['paths']['risk_audit']}")
+        print(f"lhb_phase14e_limit_lock_filter_v1|filter_ranking|{result['paths']['filter_ranking']}")
+        print(f"lhb_phase14e_limit_lock_filter_v1|best_trades|{result['paths']['best_trades']}")
+        print(f"lhb_phase14e_limit_lock_filter_v1|best_curve|{result['paths']['best_curve']}")
+        print(f"lhb_phase14e_limit_lock_filter_v1|best_summary|{result['paths']['best_summary']}")
+        print(f"lhb_phase14e_limit_lock_filter_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase15-cash-account-backtest-v1":
+        result = run_lhb_phase15_cash_account_backtest_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            max_positions=args.max_positions,
+            position_pct=args.position_pct,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase15_cash_account_backtest_v1|account_trades|{result['paths']['account_trades']}")
+        print(f"lhb_phase15_cash_account_backtest_v1|account_curve|{result['paths']['account_curve']}")
+        print(f"lhb_phase15_cash_account_backtest_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase15_cash_account_backtest_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase16-quality-improvement-diagnostics-v1":
+        result = run_lhb_phase16_quality_improvement_diagnostics_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            real_entry_trades_path=args.real_entry_trades_path,
+            selected_trades_path=args.selected_trades_path,
+            min_group_count=args.min_group_count,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase16_quality_improvement_diagnostics_v1|low_quality_buy_diagnostics|{result['paths']['low_quality_buy_diagnostics']}")
+        print(f"lhb_phase16_quality_improvement_diagnostics_v1|exit_mistake_diagnostics|{result['paths']['exit_mistake_diagnostics']}")
+        print(f"lhb_phase16_quality_improvement_diagnostics_v1|filter_scan|{result['paths']['filter_scan']}")
+        print(f"lhb_phase16_quality_improvement_diagnostics_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase16b-limit-break-failed-exit-replay-v1":
+        result = run_lhb_phase16b_limit_break_failed_exit_replay_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            real_entry_trades_path=args.real_entry_trades_path,
+            selected_trades_path=args.selected_trades_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase16b_limit_break_failed_exit_replay_v1|opportunity_trades|{result['paths']['opportunity_trades']}")
+        print(f"lhb_phase16b_limit_break_failed_exit_replay_v1|strategy_summary|{result['paths']['strategy_summary']}")
+        print(f"lhb_phase16b_limit_break_failed_exit_replay_v1|candidate_summary|{result['paths']['candidate_summary']}")
+        print(f"lhb_phase16b_limit_break_failed_exit_replay_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase16c-limit-break-failed-rule-scan-v1":
+        result = run_lhb_phase16c_limit_break_failed_rule_scan_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            real_entry_trades_path=args.real_entry_trades_path,
+            selected_trades_path=args.selected_trades_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase16c_limit_break_failed_rule_scan_v1|adjusted_trades|{result['paths']['adjusted_trades']}")
+        print(f"lhb_phase16c_limit_break_failed_rule_scan_v1|rule_scan_summary|{result['paths']['rule_scan_summary']}")
+        print(f"lhb_phase16c_limit_break_failed_rule_scan_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase16d-limit-break-failed-indicator-discovery-v1":
+        result = run_lhb_phase16d_limit_break_failed_indicator_discovery_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            real_entry_trades_path=args.real_entry_trades_path,
+            selected_trades_path=args.selected_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase16d_limit_break_failed_indicator_discovery_v1|indicator_detail|{result['paths']['indicator_detail']}")
+        print(f"lhb_phase16d_limit_break_failed_indicator_discovery_v1|indicator_summary|{result['paths']['indicator_summary']}")
+        print(f"lhb_phase16d_limit_break_failed_indicator_discovery_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase16e-limit-break-failed-indicator-rule-scan-v1":
+        result = run_lhb_phase16e_limit_break_failed_indicator_rule_scan_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            real_entry_trades_path=args.real_entry_trades_path,
+            selected_trades_path=args.selected_trades_path,
+            minute_bars_path=args.minute_bars_path,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase16e_limit_break_failed_indicator_rule_scan_v1|adjusted_trades|{result['paths']['adjusted_trades']}")
+        print(f"lhb_phase16e_limit_break_failed_indicator_rule_scan_v1|rule_scan_summary|{result['paths']['rule_scan_summary']}")
+        print(f"lhb_phase16e_limit_break_failed_indicator_rule_scan_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "run-lhb-shortline-daily-v1":
+        result = run_lhb_shortline_daily_pipeline_v1(
+            case_path=args.case_path,
+            lhb_features_path=args.lhb_features_path,
+            alignment_path=args.alignment_path,
+            market_path=args.market_path,
+            trade_date=args.trade_date,
+            rule_version=args.rule_version,
+            min_sample_count=args.min_sample_count,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_daily_v1|event_replay|{result['paths']['event_replay']}")
+        print(f"lhb_shortline_daily_v1|daily_watchlist|{result['paths']['daily_watchlist']}")
+        print(f"lhb_shortline_daily_v1|rule_registry|{result['paths']['rule_registry']}")
+        print(f"lhb_shortline_daily_v1|effectiveness_report|{result['paths']['effectiveness_report']}")
+        print(f"lhb_shortline_daily_v1|run_summary|{result['paths']['run_summary']}")
+        print(f"lhb_shortline_daily_v1|daily_watchlist_rows|{result['summary']['daily_watchlist_rows']}")
+        if args.build_watchlist_diagnostics:
+            diagnostics = build_watchlist_diagnostics_snapshot(
+                trade_date=args.trade_date,
+                score_version=args.score_version,
+                top_n=args.top_n,
+                risk_watch_n=args.risk_watch_n,
+                opportunity_watch_n=args.opportunity_watch_n,
+                lhb_shortline_path=result["paths"]["daily_watchlist"],
+            )
+            report_paths = write_watchlist_diagnostics_report(
+                full_rows=diagnostics["full"],
+                must_watch_rows=diagnostics["must_watch"],
+                output_dir=args.output_dir,
+                output_version="v1",
+                trade_date=args.trade_date,
+                watchlist_id="diagnostics",
+            )
+            _append_lhb_daily_watchlist_diagnostics_summary(
+                summary_path=result["paths"]["run_summary"],
+                report_paths=report_paths,
+            )
+            print(f"lhb_shortline_daily_v1|watchlist_diagnostics|{report_paths['full_csv_path']}")
+            print(f"lhb_shortline_daily_v1|watchlist_diagnostics_must_watch|{report_paths['must_watch_csv_path']}")
+            print(f"lhb_shortline_daily_v1|watchlist_diagnostics_markdown|{report_paths['markdown_path']}")
+    elif args.command == "lhb-shortline-manual-review-v1":
+        result = run_lhb_shortline_manual_review_v1(
+            daily_watchlist_path=args.daily_watchlist_path,
+            effectiveness_detail_path=args.effectiveness_detail_path,
+            manual_review_path=args.manual_review_path,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_shortline_manual_review_v1|manual_review|{result['paths']['manual_review']}")
+        print(f"lhb_shortline_manual_review_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_shortline_manual_review_v1|report|{result['paths']['markdown_report']}")
     elif args.command == "lhb-coverage-failure-plan":
         result = run_lhb_coverage_and_failure_rule_plan(
             coverage_gap_path=args.coverage_gap_path,
@@ -6613,6 +7498,128 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
         for adjust_type, count in counts.items():
             print(f"stock_minute_bars_synced|{args.freq}|{adjust_type}|{count}")
+    elif args.command == "sync-tushare-auction-bars":
+        counts = sync_tushare_stock_auction_bars(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            auction_phases=args.auction_phases,
+            ts_codes=args.ts_codes,
+            trade_dates=args.trade_dates,
+            sleep_seconds=args.sleep_seconds,
+        )
+        for phase, count in counts.items():
+            print(f"stock_auction_bars_synced|{phase}|{count}")
+    elif args.command == "lhb-auction-observation-v1":
+        result = build_lhb_auction_observation_report_v1(
+            trades_path=args.trades_path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            ts_codes=args.ts_codes,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_auction_observation_v1|detail|{result['paths']['detail']}")
+        print(f"lhb_auction_observation_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_auction_observation_v1|report|{result['paths']['markdown_report']}")
+        print(f"lhb_auction_observation_v1|trades_observed|{result['summary']['trades_observed']}")
+        print(f"lhb_auction_observation_v1|auction_rows_loaded|{result['summary']['auction_rows_loaded']}")
+    elif args.command == "lhb-phase18-auction-rule-scan-v1":
+        result = build_lhb_auction_enhanced_rule_scan_report_v1(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+            rule_layer=args.rule_layer,
+            thresholds=args.thresholds,
+        )
+        print(f"lhb_phase18_auction_rule_scan_v1|threshold_scan|{result['paths']['threshold_scan']}")
+        print(f"lhb_phase18_auction_rule_scan_v1|strong_detail|{result['paths']['strong_detail']}")
+        print(f"lhb_phase18_auction_rule_scan_v1|robustness|{result['paths']['robustness']}")
+        print(f"lhb_phase18_auction_rule_scan_v1|quarterly|{result['paths']['quarterly']}")
+        print(f"lhb_phase18_auction_rule_scan_v1|monthly|{result['paths']['monthly']}")
+        print(f"lhb_phase18_auction_rule_scan_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase18b-auction-topn-rerank-v1":
+        result = build_lhb_auction_topn_rerank_comparison_report_v1(
+            detail_path=args.detail_path,
+            output_dir=args.output_dir,
+            top_ns=args.top_n,
+        )
+        print(f"lhb_phase18b_auction_topn_rerank_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase18b_auction_topn_rerank_v1|selected|{result['paths']['selected']}")
+        print(f"lhb_phase18b_auction_topn_rerank_v1|scored|{result['paths']['scored']}")
+        print(f"lhb_phase18b_auction_topn_rerank_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase18c-auction-cash-account-v1":
+        result = run_lhb_phase18c_auction_enhanced_cash_account_backtest_v1(
+            lifecycle_trades_path=args.lifecycle_trades_path,
+            scored_candidates_path=args.scored_candidates_path,
+            output_dir=args.output_dir,
+            top_ns=args.top_n,
+            max_positions=args.max_positions,
+            position_pct=args.position_pct,
+        )
+        print(f"lhb_phase18c_auction_cash_account_v1|selected_trades|{result['paths']['selected_trades']}")
+        print(f"lhb_phase18c_auction_cash_account_v1|account_trades|{result['paths']['account_trades']}")
+        print(f"lhb_phase18c_auction_cash_account_v1|account_curve|{result['paths']['account_curve']}")
+        print(f"lhb_phase18c_auction_cash_account_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase18c_auction_cash_account_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-phase18d-close-auction-lifecycle-v1":
+        result = build_lhb_phase18d_close_auction_lifecycle_report_v1(
+            trades_path=args.trades_path,
+            output_dir=args.output_dir,
+            strategy=args.strategy,
+            top_n=args.top_n,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        print(f"lhb_phase18d_close_auction_lifecycle_v1|detail|{result['paths']['detail']}")
+        print(
+            "lhb_phase18d_close_auction_lifecycle_v1|trade_summary|"
+            f"{result['paths']['trade_summary']}"
+        )
+        print(
+            "lhb_phase18d_close_auction_lifecycle_v1|bucket_summary|"
+            f"{result['paths']['bucket_summary']}"
+        )
+        print(f"lhb_phase18d_close_auction_lifecycle_v1|report|{result['paths']['markdown_report']}")
+        print(
+            "lhb_phase18d_close_auction_lifecycle_v1|trades_observed|"
+            f"{result['summary']['trades_observed']}"
+        )
+        print(
+            "lhb_phase18d_close_auction_lifecycle_v1|auction_rows_loaded|"
+            f"{result['summary']['auction_rows_loaded']}"
+        )
+    elif args.command == "lhb-phase18e-joint-exit-diagnostics-v1":
+        result = build_lhb_phase18e_joint_exit_diagnostics_report_v1(
+            account_trades_path=args.account_trades_path,
+            auction_observation_path=args.auction_observation_path,
+            close_lifecycle_path=args.close_lifecycle_path,
+            intraday_indicator_path=args.intraday_indicator_path,
+            strategy=args.strategy,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase18e_joint_exit_diagnostics_v1|state_detail|{result['paths']['state_detail']}")
+        print(f"lhb_phase18e_joint_exit_diagnostics_v1|rule_scan|{result['paths']['rule_scan']}")
+        print(f"lhb_phase18e_joint_exit_diagnostics_v1|report|{result['paths']['markdown_report']}")
+        print(f"lhb_phase18e_joint_exit_diagnostics_v1|trades_observed|{result['summary']['trades_observed']}")
+        print(
+            "lhb_phase18e_joint_exit_diagnostics_v1|state_distribution|"
+            f"{result['summary']['state_distribution']}"
+        )
+    elif args.command == "lhb-phase18f-tradable-joint-exit-replay-v1":
+        result = run_lhb_phase18f_tradable_joint_exit_replay_v1(
+            account_trades_path=args.account_trades_path,
+            joint_state_detail_path=args.joint_state_detail_path,
+            close_lifecycle_detail_path=args.close_lifecycle_detail_path,
+            minute_bars_path=args.minute_bars_path,
+            selected_trades_path=args.selected_trades_path,
+            strategy=args.strategy,
+            top_n=args.top_n,
+            freq=args.freq,
+            adjust_type=args.adjust_type,
+            output_dir=args.output_dir,
+        )
+        print(f"lhb_phase18f_tradable_joint_exit_replay_v1|adjusted_trades|{result['paths']['adjusted_trades']}")
+        print(f"lhb_phase18f_tradable_joint_exit_replay_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_phase18f_tradable_joint_exit_replay_v1|report|{result['paths']['markdown_report']}")
     elif args.command == "plan-baostock-minute-backfill":
         result = plan_baostock_minute_backfill(
             start_date=args.start_date,
@@ -7147,6 +8154,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
             top_n=args.top_n,
             risk_watch_n=args.risk_watch_n,
             opportunity_watch_n=args.opportunity_watch_n,
+            lhb_shortline_path=args.lhb_shortline_path,
         )
         report_paths = write_watchlist_diagnostics_report(
             full_rows=diagnostics["full"],
@@ -7180,6 +8188,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
                 top_n=args.top_n,
                 risk_watch_n=args.risk_watch_n,
                 opportunity_watch_n=args.opportunity_watch_n,
+                lhb_shortline_path=args.lhb_shortline_path,
             )
             write_watchlist_diagnostics_report(
                 full_rows=diagnostics["full"],
