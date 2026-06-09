@@ -19,14 +19,22 @@ def list_backtest_strategies() -> list[dict[str, Any]]:
 
 
 def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
-    strategy_id = str(payload["strategy_id"])
+    strategy_id = _required_text(payload, "strategy_id")
     if strategy_id != RUNNABLE_STRATEGY_ID:
         raise ValueError("only manual_v1_topn_rotation is runnable in this version")
 
-    start_date = str(payload["start_date"])
-    end_date = str(payload["end_date"])
-    score_version = str(payload.get("score_version") or "manual_v1")
-    adjust_type = str(payload.get("adjust_type") or "hfq")
+    start_date = _required_text(payload, "start_date")
+    end_date = _required_text(payload, "end_date")
+    score_version = _optional_text(payload.get("score_version"), "manual_v1")
+    adjust_type = _optional_text(payload.get("adjust_type"), "hfq")
+    top_n = _positive_int(payload.get("top_n"), "top_n", 20)
+    max_positions = _optional_positive_int(payload.get("max_positions"), "max_positions")
+    rebalance_frequency = _rebalance_frequency(payload.get("rebalance_frequency"))
+    transaction_cost_bps = _finite_float(
+        payload.get("transaction_cost_bps"),
+        "transaction_cost_bps",
+        0.0,
+    )
 
     scores, prices = load_vectorized_topn_inputs(
         start_date=start_date,
@@ -37,10 +45,10 @@ def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     config = VectorizedTopNConfig(
         start_date=start_date,
         end_date=end_date,
-        top_n=int(payload.get("top_n") or 20),
-        rebalance_frequency=str(payload.get("rebalance_frequency") or "weekly"),
-        transaction_cost_bps=float(payload.get("transaction_cost_bps") or 0.0),
-        max_positions=_optional_int(payload.get("max_positions")),
+        top_n=top_n,
+        rebalance_frequency=rebalance_frequency,
+        transaction_cost_bps=transaction_cost_bps,
+        max_positions=max_positions,
     )
     result = run_vectorized_topn_backtest(scores, prices, config)
 
@@ -70,6 +78,8 @@ def to_json_safe(value: Any) -> Any:
         return {str(key): to_json_safe(item) for key, item in value.items()}
     if isinstance(value, list | tuple):
         return [to_json_safe(item) for item in value]
+    if isinstance(value, pd.Series | pd.Index):
+        return [to_json_safe(item) for item in value.to_list()]
     if _is_missing(value):
         return None
     if isinstance(value, pd.Timestamp):
@@ -90,10 +100,54 @@ def to_json_safe(value: Any) -> Any:
     return str(value)
 
 
-def _optional_int(value: Any) -> int | None:
+def _required_text(payload: dict[str, Any], field: str) -> str:
+    value = payload.get(field)
+    if value is None or value == "":
+        raise ValueError(f"{field} is required")
+    return str(value)
+
+
+def _optional_text(value: Any, default: str) -> str:
+    if value is None or value == "":
+        return default
+    return str(value)
+
+
+def _positive_int(value: Any, field: str, default: int) -> int:
+    if value is None or value == "":
+        value = default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be an integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{field} must be positive")
+    return parsed
+
+
+def _optional_positive_int(value: Any, field: str) -> int | None:
     if value is None or value == "":
         return None
-    return int(value)
+    return _positive_int(value, field, 0)
+
+
+def _finite_float(value: Any, field: str, default: float) -> float:
+    if value is None or value == "":
+        value = default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a number") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{field} must be finite")
+    return parsed
+
+
+def _rebalance_frequency(value: Any) -> str:
+    frequency = _optional_text(value, "weekly")
+    if frequency not in {"daily", "weekly"}:
+        raise ValueError("rebalance_frequency must be daily or weekly")
+    return frequency
 
 
 def _frame_records(frame: pd.DataFrame | None) -> list[dict[str, Any]]:

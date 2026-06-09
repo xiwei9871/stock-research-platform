@@ -137,6 +137,7 @@ def test_json_safe_conversion_handles_common_pandas_and_scalar_values():
     assert backtests.to_json_safe(float("nan")) is None
     assert backtests.to_json_safe(pd.NA) is None
     assert backtests.to_json_safe({"value": math.inf}) == {"value": None}
+    assert backtests.to_json_safe(pd.Series([1, pd.NA])) == [1, None]
 
 
 def test_backtest_routes(monkeypatch):
@@ -186,3 +187,43 @@ def test_backtest_run_route_maps_value_error_to_400(monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "unsupported strategy"
+
+
+def test_backtest_run_route_rejects_missing_required_fields():
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post(
+        "/api/backtests/run",
+        json={"strategy_id": "manual_v1_topn_rotation"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_run_backtest_validates_config_before_loading_inputs(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        backtests,
+        "load_vectorized_topn_inputs",
+        lambda **kwargs: calls.append(kwargs) or (pd.DataFrame(), pd.DataFrame()),
+    )
+
+    try:
+        backtests.run_backtest(
+            {
+                "strategy_id": "manual_v1_topn_rotation",
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-05",
+                "top_n": 0,
+                "rebalance_frequency": "daily",
+                "transaction_cost_bps": "inf",
+                "max_positions": 0,
+            }
+        )
+    except ValueError as exc:
+        assert "top_n" in str(exc)
+    else:
+        raise AssertionError("expected invalid config to raise ValueError")
+
+    assert calls == []
