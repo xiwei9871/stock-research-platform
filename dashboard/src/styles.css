@@ -12,6 +12,138 @@ body {
   margin: 0;
 }
 
+.platform-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100vh;
+  background: #f4f6f8;
+}
+
+.platform-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-right: 1px solid #d9dee7;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.platform-nav button,
+.quick-actions button {
+  min-height: 34px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 7px 10px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.platform-nav button.active {
+  border-color: #202936;
+  background: #202936;
+  color: #ffffff;
+}
+
+.platform-workspace {
+  min-width: 0;
+  padding: 18px;
+}
+
+.home-cockpit,
+.placeholder-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.workspace-header h1,
+.placeholder-workspace h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.metric-card,
+.workspace-band {
+  border: 1px solid #d9dee7;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 4px;
+}
+
+.metric-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.metric-card strong {
+  color: #18202a;
+  font-size: 20px;
+}
+
+.workspace-band {
+  display: grid;
+  gap: 10px;
+}
+
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.strategy-card-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.strategy-card-header span {
+  border: 1px solid #cfd6e2;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #f7f9fc;
+  font-size: 12px;
+}
+
+.strategy-summary-card p {
+  margin: 0;
+  color: #475467;
+  font-size: 13px;
+}
+
+.topn-preview-list .list-row {
+  padding: 0 8px;
+  cursor: default;
+}
+
 .workbench {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
@@ -224,6 +356,15 @@ body {
 }
 
 @media (max-width: 900px) {
+  .platform-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-nav {
+    border-right: 0;
+    border-bottom: 1px solid #d9dee7;
+  }
+
   .workbench {
     grid-template-columns: 1fr;
   }

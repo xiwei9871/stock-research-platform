@@ -1,0 +1,95 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AppShell } from '../src/components/AppShell';
+
+vi.mock('../src/api/client', () => ({
+  fetchPlatformSummary: vi.fn(),
+  fetchStrategyCatalog: vi.fn(),
+  fetchOverview: vi.fn(),
+  fetchDailyBars: vi.fn(),
+  fetchAssetScore: vi.fn(),
+  fetchAssetSignals: vi.fn(),
+  fetchAssetDecisions: vi.fn(),
+  fetchAssetOutcomes: vi.fn(),
+  fetchOutcomeAnalytics: vi.fn(),
+  fetchExperimentProposals: vi.fn(),
+  fetchExperimentReplay: vi.fn(),
+  fetchShadowWatchlist: vi.fn(),
+  fetchShadowOutcomes: vi.fn(),
+  fetchShadowOutcomeAnalytics: vi.fn(),
+  fetchShadowAnalyticsReview: vi.fn(),
+  fetchShadowReviewDecisions: vi.fn(),
+  fetchShadowFollowUpQueue: vi.fn(),
+  fetchShadowFollowUpResolution: vi.fn(),
+  fetchStrategyValidationRuns: vi.fn(),
+  fetchStrategyValidationReplay: vi.fn()
+}));
+
+import * as api from '../src/api/client';
+
+describe('AppShell and HomeCockpit', () => {
+  beforeEach(() => {
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValue({
+      latest_market_date: '2026-06-08',
+      latest_score_date: '2026-06-08',
+      latest_factor_date: '2026-06-07',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: [
+        {
+          trade_date: '2026-06-08',
+          asset_id: 'CN:SZ:300951',
+          rank: 1,
+          score_total: 89.9,
+          score_version: 'manual_v1',
+          score_components: {}
+        }
+      ]
+    });
+    vi.mocked(api.fetchStrategyCatalog).mockResolvedValue([
+      {
+        strategy_id: 'manual_v1_topn_rotation',
+        strategy_name: 'Manual V1 TopN Rotation',
+        status: 'runnable',
+        description: 'TopN rotation',
+        factor_groups: ['momentum'],
+        signal_inputs: ['factor.stock_score_daily'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('renders platform summary and strategy entry points', async () => {
+    render(<AppShell />);
+
+    expect(await screen.findByText('Research Cockpit')).toBeVisible();
+    expect(screen.getByText('Latest Market Data')).toBeVisible();
+    expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
+    expect(screen.getByText('Latest Factor Data')).toBeVisible();
+    expect(screen.getByText('2026-06-07')).toBeVisible();
+    expect(screen.getByText('Manual V1 TopN Rotation')).toBeVisible();
+    expect(screen.getByText('candidate pool, not buy signal')).toBeVisible();
+  });
+
+  it('navigates to Data Explorer from Home', async () => {
+    render(<AppShell />);
+    await screen.findByRole('heading', { name: 'Research Cockpit' });
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Quick actions' })).getByRole('button', {
+      name: 'Data Explorer'
+    }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Data Explorer' })).toBeVisible());
+  });
+});
