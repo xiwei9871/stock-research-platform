@@ -234,3 +234,138 @@ body {
     border-bottom: 1px solid #d9dee7;
   }
 }
+
+.mode-switch {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d9dee7;
+  background: #f7f9fc;
+}
+
+.mode-switch button,
+.strategy-tabs button {
+  border: 1px solid #cfd6e2;
+  background: #ffffff;
+  color: #202936;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mode-switch button.active,
+.strategy-tabs button.active {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #eef4ff;
+}
+
+.strategy-mode {
+  grid-column: 1 / -1;
+  min-height: 720px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.strategy-workspace {
+  display: grid;
+  gap: 12px;
+}
+
+.strategy-toolbar,
+.strategy-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.strategy-toolbar select,
+.strategy-toolbar input {
+  min-width: 180px;
+}
+
+.strategy-replay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+
+.strategy-chart-panel,
+.strategy-detail-panel,
+.strategy-summary-card,
+.strategy-evidence {
+  border: 1px solid #d9dee7;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.strategy-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.strategy-row {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #eef1f5;
+  padding-top: 8px;
+}
+
+.strategy-row span,
+.strategy-row small,
+.strategy-summary-card span,
+.strategy-summary-card small {
+  color: #5b6678;
+}
+
+.strategy-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.strategy-table th,
+.strategy-table td {
+  border: 1px solid #d9dee7;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.strategy-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.strategy-summary-card {
+  display: grid;
+  gap: 5px;
+}
+
+.strategy-warning-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.strategy-warning-list span {
+  border: 1px solid #f4c542;
+  background: #fff8df;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #7a5c00;
+}
+
+@media (max-width: 900px) {
+  .strategy-replay {
+    grid-template-columns: 1fr;
+  }
+}

@@ -49,6 +49,7 @@ import { ShadowFollowUpQueuePanel } from './components/ShadowFollowUpQueuePanel'
 import { ShadowFollowUpResolutionPanel } from './components/ShadowFollowUpResolutionPanel';
 import { ShadowReviewDecisionsPanel } from './components/ShadowReviewDecisionsPanel';
 import { ShadowOutcomeAnalyticsPanel } from './components/ShadowOutcomeAnalyticsPanel';
+import { StrategyValidationWorkspace } from './components/StrategyValidationWorkspace';
 import { ShadowWatchlistPanel } from './components/ShadowWatchlistPanel';
 import { TopNList } from './components/TopNList';
 import { WatchlistList } from './components/WatchlistList';
@@ -67,6 +68,7 @@ function dateNDaysBefore(dateText: string, days: number) {
 }
 
 export function App() {
+  const [workspaceMode, setWorkspaceMode] = useState<'research' | 'strategy'>('research');
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [selectedAssetId, setSelectedAssetId] = useState(DEFAULT_ASSET_ID);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
@@ -396,77 +398,101 @@ export function App() {
 
   return (
     <main className="workbench">
-      <aside className="sidebar">
-        <div className="panel-title">Stock Research</div>
-        <TopNList
-          rows={overview?.top_scores ?? []}
-          selectedAssetId={selectedAssetId}
-          onSelectAsset={setSelectedAssetId}
-          isLoading={overviewLoading}
-        />
-        <WatchlistList
-          rows={overview?.watchlist_signals ?? []}
-          selectedAssetId={selectedAssetId}
-          onSelectAsset={setSelectedAssetId}
-          isLoading={overviewLoading}
-        />
-      </aside>
-      <section className="workspace">
-        <header className="toolbar">
-          <input
-            aria-label="trade date"
-            type="date"
-            value={tradeDate}
-            onChange={(event) => setTradeDate(event.target.value)}
-          />
-          <input
-            aria-label="asset id"
-            value={selectedAssetId}
-            onChange={(event) => setSelectedAssetId(event.target.value.trim())}
-          />
-          {error ? <span className="error-text">{error}</span> : null}
-        </header>
-        <section className="chart-panel">
-          {assetLoading ? (
-            <p className="muted">Loading asset review...</p>
-          ) : bars.length > 0 ? (
-            <AssetChart bars={bars} />
-          ) : (
-            <p className="muted">No chart bars for selected range.</p>
-          )}
+      <div className="mode-switch" aria-label="workspace mode">
+        <button
+          type="button"
+          className={workspaceMode === 'research' ? 'active' : ''}
+          onClick={() => setWorkspaceMode('research')}
+        >
+          Research Workbench
+        </button>
+        <button
+          type="button"
+          className={workspaceMode === 'strategy' ? 'active' : ''}
+          onClick={() => setWorkspaceMode('strategy')}
+        >
+          Strategy Validation
+        </button>
+      </div>
+      {workspaceMode === 'strategy' ? (
+        <section className="strategy-mode">
+          <StrategyValidationWorkspace />
         </section>
-      </section>
-      <aside className="inspector">
-        <ScorePanel score={score} signals={signals} />
-        <DecisionHistoryPanel decisions={decisions} />
-        <OutcomeHistoryPanel outcomes={outcomes} />
-        <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
-        <ExperimentProposalsPanel rows={experimentProposals} />
-        <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
-        <ShadowWatchlistPanel rows={shadowWatchlist} isLoading={shadowWatchlistLoading} />
-        <ShadowOutcomesPanel rows={shadowOutcomes} isLoading={shadowOutcomesLoading} />
-        <ShadowOutcomeAnalyticsPanel
-          rows={shadowOutcomeAnalytics}
-          isLoading={shadowOutcomeAnalyticsLoading}
-        />
-        <ShadowAnalyticsReviewPanel
-          rows={shadowAnalyticsReview}
-          isLoading={shadowAnalyticsReviewLoading}
-        />
-        <ShadowReviewDecisionsPanel
-          rows={shadowReviewDecisions}
-          isLoading={shadowReviewDecisionsLoading}
-        />
-        <ShadowFollowUpQueuePanel
-          rows={shadowFollowUpQueue}
-          isLoading={shadowFollowUpQueueLoading}
-        />
-        <ShadowFollowUpResolutionPanel
-          rows={shadowFollowUpResolution}
-          isLoading={shadowFollowUpResolutionLoading}
-        />
-        <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
-      </aside>
+      ) : (
+        <>
+          <aside className="sidebar">
+            <div className="panel-title">Stock Research</div>
+            <TopNList
+              rows={overview?.top_scores ?? []}
+              selectedAssetId={selectedAssetId}
+              onSelectAsset={setSelectedAssetId}
+              isLoading={overviewLoading}
+            />
+            <WatchlistList
+              rows={overview?.watchlist_signals ?? []}
+              selectedAssetId={selectedAssetId}
+              onSelectAsset={setSelectedAssetId}
+              isLoading={overviewLoading}
+            />
+          </aside>
+          <section className="workspace">
+            <header className="toolbar">
+              <input
+                aria-label="trade date"
+                type="date"
+                value={tradeDate}
+                onChange={(event) => setTradeDate(event.target.value)}
+              />
+              <input
+                aria-label="asset id"
+                value={selectedAssetId}
+                onChange={(event) => setSelectedAssetId(event.target.value.trim())}
+              />
+              {error ? <span className="error-text">{error}</span> : null}
+            </header>
+            <section className="chart-panel">
+              {assetLoading ? (
+                <p className="muted">Loading asset review...</p>
+              ) : bars.length > 0 ? (
+                <AssetChart bars={bars} />
+              ) : (
+                <p className="muted">No chart bars for selected range.</p>
+              )}
+            </section>
+          </section>
+          <aside className="inspector">
+            <ScorePanel score={score} signals={signals} />
+            <DecisionHistoryPanel decisions={decisions} />
+            <OutcomeHistoryPanel outcomes={outcomes} />
+            <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
+            <ExperimentProposalsPanel rows={experimentProposals} />
+            <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
+            <ShadowWatchlistPanel rows={shadowWatchlist} isLoading={shadowWatchlistLoading} />
+            <ShadowOutcomesPanel rows={shadowOutcomes} isLoading={shadowOutcomesLoading} />
+            <ShadowOutcomeAnalyticsPanel
+              rows={shadowOutcomeAnalytics}
+              isLoading={shadowOutcomeAnalyticsLoading}
+            />
+            <ShadowAnalyticsReviewPanel
+              rows={shadowAnalyticsReview}
+              isLoading={shadowAnalyticsReviewLoading}
+            />
+            <ShadowReviewDecisionsPanel
+              rows={shadowReviewDecisions}
+              isLoading={shadowReviewDecisionsLoading}
+            />
+            <ShadowFollowUpQueuePanel
+              rows={shadowFollowUpQueue}
+              isLoading={shadowFollowUpQueueLoading}
+            />
+            <ShadowFollowUpResolutionPanel
+              rows={shadowFollowUpResolution}
+              isLoading={shadowFollowUpResolutionLoading}
+            />
+            <ReportPanel reports={overview?.reports ?? []} isLoading={overviewLoading} />
+          </aside>
+        </>
+      )}
     </main>
   );
 }

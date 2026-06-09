@@ -42,7 +42,9 @@ const apiMocks = vi.hoisted(() => ({
   fetchShadowReviewDecisions: vi.fn(),
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
-  fetchShadowWatchlist: vi.fn()
+  fetchShadowWatchlist: vi.fn(),
+  fetchStrategyValidationRuns: vi.fn(),
+  fetchStrategyValidationReplay: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -560,6 +562,63 @@ describe('dashboard app shell', () => {
 
     expect(screen.getByText('Stock Research')).toBeVisible();
     await screen.findByText('TopN');
+  });
+
+  it('switches from research workbench to strategy validation mode', async () => {
+    apiMocks.fetchOverview.mockResolvedValue(makeOverview());
+    apiMocks.fetchDailyBars.mockResolvedValue(makeBars(2));
+    apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
+    apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
+    apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
+    apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
+    apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
+    apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
+    apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
+    apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
+    apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
+    apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
+    apiMocks.fetchShadowAnalyticsReview.mockResolvedValue(makeShadowAnalyticsReview());
+    apiMocks.fetchShadowReviewDecisions.mockResolvedValue(makeShadowReviewDecisions());
+    apiMocks.fetchShadowFollowUpQueue.mockResolvedValue(makeShadowFollowUpQueue());
+    apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
+    apiMocks.fetchStrategyValidationRuns.mockResolvedValue([
+      {
+        run_id: 'lhb_shortline:fixture:phase16',
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline',
+        strategy_version: 'phase16',
+        run_type: 'replay',
+        start_date: '2026-06-01',
+        end_date: '2026-06-08',
+        created_at: '2026-06-08T20:30:00+08:00',
+        benchmark: '000300.SH',
+        universe: 'a_share',
+        data_window: {},
+        cost_config: {},
+        slippage_config: {},
+        risk_config: {},
+        position_config: {},
+        source_artifact_paths: [],
+        summary_metrics: {},
+        warnings: []
+      }
+    ]);
+    apiMocks.fetchStrategyValidationReplay.mockResolvedValue({
+      run: null,
+      asset_id: '000001.SZ',
+      bars: [],
+      signals: [],
+      trades: [],
+      positions: [],
+      metrics: [],
+      artifacts: []
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strategy Validation' }));
+
+    await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });
 
   it('loads overview, selected asset review, and chart data', async () => {
