@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 
 from stock_research.dashboard.asset_profile import build_asset_profile
+from stock_research.dashboard.backtests import list_backtest_strategies, run_backtest
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
@@ -353,6 +354,17 @@ def create_app() -> FastAPI:
     @app.get("/api/strategies/catalog")
     def strategies_catalog():
         return {"items": list_strategy_catalog()}
+
+    @app.get("/api/backtests/strategies")
+    def backtest_strategies():
+        return {"items": list_backtest_strategies()}
+
+    @app.post("/api/backtests/run")
+    def backtest_run(payload: dict):
+        try:
+            return run_backtest(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/factors/library")
     def factor_library():
