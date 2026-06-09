@@ -5,7 +5,19 @@ type StrategyEvidencePanelProps = {
   artifacts: StrategyEvidenceArtifact[];
 };
 
+function formatConfig(value: unknown) {
+  return JSON.stringify(value, null, 2);
+}
+
 export function StrategyEvidencePanel({ run, artifacts }: StrategyEvidencePanelProps) {
+  const runConfigs = [
+    { label: 'Data Window', value: run.data_window },
+    { label: 'Cost Config', value: run.cost_config },
+    { label: 'Slippage Config', value: run.slippage_config },
+    { label: 'Risk Config', value: run.risk_config },
+    { label: 'Position Config', value: run.position_config }
+  ];
+
   return (
     <section className="strategy-evidence">
       <div className="strategy-summary-card">
@@ -21,6 +33,14 @@ export function StrategyEvidencePanel({ run, artifacts }: StrategyEvidencePanelP
           ))}
         </div>
       ) : null}
+      <div className="strategy-card-grid">
+        {runConfigs.map((config) => (
+          <div className="strategy-summary-card" key={config.label}>
+            <strong>{config.label}</strong>
+            <pre>{formatConfig(config.value)}</pre>
+          </div>
+        ))}
+      </div>
       <table className="strategy-table">
         <thead>
           <tr>

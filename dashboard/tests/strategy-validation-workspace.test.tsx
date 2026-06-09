@@ -167,6 +167,15 @@ describe('StrategyValidationWorkspace', () => {
     await waitFor(() => expect(screen.getByText('No strategy validation runs found.')).toBeInTheDocument());
   });
 
+  it('shows run-list fetch errors instead of the empty state', async () => {
+    apiMocks.fetchStrategyValidationRuns.mockRejectedValue(new Error('runs failed'));
+
+    render(<StrategyValidationWorkspace />);
+
+    await waitFor(() => expect(screen.getByText('runs failed')).toBeInTheDocument());
+    expect(screen.queryByText('No strategy validation runs found.')).not.toBeInTheDocument();
+  });
+
   it('switches to cohort, portfolio risk, and evidence tabs', async () => {
     render(<StrategyValidationWorkspace />);
 
@@ -182,5 +191,12 @@ describe('StrategyValidationWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Evidence' }));
     expect(screen.getByText('fixture-backed run')).toBeInTheDocument();
     expect(screen.getByText('LHB Fixture Report')).toBeInTheDocument();
+    expect(screen.getByText('Data Window')).toBeInTheDocument();
+    expect(screen.getByText('Cost Config')).toBeInTheDocument();
+    expect(screen.getByText('Slippage Config')).toBeInTheDocument();
+    expect(screen.getByText('Risk Config')).toBeInTheDocument();
+    expect(screen.getByText('Position Config')).toBeInTheDocument();
+    expect(screen.getByText(/commission/)).toBeInTheDocument();
+    expect(screen.getByText(/max_position_weight/)).toBeInTheDocument();
   });
 });

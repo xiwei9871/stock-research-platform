@@ -82,6 +82,10 @@ export function StrategyValidationWorkspace() {
     return <p className="muted">Loading strategy validation...</p>;
   }
 
+  if (error && runs.length === 0) {
+    return <p className="error-text">{error}</p>;
+  }
+
   if (runs.length === 0) {
     return <p className="muted">No strategy validation runs found.</p>;
   }
