@@ -343,13 +343,13 @@ def create_app() -> FastAPI:
     def factor_score_preview(trade_date: str, factors: str, top_n: int = 30):
         try:
             selected_factors = parse_factor_selection(factors)
+            return build_factor_score_preview(
+                trade_date=trade_date,
+                selected_factors=selected_factors,
+                top_n=top_n,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return build_factor_score_preview(
-            trade_date=trade_date,
-            selected_factors=selected_factors,
-            top_n=top_n,
-        )
 
     @app.get("/api/strategy-validation/runs")
     def strategy_validation_runs(strategy_id: str | None = None):

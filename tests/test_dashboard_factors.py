@@ -103,6 +103,22 @@ def test_parse_factor_selection_rejects_bad_direction():
         factors.parse_factor_selection("ret_20:sideways:1.0")
 
 
+@pytest.mark.parametrize("weight", ["0", "nan", "inf"])
+def test_factor_score_preview_route_rejects_invalid_weights(weight):
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/factors/score-preview",
+        params={
+            "trade_date": "2026-06-08",
+            "factors": f"ret_20:higher:{weight}",
+            "top_n": 5,
+        },
+    )
+
+    assert response.status_code == 400
+
+
 def test_factor_routes(monkeypatch):
     monkeypatch.setattr(dashboard_app, "list_factor_library", lambda: [{"factor_name": "ret_20"}])
     monkeypatch.setattr(

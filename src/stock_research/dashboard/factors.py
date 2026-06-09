@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -158,8 +159,8 @@ def _normalize_selected_factors(
         if direction not in {"higher", "lower"}:
             raise ValueError("factor direction must be higher or lower")
         weight = float(row["weight"])
-        if weight < 0:
-            raise ValueError("factor weight must be non-negative")
+        if not math.isfinite(weight) or weight <= 0:
+            raise ValueError("factor weight must be a positive finite number")
         rows.append(
             {
                 "factor_name": factor_name,
