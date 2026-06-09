@@ -38,7 +38,7 @@ describe('platform API clients', () => {
       max_positions: 20,
       score_version: 'manual_v1',
       adjust_type: 'hfq'
-    };
+    } as const;
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
