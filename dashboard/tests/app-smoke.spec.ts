@@ -655,6 +655,9 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shadow Follow-up Resolution' })).toBeVisible();
+  await page.getByRole('button', { name: 'Strategy Validation' }).click();
+  await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
+  await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
 });
