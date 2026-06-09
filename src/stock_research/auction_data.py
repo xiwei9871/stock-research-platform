@@ -262,6 +262,7 @@ def build_lhb_auction_backfill_plan(
     ts_codes: list[str],
     auction_phases: list[str],
     existing_coverage: pd.DataFrame,
+    min_coverage_ratio: float = 1.0,
 ) -> pd.DataFrame:
     selected_codes = sorted({str(code).strip().upper() for code in ts_codes if str(code).strip()})
     coverage = existing_coverage.copy()
@@ -280,8 +281,9 @@ def build_lhb_auction_backfill_plan(
                 & coverage["auction_phase"].eq(phase)
                 & coverage["ts_code"].isin(selected_codes)
             ]["ts_code"].nunique()
+            coverage_ratio = float(existing_rows / len(selected_codes)) if selected_codes else 0.0
             missing_rows = max(len(selected_codes) - int(existing_rows), 0)
-            if missing_rows <= 0:
+            if missing_rows <= 0 or coverage_ratio >= min_coverage_ratio:
                 continue
             rows.append(
                 {
@@ -290,6 +292,7 @@ def build_lhb_auction_backfill_plan(
                     "selected_ts_codes": len(selected_codes),
                     "existing_rows": int(existing_rows),
                     "missing_rows": missing_rows,
+                    "coverage_ratio": coverage_ratio,
                     "should_query": True,
                 }
             )
@@ -301,6 +304,7 @@ def build_lhb_auction_backfill_plan(
             "selected_ts_codes",
             "existing_rows",
             "missing_rows",
+            "coverage_ratio",
             "should_query",
         ],
     )

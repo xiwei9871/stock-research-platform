@@ -1489,6 +1489,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=["open_call", "close_call"],
     )
     lhb_auction_backfill_plan.add_argument("--trade-dates", type=parse_trade_dates, required=True)
+    lhb_auction_backfill_plan.add_argument("--min-coverage-ratio", type=float, default=0.95)
     lhb_auction_backfill_plan.add_argument("--output-dir", required=True)
 
     lhb_auction_backfill_run = subparsers.add_parser("lhb-auction-backfill-run-v1")
@@ -7545,6 +7546,7 @@ def main_for_args(argv: list[str] | None = None) -> None:
             ts_codes=ts_codes,
             auction_phases=args.auction_phases,
             existing_coverage=coverage,
+            min_coverage_ratio=args.min_coverage_ratio,
         )
         result = write_lhb_auction_backfill_plan_report(
             plan=plan,

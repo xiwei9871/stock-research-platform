@@ -715,6 +715,8 @@ def test_cli_accepts_baostock_ingestion_commands():
             "open_call,close_call",
             "--trade-dates",
             "2025-01-02,2025-01-03",
+            "--min-coverage-ratio",
+            "0.95",
             "--output-dir",
             "outputs/research/lhb_auction_backfill_20250101",
         ]
@@ -723,6 +725,7 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert auction_backfill_plan_args.candidate_paths == ["selected.csv", "phase18.csv"]
     assert auction_backfill_plan_args.auction_phases == ["open_call", "close_call"]
     assert auction_backfill_plan_args.trade_dates == ["2025-01-02", "2025-01-03"]
+    assert auction_backfill_plan_args.min_coverage_ratio == 0.95
 
     auction_backfill_run_args = build_parser().parse_args(
         [

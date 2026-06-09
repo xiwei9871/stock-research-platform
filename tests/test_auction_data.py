@@ -270,6 +270,7 @@ def test_build_lhb_auction_backfill_plan_skips_complete_date_phase():
             "selected_ts_codes": 2,
             "existing_rows": 1,
             "missing_rows": 1,
+            "coverage_ratio": 0.5,
             "should_query": True,
         },
         {
@@ -278,6 +279,7 @@ def test_build_lhb_auction_backfill_plan_skips_complete_date_phase():
             "selected_ts_codes": 2,
             "existing_rows": 0,
             "missing_rows": 2,
+            "coverage_ratio": 0.0,
             "should_query": True,
         },
         {
@@ -286,9 +288,30 @@ def test_build_lhb_auction_backfill_plan_skips_complete_date_phase():
             "selected_ts_codes": 2,
             "existing_rows": 0,
             "missing_rows": 2,
+            "coverage_ratio": 0.0,
             "should_query": True,
         },
     ]
+
+
+def test_build_lhb_auction_backfill_plan_accepts_coverage_threshold_for_unreturned_stocks():
+    ts_codes = [f"{index:06d}.SZ" for index in range(100)]
+    existing = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "ts_code": code, "auction_phase": "open_call"}
+            for code in ts_codes[:96]
+        ]
+    )
+
+    plan = auction_data.build_lhb_auction_backfill_plan(
+        trade_dates=["2025-01-02"],
+        ts_codes=ts_codes,
+        auction_phases=["open_call"],
+        existing_coverage=existing,
+        min_coverage_ratio=0.95,
+    )
+
+    assert plan.empty
 
 
 def test_load_existing_lhb_auction_coverage_queries_selected_scope(monkeypatch):
