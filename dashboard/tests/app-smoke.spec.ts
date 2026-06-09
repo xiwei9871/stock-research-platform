@@ -511,6 +511,50 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('**/api/strategy-validation/runs', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            run_id: 'lhb_shortline:fixture:phase16',
+            strategy_id: 'lhb_shortline',
+            strategy_name: 'LHB Shortline',
+            strategy_version: 'phase16',
+            run_type: 'replay',
+            start_date: '2026-06-01',
+            end_date: '2026-06-08',
+            created_at: '2026-06-08T20:30:00+08:00',
+            benchmark: '000300.SH',
+            universe: 'a_share',
+            data_window: {},
+            cost_config: {},
+            slippage_config: {},
+            risk_config: {},
+            position_config: {},
+            source_artifact_paths: [],
+            summary_metrics: {},
+            warnings: ['fixture-backed run']
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('**/api/strategy-validation/runs/*/assets/*/replay?*', async (route) => {
+    await route.fulfill({
+      json: {
+        run: null,
+        asset_id: '000001.SZ',
+        bars: [{ time: '2026-06-03', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }],
+        signals: [],
+        trades: [],
+        positions: [],
+        metrics: [],
+        artifacts: []
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -589,6 +633,10 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByText(/write/i)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
   await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Strategy Validation' }).click();
+  await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
+  await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
 
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
