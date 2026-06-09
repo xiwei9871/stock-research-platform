@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../src/components/AppShell';
 import { FactorLabWorkspace } from '../src/components/FactorLabWorkspace';
@@ -69,6 +69,16 @@ function makePreview(): FactorScorePreview {
   };
 }
 
+function deferredPreview() {
+  let resolve!: (preview: FactorScorePreview) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<FactorScorePreview>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('FactorLabWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchFactorLibrary.mockResolvedValue(makeLibrary());
@@ -133,6 +143,36 @@ describe('FactorLabWorkspace', () => {
 
     fireEvent.click(screen.getByLabelText('select ret_20'));
     expect(previewButton).toBeEnabled();
+  });
+
+  it('disables preview for non-positive selected weights', async () => {
+    render(<FactorLabWorkspace />);
+    await screen.findByRole('cell', { name: 'ret_20' });
+
+    fireEvent.click(screen.getByLabelText('select ret_20'));
+    fireEvent.change(screen.getByLabelText('ret_20 weight'), { target: { value: '-1' } });
+
+    expect(screen.getByRole('button', { name: 'Preview Scores' })).toBeDisabled();
+    expect(apiMocks.fetchFactorScorePreview).not.toHaveBeenCalled();
+  });
+
+  it('ignores pending preview responses after selected factors change', async () => {
+    const pendingPreview = deferredPreview();
+    apiMocks.fetchFactorScorePreview.mockReturnValueOnce(pendingPreview.promise);
+
+    render(<FactorLabWorkspace />);
+    await screen.findByRole('cell', { name: 'ret_20' });
+
+    fireEvent.click(screen.getByLabelText('select ret_20'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Scores' }));
+    fireEvent.click(screen.getByLabelText('select ret_20'));
+
+    await act(async () => {
+      pendingPreview.resolve(makePreview());
+    });
+
+    expect(screen.queryByRole('cell', { name: 'CN:SZ:300951' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview Scores' })).toBeDisabled();
   });
 
   it('opens Factor Lab from AppShell side navigation', async () => {

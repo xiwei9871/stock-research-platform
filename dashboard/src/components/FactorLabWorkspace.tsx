@@ -61,6 +61,17 @@ export function FactorLabWorkspace() {
     () => libraryRows.map((row) => selectedByName[row.factor_name]).filter(Boolean),
     [libraryRows, selectedByName]
   );
+  const hasInvalidSelection = selectedFactors.some(
+    (selection) => !Number.isFinite(selection.weight) || selection.weight <= 0
+  );
+  const canPreview = selectedFactors.length > 0 && !hasInvalidSelection && !isPreviewLoading;
+
+  const invalidatePreview = () => {
+    previewRequestIdRef.current += 1;
+    setPreview(null);
+    setPreviewError(null);
+    setIsPreviewLoading(false);
+  };
 
   const toggleSelection = (row: FactorLibraryRow) => {
     setSelectedByName((current) => {
@@ -71,8 +82,7 @@ export function FactorLabWorkspace() {
       }
       return { ...current, [row.factor_name]: getDefaultSelection(row) };
     });
-    setPreview(null);
-    setPreviewError(null);
+    invalidatePreview();
   };
 
   const updateSelection = (factorName: string, updates: Partial<FactorSelection>) => {
@@ -83,12 +93,11 @@ export function FactorLabWorkspace() {
       }
       return { ...current, [factorName]: { ...existing, ...updates } };
     });
-    setPreview(null);
-    setPreviewError(null);
+    invalidatePreview();
   };
 
   const previewScores = () => {
-    if (selectedFactors.length === 0) {
+    if (selectedFactors.length === 0 || hasInvalidSelection) {
       return;
     }
 
@@ -129,7 +138,7 @@ export function FactorLabWorkspace() {
           <span>Top N</span>
           <strong>{DEFAULT_TOP_N}</strong>
         </div>
-        <button type="button" disabled={selectedFactors.length === 0 || isPreviewLoading} onClick={previewScores}>
+        <button type="button" disabled={!canPreview} onClick={previewScores}>
           Preview Scores
         </button>
         {isPreviewLoading ? <span className="muted">Loading score preview...</span> : null}
@@ -226,10 +235,11 @@ export function FactorLabWorkspace() {
                   <input
                     aria-label={`${selection.factor_name} weight`}
                     type="number"
+                    min="0.0001"
                     step="0.1"
                     value={selection.weight}
                     onChange={(event) =>
-                      updateSelection(selection.factor_name, { weight: Number(event.target.value) || 0 })
+                      updateSelection(selection.factor_name, { weight: Number(event.target.value) })
                     }
                   />
                 </label>
