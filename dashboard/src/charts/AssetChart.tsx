@@ -1,13 +1,22 @@
-import { CandlestickSeries, createChart, HistogramSeries, type IChartApi } from 'lightweight-charts';
+import {
+  CandlestickSeries,
+  createChart,
+  createSeriesMarkers,
+  HistogramSeries,
+  type IChartApi,
+  type SeriesMarker,
+  type Time
+} from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
 import type { BarPoint } from '../api/types';
 import { toCandlestickData, toVolumeData } from './chartData';
 
 type AssetChartProps = {
   bars: BarPoint[];
+  markers?: SeriesMarker<Time>[];
 };
 
-export function AssetChart({ bars }: AssetChartProps) {
+export function AssetChart({ bars, markers = [] }: AssetChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -43,6 +52,9 @@ export function AssetChart({ bars }: AssetChartProps) {
       wickDownColor: '#d64545'
     });
     candleSeries.setData(toCandlestickData(bars));
+    if (markers.length > 0) {
+      createSeriesMarkers(candleSeries, markers);
+    }
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
@@ -71,7 +83,7 @@ export function AssetChart({ bars }: AssetChartProps) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [bars]);
+  }, [bars, markers]);
 
   return <div className="asset-chart" ref={containerRef} />;
 }
