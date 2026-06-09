@@ -1,0 +1,68 @@
+from typing import Any
+
+
+def list_strategy_catalog() -> list[dict[str, Any]]:
+    return [
+        {
+            "strategy_id": "manual_v1_topn_rotation",
+            "strategy_name": "Manual V1 TopN Rotation",
+            "status": "runnable",
+            "description": "Rank stocks by manual_v1 factor score and rebalance a TopN basket.",
+            "factor_groups": ["momentum", "trend", "volume_price", "risk", "sector"],
+            "signal_inputs": ["factor.stock_score_daily", "market_daily_bar"],
+            "default_parameters": {
+                "score_version": "manual_v1",
+                "top_n": 20,
+                "rebalance_frequency": "weekly",
+                "max_positions": 20,
+                "transaction_cost_bps": 10,
+                "adjust_type": "hfq",
+            },
+            "latest_evidence": "",
+            "primary_action": "Run backtest",
+        },
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline",
+            "status": "replay_only",
+            "description": "Inspect LHB support/follow signals and shortline replay artifacts.",
+            "factor_groups": [],
+            "signal_inputs": ["LHB events", "support/follow signals", "daily bars"],
+            "default_parameters": {},
+            "latest_evidence": "strategy_validation",
+            "primary_action": "Inspect evidence",
+        },
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Shortline",
+            "status": "replay_only",
+            "description": "Inspect trend protection, drawdown diagnostics, and mid-trend evidence.",
+            "factor_groups": ["trend", "risk"],
+            "signal_inputs": ["trend protection", "drawdown diagnostics", "market state"],
+            "default_parameters": {},
+            "latest_evidence": "strategy_validation",
+            "primary_action": "Inspect evidence",
+        },
+        {
+            "strategy_id": "tech_bottleneck",
+            "strategy_name": "Tech Bottleneck Discovery",
+            "status": "replay_only",
+            "description": "Inspect bottleneck rank and technical condition evidence.",
+            "factor_groups": ["trend", "volume_price", "risk"],
+            "signal_inputs": ["bottleneck rank", "technical condition buckets"],
+            "default_parameters": {},
+            "latest_evidence": "strategy_validation",
+            "primary_action": "Inspect evidence",
+        },
+        {
+            "strategy_id": "position_control",
+            "strategy_name": "Position Control Overlay",
+            "status": "replay_only",
+            "description": "Inspect risk budgets, exposure caps, and position snapshots.",
+            "factor_groups": ["risk"],
+            "signal_inputs": ["exposure cap", "risk budget", "drawdown state"],
+            "default_parameters": {},
+            "latest_evidence": "strategy_validation",
+            "primary_action": "Inspect evidence",
+        },
+    ]

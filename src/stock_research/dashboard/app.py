@@ -21,6 +21,7 @@ from stock_research.dashboard.shadow_review_decisions import load_shadow_review_
 from stock_research.dashboard.shadow_follow_up_queue import load_shadow_follow_up_queue_summary
 from stock_research.dashboard.shadow_follow_up_resolution import load_shadow_follow_up_resolution_summary
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
+from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.dashboard.strategy_validation import (
     build_strategy_validation_replay,
     list_strategy_validation_artifacts,
@@ -319,6 +320,10 @@ def create_app() -> FastAPI:
     @app.get("/api/reports")
     def reports(trade_date: str):
         return {"trade_date": trade_date, "items": load_report_links(trade_date)}
+
+    @app.get("/api/strategies/catalog")
+    def strategies_catalog():
+        return {"items": list_strategy_catalog()}
 
     @app.get("/api/strategy-validation/runs")
     def strategy_validation_runs(strategy_id: str | None = None):
