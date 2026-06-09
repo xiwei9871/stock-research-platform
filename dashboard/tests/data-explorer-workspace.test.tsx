@@ -57,9 +57,15 @@ function makeProfile(overrides: Partial<AssetProfile> = {}): AssetProfile {
       }
     ],
     coverage: {
-      min_date: '1991-04-03',
-      max_date: '2026-06-08',
-      bar_count: 8240
+      daily_bars: {
+        min_date: '1991-04-03',
+        max_date: '2026-06-08',
+        row_count: 8240
+      },
+      factors: {
+        latest_factor_date: '2026-06-08',
+        factor_count: 43
+      }
     },
     ...overrides
   };
@@ -118,6 +124,9 @@ describe('DataExplorerWorkspace', () => {
     expect(screen.getByRole('cell', { name: '0.1234' })).toBeInTheDocument();
     expect(screen.queryByRole('cell', { name: 'factor_name' })).not.toBeInTheDocument();
     expect(screen.getByText('1991-04-03')).toBeInTheDocument();
+    expect(screen.getByText('daily_bars.min_date')).toBeInTheDocument();
+    expect(screen.getByText('factors.factor_count')).toBeInTheDocument();
+    expect(screen.queryByText(/"min_date"/)).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
   });
 
@@ -197,6 +206,22 @@ describe('DataExplorerWorkspace', () => {
     expect(screen.getByText('浦发银行')).toBeInTheDocument();
     expect(screen.getByText('CN:SH:600000')).toBeInTheDocument();
     expect(screen.queryByText('平安银行')).not.toBeInTheDocument();
+  });
+
+  it('does not update state after unmounting during a load', async () => {
+    const pendingRequest = deferredProfile();
+    apiMocks.fetchAssetProfile.mockReturnValueOnce(pendingRequest.promise);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { unmount } = render(<DataExplorerWorkspace />);
+    unmount();
+
+    await act(async () => {
+      pendingRequest.resolve(makeProfile());
+    });
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 
   it('opens from AppShell Data Explorer navigation', async () => {

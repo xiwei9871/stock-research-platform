@@ -32,6 +32,25 @@ function formatScore(profile: AssetProfile | null) {
   return typeof score === 'number' ? score.toFixed(1) : '-';
 }
 
+type KeyValueRow = {
+  key: string;
+  value: unknown;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function flattenKeyValueRows(value: Record<string, unknown>, prefix = ''): KeyValueRow[] {
+  return Object.entries(value).flatMap(([key, rowValue]) => {
+    const nextKey = prefix ? `${prefix}.${key}` : key;
+    if (isPlainRecord(rowValue)) {
+      return flattenKeyValueRows(rowValue, nextKey);
+    }
+    return [{ key: nextKey, value: rowValue }];
+  });
+}
+
 type FactorDisplayRow = {
   group: string;
   name: string;
@@ -62,6 +81,7 @@ export function DataExplorerWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const mountedRef = useRef(false);
 
   const loadProfile = (nextAssetId = assetId, nextTradeDate = tradeDate, nextAdjustType = adjustType) => {
     const requestId = requestIdRef.current + 1;
@@ -74,14 +94,14 @@ export function DataExplorerWorkspace() {
 
     fetchAssetProfile(normalizedAssetId, nextTradeDate, startDate, nextTradeDate, SCORE_VERSION, nextAdjustType)
       .then((nextProfile) => {
-        if (requestIdRef.current !== requestId) {
+        if (!mountedRef.current || requestIdRef.current !== requestId) {
           return;
         }
         setProfile(nextProfile);
         setIsLoading(false);
       })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== requestId) {
+        if (!mountedRef.current || requestIdRef.current !== requestId) {
           return;
         }
         setError(err instanceof Error ? err.message : String(err));
@@ -90,7 +110,11 @@ export function DataExplorerWorkspace() {
   };
 
   useEffect(() => {
+    mountedRef.current = true;
     loadProfile(DEFAULT_ASSET_ID, DEFAULT_TRADE_DATE, DEFAULT_ADJUST_TYPE);
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -100,7 +124,7 @@ export function DataExplorerWorkspace() {
 
   const identityName = profile?.asset?.name ?? profile?.asset_id ?? assetId;
   const canonicalAssetId = profile?.canonical_asset_id ?? '-';
-  const coverageRows = Object.entries(profile?.coverage ?? {});
+  const coverageRows = flattenKeyValueRows(profile?.coverage ?? {});
   const factorRows = getFactorRows(profile);
 
   return (
@@ -160,10 +184,10 @@ export function DataExplorerWorkspace() {
                 <h2>Data Coverage</h2>
               </div>
               <dl className="data-kv-list">
-                {coverageRows.map(([key, value]) => (
-                  <div key={key}>
-                    <dt>{key}</dt>
-                    <dd>{formatValue(value)}</dd>
+                {coverageRows.map((row) => (
+                  <div key={row.key}>
+                    <dt>{row.key}</dt>
+                    <dd>{formatValue(row.value)}</dd>
                   </div>
                 ))}
                 {coverageRows.length === 0 ? <p className="muted">No coverage metadata available.</p> : null}
