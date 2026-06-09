@@ -17,6 +17,7 @@ body {
   grid-template-columns: 220px minmax(0, 1fr);
   min-height: 100vh;
   background: #f4f6f8;
+  min-width: 0;
 }
 
 .platform-nav {
@@ -26,6 +27,7 @@ body {
   border-right: 1px solid #d9dee7;
   background: #ffffff;
   padding: 16px;
+  min-width: 0;
 }
 
 .platform-nav button,
@@ -50,6 +52,7 @@ body {
 .platform-workspace {
   min-width: 0;
   padding: 18px;
+  overflow-x: clip;
 }
 
 .home-cockpit,
@@ -419,6 +422,7 @@ body {
 .strategy-workspace {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .strategy-toolbar,
@@ -438,6 +442,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 12px;
+  min-width: 0;
 }
 
 .strategy-chart-panel,
@@ -472,6 +477,7 @@ body {
 
 .strategy-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   background: #ffffff;
 }
@@ -511,7 +517,21 @@ body {
 }
 
 @media (max-width: 900px) {
+  .platform-workspace {
+    padding: 12px;
+  }
+
   .strategy-replay {
     grid-template-columns: 1fr;
+  }
+
+  .strategy-toolbar select,
+  .strategy-toolbar input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .strategy-tabs button {
+    min-width: 0;
   }
 }

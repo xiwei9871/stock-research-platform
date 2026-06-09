@@ -597,13 +597,13 @@ describe('dashboard app shell', () => {
     await screen.findByRole('heading', { name: 'Research Cockpit' });
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Factor Lab' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
     expect(await screen.findByRole('heading', { name: 'Factor Lab' })).toBeVisible();
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Backtest Lab' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Backtest Lab workspace' }));
     expect(await screen.findByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Reports' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Reports workspace' }));
     expect(await screen.findByRole('heading', { name: 'Reports' })).toBeVisible();
   });
 
@@ -644,7 +644,7 @@ describe('dashboard app shell', () => {
     render(<App />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Strategy Validation' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Validation workspace' }));
 
     await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });

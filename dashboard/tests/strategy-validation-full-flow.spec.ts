@@ -460,7 +460,7 @@ function makeReplayPayload(scenario: StrategyScenario, assetId: string) {
 async function openStrategyValidation(page: Page) {
   await page.goto('/');
   await expect(page.getByText('Stock Research')).toBeVisible();
-  await page.getByRole('button', { name: 'Strategy Validation' }).click();
+  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toHaveValue(scenarios[0].run.run_id);
 }
 

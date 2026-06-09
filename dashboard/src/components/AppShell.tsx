@@ -32,6 +32,8 @@ export function AppShell() {
           <button
             type="button"
             key={item.mode}
+            aria-current={workspaceMode === item.mode ? 'page' : undefined}
+            aria-label={`Open ${item.label} workspace`}
             className={workspaceMode === item.mode ? 'active' : ''}
             onClick={() => setWorkspaceMode(item.mode)}
           >

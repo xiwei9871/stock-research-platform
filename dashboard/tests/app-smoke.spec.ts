@@ -46,6 +46,50 @@ async function mockDashboardApi(page: Page) {
     });
   });
 
+  await page.route('/api/platform/summary**', async (route) => {
+    await route.fulfill({
+      json: {
+        latest_market_date: '2026-06-08',
+        latest_score_date: '2026-06-08',
+        latest_factor_date: '2026-06-08',
+        market_asset_count: 5207,
+        score_asset_count: 5207,
+        factor_count: 43,
+        score_versions: ['manual_v1'],
+        topn_preview: [
+          {
+            trade_date: '2026-06-08',
+            asset_id: 'CN:SZ:300951',
+            rank: 1,
+            score_total: 89.9,
+            score_version: 'manual_v1',
+            score_components: {}
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/strategies/catalog**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            strategy_id: 'manual_v1_topn_rotation',
+            strategy_name: 'Manual V1 TopN Rotation',
+            status: 'runnable',
+            description: 'TopN rotation',
+            factor_groups: ['momentum'],
+            signal_inputs: ['factor.stock_score_daily'],
+            default_parameters: { top_n: 20 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          }
+        ]
+      }
+    });
+  });
+
   await page.route('/api/assets/*/bars**', async (route) => {
     await route.fulfill({
       json: {
@@ -563,78 +607,16 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByLabel('asset id')).toHaveValue('000001.SZ');
-  await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
-  await expect(
-    page
-      .locator('.inspector-section')
-      .filter({ has: page.getByRole('heading', { name: 'Asset Review' }) })
-      .getByText('Score')
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
-  await expect(
-    page
-      .locator('.inspector-section')
-      .filter({ has: page.getByRole('heading', { name: 'Decision History' }) })
-      .getByText('candidate')
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
-  await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outcome Analytics', exact: true })).toBeVisible();
-  await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Experiment Proposals' })).toBeVisible();
-  await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
-  await expect(page.getByText('passed_offline_replay')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Watchlist' })).toBeVisible();
-  const shadowWatchlistPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Watchlist' }) });
-  await expect(shadowWatchlistPanel.getByText('shadow_ready')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcomes' })).toBeVisible();
-  const shadowOutcomesPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcomes' }) });
-  await expect(shadowOutcomesPanel.getByText('complete', { exact: true })).toBeVisible();
-  await expect(shadowOutcomesPanel.getByText(/5D\s+\+50.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
-  const shadowOutcomeAnalyticsPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcome Analytics' }) });
-  await expect(shadowOutcomeAnalyticsPanel.getByText('trend_shadow')).toBeVisible();
-  await expect(shadowOutcomeAnalyticsPanel.getByText(/20D\s+\+12.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
-  const shadowAnalyticsReviewPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Analytics Review' }) });
-  await expect(shadowAnalyticsReviewPanel.getByText('research_follow_up_candidate')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
-  const shadowReviewDecisionsPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Review Decisions' }) });
-  await expect(shadowReviewDecisionsPanel.getByText('open_research_follow_up')).toBeVisible();
-  await expect(shadowReviewDecisionsPanel.getByText('Create a separately scoped research follow-up.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Queue' })).toBeVisible();
-  const shadowFollowUpPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Follow-up Queue' }) });
-  await expect(shadowFollowUpPanel.getByText('collect_more_evidence')).toBeVisible();
-  await expect(shadowFollowUpPanel.getByText('Additional outcome or data-quality evidence')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Resolution' })).toBeVisible();
-  const shadowFollowUpResolutionPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Follow-up Resolution' }) });
-  await expect(shadowFollowUpResolutionPanel.getByText('stale_unresolved')).toBeVisible();
-  await expect(
-    shadowFollowUpResolutionPanel.getByText('Review whether requested evidence has been collected.')
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
+  await expect(page.getByText('Latest Market Data')).toBeVisible();
+  await expect(page.getByText('Manual V1 TopN Rotation')).toBeVisible();
+  await expect(page.getByText('candidate pool, not buy signal')).toBeVisible();
+  await expect(page.getByText('CN:SZ:300951')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Strategy Validation' }).click();
+  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
 
@@ -649,13 +631,9 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await page.goto('/');
 
   await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Resolution' })).toBeVisible();
-  await page.getByRole('button', { name: 'Strategy Validation' }).click();
+  await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
+  await expect(page.getByText('candidate pool, not buy signal')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);

@@ -92,4 +92,17 @@ describe('AppShell and HomeCockpit', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Data Explorer' })).toBeVisible());
   });
+
+  it('exposes side navigation with unique accessible names and current state', async () => {
+    render(<AppShell />);
+    await screen.findByRole('heading', { name: 'Research Cockpit' });
+
+    const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
+
+    expect(within(sideNav).getByRole('button', { name: 'Open Home workspace' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('button', { name: 'Open Strategy Validation workspace' })).toBeVisible();
+  });
 });
