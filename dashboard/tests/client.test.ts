@@ -239,4 +239,43 @@ describe('dashboard API client', () => {
     );
     expect(result[0].resolution_status).toBe('stale_unresolved');
   });
+
+  it('fetches strategy validation runs with optional strategy filter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ run_id: 'lhb_shortline:fixture:phase16', strategy_id: 'lhb_shortline' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { fetchStrategyValidationRuns } = await import('../src/api/client');
+    const result = await fetchStrategyValidationRuns({ strategyId: 'lhb_shortline' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/strategy-validation/runs?strategy_id=lhb_shortline');
+    expect(result[0].run_id).toBe('lhb_shortline:fixture:phase16');
+  });
+
+  it('fetches strategy validation replay with date range', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        run: { run_id: 'run-1', strategy_id: 'lhb_shortline' },
+        asset_id: '000001.SZ',
+        bars: [],
+        signals: [],
+        trades: [],
+        positions: [],
+        metrics: [],
+        artifacts: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { fetchStrategyValidationReplay } = await import('../src/api/client');
+    const result = await fetchStrategyValidationReplay('run-1', '000001.SZ', '2026-06-01', '2026-06-08');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/strategy-validation/runs/run-1/assets/000001.SZ/replay?start_date=2026-06-01&end_date=2026-06-08&adjust_type=qfq'
+    );
+    expect(result.asset_id).toBe('000001.SZ');
+  });
 });

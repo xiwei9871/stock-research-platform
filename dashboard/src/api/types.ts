@@ -372,3 +372,114 @@ export type DashboardOverview = {
   watchlist_signals: WatchlistSignalRow[];
   reports: ReportLink[];
 };
+
+export type StrategyValidationRun = {
+  run_id: string;
+  strategy_id: string;
+  strategy_name: string;
+  strategy_version: string;
+  run_type: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  benchmark: string;
+  universe: string;
+  data_window: Record<string, unknown>;
+  cost_config: Record<string, unknown>;
+  slippage_config: Record<string, unknown>;
+  risk_config: Record<string, unknown>;
+  position_config: Record<string, unknown>;
+  source_artifact_paths: string[];
+  summary_metrics: Record<string, unknown>;
+  warnings: string[];
+};
+
+export type StrategySignal = {
+  run_id: string;
+  strategy_id: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  signal_time: string;
+  trade_date: string;
+  signal_type: string;
+  signal_strength: number | null;
+  signal_bucket: string;
+  risk_bucket: string;
+  rule_id: string;
+  reason: string;
+  tags: string[];
+  source_artifact_path: string;
+};
+
+export type StrategyTrade = {
+  run_id: string;
+  strategy_id: string;
+  asset_id: string;
+  entry_time: string | null;
+  entry_price: number | null;
+  entry_reason: string;
+  exit_time: string | null;
+  exit_price: number | null;
+  exit_reason: string;
+  holding_days: number | null;
+  return_pct: number | null;
+  max_high_return_pct: number | null;
+  max_drawdown_pct: number | null;
+  outcome_status: string;
+  source_artifact_path: string;
+};
+
+export type StrategyPositionSnapshot = {
+  run_id: string;
+  strategy_id: string;
+  trade_date: string;
+  asset_id: string;
+  position_weight: number | null;
+  target_weight: number | null;
+  cash_weight: number | null;
+  exposure: number | null;
+  position_cap: number | null;
+  risk_budget: number | null;
+  suppression_reason: string;
+  source_artifact_path: string;
+};
+
+export type StrategyMetricRow = {
+  run_id: string;
+  strategy_id: string;
+  metric_level: string;
+  group_key: string;
+  sample_count: number;
+  complete_count: number;
+  win_rate: number | null;
+  forward_return_mean: number | null;
+  forward_return_median: number | null;
+  max_high_return_mean: number | null;
+  max_drawdown_mean: number | null;
+  max_drawdown_worst: number | null;
+  turnover: number | null;
+  exposure_mean: number | null;
+  source_artifact_path: string;
+};
+
+export type StrategyEvidenceArtifact = {
+  run_id: string;
+  artifact_type: string;
+  title: string;
+  path: string;
+  format: string;
+  trade_date: string | null;
+  description: string;
+};
+
+export type StrategyReplayPayload = {
+  run: StrategyValidationRun | null;
+  asset_id: string;
+  bars: BarPoint[];
+  signals: StrategySignal[];
+  trades: StrategyTrade[];
+  positions: StrategyPositionSnapshot[];
+  metrics: StrategyMetricRow[];
+  artifacts: StrategyEvidenceArtifact[];
+};

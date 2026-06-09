@@ -14,6 +14,13 @@ import type {
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
+  StrategyEvidenceArtifact,
+  StrategyMetricRow,
+  StrategyPositionSnapshot,
+  StrategyReplayPayload,
+  StrategySignal,
+  StrategyTrade,
+  StrategyValidationRun,
   WatchlistSignalRow
 } from './types';
 
@@ -230,6 +237,83 @@ export async function fetchShadowFollowUpResolution(
       `&end_date=${encodeURIComponent(endDate)}&limit=${limit}`
   );
   return payload.items;
+}
+
+export async function fetchStrategyValidationRuns(
+  options: { strategyId?: string } = {}
+): Promise<StrategyValidationRun[]> {
+  const strategy = options.strategyId ? `?strategy_id=${encodeURIComponent(options.strategyId)}` : '';
+  const payload = await getJson<{ items: StrategyValidationRun[] }>(`/api/strategy-validation/runs${strategy}`);
+  return payload.items;
+}
+
+export async function fetchStrategyValidationSignals(
+  runId: string,
+  options: { assetId?: string; signalBucket?: string; riskBucket?: string } = {}
+): Promise<StrategySignal[]> {
+  const params = new URLSearchParams();
+  if (options.assetId) params.set('asset_id', options.assetId);
+  if (options.signalBucket) params.set('signal_bucket', options.signalBucket);
+  if (options.riskBucket) params.set('risk_bucket', options.riskBucket);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const payload = await getJson<{ items: StrategySignal[] }>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}/signals${suffix}`
+  );
+  return payload.items;
+}
+
+export async function fetchStrategyValidationTrades(
+  runId: string,
+  options: { assetId?: string } = {}
+): Promise<StrategyTrade[]> {
+  const suffix = options.assetId ? `?asset_id=${encodeURIComponent(options.assetId)}` : '';
+  const payload = await getJson<{ items: StrategyTrade[] }>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}/trades${suffix}`
+  );
+  return payload.items;
+}
+
+export async function fetchStrategyValidationPositions(
+  runId: string,
+  options: { assetId?: string } = {}
+): Promise<StrategyPositionSnapshot[]> {
+  const suffix = options.assetId ? `?asset_id=${encodeURIComponent(options.assetId)}` : '';
+  const payload = await getJson<{ items: StrategyPositionSnapshot[] }>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}/positions${suffix}`
+  );
+  return payload.items;
+}
+
+export async function fetchStrategyValidationMetrics(
+  runId: string,
+  options: { metricLevel?: string } = {}
+): Promise<StrategyMetricRow[]> {
+  const suffix = options.metricLevel ? `?metric_level=${encodeURIComponent(options.metricLevel)}` : '';
+  const payload = await getJson<{ items: StrategyMetricRow[] }>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}/metrics${suffix}`
+  );
+  return payload.items;
+}
+
+export async function fetchStrategyValidationArtifacts(runId: string): Promise<StrategyEvidenceArtifact[]> {
+  const payload = await getJson<{ items: StrategyEvidenceArtifact[] }>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}/artifacts`
+  );
+  return payload.items;
+}
+
+export async function fetchStrategyValidationReplay(
+  runId: string,
+  assetId: string,
+  startDate: string,
+  endDate: string,
+  adjustType = 'qfq'
+): Promise<StrategyReplayPayload> {
+  return getJson<StrategyReplayPayload>(
+    `/api/strategy-validation/runs/${encodeURIComponent(runId)}` +
+      `/assets/${encodeURIComponent(assetId)}/replay?start_date=${encodeURIComponent(startDate)}` +
+      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}`
+  );
 }
 
 async function getJson<T>(url: string): Promise<T> {
