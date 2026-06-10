@@ -5,23 +5,36 @@ from typing import Any
 import pandas as pd
 
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
+from stock_research.dashboard.strategy_backtest_adapters import (
+    STRATEGY_BACKTEST_REGISTRY,
+    StrategyBacktestParams,
+)
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     load_vectorized_topn_inputs,
     run_vectorized_topn_backtest,
 )
 
-RUNNABLE_STRATEGY_ID = "manual_v1_topn_rotation"
-
 
 def list_backtest_strategies() -> list[dict[str, Any]]:
     return list_strategy_catalog()
 
 
+def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str) -> pd.DataFrame:
+    _, prices = load_vectorized_topn_inputs(
+        start_date=start_date,
+        end_date=end_date,
+        score_version="manual_v1",
+        adjust_type=adjust_type,
+    )
+    return prices
+
+
 def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     strategy_id = _required_text(payload, "strategy_id")
-    if strategy_id != RUNNABLE_STRATEGY_ID:
-        raise ValueError("only manual_v1_topn_rotation is runnable in this version")
+    adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
+    if adapter is None:
+        raise ValueError(f"unsupported strategy: {strategy_id}")
 
     start_date = _required_text(payload, "start_date")
     end_date = _required_text(payload, "end_date")
@@ -36,10 +49,16 @@ def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         0.0,
     )
 
-    scores, prices = load_vectorized_topn_inputs(
+    params = StrategyBacktestParams(
         start_date=start_date,
         end_date=end_date,
         score_version=score_version,
+        adjust_type=adjust_type,
+    )
+    scores = adapter.load_scores(params)
+    prices = load_vectorized_topn_prices(
+        start_date=start_date,
+        end_date=end_date,
         adjust_type=adjust_type,
     )
     config = VectorizedTopNConfig(
