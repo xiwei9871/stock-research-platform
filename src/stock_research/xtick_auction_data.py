@@ -13,12 +13,13 @@ from typing import Any
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many
+from stock_research.db import connect, execute_many, fetch_all
 from stock_research.minute_data import canonical_json, parse_float, payload_hash
 
 
 XTICK_BASE_URL = "http://api.xtick.top"
-XTICK_DAYUPDATE_SYMBOLS = ["szm", "shm", "cyb", "kcb", "bj"]
+XTICK_DAYUPDATE_SYMBOLS = ["szm", "shm", "cyb", "kcb"]
+XTICK_AUCTION_DETAIL_AVAILABLE_START_DATE = "2026-05-10"
 
 
 def xtick_token(token: str | None = None, token_env: str = "XTICK_TOKEN") -> str:
@@ -356,3 +357,311 @@ def write_xtick_auction_collect_report(
         },
         "summary": summary,
     }
+
+
+def _date_range(start_date: str, end_date: str) -> list[dt.date]:
+    start = dt.date.fromisoformat(start_date)
+    end = dt.date.fromisoformat(end_date)
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current)
+        current += dt.timedelta(days=1)
+    return dates
+
+
+def load_xtick_backfill_trade_dates(
+    start_date: str,
+    end_date: str,
+    research_service: str = SETTINGS.research_service,
+) -> list[str]:
+    sql = """
+    SELECT DISTINCT trade_date::text AS trade_date
+    FROM market_daily_bar
+    WHERE trade_date BETWEEN %s AND %s
+    ORDER BY trade_date
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date])
+    return [str(row["trade_date"])[:10] for row in rows]
+
+
+def load_existing_xtick_auction_coverage(
+    start_date: str,
+    end_date: str,
+    source: str = "xtick_dayupdate_bid",
+    research_service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    SELECT
+        trade_date::text AS trade_date,
+        CASE
+            WHEN ts_code LIKE '%%.SH' AND code LIKE '688%%' THEN 'kcb'
+            WHEN ts_code LIKE '%%.SH' THEN 'shm'
+            WHEN ts_code LIKE '%%.SZ' AND code LIKE '300%%' THEN 'cyb'
+            WHEN ts_code LIKE '%%.SZ' THEN 'szm'
+            WHEN ts_code LIKE '%%.BJ' THEN 'bj'
+            ELSE 'unknown'
+        END AS symbol,
+        count(*) AS existing_rows,
+        min(trade_time)::text AS min_time,
+        max(trade_time)::text AS max_time
+    FROM market.stock_auction_detail
+    WHERE trade_date BETWEEN %s AND %s
+      AND source = %s
+    GROUP BY trade_date, symbol
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, source])
+    return pd.DataFrame(rows)
+
+
+def build_xtick_auction_backfill_plan(
+    start_date: str,
+    end_date: str,
+    trade_dates: list[str] | None = None,
+    symbols: list[str] | None = None,
+    existing_coverage: pd.DataFrame | None = None,
+    available_start_date: str = XTICK_AUCTION_DETAIL_AVAILABLE_START_DATE,
+    min_existing_rows: int = 1,
+) -> pd.DataFrame:
+    selected_symbols = symbols or XTICK_DAYUPDATE_SYMBOLS
+    if trade_dates is None:
+        selected_dates = [value.isoformat() for value in _date_range(start_date, end_date)]
+    else:
+        selected_dates = sorted(set(trade_dates))
+    available_start = dt.date.fromisoformat(available_start_date)
+    coverage_lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    if existing_coverage is not None and not existing_coverage.empty:
+        coverage = existing_coverage.copy()
+        coverage["trade_date"] = pd.to_datetime(coverage["trade_date"], errors="coerce").dt.date.astype(str)
+        for row in coverage.to_dict("records"):
+            coverage_lookup[(str(row["trade_date"]), str(row["symbol"]))] = row
+    plan_rows = []
+    for trade_date in selected_dates:
+        parsed_date = dt.date.fromisoformat(str(trade_date))
+        for symbol in selected_symbols:
+            coverage_row = coverage_lookup.get((str(trade_date), symbol), {})
+            existing_rows = int(coverage_row.get("existing_rows") or 0)
+            if parsed_date < available_start:
+                status = "unavailable_by_permission"
+            elif existing_rows >= min_existing_rows:
+                status = "covered"
+            else:
+                status = "pending"
+            plan_rows.append(
+                {
+                    "trade_date": str(trade_date),
+                    "symbol": symbol,
+                    "source_endpoint": "dayupdate",
+                    "source": "xtick_dayupdate_bid",
+                    "status": status,
+                    "existing_rows": existing_rows,
+                    "min_time": coverage_row.get("min_time", ""),
+                    "max_time": coverage_row.get("max_time", ""),
+                    "attempt_count": 0,
+                    "last_error": "",
+                }
+            )
+    return pd.DataFrame(plan_rows)
+
+
+def write_xtick_auction_backfill_plan_report(
+    plan: pd.DataFrame,
+    output_dir: str | Path,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    plan_path = output / "xtick_auction_detail_backfill_plan_latest.csv"
+    report_path = output / "xtick_auction_detail_backfill_plan_latest.md"
+    plan.to_csv(plan_path, index=False)
+    counts = plan["status"].value_counts().to_dict() if not plan.empty else {}
+    summary = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_tasks": int(len(plan)),
+        "pending_tasks": int(counts.get("pending", 0)),
+        "covered_tasks": int(counts.get("covered", 0)),
+        "unavailable_tasks": int(counts.get("unavailable_by_permission", 0)),
+    }
+    report_path.write_text(
+        "\n".join(
+            [
+                "# XTick Auction Detail Backfill Plan",
+                "",
+                f"- start_date: {start_date}",
+                f"- end_date: {end_date}",
+                f"- total_tasks: {summary['total_tasks']}",
+                f"- pending_tasks: {summary['pending_tasks']}",
+                f"- covered_tasks: {summary['covered_tasks']}",
+                f"- unavailable_by_permission: {summary['unavailable_tasks']}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {"paths": {"plan": plan_path, "markdown_report": report_path}, "summary": summary}
+
+
+def run_xtick_auction_backfill_plan(
+    plan: pd.DataFrame,
+    max_tasks: int | None = None,
+    token: str | None = None,
+    token_env: str = "XTICK_TOKEN",
+    sleep_seconds: float = 1.0,
+) -> dict[str, Any]:
+    if plan.empty:
+        executed = pd.DataFrame()
+    else:
+        tasks = plan[plan["status"] == "pending"].copy()
+        tasks = tasks.sort_values(["trade_date", "symbol"])
+        if max_tasks is not None:
+            tasks = tasks.head(max_tasks)
+        executed_rows: list[dict[str, Any]] = []
+        for task in tasks.to_dict("records"):
+            result = collect_xtick_dayupdate_bid(
+                trade_date=str(task["trade_date"]),
+                symbols=[str(task["symbol"])],
+                token=token,
+                token_env=token_env,
+                sleep_seconds=sleep_seconds,
+            )
+            for row in result["detail"].to_dict("records"):
+                executed_rows.append(row)
+        executed = pd.DataFrame(executed_rows)
+    pending_total = int((plan["status"] == "pending").sum()) if not plan.empty else 0
+    executed_tasks = int(len(executed))
+    return {
+        "executed": executed,
+        "summary": {
+            "executed_tasks": executed_tasks,
+            "remaining_pending_tasks": max(0, pending_total - executed_tasks),
+            "upserted_rows": int(executed["upserted_rows"].sum()) if not executed.empty else 0,
+        },
+    }
+
+
+def write_xtick_auction_backfill_run_report(
+    result: dict[str, Any],
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    executed_path = output / "xtick_auction_detail_backfill_executed_latest.csv"
+    report_path = output / "xtick_auction_detail_backfill_run_latest.md"
+    result["executed"].to_csv(executed_path, index=False)
+    summary = result["summary"]
+    report_path.write_text(
+        "\n".join(
+            [
+                "# XTick Auction Detail Backfill Run",
+                "",
+                f"- executed_tasks: {summary['executed_tasks']}",
+                f"- remaining_pending_tasks: {summary['remaining_pending_tasks']}",
+                f"- upserted_rows: {summary['upserted_rows']}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {"paths": {"executed": executed_path, "markdown_report": report_path}, "summary": summary}
+
+
+def build_xtick_auction_close_check(
+    start_date: str,
+    end_date: str,
+    source: str = "xtick_dayupdate_bid",
+    research_service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    WITH detail_925 AS (
+        SELECT
+            trade_date,
+            ts_code,
+            trade_time,
+            price AS detail_price,
+            jje AS detail_amount
+        FROM market.stock_auction_detail
+        WHERE trade_date BETWEEN %s AND %s
+          AND source = %s
+          AND to_char(trade_time, 'HH24:MI:SS') = '09:25:00'
+    ),
+    result_bar AS (
+        SELECT
+            trade_date,
+            ts_code,
+            open AS bar_open,
+            close AS bar_close,
+            vwap AS bar_vwap,
+            amount AS bar_amount
+        FROM market.stock_auction_bar
+        WHERE trade_date BETWEEN %s AND %s
+          AND auction_phase = 'open_call'
+    )
+    SELECT
+        d.trade_date::text AS trade_date,
+        d.ts_code,
+        d.trade_time::text AS detail_time,
+        d.detail_price,
+        d.detail_amount,
+        b.bar_open,
+        b.bar_close,
+        b.bar_vwap,
+        b.bar_amount,
+        d.detail_price - b.bar_open AS price_diff,
+        d.detail_amount - b.bar_amount AS amount_diff,
+        CASE
+            WHEN b.ts_code IS NULL THEN 'missing_result_bar'
+            WHEN abs(coalesce(d.detail_price, 0) - coalesce(b.bar_open, 0)) <= 0.000001 THEN 'match'
+            ELSE 'price_mismatch'
+        END AS check_status
+    FROM detail_925 d
+    LEFT JOIN result_bar b
+      ON d.trade_date = b.trade_date
+     AND d.ts_code = b.ts_code
+    ORDER BY d.trade_date, d.ts_code
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, source, start_date, end_date])
+    return pd.DataFrame(rows)
+
+
+def write_xtick_auction_close_check_report(
+    detail: pd.DataFrame,
+    output_dir: str | Path,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    detail_path = output / "xtick_auction_detail_925_check_latest.csv"
+    report_path = output / "xtick_auction_detail_925_check_latest.md"
+    detail.to_csv(detail_path, index=False)
+    counts = detail["check_status"].value_counts().to_dict() if not detail.empty else {}
+    summary = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "checked_rows": int(len(detail)),
+        "match_rows": int(counts.get("match", 0)),
+        "missing_result_bar_rows": int(counts.get("missing_result_bar", 0)),
+        "price_mismatch_rows": int(counts.get("price_mismatch", 0)),
+    }
+    report_path.write_text(
+        "\n".join(
+            [
+                "# XTick Auction 09:25 Check",
+                "",
+                f"- start_date: {start_date}",
+                f"- end_date: {end_date}",
+                f"- checked_rows: {summary['checked_rows']}",
+                f"- match_rows: {summary['match_rows']}",
+                f"- missing_result_bar_rows: {summary['missing_result_bar_rows']}",
+                f"- price_mismatch_rows: {summary['price_mismatch_rows']}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {"paths": {"detail": detail_path, "markdown_report": report_path}, "summary": summary}

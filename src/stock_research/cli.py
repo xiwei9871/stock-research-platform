@@ -264,7 +264,15 @@ from stock_research.operator_decision.shadow_analytics_review import (
 )
 from stock_research.open_auction_minute_cron import build_open_auction_minute_cron_entries
 from stock_research.xtick_auction_data import (
+    build_xtick_auction_backfill_plan,
+    build_xtick_auction_close_check,
     collect_xtick_dayupdate_bid,
+    load_existing_xtick_auction_coverage,
+    load_xtick_backfill_trade_dates,
+    run_xtick_auction_backfill_plan,
+    write_xtick_auction_backfill_plan_report,
+    write_xtick_auction_backfill_run_report,
+    write_xtick_auction_close_check_report,
     write_xtick_auction_collect_report,
 )
 from stock_research.operator_decision.shadow_review_decisions import (
@@ -1539,13 +1547,47 @@ def build_parser() -> argparse.ArgumentParser:
     xtick_auction_detail.add_argument(
         "--symbols",
         type=lambda value: parse_str_list(value, "--symbols"),
-        default=["szm", "shm", "cyb", "kcb", "bj"],
+        default=["szm", "shm", "cyb", "kcb"],
     )
     xtick_auction_detail.add_argument("--token-env", default="XTICK_TOKEN")
     xtick_auction_detail.add_argument("--sleep-seconds", type=float, default=1.0)
     xtick_auction_detail.add_argument(
         "--output-dir",
         default="/Users/xiwei/stock_research/outputs/research/xtick_auction_detail_collect",
+    )
+
+    xtick_auction_backfill_plan = subparsers.add_parser("xtick-auction-backfill-plan-v1")
+    xtick_auction_backfill_plan.add_argument("--start-date", required=True)
+    xtick_auction_backfill_plan.add_argument("--end-date", required=True)
+    xtick_auction_backfill_plan.add_argument(
+        "--symbols",
+        type=lambda value: parse_str_list(value, "--symbols"),
+        default=["szm", "shm", "cyb", "kcb"],
+    )
+    xtick_auction_backfill_plan.add_argument("--available-start-date", default="2026-05-10")
+    xtick_auction_backfill_plan.add_argument("--min-existing-rows", type=int, default=1)
+    xtick_auction_backfill_plan.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/xtick_auction_detail_backfill",
+    )
+
+    xtick_auction_backfill_run = subparsers.add_parser("xtick-auction-backfill-run-v1")
+    xtick_auction_backfill_run.add_argument("--plan-path", required=True)
+    xtick_auction_backfill_run.add_argument("--max-tasks", type=int, default=1)
+    xtick_auction_backfill_run.add_argument("--token-env", default="XTICK_TOKEN")
+    xtick_auction_backfill_run.add_argument("--sleep-seconds", type=float, default=20.0)
+    xtick_auction_backfill_run.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/xtick_auction_detail_backfill",
+    )
+
+    xtick_auction_925_check = subparsers.add_parser("xtick-auction-925-check-v1")
+    xtick_auction_925_check.add_argument("--start-date", required=True)
+    xtick_auction_925_check.add_argument("--end-date", required=True)
+    xtick_auction_925_check.add_argument("--source", default="xtick_dayupdate_bid")
+    xtick_auction_925_check.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/xtick_auction_detail_backfill",
     )
 
     lhb_auction_observation = subparsers.add_parser("lhb-auction-observation-v1")
@@ -7683,6 +7725,75 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"xtick_auction_detail_collect_v1|symbols_requested|{report['summary']['symbols_requested']}")
         print(f"xtick_auction_detail_collect_v1|symbols_failed|{report['summary']['symbols_failed']}")
         print(f"xtick_auction_detail_collect_v1|upserted_rows|{report['summary']['upserted_rows']}")
+        return 0
+    elif args.command == "xtick-auction-backfill-plan-v1":
+        coverage = load_existing_xtick_auction_coverage(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source="xtick_dayupdate_bid",
+        )
+        trade_dates = load_xtick_backfill_trade_dates(
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        plan = build_xtick_auction_backfill_plan(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            trade_dates=trade_dates or None,
+            symbols=args.symbols,
+            existing_coverage=coverage,
+            available_start_date=args.available_start_date,
+            min_existing_rows=args.min_existing_rows,
+        )
+        report = write_xtick_auction_backfill_plan_report(
+            plan=plan,
+            output_dir=args.output_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        print(f"xtick_auction_backfill_plan_v1|plan|{report['paths']['plan']}")
+        print(f"xtick_auction_backfill_plan_v1|report|{report['paths']['markdown_report']}")
+        print(f"xtick_auction_backfill_plan_v1|total_tasks|{report['summary']['total_tasks']}")
+        print(f"xtick_auction_backfill_plan_v1|pending_tasks|{report['summary']['pending_tasks']}")
+        print(f"xtick_auction_backfill_plan_v1|covered_tasks|{report['summary']['covered_tasks']}")
+        print(f"xtick_auction_backfill_plan_v1|unavailable_tasks|{report['summary']['unavailable_tasks']}")
+        return 0
+    elif args.command == "xtick-auction-backfill-run-v1":
+        plan = pd.read_csv(args.plan_path, low_memory=False)
+        result = run_xtick_auction_backfill_plan(
+            plan=plan,
+            max_tasks=args.max_tasks,
+            token_env=args.token_env,
+            sleep_seconds=args.sleep_seconds,
+        )
+        report = write_xtick_auction_backfill_run_report(
+            result=result,
+            output_dir=args.output_dir,
+        )
+        print(f"xtick_auction_backfill_run_v1|executed|{report['paths']['executed']}")
+        print(f"xtick_auction_backfill_run_v1|report|{report['paths']['markdown_report']}")
+        print(f"xtick_auction_backfill_run_v1|executed_tasks|{report['summary']['executed_tasks']}")
+        print(f"xtick_auction_backfill_run_v1|remaining_pending_tasks|{report['summary']['remaining_pending_tasks']}")
+        print(f"xtick_auction_backfill_run_v1|upserted_rows|{report['summary']['upserted_rows']}")
+        return 0
+    elif args.command == "xtick-auction-925-check-v1":
+        detail = build_xtick_auction_close_check(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            source=args.source,
+        )
+        report = write_xtick_auction_close_check_report(
+            detail=detail,
+            output_dir=args.output_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
+        print(f"xtick_auction_925_check_v1|detail|{report['paths']['detail']}")
+        print(f"xtick_auction_925_check_v1|report|{report['paths']['markdown_report']}")
+        print(f"xtick_auction_925_check_v1|checked_rows|{report['summary']['checked_rows']}")
+        print(f"xtick_auction_925_check_v1|match_rows|{report['summary']['match_rows']}")
+        print(f"xtick_auction_925_check_v1|missing_result_bar_rows|{report['summary']['missing_result_bar_rows']}")
+        print(f"xtick_auction_925_check_v1|price_mismatch_rows|{report['summary']['price_mismatch_rows']}")
         return 0
     elif args.command == "lhb-auction-observation-v1":
         result = build_lhb_auction_observation_report_v1(

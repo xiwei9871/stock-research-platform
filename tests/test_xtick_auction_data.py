@@ -10,10 +10,15 @@ import pytest
 from stock_research import cli
 from stock_research import xtick_auction_data
 from stock_research.xtick_auction_data import (
+    build_xtick_auction_backfill_plan,
+    build_xtick_auction_close_check,
     collect_xtick_dayupdate_bid,
     decode_xtick_response,
+    load_existing_xtick_auction_coverage,
+    run_xtick_auction_backfill_plan,
     ts_code_from_xtick_code,
     upsert_xtick_open_auction_detail_rows,
+    write_xtick_auction_backfill_plan_report,
     xtick_auction_detail_market_row,
 )
 
@@ -157,6 +162,35 @@ def test_xtick_auction_detail_commands_are_registered():
     assert args.symbols == ["shm", "szm"]
     assert args.token_env == "XTICK_TOKEN"
 
+    plan_args = parser.parse_args(
+        [
+            "xtick-auction-backfill-plan-v1",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-10",
+            "--output-dir",
+            "/tmp/out",
+        ]
+    )
+    run_args = parser.parse_args(
+        [
+            "xtick-auction-backfill-run-v1",
+            "--plan-path",
+            "/tmp/plan.csv",
+            "--max-tasks",
+            "2",
+            "--output-dir",
+            "/tmp/out",
+        ]
+    )
+
+    assert plan_args.command == "xtick-auction-backfill-plan-v1"
+    assert plan_args.available_start_date == "2026-05-10"
+    assert plan_args.symbols == ["szm", "shm", "cyb", "kcb"]
+    assert run_args.command == "xtick-auction-backfill-run-v1"
+    assert run_args.max_tasks == 2
+
 
 def test_write_xtick_collect_report_writes_latest_files(tmp_path):
     result = {
@@ -178,3 +212,182 @@ def test_write_xtick_collect_report_writes_latest_files(tmp_path):
     assert report["paths"]["detail"].exists()
     assert report["paths"]["latest"].exists()
     assert "upserted_rows: 1" in report["paths"]["markdown_report"].read_text(encoding="utf-8")
+
+
+def test_build_xtick_auction_backfill_plan_marks_permission_gap_and_pending_tasks():
+    plan = build_xtick_auction_backfill_plan(
+        start_date="2026-05-09",
+        end_date="2026-05-11",
+        trade_dates=["2026-05-09", "2026-05-10", "2026-05-11"],
+        symbols=["shm", "szm"],
+        existing_coverage=pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-05-10",
+                    "symbol": "shm",
+                    "existing_rows": 120000,
+                    "min_time": "2026-05-10 09:15:00",
+                    "max_time": "2026-05-10 09:25:00",
+                }
+            ]
+        ),
+        available_start_date="2026-05-10",
+    )
+
+    records = plan.to_dict("records")
+    assert records[0]["trade_date"] == "2026-05-09"
+    assert records[0]["status"] == "unavailable_by_permission"
+    assert records[2]["trade_date"] == "2026-05-10"
+    assert records[2]["symbol"] == "shm"
+    assert records[2]["status"] == "covered"
+    assert records[3]["trade_date"] == "2026-05-10"
+    assert records[3]["symbol"] == "szm"
+    assert records[3]["status"] == "pending"
+
+
+def test_build_xtick_auction_backfill_plan_defaults_to_existing_market_segments():
+    plan = build_xtick_auction_backfill_plan(
+        start_date="2026-06-09",
+        end_date="2026-06-09",
+        trade_dates=["2026-06-09"],
+        existing_coverage=pd.DataFrame(),
+    )
+
+    assert plan["symbol"].tolist() == ["szm", "shm", "cyb", "kcb"]
+
+
+def test_load_existing_xtick_auction_coverage_queries_by_date_and_source(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "trade_date": "2026-06-09",
+                "symbol": "shm",
+                "existing_rows": 58,
+                "min_time": "2026-06-09 09:15:00",
+                "max_time": "2026-06-09 09:25:00",
+            }
+        ]
+
+    monkeypatch.setattr(xtick_auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(xtick_auction_data, "fetch_all", fake_fetch_all)
+
+    coverage = load_existing_xtick_auction_coverage(
+        start_date="2026-06-01",
+        end_date="2026-06-30",
+        source="xtick_dayupdate_bid",
+    )
+
+    assert "FROM market.stock_auction_detail" in captured["sql"]
+    assert captured["params"] == ["2026-06-01", "2026-06-30", "xtick_dayupdate_bid"]
+    assert coverage.to_dict("records")[0]["symbol"] == "shm"
+
+
+def test_run_xtick_auction_backfill_plan_executes_pending_tasks_with_limit(monkeypatch):
+    plan = pd.DataFrame(
+        [
+            {"trade_date": "2026-06-07", "symbol": "shm", "status": "pending"},
+            {"trade_date": "2026-06-08", "symbol": "shm", "status": "covered"},
+            {"trade_date": "2026-06-09", "symbol": "szm", "status": "pending"},
+        ]
+    )
+    calls = []
+
+    def fake_collect(trade_date, symbols, token=None, token_env="XTICK_TOKEN", sleep_seconds=1.0):
+        calls.append((trade_date, symbols, token, token_env, sleep_seconds))
+        return {
+            "detail": pd.DataFrame(
+                [
+                    {
+                        "trade_date": trade_date,
+                        "symbol": symbols[0],
+                        "queried_rows": 10,
+                        "selected_rows": 10,
+                        "upserted_rows": 10,
+                        "error": "",
+                    }
+                ]
+            ),
+            "summary": {"upserted_rows": 10},
+        }
+
+    monkeypatch.setattr(xtick_auction_data, "collect_xtick_dayupdate_bid", fake_collect)
+
+    result = run_xtick_auction_backfill_plan(
+        plan=plan,
+        max_tasks=1,
+        token="token-value",
+        sleep_seconds=0,
+    )
+
+    assert calls == [("2026-06-07", ["shm"], "token-value", "XTICK_TOKEN", 0)]
+    assert result["summary"]["executed_tasks"] == 1
+    assert result["summary"]["remaining_pending_tasks"] == 1
+    assert result["executed"].to_dict("records")[0]["upserted_rows"] == 10
+
+
+def test_write_xtick_auction_backfill_plan_report_writes_gap_summary(tmp_path):
+    plan = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "symbol": "shm", "status": "unavailable_by_permission"},
+            {"trade_date": "2026-06-09", "symbol": "shm", "status": "pending"},
+        ]
+    )
+
+    report = write_xtick_auction_backfill_plan_report(
+        plan=plan,
+        output_dir=tmp_path,
+        start_date="2025-01-01",
+        end_date="2026-06-10",
+    )
+
+    assert report["paths"]["plan"].exists()
+    assert report["summary"]["pending_tasks"] == 1
+    assert report["summary"]["unavailable_tasks"] == 1
+    assert "unavailable_by_permission" in report["paths"]["markdown_report"].read_text(encoding="utf-8")
+
+
+def test_build_xtick_auction_close_check_compares_detail_925_with_result_bar(monkeypatch):
+    captured = {}
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "trade_date": "2026-06-09",
+                "ts_code": "000001.SZ",
+                "detail_time": "2026-06-09 09:25:00",
+                "detail_price": 11.01,
+                "detail_amount": 3339333,
+                "bar_open": 11.01,
+                "bar_close": 11.00,
+                "bar_vwap": 11.01,
+                "bar_amount": 3339333,
+                "price_diff": 0,
+                "amount_diff": 0,
+                "check_status": "match",
+            }
+        ]
+
+    monkeypatch.setattr(xtick_auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(xtick_auction_data, "fetch_all", fake_fetch_all)
+
+    check = build_xtick_auction_close_check(
+        start_date="2026-06-09",
+        end_date="2026-06-09",
+        source="xtick_biddetail",
+    )
+
+    assert "09:25:00" in captured["sql"]
+    assert captured["params"] == [
+        "2026-06-09",
+        "2026-06-09",
+        "xtick_biddetail",
+        "2026-06-09",
+        "2026-06-09",
+    ]
+    assert check.to_dict("records")[0]["check_status"] == "match"
