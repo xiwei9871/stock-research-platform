@@ -8,7 +8,8 @@ import type { AssetProfile } from '../src/api/types';
 const apiMocks = vi.hoisted(() => ({
   fetchAssetProfile: vi.fn(),
   fetchPlatformSummary: vi.fn(),
-  fetchStrategyCatalog: vi.fn()
+  fetchStrategyCatalog: vi.fn(),
+  fetchBacktestStrategies: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -94,6 +95,19 @@ describe('DataExplorerWorkspace', () => {
       topn_preview: []
     });
     apiMocks.fetchStrategyCatalog.mockResolvedValue([]);
+    apiMocks.fetchBacktestStrategies.mockResolvedValue([
+      {
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
+        status: 'runnable',
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
   });
 
   afterEach(() => {
@@ -128,6 +142,31 @@ describe('DataExplorerWorkspace', () => {
     expect(screen.getByText('factors.factor_count')).toBeInTheDocument();
     expect(screen.queryByText(/"min_date"/)).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
+    expect(screen.getByText('Chart Range')).toBeInTheDocument();
+    expect(screen.getByLabelText('chart start date')).toHaveValue('2025-12-10');
+    expect(screen.getByLabelText('chart end date')).toHaveValue('2026-06-08');
+    expect(screen.getByText('Factor Snapshot')).toBeInTheDocument();
+    expect(screen.getByText('as of 2026-06-08')).toBeInTheDocument();
+  });
+
+  it('lets the user choose an explicit chart range for the asset profile', async () => {
+    render(<DataExplorerWorkspace />);
+    await waitFor(() => expect(screen.getByText('平安银行')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('chart start date'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByLabelText('chart end date'), { target: { value: '2026-06-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Asset' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
+        '000001.SZ',
+        '2026-06-08',
+        '2026-01-01',
+        '2026-06-01',
+        'manual_v1',
+        'qfq'
+      )
+    );
   });
 
   it('loads a new asset id on request', async () => {

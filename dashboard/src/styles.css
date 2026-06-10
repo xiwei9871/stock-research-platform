@@ -431,6 +431,14 @@ body {
   cursor: pointer;
 }
 
+.data-explorer-range-label {
+  align-self: center;
+  color: #465160;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 2px;
+}
+
 .data-explorer-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -700,6 +708,10 @@ body {
   min-width: 760px;
 }
 
+.backtest-comparison-table tr.selected-row td {
+  background: #f5f9ff;
+}
+
 .backtest-comparison-table .inline-button {
   min-height: 28px;
   border: 1px solid #c4cbd6;
@@ -711,8 +723,101 @@ body {
   cursor: pointer;
 }
 
+.backtest-comparison-table .inline-button:disabled {
+  cursor: default;
+  color: #1f4f82;
+  border-color: #b8c7dc;
+  background: #eef6ff;
+}
+
 .backtest-results {
+  display: grid;
+  gap: 14px;
   min-width: 0;
+}
+
+.backtest-readable-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.backtest-readable-summary h3,
+.backtest-readable-summary p {
+  margin: 0;
+}
+
+.backtest-readable-summary p {
+  color: #465160;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.backtest-mode-pill {
+  border: 1px solid #b8c7dc;
+  border-radius: 999px;
+  color: #1f4f82;
+  background: #f5f9ff;
+  font-size: 12px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.backtest-risk-caveat {
+  border: 1px solid #dfc77b;
+  border-radius: 8px;
+  background: #fff9e8;
+  color: #5e4a12;
+  padding: 12px;
+}
+
+.backtest-risk-caveat p {
+  margin: 6px 0 0;
+  color: #6b571f;
+  line-height: 1.5;
+}
+
+.backtest-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.backtest-kpi-grid article {
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  min-width: 0;
+}
+
+.backtest-kpi-grid span,
+.backtest-kpi-grid strong {
+  display: block;
+}
+
+.backtest-kpi-grid span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.backtest-kpi-grid strong {
+  color: #202936;
+  font-size: 18px;
+  font-weight: 650;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.backtest-chart {
+  height: 300px;
+  min-width: 0;
+  width: 100%;
 }
 
 .backtest-result-section {

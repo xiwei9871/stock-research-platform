@@ -3,6 +3,8 @@ import pytest
 
 from stock_research.dashboard import strategy_backtest_adapters as adapters
 from stock_research.dashboard.strategy_backtest_adapters import (
+    ArtifactReplayAdapter,
+    ArtifactReplayConfig,
     LHBShortlineAdapter,
     MidTrendAdapter,
     PositionControlAdapter,
@@ -10,6 +12,7 @@ from stock_research.dashboard.strategy_backtest_adapters import (
     StrategyBacktestParams,
     TechBottleneckAdapter,
     build_lhb_shortline_scores_from_frames,
+    build_lhb_phase16c_account_replay_frames,
     build_manual_v1_scores_from_frame,
     build_mid_trend_scores_from_frames,
     build_position_control_scores_from_frames,
@@ -26,6 +29,307 @@ def test_registry_contains_all_backtest_lab_strategies():
         "tech_bottleneck",
         "position_control",
     }
+
+
+def test_research_strategies_use_validated_combo_replay_adapters():
+    expected = {
+        "lhb_shortline": "lhb_shortline_combo_v1",
+        "mid_trend": "mid_trend_combo_v1",
+        "tech_bottleneck": "tech_bottleneck_combo_v1",
+    }
+
+    for strategy_id, combo_scheme in expected.items():
+        adapter = STRATEGY_BACKTEST_REGISTRY[strategy_id]
+        assert getattr(adapter, "combo_scheme") == combo_scheme
+        assert callable(getattr(adapter, "run_replay"))
+
+
+def test_artifact_replay_adapter_filters_variant_and_normalizes_payload(tmp_path):
+    summary_path = tmp_path / "summary.csv"
+    equity_path = tmp_path / "equity.csv"
+    positions_path = tmp_path / "positions.csv"
+    trades_path = tmp_path / "trades.csv"
+    pd.DataFrame(
+        [
+            {
+                "variant_name": "baseline",
+                "final_equity": 1.20,
+                "total_return": 0.20,
+                "max_drawdown": -0.08,
+                "trade_rows": 3,
+            },
+            {
+                "variant_name": "combo",
+                "final_equity": 2.50,
+                "total_return": 1.50,
+                "max_drawdown": -0.03,
+                "trade_rows": 2,
+            },
+        ]
+    ).to_csv(summary_path, index=False)
+    pd.DataFrame(
+        [
+            {"variant_name": "combo", "date": "2026-01-02", "equity": 1.10, "drawdown": 0.0},
+            {"variant_name": "combo", "date": "2026-06-08", "equity": 2.50, "drawdown": -0.01},
+            {"variant_name": "baseline", "date": "2026-06-08", "equity": 1.20, "drawdown": -0.08},
+        ]
+    ).to_csv(equity_path, index=False)
+    pd.DataFrame(
+        [
+            {"variant_name": "combo", "rebalance_date": "2026-06-08", "asset_id": "CN:SZ:000001", "weight": 0.5},
+            {"variant_name": "baseline", "rebalance_date": "2026-06-08", "asset_id": "CN:SZ:000002", "weight": 0.5},
+        ]
+    ).to_csv(positions_path, index=False)
+    pd.DataFrame(
+        [
+            {"variant_name": "combo", "trade_date": "2026-06-08", "asset_id": "CN:SZ:000001", "side": "buy"},
+            {"variant_name": "baseline", "trade_date": "2026-06-08", "asset_id": "CN:SZ:000002", "side": "buy"},
+        ]
+    ).to_csv(trades_path, index=False)
+
+    adapter = ArtifactReplayAdapter(
+        ArtifactReplayConfig(
+            strategy_id="unit_combo",
+            strategy_name="Unit Combo",
+            combo_scheme="unit_combo_v1",
+            evidence_source="unit fixture",
+            summary_path=summary_path,
+            summary_filters={"variant_name": "combo"},
+            equity_path=equity_path,
+            equity_filters={"variant_name": "combo"},
+            positions_path=positions_path,
+            positions_filters={"variant_name": "combo"},
+            trades_path=trades_path,
+            trades_filters={"variant_name": "combo"},
+        )
+    )
+
+    payload = adapter.run_replay(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08"),
+        {"top_n": 20, "rebalance_frequency": "weekly"},
+    )
+
+    assert payload["strategy_id"] == "unit_combo"
+    assert payload["strategy_name"] == "Unit Combo"
+    assert payload["read_only"] is True
+    assert payload["summary"]["combo_scheme"] == "unit_combo_v1"
+    assert payload["summary"]["evidence_source"] == "unit fixture"
+    assert payload["summary"]["start_date"] == "2026-01-01"
+    assert payload["summary"]["end_date"] == "2026-06-08"
+    assert payload["summary"]["actual_start_date"] == "2026-01-02"
+    assert payload["summary"]["actual_end_date"] == "2026-06-08"
+    assert payload["summary"]["final_equity"] == pytest.approx(2.50 / 1.10)
+    assert [row["equity"] for row in payload["equity_curve"]] == pytest.approx([1.0, 2.50 / 1.10])
+    assert payload["positions"] == [
+        {"rebalance_date": "2026-06-08", "asset_id": "CN:SZ:000001", "weight": 0.5}
+    ]
+    assert payload["trades"] == [
+        {"trade_date": "2026-06-08", "asset_id": "CN:SZ:000001", "side": "buy"}
+    ]
+
+
+def test_artifact_replay_adapter_prefers_database_payload(monkeypatch, tmp_path):
+    from stock_research.dashboard import strategy_backtest_adapters
+
+    db_payload = {
+        "strategy_id": "unit_combo",
+        "strategy_name": "Unit Combo",
+        "read_only": True,
+        "config": {"start_date": "2026-01-01", "end_date": "2026-06-08"},
+        "summary": {"combo_scheme": "unit_combo_v1", "final_equity": 9.0},
+        "equity_curve": [],
+        "positions": [],
+        "trades": [],
+    }
+    monkeypatch.setattr(
+        strategy_backtest_adapters,
+        "load_strategy_backtest_replay_payload",
+        lambda strategy_id, **kwargs: db_payload,
+    )
+    monkeypatch.setattr(
+        strategy_backtest_adapters,
+        "_read_artifact_frame",
+        lambda path: (_ for _ in ()).throw(AssertionError("database hit should not read artifact")),
+    )
+
+    adapter = ArtifactReplayAdapter(
+        ArtifactReplayConfig(
+            strategy_id="unit_combo",
+            strategy_name="Unit Combo",
+            combo_scheme="unit_combo_v1",
+            evidence_source="unit fixture",
+            summary_path=tmp_path / "missing.csv",
+            summary_filters={},
+        )
+    )
+
+    payload = adapter.run_replay(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08"),
+        {"top_n": 20},
+    )
+
+    assert payload is db_payload
+
+
+def test_artifact_replay_adapter_imports_artifact_payload_when_database_is_empty(monkeypatch, tmp_path):
+    from stock_research.dashboard import strategy_backtest_adapters
+
+    summary_path = tmp_path / "summary.csv"
+    pd.DataFrame([{"variant_name": "combo", "final_equity": 2.0}]).to_csv(summary_path, index=False)
+    imports = []
+    monkeypatch.setattr(
+        strategy_backtest_adapters,
+        "load_strategy_backtest_replay_payload",
+        lambda strategy_id, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        strategy_backtest_adapters,
+        "import_strategy_backtest_replay_payload",
+        lambda payload: imports.append(payload) or {"run_id": "unit"},
+    )
+
+    adapter = ArtifactReplayAdapter(
+        ArtifactReplayConfig(
+            strategy_id="unit_combo",
+            strategy_name="Unit Combo",
+            combo_scheme="unit_combo_v1",
+            evidence_source="unit fixture",
+            summary_path=summary_path,
+            summary_filters={"variant_name": "combo"},
+        )
+    )
+
+    payload = adapter.run_replay(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08"),
+        {"top_n": 20},
+    )
+
+    assert imports[0]["strategy_id"] == "unit_combo"
+    assert imports[0]["summary"]["combo_scheme"] == "unit_combo_v1"
+    assert payload["summary"]["final_equity"] == 2.0
+
+
+def test_artifact_replay_adapter_rebases_summary_to_requested_window(monkeypatch, tmp_path):
+    from stock_research.dashboard import strategy_backtest_adapters
+
+    summary_path = tmp_path / "summary.csv"
+    equity_path = tmp_path / "equity.csv"
+    pd.DataFrame(
+        [
+            {
+                "variant_name": "combo",
+                "start_date": "2025-01-01",
+                "end_date": "2026-06-02",
+                "actual_start_date": "2025-01-02",
+                "actual_end_date": "2026-06-02",
+                "periods": 340,
+                "final_equity": 4.2,
+                "total_return": 3.2,
+                "max_drawdown": -0.30,
+            }
+        ]
+    ).to_csv(summary_path, index=False)
+    pd.DataFrame(
+        [
+            {"variant_name": "combo", "date": "2025-12-31", "equity": 1.8},
+            {"variant_name": "combo", "date": "2026-01-05", "equity": 2.0},
+            {"variant_name": "combo", "date": "2026-01-06", "equity": 3.0},
+            {"variant_name": "combo", "date": "2026-01-07", "equity": 2.4},
+        ]
+    ).to_csv(equity_path, index=False)
+    monkeypatch.setattr(strategy_backtest_adapters, "load_strategy_backtest_replay_payload", lambda *args, **kwargs: None)
+    monkeypatch.setattr(strategy_backtest_adapters, "import_strategy_backtest_replay_payload", lambda payload: {})
+
+    adapter = ArtifactReplayAdapter(
+        ArtifactReplayConfig(
+            strategy_id="unit_combo",
+            strategy_name="Unit Combo",
+            combo_scheme="unit_combo_v1",
+            evidence_source="unit fixture",
+            summary_path=summary_path,
+            summary_filters={"variant_name": "combo"},
+            equity_path=equity_path,
+            equity_filters={"variant_name": "combo"},
+        )
+    )
+
+    payload = adapter.run_replay(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08"),
+        {"top_n": 20},
+    )
+
+    assert payload["summary"]["start_date"] == "2026-01-01"
+    assert payload["summary"]["end_date"] == "2026-06-08"
+    assert payload["summary"]["actual_start_date"] == "2026-01-05"
+    assert payload["summary"]["actual_end_date"] == "2026-01-07"
+    assert payload["summary"]["periods"] == 3
+    assert payload["summary"]["final_equity"] == pytest.approx(1.2)
+    assert payload["summary"]["total_return"] == pytest.approx(0.2)
+    assert payload["summary"]["max_drawdown"] == pytest.approx(-0.2)
+    assert [row["equity"] for row in payload["equity_curve"]] == pytest.approx([1.0, 1.5, 1.2])
+
+
+def test_tech_bottleneck_combo_uses_complete_weekly_control_artifacts():
+    adapter = STRATEGY_BACKTEST_REGISTRY["tech_bottleneck"]
+
+    config = adapter.config
+
+    assert "tech_hard_filter/mid_trend_shadow_weekly_control_equity.csv" in str(config.equity_path)
+    assert "tech_hard_filter/mid_trend_shadow_weekly_control_positions.csv" in str(config.positions_path)
+    assert "tech_hard_filter/mid_trend_shadow_weekly_control_trades.csv" in str(config.trades_path)
+    assert config.equity_filters == {"variant_name": "top5_adaptive_daily_check_max2_v1"}
+    assert config.trades_filters == {"variant_name": "top5_adaptive_daily_check_max2_v1"}
+
+
+def test_lhb_phase16c_account_replay_rebuilds_curve_and_trades_from_source_frames():
+    lifecycle = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-02",
+                "ts_code": "300001.SZ",
+                "top_n": 1,
+                "phase12a_rule_layer": "follow_pool_core",
+                "fill_status": "filled",
+                "entry_trade_date": "2026-01-05",
+                "entry_price": 10.0,
+                "exit_trade_date": "2026-01-06",
+                "exit_price": 10.5,
+                "exit_signal": "limit_break_failed",
+                "realized_return": 0.05,
+            },
+            {
+                "trade_date": "2026-01-02",
+                "ts_code": "300002.SZ",
+                "top_n": 2,
+                "phase12a_rule_layer": "follow_pool_core",
+                "fill_status": "filled",
+                "entry_trade_date": "2026-01-05",
+                "entry_price": 20.0,
+                "exit_trade_date": "2026-01-07",
+                "exit_price": 19.0,
+                "exit_signal": "normal_exit",
+                "realized_return": -0.05,
+            },
+        ]
+    )
+    real_entry = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-02", "ts_code": "300001.SZ", "top_n": 1, "exit_5d_return": 0.20},
+            {"trade_date": "2026-01-02", "ts_code": "300002.SZ", "top_n": 2, "exit_5d_return": 0.30},
+        ]
+    )
+
+    account_trades, account_curve = build_lhb_phase16c_account_replay_frames(
+        lifecycle_trades=lifecycle,
+        real_entry_trades=real_entry,
+        replacement_return_column="exit_5d_return",
+        adjust_reason="limit_break_failed_delay_to_5d",
+    )
+
+    filled = account_trades[account_trades["account_trade_status"].eq("filled")]
+    assert list(filled["realized_return"]) == [0.20, -0.05]
+    assert list(account_curve["trade_date"]) == ["2026-01-05", "2026-01-06", "2026-01-07"]
+    assert account_curve.iloc[-1]["equity"] == pytest.approx(1.015)
 
 
 def test_normalize_strategy_scores_ranks_high_scores_first():

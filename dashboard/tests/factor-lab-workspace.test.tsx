@@ -9,7 +9,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchPlatformSummary: vi.fn(),
-  fetchStrategyCatalog: vi.fn()
+  fetchStrategyCatalog: vi.fn(),
+  fetchBacktestStrategies: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -94,6 +95,19 @@ describe('FactorLabWorkspace', () => {
       topn_preview: []
     });
     apiMocks.fetchStrategyCatalog.mockResolvedValue([]);
+    apiMocks.fetchBacktestStrategies.mockResolvedValue([
+      {
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
+        status: 'runnable',
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
   });
 
   afterEach(() => {

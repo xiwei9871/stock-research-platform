@@ -1,4 +1,6 @@
 import math
+import time
+from datetime import datetime, timezone
 from numbers import Integral, Real
 from typing import Any
 
@@ -16,9 +18,19 @@ from stock_research.vectorized_topn_backtest import (
     run_vectorized_topn_backtest,
 )
 
+BACKTEST_LAB_STRATEGY_IDS = {
+    "lhb_shortline",
+    "mid_trend",
+    "tech_bottleneck",
+}
+
 
 def list_backtest_strategies() -> list[dict[str, Any]]:
-    return list_strategy_catalog()
+    return [
+        strategy
+        for strategy in list_strategy_catalog()
+        if strategy["strategy_id"] in BACKTEST_LAB_STRATEGY_IDS and strategy["status"] == "runnable"
+    ]
 
 
 def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str) -> pd.DataFrame:
@@ -37,12 +49,10 @@ def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str
     return pd.DataFrame(rows)
 
 
-def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
+def _parse_backtest_request(
+    payload: dict[str, Any],
+) -> tuple[str, StrategyBacktestParams, dict[str, Any], VectorizedTopNConfig]:
     strategy_id = _required_text(payload, "strategy_id")
-    adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
-    if adapter is None:
-        raise ValueError(f"unsupported strategy: {strategy_id}")
-
     start_date = _required_text(payload, "start_date")
     end_date = _required_text(payload, "end_date")
     score_version = _optional_text(payload.get("score_version"), "manual_v1")
@@ -62,13 +72,15 @@ def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         score_version=score_version,
         adjust_type=adjust_type,
     )
-    scores = adapter.load_scores(params)
-    prices = load_vectorized_topn_prices(
-        start_date=start_date,
-        end_date=end_date,
-        adjust_type=adjust_type,
-    )
-    config = VectorizedTopNConfig(
+    run_config = {
+        "score_version": score_version,
+        "top_n": top_n,
+        "rebalance_frequency": rebalance_frequency,
+        "transaction_cost_bps": transaction_cost_bps,
+        "max_positions": max_positions,
+        "adjust_type": adjust_type,
+    }
+    vector_config = VectorizedTopNConfig(
         start_date=start_date,
         end_date=end_date,
         top_n=top_n,
@@ -76,27 +88,100 @@ def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         transaction_cost_bps=transaction_cost_bps,
         max_positions=max_positions,
     )
+    return strategy_id, params, run_config, vector_config
+
+
+def _with_execution_metadata(
+    payload: dict[str, Any],
+    *,
+    mode: str,
+    source: str,
+    started_at: str,
+    elapsed_ms: float,
+) -> dict[str, Any]:
+    result = dict(payload)
+    result["execution_mode"] = mode
+    result["result_source"] = source
+    result["run_started_at"] = started_at
+    result["run_finished_at"] = datetime.now(timezone.utc).isoformat()
+    result["elapsed_ms"] = round(float(elapsed_ms), 3)
+    summary = dict(result.get("summary") or {})
+    summary["execution_mode"] = mode
+    summary["result_source"] = source
+    summary["elapsed_ms"] = result["elapsed_ms"]
+    result["summary"] = summary
+    return result
+
+
+def run_replay_backtest(payload: dict[str, Any]) -> dict[str, Any]:
+    started = time.perf_counter()
+    started_at = datetime.now(timezone.utc).isoformat()
+    strategy_id, params, run_config, _vector_config = _parse_backtest_request(payload)
+    adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
+    if adapter is None:
+        raise ValueError(f"unsupported strategy: {strategy_id}")
+    replay_runner = getattr(adapter, "run_replay", None)
+    if not callable(replay_runner):
+        raise ValueError(f"strategy does not support replay: {strategy_id}")
+    result = to_json_safe(replay_runner(params, run_config))
+    return _with_execution_metadata(
+        result,
+        mode="replay",
+        source=str(result.get("source_kind") or "database_replay"),
+        started_at=started_at,
+        elapsed_ms=(time.perf_counter() - started) * 1000.0,
+    )
+
+
+def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
+    started = time.perf_counter()
+    started_at = datetime.now(timezone.utc).isoformat()
+    strategy_id, params, run_config, config = _parse_backtest_request(payload)
+    adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
+    if adapter is None:
+        raise ValueError(f"unsupported strategy: {strategy_id}")
+
+    scores = adapter.load_scores(params)
+    prices = load_vectorized_topn_prices(
+        start_date=params.start_date,
+        end_date=params.end_date,
+        adjust_type=params.adjust_type,
+    )
     result = run_vectorized_topn_backtest(scores, prices, config)
 
-    return {
+    payload_result = {
         "strategy_id": strategy_id,
         "strategy_name": _strategy_name(strategy_id),
-        "read_only": True,
+        "read_only": False,
         "config": {
-            "start_date": start_date,
-            "end_date": end_date,
-            "score_version": score_version,
+            "start_date": params.start_date,
+            "end_date": params.end_date,
+            "score_version": params.score_version,
             "top_n": config.top_n,
             "rebalance_frequency": config.rebalance_frequency,
             "transaction_cost_bps": config.transaction_cost_bps,
             "max_positions": config.max_positions,
-            "adjust_type": adjust_type,
+            "adjust_type": params.adjust_type,
         },
-        "summary": to_json_safe(result.summary),
+        "summary": {
+            **to_json_safe(result.summary),
+            "fresh_engine_note": "live score rebuild from selected strategy factors and market prices",
+        },
         "equity_curve": _frame_records(result.equity_curve),
         "positions": _frame_records(result.positions),
         "trades": _frame_records(result.trades),
     }
+    return _with_execution_metadata(
+        payload_result,
+        mode="fresh",
+        source="live_vectorized_backtest",
+        started_at=started_at,
+        elapsed_ms=(time.perf_counter() - started) * 1000.0,
+    )
+
+
+def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:
+    return run_replay_backtest(payload)
 
 
 def to_json_safe(value: Any) -> Any:

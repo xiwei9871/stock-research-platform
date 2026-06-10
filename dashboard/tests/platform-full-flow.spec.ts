@@ -23,37 +23,37 @@ const manualV1Strategy = {
 
 const lhbStrategy = {
   strategy_id: 'lhb_shortline',
-  strategy_name: 'LHB Shortline',
+  strategy_name: 'LHB Shortline Combo',
   status: 'runnable',
-  description: '龙虎榜超短线 validation strategy.',
-  factor_groups: ['lhb', 'momentum'],
-  signal_inputs: ['lhb_events', 'technical_factors'],
+  description: 'Phase15 cash account plus Phase16C delayed exit.',
+  factor_groups: ['lhb', 'auction', 'position_control'],
+  signal_inputs: ['Phase14C lifecycle entry/exit', 'Phase15 cash account', 'Phase16C limit-break-failed delayed exit'],
   default_parameters: { top_n: 20 },
-  latest_evidence: 'strategy_validation',
+  latest_evidence: 'Phase16C account_final_equity=3.1279',
   primary_action: 'Run backtest'
 };
 
 const midTrendStrategy = {
   strategy_id: 'mid_trend',
-  strategy_name: 'Mid Trend Shortline',
+  strategy_name: 'Mid Trend Combo',
   status: 'runnable',
-  description: 'Shortline trend continuation strategy.',
-  factor_groups: ['trend', 'liquidity'],
-  signal_inputs: ['factor_values', 'manual_scores'],
-  default_parameters: { top_n: 20 },
-  latest_evidence: 'strategy_validation',
+  description: 'report_mild_bonus plus Top5 weekly max2 selective trend holding protection.',
+  factor_groups: ['trend', 'research_overlay'],
+  signal_inputs: ['mid_trend funnel', 'report_mild_bonus', 'C2 stock protection'],
+  default_parameters: { top_n: 5 },
+  latest_evidence: 'report_mild_bonus final_equity=4.2056',
   primary_action: 'Run backtest'
 };
 
 const techBottleneckStrategy = {
   strategy_id: 'tech_bottleneck',
-  strategy_name: 'Tech Bottleneck Discovery+',
+  strategy_name: 'Tech Bottleneck Combo',
   status: 'runnable',
-  description: 'Technical bottleneck discovery strategy.',
-  factor_groups: ['breakout', 'volume'],
-  signal_inputs: ['factor_values', 'manual_scores'],
-  default_parameters: { top_n: 20 },
-  latest_evidence: 'strategy_validation',
+  description: 'tech_hard_filter plus top5_adaptive_daily_check_max2_v1.',
+  factor_groups: ['tech_bottleneck', 'trend'],
+  signal_inputs: ['tech_hard_filter', 'top5_adaptive_daily_check_max2_v1'],
+  default_parameters: { top_n: 5 },
+  latest_evidence: 'tech_hard_filter final_equity=3.4973',
   primary_action: 'Run backtest'
 };
 
@@ -70,12 +70,18 @@ const positionControlStrategy = {
 };
 
 const backtestStrategies = [
-  manualV1Strategy,
   lhbStrategy,
   midTrendStrategy,
-  techBottleneckStrategy,
+  techBottleneckStrategy
+];
+
+const strategyCatalog = [
+  manualV1Strategy,
+  ...backtestStrategies,
   positionControlStrategy
 ];
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const validationRun = {
   run_id: 'lhb_shortline:fixture:platform-full-flow',
@@ -121,7 +127,7 @@ async function mockPlatformApi(page: Page) {
     }
 
     if (url.pathname === '/api/strategies/catalog') {
-      await route.fulfill({ json: { items: backtestStrategies } });
+      await route.fulfill({ json: { items: strategyCatalog } });
       return;
     }
 
@@ -194,11 +200,19 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
-    if (url.pathname === '/api/backtests/run') {
+    if (
+      url.pathname === '/api/backtests/run-fresh' ||
+      url.pathname === '/api/backtests/run-replay' ||
+      url.pathname === '/api/backtests/run'
+    ) {
       const request = route.request().postDataJSON() as { strategy_id?: string };
-      const strategy = backtestStrategies.find((item) => item.strategy_id === request.strategy_id) ?? manualV1Strategy;
+      const strategy = backtestStrategies.find((item) => item.strategy_id === request.strategy_id) ?? lhbStrategy;
       backtestRunStrategyIds.push(strategy.strategy_id);
-      await route.fulfill({ json: makeBacktestResult(strategy.strategy_id, strategy.strategy_name) });
+      if (backtestRunStrategyIds.length > 1) {
+        await delay(50);
+      }
+      const mode = url.pathname === '/api/backtests/run-fresh' ? 'validated' : 'replay';
+      await route.fulfill({ json: makeBacktestResult(strategy.strategy_id, strategy.strategy_name, mode) });
       return;
     }
 
@@ -294,17 +308,29 @@ function makeAssetProfile() {
   };
 }
 
-function makeBacktestResult(strategyId = 'manual_v1_topn_rotation', strategyName = 'Manual V1 TopN Rotation') {
+function makeBacktestResult(
+  strategyId = 'lhb_shortline',
+  strategyName = 'LHB Shortline Combo',
+  mode: 'validated' | 'replay' = 'validated'
+) {
+  const summary: Record<string, number | string> = {
+    final_equity: 1.12,
+    total_return: 0.12,
+    max_drawdown: -0.05,
+    sharpe_ratio: 1.8,
+    turnover: 1.4
+  };
+  summary.combo_scheme = `${strategyId}_combo_v1`;
+  summary.evidence_source = 'validated replay fixture';
   return {
     strategy_id: strategyId,
     strategy_name: strategyName,
-    read_only: true,
+    read_only: mode === 'replay',
+    execution_mode: mode,
+    result_source: mode === 'validated' ? 'validated_combo_artifact_rerun' : 'database_replay',
+    elapsed_ms: mode === 'validated' ? 1234 : 30,
     config: { adjust_type: 'hfq' },
-    summary: {
-      total_return: 0.12,
-      max_drawdown: -0.05,
-      turnover: 1.4
-    },
+    summary,
     equity_curve: [
       { date: '2026-06-05', equity: 1.1, drawdown: -0.01 },
       { date: '2026-06-08', equity: 1.12, drawdown: -0.02 }
@@ -430,7 +456,11 @@ test('platform full flow covers all research workspaces with mocked API response
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('Manual V1 TopN Rotation')).toBeVisible();
+  await expect(page.getByText('LHB Shortline Combo')).toBeVisible();
+  await expect(page.getByText('Mid Trend Combo')).toBeVisible();
+  await expect(page.getByText('Tech Bottleneck Combo')).toBeVisible();
+  await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
+  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
@@ -454,32 +484,44 @@ test('platform full flow covers all research workspaces with mocked API response
 
   await page.getByRole('button', { name: 'Open Backtest Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
-  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'LHB Shortline' })).toBeVisible();
-  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Mid Trend Shortline' })).toBeVisible();
-  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Tech Bottleneck Discovery+' })).toBeVisible();
-  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Position Control Overlay' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'strategy' })).toContainText('Manual V1 TopN Rotation');
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'LHB Shortline Combo' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Mid Trend Combo' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Tech Bottleneck Combo' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Position Control Overlay' })).toHaveCount(0);
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'runnable' })).toHaveCount(0);
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Run backtest' })).toHaveCount(0);
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'final_equity' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Load Cached Replay' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Load Cached Replay Comparison' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'strategy' })).not.toContainText('Manual V1 TopN Rotation');
   await page.getByRole('combobox', { name: 'strategy' }).selectOption('lhb_shortline');
-  await page.getByRole('button', { name: 'Run Backtest' }).click();
-  await expect(page.getByRole('heading', { name: 'Read-only backtest' })).toBeVisible();
-  await expect(page.getByText('LHB Shortline').last()).toBeVisible();
+  await page.getByRole('button', { name: 'Run Fresh Backtest' }).click();
+  await expect(page.getByRole('heading', { name: 'Validated backtest' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Result Summary' })).toBeVisible();
+  await expect(page.getByText('LHB Shortline Combo').last()).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'combo_scheme' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
   const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
   await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
-  await page.getByRole('button', { name: 'Run Comparison' }).click();
+  await page.getByRole('button', { name: 'Run Fresh Comparison' }).click();
   await expect(page.getByRole('heading', { name: 'Strategy Comparison' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Manual V1 TopN Rotation' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'LHB Shortline' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Mid Trend Shortline' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Tech Bottleneck Discovery+' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'Position Control Overlay' })).toBeVisible();
+  await expect(page.getByText('0 / 3 completed')).toBeVisible();
+  const comparisonTable = page.locator('.backtest-comparison-table');
+  await expect(comparisonTable.getByRole('cell', { name: 'running' })).toHaveCount(3);
+  await expect(comparisonTable.getByRole('cell', { name: 'Manual V1 TopN Rotation' })).toHaveCount(0);
+  await expect(comparisonTable.getByRole('cell', { name: 'LHB Shortline Combo' })).toBeVisible();
+  await expect(comparisonTable.getByRole('cell', { name: 'Mid Trend Combo' })).toBeVisible();
+  await expect(comparisonTable.getByRole('cell', { name: 'Tech Bottleneck Combo' })).toBeVisible();
+  await expect(comparisonTable.getByRole('cell', { name: 'validated', exact: true })).toHaveCount(3);
+  await expect(comparisonTable.getByRole('cell', { name: 'validated_combo_artifact_rerun', exact: true })).toHaveCount(3);
+  await expect(comparisonTable.getByRole('cell', { name: 'Position Control Overlay' })).toHaveCount(0);
+  await expect(page.getByText('3 / 3 completed')).toBeVisible();
+  await expect(comparisonTable.getByRole('cell', { name: 'passed' })).toHaveCount(3);
   expect(backtestRunStrategyIds).toEqual([
     'lhb_shortline',
-    'manual_v1_topn_rotation',
     'lhb_shortline',
     'mid_trend',
-    'tech_bottleneck',
-    'position_control'
+    'tech_bottleneck'
   ]);
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);

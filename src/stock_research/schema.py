@@ -251,6 +251,72 @@ CREATE SCHEMA IF NOT EXISTS ops;
 CREATE SCHEMA IF NOT EXISTS research;
 CREATE SCHEMA IF NOT EXISTS simulation;
 
+CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_run (
+    run_id text PRIMARY KEY,
+    strategy_id text NOT NULL,
+    strategy_name text NOT NULL,
+    combo_scheme text NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    summary_json jsonb NOT NULL,
+    config_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+    source_kind text NOT NULL DEFAULT 'validated_combo_replay',
+    source_paths jsonb NOT NULL DEFAULT '[]'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_equity (
+    run_id text NOT NULL REFERENCES backtest.strategy_backtest_run(run_id) ON DELETE CASCADE,
+    trade_date date NOT NULL,
+    row_index integer NOT NULL,
+    equity numeric,
+    drawdown numeric,
+    daily_return numeric,
+    turnover numeric,
+    invested_weight numeric,
+    row_json jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, trade_date, row_index)
+);
+
+CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_position (
+    run_id text NOT NULL REFERENCES backtest.strategy_backtest_run(run_id) ON DELETE CASCADE,
+    trade_date date NOT NULL,
+    row_index integer NOT NULL,
+    asset_id text,
+    weight numeric,
+    rank numeric,
+    row_json jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, trade_date, row_index)
+);
+
+CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_trade (
+    run_id text NOT NULL REFERENCES backtest.strategy_backtest_run(run_id) ON DELETE CASCADE,
+    trade_date date NOT NULL,
+    row_index integer NOT NULL,
+    asset_id text,
+    side text,
+    weight numeric,
+    realized_return numeric,
+    row_json jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, trade_date, row_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_backtest_run_lookup
+    ON backtest.strategy_backtest_run (strategy_id, combo_scheme, start_date, end_date, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_backtest_equity_run_date
+    ON backtest.strategy_backtest_equity (run_id, trade_date);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_backtest_position_run_date
+    ON backtest.strategy_backtest_position (run_id, trade_date);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_backtest_trade_run_date
+    ON backtest.strategy_backtest_trade (run_id, trade_date);
+
 CREATE TABLE IF NOT EXISTS research.stock_report_source (
     report_id text PRIMARY KEY,
     source_type text NOT NULL,

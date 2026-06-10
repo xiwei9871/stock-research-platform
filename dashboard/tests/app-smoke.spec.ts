@@ -90,6 +90,48 @@ async function mockDashboardApi(page: Page) {
     });
   });
 
+  await page.route('/api/backtests/strategies**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            strategy_id: 'lhb_shortline',
+            strategy_name: 'LHB Shortline Combo',
+            status: 'runnable',
+            description: 'LHB combo',
+            factor_groups: ['资金行为'],
+            signal_inputs: ['龙虎榜'],
+            default_parameters: { top_n: 20 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          },
+          {
+            strategy_id: 'mid_trend',
+            strategy_name: 'Mid Trend Combo',
+            status: 'runnable',
+            description: 'Mid trend combo',
+            factor_groups: ['趋势强度'],
+            signal_inputs: ['趋势'],
+            default_parameters: { top_n: 5 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          },
+          {
+            strategy_id: 'tech_bottleneck',
+            strategy_name: 'Tech Bottleneck Combo',
+            status: 'runnable',
+            description: 'Tech bottleneck combo',
+            factor_groups: ['技术形态'],
+            signal_inputs: ['技术'],
+            default_parameters: { top_n: 5 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          }
+        ]
+      }
+    });
+  });
+
   await page.route('/api/assets/*/bars**', async (route) => {
     await route.fulfill({
       json: {
@@ -609,8 +651,11 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
   await expect(page.getByText('Latest Market Data')).toBeVisible();
-  await expect(page.getByText('Manual V1 TopN Rotation')).toBeVisible();
-  await expect(page.getByText('candidate pool, not buy signal')).toBeVisible();
+  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'LHB Shortline Combo' })).toBeVisible();
+  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Mid Trend Combo' })).toBeVisible();
+  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Tech Bottleneck Combo' })).toBeVisible();
+  await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
+  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   await expect(page.getByText('CN:SZ:300951')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
@@ -632,7 +677,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('candidate pool, not buy signal')).toBeVisible();
+  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();

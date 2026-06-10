@@ -149,4 +149,31 @@ describe('strategy chart markers', () => {
 
     expect(chartMocks.createChart).toHaveBeenCalledTimes(1);
   });
+
+  it('disables mouse wheel chart zoom so page scrolling remains stable', () => {
+    render(createElement(AssetChart, { bars: [bar()] }));
+
+    expect(chartMocks.createChart).toHaveBeenCalledWith(
+      expect.any(HTMLDivElement),
+      expect.objectContaining({
+        handleScroll: expect.objectContaining({ mouseWheel: false }),
+        handleScale: expect.objectContaining({ mouseWheel: false })
+      })
+    );
+  });
+
+  it('configures candlesticks with A-share red-up green-down colors', () => {
+    render(createElement(AssetChart, { bars: [bar()] }));
+    const chart = chartMocks.createChart.mock.results[0].value;
+
+    expect(chart.addSeries).toHaveBeenCalledWith(
+      'CandlestickSeries',
+      expect.objectContaining({
+        upColor: '#d64545',
+        downColor: '#1f9d55',
+        wickUpColor: '#d64545',
+        wickDownColor: '#1f9d55'
+      })
+    );
+  });
 });

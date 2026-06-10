@@ -59,14 +59,19 @@ describe('platform API clients', () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ strategy_id: 'manual_v1_topn_rotation', read_only: true })
+        json: async () => ({ strategy_id: 'manual_v1_topn_rotation', read_only: false, execution_mode: 'fresh' })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ strategy_id: 'manual_v1_topn_rotation', read_only: false, execution_mode: 'fresh' })
       } as Response);
     const {
       fetchAssetProfile,
       fetchBacktestStrategies,
       fetchFactorLibrary,
       fetchFactorScorePreview,
-      runBacktest
+      runBacktest,
+      runFreshBacktest
     } = await import('../src/api/client');
 
     const factorLibrary = await fetchFactorLibrary();
@@ -81,12 +86,14 @@ describe('platform API clients', () => {
     const profile = await fetchAssetProfile('000001.SZ', '2026-06-08', '2026-06-01', '2026-06-08');
     const strategies = await fetchBacktestStrategies();
     const result = await runBacktest(backtestRequest);
+    const freshResult = await runFreshBacktest(backtestRequest);
 
     expect(factorLibrary[0].factor_name).toBe('ret_20');
     expect(profile.asset_id).toBe('000001.SZ');
     expect(strategies[0].strategy_id).toBe('manual_v1_topn_rotation');
-    expect(result.read_only).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(result.execution_mode).toBe('fresh');
+    expect(freshResult.execution_mode).toBe('fresh');
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/factors/library');
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -97,7 +104,12 @@ describe('platform API clients', () => {
       '/api/assets/000001.SZ/profile?trade_date=2026-06-08&start_date=2026-06-01&end_date=2026-06-08&score_version=manual_v1&adjust_type=qfq'
     );
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/backtests/strategies');
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/backtests/run', {
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/backtests/run-fresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backtestRequest)
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/backtests/run-fresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backtestRequest)

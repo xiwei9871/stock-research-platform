@@ -44,15 +44,21 @@ export function AssetChart({ bars, markers }: AssetChartProps) {
       },
       timeScale: {
         borderColor: '#d9dee7'
+      },
+      handleScroll: {
+        mouseWheel: false
+      },
+      handleScale: {
+        mouseWheel: false
       }
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#1f9d55',
-      downColor: '#d64545',
+      upColor: '#d64545',
+      downColor: '#1f9d55',
       borderVisible: false,
-      wickUpColor: '#1f9d55',
-      wickDownColor: '#d64545'
+      wickUpColor: '#d64545',
+      wickDownColor: '#1f9d55'
     });
     candleSeries.setData(toCandlestickData(bars));
     if (chartMarkers.length > 0) {

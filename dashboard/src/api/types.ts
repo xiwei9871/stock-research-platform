@@ -455,15 +455,22 @@ export type BacktestRunRequest = {
   adjust_type: string;
 };
 
+export type BacktestScalar = number | string | boolean | null;
+
 export type BacktestRunResult = {
   strategy_id: string;
   strategy_name: string;
   read_only: boolean;
+  execution_mode?: 'fresh' | 'replay' | 'validated';
+  result_source?: string;
+  run_started_at?: string;
+  run_finished_at?: string;
+  elapsed_ms?: number;
   config: Record<string, unknown>;
-  summary: Record<string, number | string | null>;
-  equity_curve: Array<Record<string, number | string | null>>;
-  positions: Array<Record<string, number | string | null>>;
-  trades: Array<Record<string, number | string | null>>;
+  summary: Record<string, BacktestScalar>;
+  equity_curve: Array<Record<string, BacktestScalar>>;
+  positions: Array<Record<string, BacktestScalar>>;
+  trades: Array<Record<string, BacktestScalar>>;
 };
 
 export type StrategyValidationRun = {

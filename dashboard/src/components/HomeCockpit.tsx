@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchPlatformSummary, fetchStrategyCatalog } from '../api/client';
+import { fetchBacktestStrategies, fetchPlatformSummary } from '../api/client';
 import type { PlatformSummary, ScoreRow, StrategyCatalogItem } from '../api/types';
 
 type WorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'reports';
@@ -27,7 +27,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setIsLoading(true);
     setError(null);
 
-    Promise.all([fetchPlatformSummary(), fetchStrategyCatalog()])
+    Promise.all([fetchPlatformSummary(), fetchBacktestStrategies()])
       .then(([summaryPayload, strategyRows]) => {
         if (!ignore) {
           setSummary(summaryPayload);
@@ -113,7 +113,6 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
               <article className="strategy-summary-card" key={strategy.strategy_id}>
                 <div className="strategy-card-header">
                   <strong>{strategy.strategy_name}</strong>
-                  <span>{strategy.status}</span>
                 </div>
                 <p>{strategy.description}</p>
                 <small>{inputs.join(', ') || 'No signal inputs listed'}</small>
@@ -126,7 +125,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       <section className="workspace-panel">
         <div className="section-heading">
           <h2>TopN Preview</h2>
-          <span className="muted">candidate pool, not buy signal</span>
+          <span className="muted">manual_v1 factor-score candidate pool, not a combo strategy result</span>
         </div>
         <div className="dense-list topn-preview-list">
           {(summary?.topn_preview ?? []).map((row) => (

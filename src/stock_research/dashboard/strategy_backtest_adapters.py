@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from pathlib import Path
+from typing import Any, Protocol
 
 import pandas as pd
+from psycopg import errors as psycopg_errors
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.bars import normalize_market_asset_id
 from stock_research.db import connect, fetch_all
+from stock_research.strategy_backtest_read_model import (
+    import_strategy_backtest_replay_payload,
+    load_strategy_backtest_replay_payload,
+    normalize_replay_payload_to_requested_window,
+)
 
 
 @dataclass(frozen=True)
@@ -23,6 +30,190 @@ class StrategyBacktestAdapter(Protocol):
 
     def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
         ...
+
+
+@dataclass(frozen=True)
+class ArtifactReplayConfig:
+    strategy_id: str
+    strategy_name: str
+    combo_scheme: str
+    evidence_source: str
+    summary_path: str | Path
+    summary_filters: dict[str, object]
+    equity_path: str | Path | None = None
+    equity_filters: dict[str, object] | None = None
+    positions_path: str | Path | None = None
+    positions_filters: dict[str, object] | None = None
+    trades_path: str | Path | None = None
+    trades_filters: dict[str, object] | None = None
+    summary_aliases: dict[str, str] | None = None
+
+
+class ArtifactReplayAdapter:
+    def __init__(self, config: ArtifactReplayConfig):
+        self.config = config
+        self.strategy_id = config.strategy_id
+        self.strategy_name = config.strategy_name
+        self.combo_scheme = config.combo_scheme
+
+    def run_replay(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        can_import_to_read_model = True
+        try:
+            stored = load_strategy_backtest_replay_payload(
+                self.strategy_id,
+                start_date=params.start_date,
+                end_date=params.end_date,
+                combo_scheme=self.combo_scheme,
+            )
+        except (psycopg_errors.InvalidSchemaName, psycopg_errors.UndefinedTable):
+            stored = None
+            can_import_to_read_model = False
+        if stored is not None:
+            return stored
+
+        payload = normalize_replay_payload_to_requested_window(self._build_artifact_payload(params, run_config))
+        if can_import_to_read_model:
+            import_strategy_backtest_replay_payload(payload)
+        return payload
+
+    def run_validated_backtest(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        payload = normalize_replay_payload_to_requested_window(self._build_artifact_payload(params, run_config))
+        payload["read_only"] = False
+        payload["source_kind"] = "validated_combo_artifact_rerun"
+        return payload
+
+    def _build_artifact_payload(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        summary = self._load_summary(params)
+        return {
+            "strategy_id": self.strategy_id,
+            "strategy_name": self.strategy_name,
+            "read_only": True,
+            "config": {
+                "start_date": params.start_date,
+                "end_date": params.end_date,
+                "score_version": params.score_version,
+                "adjust_type": params.adjust_type,
+                **run_config,
+            },
+            "source_kind": "artifact_bootstrap",
+            "source_paths": _config_source_paths(self.config),
+            "summary": summary,
+            "equity_curve": _artifact_records(
+                self.config.equity_path,
+                self.config.equity_filters,
+                params,
+                date_columns=("date", "trade_date"),
+            ),
+            "positions": _artifact_records(
+                self.config.positions_path,
+                self.config.positions_filters,
+                params,
+                date_columns=("rebalance_date", "trade_date", "date"),
+            ),
+            "trades": _artifact_records(
+                self.config.trades_path,
+                self.config.trades_filters,
+                params,
+                date_columns=("trade_date", "execution_date", "date"),
+            ),
+        }
+
+    def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
+        raise ValueError(f"{self.strategy_id} uses validated combo replay, not vectorized TopN scores")
+
+    def _load_summary(self, params: StrategyBacktestParams) -> dict[str, Any]:
+        frame = _read_artifact_frame(self.config.summary_path)
+        row = _filter_artifact_frame(frame, self.config.summary_filters or {}).iloc[0].to_dict()
+        aliases = self.config.summary_aliases or {}
+        summary = {str(key): _jsonable(value) for key, value in row.items()}
+        for target_key, source_key in aliases.items():
+            if source_key in row:
+                summary[target_key] = _jsonable(row[source_key])
+        if "final_equity" in summary and "total_return" not in summary:
+            summary["total_return"] = float(summary["final_equity"]) - 1.0
+        summary["combo_scheme"] = self.config.combo_scheme
+        summary["evidence_source"] = self.config.evidence_source
+        summary["requested_start_date"] = params.start_date
+        summary["requested_end_date"] = params.end_date
+        return summary
+
+
+class FreshReplayBacktestAdapter:
+    def __init__(self, fresh_adapter: StrategyBacktestAdapter, replay_adapter: Any):
+        if fresh_adapter.strategy_id != replay_adapter.strategy_id:
+            raise ValueError("fresh and replay adapters must use the same strategy_id")
+        self.fresh_adapter = fresh_adapter
+        self.replay_adapter = replay_adapter
+        self.strategy_id = fresh_adapter.strategy_id
+        self.strategy_name = getattr(replay_adapter, "strategy_name", self.strategy_id)
+        self.combo_scheme = getattr(replay_adapter, "combo_scheme", None)
+        self.config = getattr(replay_adapter, "config", None)
+
+    def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
+        return self.fresh_adapter.load_scores(params)
+
+    def run_replay(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        return self.replay_adapter.run_replay(params, run_config)
+
+    def run_validated_backtest(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        return self.replay_adapter.run_validated_backtest(params, run_config)
+
+
+class LHBPhase16CReplayAdapter(ArtifactReplayAdapter):
+    def __init__(
+        self,
+        config: ArtifactReplayConfig,
+        *,
+        lifecycle_trades_path: str | Path,
+        real_entry_trades_path: str | Path,
+        replacement_return_column: str,
+        adjust_reason: str,
+    ):
+        super().__init__(config)
+        self.lifecycle_trades_path = lifecycle_trades_path
+        self.real_entry_trades_path = real_entry_trades_path
+        self.replacement_return_column = replacement_return_column
+        self.adjust_reason = adjust_reason
+
+    def _build_artifact_payload(self, params: StrategyBacktestParams, run_config: dict[str, Any]) -> dict[str, Any]:
+        payload = super()._build_artifact_payload(params, run_config)
+        lifecycle_trades = _read_artifact_frame(self.lifecycle_trades_path)
+        real_entry_trades = _read_artifact_frame(self.real_entry_trades_path)
+        account_trades, account_curve = build_lhb_phase16c_account_replay_frames(
+            lifecycle_trades=lifecycle_trades,
+            real_entry_trades=real_entry_trades,
+            replacement_return_column=self.replacement_return_column,
+            adjust_reason=self.adjust_reason,
+        )
+        if not account_curve.empty:
+            equity_values = pd.to_numeric(account_curve["equity"], errors="coerce").dropna()
+            drawdown_values = pd.to_numeric(account_curve["drawdown"], errors="coerce").dropna()
+            if not equity_values.empty:
+                payload["summary"]["final_equity"] = _jsonable(equity_values.iloc[-1])
+                payload["summary"]["total_return"] = _jsonable(equity_values.iloc[-1] - 1.0)
+            if not drawdown_values.empty:
+                payload["summary"]["max_drawdown"] = _jsonable(drawdown_values.min())
+            payload["summary"]["detail_source"] = "phase16c_rebuilt_cash_account"
+            payload["summary"]["mark_to_market"] = False
+            payload["summary"]["risk_metric_caveat"] = (
+                "LHB lifecycle cash replay is event-based and not daily marked to market; "
+                "drawdown, Sharpe, and turnover are not strict daily risk metrics."
+            )
+        if "ts_code" in account_trades.columns and "asset_id" not in account_trades.columns:
+            account_trades = account_trades.copy()
+            account_trades["asset_id"] = account_trades["ts_code"].map(normalize_market_asset_id)
+        payload["equity_curve"] = _frame_records(
+            _filter_artifact_dates(account_curve, params, ("trade_date",)),
+        )
+        payload["trades"] = _frame_records(
+            _filter_artifact_dates(account_trades, params, ("trade_date", "entry_trade_date", "exit_trade_date")),
+        )
+        payload["source_paths"] = [
+            *payload.get("source_paths", []),
+            str(self.lifecycle_trades_path),
+            str(self.real_entry_trades_path),
+        ]
+        return payload
 
 
 def normalize_strategy_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataFrame:
@@ -70,6 +261,343 @@ def normalize_strategy_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataF
             "exposure_scale",
         ]
     ]
+
+
+def _artifact_root() -> Path:
+    for candidate in _artifact_root_candidates():
+        if (candidate / "outputs" / "research").exists():
+            return candidate
+    return _artifact_root_candidates()[0]
+
+
+def _artifact_root_candidates() -> list[Path]:
+    return [
+        Path.cwd(),
+        Path(__file__).resolve().parents[3],
+        Path.home() / "stock_research",
+    ]
+
+
+def _artifact_path(path: str | Path) -> Path:
+    parsed = Path(path)
+    if parsed.is_absolute():
+        return parsed
+    for candidate in _artifact_root_candidates():
+        resolved = candidate / parsed
+        if resolved.exists():
+            return resolved
+    return _artifact_root() / parsed
+
+
+def _config_source_paths(config: ArtifactReplayConfig) -> list[str]:
+    paths = [
+        config.summary_path,
+        config.equity_path,
+        config.positions_path,
+        config.trades_path,
+    ]
+    return [str(path) for path in paths if path is not None]
+
+
+def _read_artifact_frame(path: str | Path | None) -> pd.DataFrame:
+    if path is None:
+        return pd.DataFrame()
+    resolved = _artifact_path(path)
+    if not resolved.exists():
+        raise ValueError(f"validated replay artifact not found: {resolved}")
+    return pd.read_csv(resolved)
+
+
+def _filter_artifact_frame(frame: pd.DataFrame, filters: dict[str, object]) -> pd.DataFrame:
+    filtered = frame.copy()
+    for column, expected in filters.items():
+        if column not in filtered.columns:
+            raise ValueError(f"validated replay artifact missing filter column: {column}")
+        filtered = filtered[filtered[column].astype(str) == str(expected)]
+    if filtered.empty:
+        raise ValueError(f"validated replay artifact has no rows for filters: {filters}")
+    return filtered.reset_index(drop=True)
+
+
+def _filter_artifact_dates(frame: pd.DataFrame, params: StrategyBacktestParams, date_columns: tuple[str, ...]) -> pd.DataFrame:
+    for column in date_columns:
+        if column in frame.columns:
+            dates = pd.to_datetime(frame[column], errors="coerce")
+            start = pd.Timestamp(params.start_date)
+            end = pd.Timestamp(params.end_date)
+            return frame[(dates >= start) & (dates <= end)].reset_index(drop=True)
+    return frame
+
+
+def _artifact_records(
+    path: str | Path | None,
+    filters: dict[str, object] | None,
+    params: StrategyBacktestParams,
+    *,
+    date_columns: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    if path is None:
+        return []
+    frame = _read_artifact_frame(path)
+    filters = filters or {}
+    if filters:
+        frame = _filter_artifact_frame(frame, filters)
+        frame = frame.drop(columns=[column for column in filters if column in frame.columns])
+    frame = _filter_artifact_dates(frame, params, date_columns)
+    return _frame_records(frame)
+
+
+def _frame_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    if frame is None or frame.empty:
+        return []
+    return [{str(key): _jsonable(value) for key, value in row.items()} for row in frame.to_dict("records")]
+
+
+def _jsonable(value: Any) -> Any:
+    if pd.isna(value):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.date().isoformat()
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
+def build_lhb_phase16c_account_replay_frames(
+    *,
+    lifecycle_trades: pd.DataFrame,
+    real_entry_trades: pd.DataFrame,
+    replacement_return_column: str,
+    adjust_reason: str,
+    max_positions: int = 10,
+    position_pct: float = 0.10,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    adjusted = _build_lhb_phase16c_adjusted_lifecycle_frame(
+        lifecycle_trades=lifecycle_trades,
+        real_entry_trades=real_entry_trades,
+        replacement_return_column=replacement_return_column,
+        adjust_reason=adjust_reason,
+    )
+    return _build_lhb_cash_account_frames(
+        lifecycle_trades=adjusted,
+        max_positions=max_positions,
+        position_pct=position_pct,
+    )
+
+
+def _build_lhb_phase16c_adjusted_lifecycle_frame(
+    *,
+    lifecycle_trades: pd.DataFrame,
+    real_entry_trades: pd.DataFrame,
+    replacement_return_column: str,
+    adjust_reason: str,
+) -> pd.DataFrame:
+    trades = lifecycle_trades.copy()
+    for column in ["trade_date", "ts_code", "top_n", "fill_status", "exit_signal", "realized_return"]:
+        if column not in trades.columns:
+            trades[column] = pd.NA
+    trades["trade_date"] = pd.to_datetime(trades["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    trades["ts_code"] = trades["ts_code"].astype(str)
+    trades["top_n"] = pd.to_numeric(trades["top_n"], errors="coerce")
+    trades["realized_return"] = pd.to_numeric(trades["realized_return"], errors="coerce")
+
+    real_entry = real_entry_trades.copy()
+    for column in ["trade_date", "ts_code", "top_n", replacement_return_column]:
+        if column not in real_entry.columns:
+            real_entry[column] = pd.NA
+    real_entry["trade_date"] = pd.to_datetime(real_entry["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    real_entry["ts_code"] = real_entry["ts_code"].astype(str)
+    real_entry["top_n"] = pd.to_numeric(real_entry["top_n"], errors="coerce")
+    real_entry[replacement_return_column] = pd.to_numeric(real_entry[replacement_return_column], errors="coerce")
+    real_entry = real_entry.drop_duplicates(["trade_date", "ts_code", "top_n"])
+
+    merged = trades.merge(
+        real_entry[["trade_date", "ts_code", "top_n", replacement_return_column]],
+        on=["trade_date", "ts_code", "top_n"],
+        how="left",
+    )
+    replacement = pd.to_numeric(merged[replacement_return_column], errors="coerce")
+    replace_mask = (
+        merged["fill_status"].eq("filled")
+        & merged["exit_signal"].eq("limit_break_failed")
+        & replacement.notna()
+    )
+    merged["original_realized_return"] = merged["realized_return"]
+    merged["phase16c_adjust_reason"] = ""
+    merged.loc[replace_mask, "realized_return"] = replacement.loc[replace_mask]
+    merged.loc[replace_mask, "phase16c_adjust_reason"] = adjust_reason
+    return merged
+
+
+def _build_lhb_cash_account_frames(
+    *,
+    lifecycle_trades: pd.DataFrame,
+    max_positions: int,
+    position_pct: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    trade_columns = [
+        "account_trade_status",
+        "trade_date",
+        "ts_code",
+        "top_n",
+        "phase12a_rule_layer",
+        "entry_trade_date",
+        "entry_price",
+        "exit_trade_date",
+        "exit_price",
+        "realized_return",
+        "position_notional",
+        "pnl",
+        "skip_reason",
+    ]
+    curve_columns = [
+        "trade_date",
+        "cash",
+        "invested_notional",
+        "equity",
+        "drawdown",
+        "open_position_count",
+        "opened_count",
+        "closed_count",
+        "daily_realized_pnl",
+    ]
+    if lifecycle_trades.empty:
+        return pd.DataFrame(columns=trade_columns), pd.DataFrame(columns=curve_columns)
+
+    trades = lifecycle_trades.copy()
+    for column in [
+        "fill_status",
+        "entry_trade_date",
+        "exit_trade_date",
+        "ts_code",
+        "realized_return",
+        "top_n",
+        "phase12a_rule_layer",
+        "trade_date",
+        "entry_price",
+        "exit_price",
+    ]:
+        if column not in trades.columns:
+            trades[column] = pd.NA
+    trades["entry_trade_date"] = pd.to_datetime(trades["entry_trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    trades["exit_trade_date"] = pd.to_datetime(trades["exit_trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    trades["trade_date"] = pd.to_datetime(trades["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    trades["realized_return"] = pd.to_numeric(trades["realized_return"], errors="coerce")
+    candidates = trades[
+        trades["fill_status"].eq("filled")
+        & trades["entry_trade_date"].notna()
+        & trades["exit_trade_date"].notna()
+        & trades["realized_return"].notna()
+    ].copy()
+    candidates = candidates.sort_values(["entry_trade_date", "trade_date", "top_n", "ts_code"], kind="stable")
+
+    dates = sorted(set(candidates["entry_trade_date"].dropna()) | set(candidates["exit_trade_date"].dropna()))
+    cash = 1.0
+    running_max = 1.0
+    open_positions: dict[str, dict[str, Any]] = {}
+    account_rows: list[dict[str, Any]] = []
+    curve_rows: list[dict[str, Any]] = []
+    trade_records: dict[int, dict[str, Any]] = {}
+    by_entry = {date: group for date, group in candidates.groupby("entry_trade_date", sort=False)}
+
+    for date in dates:
+        opened_count = 0
+        closed_count = 0
+        daily_pnl = 0.0
+
+        for ts_code, position in list(open_positions.items()):
+            if str(position["exit_trade_date"]) != str(date):
+                continue
+            pnl = float(position["position_notional"]) * float(position["realized_return"])
+            cash += float(position["position_notional"]) + pnl
+            daily_pnl += pnl
+            closed_count += 1
+            trade_records[int(position["trade_idx"])]["pnl"] = pnl
+            open_positions.pop(ts_code, None)
+
+        entries = by_entry.get(date)
+        if entries is not None:
+            for _idx, row in entries.iterrows():
+                ts_code = str(row.get("ts_code") or "")
+                base_record = _lhb_cash_account_trade_record(row)
+                if ts_code in open_positions:
+                    account_rows.append({
+                        **base_record,
+                        "account_trade_status": "duplicate_position_skipped",
+                        "skip_reason": "duplicate_open_position",
+                    })
+                    continue
+                if len(open_positions) >= int(max_positions):
+                    account_rows.append({
+                        **base_record,
+                        "account_trade_status": "max_positions_skipped",
+                        "skip_reason": "max_positions_reached",
+                    })
+                    continue
+                equity_before_entry = cash + sum(float(pos["position_notional"]) for pos in open_positions.values())
+                notional = min(equity_before_entry * float(position_pct), cash)
+                if notional <= 0.0:
+                    account_rows.append({
+                        **base_record,
+                        "account_trade_status": "cash_skipped",
+                        "skip_reason": "insufficient_cash",
+                    })
+                    continue
+                cash -= notional
+                trade_idx = len(account_rows)
+                record = {
+                    **base_record,
+                    "account_trade_status": "filled",
+                    "position_notional": notional,
+                    "pnl": pd.NA,
+                    "skip_reason": "",
+                }
+                account_rows.append(record)
+                trade_records[trade_idx] = record
+                open_positions[ts_code] = {
+                    "trade_idx": trade_idx,
+                    "exit_trade_date": row.get("exit_trade_date"),
+                    "realized_return": float(row.get("realized_return")),
+                    "position_notional": notional,
+                }
+                opened_count += 1
+
+        invested = sum(float(pos["position_notional"]) for pos in open_positions.values())
+        equity = cash + invested
+        running_max = max(running_max, equity)
+        curve_rows.append(
+            {
+                "trade_date": date,
+                "cash": cash,
+                "invested_notional": invested,
+                "equity": equity,
+                "drawdown": equity / running_max - 1.0 if running_max else 0.0,
+                "open_position_count": len(open_positions),
+                "opened_count": opened_count,
+                "closed_count": closed_count,
+                "daily_realized_pnl": daily_pnl,
+            }
+        )
+
+    return pd.DataFrame(account_rows).reindex(columns=trade_columns), pd.DataFrame(curve_rows).reindex(columns=curve_columns)
+
+
+def _lhb_cash_account_trade_record(row: pd.Series) -> dict[str, Any]:
+    return {
+        "account_trade_status": "",
+        "trade_date": row.get("trade_date", ""),
+        "ts_code": row.get("ts_code", ""),
+        "top_n": row.get("top_n", pd.NA),
+        "phase12a_rule_layer": row.get("phase12a_rule_layer", ""),
+        "entry_trade_date": row.get("entry_trade_date", pd.NA),
+        "entry_price": row.get("entry_price", pd.NA),
+        "exit_trade_date": row.get("exit_trade_date", pd.NA),
+        "exit_price": row.get("exit_price", pd.NA),
+        "realized_return": row.get("realized_return", pd.NA),
+        "position_notional": pd.NA,
+        "pnl": pd.NA,
+        "skip_reason": "",
+    }
 
 
 def _fetch_frame(sql: str, params: list[object], service: str = SETTINGS.research_service) -> pd.DataFrame:
@@ -497,10 +1025,103 @@ class PositionControlAdapter:
         return _filter_eligible_scores(scores)
 
 
+LHB_SHORTLINE_COMBO_REPLAY = LHBPhase16CReplayAdapter(
+    ArtifactReplayConfig(
+        strategy_id="lhb_shortline",
+        strategy_name="LHB Shortline Combo",
+        combo_scheme="lhb_shortline_combo_v1",
+        evidence_source=(
+            "Phase14C lifecycle + strict limit-lock + Phase15 cash account + "
+            "Phase16C limit-break-failed delayed exit"
+        ),
+        summary_path=(
+            "outputs/research/lhb_phase16c_limit_break_failed_rule_scan_20250101_20260608/"
+            "lhb_phase16c_limit_break_failed_rule_scan_summary_v1.csv"
+        ),
+        summary_filters={"rule_profile": "delay_all_limit_break_failed_to_5d"},
+        summary_aliases={"final_equity": "account_final_equity", "max_drawdown": "account_max_drawdown"},
+    ),
+    lifecycle_trades_path=(
+        "outputs/research/lhb_phase14c_top10_20250101_20260608_limitlock/"
+        "lhb_phase14c_lifecycle_trades_v1.csv"
+    ),
+    real_entry_trades_path=(
+        "outputs/research/lhb_phase14c_top10_20250101_20260608_limitlock/"
+        "lhb_phase12a_real_entry_trades_v1.csv"
+    ),
+    replacement_return_column="exit_5d_return",
+    adjust_reason="limit_break_failed_delay_to_5d",
+)
+
+MID_TREND_COMBO_REPLAY = ArtifactReplayAdapter(
+    ArtifactReplayConfig(
+        strategy_id="mid_trend",
+        strategy_name="Mid Trend Combo",
+        combo_scheme="mid_trend_combo_v1",
+        evidence_source=(
+            "report_mild_bonus + Top5 weekly max2 selective trend holding protection + "
+            "C2 stock protection review"
+        ),
+        summary_path=(
+            "outputs/research/mid_trend_research_overlay_after_2024q4_lookback/report_mild_bonus/"
+            "mid_trend_shadow_weekly_control_summary.csv"
+        ),
+        summary_filters={"variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1"},
+        equity_path=(
+            "outputs/research/mid_trend_research_overlay_after_2024q4_lookback/report_mild_bonus/"
+            "mid_trend_shadow_weekly_control_equity.csv"
+        ),
+        equity_filters={"variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1"},
+        positions_path=(
+            "outputs/research/mid_trend_research_overlay_after_2024q4_lookback/report_mild_bonus/"
+            "mid_trend_shadow_weekly_control_positions.csv"
+        ),
+        positions_filters={"variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1"},
+        trades_path=(
+            "outputs/research/mid_trend_research_overlay_after_2024q4_lookback/report_mild_bonus/"
+            "mid_trend_shadow_weekly_control_trades.csv"
+        ),
+        trades_filters={"variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1"},
+    )
+)
+
+TECH_BOTTLENECK_COMBO_REPLAY = ArtifactReplayAdapter(
+    ArtifactReplayConfig(
+        strategy_id="tech_bottleneck",
+        strategy_name="Tech Bottleneck Combo",
+        combo_scheme="tech_bottleneck_combo_v1",
+        evidence_source="tech_hard_filter + top5_adaptive_daily_check_max2_v1",
+        summary_path=(
+            "outputs/research/tech_bottleneck_mid_trend_overlay_20250101_20260605/"
+            "overlay_weekly_control_all_variant_summary.csv"
+        ),
+        summary_filters={
+            "overlay_name": "tech_hard_filter",
+            "variant_name": "top5_adaptive_daily_check_max2_v1",
+        },
+        equity_path=(
+            "outputs/research/tech_bottleneck_mid_trend_overlay_20250101_20260605/"
+            "tech_hard_filter/mid_trend_shadow_weekly_control_equity.csv"
+        ),
+        equity_filters={"variant_name": "top5_adaptive_daily_check_max2_v1"},
+        positions_path=(
+            "outputs/research/tech_bottleneck_mid_trend_overlay_20250101_20260605/"
+            "tech_hard_filter/mid_trend_shadow_weekly_control_positions.csv"
+        ),
+        positions_filters={"variant_name": "top5_adaptive_daily_check_max2_v1"},
+        trades_path=(
+            "outputs/research/tech_bottleneck_mid_trend_overlay_20250101_20260605/"
+            "tech_hard_filter/mid_trend_shadow_weekly_control_trades.csv"
+        ),
+        trades_filters={"variant_name": "top5_adaptive_daily_check_max2_v1"},
+    )
+)
+
+
 STRATEGY_BACKTEST_REGISTRY: dict[str, StrategyBacktestAdapter] = {
     "manual_v1_topn_rotation": ManualV1TopNAdapter(),
-    "lhb_shortline": LHBShortlineAdapter(),
-    "mid_trend": MidTrendAdapter(),
-    "tech_bottleneck": TechBottleneckAdapter(),
+    "lhb_shortline": FreshReplayBacktestAdapter(LHBShortlineAdapter(), LHB_SHORTLINE_COMBO_REPLAY),
+    "mid_trend": FreshReplayBacktestAdapter(MidTrendAdapter(), MID_TREND_COMBO_REPLAY),
+    "tech_bottleneck": FreshReplayBacktestAdapter(TechBottleneckAdapter(), TECH_BOTTLENECK_COMBO_REPLAY),
     "position_control": PositionControlAdapter(),
 }

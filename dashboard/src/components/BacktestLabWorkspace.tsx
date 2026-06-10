@@ -1,24 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchBacktestStrategies, runBacktest } from '../api/client';
-import type { BacktestRunRequest, BacktestRunResult, StrategyCatalogItem } from '../api/types';
+import { fetchBacktestStrategies, runFreshBacktest } from '../api/client';
+import type { BacktestRunRequest, BacktestRunResult, BacktestScalar, StrategyCatalogItem } from '../api/types';
+import { BacktestResultDetail } from './BacktestResultDetail';
 
-const DEFAULT_STRATEGY_ID = 'manual_v1_topn_rotation';
+const DEFAULT_STRATEGY_ID = 'lhb_shortline';
 const DEFAULT_START_DATE = '2026-01-01';
 const DEFAULT_END_DATE = '2026-06-08';
+const DEFAULT_COMBO_STRATEGY_IDS = new Set(['lhb_shortline', 'mid_trend', 'tech_bottleneck']);
 
 type RebalanceFrequency = 'daily' | 'weekly';
-type ResultRow = Record<string, number | string | null>;
+type ResultRow = Record<string, BacktestScalar>;
 type ComparisonRow = {
   strategyId: string;
   strategyName: string;
-  status: 'passed' | 'failed';
+  status: 'running' | 'passed' | 'failed';
   result: BacktestRunResult | null;
   error: string | null;
 };
 
-function formatValue(value: number | string | null | undefined) {
+function formatValue(value: BacktestScalar | undefined) {
   if (typeof value === 'number') {
     return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
   }
   return value ?? '-';
 }
@@ -61,64 +66,28 @@ function metricValue(result: BacktestRunResult | null, keys: string[]) {
   return null;
 }
 
-function ResultTable({ emptyText, rows }: { emptyText: string; rows: ResultRow[] }) {
-  const columns = getTableColumns(rows);
-
-  if (rows.length === 0 || columns.length === 0) {
-    return <p className="muted">{emptyText}</p>;
+function resultExecutionMode(result: BacktestRunResult | null) {
+  if (!result) {
+    return null;
   }
-
-  return (
-    <div className="table-scroll">
-      <table className="data-table backtest-result-table">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr key={String(row.id ?? row.date ?? row.asset_id ?? index)}>
-              {columns.map((column) => (
-                <td key={column}>{formatValue(row[column])}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  if (result.execution_mode) {
+    return result.execution_mode;
+  }
+  return result.read_only === false ? 'fresh' : 'replay';
 }
 
-function SummaryTable({ summary }: { summary: BacktestRunResult['summary'] }) {
-  const entries = Object.entries(summary);
-
-  if (entries.length === 0) {
-    return <p className="muted">No summary metrics returned.</p>;
+function resultSource(result: BacktestRunResult | null) {
+  if (!result) {
+    return null;
   }
+  return result.result_source ?? metricValue(result, ['result_source', 'evidence_source']);
+}
 
-  return (
-    <div className="table-scroll">
-      <table className="data-table backtest-summary-table">
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(([key, value]) => (
-            <tr key={key}>
-              <td>{key}</td>
-              <td>{formatValue(value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function elapsedSeconds(result: BacktestRunResult | null) {
+  if (!result || typeof result.elapsed_ms !== 'number') {
+    return null;
+  }
+  return `${Number((result.elapsed_ms / 1000).toFixed(2))}s`;
 }
 
 export function BacktestLabWorkspace() {
@@ -151,7 +120,12 @@ export function BacktestLabWorkspace() {
           return;
         }
         setStrategies(rows);
-        setStrategyId(rows.find((row) => row.status === 'runnable')?.strategy_id ?? rows[0]?.strategy_id ?? DEFAULT_STRATEGY_ID);
+        setStrategyId(
+          rows.find((row) => row.status === 'runnable' && DEFAULT_COMBO_STRATEGY_IDS.has(row.strategy_id))?.strategy_id ??
+            rows.find((row) => row.status === 'runnable')?.strategy_id ??
+            rows[0]?.strategy_id ??
+            DEFAULT_STRATEGY_ID
+        );
         setIsCatalogLoading(false);
       })
       .catch((err: unknown) => {
@@ -184,6 +158,7 @@ export function BacktestLabWorkspace() {
     (rebalanceFrequency === 'daily' || rebalanceFrequency === 'weekly');
   const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning && !isComparing;
   const canCompare = runnableStrategies.length > 0 && hasValidConfig && !isRunning && !isComparing;
+  const completedComparisonCount = comparisonRows.filter((row) => row.status !== 'running').length;
   const runDisabledReason =
     selectedStrategy && selectedStrategy.status !== 'runnable'
       ? `${selectedStrategy.strategy_name} is ${formatStrategyStatus(
@@ -259,7 +234,7 @@ export function BacktestLabWorkspace() {
     setResult(null);
     setComparisonRows([]);
 
-    runBacktest(buildBacktestRequest(strategyId))
+    runFreshBacktest(buildBacktestRequest(strategyId))
       .then((payload) => {
         if (!mountedRef.current || runRequestIdRef.current !== requestId) {
           return;
@@ -283,37 +258,57 @@ export function BacktestLabWorkspace() {
 
     const requestId = runRequestIdRef.current + 1;
     runRequestIdRef.current = requestId;
+    const initialRows = runnableStrategies.map((strategy) => ({
+      strategyId: strategy.strategy_id,
+      strategyName: strategy.strategy_name,
+      status: 'running' as const,
+      result: null,
+      error: null
+    }));
     setIsComparing(true);
     setRunError(null);
     setResult(null);
-    setComparisonRows([]);
+    setComparisonRows(initialRows);
 
-    Promise.all(
-      runnableStrategies.map(async (strategy) => {
+    const updateComparisonRow = (nextRow: ComparisonRow) => {
+      setComparisonRows((currentRows) =>
+        currentRows.map((row) => (row.strategyId === nextRow.strategyId ? nextRow : row))
+      );
+    };
+
+    const runs = runnableStrategies.map(async (strategy) => {
         try {
-          const payload = await runBacktest(buildBacktestRequest(strategy.strategy_id));
-          return {
+          const payload = await runFreshBacktest(buildBacktestRequest(strategy.strategy_id));
+          const nextRow = {
             strategyId: strategy.strategy_id,
             strategyName: strategy.strategy_name,
             status: 'passed' as const,
             result: payload,
             error: null
           };
+          if (mountedRef.current && runRequestIdRef.current === requestId) {
+            updateComparisonRow(nextRow);
+          }
+          return nextRow;
         } catch (err: unknown) {
-          return {
+          const nextRow = {
             strategyId: strategy.strategy_id,
             strategyName: strategy.strategy_name,
             status: 'failed' as const,
             result: null,
             error: err instanceof Error ? err.message : String(err)
           };
+          if (mountedRef.current && runRequestIdRef.current === requestId) {
+            updateComparisonRow(nextRow);
+          }
+          return nextRow;
         }
-      })
-    ).then((rows) => {
+      });
+
+    Promise.all(runs).then((rows) => {
       if (!mountedRef.current || runRequestIdRef.current !== requestId) {
         return;
       }
-      setComparisonRows(rows);
       setResult(rows.find((row) => row.status === 'passed')?.result ?? null);
       setIsComparing(false);
     });
@@ -323,9 +318,7 @@ export function BacktestLabWorkspace() {
     <section className="backtest-lab-workspace" aria-label="Backtest Lab workspace">
       <header className="workspace-header">
         <h1>Backtest Lab</h1>
-        <p className="muted">
-          Run built-in read-only strategy backtests. Custom strategy code is not supported.
-        </p>
+        <p className="muted">Run validated built-in combo backtests. Custom strategy code is not supported.</p>
       </header>
 
       <section className="backtest-controls" aria-label="Backtest controls">
@@ -395,10 +388,10 @@ export function BacktestLabWorkspace() {
           />
         </label>
         <button type="button" disabled={!canRun} onClick={submitBacktest}>
-          {isRunning ? 'Running...' : 'Run Backtest'}
+          {isRunning ? 'Running...' : 'Run Fresh Backtest'}
         </button>
         <button type="button" disabled={!canCompare} onClick={submitComparison}>
-          {isComparing ? 'Comparing...' : 'Run Comparison'}
+          {isComparing ? 'Comparing...' : 'Run Fresh Comparison'}
         </button>
         {runDisabledReason ? <p className="backtest-run-note">{runDisabledReason}</p> : null}
       </section>
@@ -420,11 +413,6 @@ export function BacktestLabWorkspace() {
                   <p>{strategy.description}</p>
                   <small>{getStrategyInputs(strategy)}</small>
                 </div>
-                <div className="backtest-catalog-meta">
-                  <span>{strategy.status}</span>
-                  <small>{strategy.primary_action}</small>
-                  {strategy.latest_evidence ? <small>{strategy.latest_evidence}</small> : null}
-                </div>
               </article>
             ))}
           </div>
@@ -437,7 +425,9 @@ export function BacktestLabWorkspace() {
         <section className="workspace-band backtest-comparison">
           <div className="section-heading">
             <h2>Strategy Comparison</h2>
-            <span className="muted">{comparisonRows.length} runnable strategies</span>
+            <span className="muted">
+              {completedComparisonCount} / {comparisonRows.length} completed
+            </span>
           </div>
           <div className="table-scroll">
             <table className="data-table backtest-comparison-table">
@@ -445,33 +435,47 @@ export function BacktestLabWorkspace() {
                 <tr>
                   <th>Strategy</th>
                   <th>Status</th>
+                  <th>Mode</th>
                   <th>Total Return</th>
                   <th>Max Drawdown</th>
                   <th>Turnover</th>
+                  <th>Source</th>
+                  <th>Elapsed</th>
                   <th>Error</th>
                   <th>Detail</th>
                 </tr>
               </thead>
               <tbody>
-                {comparisonRows.map((row) => (
-                  <tr key={row.strategyId}>
+                {comparisonRows.map((row) => {
+                  const isSelectedResult = Boolean(row.result && result?.strategy_id === row.result.strategy_id);
+                  return (
+                  <tr className={isSelectedResult ? 'selected-row' : undefined} key={row.strategyId}>
                     <td>{row.strategyName}</td>
                     <td>{row.status}</td>
+                    <td>{formatValue(resultExecutionMode(row.result))}</td>
                     <td>{formatValue(metricValue(row.result, ['total_return']))}</td>
                     <td>{formatValue(metricValue(row.result, ['max_drawdown']))}</td>
                     <td>{formatValue(metricValue(row.result, ['turnover', 'average_turnover']))}</td>
+                    <td>{formatValue(resultSource(row.result))}</td>
+                    <td>{formatValue(elapsedSeconds(row.result))}</td>
                     <td>{row.error ?? '-'}</td>
                     <td>
                       {row.result ? (
-                        <button type="button" className="inline-button" onClick={() => setResult(row.result)}>
-                          View
+                        <button
+                          type="button"
+                          className="inline-button"
+                          disabled={isSelectedResult}
+                          onClick={() => setResult(row.result)}
+                        >
+                          {isSelectedResult ? 'Viewing' : 'View'}
                         </button>
                       ) : (
                         '-'
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -479,32 +483,11 @@ export function BacktestLabWorkspace() {
       ) : null}
 
       {result ? (
-        <section className="workspace-band backtest-results">
-          <div className="section-heading">
-            <h2>Read-only backtest</h2>
-            <span className="muted">{result.strategy_name}</span>
-          </div>
-          <SummaryTable summary={result.summary} />
-
-          <section className="backtest-result-section">
-            <h3>Positions</h3>
-            <ResultTable rows={result.positions} emptyText="No positions returned." />
-          </section>
-
-          <section className="backtest-result-section">
-            <h3>Trades</h3>
-            <ResultTable rows={result.trades} emptyText="No trades returned." />
-          </section>
-
-          <section className="backtest-result-section">
-            <h3>Equity / Drawdown</h3>
-            <ResultTable rows={result.equity_curve} emptyText="No equity curve returned." />
-          </section>
-        </section>
+        <BacktestResultDetail result={result} />
       ) : (
         <section className="workspace-band">
           <h2>Backtest Results</h2>
-          <p className="muted">Run a runnable built-in strategy to view summary metrics, positions, trades, and equity/drawdown rows.</p>
+          <p className="muted">Run a built-in combo strategy to view summary metrics, positions, trades, and equity/drawdown rows.</p>
         </section>
       )}
     </section>

@@ -373,13 +373,21 @@ export async function fetchBacktestStrategies(): Promise<StrategyCatalogItem[]> 
 }
 
 export async function runBacktest(request: BacktestRunRequest): Promise<BacktestRunResult> {
-  const response = await fetch('/api/backtests/run', {
+  return runFreshBacktest(request);
+}
+
+export async function runFreshBacktest(request: BacktestRunRequest): Promise<BacktestRunResult> {
+  return postBacktest('/api/backtests/run-fresh', request);
+}
+
+async function postBacktest(url: string, request: BacktestRunRequest): Promise<BacktestRunResult> {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request)
   });
   if (!response.ok) {
-    throw new Error(`POST /api/backtests/run failed with ${response.status}`);
+    throw new Error(`POST ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<BacktestRunResult>;
 }

@@ -7,6 +7,7 @@ import { AppShell } from '../src/components/AppShell';
 vi.mock('../src/api/client', () => ({
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
+  fetchBacktestStrategies: vi.fn(),
   fetchOverview: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetProfile: vi.fn(),
@@ -64,6 +65,41 @@ describe('AppShell and HomeCockpit', () => {
         primary_action: 'Run backtest'
       }
     ]);
+    vi.mocked(api.fetchBacktestStrategies).mockResolvedValue([
+      {
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
+        status: 'runnable',
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
+        default_parameters: { top_n: 20 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      },
+      {
+        strategy_id: 'mid_trend',
+        strategy_name: 'Mid Trend Combo',
+        status: 'runnable',
+        description: 'Mid trend combo',
+        factor_groups: ['趋势强度'],
+        signal_inputs: ['趋势'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      },
+      {
+        strategy_id: 'tech_bottleneck',
+        strategy_name: 'Tech Bottleneck Combo',
+        status: 'runnable',
+        description: 'Tech bottleneck combo',
+        factor_groups: ['技术形态'],
+        signal_inputs: ['技术'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: '',
+        primary_action: 'Run backtest'
+      }
+    ]);
     vi.mocked(api.fetchOverview).mockResolvedValue({
       trade_date: '2026-06-08',
       score_version: 'manual_v1',
@@ -114,8 +150,11 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
     expect(screen.getByText('Latest Factor Data')).toBeVisible();
     expect(screen.getByText('2026-06-07')).toBeVisible();
-    expect(screen.getByText('Manual V1 TopN Rotation')).toBeVisible();
-    expect(screen.getByText('candidate pool, not buy signal')).toBeVisible();
+    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(screen.getByText('Mid Trend Combo')).toBeVisible();
+    expect(screen.getByText('Tech Bottleneck Combo')).toBeVisible();
+    expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
+    expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   });
 
   it('navigates to Data Explorer from Home', async () => {

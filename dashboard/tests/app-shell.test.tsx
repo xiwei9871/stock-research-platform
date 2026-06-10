@@ -566,12 +566,12 @@ describe('dashboard app shell', () => {
     ]);
     apiMocks.fetchBacktestStrategies.mockResolvedValue([
       {
-        strategy_id: 'manual_v1_topn_rotation',
-        strategy_name: 'Manual V1 TopN Rotation',
+        strategy_id: 'lhb_shortline',
+        strategy_name: 'LHB Shortline Combo',
         status: 'runnable',
-        description: 'TopN rotation',
-        factor_groups: ['momentum'],
-        signal_inputs: ['factor.stock_score_daily'],
+        description: 'LHB combo',
+        factor_groups: ['资金行为'],
+        signal_inputs: ['龙虎榜'],
         default_parameters: { top_n: 20 },
         latest_evidence: '',
         primary_action: 'Run backtest'
@@ -617,8 +617,9 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Stock Research')).toBeVisible();
     expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
     expect(screen.getByText('Latest Market Data')).toBeVisible();
-    expect(screen.getByText('Manual V1 TopN Rotation')).toBeVisible();
-    expect(screen.getByText('candidate pool, not buy signal')).toBeVisible();
+    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
+    expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   });
 
   it('navigates between planned platform workspaces', async () => {

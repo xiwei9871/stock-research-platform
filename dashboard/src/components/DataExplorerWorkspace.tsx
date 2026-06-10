@@ -76,6 +76,8 @@ function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
 export function DataExplorerWorkspace() {
   const [assetId, setAssetId] = useState(DEFAULT_ASSET_ID);
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
+  const [chartStartDate, setChartStartDate] = useState(offsetDate(DEFAULT_TRADE_DATE, -180));
+  const [chartEndDate, setChartEndDate] = useState(DEFAULT_TRADE_DATE);
   const [adjustType, setAdjustType] = useState(DEFAULT_ADJUST_TYPE);
   const [profile, setProfile] = useState<AssetProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -87,12 +89,11 @@ export function DataExplorerWorkspace() {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     const normalizedAssetId = nextAssetId.trim();
-    const startDate = offsetDate(nextTradeDate, -180);
 
     setIsLoading(true);
     setError(null);
 
-    fetchAssetProfile(normalizedAssetId, nextTradeDate, startDate, nextTradeDate, SCORE_VERSION, nextAdjustType)
+    fetchAssetProfile(normalizedAssetId, nextTradeDate, chartStartDate, chartEndDate, SCORE_VERSION, nextAdjustType)
       .then((nextProfile) => {
         if (!mountedRef.current || requestIdRef.current !== requestId) {
           return;
@@ -144,7 +145,31 @@ export function DataExplorerWorkspace() {
             aria-label="trade date"
             type="date"
             value={tradeDate}
-            onChange={(event) => setTradeDate(event.target.value)}
+            onChange={(event) => {
+              const nextTradeDate = event.target.value;
+              setTradeDate(nextTradeDate);
+              setChartEndDate(nextTradeDate);
+              setChartStartDate(offsetDate(nextTradeDate, -180));
+            }}
+          />
+        </label>
+        <span className="data-explorer-range-label">Chart Range</span>
+        <label>
+          Start
+          <input
+            aria-label="chart start date"
+            type="date"
+            value={chartStartDate}
+            onChange={(event) => setChartStartDate(event.target.value)}
+          />
+        </label>
+        <label>
+          End
+          <input
+            aria-label="chart end date"
+            type="date"
+            value={chartEndDate}
+            onChange={(event) => setChartEndDate(event.target.value)}
           />
         </label>
         <label>
@@ -178,6 +203,22 @@ export function DataExplorerWorkspace() {
             </div>
           </section>
 
+          {profile.bars.length > 0 ? (
+            <section className="workspace-band data-chart-panel" aria-label="Daily bars">
+              <div className="section-heading">
+                <h2>Daily Bars</h2>
+                <span className="muted">
+                  {profile.bars.length} bars / {chartStartDate} to {chartEndDate}
+                </span>
+              </div>
+              <AssetChart bars={profile.bars} />
+            </section>
+          ) : (
+            <section className="workspace-band" aria-label="Daily bars">
+              <p className="muted">No daily bars available.</p>
+            </section>
+          )}
+
           <section className="data-explorer-grid">
             <article className="workspace-band">
               <div className="section-heading">
@@ -196,7 +237,8 @@ export function DataExplorerWorkspace() {
 
             <article className="workspace-band">
               <div className="section-heading">
-                <h2>Factors</h2>
+                <h2>Factor Snapshot</h2>
+                <span className="muted">as of {tradeDate}</span>
               </div>
               {factorRows.length > 0 ? (
                 <table className="data-table">
@@ -222,20 +264,6 @@ export function DataExplorerWorkspace() {
               )}
             </article>
           </section>
-
-          {profile.bars.length > 0 ? (
-            <section className="workspace-band data-chart-panel" aria-label="Daily bars">
-              <div className="section-heading">
-                <h2>Daily Bars</h2>
-                <span className="muted">{profile.bars.length} bars</span>
-              </div>
-              <AssetChart bars={profile.bars} />
-            </section>
-          ) : (
-            <section className="workspace-band" aria-label="Daily bars">
-              <p className="muted">No daily bars available.</p>
-            </section>
-          )}
         </>
       ) : null}
     </section>

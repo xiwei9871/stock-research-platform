@@ -5,35 +5,57 @@ from fastapi.testclient import TestClient
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import backtests
+from stock_research.dashboard import strategy_backtest_adapters as adapters
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     VectorizedTopNResult,
 )
 
 
-def test_list_backtest_strategies_returns_strategy_catalog_rows():
+def test_list_backtest_strategies_returns_validated_combo_rows_only():
     rows = backtests.list_backtest_strategies()
 
     by_id = {row["strategy_id"]: row for row in rows}
-    assert set(by_id) >= {
-        "manual_v1_topn_rotation",
+    assert list(by_id) == [
         "lhb_shortline",
         "mid_trend",
         "tech_bottleneck",
-        "position_control",
-    }
-    assert {
-        by_id[key]["status"]
-        for key in by_id
-        if key
-        in {
-            "manual_v1_topn_rotation",
-            "lhb_shortline",
-            "mid_trend",
-            "tech_bottleneck",
-            "position_control",
-        }
-    } == {"runnable"}
+    ]
+    assert {row["status"] for row in rows} == {"runnable"}
+    assert "manual_v1_topn_rotation" not in by_id
+    assert "position_control" not in by_id
+
+
+def test_fresh_replay_backtest_adapter_delegates_fresh_scores_and_replay():
+    calls = []
+
+    class FakeFreshAdapter:
+        strategy_id = "lhb_shortline"
+
+        def load_scores(self, params):
+            calls.append(("fresh", params.start_date))
+            return pd.DataFrame([{"trade_date": params.start_date, "asset_id": "A", "score_total": 1.0}])
+
+    class FakeReplayAdapter:
+        strategy_id = "lhb_shortline"
+        strategy_name = "LHB Shortline Combo"
+        combo_scheme = "lhb_shortline_combo_v1"
+
+        def run_replay(self, params, run_config):
+            calls.append(("replay", run_config["top_n"]))
+            return {"strategy_id": "lhb_shortline", "summary": {"combo_scheme": self.combo_scheme}}
+
+    combo = adapters.FreshReplayBacktestAdapter(FakeFreshAdapter(), FakeReplayAdapter())
+    params = adapters.StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08")
+
+    scores = combo.load_scores(params)
+    replay = combo.run_replay(params, {"top_n": 20})
+
+    assert combo.strategy_id == "lhb_shortline"
+    assert combo.strategy_name == "LHB Shortline Combo"
+    assert scores.iloc[0]["asset_id"] == "A"
+    assert replay["summary"]["combo_scheme"] == "lhb_shortline_combo_v1"
+    assert calls == [("fresh", "2026-01-01"), ("replay", 20)]
 
 
 def test_load_vectorized_topn_prices_queries_market_daily_bar_directly(monkeypatch):
@@ -174,7 +196,7 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
     monkeypatch.setattr(backtests, "load_vectorized_topn_prices", fake_load_prices)
     monkeypatch.setattr(backtests, "run_vectorized_topn_backtest", fake_run_backtest)
 
-    payload = backtests.run_backtest(
+    payload = backtests.run_fresh_backtest(
         {
             "strategy_id": "manual_v1_topn_rotation",
             "start_date": "2026-06-01",
@@ -218,15 +240,172 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
     )
     assert payload["strategy_id"] == "manual_v1_topn_rotation"
     assert payload["strategy_name"] == "Manual V1 TopN Rotation"
-    assert payload["read_only"] is True
+    assert payload["execution_mode"] == "fresh"
+    assert payload["read_only"] is False
     assert payload["config"]["adjust_type"] == "hfq"
     assert payload["summary"]["total_return"] == 0.02
     assert payload["summary"]["max_drawdown"] is None
-    assert payload["summary"]["average_turnover"] is None
-    assert payload["equity_curve"][0]["date"] == "2026-06-02"
-    assert payload["equity_curve"][0]["turnover"] is None
-    assert payload["positions"][0]["rebalance_date"] == "2026-06-01"
-    assert payload["trades"][0]["execution_date"] == "2026-06-02"
+
+
+def test_run_replay_backtest_uses_replay_adapter(monkeypatch):
+    calls = {}
+
+    class FakeReplayAdapter:
+        strategy_id = "mid_trend"
+        strategy_name = "Mid Trend Combo"
+
+        def run_replay(self, params, run_config):
+            calls["params"] = params
+            calls["run_config"] = run_config
+            return {
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "read_only": True,
+                "config": {"start_date": params.start_date, "end_date": params.end_date},
+                "summary": {"final_equity": 1.2},
+                "equity_curve": [],
+                "positions": [],
+                "trades": [],
+            }
+
+    monkeypatch.setitem(backtests.STRATEGY_BACKTEST_REGISTRY, "mid_trend", FakeReplayAdapter())
+
+    payload = backtests.run_replay_backtest(
+        {
+            "strategy_id": "mid_trend",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-08",
+            "top_n": 20,
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 10,
+            "max_positions": 20,
+            "score_version": "manual_v1",
+            "adjust_type": "hfq",
+        }
+    )
+
+    assert payload["execution_mode"] == "replay"
+    assert payload["result_source"] == "database_replay"
+    assert payload["summary"]["final_equity"] == 1.2
+    assert calls["params"].start_date == "2026-01-01"
+
+
+def test_run_fresh_backtest_bypasses_replay_adapter_and_uses_live_scores(monkeypatch):
+    calls = {}
+
+    class FakeComboAdapter:
+        strategy_id = "mid_trend"
+        strategy_name = "Mid Trend Combo"
+
+        def run_replay(self, params, run_config):
+            raise AssertionError("fresh mode must not call run_replay")
+
+        def load_scores(self, params):
+            calls["params"] = params
+            return pd.DataFrame(
+                [{"trade_date": "2026-01-02", "asset_id": "A", "rank": 1, "score_total": 90.0}]
+            )
+
+    result = VectorizedTopNResult(
+        config=VectorizedTopNConfig(
+            start_date="2026-01-01",
+            end_date="2026-06-08",
+            top_n=1,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=10.0,
+            max_positions=1,
+        ),
+        equity_curve=pd.DataFrame([{"date": "2026-01-02", "equity": 1.03, "drawdown": 0.0}]),
+        positions=pd.DataFrame([{"rebalance_date": "2026-01-02", "asset_id": "A", "weight": 1.0}]),
+        trades=pd.DataFrame([{"execution_date": "2026-01-02", "asset_id": "A", "side": "buy"}]),
+        summary={"final_equity": 1.03, "total_return": 0.03, "max_drawdown": 0.0},
+    )
+
+    monkeypatch.setitem(backtests.STRATEGY_BACKTEST_REGISTRY, "mid_trend", FakeComboAdapter())
+    monkeypatch.setattr(
+        backtests,
+        "load_vectorized_topn_prices",
+        lambda **kwargs: pd.DataFrame([{"trade_date": "2026-01-02", "asset_id": "A", "close": 10.0}]),
+    )
+    monkeypatch.setattr(backtests, "run_vectorized_topn_backtest", lambda scores, prices, config: result)
+
+    payload = backtests.run_fresh_backtest(
+        {
+            "strategy_id": "mid_trend",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-08",
+            "top_n": 1,
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 10,
+            "max_positions": 1,
+            "score_version": "manual_v1",
+            "adjust_type": "hfq",
+        }
+    )
+
+    assert payload["execution_mode"] == "fresh"
+    assert payload["result_source"] == "live_vectorized_backtest"
+    assert payload["summary"]["final_equity"] == 1.03
+    assert payload["summary"]["fresh_engine_note"] == "live score rebuild from selected strategy factors and market prices"
+    assert payload["equity_curve"][0]["date"] == "2026-01-02"
+    assert payload["positions"][0]["rebalance_date"] == "2026-01-02"
+    assert payload["trades"][0]["execution_date"] == "2026-01-02"
+
+
+def test_run_fresh_backtest_ignores_validated_combo_runner_and_uses_live_scores(monkeypatch):
+    calls = {}
+
+    class FakeValidatedComboAdapter:
+        strategy_id = "lhb_shortline"
+        strategy_name = "LHB Shortline Combo"
+
+        def run_validated_backtest(self, params, run_config):
+            raise AssertionError("fresh mode must not call validated artifact rerun")
+
+        def load_scores(self, params):
+            calls["params"] = params
+            return pd.DataFrame(
+                [{"trade_date": "2026-01-02", "asset_id": "A", "rank": 1, "score_total": 90.0}]
+            )
+
+    result = VectorizedTopNResult(
+        config=VectorizedTopNConfig(
+            start_date="2026-01-01",
+            end_date="2026-06-08",
+            top_n=20,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=10.0,
+            max_positions=20,
+        ),
+        equity_curve=pd.DataFrame([{"date": "2026-01-02", "equity": 0.99, "drawdown": -0.01}]),
+        positions=pd.DataFrame([{"rebalance_date": "2026-01-02", "asset_id": "A", "weight": 0.05}]),
+        trades=pd.DataFrame([{"execution_date": "2026-01-02", "asset_id": "A", "side": "buy"}]),
+        summary={"final_equity": 0.99, "total_return": -0.01, "max_drawdown": -0.01},
+    )
+
+    monkeypatch.setitem(backtests.STRATEGY_BACKTEST_REGISTRY, "lhb_shortline", FakeValidatedComboAdapter())
+    monkeypatch.setattr(backtests, "load_vectorized_topn_prices", lambda **kwargs: pd.DataFrame())
+    monkeypatch.setattr(backtests, "run_vectorized_topn_backtest", lambda scores, prices, config: result)
+
+    payload = backtests.run_fresh_backtest(
+        {
+            "strategy_id": "lhb_shortline",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-08",
+            "top_n": 20,
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 10,
+            "max_positions": 20,
+            "score_version": "manual_v1",
+            "adjust_type": "hfq",
+        }
+    )
+
+    assert calls["params"].start_date == "2026-01-01"
+    assert payload["execution_mode"] == "fresh"
+    assert payload["result_source"] == "live_vectorized_backtest"
+    assert payload["summary"]["final_equity"] == 0.99
+    assert payload["summary"]["fresh_engine_note"] == "live score rebuild from selected strategy factors and market prices"
 
 
 def test_run_backtest_rejects_unknown_strategy():
@@ -284,7 +463,7 @@ def test_run_backtest_routes_lhb_strategy_through_adapter(monkeypatch):
     monkeypatch.setattr(backtests, "load_vectorized_topn_prices", lambda **kwargs: pd.DataFrame())
     monkeypatch.setattr(backtests, "run_vectorized_topn_backtest", lambda scores, prices, config: result)
 
-    payload = backtests.run_backtest(
+    payload = backtests.run_fresh_backtest(
         {
             "strategy_id": "lhb_shortline",
             "start_date": "2026-06-01",
@@ -300,7 +479,67 @@ def test_run_backtest_routes_lhb_strategy_through_adapter(monkeypatch):
 
     assert calls["params"].start_date == "2026-06-01"
     assert payload["strategy_id"] == "lhb_shortline"
-    assert payload["strategy_name"] == "LHB Shortline"
+    assert payload["strategy_name"] == "LHB Shortline Combo"
+    assert payload["execution_mode"] == "fresh"
+
+
+def test_run_backtest_uses_combo_replay_adapter_without_vectorized_topn(monkeypatch):
+    calls = {}
+
+    class FakeReplayAdapter:
+        strategy_id = "lhb_shortline"
+
+        def run_replay(self, params, run_config):
+            calls["params"] = params
+            calls["run_config"] = run_config
+            return {
+                "strategy_id": "lhb_shortline",
+                "strategy_name": "LHB Shortline Combo",
+                "read_only": True,
+                "config": {"start_date": params.start_date, "end_date": params.end_date},
+                "summary": {
+                    "combo_scheme": "lhb_shortline_combo_v1",
+                    "final_equity": 2.674043,
+                    "total_return": 1.674043,
+                    "max_drawdown": -0.027448,
+                },
+                "equity_curve": [{"date": "2026-06-08", "equity": 2.674043}],
+                "positions": [],
+                "trades": [{"trade_date": "2026-06-08", "asset_id": "CN:SZ:300615"}],
+            }
+
+    monkeypatch.setitem(backtests.STRATEGY_BACKTEST_REGISTRY, "lhb_shortline", FakeReplayAdapter())
+    monkeypatch.setattr(
+        backtests,
+        "load_vectorized_topn_prices",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("combo replay should not load TopN prices")),
+    )
+    monkeypatch.setattr(
+        backtests,
+        "run_vectorized_topn_backtest",
+        lambda scores, prices, config: (_ for _ in ()).throw(AssertionError("combo replay should not run TopN")),
+    )
+
+    payload = backtests.run_backtest(
+        {
+            "strategy_id": "lhb_shortline",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-08",
+            "top_n": 20,
+            "rebalance_frequency": "weekly",
+            "transaction_cost_bps": 10,
+            "max_positions": 20,
+            "score_version": "manual_v1",
+            "adjust_type": "hfq",
+        }
+    )
+
+    assert calls["params"].start_date == "2026-01-01"
+    assert calls["params"].end_date == "2026-06-08"
+    assert calls["run_config"]["top_n"] == 20
+    assert payload["strategy_id"] == "lhb_shortline"
+    assert payload["summary"]["combo_scheme"] == "lhb_shortline_combo_v1"
+    assert payload["summary"]["final_equity"] == 2.674043
 
 
 def test_json_safe_conversion_handles_common_pandas_and_scalar_values():

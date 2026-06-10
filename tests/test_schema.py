@@ -32,6 +32,21 @@ def test_schema_creates_backtest_tables():
     assert "idx_backtest_equity_curve_run_date" in CREATE_TABLES_SQL
 
 
+def test_research_extension_includes_strategy_backtest_read_model_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_run" in sql
+    assert "CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_equity" in sql
+    assert "CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_position" in sql
+    assert "CREATE TABLE IF NOT EXISTS backtest.strategy_backtest_trade" in sql
+    assert "summary_json jsonb NOT NULL" in sql
+    assert "row_json jsonb NOT NULL" in sql
+    assert "idx_strategy_backtest_run_lookup" in sql
+    assert "idx_strategy_backtest_equity_run_date" in sql
+    assert "idx_strategy_backtest_position_run_date" in sql
+    assert "idx_strategy_backtest_trade_run_date" in sql
+
+
 def test_research_extension_creates_schemas_and_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE SCHEMA IF NOT EXISTS raw_akshare" in sql

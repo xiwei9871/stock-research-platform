@@ -1,7 +1,12 @@
 from fastapi import FastAPI, HTTPException
 
 from stock_research.dashboard.asset_profile import build_asset_profile
-from stock_research.dashboard.backtests import list_backtest_strategies, run_backtest
+from stock_research.dashboard.backtests import (
+    list_backtest_strategies,
+    run_backtest,
+    run_fresh_backtest,
+    run_replay_backtest,
+)
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
@@ -363,6 +368,20 @@ def create_app() -> FastAPI:
     def backtest_run(payload: dict):
         try:
             return run_backtest(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/backtests/run-fresh")
+    def backtest_run_fresh(payload: dict):
+        try:
+            return run_fresh_backtest(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/backtests/run-replay")
+    def backtest_run_replay(payload: dict):
+        try:
+            return run_replay_backtest(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
