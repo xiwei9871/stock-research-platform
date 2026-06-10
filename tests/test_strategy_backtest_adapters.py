@@ -8,6 +8,9 @@ from stock_research.dashboard.strategy_backtest_adapters import (
     StrategyBacktestParams,
     build_lhb_shortline_scores_from_frames,
     build_manual_v1_scores_from_frame,
+    build_mid_trend_scores_from_frames,
+    build_position_control_scores_from_frames,
+    build_tech_bottleneck_scores_from_frames,
     normalize_strategy_scores,
 )
 
@@ -219,3 +222,116 @@ def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
 
     assert list(scores["asset_id"]) == ["A"]
     assert scores.iloc[0]["eligibility"] is True
+
+
+def test_mid_trend_builder_prefers_stronger_trend_and_penalizes_risk():
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 78.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "ret_20d": 0.18,
+                "high_to_close_drawdown": 0.02,
+                "amount_vs_20d": 1.2,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "ret_20d": -0.03,
+                "high_to_close_drawdown": 0.18,
+                "amount_vs_20d": 0.5,
+            },
+        ]
+    )
+    factors = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "factor_name": "trend_r2_20",
+                "factor_value": 0.85,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "factor_name": "trend_r2_20",
+                "factor_value": 0.25,
+            },
+        ]
+    )
+
+    scores = build_mid_trend_scores_from_frames(manual, technical, factors)
+
+    assert list(scores["asset_id"]) == ["A", "B"]
+    assert scores.iloc[0]["score_total"] > scores.iloc[1]["score_total"]
+
+
+def test_tech_bottleneck_builder_prefers_continuation_and_volume_confirmation():
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 65.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 86.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "ret_20d": 0.16,
+                "amount_vs_20d": 2.4,
+                "close_position_in_day": 0.86,
+                "high_to_close_drawdown": 0.02,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "ret_20d": 0.01,
+                "amount_vs_20d": 0.7,
+                "close_position_in_day": 0.45,
+                "high_to_close_drawdown": 0.12,
+            },
+        ]
+    )
+
+    scores = build_tech_bottleneck_scores_from_frames(manual, technical)
+
+    assert list(scores["asset_id"]) == ["A", "B"]
+    assert scores.iloc[0]["score_total"] > scores.iloc[1]["score_total"]
+
+
+def test_position_control_builder_reranks_risky_base_candidates():
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 90.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 88.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "high_to_close_drawdown": 0.22,
+                "amount_vs_20d": 3.0,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "high_to_close_drawdown": 0.02,
+                "amount_vs_20d": 1.0,
+            },
+        ]
+    )
+
+    scores = build_position_control_scores_from_frames(manual, technical)
+
+    assert list(scores["asset_id"]) == ["B", "A"]
+    assert scores.iloc[0]["exposure_scale"] == 1.0
+    assert scores.iloc[1]["exposure_scale"] < 1.0
