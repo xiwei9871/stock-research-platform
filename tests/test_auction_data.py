@@ -19,6 +19,7 @@ from stock_research.auction_data import (
     build_lhb_phase18e_joint_exit_rule_scan_v1,
     build_lhb_phase18e_joint_exit_state_detail_v1,
     collect_open_auction_minute_bars,
+    collect_open_auction_minute_bars_until_covered,
     open_auction_minute_market_row,
     query_tushare_auction_rows_for_trade_date,
     sync_tushare_stock_auction_bars,
@@ -311,6 +312,53 @@ def test_collect_open_auction_minute_bars_filters_target_date_and_upserts(monkey
     assert upsert_calls[0][3]["trade_date"] == "2026-06-09"
     assert result["summary"]["upserted_rows"] == 1
     assert result["detail"].to_dict("records")[0]["queried_rows"] == 2
+
+
+def test_collect_open_auction_minute_bars_until_covered_retries_only_remaining(monkeypatch):
+    calls = []
+    covered = set()
+
+    def fake_collect(trade_date, ts_codes, start_time, end_time, sleep_seconds, max_symbols=None):
+        calls.append(list(ts_codes))
+        rows = []
+        for ts_code in ts_codes:
+            success = ts_code == "000001.SZ" or (ts_code == "600023.SH" and len(calls) == 2)
+            if success:
+                covered.add(ts_code)
+            rows.append(
+                {
+                    "trade_date": str(trade_date),
+                    "ts_code": ts_code,
+                    "symbol": ts_code.split(".")[0],
+                    "queried_rows": 11 if success else 0,
+                    "selected_rows": 11 if success else 0,
+                    "upserted_rows": 11 if success else 0,
+                    "error": "" if success else "temporary failure",
+                }
+            )
+        return {
+            "detail": pd.DataFrame(rows),
+            "summary": {"upserted_rows": sum(row["upserted_rows"] for row in rows)},
+        }
+
+    def fake_existing(trade_date, ts_codes, source="eastmoney_pre_min"):
+        return sorted(covered)
+
+    monkeypatch.setattr(auction_data, "collect_open_auction_minute_bars", fake_collect)
+    monkeypatch.setattr(auction_data, "load_existing_open_auction_minute_ts_codes", fake_existing)
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    result = collect_open_auction_minute_bars_until_covered(
+        trade_date="2026-06-10",
+        ts_codes=["000001.SZ", "600023.SH"],
+        max_rounds=3,
+        round_sleep_seconds=0,
+        sleep_seconds=0,
+    )
+
+    assert calls == [["000001.SZ", "600023.SH"], ["600023.SH"]]
+    assert result["summary"]["covered_symbols"] == 2
+    assert result["summary"]["remaining_symbols"] == 0
 
 
 def test_load_lhb_auction_backfill_universe_reads_unique_ts_codes(tmp_path):

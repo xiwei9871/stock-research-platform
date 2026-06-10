@@ -419,6 +419,77 @@ def collect_open_auction_minute_bars(
     }
 
 
+def load_existing_open_auction_minute_ts_codes(
+    trade_date: str | dt.date,
+    ts_codes: list[str],
+    source: str = "eastmoney_pre_min",
+    research_service: str = SETTINGS.research_service,
+) -> list[str]:
+    if not ts_codes:
+        return []
+    target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
+    sql = """
+    SELECT ts_code
+    FROM market.stock_auction_minute_bar
+    WHERE trade_date = %s
+      AND source = %s
+      AND ts_code = ANY(%s)
+    GROUP BY ts_code
+    HAVING count(*) >= 1
+    ORDER BY ts_code
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [target_date.isoformat(), source, list(ts_codes)])
+    return [str(row["ts_code"]) for row in rows]
+
+
+def collect_open_auction_minute_bars_until_covered(
+    trade_date: str | dt.date,
+    ts_codes: list[str],
+    start_time: str = "09:15:00",
+    end_time: str = "09:25:00",
+    sleep_seconds: float = 5.0,
+    max_rounds: int = 6,
+    round_sleep_seconds: float = 300.0,
+    max_symbols: int | None = None,
+) -> dict[str, Any]:
+    selected_codes = sorted(ts_codes)[:max_symbols] if max_symbols else sorted(ts_codes)
+    all_details: list[pd.DataFrame] = []
+    for round_index in range(1, max_rounds + 1):
+        covered = set(load_existing_open_auction_minute_ts_codes(trade_date, selected_codes))
+        remaining = [code for code in selected_codes if code not in covered]
+        if not remaining:
+            break
+        result = collect_open_auction_minute_bars(
+            trade_date=trade_date,
+            ts_codes=remaining,
+            start_time=start_time,
+            end_time=end_time,
+            sleep_seconds=sleep_seconds,
+        )
+        detail = result["detail"].copy()
+        detail.insert(0, "round", round_index)
+        all_details.append(detail)
+        covered_after = set(load_existing_open_auction_minute_ts_codes(trade_date, selected_codes))
+        if len(covered_after) == len(selected_codes):
+            break
+        if round_index < max_rounds and round_sleep_seconds:
+            time.sleep(round_sleep_seconds)
+    final_covered = set(load_existing_open_auction_minute_ts_codes(trade_date, selected_codes))
+    combined = pd.concat(all_details, ignore_index=True) if all_details else pd.DataFrame()
+    return {
+        "detail": combined,
+        "summary": {
+            "trade_date": str(trade_date),
+            "total_symbols": len(selected_codes),
+            "covered_symbols": len(final_covered),
+            "remaining_symbols": len(selected_codes) - len(final_covered),
+            "rounds_executed": int(combined["round"].nunique()) if not combined.empty else 0,
+            "upserted_rows": int(combined["upserted_rows"].sum()) if not combined.empty else 0,
+        },
+    }
+
+
 def write_open_auction_minute_collect_report(
     result: dict[str, Any],
     output_dir: str | Path,

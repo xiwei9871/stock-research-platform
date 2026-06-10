@@ -18,6 +18,7 @@ from stock_research.auction_data import (
     build_lhb_phase18d_close_auction_lifecycle_report_v1,
     build_lhb_phase18e_joint_exit_diagnostics_report_v1,
     collect_open_auction_minute_bars,
+    collect_open_auction_minute_bars_until_covered,
     load_existing_lhb_auction_coverage,
     load_lhb_auction_backfill_universe,
     load_open_auction_minute_universe,
@@ -1524,6 +1525,9 @@ def build_parser() -> argparse.ArgumentParser:
     open_auction_minute_collect.add_argument("--end-time", default="09:25:00")
     open_auction_minute_collect.add_argument("--sleep-seconds", type=float, default=0.2)
     open_auction_minute_collect.add_argument("--max-symbols", type=int)
+    open_auction_minute_collect.add_argument("--retry-until-covered", action="store_true")
+    open_auction_minute_collect.add_argument("--max-rounds", type=int, default=6)
+    open_auction_minute_collect.add_argument("--round-sleep-seconds", type=float, default=300.0)
     open_auction_minute_collect.add_argument(
         "--output-dir",
         default="/Users/xiwei/stock_research/outputs/research/open_auction_minute_collect",
@@ -7674,14 +7678,26 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "collect-open-auction-minute-v1":
         trade_date = dt.date.today().isoformat() if args.trade_date == "auto" else args.trade_date
         ts_codes = load_open_auction_minute_universe(args.universe_path)
-        result = collect_open_auction_minute_bars(
-            trade_date=trade_date,
-            ts_codes=ts_codes,
-            start_time=args.start_time,
-            end_time=args.end_time,
-            sleep_seconds=args.sleep_seconds,
-            max_symbols=args.max_symbols,
-        )
+        if args.retry_until_covered:
+            result = collect_open_auction_minute_bars_until_covered(
+                trade_date=trade_date,
+                ts_codes=ts_codes,
+                start_time=args.start_time,
+                end_time=args.end_time,
+                sleep_seconds=args.sleep_seconds,
+                max_rounds=args.max_rounds,
+                round_sleep_seconds=args.round_sleep_seconds,
+                max_symbols=args.max_symbols,
+            )
+        else:
+            result = collect_open_auction_minute_bars(
+                trade_date=trade_date,
+                ts_codes=ts_codes,
+                start_time=args.start_time,
+                end_time=args.end_time,
+                sleep_seconds=args.sleep_seconds,
+                max_symbols=args.max_symbols,
+            )
         report = write_open_auction_minute_collect_report(
             result=result,
             output_dir=args.output_dir,
