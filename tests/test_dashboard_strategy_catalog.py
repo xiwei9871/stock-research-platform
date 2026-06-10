@@ -4,16 +4,21 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 
 
-def test_strategy_catalog_marks_only_manual_v1_topn_as_runnable():
+def test_strategy_catalog_marks_backtest_lab_strategies_as_runnable():
     rows = list_strategy_catalog()
 
     by_id = {row["strategy_id"]: row for row in rows}
-    assert by_id["manual_v1_topn_rotation"]["status"] == "runnable"
-    assert by_id["manual_v1_topn_rotation"]["primary_action"] == "Run backtest"
-    assert by_id["lhb_shortline"]["status"] == "replay_only"
-    assert by_id["mid_trend"]["status"] == "replay_only"
-    assert by_id["tech_bottleneck"]["status"] == "replay_only"
-    assert by_id["position_control"]["status"] == "replay_only"
+    strategy_ids = {
+        "manual_v1_topn_rotation",
+        "lhb_shortline",
+        "mid_trend",
+        "tech_bottleneck",
+        "position_control",
+    }
+    assert {by_id[strategy_id]["status"] for strategy_id in strategy_ids} == {"runnable"}
+    assert {
+        by_id[strategy_id]["primary_action"] for strategy_id in strategy_ids
+    } == {"Run backtest"}
     assert "momentum" in by_id["manual_v1_topn_rotation"]["factor_groups"]
 
 

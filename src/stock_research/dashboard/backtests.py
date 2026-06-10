@@ -4,14 +4,15 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.config import SETTINGS
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.dashboard.strategy_backtest_adapters import (
     STRATEGY_BACKTEST_REGISTRY,
     StrategyBacktestParams,
 )
+from stock_research.db import connect, fetch_all
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
-    load_vectorized_topn_inputs,
     run_vectorized_topn_backtest,
 )
 
@@ -21,13 +22,19 @@ def list_backtest_strategies() -> list[dict[str, Any]]:
 
 
 def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str) -> pd.DataFrame:
-    _, prices = load_vectorized_topn_inputs(
-        start_date=start_date,
-        end_date=end_date,
-        score_version="manual_v1",
-        adjust_type=adjust_type,
-    )
-    return prices
+    sql = """
+    SELECT trade_date, asset_id, open, close, amount, trade_status,
+           false AS is_limit_up,
+           false AS is_limit_down,
+           trade_status <> '1' AS is_suspended
+    FROM market_daily_bar
+    WHERE adjust_type = %s
+      AND trade_date BETWEEN %s AND %s
+    ORDER BY trade_date, asset_id
+    """
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, sql, [adjust_type, start_date, end_date])
+    return pd.DataFrame(rows)
 
 
 def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:

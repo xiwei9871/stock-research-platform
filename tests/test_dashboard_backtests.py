@@ -36,6 +36,59 @@ def test_list_backtest_strategies_returns_strategy_catalog_rows():
     } == {"runnable"}
 
 
+def test_load_vectorized_topn_prices_queries_market_daily_bar_directly(monkeypatch):
+    calls = []
+    expected_rows = [
+        {
+            "trade_date": "2026-06-02",
+            "asset_id": "A",
+            "open": 10.0,
+            "close": 10.5,
+            "amount": 1000000.0,
+            "trade_status": "1",
+            "is_limit_up": False,
+            "is_limit_down": False,
+            "is_suspended": False,
+        }
+    ]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append({"conn": conn, "sql": sql, "params": params})
+        return expected_rows
+
+    monkeypatch.setattr(backtests, "connect", lambda service: FakeConnection(), raising=False)
+    monkeypatch.setattr(backtests, "fetch_all", fake_fetch_all, raising=False)
+    monkeypatch.setattr(
+        backtests,
+        "load_vectorized_topn_inputs",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("unexpected score query")),
+        raising=False,
+    )
+
+    prices = backtests.load_vectorized_topn_prices(
+        start_date="2026-06-01",
+        end_date="2026-06-05",
+        adjust_type="hfq",
+    )
+
+    assert prices.to_dict("records") == expected_rows
+    assert len(calls) == 1
+    assert "FROM market_daily_bar" in calls[0]["sql"]
+    assert "stock_score_daily" not in calls[0]["sql"]
+    assert "false AS is_limit_up" in calls[0]["sql"]
+    assert "false AS is_limit_down" in calls[0]["sql"]
+    assert "trade_status <> '1' AS is_suspended" in calls[0]["sql"]
+    assert "ORDER BY trade_date, asset_id" in calls[0]["sql"]
+    assert calls[0]["params"] == ["hfq", "2026-06-01", "2026-06-05"]
+
+
 def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatch):
     calls = {}
     result = VectorizedTopNResult(
@@ -87,12 +140,13 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
         },
     )
 
-    def fake_load_inputs(**kwargs):
-        calls["inputs"] = kwargs
-        return pd.DataFrame(), pd.DataFrame()
+    def fake_load_prices(**kwargs):
+        calls["prices"] = kwargs
+        return pd.DataFrame([{"trade_date": "2026-06-02", "asset_id": "A", "close": 10.5}])
 
     def fake_run_backtest(scores, prices, config):
         calls["scores"] = scores
+        calls["price_frame"] = prices
         calls["config"] = config
         return result
 
@@ -117,7 +171,7 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
         "manual_v1_topn_rotation",
         FakeAdapter(),
     )
-    monkeypatch.setattr(backtests, "load_vectorized_topn_inputs", fake_load_inputs)
+    monkeypatch.setattr(backtests, "load_vectorized_topn_prices", fake_load_prices)
     monkeypatch.setattr(backtests, "run_vectorized_topn_backtest", fake_run_backtest)
 
     payload = backtests.run_backtest(
@@ -134,10 +188,9 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
         }
     )
 
-    assert calls["inputs"] == {
+    assert calls["prices"] == {
         "start_date": "2026-06-01",
         "end_date": "2026-06-05",
-        "score_version": "manual_v1",
         "adjust_type": "hfq",
     }
     assert calls["params"].start_date == "2026-06-01"
@@ -151,6 +204,9 @@ def test_run_topn_backtest_loads_inputs_and_returns_json_safe_payload(monkeypatc
             "rank": 1,
             "score_total": 90.0,
         }
+    ]
+    assert calls["price_frame"].to_dict("records") == [
+        {"trade_date": "2026-06-02", "asset_id": "A", "close": 10.5}
     ]
     assert calls["config"] == VectorizedTopNConfig(
         start_date="2026-06-01",
@@ -320,8 +376,8 @@ def test_run_backtest_validates_config_before_loading_inputs(monkeypatch):
 
     monkeypatch.setattr(
         backtests,
-        "load_vectorized_topn_inputs",
-        lambda **kwargs: calls.append(kwargs) or (pd.DataFrame(), pd.DataFrame()),
+        "load_vectorized_topn_prices",
+        lambda **kwargs: calls.append(kwargs) or pd.DataFrame(),
     )
 
     try:
