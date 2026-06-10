@@ -8,19 +8,24 @@ UNIVERSE_PATH="${OPEN_AUCTION_MINUTE_UNIVERSE_PATH:-$ROOT/outputs/research/open_
 OUTPUT_DIR="${OPEN_AUCTION_MINUTE_OUTPUT_DIR:-$ROOT/outputs/research/open_auction_minute_collect}"
 SLEEP_SECONDS="${OPEN_AUCTION_MINUTE_SLEEP_SECONDS:-0.2}"
 
-MAX_SYMBOLS_ARG=()
-if [ -n "${OPEN_AUCTION_MINUTE_MAX_SYMBOLS:-}" ]; then
-  MAX_SYMBOLS_ARG=(--max-symbols "$OPEN_AUCTION_MINUTE_MAX_SYMBOLS")
-fi
-
 mkdir -p "$ROOT/logs"
 cd "$ROOT"
 
-"$PYTHON" -m stock_research.cli collect-open-auction-minute-v1 \
-  --trade-date "$TRADE_DATE" \
-  --universe-path "$UNIVERSE_PATH" \
-  --start-time 09:15:00 \
-  --end-time 09:25:00 \
-  --sleep-seconds "$SLEEP_SECONDS" \
-  "${MAX_SYMBOLS_ARG[@]}" \
-  --output-dir "$OUTPUT_DIR"
+if [ -n "${OPEN_AUCTION_MINUTE_MAX_SYMBOLS:-}" ]; then
+  "$PYTHON" -m stock_research.cli collect-open-auction-minute-v1 \
+    --trade-date "$TRADE_DATE" \
+    --universe-path "$UNIVERSE_PATH" \
+    --start-time 09:15:00 \
+    --end-time 09:25:00 \
+    --sleep-seconds "$SLEEP_SECONDS" \
+    --max-symbols "$OPEN_AUCTION_MINUTE_MAX_SYMBOLS" \
+    --output-dir "$OUTPUT_DIR"
+else
+  "$PYTHON" -m stock_research.cli collect-open-auction-minute-v1 \
+    --trade-date "$TRADE_DATE" \
+    --universe-path "$UNIVERSE_PATH" \
+    --start-time 09:15:00 \
+    --end-time 09:25:00 \
+    --sleep-seconds "$SLEEP_SECONDS" \
+    --output-dir "$OUTPUT_DIR"
+fi
