@@ -18,10 +18,13 @@ from stock_research.auction_data import (
     build_lhb_close_auction_trade_summary,
     build_lhb_phase18e_joint_exit_rule_scan_v1,
     build_lhb_phase18e_joint_exit_state_detail_v1,
+    build_tushare_auction_full_backfill_plan,
     collect_open_auction_minute_bars,
     collect_open_auction_minute_bars_until_covered,
+    load_open_trading_dates,
     open_auction_minute_market_row,
     query_tushare_auction_rows_for_trade_date,
+    run_tushare_auction_full_backfill_plan,
     sync_tushare_stock_auction_bars,
     upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
@@ -239,6 +242,109 @@ def test_sync_tushare_stock_auction_bars_requires_selected_ts_codes():
             auction_phases=["open_call"],
             ts_codes=None,
         )
+
+
+def test_build_tushare_auction_full_backfill_plan_skips_covered_dates():
+    trade_dates = ["2026-03-05", "2026-03-06"]
+    coverage = pd.DataFrame(
+        [
+            {"trade_date": "2026-03-05", "auction_phase": "open_call", "row_count": 5200},
+            {"trade_date": "2026-03-05", "auction_phase": "close_call", "row_count": 5100},
+            {"trade_date": "2026-03-06", "auction_phase": "open_call", "row_count": 2},
+        ]
+    )
+
+    plan = build_tushare_auction_full_backfill_plan(
+        trade_dates=trade_dates,
+        auction_phases=["open_call", "close_call"],
+        existing_coverage=coverage,
+        min_rows_per_date=1000,
+    )
+
+    assert plan.to_dict("records") == [
+        {
+            "trade_date": "2026-03-06",
+            "auction_phase": "open_call",
+            "existing_rows": 2,
+            "should_query": True,
+        },
+        {
+            "trade_date": "2026-03-06",
+            "auction_phase": "close_call",
+            "existing_rows": 0,
+            "should_query": True,
+        },
+    ]
+
+
+def test_load_open_trading_dates_includes_daily_bar_dates_when_calendar_lags(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        assert conn == "conn"
+        assert "market.trading_calendar" in sql
+        assert "market_daily_bar" in sql
+        assert params == ["2026-06-08", "2026-06-10", "2026-06-08", "2026-06-10"]
+        return [
+            {"trade_date": "2026-06-08"},
+            {"trade_date": "2026-06-09"},
+        ]
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "fetch_all", fake_fetch_all)
+
+    assert load_open_trading_dates(start_date="2026-06-08", end_date="2026-06-10") == [
+        "2026-06-08",
+        "2026-06-09",
+    ]
+
+
+def test_run_tushare_auction_full_backfill_plan_queries_whole_market(monkeypatch):
+    plan = pd.DataFrame(
+        [
+            {"trade_date": "2026-03-05", "auction_phase": "open_call"},
+            {"trade_date": "2026-03-06", "auction_phase": "open_call"},
+        ]
+    )
+    query_calls = []
+    upsert_calls = []
+
+    def fake_query(client, trade_date, auction_phase):
+        query_calls.append((client, trade_date, auction_phase))
+        if trade_date == dt.date(2026, 3, 6):
+            raise RuntimeError("temporary tushare failure")
+        return [raw_auction_row(), {**raw_auction_row(), "ts_code": "000001.SZ"}]
+
+    def fake_upsert(rows, auction_phase, source_endpoint, params):
+        upsert_calls.append((rows, auction_phase, source_endpoint, params))
+        return len(rows)
+
+    monkeypatch.setattr(auction_data, "tushare_client", lambda token=None: "client")
+    monkeypatch.setattr(auction_data, "query_tushare_auction_rows_for_trade_date", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_auction_bars", fake_upsert)
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    result = run_tushare_auction_full_backfill_plan(
+        plan=plan,
+        max_calls=10,
+        sleep_seconds=0,
+    )
+
+    assert query_calls == [
+        ("client", dt.date(2026, 3, 5), "open_call"),
+        ("client", dt.date(2026, 3, 6), "open_call"),
+    ]
+    assert upsert_calls[0][0] == [raw_auction_row(), {**raw_auction_row(), "ts_code": "000001.SZ"}]
+    assert upsert_calls[0][3] == {
+        "trade_date": "20260305",
+        "auction_phase": "open_call",
+        "executor": "tushare_auction_full_backfill_v1",
+    }
+    assert result["summary"] == {
+        "executed_calls": 2,
+        "failed_calls": 1,
+        "remaining_calls": 0,
+        "queried_rows": 2,
+        "upserted_rows": 2,
+    }
 
 
 def test_open_auction_minute_market_row_normalizes_eastmoney_payload():

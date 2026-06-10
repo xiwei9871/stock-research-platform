@@ -803,6 +803,216 @@ def run_lhb_auction_backfill_plan(
     }
 
 
+def load_open_trading_dates(
+    *,
+    start_date: str,
+    end_date: str,
+    research_service: str = SETTINGS.research_service,
+) -> list[str]:
+    sql = """
+    SELECT DISTINCT trade_date::text AS trade_date
+    FROM (
+        SELECT trade_date
+        FROM market.trading_calendar
+        WHERE trade_date BETWEEN %s AND %s
+          AND is_open = true
+        UNION
+        SELECT trade_date
+        FROM market_daily_bar
+        WHERE trade_date BETWEEN %s AND %s
+          AND adjust_type = 'qfq'
+    ) AS dates
+    ORDER BY trade_date
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, start_date, end_date])
+    return [str(row["trade_date"]) for row in rows]
+
+
+def load_tushare_auction_full_coverage(
+    *,
+    start_date: str,
+    end_date: str,
+    auction_phases: list[str],
+    research_service: str = SETTINGS.research_service,
+) -> pd.DataFrame:
+    sql = """
+    SELECT trade_date::text AS trade_date, auction_phase, count(*)::int AS row_count
+    FROM market.stock_auction_bar
+    WHERE trade_date BETWEEN %s AND %s
+      AND auction_phase = ANY(%s)
+      AND source = 'tushare'
+    GROUP BY trade_date, auction_phase
+    ORDER BY trade_date, auction_phase
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [start_date, end_date, auction_phases])
+    return pd.DataFrame(rows, columns=["trade_date", "auction_phase", "row_count"])
+
+
+def build_tushare_auction_full_backfill_plan(
+    *,
+    trade_dates: list[str],
+    auction_phases: list[str],
+    existing_coverage: pd.DataFrame,
+    min_rows_per_date: int = 1000,
+) -> pd.DataFrame:
+    coverage = existing_coverage.copy()
+    if coverage.empty:
+        coverage = pd.DataFrame(columns=["trade_date", "auction_phase", "row_count"])
+    coverage["trade_date"] = pd.to_datetime(coverage["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    coverage["auction_phase"] = coverage["auction_phase"].astype(str).str.strip()
+    coverage["row_count"] = pd.to_numeric(coverage["row_count"], errors="coerce").fillna(0).astype(int)
+    row_counts = {
+        (str(row.trade_date), str(row.auction_phase)): int(row.row_count)
+        for row in coverage.itertuples(index=False)
+    }
+
+    rows: list[dict[str, Any]] = []
+    for trade_date in sorted({pd.Timestamp(value).strftime("%Y-%m-%d") for value in trade_dates}):
+        for phase in auction_phases:
+            existing_rows = row_counts.get((trade_date, phase), 0)
+            if existing_rows >= min_rows_per_date:
+                continue
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "auction_phase": phase,
+                    "existing_rows": existing_rows,
+                    "should_query": True,
+                }
+            )
+    return pd.DataFrame(
+        rows,
+        columns=["trade_date", "auction_phase", "existing_rows", "should_query"],
+    )
+
+
+def run_tushare_auction_full_backfill_plan(
+    *,
+    plan: pd.DataFrame,
+    max_calls: int,
+    token: str | None = None,
+    sleep_seconds: float = 1.3,
+) -> dict[str, Any]:
+    client = tushare_client(token=token)
+    executed_rows: list[dict[str, Any]] = []
+    ordered_plan = plan.sort_values(["trade_date", "auction_phase"]).head(max_calls)
+    for _, task in ordered_plan.iterrows():
+        phase = str(task["auction_phase"])
+        trade_date = dt.date.fromisoformat(str(task["trade_date"]))
+        endpoint = auction_endpoint_for_phase(phase)
+        error = ""
+        raw_rows: list[dict[str, Any]] = []
+        upserted = 0
+        try:
+            raw_rows = query_tushare_auction_rows_for_trade_date(
+                client,
+                trade_date=trade_date,
+                auction_phase=phase,
+            )
+            params = {
+                "trade_date": trade_date.strftime("%Y%m%d"),
+                "auction_phase": phase,
+                "executor": "tushare_auction_full_backfill_v1",
+            }
+            upserted = upsert_stock_auction_bars(
+                raw_rows,
+                auction_phase=phase,
+                source_endpoint=endpoint,
+                params=params,
+            )
+        except Exception as exc:  # pragma: no cover - integration safety path.
+            error = str(exc)
+        executed_rows.append(
+            {
+                "trade_date": trade_date.strftime("%Y-%m-%d"),
+                "auction_phase": phase,
+                "queried_rows": len(raw_rows),
+                "upserted_rows": upserted,
+                "error": error,
+            }
+        )
+        if sleep_seconds:
+            time.sleep(sleep_seconds)
+
+    executed_calls = len(executed_rows)
+    failed_calls = sum(1 for row in executed_rows if row["error"])
+    return {
+        "executed": pd.DataFrame(
+            executed_rows,
+            columns=["trade_date", "auction_phase", "queried_rows", "upserted_rows", "error"],
+        ),
+        "summary": {
+            "executed_calls": executed_calls,
+            "failed_calls": failed_calls,
+            "remaining_calls": max(len(plan) - executed_calls, 0),
+            "queried_rows": int(sum(row["queried_rows"] for row in executed_rows)),
+            "upserted_rows": int(sum(row["upserted_rows"] for row in executed_rows)),
+        },
+    }
+
+
+def write_tushare_auction_full_backfill_report(
+    *,
+    plan: pd.DataFrame,
+    executed: pd.DataFrame | None,
+    output_dir: str | Path,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    suffix = f"{start_date.replace('-', '')}_{end_date.replace('-', '')}"
+    plan_path = output / f"tushare_auction_full_backfill_plan_{suffix}.csv"
+    latest_plan_path = output / "tushare_auction_full_backfill_plan_latest.csv"
+    report_path = output / f"tushare_auction_full_backfill_{suffix}.md"
+    plan.to_csv(plan_path, index=False)
+    plan.to_csv(latest_plan_path, index=False)
+    paths = {
+        "plan": str(plan_path),
+        "latest_plan": str(latest_plan_path),
+        "markdown_report": str(report_path),
+    }
+    executed_calls = 0
+    failed_calls = 0
+    upserted_rows = 0
+    if executed is not None:
+        executed_path = output / f"tushare_auction_full_backfill_executed_{suffix}.csv"
+        latest_executed_path = output / "tushare_auction_full_backfill_executed_latest.csv"
+        executed.to_csv(executed_path, index=False)
+        executed.to_csv(latest_executed_path, index=False)
+        paths["executed"] = str(executed_path)
+        paths["latest_executed"] = str(latest_executed_path)
+        executed_calls = len(executed)
+        failed_calls = int((executed["error"].astype(str) != "").sum()) if "error" in executed else 0
+        upserted_rows = int(pd.to_numeric(executed.get("upserted_rows", pd.Series(dtype=float)), errors="coerce").fillna(0).sum())
+
+    phase_counts = plan["auction_phase"].value_counts().to_dict() if "auction_phase" in plan else {}
+    lines = [
+        "# Tushare Auction Full Backfill",
+        "",
+        f"- Window: `{start_date}` to `{end_date}`",
+        f"- Planned calls: `{len(plan)}`",
+        f"- Phase counts: `{phase_counts}`",
+        f"- Executed calls: `{executed_calls}`",
+        f"- Failed calls: `{failed_calls}`",
+        f"- Upserted rows: `{upserted_rows}`",
+        "",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "summary": {
+            "planned_calls": int(len(plan)),
+            "executed_calls": int(executed_calls),
+            "failed_calls": int(failed_calls),
+            "upserted_rows": int(upserted_rows),
+            "phase_counts": phase_counts,
+        },
+        "paths": paths,
+    }
+
+
 def safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     num = pd.to_numeric(numerator, errors="coerce")
     den = pd.to_numeric(denominator, errors="coerce")
