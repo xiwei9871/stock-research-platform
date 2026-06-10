@@ -51,6 +51,7 @@ def normalize_strategy_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataF
         normalized["score_components"] = [{} for _ in range(len(normalized))]
     if "eligibility" not in normalized.columns:
         normalized["eligibility"] = True
+    normalized["eligibility"] = normalized["eligibility"].map(lambda value: bool(value)).astype(object)
     if "eligibility_reason" not in normalized.columns:
         normalized["eligibility_reason"] = "eligible"
     if "exposure_scale" not in normalized.columns:
@@ -223,19 +224,59 @@ def _factor_pivot(factors: pd.DataFrame | None) -> pd.DataFrame:
         index=["trade_date", "asset_id"],
         columns="factor_name",
         values="factor_value",
-        aggfunc="last",
+        aggfunc="max",
     ).reset_index()
     pivot.columns = [str(column) for column in pivot.columns]
     return pivot
 
 
+def _deduplicate_manual_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return normalize_strategy_scores(pd.DataFrame(), strategy_id=strategy_id)
+    required = {"trade_date", "asset_id", "score_total"}
+    missing = required - set(frame.columns)
+    if missing:
+        raise ValueError(f"{strategy_id} scores missing columns: {', '.join(sorted(missing))}")
+
+    grouped = frame.copy()
+    grouped["score_total"] = pd.to_numeric(grouped["score_total"], errors="coerce")
+    aggregations = {"score_total": "max"}
+    if "rank" in grouped.columns:
+        grouped["rank"] = pd.to_numeric(grouped["rank"], errors="coerce")
+        aggregations["rank"] = "min"
+    grouped = grouped.dropna(subset=["trade_date", "asset_id", "score_total"])
+    if grouped.empty:
+        return normalize_strategy_scores(pd.DataFrame(), strategy_id=strategy_id)
+    return grouped.groupby(["trade_date", "asset_id"], as_index=False, sort=False).agg(aggregations)
+
+
+def _deduplicate_feature_frame(frame: pd.DataFrame | None) -> pd.DataFrame | None:
+    if frame is None or frame.empty:
+        return frame
+    group_keys = ["trade_date", "asset_id"]
+    grouped = frame.copy()
+    aggregations: dict[str, str] = {}
+    for column in grouped.columns:
+        if column in group_keys:
+            continue
+        grouped[column] = pd.to_numeric(grouped[column], errors="coerce")
+        aggregations[column] = "max"
+
+    if not aggregations:
+        return grouped[group_keys].drop_duplicates().reset_index(drop=True)
+    return grouped.groupby(group_keys, as_index=False, sort=False).agg(aggregations)
+
+
 def _merge_manual_technical_factors(
     manual: pd.DataFrame,
     technical: pd.DataFrame | None,
+    strategy_id: str,
     factors: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
+    manual = _deduplicate_manual_scores(manual, strategy_id)
     base = manual[["trade_date", "asset_id", "score_total"]].copy()
     base = base.rename(columns={"score_total": "manual_score"})
+    technical = _deduplicate_feature_frame(technical)
     if technical is not None and not technical.empty:
         base = base.merge(technical, on=["trade_date", "asset_id"], how="left")
     factor_wide = _factor_pivot(factors)
@@ -249,7 +290,7 @@ def build_mid_trend_scores_from_frames(
     technical: pd.DataFrame | None,
     factors: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    frame = _merge_manual_technical_factors(manual, technical, factors)
+    frame = _merge_manual_technical_factors(manual, technical, strategy_id="mid_trend", factors=factors)
     trend = _num(frame.get("trend_r2_20", pd.Series(index=frame.index))).clip(0, 1)
     ret_20d = _num(frame.get("ret_20d", pd.Series(index=frame.index))).clip(-0.3, 0.5)
     amount = _num(frame.get("amount_vs_20d", pd.Series(index=frame.index)), 1.0).clip(0, 3)
@@ -276,7 +317,7 @@ def build_mid_trend_scores_from_frames(
 
 
 def build_tech_bottleneck_scores_from_frames(manual: pd.DataFrame, technical: pd.DataFrame | None) -> pd.DataFrame:
-    frame = _merge_manual_technical_factors(manual, technical)
+    frame = _merge_manual_technical_factors(manual, technical, strategy_id="tech_bottleneck")
     manual_score = _num(frame.get("manual_score", pd.Series(index=frame.index)), 50.0)
     ret_20d = _num(frame.get("ret_20d", pd.Series(index=frame.index))).clip(-0.3, 0.5)
     amount = _num(frame.get("amount_vs_20d", pd.Series(index=frame.index)), 1.0).clip(0, 4)
@@ -303,12 +344,14 @@ def build_tech_bottleneck_scores_from_frames(manual: pd.DataFrame, technical: pd
 
 
 def build_position_control_scores_from_frames(manual: pd.DataFrame, technical: pd.DataFrame | None) -> pd.DataFrame:
-    frame = _merge_manual_technical_factors(manual, technical)
+    frame = _merge_manual_technical_factors(manual, technical, strategy_id="position_control")
     manual_score = _num(frame.get("manual_score", pd.Series(index=frame.index)), 50.0)
     drawdown = _num(frame.get("high_to_close_drawdown", pd.Series(index=frame.index))).clip(0, 1)
     amount = _num(frame.get("amount_vs_20d", pd.Series(index=frame.index)), 1.0).clip(0, 5)
     risk_penalty = drawdown * 120.0 + (amount - 2.5).clip(lower=0) * 8.0
     frame["score_total"] = manual_score - risk_penalty
+    # Current TopN execution is equal-weighted, so score_total carries the risk-control effect.
+    # exposure_scale is retained as metadata for later engine-level position scaling.
     exposure_scale = (1.0 - drawdown * 2.0).clip(lower=0.25, upper=1.0)
     frame["exposure_scale"] = exposure_scale.mask(drawdown <= 0.02, 1.0)
     frame["eligibility"] = frame["exposure_scale"] >= 0.25
@@ -367,6 +410,12 @@ def _load_factor_values(params: StrategyBacktestParams, factor_names: list[str])
     )
 
 
+def _filter_eligible_scores(scores: pd.DataFrame) -> pd.DataFrame:
+    filtered = scores[scores["eligibility"].map(bool)].reset_index(drop=True).copy()
+    filtered["eligibility"] = filtered["eligibility"].map(lambda value: bool(value)).astype(object)
+    return filtered
+
+
 class ManualV1TopNAdapter:
     strategy_id = "manual_v1_topn_rotation"
 
@@ -402,38 +451,41 @@ class LHBShortlineAdapter:
         lhb = _fetch_frame(lhb_sql, [params.start_date, params.end_date])
         technical = _fetch_frame(technical_sql, [params.adjust_type, params.start_date, params.end_date])
         scores = build_lhb_shortline_scores_from_frames(lhb, technical)
-        return scores[scores["eligibility"].map(bool)].reset_index(drop=True)
+        return _filter_eligible_scores(scores)
 
 
 class MidTrendAdapter:
     strategy_id = "mid_trend"
 
     def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
-        return build_mid_trend_scores_from_frames(
+        scores = build_mid_trend_scores_from_frames(
             _load_manual_scores(params),
             _load_technical_features(params),
             _load_factor_values(params, ["trend_r2_20", "ma20_slope", "ma60_slope"]),
         )
+        return _filter_eligible_scores(scores)
 
 
 class TechBottleneckAdapter:
     strategy_id = "tech_bottleneck"
 
     def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
-        return build_tech_bottleneck_scores_from_frames(
+        scores = build_tech_bottleneck_scores_from_frames(
             _load_manual_scores(params),
             _load_technical_features(params),
         )
+        return _filter_eligible_scores(scores)
 
 
 class PositionControlAdapter:
     strategy_id = "position_control"
 
     def load_scores(self, params: StrategyBacktestParams) -> pd.DataFrame:
-        return build_position_control_scores_from_frames(
+        scores = build_position_control_scores_from_frames(
             _load_manual_scores(params),
             _load_technical_features(params),
         )
+        return _filter_eligible_scores(scores)
 
 
 STRATEGY_BACKTEST_REGISTRY: dict[str, StrategyBacktestAdapter] = {

@@ -4,8 +4,11 @@ import pytest
 from stock_research.dashboard import strategy_backtest_adapters as adapters
 from stock_research.dashboard.strategy_backtest_adapters import (
     LHBShortlineAdapter,
+    MidTrendAdapter,
+    PositionControlAdapter,
     STRATEGY_BACKTEST_REGISTRY,
     StrategyBacktestParams,
+    TechBottleneckAdapter,
     build_lhb_shortline_scores_from_frames,
     build_manual_v1_scores_from_frame,
     build_mid_trend_scores_from_frames,
@@ -270,6 +273,202 @@ def test_mid_trend_builder_prefers_stronger_trend_and_penalizes_risk():
 
     assert list(scores["asset_id"]) == ["A", "B"]
     assert scores.iloc[0]["score_total"] > scores.iloc[1]["score_total"]
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        build_mid_trend_scores_from_frames,
+        build_tech_bottleneck_scores_from_frames,
+        build_position_control_scores_from_frames,
+    ],
+)
+def test_manual_technical_builders_deduplicate_date_asset_rows_before_scoring(builder):
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 2, "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 1, "score_total": 88.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "rank": 3, "score_total": 75.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "ret_20d": 0.04,
+                "amount_vs_20d": 1.1,
+                "close_position_in_day": 0.60,
+                "high_to_close_drawdown": 0.03,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "ret_20d": 0.12,
+                "amount_vs_20d": 1.8,
+                "close_position_in_day": 0.82,
+                "high_to_close_drawdown": 0.08,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "ret_20d": 0.03,
+                "amount_vs_20d": 1.0,
+                "close_position_in_day": 0.50,
+                "high_to_close_drawdown": 0.02,
+            },
+        ]
+    )
+
+    scores = builder(manual, technical)
+
+    assert len(scores[(scores["trade_date"] == "2026-01-01") & (scores["asset_id"] == "A")]) == 1
+
+
+@pytest.mark.parametrize(
+    ("builder", "strategy_id"),
+    [
+        (build_mid_trend_scores_from_frames, "mid_trend"),
+        (build_tech_bottleneck_scores_from_frames, "tech_bottleneck"),
+        (build_position_control_scores_from_frames, "position_control"),
+    ],
+)
+def test_manual_technical_builders_reject_empty_manual_data_with_value_error(builder, strategy_id):
+    with pytest.raises(ValueError, match=f"no {strategy_id} strategy scores found"):
+        builder(pd.DataFrame(), pd.DataFrame())
+
+
+def test_factor_pivot_uses_max_factor_value_for_duplicate_rows():
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 70.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "ret_20d": 0.0, "amount_vs_20d": 1.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "ret_20d": 0.0, "amount_vs_20d": 1.0},
+        ]
+    )
+    factors = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "factor_name": "trend_r2_20", "factor_value": 0.90},
+            {"trade_date": "2026-01-01", "asset_id": "A", "factor_name": "trend_r2_20", "factor_value": 0.20},
+            {"trade_date": "2026-01-01", "asset_id": "B", "factor_name": "trend_r2_20", "factor_value": 0.50},
+        ]
+    )
+
+    scores = build_mid_trend_scores_from_frames(manual, technical, factors)
+
+    assert list(scores["asset_id"]) == ["A", "B"]
+    assert scores.iloc[0]["score_components"]["trend_r2_20"] == 0.90
+
+
+def test_mid_trend_adapter_returns_only_eligible_scores(monkeypatch):
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 70.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "ret_20d": 0.04, "amount_vs_20d": 1.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "ret_20d": -0.04, "amount_vs_20d": 1.0},
+        ]
+    )
+    factors = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "factor_name": "trend_r2_20", "factor_value": 0.60},
+            {"trade_date": "2026-01-01", "asset_id": "B", "factor_name": "trend_r2_20", "factor_value": 0.10},
+        ]
+    )
+    monkeypatch.setattr(adapters, "_load_manual_scores", lambda params: manual)
+    monkeypatch.setattr(adapters, "_load_technical_features", lambda params: technical)
+    monkeypatch.setattr(adapters, "_load_factor_values", lambda params, factor_names: factors)
+
+    scores = MidTrendAdapter().load_scores(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
+    )
+
+    assert list(scores["asset_id"]) == ["A"]
+    assert scores.iloc[0]["eligibility"] is True
+
+
+def test_tech_bottleneck_adapter_returns_only_eligible_scores(monkeypatch):
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "score_total": 70.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "score_total": 90.0},
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "ret_20d": 0.08,
+                "amount_vs_20d": 1.0,
+                "close_position_in_day": 0.70,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "ret_20d": 0.08,
+                "amount_vs_20d": 0.2,
+                "close_position_in_day": 0.70,
+            },
+        ]
+    )
+    monkeypatch.setattr(adapters, "_load_manual_scores", lambda params: manual)
+    monkeypatch.setattr(adapters, "_load_technical_features", lambda params: technical)
+
+    scores = TechBottleneckAdapter().load_scores(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
+    )
+
+    assert list(scores["asset_id"]) == ["A"]
+    assert scores.iloc[0]["eligibility"] is True
+
+
+def test_position_control_adapter_applies_eligibility_filter(monkeypatch):
+    raw_scores = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "rank": 1,
+                "score_total": 90.0,
+                "score_components": {},
+                "strategy_id": "position_control",
+                "eligibility": True,
+                "eligibility_reason": "risk_scaled",
+                "exposure_scale": 1.0,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "rank": 2,
+                "score_total": 80.0,
+                "score_components": {},
+                "strategy_id": "position_control",
+                "eligibility": False,
+                "eligibility_reason": "risk_excluded",
+                "exposure_scale": 0.0,
+            },
+        ]
+    )
+    monkeypatch.setattr(adapters, "_load_manual_scores", lambda params: pd.DataFrame())
+    monkeypatch.setattr(adapters, "_load_technical_features", lambda params: pd.DataFrame())
+    monkeypatch.setattr(adapters, "build_position_control_scores_from_frames", lambda manual, technical: raw_scores)
+
+    scores = PositionControlAdapter().load_scores(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
+    )
+
+    assert list(scores["asset_id"]) == ["A"]
+    assert scores.iloc[0]["eligibility"] is True
 
 
 def test_tech_bottleneck_builder_prefers_continuation_and_volume_confirmation():
