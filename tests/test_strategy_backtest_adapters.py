@@ -71,6 +71,19 @@ def test_normalize_strategy_scores_drops_missing_values_before_formatting_dates(
     assert scores.loc[0, "asset_id"] == "A"
 
 
+def test_normalize_strategy_scores_canonicalizes_tushare_asset_ids():
+    raw = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "002713.SZ", "score_total": 90.0},
+            {"trade_date": "2026-01-01", "asset_id": "688766.SH", "score_total": 80.0},
+        ]
+    )
+
+    scores = normalize_strategy_scores(raw, strategy_id="unit_strategy")
+
+    assert list(scores["asset_id"]) == ["CN:SZ:002713", "CN:SH:688766"]
+
+
 def test_strategy_backtest_params_defaults():
     params = StrategyBacktestParams(start_date="2026-01-01", end_date="2026-06-08")
 
@@ -201,7 +214,7 @@ def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
         [
             {
                 "trade_date": "2026-01-01",
-                "asset_id": "A",
+                "asset_id": "002713.SZ",
                 "on_lhb": True,
                 "lhb_net_buy_ratio": 0.22,
                 "lhb_net_buy_amount": 80_000_000,
@@ -225,7 +238,7 @@ def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
     )
     technical = pd.DataFrame(
         [
-            {"trade_date": "2026-01-01", "asset_id": "A", "amount_vs_20d": 1.5, "high_to_close_drawdown": 0.03},
+            {"trade_date": "2026-01-01", "asset_id": "CN:SZ:002713", "amount_vs_20d": 1.5, "high_to_close_drawdown": 0.03},
             {"trade_date": "2026-01-01", "asset_id": "B", "amount_vs_20d": 0.3, "high_to_close_drawdown": 0.16},
         ]
     )
@@ -241,7 +254,7 @@ def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
         StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
     )
 
-    assert list(scores["asset_id"]) == ["A"]
+    assert list(scores["asset_id"]) == ["CN:SZ:002713"]
     assert scores.iloc[0]["eligibility"] is True
 
 

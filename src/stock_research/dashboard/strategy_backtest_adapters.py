@@ -6,6 +6,7 @@ from typing import Protocol
 import pandas as pd
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.bars import normalize_market_asset_id
 from stock_research.db import connect, fetch_all
 
 
@@ -39,7 +40,7 @@ def normalize_strategy_scores(frame: pd.DataFrame, strategy_id: str) -> pd.DataF
         raise ValueError(f"no {strategy_id} strategy scores found for selected range")
 
     normalized["trade_date"] = pd.to_datetime(normalized["trade_date"]).dt.strftime("%Y-%m-%d")
-    normalized["asset_id"] = normalized["asset_id"].astype(str)
+    normalized["asset_id"] = normalized["asset_id"].map(normalize_market_asset_id)
 
     normalized = normalized.sort_values(
         ["trade_date", "score_total", "asset_id"],
@@ -132,6 +133,7 @@ def build_manual_v1_scores_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
 def _deduplicate_lhb_frame(frame: pd.DataFrame) -> pd.DataFrame:
     grouped = frame.copy()
     group_keys = ["trade_date", "asset_id"]
+    grouped["asset_id"] = grouped["asset_id"].map(normalize_market_asset_id)
     numeric_columns = [
         "lhb_net_buy_ratio",
         "lhb_net_buy_amount",
@@ -159,6 +161,7 @@ def _deduplicate_lhb_frame(frame: pd.DataFrame) -> pd.DataFrame:
 def _deduplicate_technical_frame(frame: pd.DataFrame) -> pd.DataFrame:
     grouped = frame.copy()
     group_keys = ["trade_date", "asset_id"]
+    grouped["asset_id"] = grouped["asset_id"].map(normalize_market_asset_id)
     aggregations: dict[str, str] = {}
     for column in ["amount_vs_20d", "high_to_close_drawdown"]:
         if column in grouped.columns:
