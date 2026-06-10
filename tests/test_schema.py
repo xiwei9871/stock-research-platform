@@ -19,11 +19,15 @@ def test_schema_creates_stock_auction_tables():
     assert "CREATE TABLE IF NOT EXISTS market.stock_auction_bar" in sql
     assert "CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_auction_minute_bar" in sql
     assert "CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.xtick_stock_auction_detail" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_auction_detail" in sql
     assert "auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call'))" in sql
     assert "PRIMARY KEY (trade_date, asset_id, auction_phase, source)" in sql
     assert "PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)" in sql
+    assert "PRIMARY KEY (trade_time, asset_id, source)" in sql
     assert "idx_market_stock_auction_bar_date_phase" in sql
     assert "idx_market_stock_auction_minute_bar_date_phase" in sql
+    assert "idx_market_stock_auction_detail_date_time" in sql
 
 
 def test_schema_uses_replay_keys():

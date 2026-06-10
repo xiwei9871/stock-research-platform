@@ -263,6 +263,10 @@ from stock_research.operator_decision.shadow_analytics_review import (
     write_shadow_analytics_review,
 )
 from stock_research.open_auction_minute_cron import build_open_auction_minute_cron_entries
+from stock_research.xtick_auction_data import (
+    collect_xtick_dayupdate_bid,
+    write_xtick_auction_collect_report,
+)
 from stock_research.operator_decision.shadow_review_decisions import (
     build_shadow_review_decisions,
     write_shadow_review_decisions,
@@ -1529,6 +1533,20 @@ def build_parser() -> argparse.ArgumentParser:
     open_auction_minute_cron.add_argument("--primary-minute", type=int, default=40)
     open_auction_minute_cron.add_argument("--retry-hour", type=int, default=15)
     open_auction_minute_cron.add_argument("--retry-minute", type=int, default=10)
+
+    xtick_auction_detail = subparsers.add_parser("collect-xtick-auction-detail-v1")
+    xtick_auction_detail.add_argument("--trade-date", required=True)
+    xtick_auction_detail.add_argument(
+        "--symbols",
+        type=lambda value: parse_str_list(value, "--symbols"),
+        default=["szm", "shm", "cyb", "kcb", "bj"],
+    )
+    xtick_auction_detail.add_argument("--token-env", default="XTICK_TOKEN")
+    xtick_auction_detail.add_argument("--sleep-seconds", type=float, default=1.0)
+    xtick_auction_detail.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/xtick_auction_detail_collect",
+    )
 
     lhb_auction_observation = subparsers.add_parser("lhb-auction-observation-v1")
     lhb_auction_observation.add_argument("--trades-path", required=True)
@@ -7646,6 +7664,25 @@ def main_for_args(argv: list[str] | None = None) -> None:
             retry_minute=args.retry_minute,
         ):
             print(entry)
+        return 0
+    elif args.command == "collect-xtick-auction-detail-v1":
+        result = collect_xtick_dayupdate_bid(
+            trade_date=args.trade_date,
+            symbols=args.symbols,
+            token_env=args.token_env,
+            sleep_seconds=args.sleep_seconds,
+        )
+        report = write_xtick_auction_collect_report(
+            result=result,
+            output_dir=args.output_dir,
+            trade_date=args.trade_date,
+        )
+        print(f"xtick_auction_detail_collect_v1|detail|{report['paths']['detail']}")
+        print(f"xtick_auction_detail_collect_v1|latest|{report['paths']['latest']}")
+        print(f"xtick_auction_detail_collect_v1|report|{report['paths']['markdown_report']}")
+        print(f"xtick_auction_detail_collect_v1|symbols_requested|{report['summary']['symbols_requested']}")
+        print(f"xtick_auction_detail_collect_v1|symbols_failed|{report['summary']['symbols_failed']}")
+        print(f"xtick_auction_detail_collect_v1|upserted_rows|{report['summary']['upserted_rows']}")
         return 0
     elif args.command == "lhb-auction-observation-v1":
         result = build_lhb_auction_observation_report_v1(
