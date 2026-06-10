@@ -245,6 +245,55 @@ def test_lhb_shortline_adapter_returns_only_eligible_scores(monkeypatch):
     assert scores.iloc[0]["eligibility"] is True
 
 
+def test_lhb_shortline_adapter_recomputes_dense_ranks_after_filtering(monkeypatch):
+    lhb = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "A",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": 1.00,
+                "lhb_net_buy_amount": 300_000_000,
+                "institution_net_buy": 200_000_000,
+                "repeat_on_list_count_3d": 5,
+                "lhb_after_reversal": True,
+                "lhb_one_day_pump_risk": 0.95,
+            },
+            {
+                "trade_date": "2026-01-01",
+                "asset_id": "B",
+                "on_lhb": True,
+                "lhb_net_buy_ratio": 0.20,
+                "lhb_net_buy_amount": 80_000_000,
+                "institution_net_buy": 15_000_000,
+                "repeat_on_list_count_3d": 1,
+                "lhb_after_reversal": True,
+                "lhb_one_day_pump_risk": 0.10,
+            },
+        ]
+    )
+    technical = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "amount_vs_20d": 3.0, "high_to_close_drawdown": 0.00},
+            {"trade_date": "2026-01-01", "asset_id": "B", "amount_vs_20d": 1.5, "high_to_close_drawdown": 0.02},
+        ]
+    )
+
+    def fake_fetch_frame(sql, params):
+        if "factor.lhb_event_features_daily" in sql:
+            return lhb
+        return technical
+
+    monkeypatch.setattr(adapters, "_fetch_frame", fake_fetch_frame)
+
+    scores = LHBShortlineAdapter().load_scores(
+        StrategyBacktestParams(start_date="2026-01-01", end_date="2026-01-01")
+    )
+
+    assert list(scores["asset_id"]) == ["B"]
+    assert list(scores["rank"]) == [1]
+
+
 def test_mid_trend_builder_prefers_stronger_trend_and_penalizes_risk():
     manual = pd.DataFrame(
         [

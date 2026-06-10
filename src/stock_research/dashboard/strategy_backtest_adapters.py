@@ -413,6 +413,11 @@ def _load_factor_values(params: StrategyBacktestParams, factor_names: list[str])
 
 def _filter_eligible_scores(scores: pd.DataFrame) -> pd.DataFrame:
     filtered = scores[scores["eligibility"].map(bool)].reset_index(drop=True).copy()
+    filtered = filtered.sort_values(
+        ["trade_date", "score_total", "asset_id"],
+        ascending=[True, False, True],
+    ).reset_index(drop=True)
+    filtered["rank"] = filtered.groupby("trade_date").cumcount() + 1
     filtered["eligibility"] = filtered["eligibility"].map(lambda value: bool(value)).astype(object)
     return filtered
 
