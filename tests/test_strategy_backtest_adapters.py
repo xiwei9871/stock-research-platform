@@ -92,6 +92,24 @@ def test_manual_v1_builder_preserves_manual_score_order():
     assert list(scores["rank"]) == [1, 2]
 
 
+def test_manual_v1_builder_deduplicates_date_asset_rows_before_ranking():
+    manual = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 2, "score_total": 80.0},
+            {"trade_date": "2026-01-01", "asset_id": "A", "rank": 1, "score_total": 90.0},
+            {"trade_date": "2026-01-01", "asset_id": "B", "rank": 3, "score_total": 70.0},
+        ]
+    )
+
+    scores = build_manual_v1_scores_from_frame(manual)
+
+    assert len(scores[(scores["trade_date"] == "2026-01-01") & (scores["asset_id"] == "A")]) == 1
+    assert scores.duplicated(subset=["trade_date", "asset_id"]).sum() == 0
+    a_score = scores[(scores["trade_date"] == "2026-01-01") & (scores["asset_id"] == "A")].iloc[0]
+    assert a_score["rank"] == 1
+    assert a_score["score_total"] == 90.0
+
+
 def test_manual_v1_builder_rejects_empty_frame_with_value_error():
     with pytest.raises(ValueError, match="no manual_v1_topn_rotation strategy scores found"):
         build_manual_v1_scores_from_frame(pd.DataFrame())

@@ -90,14 +90,15 @@ def build_manual_v1_scores_from_frame(frame: pd.DataFrame) -> pd.DataFrame:
     if frame is None or frame.empty:
         return normalize_strategy_scores(frame, strategy_id=strategy_id)
 
+    manual = _deduplicate_manual_scores(frame, strategy_id=strategy_id)
     normalized = normalize_strategy_scores(
-        frame.copy(),
+        manual.copy(),
         strategy_id=strategy_id,
     )
-    if "rank" not in frame.columns:
+    if "rank" not in manual.columns:
         return normalized
 
-    manual_ranks = frame[["trade_date", "asset_id", "rank", "score_total"]].copy()
+    manual_ranks = manual[["trade_date", "asset_id", "rank", "score_total"]].copy()
     manual_ranks["score_total"] = pd.to_numeric(manual_ranks["score_total"], errors="coerce")
     manual_ranks["rank"] = pd.to_numeric(manual_ranks["rank"], errors="coerce")
     manual_ranks = manual_ranks.dropna(subset=["trade_date", "asset_id", "rank", "score_total"])
