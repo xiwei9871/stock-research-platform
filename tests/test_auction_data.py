@@ -23,9 +23,12 @@ from stock_research.auction_data import (
     collect_open_auction_minute_bars_until_covered,
     load_open_trading_dates,
     open_auction_minute_market_row,
+    open_auction_spot_snapshot_market_row,
+    open_auction_spot_snapshot_staging_row,
     query_tushare_auction_rows_for_trade_date,
     run_tushare_auction_full_backfill_plan,
     sync_tushare_stock_auction_bars,
+    ts_code_from_spot_symbol,
     upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
 )
@@ -66,6 +69,22 @@ def raw_open_auction_minute_row() -> dict:
         "成交量": 120000,
         "成交额": 1234567.89,
         "最新价": 10.24,
+    }
+
+
+def raw_spot_snapshot_row() -> dict:
+    return {
+        "代码": "600023",
+        "名称": "浙能电力",
+        "最新价": 5.45,
+        "今开": 5.40,
+        "昨收": 5.38,
+        "最高": 5.47,
+        "最低": 5.39,
+        "成交量": 457800,
+        "成交额": 2495009.92,
+        "量比": 1.23,
+        "换手率": 0.56,
     }
 
 
@@ -364,6 +383,55 @@ def test_open_auction_minute_market_row_normalizes_eastmoney_payload():
     assert row["source"] == "eastmoney_pre_min"
 
 
+def test_ts_code_from_spot_symbol_maps_cn_exchanges():
+    assert ts_code_from_spot_symbol("600023") == "600023.SH"
+    assert ts_code_from_spot_symbol("000001") == "000001.SZ"
+    assert ts_code_from_spot_symbol("300001") == "300001.SZ"
+    assert ts_code_from_spot_symbol("830799") == "830799.BJ"
+
+
+def test_open_auction_spot_snapshot_market_row_normalizes_spot_payload():
+    row = open_auction_spot_snapshot_market_row(
+        raw_spot_snapshot_row(),
+        trade_date=dt.date(2026, 6, 11),
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+        target_time="09:17",
+    )
+
+    assert row["asset_id"] == "CN:SH:600023"
+    assert row["ts_code"] == "600023.SH"
+    assert row["trade_date"] == dt.date(2026, 6, 11)
+    assert row["snapshot_time"] == dt.datetime(2026, 6, 11, 9, 17, 5)
+    assert row["target_time"] == dt.time(9, 17)
+    assert row["auction_phase"] == "open_call"
+    assert row["latest"] == 5.45
+    assert row["open"] == 5.40
+    assert row["prev_close"] == 5.38
+    assert row["volume"] == 457800
+    assert row["amount"] == 2495009.92
+    assert row["volume_ratio"] == 1.23
+    assert row["turnover_rate"] == 0.56
+    assert row["source"] == "eastmoney_spot_snapshot"
+
+
+def test_open_auction_spot_snapshot_staging_row_preserves_payload_hash():
+    row = open_auction_spot_snapshot_staging_row(
+        raw_spot_snapshot_row(),
+        trade_date=dt.date(2026, 6, 11),
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+        target_time="09:17",
+        source_endpoint="stock_zh_a_spot_em",
+        params={"target_time": "09:17"},
+    )
+
+    assert row["source_endpoint"] == "stock_zh_a_spot_em"
+    assert row["raw_symbol"] == "600023"
+    assert row["ts_code"] == "600023.SH"
+    assert row["target_time"] == dt.time(9, 17)
+    assert row["payload"] == raw_spot_snapshot_row()
+    assert len(row["payload_hash"]) == 64
+
+
 def test_upsert_stock_open_auction_minute_bars_writes_staging_and_market(monkeypatch):
     calls = []
 
@@ -465,6 +533,41 @@ def test_collect_open_auction_minute_bars_until_covered_retries_only_remaining(m
     assert calls == [["000001.SZ", "600023.SH"], ["600023.SH"]]
     assert result["summary"]["covered_symbols"] == 2
     assert result["summary"]["remaining_symbols"] == 0
+
+
+def test_write_open_auction_minute_collect_report_accepts_retry_summary(tmp_path):
+    result = {
+        "detail": pd.DataFrame(
+            [
+                {
+                    "round": 1,
+                    "trade_date": "2026-06-10",
+                    "ts_code": "600023.SH",
+                    "upserted_rows": 11,
+                    "error": "",
+                }
+            ]
+        ),
+        "summary": {
+            "trade_date": "2026-06-10",
+            "total_symbols": 2,
+            "covered_symbols": 1,
+            "remaining_symbols": 1,
+            "rounds_executed": 1,
+            "upserted_rows": 11,
+        },
+    }
+
+    report = auction_data.write_open_auction_minute_collect_report(
+        result=result,
+        output_dir=tmp_path,
+        trade_date="2026-06-10",
+    )
+
+    text = Path(report["paths"]["markdown_report"]).read_text(encoding="utf-8")
+    assert "- total_symbols: 2" in text
+    assert "- covered_symbols: 1" in text
+    assert "- remaining_symbols: 1" in text
 
 
 def test_load_lhb_auction_backfill_universe_reads_unique_ts_codes(tmp_path):

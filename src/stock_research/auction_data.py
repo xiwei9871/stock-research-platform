@@ -186,6 +186,92 @@ def _first_present(raw: dict[str, Any], keys: list[str]) -> Any:
     return None
 
 
+def ts_code_from_spot_symbol(symbol: Any) -> str:
+    code = str(symbol).strip().zfill(6)
+    if len(code) != 6 or not code.isdigit():
+        raise ValueError(f"Unsupported spot symbol: {symbol}")
+    if code.startswith("6"):
+        return f"{code}.SH"
+    if code.startswith(("0", "3")):
+        return f"{code}.SZ"
+    if code.startswith(("4", "8", "9")):
+        return f"{code}.BJ"
+    raise ValueError(f"Unsupported spot symbol: {symbol}")
+
+
+def parse_target_time(value: str | dt.time) -> dt.time:
+    if isinstance(value, dt.time):
+        return value
+    return dt.datetime.strptime(str(value), "%H:%M").time()
+
+
+def open_auction_spot_snapshot_market_row(
+    raw: dict[str, Any],
+    *,
+    trade_date: dt.date,
+    snapshot_time: dt.datetime,
+    target_time: str | dt.time,
+    source: str = "eastmoney_spot_snapshot",
+) -> dict[str, Any]:
+    ts_code = ts_code_from_spot_symbol(_first_present(raw, ["代码", "symbol", "raw_symbol"]))
+    return {
+        "asset_id": asset_id_from_ts_code(ts_code),
+        "ts_code": ts_code,
+        "trade_date": trade_date,
+        "snapshot_time": snapshot_time.replace(tzinfo=None),
+        "target_time": parse_target_time(target_time),
+        "auction_phase": "open_call",
+        "latest": parse_float(_first_present(raw, ["最新价", "latest"])),
+        "open": parse_float(_first_present(raw, ["今开", "open"])),
+        "prev_close": parse_float(_first_present(raw, ["昨收", "prev_close"])),
+        "high": parse_float(_first_present(raw, ["最高", "high"])),
+        "low": parse_float(_first_present(raw, ["最低", "low"])),
+        "volume": parse_float(_first_present(raw, ["成交量", "volume", "vol"])),
+        "amount": parse_float(_first_present(raw, ["成交额", "amount"])),
+        "volume_ratio": parse_float(_first_present(raw, ["量比", "volume_ratio"])),
+        "turnover_rate": parse_float(_first_present(raw, ["换手率", "turnover_rate"])),
+        "source": source,
+    }
+
+
+def open_auction_spot_snapshot_staging_row(
+    raw: dict[str, Any],
+    *,
+    trade_date: dt.date,
+    snapshot_time: dt.datetime,
+    target_time: str | dt.time,
+    source_endpoint: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = {str(key): value for key, value in raw.items()}
+    market_row = open_auction_spot_snapshot_market_row(
+        payload,
+        trade_date=trade_date,
+        snapshot_time=snapshot_time,
+        target_time=target_time,
+    )
+    return {
+        "source_endpoint": source_endpoint,
+        "request_params": params or {},
+        "raw_symbol": str(_first_present(payload, ["代码", "symbol", "raw_symbol"])),
+        "ts_code": market_row["ts_code"],
+        "trade_date": trade_date,
+        "snapshot_time": market_row["snapshot_time"],
+        "target_time": market_row["target_time"],
+        "latest": market_row["latest"],
+        "open": market_row["open"],
+        "prev_close": market_row["prev_close"],
+        "high": market_row["high"],
+        "low": market_row["low"],
+        "volume": market_row["volume"],
+        "amount": market_row["amount"],
+        "volume_ratio": market_row["volume_ratio"],
+        "turnover_rate": market_row["turnover_rate"],
+        "payload": payload,
+        "payload_hash": payload_hash(payload),
+    }
+
+
 def open_auction_minute_market_row(
     raw: dict[str, Any],
     ts_code: str,
@@ -504,14 +590,22 @@ def write_open_auction_minute_collect_report(
     result["detail"].to_csv(detail_path, index=False)
     result["detail"].to_csv(latest_path, index=False)
     summary = result["summary"]
+    summary_keys = [
+        "symbols_requested",
+        "symbols_failed",
+        "total_symbols",
+        "covered_symbols",
+        "remaining_symbols",
+        "rounds_executed",
+        "upserted_rows",
+    ]
+    summary_lines = [f"- {key}: {summary[key]}" for key in summary_keys if key in summary]
     report_path.write_text(
         "\n".join(
             [
                 f"# Open Auction Minute Collect {date_text}",
                 "",
-                f"- symbols_requested: {summary['symbols_requested']}",
-                f"- symbols_failed: {summary['symbols_failed']}",
-                f"- upserted_rows: {summary['upserted_rows']}",
+                *summary_lines,
             ]
         )
         + "\n",
