@@ -187,7 +187,9 @@ def _first_present(raw: dict[str, Any], keys: list[str]) -> Any:
 
 
 def ts_code_from_spot_symbol(symbol: Any) -> str:
-    code = str(symbol).strip().zfill(6)
+    if symbol is None:
+        raise ValueError(f"Unsupported spot symbol: {symbol}")
+    code = str(symbol).strip()
     if len(code) != 6 or not code.isdigit():
         raise ValueError(f"Unsupported spot symbol: {symbol}")
     if code.startswith("6"):
@@ -197,6 +199,29 @@ def ts_code_from_spot_symbol(symbol: Any) -> str:
     if code.startswith(("4", "8", "9")):
         return f"{code}.BJ"
     raise ValueError(f"Unsupported spot symbol: {symbol}")
+
+
+def _clean_spot_payload_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip() in {"", "-"}:
+        return None
+    if isinstance(value, (dict, list, tuple, set)):
+        return value
+    try:
+        is_missing = pd.isna(value)
+    except (TypeError, ValueError):
+        return value
+    try:
+        if bool(is_missing):
+            return None
+    except (TypeError, ValueError):
+        return value
+    return value
+
+
+def _parse_spot_float(value: Any) -> float | None:
+    return parse_float(_clean_spot_payload_value(value))
 
 
 def parse_target_time(value: str | dt.time) -> dt.time:
@@ -221,15 +246,15 @@ def open_auction_spot_snapshot_market_row(
         "snapshot_time": snapshot_time.replace(tzinfo=None),
         "target_time": parse_target_time(target_time),
         "auction_phase": "open_call",
-        "latest": parse_float(_first_present(raw, ["最新价", "latest"])),
-        "open": parse_float(_first_present(raw, ["今开", "open"])),
-        "prev_close": parse_float(_first_present(raw, ["昨收", "prev_close"])),
-        "high": parse_float(_first_present(raw, ["最高", "high"])),
-        "low": parse_float(_first_present(raw, ["最低", "low"])),
-        "volume": parse_float(_first_present(raw, ["成交量", "volume", "vol"])),
-        "amount": parse_float(_first_present(raw, ["成交额", "amount"])),
-        "volume_ratio": parse_float(_first_present(raw, ["量比", "volume_ratio"])),
-        "turnover_rate": parse_float(_first_present(raw, ["换手率", "turnover_rate"])),
+        "latest": _parse_spot_float(_first_present(raw, ["最新价", "latest"])),
+        "open": _parse_spot_float(_first_present(raw, ["今开", "open"])),
+        "prev_close": _parse_spot_float(_first_present(raw, ["昨收", "prev_close"])),
+        "high": _parse_spot_float(_first_present(raw, ["最高", "high"])),
+        "low": _parse_spot_float(_first_present(raw, ["最低", "low"])),
+        "volume": _parse_spot_float(_first_present(raw, ["成交量", "volume", "vol"])),
+        "amount": _parse_spot_float(_first_present(raw, ["成交额", "amount"])),
+        "volume_ratio": _parse_spot_float(_first_present(raw, ["量比", "volume_ratio"])),
+        "turnover_rate": _parse_spot_float(_first_present(raw, ["换手率", "turnover_rate"])),
         "source": source,
     }
 
@@ -243,7 +268,7 @@ def open_auction_spot_snapshot_staging_row(
     source_endpoint: str,
     params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    payload = {str(key): value for key, value in raw.items()}
+    payload = {str(key): _clean_spot_payload_value(value) for key, value in raw.items()}
     market_row = open_auction_spot_snapshot_market_row(
         payload,
         trade_date=trade_date,

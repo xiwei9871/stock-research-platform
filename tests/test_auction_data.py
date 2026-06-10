@@ -32,6 +32,7 @@ from stock_research.auction_data import (
     upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
 )
+from stock_research.minute_data import canonical_json
 
 
 class _Context:
@@ -390,6 +391,12 @@ def test_ts_code_from_spot_symbol_maps_cn_exchanges():
     assert ts_code_from_spot_symbol("830799") == "830799.BJ"
 
 
+def test_ts_code_from_spot_symbol_rejects_malformed_symbols():
+    for symbol in ["1", 1, "600023.SH", "sh600023", "ABCDEF", "", None]:
+        with pytest.raises(ValueError):
+            ts_code_from_spot_symbol(symbol)
+
+
 def test_open_auction_spot_snapshot_market_row_normalizes_spot_payload():
     row = open_auction_spot_snapshot_market_row(
         raw_spot_snapshot_row(),
@@ -430,6 +437,52 @@ def test_open_auction_spot_snapshot_staging_row_preserves_payload_hash():
     assert row["target_time"] == dt.time(9, 17)
     assert row["payload"] == raw_spot_snapshot_row()
     assert len(row["payload_hash"]) == 64
+
+
+def test_open_auction_spot_snapshot_rows_normalize_nan_and_placeholders():
+    raw = {
+        "代码": "600023",
+        "最新价": float("nan"),
+        "今开": "-",
+        "昨收": "",
+        "最高": None,
+        "最低": 5.39,
+        "成交量": pd.NA,
+        "成交额": 2495009.92,
+    }
+
+    market_row = open_auction_spot_snapshot_market_row(
+        raw,
+        trade_date=dt.date(2026, 6, 11),
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+        target_time="09:17",
+    )
+    staging_row = open_auction_spot_snapshot_staging_row(
+        raw,
+        trade_date=dt.date(2026, 6, 11),
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+        target_time="09:17",
+        source_endpoint="stock_zh_a_spot_em",
+    )
+
+    assert market_row["latest"] is None
+    assert market_row["open"] is None
+    assert market_row["prev_close"] is None
+    assert market_row["high"] is None
+    assert market_row["volume"] is None
+    assert market_row["low"] == 5.39
+    assert market_row["amount"] == 2495009.92
+    assert staging_row["payload"] == {
+        "代码": "600023",
+        "最新价": None,
+        "今开": None,
+        "昨收": None,
+        "最高": None,
+        "最低": 5.39,
+        "成交量": None,
+        "成交额": 2495009.92,
+    }
+    assert "NaN" not in canonical_json(staging_row["payload"])
 
 
 def test_upsert_stock_open_auction_minute_bars_writes_staging_and_market(monkeypatch):
