@@ -704,6 +704,51 @@ CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar (
     PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)
 );
 
+CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_spot_snapshot (
+    source_endpoint text NOT NULL,
+    request_params jsonb NOT NULL,
+    raw_symbol text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    snapshot_time timestamp NOT NULL,
+    target_time time NOT NULL,
+    latest numeric,
+    open numeric,
+    prev_close numeric,
+    high numeric,
+    low numeric,
+    volume numeric,
+    amount numeric,
+    volume_ratio numeric,
+    turnover_rate numeric,
+    payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    fetched_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_endpoint, ts_code, trade_date, target_time)
+);
+
+CREATE TABLE IF NOT EXISTS market.stock_open_auction_snapshot (
+    asset_id text NOT NULL,
+    ts_code text NOT NULL,
+    trade_date date NOT NULL,
+    snapshot_time timestamp NOT NULL,
+    target_time time NOT NULL,
+    auction_phase text NOT NULL CHECK (auction_phase IN ('open_call')),
+    latest numeric,
+    open numeric,
+    prev_close numeric,
+    high numeric,
+    low numeric,
+    volume numeric,
+    amount numeric,
+    volume_ratio numeric,
+    turnover_rate numeric,
+    source text NOT NULL CHECK (source IN ('eastmoney_spot_snapshot')),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (trade_date, asset_id, target_time, source)
+);
+
 CREATE TABLE IF NOT EXISTS staging.xtick_stock_auction_detail (
     source_endpoint text NOT NULL,
     request_params jsonb NOT NULL,
@@ -2101,6 +2146,15 @@ CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_date_phase
 
 CREATE INDEX IF NOT EXISTS idx_market_stock_auction_minute_bar_asset_time
     ON market.stock_auction_minute_bar (asset_id, trade_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_staging_eastmoney_stock_spot_snapshot_date_target
+    ON staging.eastmoney_stock_spot_snapshot (trade_date, target_time);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_open_auction_snapshot_date_target
+    ON market.stock_open_auction_snapshot (trade_date, target_time);
+
+CREATE INDEX IF NOT EXISTS idx_market_stock_open_auction_snapshot_asset_time
+    ON market.stock_open_auction_snapshot (asset_id, snapshot_time DESC);
 
 CREATE INDEX IF NOT EXISTS idx_staging_xtick_stock_auction_detail_date
     ON staging.xtick_stock_auction_detail (trade_date, code);

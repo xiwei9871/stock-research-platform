@@ -19,14 +19,20 @@ def test_schema_creates_stock_auction_tables():
     assert "CREATE TABLE IF NOT EXISTS market.stock_auction_bar" in sql
     assert "CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_auction_minute_bar" in sql
     assert "CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_spot_snapshot" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_open_auction_snapshot" in sql
     assert "CREATE TABLE IF NOT EXISTS staging.xtick_stock_auction_detail" in sql
     assert "CREATE TABLE IF NOT EXISTS market.stock_auction_detail" in sql
     assert "auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call'))" in sql
+    assert "source text NOT NULL CHECK (source IN ('eastmoney_spot_snapshot'))" in sql
     assert "PRIMARY KEY (trade_date, asset_id, auction_phase, source)" in sql
     assert "PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)" in sql
+    assert "PRIMARY KEY (trade_date, asset_id, target_time, source)" in sql
     assert "PRIMARY KEY (trade_time, asset_id, source)" in sql
     assert "idx_market_stock_auction_bar_date_phase" in sql
     assert "idx_market_stock_auction_minute_bar_date_phase" in sql
+    assert "idx_market_stock_open_auction_snapshot_date_target" in sql
+    assert "idx_market_stock_open_auction_snapshot_asset_time" in sql
     assert "idx_market_stock_auction_detail_date_time" in sql
 
 
