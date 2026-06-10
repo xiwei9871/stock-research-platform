@@ -1,0 +1,17 @@
+[Unit]
+Description=Stock Research Dashboard API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/stock_research
+Environment=PYTHONPATH=src
+Environment=PGSERVICEFILE=/opt/stock_research/.pg_service.conf
+ExecStart=/opt/stock_research/.venv/bin/python -m uvicorn stock_research.dashboard.app:app --host 127.0.0.1 --port 8765 --http h11
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

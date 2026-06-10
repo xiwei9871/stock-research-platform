@@ -1,0 +1,158 @@
+# Dashboard Deployment Runbook
+
+This runbook deploys the Stock Research dashboard frontend and API from the same `origin/dashboard` commit. The reference version for the current dashboard work is `2d2f223`.
+
+## Current Diagnosis
+
+The public site at `https://stock.manqiaotechnology.com/` was serving the old dashboard shell (`TOPN`, `WATCHLIST`, `ASSET REVIEW`). The old API could still answer `/api/dashboard/overview`, so the database was not completely disconnected. The missing endpoints `/api/platform/summary` and `/api/backtests/strategies` showed that the API process behind `/api` was also an older app version.
+
+The fix is to deploy frontend and backend atomically from the same dashboard branch commit.
+
+## Server Layout
+
+Use these paths unless the server already has a stronger convention:
+
+```bash
+/opt/stock_research                  # git checkout of origin/dashboard
+/opt/stock_research/.venv            # Python virtual environment
+/opt/stock_research/.pg_service.conf # database service definitions for the API user
+/var/www/stock-dashboard/releases    # versioned frontend builds
+/var/www/stock-dashboard/current     # symlink used by nginx
+```
+
+The API service must be able to read `.pg_service.conf`. It must define all three services used by the dashboard:
+
+```ini
+[stock_research]
+
+[stock_hfq]
+
+[stock_qfq]
+```
+
+Do not rely on root's home directory for this file if systemd runs the service as `www-data`.
+
+## Backend Deploy
+
+```bash
+cd /opt/stock_research
+git fetch origin
+git checkout dashboard
+git pull --ff-only origin dashboard
+
+python3 -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -e ".[dashboard]"
+```
+
+Install the service template from `deploy/systemd/stock-research-dashboard-api.service`, adjusting `WorkingDirectory`, `ExecStart`, `User`, `Group`, and `PGSERVICEFILE` if the server paths differ.
+
+```bash
+sudo cp deploy/systemd/stock-research-dashboard-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable stock-research-dashboard-api
+sudo systemctl restart stock-research-dashboard-api
+sudo systemctl status stock-research-dashboard-api --no-pager
+```
+
+Database smoke checks must run as the same user that runs the service:
+
+```bash
+sudo -u www-data PGSERVICEFILE=/opt/stock_research/.pg_service.conf psql service=stock_research -c 'select 1'
+sudo -u www-data PGSERVICEFILE=/opt/stock_research/.pg_service.conf psql service=stock_hfq -c 'select 1'
+sudo -u www-data PGSERVICEFILE=/opt/stock_research/.pg_service.conf psql service=stock_qfq -c 'select 1'
+```
+
+## Frontend Deploy
+
+```bash
+cd /opt/stock_research/dashboard
+pnpm install --frozen-lockfile
+pnpm build
+
+release="/var/www/stock-dashboard/releases/$(git -C .. rev-parse --short HEAD)"
+sudo mkdir -p "$release"
+sudo rsync -a --delete dist/ "$release/"
+sudo ln -sfn "$release" /var/www/stock-dashboard/current
+```
+
+The deployed dashboard must show the new workspace, including `Research Cockpit`, `Data Explorer`, `Factor Lab`, and `Backtest Lab`. It should not show the old standalone `TOPN`, `WATCHLIST`, `ASSET REVIEW` homepage.
+
+## Nginx Deploy
+
+Install `deploy/nginx/stock-dashboard.conf` into the server's nginx site configuration. Keep Basic Auth if the site is private.
+
+Key requirements:
+
+- `/api/` proxies to `http://127.0.0.1:8765` without stripping `/api`.
+- `/assets/` serves static frontend assets.
+- `/` uses SPA fallback to `index.html`.
+- `proxy_read_timeout` is at least `180s` because fresh comparisons can take close to a minute or more.
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Release Verification
+
+Run the bundled check from any machine that can reach the public site:
+
+```bash
+cd /opt/stock_research
+DASHBOARD_AUTH='mqkj:mqkj1234' ./deploy/check_dashboard_release.sh
+```
+
+The script verifies:
+
+- The frontend is the new dashboard shell.
+- `/api/platform/summary` returns successfully.
+- `/api/backtests/strategies` exposes only the three combo strategies.
+- `/api/assets/000001.SZ/profile` can read the asset profile path.
+- `/api/backtests/run-fresh` is wired to real fresh execution.
+
+Manual browser checks:
+
+- Homepage has the new dashboard navigation.
+- Strategy Catalog does not show `manual_v1_topn` or `position_control` as runnable strategies.
+- Backtest Lab exposes `Run Fresh Backtest` and fresh comparison controls.
+- `Load Cached Replay` is not available.
+
+## Troubleshooting
+
+If the frontend is still the old page, check the nginx `root` and the `current` symlink:
+
+```bash
+readlink -f /var/www/stock-dashboard/current
+ls -la /var/www/stock-dashboard/current/assets
+```
+
+If `/api/platform/summary` returns 404, nginx is proxying to an old API process or the new service did not start:
+
+```bash
+sudo systemctl status stock-research-dashboard-api --no-pager
+sudo journalctl -u stock-research-dashboard-api -n 100 --no-pager
+```
+
+If API endpoints return 500 and mention PostgreSQL service lookup or connection errors, verify `PGSERVICEFILE` and file permissions for `stock_research`, `stock_hfq`, and `stock_qfq`.
+
+If fresh backtests timeout through the browser but work locally on the server, raise nginx `proxy_read_timeout` and confirm the API process remains healthy during execution.
+
+## 回滚
+
+Keep each frontend build in a versioned release directory. To roll back the frontend:
+
+```bash
+sudo ln -sfn /var/www/stock-dashboard/releases/<previous_commit> /var/www/stock-dashboard/current
+sudo systemctl reload nginx
+```
+
+To roll back the backend:
+
+```bash
+cd /opt/stock_research
+git checkout <previous_commit>
+sudo systemctl restart stock-research-dashboard-api
+```
+
+After rollback, rerun the release verification command for the version you expect to serve.
