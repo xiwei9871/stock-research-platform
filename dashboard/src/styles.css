@@ -629,6 +629,10 @@ body {
   cursor: pointer;
 }
 
+.backtest-controls button + button {
+  margin-left: 0;
+}
+
 .backtest-controls button:disabled {
   cursor: not-allowed;
   color: #98a2b3;
@@ -684,6 +688,27 @@ body {
   color: #202936;
   background: #f7f9fc;
   font-size: 12px;
+}
+
+.backtest-comparison {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.backtest-comparison-table {
+  min-width: 760px;
+}
+
+.backtest-comparison-table .inline-button {
+  min-height: 28px;
+  border: 1px solid #c4cbd6;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202936;
+  padding: 4px 8px;
+  font: inherit;
+  cursor: pointer;
 }
 
 .backtest-results {

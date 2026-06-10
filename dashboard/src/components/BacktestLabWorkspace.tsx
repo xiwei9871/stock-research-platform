@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchBacktestStrategies, runBacktest } from '../api/client';
-import type { BacktestRunResult, StrategyCatalogItem } from '../api/types';
+import type { BacktestRunRequest, BacktestRunResult, StrategyCatalogItem } from '../api/types';
 
 const DEFAULT_STRATEGY_ID = 'manual_v1_topn_rotation';
 const DEFAULT_START_DATE = '2026-01-01';
@@ -8,6 +8,13 @@ const DEFAULT_END_DATE = '2026-06-08';
 
 type RebalanceFrequency = 'daily' | 'weekly';
 type ResultRow = Record<string, number | string | null>;
+type ComparisonRow = {
+  strategyId: string;
+  strategyName: string;
+  status: 'passed' | 'failed';
+  result: BacktestRunResult | null;
+  error: string | null;
+};
 
 function formatValue(value: number | string | null | undefined) {
   if (typeof value === 'number') {
@@ -39,6 +46,19 @@ function getTableColumns(rows: ResultRow[]) {
 
 function formatStrategyStatus(status: string) {
   return status.replace(/_/g, '-');
+}
+
+function metricValue(result: BacktestRunResult | null, keys: string[]) {
+  if (!result) {
+    return null;
+  }
+  for (const key of keys) {
+    const value = result.summary[key];
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function ResultTable({ emptyText, rows }: { emptyText: string; rows: ResultRow[] }) {
@@ -111,8 +131,10 @@ export function BacktestLabWorkspace() {
   const [transactionCostBps, setTransactionCostBps] = useState(10);
   const [maxPositions, setMaxPositions] = useState(20);
   const [result, setResult] = useState<BacktestRunResult | null>(null);
+  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>([]);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [isComparing, setIsComparing] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const mountedRef = useRef(false);
@@ -149,6 +171,7 @@ export function BacktestLabWorkspace() {
     () => strategies.find((strategy) => strategy.strategy_id === strategyId) ?? null,
     [strategies, strategyId]
   );
+  const runnableStrategies = useMemo(() => strategies.filter((strategy) => strategy.status === 'runnable'), [strategies]);
   const hasValidConfig =
     startDate.trim() !== '' &&
     endDate.trim() !== '' &&
@@ -159,19 +182,22 @@ export function BacktestLabWorkspace() {
     Number.isInteger(maxPositions) &&
     maxPositions > 0 &&
     (rebalanceFrequency === 'daily' || rebalanceFrequency === 'weekly');
-  const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning;
+  const canRun = selectedStrategy?.status === 'runnable' && hasValidConfig && !isRunning && !isComparing;
+  const canCompare = runnableStrategies.length > 0 && hasValidConfig && !isRunning && !isComparing;
   const runDisabledReason =
     selectedStrategy && selectedStrategy.status !== 'runnable'
       ? `${selectedStrategy.strategy_name} is ${formatStrategyStatus(
           selectedStrategy.status
-        )}. Use Strategy Validation to inspect evidence; Backtest Lab currently runs Manual V1 TopN Rotation only.`
+        )}. Backtest Lab runs runnable research strategies only. Use Strategy Validation to inspect replay evidence.`
       : null;
 
   const invalidateRun = () => {
     runRequestIdRef.current += 1;
     setResult(null);
+    setComparisonRows([]);
     setRunError(null);
     setIsRunning(false);
+    setIsComparing(false);
   };
 
   const updateStrategyId = (nextStrategyId: string) => {
@@ -209,6 +235,18 @@ export function BacktestLabWorkspace() {
     invalidateRun();
   };
 
+  const buildBacktestRequest = (nextStrategyId: string): BacktestRunRequest => ({
+    strategy_id: nextStrategyId,
+    start_date: startDate,
+    end_date: endDate,
+    score_version: 'manual_v1',
+    top_n: topN,
+    rebalance_frequency: rebalanceFrequency,
+    transaction_cost_bps: transactionCostBps,
+    max_positions: maxPositions,
+    adjust_type: 'hfq'
+  });
+
   const submitBacktest = () => {
     if (!canRun) {
       return;
@@ -219,18 +257,9 @@ export function BacktestLabWorkspace() {
     setIsRunning(true);
     setRunError(null);
     setResult(null);
+    setComparisonRows([]);
 
-    runBacktest({
-      strategy_id: strategyId,
-      start_date: startDate,
-      end_date: endDate,
-      score_version: 'manual_v1',
-      top_n: topN,
-      rebalance_frequency: rebalanceFrequency,
-      transaction_cost_bps: transactionCostBps,
-      max_positions: maxPositions,
-      adjust_type: 'hfq'
-    })
+    runBacktest(buildBacktestRequest(strategyId))
       .then((payload) => {
         if (!mountedRef.current || runRequestIdRef.current !== requestId) {
           return;
@@ -245,6 +274,49 @@ export function BacktestLabWorkspace() {
         setRunError(err instanceof Error ? err.message : String(err));
         setIsRunning(false);
       });
+  };
+
+  const submitComparison = () => {
+    if (!canCompare) {
+      return;
+    }
+
+    const requestId = runRequestIdRef.current + 1;
+    runRequestIdRef.current = requestId;
+    setIsComparing(true);
+    setRunError(null);
+    setResult(null);
+    setComparisonRows([]);
+
+    Promise.all(
+      runnableStrategies.map(async (strategy) => {
+        try {
+          const payload = await runBacktest(buildBacktestRequest(strategy.strategy_id));
+          return {
+            strategyId: strategy.strategy_id,
+            strategyName: strategy.strategy_name,
+            status: 'passed' as const,
+            result: payload,
+            error: null
+          };
+        } catch (err: unknown) {
+          return {
+            strategyId: strategy.strategy_id,
+            strategyName: strategy.strategy_name,
+            status: 'failed' as const,
+            result: null,
+            error: err instanceof Error ? err.message : String(err)
+          };
+        }
+      })
+    ).then((rows) => {
+      if (!mountedRef.current || runRequestIdRef.current !== requestId) {
+        return;
+      }
+      setComparisonRows(rows);
+      setResult(rows.find((row) => row.status === 'passed')?.result ?? null);
+      setIsComparing(false);
+    });
   };
 
   return (
@@ -325,6 +397,9 @@ export function BacktestLabWorkspace() {
         <button type="button" disabled={!canRun} onClick={submitBacktest}>
           {isRunning ? 'Running...' : 'Run Backtest'}
         </button>
+        <button type="button" disabled={!canCompare} onClick={submitComparison}>
+          {isComparing ? 'Comparing...' : 'Run Comparison'}
+        </button>
         {runDisabledReason ? <p className="backtest-run-note">{runDisabledReason}</p> : null}
       </section>
 
@@ -357,6 +432,51 @@ export function BacktestLabWorkspace() {
           <p className="muted">No backtest strategies available.</p>
         ) : null}
       </section>
+
+      {comparisonRows.length > 0 ? (
+        <section className="workspace-band backtest-comparison">
+          <div className="section-heading">
+            <h2>Strategy Comparison</h2>
+            <span className="muted">{comparisonRows.length} runnable strategies</span>
+          </div>
+          <div className="table-scroll">
+            <table className="data-table backtest-comparison-table">
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>Status</th>
+                  <th>Total Return</th>
+                  <th>Max Drawdown</th>
+                  <th>Turnover</th>
+                  <th>Error</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((row) => (
+                  <tr key={row.strategyId}>
+                    <td>{row.strategyName}</td>
+                    <td>{row.status}</td>
+                    <td>{formatValue(metricValue(row.result, ['total_return']))}</td>
+                    <td>{formatValue(metricValue(row.result, ['max_drawdown']))}</td>
+                    <td>{formatValue(metricValue(row.result, ['turnover', 'average_turnover']))}</td>
+                    <td>{row.error ?? '-'}</td>
+                    <td>
+                      {row.result ? (
+                        <button type="button" className="inline-button" onClick={() => setResult(row.result)}>
+                          View
+                        </button>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       {result ? (
         <section className="workspace-band backtest-results">

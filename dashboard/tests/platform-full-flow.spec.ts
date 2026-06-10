@@ -24,14 +24,58 @@ const manualV1Strategy = {
 const lhbStrategy = {
   strategy_id: 'lhb_shortline',
   strategy_name: 'LHB Shortline',
-  status: 'replay_only',
-  description: 'Replay-only shortline validation strategy.',
-  factor_groups: [],
-  signal_inputs: ['lhb_events', 'operator_review'],
-  default_parameters: {},
+  status: 'runnable',
+  description: '龙虎榜超短线 validation strategy.',
+  factor_groups: ['lhb', 'momentum'],
+  signal_inputs: ['lhb_events', 'technical_factors'],
+  default_parameters: { top_n: 20 },
   latest_evidence: 'strategy_validation',
-  primary_action: 'Inspect evidence'
+  primary_action: 'Run backtest'
 };
+
+const midTrendStrategy = {
+  strategy_id: 'mid_trend',
+  strategy_name: 'Mid Trend Shortline',
+  status: 'runnable',
+  description: 'Shortline trend continuation strategy.',
+  factor_groups: ['trend', 'liquidity'],
+  signal_inputs: ['factor_values', 'manual_scores'],
+  default_parameters: { top_n: 20 },
+  latest_evidence: 'strategy_validation',
+  primary_action: 'Run backtest'
+};
+
+const techBottleneckStrategy = {
+  strategy_id: 'tech_bottleneck',
+  strategy_name: 'Tech Bottleneck Discovery+',
+  status: 'runnable',
+  description: 'Technical bottleneck discovery strategy.',
+  factor_groups: ['breakout', 'volume'],
+  signal_inputs: ['factor_values', 'manual_scores'],
+  default_parameters: { top_n: 20 },
+  latest_evidence: 'strategy_validation',
+  primary_action: 'Run backtest'
+};
+
+const positionControlStrategy = {
+  strategy_id: 'position_control',
+  strategy_name: 'Position Control Overlay',
+  status: 'runnable',
+  description: 'Risk-adjusted position control strategy.',
+  factor_groups: ['risk', 'trend'],
+  signal_inputs: ['factor_values', 'manual_scores'],
+  default_parameters: { top_n: 20 },
+  latest_evidence: 'strategy_validation',
+  primary_action: 'Run backtest'
+};
+
+const backtestStrategies = [
+  manualV1Strategy,
+  lhbStrategy,
+  midTrendStrategy,
+  techBottleneckStrategy,
+  positionControlStrategy
+];
 
 const validationRun = {
   run_id: 'lhb_shortline:fixture:platform-full-flow',
@@ -56,6 +100,7 @@ const validationRun = {
 
 async function mockPlatformApi(page: Page) {
   const unhandledRoutes: string[] = [];
+  const backtestRunStrategyIds: string[] = [];
   await page.route('/api/**', async (route) => {
     const url = new URL(route.request().url());
 
@@ -76,7 +121,7 @@ async function mockPlatformApi(page: Page) {
     }
 
     if (url.pathname === '/api/strategies/catalog') {
-      await route.fulfill({ json: { items: [manualV1Strategy, lhbStrategy] } });
+      await route.fulfill({ json: { items: backtestStrategies } });
       return;
     }
 
@@ -145,12 +190,15 @@ async function mockPlatformApi(page: Page) {
     }
 
     if (url.pathname === '/api/backtests/strategies') {
-      await route.fulfill({ json: { items: [manualV1Strategy, lhbStrategy] } });
+      await route.fulfill({ json: { items: backtestStrategies } });
       return;
     }
 
     if (url.pathname === '/api/backtests/run') {
-      await route.fulfill({ json: makeBacktestResult() });
+      const request = route.request().postDataJSON() as { strategy_id?: string };
+      const strategy = backtestStrategies.find((item) => item.strategy_id === request.strategy_id) ?? manualV1Strategy;
+      backtestRunStrategyIds.push(strategy.strategy_id);
+      await route.fulfill({ json: makeBacktestResult(strategy.strategy_id, strategy.strategy_name) });
       return;
     }
 
@@ -190,7 +238,7 @@ async function mockPlatformApi(page: Page) {
     unhandledRoutes.push(url.pathname);
     await route.abort('failed');
   });
-  return unhandledRoutes;
+  return { unhandledRoutes, backtestRunStrategyIds };
 }
 
 function makeAssetProfile() {
@@ -246,10 +294,10 @@ function makeAssetProfile() {
   };
 }
 
-function makeBacktestResult() {
+function makeBacktestResult(strategyId = 'manual_v1_topn_rotation', strategyName = 'Manual V1 TopN Rotation') {
   return {
-    strategy_id: 'manual_v1_topn_rotation',
-    strategy_name: 'Manual V1 TopN Rotation',
+    strategy_id: strategyId,
+    strategy_name: strategyName,
     read_only: true,
     config: { adjust_type: 'hfq' },
     summary: {
@@ -377,7 +425,7 @@ async function assertNoHorizontalOverflow(page: Page) {
 }
 
 test('platform full flow covers all research workspaces with mocked API responses', async ({ page }) => {
-  const unhandledRoutes = await mockPlatformApi(page);
+  const { unhandledRoutes, backtestRunStrategyIds } = await mockPlatformApi(page);
 
   await page.goto('/');
 
@@ -407,12 +455,32 @@ test('platform full flow covers all research workspaces with mocked API response
   await page.getByRole('button', { name: 'Open Backtest Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
   await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'LHB Shortline' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Mid Trend Shortline' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Tech Bottleneck Discovery+' })).toBeVisible();
+  await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Position Control Overlay' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'strategy' })).toContainText('Manual V1 TopN Rotation');
+  await page.getByRole('combobox', { name: 'strategy' }).selectOption('lhb_shortline');
   await page.getByRole('button', { name: 'Run Backtest' }).click();
   await expect(page.getByRole('heading', { name: 'Read-only backtest' })).toBeVisible();
+  await expect(page.getByText('LHB Shortline').last()).toBeVisible();
   await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
   const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
   await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
+  await page.getByRole('button', { name: 'Run Comparison' }).click();
+  await expect(page.getByRole('heading', { name: 'Strategy Comparison' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Manual V1 TopN Rotation' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'LHB Shortline' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Mid Trend Shortline' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Tech Bottleneck Discovery+' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Position Control Overlay' })).toBeVisible();
+  expect(backtestRunStrategyIds).toEqual([
+    'lhb_shortline',
+    'manual_v1_topn_rotation',
+    'lhb_shortline',
+    'mid_trend',
+    'tech_bottleneck',
+    'position_control'
+  ]);
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
