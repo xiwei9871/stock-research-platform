@@ -297,6 +297,211 @@ def open_auction_spot_snapshot_staging_row(
     }
 
 
+def query_eastmoney_spot_snapshot_rows() -> list[dict[str, Any]]:
+    import akshare as ak
+
+    frame = ak.stock_zh_a_spot_em()
+    return list(frame.to_dict("records"))
+
+
+def upsert_stock_open_auction_spot_snapshots(
+    rows: list[dict[str, Any]],
+    *,
+    trade_date: dt.date,
+    snapshot_time: dt.datetime,
+    target_time: str | dt.time,
+    source_endpoint: str = "stock_zh_a_spot_em",
+    research_service: str = SETTINGS.research_service,
+    params: dict[str, Any] | None = None,
+) -> int:
+    if not rows:
+        return 0
+
+    staging_rows = [
+        open_auction_spot_snapshot_staging_row(
+            row,
+            trade_date=trade_date,
+            snapshot_time=snapshot_time,
+            target_time=target_time,
+            source_endpoint=source_endpoint,
+            params=params,
+        )
+        for row in rows
+    ]
+    market_rows = [
+        open_auction_spot_snapshot_market_row(
+            row["payload"],
+            trade_date=trade_date,
+            snapshot_time=snapshot_time,
+            target_time=target_time,
+        )
+        for row in staging_rows
+    ]
+
+    staging_sql = """
+    INSERT INTO staging.eastmoney_stock_spot_snapshot (
+        source_endpoint, request_params, raw_symbol, ts_code, trade_date, snapshot_time,
+        target_time, latest, open, prev_close, high, low, volume, amount,
+        volume_ratio, turnover_rate, payload, payload_hash
+    )
+    VALUES (
+        %(source_endpoint)s, %(request_params)s::jsonb, %(raw_symbol)s, %(ts_code)s,
+        %(trade_date)s, %(snapshot_time)s, %(target_time)s, %(latest)s, %(open)s,
+        %(prev_close)s, %(high)s, %(low)s, %(volume)s, %(amount)s,
+        %(volume_ratio)s, %(turnover_rate)s, %(payload)s::jsonb, %(payload_hash)s
+    )
+    ON CONFLICT (source_endpoint, ts_code, trade_date, target_time)
+    DO UPDATE SET
+        request_params = EXCLUDED.request_params,
+        snapshot_time = EXCLUDED.snapshot_time,
+        latest = EXCLUDED.latest,
+        open = EXCLUDED.open,
+        prev_close = EXCLUDED.prev_close,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        volume_ratio = EXCLUDED.volume_ratio,
+        turnover_rate = EXCLUDED.turnover_rate,
+        payload = EXCLUDED.payload,
+        payload_hash = EXCLUDED.payload_hash,
+        fetched_at = now()
+    """
+    market_sql = """
+    INSERT INTO market.stock_open_auction_snapshot (
+        asset_id, ts_code, trade_date, snapshot_time, target_time, auction_phase,
+        latest, open, prev_close, high, low, volume, amount, volume_ratio,
+        turnover_rate, source
+    )
+    VALUES (
+        %(asset_id)s, %(ts_code)s, %(trade_date)s, %(snapshot_time)s, %(target_time)s,
+        %(auction_phase)s, %(latest)s, %(open)s, %(prev_close)s, %(high)s, %(low)s,
+        %(volume)s, %(amount)s, %(volume_ratio)s, %(turnover_rate)s, %(source)s
+    )
+    ON CONFLICT (trade_date, asset_id, target_time, source)
+    DO UPDATE SET
+        ts_code = EXCLUDED.ts_code,
+        snapshot_time = EXCLUDED.snapshot_time,
+        latest = EXCLUDED.latest,
+        open = EXCLUDED.open,
+        prev_close = EXCLUDED.prev_close,
+        high = EXCLUDED.high,
+        low = EXCLUDED.low,
+        volume = EXCLUDED.volume,
+        amount = EXCLUDED.amount,
+        volume_ratio = EXCLUDED.volume_ratio,
+        turnover_rate = EXCLUDED.turnover_rate,
+        updated_at = now()
+    """
+    staging_params = [
+        {
+            **row,
+            "request_params": canonical_json(row["request_params"]),
+            "payload": canonical_json(row["payload"]),
+        }
+        for row in staging_rows
+    ]
+    with connect(research_service) as conn:
+        execute_many(conn, staging_sql, staging_params)
+        execute_many(conn, market_sql, market_rows)
+    return len(market_rows)
+
+
+def collect_open_auction_spot_snapshot(
+    *,
+    trade_date: str | dt.date,
+    target_time: str,
+    snapshot_time: dt.datetime | None = None,
+) -> dict[str, Any]:
+    target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
+    captured_at = (snapshot_time or dt.datetime.now()).replace(tzinfo=None)
+    rows: list[dict[str, Any]] = []
+    valid_rows: list[dict[str, Any]] = []
+    upserted = 0
+    skipped = 0
+    error = ""
+    try:
+        rows = query_eastmoney_spot_snapshot_rows()
+        for row in rows:
+            try:
+                ts_code_from_spot_symbol(_first_present(row, ["代码", "symbol", "raw_symbol"]))
+                valid_rows.append(row)
+            except ValueError:
+                skipped += 1
+        params = {
+            "trade_date": target_date.isoformat(),
+            "target_time": target_time,
+            "snapshot_time": captured_at.isoformat(timespec="seconds"),
+        }
+        upserted = upsert_stock_open_auction_spot_snapshots(
+            valid_rows,
+            trade_date=target_date,
+            snapshot_time=captured_at,
+            target_time=target_time,
+            params=params,
+        )
+    except Exception as exc:  # pragma: no cover - integration safety path.
+        error = str(exc)
+
+    detail = pd.DataFrame(
+        [
+            {
+                "trade_date": target_date.isoformat(),
+                "target_time": target_time,
+                "snapshot_time": captured_at.isoformat(timespec="seconds"),
+                "queried_rows": len(rows),
+                "upserted_rows": upserted,
+                "skipped_rows": skipped,
+                "error": error,
+            }
+        ]
+    )
+    return {
+        "detail": detail,
+        "summary": detail.iloc[0].to_dict(),
+    }
+
+
+def write_open_auction_spot_snapshot_report(
+    *,
+    result: dict[str, Any],
+    output_dir: str | Path,
+    trade_date: str | dt.date,
+    target_time: str,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    date_text = str(trade_date)
+    safe_target = str(target_time).replace(":", "")
+    detail_path = output / f"open_auction_spot_snapshot_{date_text}_{safe_target}.csv"
+    latest_path = output / "open_auction_spot_snapshot_latest.csv"
+    report_path = output / f"open_auction_spot_snapshot_{date_text}_{safe_target}.md"
+    result["detail"].to_csv(detail_path, index=False)
+    result["detail"].to_csv(latest_path, index=False)
+    summary = result["summary"]
+    lines = [
+        f"# Open Auction Spot Snapshot {date_text} {target_time}",
+        "",
+        f"- trade_date: {summary['trade_date']}",
+        f"- target_time: {summary['target_time']}",
+        f"- snapshot_time: {summary['snapshot_time']}",
+        f"- queried_rows: {summary['queried_rows']}",
+        f"- upserted_rows: {summary['upserted_rows']}",
+        f"- skipped_rows: {summary['skipped_rows']}",
+        f"- error: {summary['error']}",
+        "",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return {
+        "paths": {
+            "detail": detail_path,
+            "latest": latest_path,
+            "markdown_report": report_path,
+        },
+        "summary": summary,
+    }
+
+
 def open_auction_minute_market_row(
     raw: dict[str, Any],
     ts_code: str,

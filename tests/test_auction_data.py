@@ -19,18 +19,22 @@ from stock_research.auction_data import (
     build_lhb_phase18e_joint_exit_rule_scan_v1,
     build_lhb_phase18e_joint_exit_state_detail_v1,
     build_tushare_auction_full_backfill_plan,
+    collect_open_auction_spot_snapshot,
     collect_open_auction_minute_bars,
     collect_open_auction_minute_bars_until_covered,
     load_open_trading_dates,
     open_auction_minute_market_row,
     open_auction_spot_snapshot_market_row,
     open_auction_spot_snapshot_staging_row,
+    query_eastmoney_spot_snapshot_rows,
     query_tushare_auction_rows_for_trade_date,
     run_tushare_auction_full_backfill_plan,
     sync_tushare_stock_auction_bars,
     ts_code_from_spot_symbol,
+    upsert_stock_open_auction_spot_snapshots,
     upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
+    write_open_auction_spot_snapshot_report,
 )
 from stock_research.minute_data import canonical_json
 
@@ -483,6 +487,101 @@ def test_open_auction_spot_snapshot_rows_normalize_nan_and_placeholders():
         "成交额": 2495009.92,
     }
     assert "NaN" not in canonical_json(staging_row["payload"])
+
+
+def test_upsert_stock_open_auction_spot_snapshots_writes_staging_and_market(monkeypatch):
+    calls = []
+
+    def fake_execute_many(conn, sql, rows):
+        calls.append((conn, sql, list(rows)))
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "execute_many", fake_execute_many)
+
+    count = upsert_stock_open_auction_spot_snapshots(
+        [{**raw_spot_snapshot_row(), "最新价": float("nan")}],
+        trade_date=dt.date(2026, 6, 11),
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+        target_time="09:17",
+        params={"target_time": "09:17"},
+    )
+
+    assert count == 1
+    assert len(calls) == 2
+    assert "INSERT INTO staging.eastmoney_stock_spot_snapshot" in calls[0][1]
+    assert "INSERT INTO market.stock_open_auction_snapshot" in calls[1][1]
+    assert "ON CONFLICT (trade_date, asset_id, target_time, source)" in calls[1][1]
+    assert calls[0][2][0]["payload"] == canonical_json({**raw_spot_snapshot_row(), "最新价": None})
+    assert "NaN" not in calls[0][2][0]["payload"]
+    assert calls[1][2][0]["target_time"] == dt.time(9, 17)
+
+
+def test_collect_open_auction_spot_snapshot_queries_once_and_reports(monkeypatch):
+    query_calls = []
+    upsert_calls = []
+
+    def fake_query():
+        query_calls.append("called")
+        return [raw_spot_snapshot_row()]
+
+    def fake_upsert(rows, trade_date, snapshot_time, target_time, source_endpoint="stock_zh_a_spot_em", params=None):
+        upsert_calls.append((rows, trade_date, snapshot_time, target_time, source_endpoint, params))
+        return len(rows)
+
+    monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
+
+    result = collect_open_auction_spot_snapshot(
+        trade_date="2026-06-11",
+        target_time="09:17",
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+    )
+
+    assert query_calls == ["called"]
+    assert upsert_calls[0][0] == [raw_spot_snapshot_row()]
+    assert upsert_calls[0][1] == dt.date(2026, 6, 11)
+    assert upsert_calls[0][3] == "09:17"
+    assert result["summary"]["queried_rows"] == 1
+    assert result["summary"]["upserted_rows"] == 1
+    assert result["summary"]["skipped_rows"] == 0
+
+
+def test_write_open_auction_spot_snapshot_report(tmp_path):
+    result = {
+        "detail": pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-06-11",
+                    "target_time": "09:17",
+                    "snapshot_time": "2026-06-11T09:17:05",
+                    "queried_rows": 1,
+                    "upserted_rows": 1,
+                    "skipped_rows": 0,
+                    "error": "",
+                }
+            ]
+        ),
+        "summary": {
+            "trade_date": "2026-06-11",
+            "target_time": "09:17",
+            "snapshot_time": "2026-06-11T09:17:05",
+            "queried_rows": 1,
+            "upserted_rows": 1,
+            "skipped_rows": 0,
+            "error": "",
+        },
+    }
+
+    report = write_open_auction_spot_snapshot_report(
+        result=result,
+        output_dir=tmp_path,
+        trade_date="2026-06-11",
+        target_time="09:17",
+    )
+
+    text = Path(report["paths"]["markdown_report"]).read_text(encoding="utf-8")
+    assert "- target_time: 09:17" in text
+    assert "- upserted_rows: 1" in text
 
 
 def test_upsert_stock_open_auction_minute_bars_writes_staging_and_market(monkeypatch):
