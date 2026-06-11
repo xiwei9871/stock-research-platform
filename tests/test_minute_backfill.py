@@ -246,6 +246,96 @@ def test_run_backfill_parallel_workers_aggregate_results(monkeypatch):
     ]
 
 
+def test_benchmark_minute_backfill_workers_reports_throughput(monkeypatch):
+    calls = []
+    times = iter([100.0, 110.0, 200.0, 220.0])
+
+    def fake_run_baostock_minute_backfill(**kwargs):
+        calls.append(kwargs)
+        workers = kwargs["workers"]
+        return {
+            "attempted": 10,
+            "success": 9 if workers == 4 else 10,
+            "failed": 1 if workers == 4 else 0,
+            "rows": 432 if workers == 4 else 480,
+        }
+
+    monkeypatch.setattr(minute_backfill.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(
+        minute_backfill,
+        "run_baostock_minute_backfill",
+        fake_run_baostock_minute_backfill,
+    )
+
+    result = minute_backfill.benchmark_baostock_minute_backfill_workers(
+        worker_counts=[4, 8],
+        start_date="2026-06-10",
+        end_date="2026-06-10",
+        freq="5min",
+        adjust_types=["raw"],
+        max_jobs=10,
+        retry_failed=True,
+        sleep_seconds=0.05,
+    )
+
+    assert calls == [
+        {
+            "start_date": "2026-06-10",
+            "end_date": "2026-06-10",
+            "freq": "5min",
+            "adjust_types": ["raw"],
+            "batch_by": "month",
+            "max_jobs": 10,
+            "retry_failed": True,
+            "sleep_seconds": 0.05,
+            "workers": 4,
+            "reset_stale_before_run": True,
+        },
+        {
+            "start_date": "2026-06-10",
+            "end_date": "2026-06-10",
+            "freq": "5min",
+            "adjust_types": ["raw"],
+            "batch_by": "month",
+            "max_jobs": 10,
+            "retry_failed": True,
+            "sleep_seconds": 0.05,
+            "workers": 8,
+            "reset_stale_before_run": True,
+        },
+    ]
+    assert result["summary"] == {
+        "worker_counts": [4, 8],
+        "best_workers_by_rows_per_second": 4,
+        "total_attempted": 20,
+        "total_failed": 1,
+    }
+    assert result["rows"] == [
+        {
+            "workers": 4,
+            "attempted": 10,
+            "success": 9,
+            "failed": 1,
+            "rows": 432,
+            "elapsed_seconds": 10.0,
+            "jobs_per_second": 1.0,
+            "rows_per_second": 43.2,
+            "failed_rate": 0.1,
+        },
+        {
+            "workers": 8,
+            "attempted": 10,
+            "success": 10,
+            "failed": 0,
+            "rows": 480,
+            "elapsed_seconds": 20.0,
+            "jobs_per_second": 0.5,
+            "rows_per_second": 24.0,
+            "failed_rate": 0.0,
+        },
+    ]
+
+
 def test_summarize_backfill_status_counts_rows_and_statuses():
     summary = summarize_backfill_status(
         [

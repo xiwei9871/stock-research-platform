@@ -848,6 +848,32 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert range_args.workers == 6
     assert range_args.report_account == "jarvis"
 
+    benchmark_args = build_parser().parse_args(
+        [
+            "benchmark-baostock-minute-backfill",
+            "--start-date",
+            "2026-06-10",
+            "--end-date",
+            "2026-06-10",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw",
+            "--max-jobs",
+            "300",
+            "--workers-list",
+            "4,8,12",
+            "--retry-failed",
+            "--sleep-seconds",
+            "0.05",
+        ]
+    )
+    assert benchmark_args.command == "benchmark-baostock-minute-backfill"
+    assert benchmark_args.worker_counts == [4, 8, 12]
+    assert benchmark_args.max_jobs == 300
+    assert benchmark_args.freq == "5min"
+    assert benchmark_args.adjust_types == ["raw"]
+
     status_args = build_parser().parse_args(["baostock-minute-backfill-status"])
     assert status_args.command == "baostock-minute-backfill-status"
 

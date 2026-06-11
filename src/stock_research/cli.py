@@ -211,6 +211,7 @@ from stock_research.market_data import load_market_daily_bars
 from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
 from stock_research.minute_backfill import (
+    benchmark_baostock_minute_backfill_workers,
     load_backfill_status,
     plan_baostock_minute_backfill,
     run_baostock_minute_backfill,
@@ -605,6 +606,10 @@ def parse_holding_days(value: str) -> list[int]:
 
 def parse_top_ks(value: str) -> list[int]:
     return parse_int_list(value, "--top-ks")
+
+
+def parse_worker_counts(value: str) -> list[int]:
+    return parse_int_list(value, "--workers-list")
 
 
 def parse_topn_thresholds(value: str) -> list[int]:
@@ -1757,6 +1762,26 @@ def build_parser() -> argparse.ArgumentParser:
     run_minute_backfill.add_argument("--retry-failed", action="store_true")
     run_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.5)
     run_minute_backfill.add_argument("--workers", type=int, default=1)
+
+    benchmark_minute_backfill = subparsers.add_parser("benchmark-baostock-minute-backfill")
+    benchmark_minute_backfill.add_argument("--start-date")
+    benchmark_minute_backfill.add_argument("--end-date")
+    benchmark_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    benchmark_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw"])
+    benchmark_minute_backfill.add_argument("--batch-by", choices=["month"], default="month")
+    benchmark_minute_backfill.add_argument("--max-jobs", type=int, default=300)
+    benchmark_minute_backfill.add_argument("--retry-failed", action="store_true")
+    benchmark_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.1)
+    benchmark_minute_backfill.add_argument(
+        "--workers-list",
+        dest="worker_counts",
+        type=parse_worker_counts,
+        default=[4, 8, 12, 16],
+    )
 
     run_minute_backfill_range = subparsers.add_parser("run-baostock-minute-backfill-range")
     run_minute_backfill_range.add_argument("--start-date", required=True)
@@ -8062,6 +8087,37 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for key, value in result.items():
             print(f"minute_backfill_run|{key}|{value}")
+    elif args.command == "benchmark-baostock-minute-backfill":
+        result = benchmark_baostock_minute_backfill_workers(
+            worker_counts=args.worker_counts,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            batch_by=args.batch_by,
+            max_jobs=args.max_jobs,
+            retry_failed=args.retry_failed,
+            sleep_seconds=args.sleep_seconds,
+        )
+        for row in result["rows"]:
+            print(
+                "minute_backfill_benchmark|"
+                f"workers|{row['workers']}|"
+                f"attempted|{row['attempted']}|"
+                f"success|{row['success']}|"
+                f"failed|{row['failed']}|"
+                f"rows|{row['rows']}|"
+                f"elapsed_seconds|{row['elapsed_seconds']}|"
+                f"jobs_per_second|{row['jobs_per_second']}|"
+                f"rows_per_second|{row['rows_per_second']}|"
+                f"failed_rate|{row['failed_rate']}"
+            )
+        print(
+            "minute_backfill_benchmark_summary|"
+            f"best_workers_by_rows_per_second|{result['summary']['best_workers_by_rows_per_second']}|"
+            f"total_attempted|{result['summary']['total_attempted']}|"
+            f"total_failed|{result['summary']['total_failed']}"
+        )
     elif args.command == "run-baostock-minute-backfill-range":
         def report(summary: dict) -> None:
             month = summary["month"]
