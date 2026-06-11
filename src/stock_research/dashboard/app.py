@@ -16,6 +16,7 @@ from stock_research.dashboard.factors import (
     list_factor_library,
     parse_factor_selection,
 )
+from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
@@ -70,6 +71,18 @@ def create_app() -> FastAPI:
     @app.get("/api/platform/summary")
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
         return load_platform_summary(score_version=score_version, top_n=top_n)
+
+    @app.get("/api/market-monitor/eod")
+    def market_monitor_eod(
+        trade_date: str | None = None,
+        score_version: str = "manual_v1",
+        top_n: int = 5,
+    ):
+        return build_market_monitor_eod(
+            trade_date=trade_date,
+            score_version=score_version,
+            top_n=top_n,
+        )
 
     @app.get("/api/public-news")
     def public_news(

@@ -718,3 +718,34 @@ def test_dashboard_api_cli_dispatches_to_runner(monkeypatch):
     cli.main_for_args(["dashboard-api", "--host", "0.0.0.0", "--port", "9999"])
 
     assert captured["call"] == {"host": "0.0.0.0", "port": 9999}
+
+
+def test_market_monitor_eod_route_returns_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_market_monitor_eod",
+        lambda trade_date=None, score_version="manual_v1", top_n=5: {
+            "trade_date": trade_date or "2026-06-10",
+            "freshness": {"mode": "eod", "is_realtime": False},
+            "coverage": {"market_assets": 5300, "score_assets": 3100, "factor_count": 42},
+            "market_breadth": {"status": "pending_source"},
+            "index_snapshot": [],
+            "sector_strength": {"strongest": [], "weakest": [], "status": "pending_source"},
+            "unusual_moves": [],
+            "watchlist_alerts": [],
+            "strategy_signal_summary": {
+                "topn_preview_count": 0,
+                "topn_preview": [],
+                "risk_filter_counts": {},
+            },
+            "generated_reports": [],
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/market-monitor/eod?trade_date=2026-06-10&top_n=3")
+
+    assert response.status_code == 200
+    assert response.json()["trade_date"] == "2026-06-10"
+    assert response.json()["freshness"]["is_realtime"] is False
