@@ -611,3 +611,50 @@ export type PublicNewsRefreshResponse = {
   counts_by_category: Record<string, number>;
   warnings: string[];
 };
+
+export type MarketMonitorFreshness = {
+  mode: 'eod' | string;
+  label: string;
+  is_realtime: boolean;
+  latest_market_date?: string;
+  latest_factor_date?: string;
+  latest_score_date?: string;
+};
+
+export type MarketMonitorCoverage = {
+  market_assets: number;
+  score_assets: number;
+  factor_count: number;
+};
+
+export type MarketBreadth = {
+  advancers: number | null;
+  decliners: number | null;
+  limit_up: number | null;
+  limit_down: number | null;
+  advancing_ratio: number | null;
+  turnover_change_pct: number | null;
+  status: string;
+};
+
+export type MarketMonitorPayload = {
+  trade_date: string;
+  freshness: MarketMonitorFreshness;
+  coverage: MarketMonitorCoverage;
+  market_breadth: MarketBreadth;
+  index_snapshot: Array<Record<string, unknown>>;
+  sector_strength: {
+    strongest: Array<Record<string, unknown>>;
+    weakest: Array<Record<string, unknown>>;
+    status: string;
+  };
+  unusual_moves: Array<Record<string, unknown>>;
+  watchlist_alerts: Array<Record<string, unknown>>;
+  strategy_signal_summary: {
+    topn_preview_count: number;
+    topn_preview: ScoreRow[];
+    risk_filter_counts: Record<string, number>;
+  };
+  generated_reports: ReportLink[];
+  warnings: string[];
+};

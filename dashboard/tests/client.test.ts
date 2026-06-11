@@ -4,6 +4,7 @@ import {
   fetchAssetOutcomes,
   fetchExperimentProposals,
   fetchExperimentReplay,
+  fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
@@ -36,6 +37,31 @@ describe('dashboard API client', () => {
       '/api/dashboard/overview?trade_date=2026-05-29&score_version=manual_v1&watchlist_id=default&top_n=20'
     );
     expect(result.trade_date).toBe('2026-05-29');
+  });
+
+  it('fetches EOD market monitor with optional trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-10',
+        freshness: { mode: 'eod', label: 'Last Completed Trading Day', is_realtime: false },
+        coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+        market_breadth: { status: 'pending_source' },
+        index_snapshot: [],
+        sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+        unusual_moves: [],
+        watchlist_alerts: [],
+        strategy_signal_summary: { topn_preview_count: 0, topn_preview: [], risk_filter_counts: {} },
+        generated_reports: [],
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchMarketMonitorEod({ tradeDate: '2026-06-10', topN: 3 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/eod?trade_date=2026-06-10&top_n=3');
+    expect(result.freshness.is_realtime).toBe(false);
   });
 
   it('fetches public news with filters and pagination', async () => {

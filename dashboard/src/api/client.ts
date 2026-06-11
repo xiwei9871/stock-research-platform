@@ -11,6 +11,7 @@ import type {
   FactorLibraryRow,
   FactorScorePreview,
   FactorSelection,
+  MarketMonitorPayload,
   OutcomeAnalyticsRow,
   PlatformSummary,
   PublicNewsRefreshResponse,
@@ -41,6 +42,12 @@ type OverviewParams = {
   topN: number;
 };
 
+type MarketMonitorParams = {
+  tradeDate?: string;
+  scoreVersion?: string;
+  topN?: number;
+};
+
 type PublicNewsParams = {
   source?: string;
   category?: string;
@@ -56,6 +63,14 @@ export async function fetchOverview(params: OverviewParams): Promise<DashboardOv
       `&watchlist_id=${encodeURIComponent(params.watchlistId)}` +
       `&top_n=${params.topN}`
   );
+}
+
+export async function fetchMarketMonitorEod(params: MarketMonitorParams = {}): Promise<MarketMonitorPayload> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.scoreVersion) searchParams.set('score_version', params.scoreVersion);
+  searchParams.set('top_n', String(params.topN ?? 5));
+  return getJson(`/api/market-monitor/eod?${searchParams.toString()}`);
 }
 
 export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<PublicNewsResponse> {
