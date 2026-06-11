@@ -11,11 +11,13 @@ const TOP_N = 5;
 type ReportsWorkspaceProps = {
   title?: string;
   description?: string;
+  ariaLabel?: string;
 };
 
 export function ReportsWorkspace({
   title = 'Reports',
-  description = 'Local research artifacts and generated reports.'
+  description = 'Local research artifacts and generated reports.',
+  ariaLabel
 }: ReportsWorkspaceProps = {}) {
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [reports, setReports] = useState<ReportLink[]>([]);
@@ -70,7 +72,7 @@ export function ReportsWorkspace({
   }
 
   return (
-    <section className="reports-workspace" aria-label="Reports workspace">
+    <section className="reports-workspace" aria-label={ariaLabel ?? `${title} workspace`}>
       <header className="workspace-header">
         <h1>{title}</h1>
         <p className="muted">{description}</p>

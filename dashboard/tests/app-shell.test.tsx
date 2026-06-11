@@ -686,10 +686,17 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
     expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
-    expect(screen.getByRole('tab', { name: 'Run Backtest' })).toBeVisible();
+    const runBacktestTab = screen.getByRole('tab', { name: 'Run Backtest' });
+    expect(runBacktestTab).toBeVisible();
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveAttribute('id', 'strategy-lab-tab-backtest');
+    expect(runBacktestTab).toHaveAttribute('aria-controls', 'strategy-lab-panel-backtest');
+    expect(runBacktestTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tabpanel', { name: 'Run Backtest' })).toHaveAttribute('id', 'strategy-lab-panel-backtest');
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
     expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Generated Reports workspace' })).toBeVisible();
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open News workspace' }));
     expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
@@ -734,7 +741,14 @@ describe('dashboard app shell', () => {
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
-    fireEvent.click(await screen.findByRole('tab', { name: 'Validation Replay' }));
+    const validationTab = await screen.findByRole('tab', { name: 'Validation Replay' });
+    fireEvent.click(validationTab);
+
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveAttribute('id', 'strategy-lab-tab-validation');
+    expect(validationTab).toHaveAttribute('aria-controls', 'strategy-lab-panel-validation');
+    expect(validationTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tabpanel', { name: 'Validation Replay' })).toHaveAttribute('id', 'strategy-lab-panel-validation');
 
     await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });
