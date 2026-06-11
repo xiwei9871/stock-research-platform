@@ -15,6 +15,8 @@ const CATEGORIES = [
   { id: 'other', label: '其他' }
 ];
 
+const NEWS_REFRESH_INTERVAL_MS = 60000;
+
 export function NewsWorkspace() {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -22,6 +24,24 @@ export function NewsWorkspace() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string>('');
+
+  async function loadCachedNews(ignoreUpdate = false) {
+    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+    if (!ignoreUpdate) {
+      setItems(payload.items);
+      setWarnings(payload.warnings ?? []);
+      setLastUpdatedAt(new Date().toLocaleTimeString());
+    }
+  }
+
+  async function refreshNews() {
+    const refreshResult = await refreshPublicNews();
+    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+    setItems(payload.items);
+    setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+    setLastUpdatedAt(new Date().toLocaleTimeString());
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -31,17 +51,29 @@ export function NewsWorkspace() {
         if (!ignore) {
           setItems(payload.items);
           setWarnings(payload.warnings ?? []);
-          setIsLoading(false);
+          setLastUpdatedAt(new Date().toLocaleTimeString());
         }
       })
       .catch((err: unknown) => {
         if (!ignore) {
           setWarnings([err instanceof Error ? err.message : String(err)]);
-          setIsLoading(false);
+        }
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+
+    const timer = window.setInterval(() => {
+      refreshNews().catch((err: unknown) => {
+        if (!ignore) {
+          setWarnings([err instanceof Error ? err.message : String(err)]);
         }
       });
+    }, NEWS_REFRESH_INTERVAL_MS);
+
     return () => {
       ignore = true;
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -60,10 +92,9 @@ export function NewsWorkspace() {
   async function handleRefresh() {
     setIsRefreshing(true);
     try {
-      const refreshResult = await refreshPublicNews();
-      const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
-      setItems(payload.items);
-      setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+      await refreshNews();
+    } catch (err: unknown) {
+      setWarnings([err instanceof Error ? err.message : String(err)]);
     } finally {
       setIsRefreshing(false);
     }
@@ -79,6 +110,7 @@ export function NewsWorkspace() {
       <section className="workspace-panel">
         <div className="section-heading">
           <h2>新浪财经</h2>
+          {lastUpdatedAt ? <span className="muted">Last updated {lastUpdatedAt}</span> : null}
           <button type="button" onClick={handleRefresh} disabled={isRefreshing}>
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>

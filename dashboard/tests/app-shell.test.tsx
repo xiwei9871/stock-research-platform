@@ -884,6 +884,69 @@ describe('dashboard app shell', () => {
     expect(await screen.findByText('全球快讯')).toBeVisible();
   });
 
+  it('auto-refreshes news and preserves visible rows on refresh failure', async () => {
+    vi.useFakeTimers();
+    try {
+      apiMocks.fetchPublicNews
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-1',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '首条快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        })
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-1',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '首条快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        });
+      apiMocks.refreshPublicNews.mockRejectedValueOnce(new Error('source timeout'));
+
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('首条快讯')).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+
+      expect(apiMocks.refreshPublicNews).toHaveBeenCalled();
+      expect(screen.getByText('source timeout')).toBeInTheDocument();
+      expect(screen.getByText('首条快讯')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('switches from cockpit to strategy validation mode', async () => {
     apiMocks.fetchStrategyValidationRuns.mockResolvedValue([
       {
