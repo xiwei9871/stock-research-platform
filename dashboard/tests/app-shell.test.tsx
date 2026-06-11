@@ -50,6 +50,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchShadowWatchlist: vi.fn(),
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
+  fetchMarketMonitorEod: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -674,6 +675,68 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
     expect(await screen.findByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
+  });
+
+  it('renders EOD market monitor data without implying realtime data', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
+      trade_date: '2026-06-10',
+      freshness: {
+        mode: 'eod',
+        label: 'Last Completed Trading Day',
+        is_realtime: false,
+        latest_market_date: '2026-06-10',
+        latest_factor_date: '2026-06-10',
+        latest_score_date: '2026-06-10'
+      },
+      coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+      market_breadth: {
+        advancers: null,
+        decliners: null,
+        limit_up: null,
+        limit_down: null,
+        advancing_ratio: null,
+        turnover_change_pct: null,
+        status: 'pending_source'
+      },
+      index_snapshot: [],
+      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+      unusual_moves: [],
+      watchlist_alerts: [],
+      strategy_signal_summary: {
+        topn_preview_count: 1,
+        topn_preview: [
+          {
+            trade_date: '2026-06-10',
+            asset_id: '000001.SZ',
+            rank: 1,
+            score_total: 91.2,
+            score_version: 'manual_v1',
+            score_components: {}
+          }
+        ],
+        risk_filter_counts: {}
+      },
+      generated_reports: [
+        {
+          report_type: 'daily_topn_report',
+          title: 'daily_topn.md',
+          path: '/reports/topn.md',
+          format: 'md',
+          trade_date: '2026-06-10'
+        }
+      ],
+      warnings: ['market breadth source pending']
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.getByText('5,300')).toBeInTheDocument();
+    expect(screen.getByText('000001.SZ')).toBeInTheDocument();
+    expect(screen.getByText('market breadth source pending')).toBeInTheDocument();
   });
 
   it('navigates between planned platform workspaces', async () => {
