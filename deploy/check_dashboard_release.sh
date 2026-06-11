@@ -53,9 +53,9 @@ fetch "${API_BASE%/}/platform/summary" >/dev/null
 
 echo "Checking /api/backtests/strategies endpoint"
 strategies_body="$(fetch "${API_BASE%/}/backtests/strategies")"
-require_body_contains "$strategies_body" "\"strategy_id\":\"lhb_shortline\"" "strategy catalog"
-require_body_contains "$strategies_body" "\"strategy_id\":\"mid_trend\"" "strategy catalog"
-require_body_contains "$strategies_body" "\"strategy_id\":\"tech_bottleneck\"" "strategy catalog"
+require_body_contains "$strategies_body" "lhb_shortline_combo_v1" "strategy catalog"
+require_body_contains "$strategies_body" "mid_trend_combo_v1" "strategy catalog"
+require_body_contains "$strategies_body" "tech_bottleneck_combo_v1" "strategy catalog"
 
 echo "Checking /api/assets/000001.SZ/profile endpoint"
 fetch "${API_BASE%/}/assets/000001.SZ/profile?trade_date=${TRADE_DATE}&start_date=${START_DATE}&end_date=${END_DATE}&score_version=manual_v1&adjust_type=qfq" >/dev/null
@@ -64,7 +64,7 @@ echo "Checking /api/backtests/run-fresh endpoint wiring"
 fetch \
   -H "Content-Type: application/json" \
   -X POST \
-  --data "{\"strategy_id\":\"lhb_shortline\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":20,\"rebalance\":\"daily\",\"cost_bps\":10,\"max_positions\":2}" \
+  --data "{\"strategy_id\":\"lhb_shortline_combo_v1\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":20,\"rebalance\":\"daily\",\"cost_bps\":10,\"max_positions\":2}" \
   "${API_BASE%/}/backtests/run-fresh" >/dev/null
 
 echo "Dashboard release check passed."
