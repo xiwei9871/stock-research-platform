@@ -11,6 +11,7 @@ import pandas as pd
 
 from stock_research.assets import sync_asset_master
 from stock_research.auction_data import (
+    build_open_auction_spot_snapshot_cron_entries,
     build_lhb_auction_backfill_plan,
     build_lhb_auction_enhanced_rule_scan_report_v1,
     build_lhb_auction_observation_report_v1,
@@ -18,6 +19,7 @@ from stock_research.auction_data import (
     build_lhb_phase18d_close_auction_lifecycle_report_v1,
     build_lhb_phase18e_joint_exit_diagnostics_report_v1,
     build_tushare_auction_full_backfill_plan,
+    collect_open_auction_spot_snapshot,
     collect_open_auction_minute_bars,
     collect_open_auction_minute_bars_until_covered,
     load_open_trading_dates,
@@ -28,6 +30,7 @@ from stock_research.auction_data import (
     run_lhb_auction_backfill_plan,
     run_tushare_auction_full_backfill_plan,
     sync_tushare_stock_auction_bars,
+    write_open_auction_spot_snapshot_report,
     write_open_auction_minute_collect_report,
     write_lhb_auction_backfill_plan_report,
     write_tushare_auction_full_backfill_report,
@@ -1568,6 +1571,22 @@ def build_parser() -> argparse.ArgumentParser:
     open_auction_minute_cron.add_argument("--primary-minute", type=int, default=40)
     open_auction_minute_cron.add_argument("--retry-hour", type=int, default=15)
     open_auction_minute_cron.add_argument("--retry-minute", type=int, default=10)
+
+    open_auction_spot_snapshot = subparsers.add_parser("collect-open-auction-spot-snapshot-v1")
+    open_auction_spot_snapshot.add_argument("--trade-date", default="auto")
+    open_auction_spot_snapshot.add_argument("--target-time", required=True)
+    open_auction_spot_snapshot.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/open_auction_spot_snapshot",
+    )
+
+    open_auction_spot_snapshot_cron = subparsers.add_parser("open-auction-spot-snapshot-cron-entry")
+    open_auction_spot_snapshot_cron.add_argument("--project-dir", default="/Users/xiwei/stock_research")
+    open_auction_spot_snapshot_cron.add_argument(
+        "--output-dir",
+        default="outputs/research/open_auction_spot_snapshot",
+    )
+    open_auction_spot_snapshot_cron.add_argument("--log-path", default="logs/open_auction_spot_snapshot.log")
 
     xtick_auction_detail = subparsers.add_parser("collect-xtick-auction-detail-v1")
     xtick_auction_detail.add_argument("--trade-date", required=True)
@@ -4462,7 +4481,7 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
     return versions == {DIAGNOSTICS_RULE_VERSION}
 
 
-def main_for_args(argv: list[str] | None = None) -> None:
+def main_for_args(argv: list[str] | None = None) -> int | None:
     args = build_parser().parse_args(argv)
 
     if args.command == "apply-schema":
@@ -7790,6 +7809,34 @@ def main_for_args(argv: list[str] | None = None) -> None:
         ):
             print(entry)
         return 0
+    elif args.command == "collect-open-auction-spot-snapshot-v1":
+        trade_date = dt.date.today().isoformat() if args.trade_date == "auto" else args.trade_date
+        result = collect_open_auction_spot_snapshot(
+            trade_date=trade_date,
+            target_time=args.target_time,
+        )
+        report = write_open_auction_spot_snapshot_report(
+            result=result,
+            output_dir=args.output_dir,
+            trade_date=trade_date,
+            target_time=args.target_time,
+        )
+        print(f"open_auction_spot_snapshot_v1|detail|{report['paths']['detail']}")
+        print(f"open_auction_spot_snapshot_v1|latest|{report['paths']['latest']}")
+        print(f"open_auction_spot_snapshot_v1|report|{report['paths']['markdown_report']}")
+        print(f"open_auction_spot_snapshot_v1|queried_rows|{report['summary']['queried_rows']}")
+        print(f"open_auction_spot_snapshot_v1|upserted_rows|{report['summary']['upserted_rows']}")
+        print(f"open_auction_spot_snapshot_v1|skipped_rows|{report['summary']['skipped_rows']}")
+        print(f"open_auction_spot_snapshot_v1|failed|{report['summary'].get('failed', False)}")
+        return 1 if report["summary"].get("failed") else 0
+    elif args.command == "open-auction-spot-snapshot-cron-entry":
+        for entry in build_open_auction_spot_snapshot_cron_entries(
+            project_dir=args.project_dir,
+            output_dir=args.output_dir,
+            log_path=args.log_path,
+        ):
+            print(entry)
+        return 0
     elif args.command == "collect-xtick-auction-detail-v1":
         result = collect_xtick_dayupdate_bid(
             trade_date=args.trade_date,
@@ -8853,9 +8900,9 @@ def main_for_args(argv: list[str] | None = None) -> None:
         )
 
 
-def main(argv: list[str] | None = None) -> None:
-    main_for_args(argv)
+def main(argv: list[str] | None = None) -> int | None:
+    return main_for_args(argv)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

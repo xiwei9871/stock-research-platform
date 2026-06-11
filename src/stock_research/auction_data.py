@@ -17,6 +17,15 @@ AUCTION_PHASE_ENDPOINTS = {
     "close_call": "stk_auction_c",
 }
 
+OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS = [
+    ("09:15", 15),
+    ("09:17", 17),
+    ("09:19", 19),
+    ("09:21", 21),
+    ("09:23", 23),
+    ("09:25", 25),
+]
+
 
 def parse_tushare_trade_date(value: Any) -> dt.date:
     return dt.datetime.strptime(str(value), "%Y%m%d").date()
@@ -496,6 +505,7 @@ def write_open_auction_spot_snapshot_report(
         f"- queried_rows: {summary['queried_rows']}",
         f"- upserted_rows: {summary['upserted_rows']}",
         f"- skipped_rows: {summary['skipped_rows']}",
+        f"- failed: {summary.get('failed', False)}",
         f"- error: {summary['error']}",
         "",
     ]
@@ -508,6 +518,32 @@ def write_open_auction_spot_snapshot_report(
         },
         "summary": summary,
     }
+
+
+def build_open_auction_spot_snapshot_cron_entries(
+    *,
+    project_dir: str = "/Users/xiwei/stock_research",
+    output_dir: str = "outputs/research/open_auction_spot_snapshot",
+    log_path: str = "logs/open_auction_spot_snapshot.log",
+) -> list[str]:
+    entries = []
+    for target_time, minute in OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS:
+        entries.append(
+            " ".join(
+                [
+                    str(minute),
+                    "9",
+                    "*",
+                    "*",
+                    "1-5",
+                    f"cd {project_dir} &&",
+                    f"OPEN_AUCTION_SPOT_OUTPUT_DIR={output_dir}",
+                    f"scripts/run_open_auction_spot_snapshot.sh {target_time} $(date +\\%F)",
+                    f">> {log_path} 2>&1",
+                ]
+            )
+        )
+    return entries
 
 
 def open_auction_minute_market_row(

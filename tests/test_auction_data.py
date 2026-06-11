@@ -10,6 +10,7 @@ from stock_research import auction_data
 from stock_research.auction_data import (
     auction_market_row,
     auction_staging_row,
+    build_open_auction_spot_snapshot_cron_entries,
     build_lhb_auction_enhanced_rule_scan_v1,
     build_lhb_auction_topn_rerank_comparison_v1,
     build_lhb_auction_observation_detail,
@@ -660,6 +661,7 @@ def test_write_open_auction_spot_snapshot_report(tmp_path):
                     "queried_rows": 1,
                     "upserted_rows": 1,
                     "skipped_rows": 0,
+                    "failed": False,
                     "error": "",
                 }
             ]
@@ -671,6 +673,7 @@ def test_write_open_auction_spot_snapshot_report(tmp_path):
             "queried_rows": 1,
             "upserted_rows": 1,
             "skipped_rows": 0,
+            "failed": False,
             "error": "",
         },
     }
@@ -685,6 +688,130 @@ def test_write_open_auction_spot_snapshot_report(tmp_path):
     text = Path(report["paths"]["markdown_report"]).read_text(encoding="utf-8")
     assert "- target_time: 09:17" in text
     assert "- upserted_rows: 1" in text
+    assert "- failed: False" in text
+
+
+def test_build_open_auction_spot_snapshot_cron_entries_uses_requested_slots():
+    entries = build_open_auction_spot_snapshot_cron_entries(
+        project_dir="/Users/xiwei/stock_research",
+        output_dir="outputs/research/open_auction_spot_snapshot",
+        log_path="logs/open_auction_spot_snapshot.log",
+    )
+
+    assert len(entries) == 6
+    assert entries[0].startswith("15 9 * * 1-5 ")
+    assert "scripts/run_open_auction_spot_snapshot.sh 09:15" in entries[0]
+    assert entries[1].startswith("17 9 * * 1-5 ")
+    assert "scripts/run_open_auction_spot_snapshot.sh 09:17" in entries[1]
+    assert entries[-1].startswith("25 9 * * 1-5 ")
+    assert "scripts/run_open_auction_spot_snapshot.sh 09:25" in entries[-1]
+    for target_time in ["09:15", "09:17", "09:19", "09:21", "09:23", "09:25"]:
+        assert any(
+            f"scripts/run_open_auction_spot_snapshot.sh {target_time}" in entry
+            for entry in entries
+        )
+
+
+def test_collect_open_auction_spot_snapshot_cli_returns_zero_when_collection_succeeds(
+    monkeypatch,
+    tmp_path,
+):
+    calls = []
+
+    def fake_collect(**kwargs):
+        calls.append(("collect", kwargs))
+        return {
+            "detail": pd.DataFrame(),
+            "summary": {
+                "trade_date": kwargs["trade_date"],
+                "target_time": kwargs["target_time"],
+                "snapshot_time": "2026-06-11T09:17:05",
+                "queried_rows": 10,
+                "upserted_rows": 9,
+                "skipped_rows": 1,
+                "failed": False,
+                "error": "",
+            },
+        }
+
+    def fake_write(**kwargs):
+        calls.append(("write", kwargs))
+        return {
+            "paths": {
+                "detail": tmp_path / "detail.csv",
+                "latest": tmp_path / "latest.csv",
+                "markdown_report": tmp_path / "report.md",
+            },
+            "summary": kwargs["result"]["summary"],
+        }
+
+    monkeypatch.setattr(cli, "collect_open_auction_spot_snapshot", fake_collect)
+    monkeypatch.setattr(cli, "write_open_auction_spot_snapshot_report", fake_write)
+
+    status = cli.main(
+        [
+            "collect-open-auction-spot-snapshot-v1",
+            "--trade-date",
+            "2026-06-11",
+            "--target-time",
+            "09:17",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert status == 0
+    assert calls[0] == (
+        "collect",
+        {"trade_date": "2026-06-11", "target_time": "09:17"},
+    )
+
+
+def test_collect_open_auction_spot_snapshot_cli_returns_one_when_collection_fails(
+    monkeypatch,
+    tmp_path,
+):
+    def fake_collect(**kwargs):
+        return {
+            "detail": pd.DataFrame(),
+            "summary": {
+                "trade_date": kwargs["trade_date"],
+                "target_time": kwargs["target_time"],
+                "snapshot_time": "2026-06-11T09:17:05",
+                "queried_rows": 0,
+                "upserted_rows": 0,
+                "skipped_rows": 0,
+                "failed": True,
+                "error": "query failed",
+            },
+        }
+
+    def fake_write(**kwargs):
+        return {
+            "paths": {
+                "detail": tmp_path / "detail.csv",
+                "latest": tmp_path / "latest.csv",
+                "markdown_report": tmp_path / "report.md",
+            },
+            "summary": kwargs["result"]["summary"],
+        }
+
+    monkeypatch.setattr(cli, "collect_open_auction_spot_snapshot", fake_collect)
+    monkeypatch.setattr(cli, "write_open_auction_spot_snapshot_report", fake_write)
+
+    status = cli.main(
+        [
+            "collect-open-auction-spot-snapshot-v1",
+            "--trade-date",
+            "2026-06-11",
+            "--target-time",
+            "09:17",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert status == 1
 
 
 def test_upsert_stock_open_auction_minute_bars_writes_staging_and_market(monkeypatch):

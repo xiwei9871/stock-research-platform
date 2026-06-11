@@ -547,6 +547,22 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert auction_args.end_date == "2026-03-06"
     assert auction_args.auction_phases == ["open_call", "close_call"]
 
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "collect-open-auction-spot-snapshot-v1",
+            "--trade-date",
+            "2026-06-11",
+            "--target-time",
+            "09:17",
+        ]
+    )
+    assert args.command == "collect-open-auction-spot-snapshot-v1"
+    assert args.target_time == "09:17"
+
+    cron_args = parser.parse_args(["open-auction-spot-snapshot-cron-entry"])
+    assert cron_args.command == "open-auction-spot-snapshot-cron-entry"
+
     auction_observation_args = build_parser().parse_args(
         [
             "lhb-auction-observation-v1",
