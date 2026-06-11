@@ -92,7 +92,7 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     assert generic_calls[0]["stale_after_minutes"] == 20
     assert generic_calls[0]["run_timeout_seconds"] == 1800
     assert generic_calls[0]["max_jobs"] == 1200
-    assert generic_calls[0]["workers"] == 6
+    assert generic_calls[0]["workers"] == 8
     assert generic_calls[0]["send_message"] is None
     assert sent == []
     assert result["pre_summary"] == {

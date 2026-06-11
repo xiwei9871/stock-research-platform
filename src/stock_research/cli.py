@@ -905,7 +905,7 @@ def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> N
         default=["raw", "qfq"],
     )
     parser.add_argument("--max-jobs", type=int, default=1200)
-    parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--stale-after-minutes", type=int, default=20)
     parser.add_argument("--run-timeout-seconds", type=int, default=1800)
     parser.add_argument("--output-dir", default="outputs/research")

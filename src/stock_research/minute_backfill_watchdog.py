@@ -27,7 +27,7 @@ def run_minute_backfill_watchdog(
     max_jobs: int = 1200,
     retry_failed: bool = True,
     sleep_seconds: float = 0.0,
-    workers: int = 6,
+    workers: int = 8,
     stale_after_minutes: int = 20,
     run_timeout_seconds: int = 1800,
     report_target: str,
