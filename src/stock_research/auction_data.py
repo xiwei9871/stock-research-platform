@@ -427,6 +427,7 @@ def collect_open_auction_spot_snapshot(
         "snapshot_time": captured_at.isoformat(timespec="seconds"),
     }
     try:
+        parsed_target_time = parse_target_time(target_time)
         rows = query_eastmoney_spot_snapshot_rows()
         for row in rows:
             try:
@@ -434,7 +435,7 @@ def collect_open_auction_spot_snapshot(
                     row,
                     trade_date=target_date,
                     snapshot_time=captured_at,
-                    target_time=target_time,
+                    target_time=parsed_target_time,
                     source_endpoint="stock_zh_a_spot_em",
                     params=params,
                 )
