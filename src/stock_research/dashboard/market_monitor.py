@@ -18,7 +18,7 @@ def build_market_monitor_eod(
     latest_score_date = str(summary.get("latest_score_date") or "")
     selected_trade_date = trade_date or latest_market_date
     warnings: list[str] = []
-    if not selected_trade_date:
+    if not latest_market_date:
         warnings.append("latest complete market date is unavailable")
     if latest_score_date and selected_trade_date and latest_score_date != selected_trade_date:
         warnings.append(
