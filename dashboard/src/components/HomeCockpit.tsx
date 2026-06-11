@@ -37,11 +37,16 @@ function formatScore(row: ScoreRow) {
   return typeof row.score_total === 'number' ? row.score_total.toFixed(1) : '-';
 }
 
+function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
+  const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,28 +54,51 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     let ignore = false;
     setIsLoading(true);
     setError(null);
+    setWidgetWarnings([]);
 
-    Promise.all([
+    Promise.allSettled([
       fetchPlatformSummary(),
       fetchBacktestStrategies(),
       fetchMarketMonitorEod({ topN: 5 }),
       fetchPublicNews({ source: 'sina_finance', limit: 5 })
-    ])
-      .then(([summaryPayload, strategyRows, marketPayload, newsPayload]) => {
-        if (!ignore) {
-          setSummary(summaryPayload);
-          setStrategies(strategyRows);
-          setMarketMonitor(marketPayload);
-          setNewsItems(newsPayload.items);
-          setIsLoading(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!ignore) {
-          setError(err instanceof Error ? err.message : String(err));
-          setIsLoading(false);
-        }
-      });
+    ]).then(([summaryResult, strategiesResult, marketResult, newsResult]) => {
+      if (ignore) return;
+
+      const criticalErrors: string[] = [];
+      const optionalWarnings: string[] = [];
+
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value);
+      } else {
+        setSummary(null);
+        criticalErrors.push(`Platform summary unavailable: ${errorMessage(summaryResult.reason)}`);
+      }
+
+      if (strategiesResult.status === 'fulfilled') {
+        setStrategies(strategiesResult.value);
+      } else {
+        setStrategies([]);
+        criticalErrors.push(`Strategies unavailable: ${errorMessage(strategiesResult.reason)}`);
+      }
+
+      if (marketResult.status === 'fulfilled') {
+        setMarketMonitor(marketResult.value);
+      } else {
+        setMarketMonitor(null);
+        optionalWarnings.push(`Market pulse unavailable: ${errorMessage(marketResult.reason)}`);
+      }
+
+      if (newsResult.status === 'fulfilled') {
+        setNewsItems(newsResult.value.items);
+      } else {
+        setNewsItems([]);
+        optionalWarnings.push(`News flow unavailable: ${errorMessage(newsResult.reason)}`);
+      }
+
+      setError(criticalErrors.length > 0 ? criticalErrors.join('; ') : null);
+      setWidgetWarnings(optionalWarnings);
+      setIsLoading(false);
+    });
 
     return () => {
       ignore = true;
@@ -93,6 +121,11 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       </nav>
 
       {error ? <p className="error-text">{error}</p> : null}
+      {widgetWarnings.map((warning) => (
+        <p className="error-text" key={warning}>
+          {warning}
+        </p>
+      ))}
 
       <section className="status-strip" aria-label="Dashboard status">
         <div>
