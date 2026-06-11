@@ -246,12 +246,35 @@ def is_open_trading_date(
     trade_date: str | dt.date,
     research_service: str = SETTINGS.research_service,
 ) -> bool:
+    return open_trading_date_status(trade_date, research_service=research_service) == "open"
+
+
+def open_trading_date_status(
+    trade_date: str | dt.date,
+    research_service: str = SETTINGS.research_service,
+) -> str:
     target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
-    return target_date.isoformat() in load_open_trading_dates(
-        start_date=target_date.isoformat(),
-        end_date=target_date.isoformat(),
-        research_service=research_service,
-    )
+    sql = """
+    SELECT
+        bool_or(is_open = true) AS calendar_open,
+        bool_or(is_open = false) AS calendar_closed,
+        EXISTS (
+            SELECT 1
+            FROM market_daily_bar
+            WHERE trade_date = %s
+              AND adjust_type = 'qfq'
+        ) AS has_daily_bar
+    FROM market.trading_calendar
+    WHERE trade_date = %s
+    """
+    with connect(research_service) as conn:
+        rows = fetch_all(conn, sql, [target_date.isoformat(), target_date.isoformat()])
+    row = rows[0] if rows else {}
+    if bool(row.get("calendar_open")) or bool(row.get("has_daily_bar")):
+        return "open"
+    if bool(row.get("calendar_closed")):
+        return "closed"
+    return "unknown"
 
 
 def open_auction_spot_snapshot_market_row(
@@ -453,7 +476,8 @@ def collect_open_auction_spot_snapshot(
     }
     try:
         parsed_target_time = parse_target_time(target_time)
-        if skip_non_trading_day and not is_open_trading_date(target_date):
+        trading_status = open_trading_date_status(target_date) if skip_non_trading_day else "open"
+        if trading_status == "closed":
             detail_row = {
                 "trade_date": target_date.isoformat(),
                 "target_time": target_time,

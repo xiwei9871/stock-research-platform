@@ -514,6 +514,26 @@ def test_clean_spot_placeholder_double_dash_preserves_row():
     assert staging_row["payload"]["最新价"] is None
 
 
+def test_open_trading_date_status_distinguishes_unknown_closed_and_open(monkeypatch):
+    responses = [
+        [{"calendar_open": None, "calendar_closed": None, "has_daily_bar": False}],
+        [{"calendar_open": False, "calendar_closed": True, "has_daily_bar": False}],
+        [{"calendar_open": False, "calendar_closed": False, "has_daily_bar": True}],
+    ]
+
+    def fake_fetch_all(conn, sql, params):
+        assert conn == "conn"
+        assert params == ["2026-06-11", "2026-06-11"]
+        return responses.pop(0)
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "fetch_all", fake_fetch_all)
+
+    assert auction_data.open_trading_date_status("2026-06-11") == "unknown"
+    assert auction_data.open_trading_date_status("2026-06-11") == "closed"
+    assert auction_data.open_trading_date_status("2026-06-11") == "open"
+
+
 def test_upsert_stock_open_auction_spot_snapshots_writes_staging_and_market(monkeypatch):
     calls = []
 
@@ -555,7 +575,7 @@ def test_collect_open_auction_spot_snapshot_queries_once_and_reports(monkeypatch
 
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
     monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
 
     result = collect_open_auction_spot_snapshot(
         trade_date="2026-06-11",
@@ -590,7 +610,7 @@ def test_collect_open_auction_spot_snapshot_skips_bad_rows_without_losing_good_r
 
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
     monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
 
     result = collect_open_auction_spot_snapshot(
         trade_date="2026-06-11",
@@ -607,7 +627,7 @@ def test_collect_open_auction_spot_snapshot_skips_bad_rows_without_losing_good_r
 
 
 def test_collect_open_auction_spot_snapshot_marks_empty_response_failed(monkeypatch):
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", lambda: [])
     monkeypatch.setattr(
         auction_data,
@@ -634,7 +654,7 @@ def test_collect_open_auction_spot_snapshot_marks_all_skipped_failed(monkeypatch
         {**raw_spot_snapshot_row(), "代码": "bad-again"},
     ]
 
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", lambda: rows)
     monkeypatch.setattr(
         auction_data,
@@ -667,7 +687,7 @@ def test_collect_open_auction_spot_snapshot_skips_non_trading_day_without_query(
         upsert_calls.append((rows, trade_date, snapshot_time, target_time, source_endpoint, params))
         return len(rows)
 
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: False)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "closed")
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
     monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
 
@@ -685,6 +705,35 @@ def test_collect_open_auction_spot_snapshot_skips_non_trading_day_without_query(
     assert result["summary"]["upserted_rows"] == 0
     assert result["summary"]["skipped_rows"] == 0
     assert result["summary"]["error"] == ""
+
+
+def test_collect_open_auction_spot_snapshot_queries_when_trading_status_unknown(monkeypatch):
+    query_calls = []
+    upsert_calls = []
+
+    def fake_query():
+        query_calls.append("called")
+        return [raw_spot_snapshot_row()]
+
+    def fake_upsert(rows, trade_date, snapshot_time, target_time, source_endpoint="stock_zh_a_spot_em", params=None):
+        upsert_calls.append((rows, trade_date, snapshot_time, target_time, source_endpoint, params))
+        return len(rows)
+
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "unknown")
+    monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
+
+    result = collect_open_auction_spot_snapshot(
+        trade_date="2026-06-11",
+        target_time="09:17",
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+    )
+
+    assert query_calls == ["called"]
+    assert len(upsert_calls) == 1
+    assert result["summary"]["non_trading_day"] is False
+    assert result["summary"]["failed"] is False
+    assert result["summary"]["upserted_rows"] == 1
 
 
 def test_collect_open_auction_spot_snapshot_marks_bad_target_time_failure(monkeypatch):
@@ -720,7 +769,7 @@ def test_collect_open_auction_spot_snapshot_marks_query_failure(monkeypatch):
     def fake_query():
         raise RuntimeError("spot unavailable")
 
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
 
     result = collect_open_auction_spot_snapshot(
@@ -742,7 +791,7 @@ def test_collect_open_auction_spot_snapshot_marks_upsert_failure(monkeypatch):
     def fake_upsert(rows, trade_date, snapshot_time, target_time, source_endpoint="stock_zh_a_spot_em", params=None):
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(auction_data, "is_open_trading_date", lambda trade_date: True)
+    monkeypatch.setattr(auction_data, "open_trading_date_status", lambda trade_date: "open")
     monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
     monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
 
