@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
@@ -15,6 +15,7 @@ import type {
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  MarketMonitorPayload,
   OutcomeAnalyticsRow,
   ScoreRow,
   ShadowAnalyticsReviewRow,
@@ -147,6 +148,59 @@ function makeBars(count: number): BarPoint[] {
     volume: 100,
     amount: 1000
   }));
+}
+
+function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {}): MarketMonitorPayload {
+  return {
+    trade_date: '2026-06-10',
+    freshness: {
+      mode: 'eod',
+      label: 'Last Completed Trading Day',
+      is_realtime: false,
+      latest_market_date: '2026-06-10',
+      latest_factor_date: '2026-06-10',
+      latest_score_date: '2026-06-10'
+    },
+    coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+    market_breadth: {
+      advancers: null,
+      decliners: null,
+      limit_up: null,
+      limit_down: null,
+      advancing_ratio: null,
+      turnover_change_pct: null,
+      status: 'pending_source'
+    },
+    index_snapshot: [],
+    sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+    unusual_moves: [],
+    watchlist_alerts: [],
+    strategy_signal_summary: {
+      topn_preview_count: 1,
+      topn_preview: [
+        {
+          trade_date: '2026-06-10',
+          asset_id: '000001.SZ',
+          rank: 1,
+          score_total: 91.2,
+          score_version: 'manual_v1',
+          score_components: {}
+        }
+      ],
+      risk_filter_counts: {}
+    },
+    generated_reports: [
+      {
+        report_type: 'daily_topn_report',
+        title: 'daily_topn.md',
+        path: '/reports/topn.md',
+        format: 'md',
+        trade_date: '2026-06-10'
+      }
+    ],
+    warnings: ['market breadth source pending'],
+    ...overrides
+  };
 }
 
 function makeDecisions(assetId = '000001.SZ'): DecisionEventRow[] {
@@ -678,55 +732,7 @@ describe('dashboard app shell', () => {
   });
 
   it('renders EOD market monitor data without implying realtime data', async () => {
-    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
-      trade_date: '2026-06-10',
-      freshness: {
-        mode: 'eod',
-        label: 'Last Completed Trading Day',
-        is_realtime: false,
-        latest_market_date: '2026-06-10',
-        latest_factor_date: '2026-06-10',
-        latest_score_date: '2026-06-10'
-      },
-      coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
-      market_breadth: {
-        advancers: null,
-        decliners: null,
-        limit_up: null,
-        limit_down: null,
-        advancing_ratio: null,
-        turnover_change_pct: null,
-        status: 'pending_source'
-      },
-      index_snapshot: [],
-      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
-      unusual_moves: [],
-      watchlist_alerts: [],
-      strategy_signal_summary: {
-        topn_preview_count: 1,
-        topn_preview: [
-          {
-            trade_date: '2026-06-10',
-            asset_id: '000001.SZ',
-            rank: 1,
-            score_total: 91.2,
-            score_version: 'manual_v1',
-            score_components: {}
-          }
-        ],
-        risk_filter_counts: {}
-      },
-      generated_reports: [
-        {
-          report_type: 'daily_topn_report',
-          title: 'daily_topn.md',
-          path: '/reports/topn.md',
-          format: 'md',
-          trade_date: '2026-06-10'
-        }
-      ],
-      warnings: ['market breadth source pending']
-    });
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
@@ -737,6 +743,53 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('5,300')).toBeInTheDocument();
     expect(screen.getByText('000001.SZ')).toBeInTheDocument();
     expect(screen.getByText('market breadth source pending')).toBeInTheDocument();
+  });
+
+  it('ignores deferred market monitor responses after navigating away', async () => {
+    let resolveMarketMonitor: (payload: MarketMonitorPayload) => void = () => undefined;
+    const pendingMarketMonitor = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveMarketMonitor = resolve;
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    apiMocks.fetchMarketMonitorEod.mockReturnValueOnce(pendingMarketMonitor);
+
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+      expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open Home workspace' }));
+      expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveMarketMonitor(
+          makeMarketMonitorPayload({
+            strategy_signal_summary: {
+              topn_preview_count: 1,
+              topn_preview: [
+                {
+                  trade_date: '2026-06-10',
+                  asset_id: 'STALE.MKT',
+                  rank: 1,
+                  score_total: 99.9,
+                  score_version: 'manual_v1',
+                  score_components: {}
+                }
+              ],
+              risk_filter_counts: {}
+            },
+            warnings: ['stale market monitor payload']
+          })
+        );
+        await pendingMarketMonitor;
+      });
+
+      await waitFor(() => expect(screen.queryByText('STALE.MKT')).not.toBeInTheDocument());
+      expect(screen.queryByText('stale market monitor payload')).not.toBeInTheDocument();
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('navigates between planned platform workspaces', async () => {

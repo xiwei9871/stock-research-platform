@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMarketMonitorEod } from '../api/client';
 import type { MarketMonitorPayload } from '../api/types';
 
@@ -14,22 +14,39 @@ export function MarketMonitorWorkspace() {
   const [payload, setPayload] = useState<MarketMonitorPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
-  async function loadLatest() {
+  const loadLatest = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setIsLoading(true);
     setError(null);
     try {
-      setPayload(await fetchMarketMonitorEod({ topN: 5 }));
+      const latestPayload = await fetchMarketMonitorEod({ topN: 5 });
+      if (isMountedRef.current && requestId === requestIdRef.current) {
+        setPayload(latestPayload);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current && requestId === requestIdRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current && requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }
+  }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     void loadLatest();
-  }, []);
+
+    return () => {
+      isMountedRef.current = false;
+      requestIdRef.current += 1;
+    };
+  }, [loadLatest]);
 
   return (
     <section className="workspace-stack" aria-label="Market Monitor workspace">
