@@ -214,8 +214,10 @@ def ts_code_from_spot_symbol(symbol: Any) -> str:
 def _clean_spot_payload_value(value: Any) -> Any:
     if value is None:
         return None
-    if isinstance(value, str) and value.strip() in {"", "-"}:
-        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if text in {"", "-", "--", "—"} or text.lower() in {"n/a", "nan", "none", "null"}:
+            return None
     if isinstance(value, (dict, list, tuple, set)):
         return value
     try:
@@ -238,6 +240,18 @@ def parse_target_time(value: str | dt.time) -> dt.time:
     if isinstance(value, dt.time):
         return value
     return dt.datetime.strptime(str(value), "%H:%M").time()
+
+
+def is_open_trading_date(
+    trade_date: str | dt.date,
+    research_service: str = SETTINGS.research_service,
+) -> bool:
+    target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
+    return target_date.isoformat() in load_open_trading_dates(
+        start_date=target_date.isoformat(),
+        end_date=target_date.isoformat(),
+        research_service=research_service,
+    )
 
 
 def open_auction_spot_snapshot_market_row(
@@ -422,6 +436,7 @@ def collect_open_auction_spot_snapshot(
     trade_date: str | dt.date,
     target_time: str,
     snapshot_time: dt.datetime | None = None,
+    skip_non_trading_day: bool = True,
 ) -> dict[str, Any]:
     target_date = dt.date.fromisoformat(str(trade_date)) if not isinstance(trade_date, dt.date) else trade_date
     captured_at = (snapshot_time or dt.datetime.now()).replace(tzinfo=None)
@@ -438,6 +453,22 @@ def collect_open_auction_spot_snapshot(
     }
     try:
         parsed_target_time = parse_target_time(target_time)
+        if skip_non_trading_day and not is_open_trading_date(target_date):
+            detail_row = {
+                "trade_date": target_date.isoformat(),
+                "target_time": target_time,
+                "snapshot_time": captured_at.isoformat(timespec="seconds"),
+                "queried_rows": 0,
+                "upserted_rows": 0,
+                "skipped_rows": 0,
+                "non_trading_day": True,
+                "failed": False,
+                "error": "",
+            }
+            return {
+                "detail": pd.DataFrame([detail_row]),
+                "summary": detail_row,
+            }
         rows = query_eastmoney_spot_snapshot_rows()
         for row in rows:
             try:
@@ -452,13 +483,20 @@ def collect_open_auction_spot_snapshot(
                 valid_rows.append(row)
             except (ValueError, TypeError):
                 skipped += 1
-        upserted = upsert_stock_open_auction_spot_snapshots(
-            valid_rows,
-            trade_date=target_date,
-            snapshot_time=captured_at,
-            target_time=target_time,
-            params=params,
-        )
+        if valid_rows:
+            upserted = upsert_stock_open_auction_spot_snapshots(
+                valid_rows,
+                trade_date=target_date,
+                snapshot_time=captured_at,
+                target_time=target_time,
+                params=params,
+            )
+        if len(rows) == 0:
+            failed = True
+            error = "AKShare spot snapshot returned no rows for open trading date"
+        elif not valid_rows:
+            failed = True
+            error = "AKShare spot snapshot returned rows but none were valid"
     except Exception as exc:  # pragma: no cover - integration safety path.
         failed = True
         error = str(exc)
@@ -470,6 +508,7 @@ def collect_open_auction_spot_snapshot(
         "queried_rows": len(rows),
         "upserted_rows": upserted,
         "skipped_rows": skipped,
+        "non_trading_day": False,
         "failed": failed,
         "error": error,
     }
