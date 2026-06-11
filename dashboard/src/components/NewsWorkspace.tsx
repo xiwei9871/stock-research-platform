@@ -206,7 +206,7 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
                         aria-label={`Open ${assetCandidate}`}
                         onClick={() => onOpenAsset?.(assetCandidate)}
                       >
-                        Open
+                        Open Stock
                       </button>
                     ) : null}
                   </div>
