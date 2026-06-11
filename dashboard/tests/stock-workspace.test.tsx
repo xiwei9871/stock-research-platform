@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace } from '../src/components/StockWorkspace';
 import type { AssetProfile, PublicNewsResponse } from '../src/api/types';
@@ -73,6 +73,16 @@ function makeProfile(overrides: Partial<AssetProfile> = {}): AssetProfile {
     coverage: { bars: { start: '2026-06-05', end: '2026-06-08' } },
     ...overrides
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
 }
 
 const newsPayload: PublicNewsResponse = {
@@ -164,5 +174,48 @@ describe('StockWorkspace', () => {
     await waitFor(() => {
       expect(apiMocks.searchAssets).toHaveBeenCalledWith('600000.SH', 8);
     });
+  });
+
+  it('does not show stale news after a later profile load clears the profile', async () => {
+    const firstNews = deferred<PublicNewsResponse>();
+    const secondNews = deferred<PublicNewsResponse>();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: { asset_id: '600000.SH', symbol: '600000', name: '浦发银行', exchange: 'SH', board: null, is_active: true },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile
+      .mockResolvedValueOnce(makeProfile())
+      .mockRejectedValueOnce(new Error('profile failed'))
+      .mockResolvedValueOnce(secondProfile);
+    apiMocks.fetchPublicNews.mockReturnValueOnce(firstNews.promise).mockReturnValueOnce(secondNews.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByText('profile failed')).toBeInTheDocument();
+
+    await act(async () => {
+      firstNews.resolve(newsPayload);
+      await firstNews.promise;
+    });
+
+    expect(screen.queryByText('000001 平安银行公告')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('000001 平安银行公告')).not.toBeInTheDocument();
   });
 });

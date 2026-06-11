@@ -186,7 +186,10 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
 
   useEffect(() => {
     if (!profile) {
+      newsRequestIdRef.current += 1;
       setNewsItems([]);
+      setIsNewsLoading(false);
+      setNewsError(null);
       return;
     }
 
