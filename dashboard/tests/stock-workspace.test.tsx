@@ -113,6 +113,8 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     expect(screen.getByText(/Score 82.4/)).toBeInTheDocument();
     expect(screen.getAllByText('momentum').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Score Component')).toHaveLength(2);
+    expect(screen.getByText('quality')).toBeInTheDocument();
     expect(await screen.findByText('000001 平安银行公告')).toBeInTheDocument();
     expect(screen.getByText('candidate')).toBeInTheDocument();
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
@@ -134,6 +136,33 @@ describe('StockWorkspace', () => {
         'manual_v1',
         'qfq'
       );
+    });
+  });
+
+  it('searches asset matches only after loading a submitted stock', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    await screen.findByRole('heading', { name: /平安银行/ });
+    await waitFor(() => {
+      expect(apiMocks.searchAssets).toHaveBeenCalledWith('000001.SZ', 8);
+    });
+    const initialSearchCallCount = apiMocks.searchAssets.mock.calls.length;
+
+    const assetInput = screen.getByLabelText('stock workspace asset');
+    fireEvent.change(assetInput, { target: { value: '' } });
+    fireEvent.change(assetInput, { target: { value: '6' } });
+    fireEvent.change(assetInput, { target: { value: '60' } });
+    fireEvent.change(assetInput, { target: { value: '600' } });
+    fireEvent.change(assetInput, { target: { value: '6000' } });
+    fireEvent.change(assetInput, { target: { value: '60000' } });
+    fireEvent.change(assetInput, { target: { value: '600000' } });
+
+    expect(apiMocks.searchAssets).toHaveBeenCalledTimes(initialSearchCallCount);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    await waitFor(() => {
+      expect(apiMocks.searchAssets).toHaveBeenCalledWith('600000.SH', 8);
     });
   });
 });

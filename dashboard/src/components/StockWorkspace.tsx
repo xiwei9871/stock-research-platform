@@ -50,11 +50,17 @@ function formatScore(profile: AssetProfile | null) {
 }
 
 function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
-  return (profile?.factor_values ?? []).map((row) => ({
+  const rawFactorRows = (profile?.factor_values ?? []).map((row) => ({
     group: formatValue(row.factor_group ?? '-'),
     name: formatValue(row.factor_name ?? '-'),
     value: row.factor_value ?? '-'
   }));
+  const scoreComponentRows = Object.entries(profile?.score?.score_components ?? {}).map(([name, value]) => ({
+    group: 'Score Component',
+    name,
+    value
+  }));
+  return [...rawFactorRows, ...scoreComponentRows];
 }
 
 function formatReason(reason: Record<string, unknown>) {
@@ -92,6 +98,35 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
     return mountedRef.current && requestId === profileRequestIdRef.current;
   }, []);
 
+  const loadAssetMatches = useCallback(async (query: string, profileRequestId: number) => {
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+
+    if (!query) {
+      setAssetMatches([]);
+      return;
+    }
+
+    setIsSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const items = await searchAssets(query, 8);
+      if (mountedRef.current && profileRequestId === profileRequestIdRef.current && requestId === searchRequestIdRef.current) {
+        setAssetMatches(items);
+      }
+    } catch (err: unknown) {
+      if (mountedRef.current && profileRequestId === profileRequestIdRef.current && requestId === searchRequestIdRef.current) {
+        setSearchError(err instanceof Error ? err.message : String(err));
+        setAssetMatches([]);
+      }
+    } finally {
+      if (mountedRef.current && profileRequestId === profileRequestIdRef.current && requestId === searchRequestIdRef.current) {
+        setIsSearchLoading(false);
+      }
+    }
+  }, []);
+
   const loadProfile = useCallback(
     async (
       nextAssetId = assetId,
@@ -121,19 +156,21 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
           return;
         }
         setProfile(nextProfile);
+        void loadAssetMatches(normalizedAssetId, requestId);
       } catch (err: unknown) {
         if (!isLatestProfileRequest(requestId)) {
           return;
         }
         setError(err instanceof Error ? err.message : String(err));
         setProfile(null);
+        setAssetMatches([]);
       } finally {
         if (isLatestProfileRequest(requestId)) {
           setIsLoading(false);
         }
       }
     },
-    [assetId, endDate, isLatestProfileRequest, startDate, tradeDate]
+    [assetId, endDate, isLatestProfileRequest, loadAssetMatches, startDate, tradeDate]
   );
 
   useEffect(() => {
@@ -146,38 +183,6 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       searchRequestIdRef.current += 1;
     };
   }, [initialAssetId]);
-
-  useEffect(() => {
-    const query = assetId.trim();
-    const requestId = searchRequestIdRef.current + 1;
-    searchRequestIdRef.current = requestId;
-
-    if (!query) {
-      setAssetMatches([]);
-      return;
-    }
-
-    setIsSearchLoading(true);
-    setSearchError(null);
-
-    searchAssets(query, 8)
-      .then((items) => {
-        if (mountedRef.current && requestId === searchRequestIdRef.current) {
-          setAssetMatches(items);
-        }
-      })
-      .catch((err: unknown) => {
-        if (mountedRef.current && requestId === searchRequestIdRef.current) {
-          setSearchError(err instanceof Error ? err.message : String(err));
-          setAssetMatches([]);
-        }
-      })
-      .finally(() => {
-        if (mountedRef.current && requestId === searchRequestIdRef.current) {
-          setIsSearchLoading(false);
-        }
-      });
-  }, [assetId]);
 
   useEffect(() => {
     if (!profile) {
