@@ -27,6 +27,69 @@ def test_overview_route_returns_payload(monkeypatch):
     assert response.json()["trade_date"] == "2026-05-29"
 
 
+def test_public_news_route_returns_filtered_items(monkeypatch):
+    captured = {}
+
+    def fake_load_public_news(**kwargs):
+        captured.update(kwargs)
+        return {
+            "items": [
+                {
+                    "news_id": "news-1",
+                    "source": "sina_finance",
+                    "source_channel": "7x24",
+                    "category": "live",
+                    "title": "全球快讯",
+                    "summary": "摘要",
+                    "url": "https://finance.sina.com.cn/live/1",
+                    "published_at": "2026-06-11 09:00:00",
+                    "collected_at": "2026-06-11T09:01:00+00:00",
+                    "raw_id": "",
+                    "raw_payload": {},
+                    "status": "available",
+                }
+            ],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "load_public_news_for_dashboard", fake_load_public_news)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "source": "sina_finance",
+        "category": "live",
+        "q": "快讯",
+        "limit": 10,
+        "offset": 2,
+    }
+    assert response.json()["items"][0]["title"] == "全球快讯"
+
+
+def test_public_news_refresh_route_returns_counts(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "refresh_public_news_for_dashboard",
+        lambda: {
+            "received": 2,
+            "stored": 2,
+            "items_received": 2,
+            "counts_by_category": {"live": 2},
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post("/api/public-news/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["counts_by_category"] == {"live": 2}
+
+
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):
     monkeypatch.setattr(dashboard_app, "load_asset_detail", lambda asset_id: None)
     client = TestClient(dashboard_app.create_app())

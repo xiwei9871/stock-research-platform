@@ -9,6 +9,8 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchPublicNews,
+  refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
   fetchShadowFollowUpResolution,
@@ -25,6 +27,7 @@ import type {
   ExperimentProposalRow,
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
+  PublicNewsItem,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -41,6 +44,7 @@ import { ExperimentProposalsPanel } from './components/ExperimentProposalsPanel'
 import { ExperimentReplayPanel } from './components/ExperimentReplayPanel';
 import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
+import { PublicNewsPanel } from './components/PublicNewsPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { ShadowOutcomesPanel } from './components/ShadowOutcomesPanel';
@@ -76,6 +80,8 @@ export function App() {
   const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
   const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
   const [outcomeAnalytics, setOutcomeAnalytics] = useState<OutcomeAnalyticsRow[]>([]);
+  const [publicNews, setPublicNews] = useState<PublicNewsItem[]>([]);
+  const [publicNewsWarnings, setPublicNewsWarnings] = useState<string[]>([]);
   const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
   const [experimentReplay, setExperimentReplay] = useState<ExperimentReplayRow[]>([]);
   const [shadowWatchlist, setShadowWatchlist] = useState<ShadowWatchlistRow[]>([]);
@@ -88,6 +94,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
+  const [publicNewsLoading, setPublicNewsLoading] = useState(false);
   const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
   const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
@@ -147,6 +154,37 @@ export function App() {
       ignore = true;
     };
   }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setPublicNewsLoading(true);
+    fetchPublicNews({ source: 'sina_finance', limit: 100, offset: 0 })
+      .then((payload) => {
+        if (!ignore) {
+          setPublicNews(payload.items);
+          setPublicNewsWarnings(payload.warnings ?? []);
+          setPublicNewsLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setPublicNews([]);
+          setPublicNewsWarnings([err instanceof Error ? err.message : String(err)]);
+          setPublicNewsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function handlePublicNewsRefresh() {
+    const refreshResult = await refreshPublicNews();
+    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 100, offset: 0 });
+    setPublicNews(payload.items);
+    setPublicNewsWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -441,6 +479,12 @@ export function App() {
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />
         <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
+        <PublicNewsPanel
+          items={publicNews}
+          warnings={publicNewsWarnings}
+          isLoading={publicNewsLoading}
+          onRefresh={handlePublicNewsRefresh}
+        />
         <ExperimentProposalsPanel rows={experimentProposals} />
         <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
         <ShadowWatchlistPanel rows={shadowWatchlist} isLoading={shadowWatchlistLoading} />
