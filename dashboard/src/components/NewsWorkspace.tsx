@@ -67,10 +67,12 @@ export function NewsWorkspace() {
         setItems(payload.items);
         setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
         setLastUpdatedAt(new Date().toLocaleTimeString());
+        setIsLoading(false);
       }
     } catch (err: unknown) {
       if (isLatestRequest(requestId)) {
         setWarnings([err instanceof Error ? err.message : String(err)]);
+        setIsLoading(false);
       }
     }
   }, [isLatestRequest, nextRequestId]);

@@ -947,6 +947,80 @@ describe('dashboard app shell', () => {
     }
   });
 
+  it('clears news loading when refresh completes before initial load', async () => {
+    let resolveInitialFetch: (payload: Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>) => void = () => undefined;
+    const initialFetch = new Promise<Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>>((resolve) => {
+      resolveInitialFetch = resolve;
+    });
+
+    apiMocks.fetchPublicNews.mockReset();
+    apiMocks.refreshPublicNews.mockReset();
+    apiMocks.fetchPublicNews.mockReturnValueOnce(initialFetch).mockResolvedValueOnce({
+      items: [
+        {
+          news_id: 'news-refresh',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '刷新后的快讯',
+          summary: '',
+          url: '',
+          published_at: '2026-06-11 10:03:00',
+          collected_at: '2026-06-11T02:03:00Z',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
+    });
+    apiMocks.refreshPublicNews.mockResolvedValue({
+      received: 1,
+      stored: 1,
+      items_received: 1,
+      counts_by_category: { live: 1 },
+      warnings: []
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    expect(await screen.findByText('Loading news...')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('Loading news...')).not.toBeInTheDocument();
+    expect(screen.getByText('刷新后的快讯')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveInitialFetch({
+        items: [
+          {
+            news_id: 'news-stale-initial',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '过期初始快讯',
+            summary: '',
+            url: '',
+            published_at: '2026-06-11 10:00:00',
+            collected_at: '2026-06-11T02:00:00Z',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+      await initialFetch;
+    });
+
+    expect(screen.getByText('刷新后的快讯')).toBeInTheDocument();
+    expect(screen.queryByText('过期初始快讯')).not.toBeInTheDocument();
+  });
+
   it('keeps manual news refresh results when an older interval refresh resolves later', async () => {
     let resolveIntervalFetch: (payload: Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>) => void = () => undefined;
     const intervalFetch = new Promise<Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>>((resolve) => {
