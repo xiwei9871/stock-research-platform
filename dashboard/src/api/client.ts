@@ -13,6 +13,8 @@ import type {
   FactorSelection,
   OutcomeAnalyticsRow,
   PlatformSummary,
+  PublicNewsRefreshResponse,
+  PublicNewsResponse,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -39,6 +41,14 @@ type OverviewParams = {
   topN: number;
 };
 
+type PublicNewsParams = {
+  source?: string;
+  category?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
   return getJson(
     `/api/dashboard/overview?trade_date=${encodeURIComponent(params.tradeDate)}` +
@@ -46,6 +56,24 @@ export async function fetchOverview(params: OverviewParams): Promise<DashboardOv
       `&watchlist_id=${encodeURIComponent(params.watchlistId)}` +
       `&top_n=${params.topN}`
   );
+}
+
+export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<PublicNewsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.source) searchParams.set('source', params.source);
+  if (params.category) searchParams.set('category', params.category);
+  if (params.q) searchParams.set('q', params.q);
+  searchParams.set('limit', String(params.limit ?? 100));
+  searchParams.set('offset', String(params.offset ?? 0));
+  return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
+  const response = await fetch('/api/public-news/refresh', { method: 'POST' });
+  if (!response.ok) {
+    throw new Error(`POST /api/public-news/refresh failed with ${response.status}`);
+  }
+  return response.json() as Promise<PublicNewsRefreshResponse>;
 }
 
 export async function fetchDailyBars(

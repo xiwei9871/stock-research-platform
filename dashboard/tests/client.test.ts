@@ -6,6 +6,8 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchPublicNews,
+  refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
   fetchShadowFollowUpResolution,
@@ -34,6 +36,40 @@ describe('dashboard API client', () => {
       '/api/dashboard/overview?trade_date=2026-05-29&score_version=manual_v1&watchlist_id=default&top_n=20'
     );
     expect(result.trade_date).toBe('2026-05-29');
+  });
+
+  it('fetches public news with filters and pagination', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ news_id: 'news-1', title: '全球快讯' }], warnings: [] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicNews({
+      source: 'sina_finance',
+      category: 'live',
+      q: '快讯',
+      limit: 10,
+      offset: 2
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2'
+    );
+    expect(result.items[0].title).toBe('全球快讯');
+  });
+
+  it('refreshes public news through POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ stored: 2, items_received: 2, counts_by_category: { live: 2 }, warnings: [] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await refreshPublicNews();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/public-news/refresh', { method: 'POST' });
+    expect(result.counts_by_category.live).toBe(2);
   });
 
   it('fetches asset decisions with date range and limit', async () => {

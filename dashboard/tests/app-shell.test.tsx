@@ -39,6 +39,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchPublicNews: vi.fn(),
+  refreshPublicNews: vi.fn(),
   fetchShadowAnalyticsReview: vi.fn(),
   fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowFollowUpResolution: vi.fn(),
@@ -594,6 +596,32 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
     apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
     apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
+    apiMocks.fetchPublicNews.mockResolvedValue({
+      items: [
+        {
+          news_id: 'news-live-1',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '全球快讯',
+          summary: '全球财经快讯摘要',
+          url: 'https://finance.sina.com.cn/live/1',
+          published_at: '2026-06-11 09:00:00',
+          collected_at: '2026-06-11T09:01:00+00:00',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
+    });
+    apiMocks.refreshPublicNews.mockResolvedValue({
+      received: 1,
+      stored: 1,
+      items_received: 1,
+      counts_by_category: { live: 1 },
+      warnings: []
+    });
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
@@ -635,6 +663,10 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Reports workspace' }));
     expect(await screen.findByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open News workspace' }));
+    expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
+    expect(await screen.findByText('全球快讯')).toBeVisible();
   });
 
   it('switches from cockpit to strategy validation mode', async () => {

@@ -3,10 +3,11 @@ import { BacktestLabWorkspace } from './BacktestLabWorkspace';
 import { DataExplorerWorkspace } from './DataExplorerWorkspace';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { HomeCockpit } from './HomeCockpit';
+import { NewsWorkspace } from './NewsWorkspace';
 import { ReportsWorkspace } from './ReportsWorkspace';
 import { StrategyValidationWorkspace } from './StrategyValidationWorkspace';
 
-type WorkspaceMode = 'home' | 'data' | 'factors' | 'backtests' | 'strategy' | 'reports';
+type WorkspaceMode = 'home' | 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
 
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
@@ -14,6 +15,7 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'factors', label: 'Factor Lab' },
   { mode: 'backtests', label: 'Backtest Lab' },
   { mode: 'strategy', label: 'Strategy Validation' },
+  { mode: 'news', label: 'News' },
   { mode: 'reports', label: 'Reports' }
 ];
 
@@ -43,6 +45,7 @@ export function AppShell() {
         {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
         {workspaceMode === 'backtests' ? <BacktestLabWorkspace /> : null}
         {workspaceMode === 'strategy' ? <StrategyValidationWorkspace /> : null}
+        {workspaceMode === 'news' ? <NewsWorkspace /> : null}
         {workspaceMode === 'reports' ? <ReportsWorkspace /> : null}
       </section>
     </main>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchBacktestStrategies, fetchPlatformSummary } from '../api/client';
 import type { PlatformSummary, ScoreRow, StrategyCatalogItem } from '../api/types';
 
-type WorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'reports';
+type WorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
 
 type HomeCockpitProps = {
   onNavigate: (mode: WorkspaceMode) => void;
@@ -66,6 +66,9 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         </button>
         <button type="button" onClick={() => onNavigate('strategy')}>
           Strategy Validation
+        </button>
+        <button type="button" onClick={() => onNavigate('news')}>
+          News
         </button>
         <button type="button" onClick={() => onNavigate('reports')}>
           Reports

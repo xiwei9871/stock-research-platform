@@ -49,6 +49,10 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.public_news.service import (
+    load_public_news_for_dashboard,
+    refresh_public_news_for_dashboard,
+)
 
 
 def create_app() -> FastAPI:
@@ -66,6 +70,26 @@ def create_app() -> FastAPI:
     @app.get("/api/platform/summary")
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
         return load_platform_summary(score_version=score_version, top_n=top_n)
+
+    @app.get("/api/public-news")
+    def public_news(
+        source: str | None = None,
+        category: str | None = None,
+        q: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        return load_public_news_for_dashboard(
+            source=source,
+            category=category,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.post("/api/public-news/refresh")
+    def public_news_refresh():
+        return refresh_public_news_for_dashboard()
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):

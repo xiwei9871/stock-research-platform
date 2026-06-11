@@ -583,3 +583,31 @@ export type StrategyReplayPayload = {
   metrics: StrategyMetricRow[];
   artifacts: StrategyEvidenceArtifact[];
 };
+
+export type PublicNewsItem = {
+  news_id: string;
+  source: string;
+  source_channel: string;
+  category: string;
+  title: string;
+  summary: string;
+  url: string;
+  published_at: string;
+  collected_at: string;
+  raw_id: string;
+  raw_payload: Record<string, unknown>;
+  status: string;
+};
+
+export type PublicNewsResponse = {
+  items: PublicNewsItem[];
+  warnings: string[];
+};
+
+export type PublicNewsRefreshResponse = {
+  received?: number;
+  stored: number;
+  items_received: number;
+  counts_by_category: Record<string, number>;
+  warnings: string[];
+};
