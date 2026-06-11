@@ -229,6 +229,20 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('News flow unavailable: news unavailable')).toBeVisible();
   });
 
+  it('renders core cockpit content while optional home widgets are still pending', async () => {
+    vi.mocked(api.fetchMarketMonitorEod).mockReturnValueOnce(new Promise(() => undefined));
+    vi.mocked(api.fetchPublicNews).mockReturnValueOnce(new Promise(() => undefined));
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
+    expect(screen.getByText('Market Date')).toBeVisible();
+    expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
+    expect(screen.getByText('Strategy Health')).toBeVisible();
+    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Open Strategy Lab' })).toBeVisible();
+  });
+
   it('navigates to Data Explorer from Home', async () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: 'Research Cockpit' });

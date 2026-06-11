@@ -56,16 +56,17 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setError(null);
     setWidgetWarnings([]);
 
+    const addWidgetWarning = (warning: string) => {
+      setWidgetWarnings((current) => [...current, warning]);
+    };
+
     Promise.allSettled([
       fetchPlatformSummary(),
-      fetchBacktestStrategies(),
-      fetchMarketMonitorEod({ topN: 5 }),
-      fetchPublicNews({ source: 'sina_finance', limit: 5 })
-    ]).then(([summaryResult, strategiesResult, marketResult, newsResult]) => {
+      fetchBacktestStrategies()
+    ]).then(([summaryResult, strategiesResult]) => {
       if (ignore) return;
 
       const criticalErrors: string[] = [];
-      const optionalWarnings: string[] = [];
 
       if (summaryResult.status === 'fulfilled') {
         setSummary(summaryResult.value);
@@ -81,24 +82,33 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         criticalErrors.push(`Strategies unavailable: ${errorMessage(strategiesResult.reason)}`);
       }
 
-      if (marketResult.status === 'fulfilled') {
-        setMarketMonitor(marketResult.value);
-      } else {
-        setMarketMonitor(null);
-        optionalWarnings.push(`Market pulse unavailable: ${errorMessage(marketResult.reason)}`);
-      }
-
-      if (newsResult.status === 'fulfilled') {
-        setNewsItems(newsResult.value.items);
-      } else {
-        setNewsItems([]);
-        optionalWarnings.push(`News flow unavailable: ${errorMessage(newsResult.reason)}`);
-      }
-
       setError(criticalErrors.length > 0 ? criticalErrors.join('; ') : null);
-      setWidgetWarnings(optionalWarnings);
       setIsLoading(false);
     });
+
+    void fetchMarketMonitorEod({ topN: 5 }).then(
+      (marketPayload) => {
+        if (!ignore) setMarketMonitor(marketPayload);
+      },
+      (err: unknown) => {
+        if (!ignore) {
+          setMarketMonitor(null);
+          addWidgetWarning(`Market pulse unavailable: ${errorMessage(err)}`);
+        }
+      }
+    );
+
+    void fetchPublicNews({ source: 'sina_finance', limit: 5 }).then(
+      (newsPayload) => {
+        if (!ignore) setNewsItems(newsPayload.items);
+      },
+      (err: unknown) => {
+        if (!ignore) {
+          setNewsItems([]);
+          addWidgetWarning(`News flow unavailable: ${errorMessage(err)}`);
+        }
+      }
+    );
 
     return () => {
       ignore = true;
