@@ -482,8 +482,9 @@ test('platform full flow covers all research workspaces with mocked API response
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open Backtest Lab workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Run Backtest' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'LHB Shortline Combo' })).toBeVisible();
   await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Mid Trend Combo' })).toBeVisible();
   await expect(page.locator('.backtest-catalog-row').filter({ hasText: 'Tech Bottleneck Combo' })).toBeVisible();
@@ -495,7 +496,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByRole('button', { name: 'Load Cached Replay Comparison' })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'strategy' })).not.toContainText('Manual V1 TopN Rotation');
   await page.getByRole('combobox', { name: 'strategy' }).selectOption('lhb_shortline');
-  await page.getByRole('button', { name: 'Run Fresh Backtest' }).click();
+  await page.getByRole('button', { name: 'Run Backtest' }).click();
   await expect(page.getByRole('heading', { name: 'Validated backtest' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Result Summary' })).toBeVisible();
   await expect(page.getByText('LHB Shortline Combo').last()).toBeVisible();
@@ -503,7 +504,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
   const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
   await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
-  await page.getByRole('button', { name: 'Run Fresh Comparison' }).click();
+  await page.getByRole('button', { name: 'Run Comparison' }).click();
   await expect(page.getByRole('heading', { name: 'Strategy Comparison' })).toBeVisible();
   await expect(page.getByText('0 / 3 completed')).toBeVisible();
   const comparisonTable = page.locator('.backtest-comparison-table');
@@ -526,14 +527,14 @@ test('platform full flow covers all research workspaces with mocked API response
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
+  await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByText('support confirmed')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open Reports workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Open Generated Reports workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
   await expect(page.getByText('Daily TopN')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);

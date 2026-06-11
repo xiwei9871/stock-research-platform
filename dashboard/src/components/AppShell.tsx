@@ -21,7 +21,6 @@ type WorkspaceMode =
   | 'strategyLab'
   | 'data'
   | 'generatedReports';
-type HomeWorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
 
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
@@ -38,17 +37,6 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
 
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
-  const handleHomeNavigate = (mode: HomeWorkspaceMode) => {
-    if (mode === 'backtests' || mode === 'strategy') {
-      setWorkspaceMode('strategyLab');
-      return;
-    }
-    if (mode === 'reports') {
-      setWorkspaceMode('generatedReports');
-      return;
-    }
-    setWorkspaceMode(mode);
-  };
 
   return (
     <main className="platform-shell">
@@ -68,7 +56,7 @@ export function AppShell() {
         ))}
       </aside>
       <section className="platform-workspace">
-        {workspaceMode === 'home' ? <HomeCockpit onNavigate={handleHomeNavigate} /> : null}
+        {workspaceMode === 'home' ? <HomeCockpit onNavigate={(mode) => setWorkspaceMode(mode)} /> : null}
         {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
         {workspaceMode === 'researchReports' ? <ResearchReportsWorkspace /> : null}
         {workspaceMode === 'stock' ? <StockWorkspace /> : null}

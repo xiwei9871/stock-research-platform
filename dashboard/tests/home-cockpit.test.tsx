@@ -155,6 +155,16 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('Tech Bottleneck Combo')).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
     expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
+    const quickActions = within(screen.getByRole('navigation', { name: 'Quick actions' }));
+    expect(quickActions.getByRole('button', { name: 'Market Monitor' })).toBeVisible();
+    expect(quickActions.getByRole('button', { name: 'Research Reports' })).toBeVisible();
+    expect(quickActions.getByRole('button', { name: 'Stock Workspace' })).toBeVisible();
+    expect(quickActions.getByRole('button', { name: 'Watchlist' })).toBeVisible();
+    expect(quickActions.getByRole('button', { name: 'Strategy Lab' })).toBeVisible();
+    expect(quickActions.getByRole('button', { name: 'Generated Reports' })).toBeVisible();
+    expect(quickActions.queryByRole('button', { name: 'Backtest Lab' })).not.toBeInTheDocument();
+    expect(quickActions.queryByRole('button', { name: 'Strategy Validation' })).not.toBeInTheDocument();
+    expect(quickActions.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument();
   });
 
   it('navigates to Data Explorer from Home', async () => {
@@ -178,18 +188,21 @@ describe('AppShell and HomeCockpit', () => {
       'aria-current',
       'page'
     );
-    expect(screen.getByRole('button', { name: 'Open Strategy Validation workspace' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Open Strategy Lab workspace' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Open Generated Reports workspace' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Open Strategy Validation workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Reports workspace' })).not.toBeInTheDocument();
   });
 
-  it('navigates to Reports workspace and loads reports for the default trade date', async () => {
+  it('navigates to Generated Reports workspace and loads reports for the default trade date', async () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: 'Research Cockpit' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
-    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Reports workspace' }));
+    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible());
-    expect(screen.getByText('Local research artifacts and generated reports.')).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible());
+    expect(screen.getByText('Local generated artifacts from TopN, risk, factor, backtest, and validation jobs.')).toBeVisible();
     expect(api.fetchOverview).toHaveBeenCalledWith({
       tradeDate: '2026-06-08',
       scoreVersion: 'manual_v1',
@@ -204,8 +217,8 @@ describe('AppShell and HomeCockpit', () => {
     await screen.findByRole('heading', { name: 'Research Cockpit' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
-    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Reports workspace' }));
-    await screen.findByRole('heading', { name: 'Reports', level: 1 });
+    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Generated Reports workspace' }));
+    await screen.findByRole('heading', { name: 'Generated Reports', level: 1 });
 
     fireEvent.change(screen.getByLabelText('report trade date'), { target: { value: '2026-06-05' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load Reports' }));

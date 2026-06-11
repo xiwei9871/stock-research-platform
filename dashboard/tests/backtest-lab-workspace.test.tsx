@@ -378,13 +378,14 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.queryByRole('heading', { name: 'Validated backtest' })).not.toBeInTheDocument();
   });
 
-  it('opens Backtest Lab from AppShell side navigation', async () => {
+  it('opens Backtest Lab through Strategy Lab from AppShell side navigation', async () => {
     render(<AppShell />);
 
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
-    fireEvent.click(navigation.getByRole('button', { name: 'Open Backtest Lab workspace' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
 
-    expect(await screen.findByRole('heading', { name: 'Backtest Lab' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Run Backtest', selected: true })).toBeInTheDocument();
     expect((await screen.findAllByText('LHB Shortline Combo')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
   });

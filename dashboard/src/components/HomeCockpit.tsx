@@ -2,11 +2,32 @@ import { useEffect, useState } from 'react';
 import { fetchBacktestStrategies, fetchPlatformSummary } from '../api/client';
 import type { PlatformSummary, ScoreRow, StrategyCatalogItem } from '../api/types';
 
-type WorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
+type WorkspaceMode =
+  | 'market'
+  | 'news'
+  | 'researchReports'
+  | 'stock'
+  | 'watchlist'
+  | 'factors'
+  | 'strategyLab'
+  | 'data'
+  | 'generatedReports';
 
 type HomeCockpitProps = {
   onNavigate: (mode: WorkspaceMode) => void;
 };
+
+const QUICK_ACTIONS: Array<{ mode: WorkspaceMode; label: string }> = [
+  { mode: 'market', label: 'Market Monitor' },
+  { mode: 'news', label: 'News' },
+  { mode: 'researchReports', label: 'Research Reports' },
+  { mode: 'stock', label: 'Stock Workspace' },
+  { mode: 'watchlist', label: 'Watchlist' },
+  { mode: 'factors', label: 'Factor Lab' },
+  { mode: 'strategyLab', label: 'Strategy Lab' },
+  { mode: 'data', label: 'Data Explorer' },
+  { mode: 'generatedReports', label: 'Generated Reports' }
+];
 
 function formatCount(value: number | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '-';
@@ -55,24 +76,11 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       </header>
 
       <nav className="quick-actions" aria-label="Quick actions">
-        <button type="button" onClick={() => onNavigate('data')}>
-          Data Explorer
-        </button>
-        <button type="button" onClick={() => onNavigate('factors')}>
-          Factor Lab
-        </button>
-        <button type="button" onClick={() => onNavigate('backtests')}>
-          Backtest Lab
-        </button>
-        <button type="button" onClick={() => onNavigate('strategy')}>
-          Strategy Validation
-        </button>
-        <button type="button" onClick={() => onNavigate('news')}>
-          News
-        </button>
-        <button type="button" onClick={() => onNavigate('reports')}>
-          Reports
-        </button>
+        {QUICK_ACTIONS.map((item) => (
+          <button type="button" key={item.mode} onClick={() => onNavigate(item.mode)}>
+            {item.label}
+          </button>
+        ))}
       </nav>
 
       {error ? <p className="error-text">{error}</p> : null}

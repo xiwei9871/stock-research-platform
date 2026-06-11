@@ -661,7 +661,8 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
+  await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
+  await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
 
@@ -678,7 +679,8 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
   await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
-  await page.getByRole('button', { name: 'Open Strategy Validation workspace' }).click();
+  await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
+  await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
