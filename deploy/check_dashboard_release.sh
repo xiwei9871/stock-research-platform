@@ -64,7 +64,7 @@ echo "Checking /api/backtests/run-fresh endpoint wiring"
 fetch \
   -H "Content-Type: application/json" \
   -X POST \
-  --data "{\"strategy_id\":\"lhb_shortline_combo_v1\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":20,\"rebalance\":\"daily\",\"cost_bps\":10,\"max_positions\":2}" \
+  --data "{\"strategy_id\":\"lhb_shortline\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":20,\"rebalance\":\"daily\",\"cost_bps\":10,\"max_positions\":2}" \
   "${API_BASE%/}/backtests/run-fresh" >/dev/null
 
 echo "Dashboard release check passed."
