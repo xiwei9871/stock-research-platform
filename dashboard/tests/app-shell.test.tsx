@@ -753,6 +753,36 @@ describe('dashboard app shell', () => {
     await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });
 
+  it('supports keyboard navigation between Strategy Lab tabs', async () => {
+    render(<App />);
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+
+    const runBacktestTab = await screen.findByRole('tab', { name: 'Run Backtest' });
+    runBacktestTab.focus();
+    expect(runBacktestTab).toHaveFocus();
+
+    fireEvent.keyDown(runBacktestTab, { key: 'ArrowRight' });
+    const validationTab = screen.getByRole('tab', { name: 'Validation Replay' });
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: 'Validation Replay' })).toHaveAttribute('id', 'strategy-lab-panel-validation');
+
+    fireEvent.keyDown(validationTab, { key: 'ArrowLeft' });
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: 'Run Backtest' })).toHaveAttribute('id', 'strategy-lab-panel-backtest');
+
+    fireEvent.keyDown(runBacktestTab, { key: 'End' });
+    expect(validationTab).toHaveClass('active');
+    expect(validationTab).toHaveFocus();
+
+    fireEvent.keyDown(validationTab, { key: 'Home' });
+    expect(runBacktestTab).toHaveClass('active');
+    expect(runBacktestTab).toHaveFocus();
+  });
+
   it('renders invalid shadow analytics review metrics as n/a instead of NaN%', async () => {
     render(
       <ShadowAnalyticsReviewPanel
