@@ -26,7 +26,9 @@ vi.mock('../src/api/client', () => ({
   fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowFollowUpResolution: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
-  fetchStrategyValidationReplay: vi.fn()
+  fetchStrategyValidationReplay: vi.fn(),
+  fetchMarketMonitorEod: vi.fn(),
+  fetchPublicNews: vi.fn()
 }));
 
 import * as api from '../src/api/client';
@@ -135,6 +137,46 @@ describe('AppShell and HomeCockpit', () => {
       factor_values: [],
       coverage: {}
     });
+    vi.mocked(api.fetchMarketMonitorEod).mockResolvedValue({
+      trade_date: '2026-06-10',
+      freshness: { mode: 'eod', label: 'Last Completed Trading Day', is_realtime: false },
+      coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+      market_breadth: {
+        advancers: null,
+        decliners: null,
+        limit_up: null,
+        limit_down: null,
+        advancing_ratio: null,
+        turnover_change_pct: null,
+        status: 'pending_source'
+      },
+      index_snapshot: [],
+      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+      unusual_moves: [],
+      watchlist_alerts: [],
+      strategy_signal_summary: { topn_preview_count: 0, topn_preview: [], risk_filter_counts: {} },
+      generated_reports: [],
+      warnings: []
+    });
+    vi.mocked(api.fetchPublicNews).mockResolvedValue({
+      items: [
+        {
+          news_id: 'news-home',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '首页快讯',
+          summary: '',
+          url: '',
+          published_at: '2026-06-11 10:00:00',
+          collected_at: '2026-06-11T02:00:00Z',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
+    });
   });
 
   afterEach(() => {
@@ -146,15 +188,19 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
 
     expect(await screen.findByText('Research Cockpit')).toBeVisible();
-    expect(screen.getByText('Latest Market Data')).toBeVisible();
+    expect(screen.getByText('Market Date')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
-    expect(screen.getByText('Latest Factor Data')).toBeVisible();
+    expect(screen.getByText('Factor Date')).toBeVisible();
     expect(screen.getByText('2026-06-07')).toBeVisible();
+    expect(screen.getByText('Today Focus')).toBeVisible();
+    expect(screen.getByText('Market Pulse')).toBeVisible();
+    expect(screen.getByText('News Flow')).toBeVisible();
+    expect(screen.getByText('Strategy Health')).toBeVisible();
+    expect(screen.getByText('首页快讯')).toBeVisible();
     expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
     expect(screen.getByText('Mid Trend Combo')).toBeVisible();
     expect(screen.getByText('Tech Bottleneck Combo')).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
-    expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
     const quickActions = within(screen.getByRole('navigation', { name: 'Quick actions' }));
     expect(quickActions.getByRole('button', { name: 'Market Monitor' })).toBeVisible();
     expect(quickActions.getByRole('button', { name: 'Research Reports' })).toBeVisible();

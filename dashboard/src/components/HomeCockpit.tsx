@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fetchBacktestStrategies, fetchPlatformSummary } from '../api/client';
-import type { PlatformSummary, ScoreRow, StrategyCatalogItem } from '../api/types';
+import { fetchBacktestStrategies, fetchMarketMonitorEod, fetchPlatformSummary, fetchPublicNews } from '../api/client';
+import type { MarketMonitorPayload, PlatformSummary, PublicNewsItem, ScoreRow, StrategyCatalogItem } from '../api/types';
 
 type WorkspaceMode =
   | 'market'
@@ -29,7 +29,7 @@ const QUICK_ACTIONS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'generatedReports', label: 'Generated Reports' }
 ];
 
-function formatCount(value: number | undefined) {
+function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '-';
 }
 
@@ -40,6 +40,8 @@ function formatScore(row: ScoreRow) {
 export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
+  const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
+  const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,11 +50,18 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setIsLoading(true);
     setError(null);
 
-    Promise.all([fetchPlatformSummary(), fetchBacktestStrategies()])
-      .then(([summaryPayload, strategyRows]) => {
+    Promise.all([
+      fetchPlatformSummary(),
+      fetchBacktestStrategies(),
+      fetchMarketMonitorEod({ topN: 5 }),
+      fetchPublicNews({ source: 'sina_finance', limit: 5 })
+    ])
+      .then(([summaryPayload, strategyRows, marketPayload, newsPayload]) => {
         if (!ignore) {
           setSummary(summaryPayload);
           setStrategies(strategyRows);
+          setMarketMonitor(marketPayload);
+          setNewsItems(newsPayload.items);
           setIsLoading(false);
         }
       })
@@ -85,70 +94,96 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      <section className="cockpit-grid" aria-label="Platform summary">
-        <div className="metric-card">
-          <span>Latest Market Data</span>
+      <section className="status-strip" aria-label="Dashboard status">
+        <div>
+          <span>Market Date</span>
           <strong>{summary?.latest_market_date ?? '-'}</strong>
         </div>
-        <div className="metric-card">
-          <span>Latest Factor Data</span>
+        <div>
+          <span>Factor Date</span>
           <strong>{summary?.latest_factor_date ?? '-'}</strong>
         </div>
-        <div className="metric-card">
-          <span>Latest Score Data</span>
-          <strong>{summary?.latest_score_date ?? '-'}</strong>
+        <div>
+          <span>EOD Monitor</span>
+          <strong>{marketMonitor?.trade_date || '-'}</strong>
         </div>
-        <div className="metric-card">
-          <span>Market Coverage</span>
-          <strong>{formatCount(summary?.market_asset_count)}</strong>
+        <div>
+          <span>Strategies</span>
+          <strong>{formatCount(strategies.length)}</strong>
         </div>
-        <div className="metric-card">
-          <span>Score Coverage</span>
-          <strong>{formatCount(summary?.score_asset_count)}</strong>
-        </div>
-        <div className="metric-card">
-          <span>Factor Coverage</span>
-          <strong>{formatCount(summary?.factor_count)}</strong>
-        </div>
+      </section>
+
+      <section className="cockpit-layout">
+        <section className="workspace-panel">
+          <div className="section-heading">
+            <h2>Today Focus</h2>
+            <span className="status-chip neutral">candidate pool</span>
+          </div>
+          <div className="data-table">
+            {(summary?.topn_preview ?? []).slice(0, 5).map((row) => (
+              <div className="data-table-row three-col" key={`${row.trade_date}-${row.asset_id}`}>
+                <span>{row.rank}</span>
+                <strong>{row.asset_id}</strong>
+                <span>{formatScore(row)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="workspace-panel">
+          <div className="section-heading">
+            <h2>Market Pulse</h2>
+            <span className="status-chip neutral">EOD</span>
+          </div>
+          <div className="metric-row">
+            <span>Market Assets</span>
+            <strong>{formatCount(marketMonitor?.coverage.market_assets)}</strong>
+          </div>
+          <div className="metric-row">
+            <span>Score Assets</span>
+            <strong>{formatCount(marketMonitor?.coverage.score_assets)}</strong>
+          </div>
+          <div className="metric-row">
+            <span>Factor Count</span>
+            <strong>{formatCount(marketMonitor?.coverage.factor_count)}</strong>
+          </div>
+        </section>
+
+        <section className="workspace-panel">
+          <div className="section-heading">
+            <h2>News Flow</h2>
+            <button type="button" onClick={() => onNavigate('news')}>
+              Open
+            </button>
+          </div>
+          <div className="compact-news-list">
+            {newsItems.map((item) => (
+              <span key={item.news_id}>{item.title}</span>
+            ))}
+          </div>
+        </section>
       </section>
 
       <section className="workspace-panel">
         <div className="section-heading">
-          <h2>Built-in Strategies</h2>
-          {isLoading ? <span className="muted">Loading...</span> : null}
+          <h2>Strategy Health</h2>
+          {isLoading ? (
+            <span className="muted">Loading...</span>
+          ) : (
+            <button type="button" onClick={() => onNavigate('strategyLab')}>
+              Open Strategy Lab
+            </button>
+          )}
         </div>
         <div className="strategy-card-grid">
-          {strategies.map((strategy) => {
-            const inputs = strategy.factor_groups.length > 0 ? strategy.factor_groups : strategy.signal_inputs;
-            return (
-              <article className="strategy-summary-card" key={strategy.strategy_id}>
-                <div className="strategy-card-header">
-                  <strong>{strategy.strategy_name}</strong>
-                </div>
-                <p>{strategy.description}</p>
-                <small>{inputs.join(', ') || 'No signal inputs listed'}</small>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="workspace-panel">
-        <div className="section-heading">
-          <h2>TopN Preview</h2>
-          <span className="muted">manual_v1 factor-score candidate pool, not a combo strategy result</span>
-        </div>
-        <div className="dense-list topn-preview-list">
-          {(summary?.topn_preview ?? []).map((row) => (
-            <div className="list-row" key={`${row.trade_date}-${row.asset_id}`}>
-              <span>{row.rank}</span>
-              <strong>{row.asset_id}</strong>
-              <span>{formatScore(row)}</span>
-            </div>
+          {strategies.slice(0, 4).map((strategy) => (
+            <article className="strategy-summary-card" key={strategy.strategy_id}>
+              <div className="strategy-card-header">
+                <strong>{strategy.strategy_name}</strong>
+              </div>
+              <p>{strategy.description}</p>
+            </article>
           ))}
-          {!isLoading && (summary?.topn_preview ?? []).length === 0 ? (
-            <p className="muted">No TopN preview rows available.</p>
-          ) : null}
         </div>
       </section>
     </section>

@@ -688,6 +688,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
+    apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
   });
 
   afterEach(() => {
@@ -699,10 +700,78 @@ describe('dashboard app shell', () => {
 
     expect(screen.getByText('Stock Research')).toBeVisible();
     expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-    expect(screen.getByText('Latest Market Data')).toBeVisible();
+    expect(screen.getByText('Market Date')).toBeVisible();
+    expect(screen.getByText('Today Focus')).toBeVisible();
+    expect(screen.getByText('Market Pulse')).toBeVisible();
+    expect(screen.getByText('News Flow')).toBeVisible();
+    expect(screen.getByText('Strategy Health')).toBeVisible();
     expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
-    expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
+  });
+
+  it('renders the redesigned home cockpit sections', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce({
+      trade_date: '2026-06-10',
+      freshness: { mode: 'eod', label: 'Last Completed Trading Day', is_realtime: false },
+      coverage: { market_assets: 5300, score_assets: 3100, factor_count: 42 },
+      market_breadth: {
+        advancers: null,
+        decliners: null,
+        limit_up: null,
+        limit_down: null,
+        advancing_ratio: null,
+        turnover_change_pct: null,
+        status: 'pending_source'
+      },
+      index_snapshot: [],
+      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+      unusual_moves: [],
+      watchlist_alerts: [],
+      strategy_signal_summary: {
+        topn_preview_count: 1,
+        topn_preview: [
+          {
+            trade_date: '2026-06-10',
+            asset_id: '000001.SZ',
+            rank: 1,
+            score_total: 91.2,
+            score_version: 'manual_v1',
+            score_components: {}
+          }
+        ],
+        risk_filter_counts: {}
+      },
+      generated_reports: [],
+      warnings: []
+    });
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      items: [
+        {
+          news_id: 'news-home-1',
+          source: 'sina_finance',
+          source_channel: '7x24',
+          category: 'live',
+          title: '首页新闻',
+          summary: '',
+          url: '',
+          published_at: '2026-06-11 10:00:00',
+          collected_at: '2026-06-11T02:00:00Z',
+          raw_id: '',
+          raw_payload: {},
+          status: 'available'
+        }
+      ],
+      warnings: []
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeInTheDocument();
+    expect(screen.getByText('Today Focus')).toBeInTheDocument();
+    expect(screen.getByText('Market Pulse')).toBeInTheDocument();
+    expect(screen.getByText('News Flow')).toBeInTheDocument();
+    expect(screen.getByText('Strategy Health')).toBeInTheDocument();
+    expect(screen.getByText('首页新闻')).toBeInTheDocument();
   });
 
   it('exposes the redesigned research cockpit navigation', async () => {
@@ -751,7 +820,7 @@ describe('dashboard app shell', () => {
       resolveMarketMonitor = resolve;
     });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    apiMocks.fetchMarketMonitorEod.mockReturnValueOnce(pendingMarketMonitor);
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload()).mockReturnValueOnce(pendingMarketMonitor);
 
     try {
       render(<App />);
@@ -801,15 +870,18 @@ describe('dashboard app shell', () => {
     const secondRequest = new Promise<MarketMonitorPayload>((resolve) => {
       resolveSecondRequest = resolve;
     });
-    apiMocks.fetchMarketMonitorEod.mockReturnValueOnce(firstRequest).mockReturnValueOnce(secondRequest);
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockReturnValueOnce(firstRequest)
+      .mockReturnValueOnce(secondRequest);
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
-    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(1);
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole('button', { name: 'Load Latest EOD' }));
-    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(2);
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(3);
 
     await act(async () => {
       resolveSecondRequest(
@@ -955,25 +1027,28 @@ describe('dashboard app shell', () => {
 
     apiMocks.fetchPublicNews.mockReset();
     apiMocks.refreshPublicNews.mockReset();
-    apiMocks.fetchPublicNews.mockReturnValueOnce(initialFetch).mockResolvedValueOnce({
-      items: [
-        {
-          news_id: 'news-refresh',
-          source: 'sina_finance',
-          source_channel: '7x24',
-          category: 'live',
-          title: '刷新后的快讯',
-          summary: '',
-          url: '',
-          published_at: '2026-06-11 10:03:00',
-          collected_at: '2026-06-11T02:03:00Z',
-          raw_id: '',
-          raw_payload: {},
-          status: 'available'
-        }
-      ],
-      warnings: []
-    });
+    apiMocks.fetchPublicNews
+      .mockResolvedValueOnce({ items: [], warnings: [] })
+      .mockReturnValueOnce(initialFetch)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            news_id: 'news-refresh',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '刷新后的快讯',
+            summary: '',
+            url: '',
+            published_at: '2026-06-11 10:03:00',
+            collected_at: '2026-06-11T02:03:00Z',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
     apiMocks.refreshPublicNews.mockResolvedValue({
       received: 1,
       stored: 1,
@@ -1032,6 +1107,7 @@ describe('dashboard app shell', () => {
       apiMocks.fetchPublicNews.mockReset();
       apiMocks.refreshPublicNews.mockReset();
       apiMocks.fetchPublicNews
+        .mockResolvedValueOnce({ items: [], warnings: [] })
         .mockResolvedValueOnce({
           items: [
             {
@@ -1089,7 +1165,7 @@ describe('dashboard app shell', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60000);
       });
-      expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(2);
+      expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(3);
 
       fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
       await act(async () => {
