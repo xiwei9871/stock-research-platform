@@ -1084,6 +1084,7 @@ table.data-table td {
 @media (max-width: 1080px) {
   .platform-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .platform-nav {
@@ -1092,8 +1093,14 @@ table.data-table td {
     z-index: 2;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    align-content: start;
+    align-items: start;
     border-right: 0;
     border-bottom: 1px solid #cfd8e3;
+  }
+
+  .platform-nav button {
+    align-self: start;
   }
 
   .cockpit-layout {
