@@ -420,19 +420,27 @@ def collect_open_auction_spot_snapshot(
     upserted = 0
     skipped = 0
     error = ""
+    failed = False
+    params = {
+        "trade_date": target_date.isoformat(),
+        "target_time": target_time,
+        "snapshot_time": captured_at.isoformat(timespec="seconds"),
+    }
     try:
         rows = query_eastmoney_spot_snapshot_rows()
         for row in rows:
             try:
-                ts_code_from_spot_symbol(_first_present(row, ["代码", "symbol", "raw_symbol"]))
+                open_auction_spot_snapshot_staging_row(
+                    row,
+                    trade_date=target_date,
+                    snapshot_time=captured_at,
+                    target_time=target_time,
+                    source_endpoint="stock_zh_a_spot_em",
+                    params=params,
+                )
                 valid_rows.append(row)
-            except ValueError:
+            except (ValueError, TypeError):
                 skipped += 1
-        params = {
-            "trade_date": target_date.isoformat(),
-            "target_time": target_time,
-            "snapshot_time": captured_at.isoformat(timespec="seconds"),
-        }
         upserted = upsert_stock_open_auction_spot_snapshots(
             valid_rows,
             trade_date=target_date,
@@ -441,24 +449,23 @@ def collect_open_auction_spot_snapshot(
             params=params,
         )
     except Exception as exc:  # pragma: no cover - integration safety path.
+        failed = True
         error = str(exc)
 
-    detail = pd.DataFrame(
-        [
-            {
-                "trade_date": target_date.isoformat(),
-                "target_time": target_time,
-                "snapshot_time": captured_at.isoformat(timespec="seconds"),
-                "queried_rows": len(rows),
-                "upserted_rows": upserted,
-                "skipped_rows": skipped,
-                "error": error,
-            }
-        ]
-    )
+    detail_row = {
+        "trade_date": target_date.isoformat(),
+        "target_time": target_time,
+        "snapshot_time": captured_at.isoformat(timespec="seconds"),
+        "queried_rows": len(rows),
+        "upserted_rows": upserted,
+        "skipped_rows": skipped,
+        "failed": failed,
+        "error": error,
+    }
+    detail = pd.DataFrame([detail_row])
     return {
         "detail": detail,
-        "summary": detail.iloc[0].to_dict(),
+        "summary": detail_row,
     }
 
 

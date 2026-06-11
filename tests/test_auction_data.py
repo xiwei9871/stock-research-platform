@@ -544,6 +544,80 @@ def test_collect_open_auction_spot_snapshot_queries_once_and_reports(monkeypatch
     assert result["summary"]["queried_rows"] == 1
     assert result["summary"]["upserted_rows"] == 1
     assert result["summary"]["skipped_rows"] == 0
+    assert result["summary"]["failed"] is False
+
+
+def test_collect_open_auction_spot_snapshot_skips_bad_rows_without_losing_good_rows(monkeypatch):
+    upsert_calls = []
+    good_row = raw_spot_snapshot_row()
+
+    def fake_query():
+        return [
+            good_row,
+            {**raw_spot_snapshot_row(), "代码": "bad-symbol"},
+            {**raw_spot_snapshot_row(), "代码": "000001", "最新价": "--"},
+        ]
+
+    def fake_upsert(rows, trade_date, snapshot_time, target_time, source_endpoint="stock_zh_a_spot_em", params=None):
+        upsert_calls.append((rows, trade_date, snapshot_time, target_time, source_endpoint, params))
+        return len(rows)
+
+    monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
+
+    result = collect_open_auction_spot_snapshot(
+        trade_date="2026-06-11",
+        target_time="09:17",
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+    )
+
+    assert upsert_calls[0][0] == [good_row]
+    assert result["summary"]["queried_rows"] == 3
+    assert result["summary"]["skipped_rows"] == 2
+    assert result["summary"]["upserted_rows"] == 1
+    assert result["summary"]["failed"] is False
+    assert result["summary"]["error"] == ""
+
+
+def test_collect_open_auction_spot_snapshot_marks_query_failure(monkeypatch):
+    def fake_query():
+        raise RuntimeError("spot unavailable")
+
+    monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
+
+    result = collect_open_auction_spot_snapshot(
+        trade_date="2026-06-11",
+        target_time="09:17",
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+    )
+
+    assert result["summary"]["failed"] is True
+    assert "spot unavailable" in result["summary"]["error"]
+    assert result["summary"]["queried_rows"] == 0
+    assert result["summary"]["upserted_rows"] == 0
+
+
+def test_collect_open_auction_spot_snapshot_marks_upsert_failure(monkeypatch):
+    def fake_query():
+        return [raw_spot_snapshot_row()]
+
+    def fake_upsert(rows, trade_date, snapshot_time, target_time, source_endpoint="stock_zh_a_spot_em", params=None):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(auction_data, "query_eastmoney_spot_snapshot_rows", fake_query)
+    monkeypatch.setattr(auction_data, "upsert_stock_open_auction_spot_snapshots", fake_upsert)
+
+    result = collect_open_auction_spot_snapshot(
+        trade_date="2026-06-11",
+        target_time="09:17",
+        snapshot_time=dt.datetime(2026, 6, 11, 9, 17, 5),
+    )
+
+    assert result["summary"]["failed"] is True
+    assert "db down" in result["summary"]["error"]
+    assert result["summary"]["queried_rows"] == 1
+    assert result["summary"]["upserted_rows"] == 0
+    assert result["summary"]["skipped_rows"] == 0
 
 
 def test_write_open_auction_spot_snapshot_report(tmp_path):
