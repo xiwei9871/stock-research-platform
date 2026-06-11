@@ -70,6 +70,7 @@ body {
 
 .workspace-header-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -91,6 +92,24 @@ body {
   text-align: left;
   font: inherit;
   cursor: pointer;
+}
+
+.section-heading button,
+.workspace-header-row button {
+  min-height: 30px;
+  border: 1px solid #cfd8e3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #263241;
+  padding: 5px 9px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.section-heading button:hover,
+.workspace-header-row button:hover {
+  border-color: #9ab3d5;
+  background: #f6f9ff;
 }
 
 .quick-actions {
@@ -154,6 +173,15 @@ body {
   font-size: 20px;
 }
 
+.metric-card.compact {
+  gap: 2px;
+  padding: 9px 10px;
+}
+
+.metric-card.compact strong {
+  font-size: 16px;
+}
+
 .workspace-band {
   display: grid;
   gap: 10px;
@@ -195,6 +223,13 @@ body {
 .metric-row strong {
   color: #17202a;
   font-size: 14px;
+}
+
+.status-strip strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-chip {
@@ -242,6 +277,15 @@ body {
 .data-table-row {
   border-top: 1px solid #edf1f5;
   background: #ffffff;
+}
+
+.data-table-header span,
+.data-table-row span,
+.data-table-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .three-col {
@@ -486,6 +530,10 @@ body {
 .report-list {
   display: grid;
   gap: 8px;
+}
+
+.report-list.compact {
+  gap: 6px;
 }
 
 .decision-list {
@@ -1020,7 +1068,7 @@ table.data-table td {
   min-width: 0;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   .platform-shell {
     grid-template-columns: 1fr;
   }
@@ -1037,6 +1085,14 @@ table.data-table td {
 
   .cockpit-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-header-row {
+    align-items: stretch;
+  }
+
+  .workspace-header-row button {
+    width: 100%;
   }
 
   .workbench {
@@ -1257,7 +1313,7 @@ table.data-table td {
   font-size: 12px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   .platform-workspace {
     padding: 12px;
   }
