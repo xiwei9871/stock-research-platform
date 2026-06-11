@@ -17,7 +17,43 @@ const CATEGORIES = [
 
 const NEWS_REFRESH_INTERVAL_MS = 60000;
 
-export function NewsWorkspace() {
+type NewsWorkspaceProps = {
+  onOpenAsset?: (assetId: string) => void;
+};
+
+function normalizeCandidate(value: string) {
+  const withExchange = value.match(/\b(\d{6})\.(SZ|SH)\b/i);
+  if (withExchange) {
+    return `${withExchange[1]}.${withExchange[2].toUpperCase()}`;
+  }
+  const bareCode = value.match(/\b(\d{6})\b/);
+  if (bareCode) {
+    return `${bareCode[1]}.${bareCode[1].startsWith('6') ? 'SH' : 'SZ'}`;
+  }
+  return null;
+}
+
+function candidateSource(value: unknown) {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return normalizeCandidate(String(value));
+  }
+  return null;
+}
+
+export function getNewsAssetCandidate(item: PublicNewsItem) {
+  const rawPayloadKeys = ['asset_id', 'stock_code', 'symbol', 'code'];
+  for (const key of rawPayloadKeys) {
+    const candidate = candidateSource(item.raw_payload[key]);
+    if (candidate) return candidate;
+  }
+  for (const value of [item.title, item.summary, item.url]) {
+    const candidate = candidateSource(value);
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [category, setCategory] = useState('all');
@@ -155,23 +191,36 @@ export function NewsWorkspace() {
           <p className="muted">No news for current filters.</p>
         ) : (
           <div className="news-feed">
-            {visibleItems.map((item) => (
-              <article key={item.news_id} className="news-feed-row">
-                <div className="news-feed-meta">
-                  <span>{item.published_at.slice(5, 16)}</span>
-                  <span>{labelForCategory(item.category)}</span>
-                  <span>{item.source_channel}</span>
-                </div>
-                {item.url ? (
-                  <a href={item.url} target="_blank" rel="noreferrer">
-                    {item.title}
-                  </a>
-                ) : (
-                  <strong>{item.title}</strong>
-                )}
-                {item.summary ? <p>{item.summary}</p> : null}
-              </article>
-            ))}
+            {visibleItems.map((item) => {
+              const assetCandidate = getNewsAssetCandidate(item);
+              return (
+                <article key={item.news_id} className="news-feed-row">
+                  <div className="news-feed-meta">
+                    <span>{item.published_at.slice(5, 16)}</span>
+                    <span>{labelForCategory(item.category)}</span>
+                    <span>{item.source_channel}</span>
+                    {assetCandidate ? (
+                      <button
+                        className="compact-action-button"
+                        type="button"
+                        aria-label={`Open ${assetCandidate}`}
+                        onClick={() => onOpenAsset?.(assetCandidate)}
+                      >
+                        Open
+                      </button>
+                    ) : null}
+                  </div>
+                  {item.url ? (
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      {item.title}
+                    </a>
+                  ) : (
+                    <strong>{item.title}</strong>
+                  )}
+                  {item.summary ? <p>{item.summary}</p> : null}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

@@ -37,6 +37,12 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
 
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
+  const [selectedAssetId, setSelectedAssetId] = useState('000001.SZ');
+
+  function openStockWorkspace(assetId: string) {
+    setSelectedAssetId(assetId);
+    setWorkspaceMode('stock');
+  }
 
   return (
     <main className="platform-shell">
@@ -59,13 +65,13 @@ export function AppShell() {
         {workspaceMode === 'home' ? <HomeCockpit onNavigate={(mode) => setWorkspaceMode(mode)} /> : null}
         {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
         {workspaceMode === 'researchReports' ? <ResearchReportsWorkspace /> : null}
-        {workspaceMode === 'stock' ? <StockWorkspace /> : null}
-        {workspaceMode === 'watchlist' ? <WatchlistWorkspace /> : null}
+        {workspaceMode === 'stock' ? <StockWorkspace initialAssetId={selectedAssetId} /> : null}
+        {workspaceMode === 'watchlist' ? <WatchlistWorkspace onOpenAsset={openStockWorkspace} /> : null}
         {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace /> : null}
         {workspaceMode === 'generatedReports' ? <GeneratedReportsWorkspace /> : null}
         {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}
         {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
-        {workspaceMode === 'news' ? <NewsWorkspace /> : null}
+        {workspaceMode === 'news' ? <NewsWorkspace onOpenAsset={openStockWorkspace} /> : null}
       </section>
     </main>
   );
