@@ -1394,3 +1394,159 @@ table.data-table td {
     width: 100%;
   }
 }
+
+.compact-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.compact-toolbar label {
+  display: grid;
+  gap: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.compact-toolbar input {
+  height: 32px;
+  min-width: 132px;
+  border: 1px solid #c4cbd6;
+  border-radius: 5px;
+  padding: 0 8px;
+  color: #17202a;
+  font: inherit;
+}
+
+.compact-toolbar button {
+  min-height: 32px;
+  border: 1px solid #c4cbd6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #202936;
+  padding: 6px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.compact-toolbar button:hover {
+  border-color: #9ab3d5;
+  background: #f6f9ff;
+}
+
+.stock-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  overflow: hidden;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.stock-summary-strip div {
+  display: grid;
+  gap: 2px;
+  border-right: 1px solid #d7dee8;
+  border-bottom: 1px solid #d7dee8;
+  padding: 8px 10px;
+}
+
+.stock-summary-strip div:last-child {
+  border-right: 0;
+}
+
+.stock-summary-strip span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.stock-summary-strip strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #17202a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.compact-table th,
+.compact-table td {
+  border-bottom: 1px solid #edf1f5;
+  padding: 6px 4px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.compact-table th {
+  color: #667085;
+  font-weight: 700;
+}
+
+.signal-card,
+.evidence-row,
+.evidence-link-row {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #edf1f5;
+  border-radius: 6px;
+  background: #fbfcfe;
+  padding: 8px;
+}
+
+.signal-card div,
+.evidence-row div,
+.evidence-link-row {
+  min-width: 0;
+}
+
+.signal-card > div:first-child,
+.evidence-row > div:first-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.signal-card p,
+.evidence-row p {
+  margin: 0;
+  color: #475467;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.signal-card span,
+.evidence-row span,
+.evidence-link-row span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.evidence-row > span,
+.evidence-link-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-link-row {
+  color: #205493;
+  text-decoration: none;
+}
