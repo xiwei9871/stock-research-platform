@@ -32,6 +32,9 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
     assert "/api/platform/summary" in script
     assert "/api/backtests/strategies" in script
     assert "/api/assets/000001.SZ/profile" in script
+    assert "lhb_shortline" in script
+    assert "mid_trend" in script
+    assert "tech_bottleneck" in script
     assert "Research Cockpit" in script
     assert "TOPN" in script
 
