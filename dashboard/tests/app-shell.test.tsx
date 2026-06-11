@@ -650,6 +650,32 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
   });
 
+  it('exposes the redesigned research cockpit navigation', async () => {
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: 'Open Market Monitor workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Research Reports workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Stock Workspace workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Watchlist workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Strategy Lab workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Generated Reports workspace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Reports workspace' })).not.toBeInTheDocument();
+  });
+
+  it('opens phase one placeholder workspaces from the redesigned navigation', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Research Reports' })).toBeInTheDocument();
+    expect(screen.getByText('External broker and institution reports will be stock-first in Phase 3.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
+  });
+
   it('navigates between planned platform workspaces', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Research Cockpit' });
@@ -658,11 +684,12 @@ describe('dashboard app shell', () => {
     fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
     expect(await screen.findByRole('heading', { name: 'Factor Lab' })).toBeVisible();
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Open Backtest Lab workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Backtest Lab' })).toBeVisible();
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Strategy Lab' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Run Backtest' })).toBeVisible();
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Open Reports workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open News workspace' }));
     expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
@@ -706,7 +733,8 @@ describe('dashboard app shell', () => {
     render(<App />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
-    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Validation workspace' }));
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Validation Replay' }));
 
     await waitFor(() => expect(screen.getByText('LHB Shortline')).toBeInTheDocument());
   });

@@ -1,26 +1,54 @@
 import { useState } from 'react';
-import { BacktestLabWorkspace } from './BacktestLabWorkspace';
 import { DataExplorerWorkspace } from './DataExplorerWorkspace';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
+import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
 import { HomeCockpit } from './HomeCockpit';
+import { MarketMonitorWorkspace } from './MarketMonitorWorkspace';
 import { NewsWorkspace } from './NewsWorkspace';
-import { ReportsWorkspace } from './ReportsWorkspace';
-import { StrategyValidationWorkspace } from './StrategyValidationWorkspace';
+import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
+import { StockWorkspace } from './StockWorkspace';
+import { StrategyLabWorkspace } from './StrategyLabWorkspace';
+import { WatchlistWorkspace } from './WatchlistWorkspace';
 
-type WorkspaceMode = 'home' | 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
+type WorkspaceMode =
+  | 'home'
+  | 'market'
+  | 'news'
+  | 'researchReports'
+  | 'stock'
+  | 'watchlist'
+  | 'factors'
+  | 'strategyLab'
+  | 'data'
+  | 'generatedReports';
+type HomeWorkspaceMode = 'data' | 'factors' | 'backtests' | 'strategy' | 'news' | 'reports';
 
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
-  { mode: 'data', label: 'Data Explorer' },
-  { mode: 'factors', label: 'Factor Lab' },
-  { mode: 'backtests', label: 'Backtest Lab' },
-  { mode: 'strategy', label: 'Strategy Validation' },
+  { mode: 'market', label: 'Market Monitor' },
   { mode: 'news', label: 'News' },
-  { mode: 'reports', label: 'Reports' }
+  { mode: 'researchReports', label: 'Research Reports' },
+  { mode: 'stock', label: 'Stock Workspace' },
+  { mode: 'watchlist', label: 'Watchlist' },
+  { mode: 'factors', label: 'Factor Lab' },
+  { mode: 'strategyLab', label: 'Strategy Lab' },
+  { mode: 'data', label: 'Data Explorer' },
+  { mode: 'generatedReports', label: 'Generated Reports' }
 ];
 
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
+  const handleHomeNavigate = (mode: HomeWorkspaceMode) => {
+    if (mode === 'backtests' || mode === 'strategy') {
+      setWorkspaceMode('strategyLab');
+      return;
+    }
+    if (mode === 'reports') {
+      setWorkspaceMode('generatedReports');
+      return;
+    }
+    setWorkspaceMode(mode);
+  };
 
   return (
     <main className="platform-shell">
@@ -40,13 +68,16 @@ export function AppShell() {
         ))}
       </aside>
       <section className="platform-workspace">
-        {workspaceMode === 'home' ? <HomeCockpit onNavigate={setWorkspaceMode} /> : null}
+        {workspaceMode === 'home' ? <HomeCockpit onNavigate={handleHomeNavigate} /> : null}
+        {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
+        {workspaceMode === 'researchReports' ? <ResearchReportsWorkspace /> : null}
+        {workspaceMode === 'stock' ? <StockWorkspace /> : null}
+        {workspaceMode === 'watchlist' ? <WatchlistWorkspace /> : null}
+        {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace /> : null}
+        {workspaceMode === 'generatedReports' ? <GeneratedReportsWorkspace /> : null}
         {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}
         {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
-        {workspaceMode === 'backtests' ? <BacktestLabWorkspace /> : null}
-        {workspaceMode === 'strategy' ? <StrategyValidationWorkspace /> : null}
         {workspaceMode === 'news' ? <NewsWorkspace /> : null}
-        {workspaceMode === 'reports' ? <ReportsWorkspace /> : null}
       </section>
     </main>
   );

@@ -7,10 +7,13 @@ import { StrategyPortfolioRiskPanel } from './StrategyPortfolioRiskPanel';
 import { StrategyReplayPanel } from './StrategyReplayPanel';
 
 type StrategyTab = 'replay' | 'cohort' | 'risk' | 'evidence';
+type StrategyValidationWorkspaceProps = {
+  embedded?: boolean;
+};
 
 const DEFAULT_ASSET_ID = '000001.SZ';
 
-export function StrategyValidationWorkspace() {
+export function StrategyValidationWorkspace(_props: StrategyValidationWorkspaceProps = {}) {
   const [runs, setRuns] = useState<StrategyValidationRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState('');
   const [selectedAssetId, setSelectedAssetId] = useState(DEFAULT_ASSET_ID);

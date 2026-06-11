@@ -17,6 +17,9 @@ type ComparisonRow = {
   result: BacktestRunResult | null;
   error: string | null;
 };
+type BacktestLabWorkspaceProps = {
+  embedded?: boolean;
+};
 
 function formatValue(value: BacktestScalar | undefined) {
   if (typeof value === 'number') {
@@ -90,7 +93,7 @@ function elapsedSeconds(result: BacktestRunResult | null) {
   return `${Number((result.elapsed_ms / 1000).toFixed(2))}s`;
 }
 
-export function BacktestLabWorkspace() {
+export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceProps = {}) {
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [strategyId, setStrategyId] = useState(DEFAULT_STRATEGY_ID);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
@@ -316,10 +319,12 @@ export function BacktestLabWorkspace() {
 
   return (
     <section className="backtest-lab-workspace" aria-label="Backtest Lab workspace">
-      <header className="workspace-header">
-        <h1>Backtest Lab</h1>
-        <p className="muted">Run validated built-in combo backtests. Custom strategy code is not supported.</p>
-      </header>
+      {embedded ? null : (
+        <header className="workspace-header">
+          <h1>Backtest Lab</h1>
+          <p className="muted">Run validated built-in combo backtests. Custom strategy code is not supported.</p>
+        </header>
+      )}
 
       <section className="backtest-controls" aria-label="Backtest controls">
         <label>

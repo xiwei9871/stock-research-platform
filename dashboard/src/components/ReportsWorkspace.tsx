@@ -8,7 +8,15 @@ const SCORE_VERSION = 'manual_v1';
 const WATCHLIST_ID = 'default';
 const TOP_N = 5;
 
-export function ReportsWorkspace() {
+type ReportsWorkspaceProps = {
+  title?: string;
+  description?: string;
+};
+
+export function ReportsWorkspace({
+  title = 'Reports',
+  description = 'Local research artifacts and generated reports.'
+}: ReportsWorkspaceProps = {}) {
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [reports, setReports] = useState<ReportLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,8 +72,8 @@ export function ReportsWorkspace() {
   return (
     <section className="reports-workspace" aria-label="Reports workspace">
       <header className="workspace-header">
-        <h1>Reports</h1>
-        <p className="muted">Local research artifacts and generated reports.</p>
+        <h1>{title}</h1>
+        <p className="muted">{description}</p>
       </header>
 
       <form className="reports-toolbar" onSubmit={handleSubmit}>
