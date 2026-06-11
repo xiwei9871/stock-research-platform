@@ -9,7 +9,9 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetProfile: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
-  fetchBacktestStrategies: vi.fn()
+  fetchBacktestStrategies: vi.fn(),
+  fetchMarketMonitorEod: vi.fn(),
+  fetchPublicNews: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -108,6 +110,28 @@ describe('DataExplorerWorkspace', () => {
         primary_action: 'Run backtest'
       }
     ]);
+    apiMocks.fetchMarketMonitorEod.mockResolvedValue({
+      trade_date: '2026-06-08',
+      freshness: { mode: 'eod', label: 'Last Completed Trading Day', is_realtime: false },
+      coverage: { market_assets: 1, score_assets: 1, factor_count: 2 },
+      market_breadth: {
+        advancers: null,
+        decliners: null,
+        limit_up: null,
+        limit_down: null,
+        advancing_ratio: null,
+        turnover_change_pct: null,
+        status: 'pending_source'
+      },
+      index_snapshot: [],
+      sector_strength: { strongest: [], weakest: [], status: 'pending_source' },
+      unusual_moves: [],
+      watchlist_alerts: [],
+      strategy_signal_summary: { topn_preview_count: 0, topn_preview: [], risk_filter_counts: {} },
+      generated_reports: [],
+      warnings: []
+    });
+    apiMocks.fetchPublicNews.mockResolvedValue({ items: [], warnings: [] });
   });
 
   afterEach(() => {
