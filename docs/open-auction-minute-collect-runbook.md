@@ -6,6 +6,23 @@ Collect 1-minute open call auction process bars for the 09:15-09:25 window after
 
 The current implementation uses AKShare `stock_zh_a_hist_pre_min_em`, backed by Eastmoney pre-market minute data. This source is suitable for the current/latest trading day collection after 09:25. It is not a historical full-market replay source.
 
+## Production Source Policy
+
+For full-market opening auction process data, use `collect-open-auction-spot-snapshot-v1`, backed by AKShare `stock_zh_a_spot_em`.
+
+The production snapshot schedule is:
+
+- `09:15`
+- `09:17`
+- `09:19`
+- `09:21`
+- `09:23`
+- `09:25`
+
+Cron entries trigger on those minute marks; the wrapper captures the actual `snapshot_time` when the command runs. The 09:25 snapshot is a process snapshot and should not overwrite final auction result rows in `market.stock_auction_bar`.
+
+The existing `collect-open-auction-minute-v1` command uses AKShare `stock_zh_a_hist_pre_min_em`. Keep it for small watchlists and diagnostics only. It is not a stable full-market historical or production backfill source.
+
 ## Database Tables
 
 - `staging.eastmoney_stock_auction_minute_bar`
