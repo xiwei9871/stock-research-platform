@@ -792,6 +792,71 @@ describe('dashboard app shell', () => {
     }
   });
 
+  it('keeps the latest market monitor request when older responses resolve later', async () => {
+    let resolveFirstRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    let resolveSecondRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    const firstRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveFirstRequest = resolve;
+    });
+    const secondRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveSecondRequest = resolve;
+    });
+    apiMocks.fetchMarketMonitorEod.mockReturnValueOnce(firstRequest).mockReturnValueOnce(secondRequest);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load Latest EOD' }));
+    expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveSecondRequest(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-11',
+          freshness: {
+            mode: 'eod',
+            label: 'Last Completed Trading Day',
+            is_realtime: false,
+            latest_market_date: '2026-06-11',
+            latest_factor_date: '2026-06-11',
+            latest_score_date: '2026-06-11'
+          },
+          strategy_signal_summary: {
+            topn_preview_count: 1,
+            topn_preview: [
+              {
+                trade_date: '2026-06-11',
+                asset_id: '000002.SZ',
+                rank: 1,
+                score_total: 88.8,
+                score_version: 'manual_v1',
+                score_components: {}
+              }
+            ],
+            risk_filter_counts: {}
+          },
+          warnings: []
+        })
+      );
+      await secondRequest;
+    });
+
+    expect(await screen.findByText('000002.SZ')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-11')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveFirstRequest(makeMarketMonitorPayload());
+      await firstRequest;
+    });
+
+    expect(screen.getByText('000002.SZ')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-11')).toBeInTheDocument();
+    expect(screen.queryByText('000001.SZ')).not.toBeInTheDocument();
+    expect(screen.queryByText('2026-06-10')).not.toBeInTheDocument();
+  });
+
   it('navigates between planned platform workspaces', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: 'Research Cockpit' });

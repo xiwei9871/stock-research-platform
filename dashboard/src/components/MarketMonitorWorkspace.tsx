@@ -55,7 +55,7 @@ export function MarketMonitorWorkspace() {
           <h1>Market Monitor</h1>
           <p className="muted">EOD market state for the latest completed trading day.</p>
         </div>
-        <button type="button" onClick={loadLatest} disabled={isLoading}>
+        <button type="button" onClick={loadLatest} aria-label="Load Latest EOD">
           {isLoading ? 'Loading...' : 'Load Latest EOD'}
         </button>
       </header>
