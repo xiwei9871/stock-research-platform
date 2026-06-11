@@ -712,6 +712,20 @@ def test_build_open_auction_spot_snapshot_cron_entries_uses_requested_slots():
         )
 
 
+def test_build_open_auction_spot_snapshot_cron_entries_quotes_shell_paths():
+    entries = build_open_auction_spot_snapshot_cron_entries(
+        project_dir="/Users/xiwei/stock research",
+        output_dir="outputs/research/open auction spot",
+        log_path="logs/open auction spot.log",
+    )
+
+    first_entry = entries[0]
+    assert "cd '/Users/xiwei/stock research' &&" in first_entry
+    assert "OPEN_AUCTION_SPOT_OUTPUT_DIR='outputs/research/open auction spot'" in first_entry
+    assert ">> 'logs/open auction spot.log' 2>&1" in first_entry
+    assert "$(date +\\%F)" in first_entry
+
+
 def test_collect_open_auction_spot_snapshot_cli_returns_zero_when_collection_succeeds(
     monkeypatch,
     tmp_path,

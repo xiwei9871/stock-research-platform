@@ -1,5 +1,6 @@
 import datetime as dt
 import os
+import shlex
 import time
 from pathlib import Path
 from typing import Any
@@ -526,6 +527,9 @@ def build_open_auction_spot_snapshot_cron_entries(
     output_dir: str = "outputs/research/open_auction_spot_snapshot",
     log_path: str = "logs/open_auction_spot_snapshot.log",
 ) -> list[str]:
+    quoted_project_dir = shlex.quote(project_dir)
+    quoted_output_dir = shlex.quote(output_dir)
+    quoted_log_path = shlex.quote(log_path)
     entries = []
     for target_time, minute in OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS:
         entries.append(
@@ -536,10 +540,10 @@ def build_open_auction_spot_snapshot_cron_entries(
                     "*",
                     "*",
                     "1-5",
-                    f"cd {project_dir} &&",
-                    f"OPEN_AUCTION_SPOT_OUTPUT_DIR={output_dir}",
+                    f"cd {quoted_project_dir} &&",
+                    f"OPEN_AUCTION_SPOT_OUTPUT_DIR={quoted_output_dir}",
                     f"scripts/run_open_auction_spot_snapshot.sh {target_time} $(date +\\%F)",
-                    f">> {log_path} 2>&1",
+                    f">> {quoted_log_path} 2>&1",
                 ]
             )
         )
