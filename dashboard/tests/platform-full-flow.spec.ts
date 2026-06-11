@@ -496,7 +496,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByRole('button', { name: 'Load Cached Replay Comparison' })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'strategy' })).not.toContainText('Manual V1 TopN Rotation');
   await page.getByRole('combobox', { name: 'strategy' }).selectOption('lhb_shortline');
-  await page.getByRole('button', { name: 'Run Backtest' }).click();
+  await page.getByRole('button', { name: 'Run Fresh Backtest' }).click();
   await expect(page.getByRole('heading', { name: 'Validated backtest' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Result Summary' })).toBeVisible();
   await expect(page.getByText('LHB Shortline Combo').last()).toBeVisible();
@@ -504,7 +504,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
   const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
   await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
-  await page.getByRole('button', { name: 'Run Comparison' }).click();
+  await page.getByRole('button', { name: 'Run Fresh Comparison' }).click();
   await expect(page.getByRole('heading', { name: 'Strategy Comparison' })).toBeVisible();
   await expect(page.getByText('0 / 3 completed')).toBeVisible();
   const comparisonTable = page.locator('.backtest-comparison-table');
