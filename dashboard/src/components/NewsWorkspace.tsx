@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPublicNews, refreshPublicNews } from '../api/client';
 import type { PublicNewsItem } from '../api/types';
 
@@ -25,57 +25,70 @@ export function NewsWorkspace() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>('');
+  const isMountedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
-  async function loadCachedNews(ignoreUpdate = false) {
-    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
-    if (!ignoreUpdate) {
-      setItems(payload.items);
-      setWarnings(payload.warnings ?? []);
-      setLastUpdatedAt(new Date().toLocaleTimeString());
+  const nextRequestId = useCallback(() => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    return requestId;
+  }, []);
+
+  const isLatestRequest = useCallback(
+    (requestId: number) => isMountedRef.current && requestId === requestIdRef.current,
+    []
+  );
+
+  const loadInitialNews = useCallback(async () => {
+    const requestId = nextRequestId();
+    setIsLoading(true);
+    try {
+      const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+      if (isLatestRequest(requestId)) {
+        setItems(payload.items);
+        setWarnings(payload.warnings ?? []);
+        setLastUpdatedAt(new Date().toLocaleTimeString());
+      }
+    } catch (err: unknown) {
+      if (isLatestRequest(requestId)) {
+        setWarnings([err instanceof Error ? err.message : String(err)]);
+      }
+    } finally {
+      if (isLatestRequest(requestId)) setIsLoading(false);
     }
-  }
+  }, [isLatestRequest, nextRequestId]);
 
-  async function refreshNews() {
-    const refreshResult = await refreshPublicNews();
-    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
-    setItems(payload.items);
-    setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
-    setLastUpdatedAt(new Date().toLocaleTimeString());
-  }
+  const refreshNews = useCallback(async () => {
+    const requestId = nextRequestId();
+    try {
+      const refreshResult = await refreshPublicNews();
+      const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+      if (isLatestRequest(requestId)) {
+        setItems(payload.items);
+        setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+        setLastUpdatedAt(new Date().toLocaleTimeString());
+      }
+    } catch (err: unknown) {
+      if (isLatestRequest(requestId)) {
+        setWarnings([err instanceof Error ? err.message : String(err)]);
+      }
+    }
+  }, [isLatestRequest, nextRequestId]);
 
   useEffect(() => {
-    let ignore = false;
-    setIsLoading(true);
-    fetchPublicNews({ source: 'sina_finance', limit: 200 })
-      .then((payload) => {
-        if (!ignore) {
-          setItems(payload.items);
-          setWarnings(payload.warnings ?? []);
-          setLastUpdatedAt(new Date().toLocaleTimeString());
-        }
-      })
-      .catch((err: unknown) => {
-        if (!ignore) {
-          setWarnings([err instanceof Error ? err.message : String(err)]);
-        }
-      })
-      .finally(() => {
-        if (!ignore) setIsLoading(false);
-      });
+    isMountedRef.current = true;
+    void loadInitialNews();
 
     const timer = window.setInterval(() => {
-      refreshNews().catch((err: unknown) => {
-        if (!ignore) {
-          setWarnings([err instanceof Error ? err.message : String(err)]);
-        }
-      });
+      void refreshNews();
     }, NEWS_REFRESH_INTERVAL_MS);
 
     return () => {
-      ignore = true;
       window.clearInterval(timer);
+      isMountedRef.current = false;
+      requestIdRef.current += 1;
     };
-  }, []);
+  }, [loadInitialNews, refreshNews]);
 
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -93,10 +106,8 @@ export function NewsWorkspace() {
     setIsRefreshing(true);
     try {
       await refreshNews();
-    } catch (err: unknown) {
-      setWarnings([err instanceof Error ? err.message : String(err)]);
     } finally {
-      setIsRefreshing(false);
+      if (isMountedRef.current) setIsRefreshing(false);
     }
   }
 

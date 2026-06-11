@@ -947,6 +947,115 @@ describe('dashboard app shell', () => {
     }
   });
 
+  it('keeps manual news refresh results when an older interval refresh resolves later', async () => {
+    let resolveIntervalFetch: (payload: Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>) => void = () => undefined;
+    const intervalFetch = new Promise<Awaited<ReturnType<typeof apiMocks.fetchPublicNews>>>((resolve) => {
+      resolveIntervalFetch = resolve;
+    });
+
+    vi.useFakeTimers();
+    try {
+      apiMocks.fetchPublicNews.mockReset();
+      apiMocks.refreshPublicNews.mockReset();
+      apiMocks.fetchPublicNews
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-initial',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '初始快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:00:00',
+              collected_at: '2026-06-11T02:00:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: []
+        })
+        .mockReturnValueOnce(intervalFetch)
+        .mockResolvedValueOnce({
+          items: [
+            {
+              news_id: 'news-manual',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '手动刷新快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:02:00',
+              collected_at: '2026-06-11T02:02:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: ['manual warning']
+        });
+      apiMocks.refreshPublicNews.mockResolvedValue({
+        received: 1,
+        stored: 1,
+        items_received: 1,
+        counts_by_category: { live: 1 },
+        warnings: []
+      });
+
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('初始快讯')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(2);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText('手动刷新快讯')).toBeInTheDocument();
+      expect(screen.getByText('manual warning')).toBeInTheDocument();
+
+      await act(async () => {
+        resolveIntervalFetch({
+          items: [
+            {
+              news_id: 'news-interval',
+              source: 'sina_finance',
+              source_channel: '7x24',
+              category: 'live',
+              title: '过期自动刷新快讯',
+              summary: '',
+              url: '',
+              published_at: '2026-06-11 10:01:00',
+              collected_at: '2026-06-11T02:01:00Z',
+              raw_id: '',
+              raw_payload: {},
+              status: 'available'
+            }
+          ],
+          warnings: ['stale interval warning']
+        });
+        await intervalFetch;
+      });
+
+      expect(screen.getByText('手动刷新快讯')).toBeInTheDocument();
+      expect(screen.getByText('manual warning')).toBeInTheDocument();
+      expect(screen.queryByText('过期自动刷新快讯')).not.toBeInTheDocument();
+      expect(screen.queryByText('stale interval warning')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('switches from cockpit to strategy validation mode', async () => {
     apiMocks.fetchStrategyValidationRuns.mockResolvedValue([
       {
