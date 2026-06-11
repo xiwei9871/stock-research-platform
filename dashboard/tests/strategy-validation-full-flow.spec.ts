@@ -291,6 +291,102 @@ async function mockFullFlowApi(page: Page) {
   await page.route('/api/**', async (route) => {
     const url = new URL(route.request().url());
 
+    if (url.pathname === '/api/platform/summary') {
+      await route.fulfill({
+        json: {
+          latest_market_date: '2026-06-08',
+          latest_score_date: '2026-06-08',
+          latest_factor_date: '2026-06-08',
+          market_asset_count: 5207,
+          score_asset_count: 5207,
+          factor_count: 43,
+          score_versions: ['manual_v1'],
+          topn_preview: [
+            {
+              trade_date: '2026-06-08',
+              asset_id: 'CN:SZ:300951',
+              rank: 1,
+              score_total: 89.9,
+              score_version: 'manual_v1',
+              score_components: {}
+            }
+          ]
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/backtests/strategies') {
+      await route.fulfill({
+        json: {
+          items: scenarios.map((scenario) => ({
+            strategy_id: scenario.run.strategy_id,
+            strategy_name: `${scenario.run.strategy_name} Combo`,
+            status: 'runnable',
+            description: `${scenario.run.strategy_name} fixture strategy`,
+            factor_groups: ['fixture'],
+            signal_inputs: ['strategy_validation'],
+            default_parameters: {},
+            latest_evidence: 'fixture',
+            primary_action: 'Run backtest'
+          }))
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/market-monitor/eod') {
+      await route.fulfill({
+        json: {
+          trade_date: '2026-06-08',
+          freshness: {
+            mode: 'eod',
+            label: 'Last completed trading day',
+            is_realtime: false,
+            latest_market_date: '2026-06-08',
+            latest_factor_date: '2026-06-08',
+            latest_score_date: '2026-06-08'
+          },
+          coverage: {
+            market_assets: 5207,
+            score_assets: 5207,
+            factor_count: 43
+          },
+          market_breadth: {
+            advancers: 2800,
+            decliners: 2200,
+            limit_up: 36,
+            limit_down: 9,
+            advancing_ratio: 0.56,
+            turnover_change_pct: 0.02,
+            status: 'ok'
+          },
+          index_snapshot: [],
+          sector_strength: { strongest: [], weakest: [], status: 'ok' },
+          unusual_moves: [],
+          watchlist_alerts: [],
+          strategy_signal_summary: {
+            topn_preview_count: 1,
+            topn_preview: [],
+            risk_filter_counts: {}
+          },
+          generated_reports: [],
+          warnings: []
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/public-news') {
+      await route.fulfill({
+        json: {
+          items: [],
+          warnings: []
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/strategy-validation/runs') {
       await route.fulfill({ json: { items: scenarios.map((scenario) => scenario.run) } });
       return;

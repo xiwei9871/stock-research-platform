@@ -131,6 +131,73 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/market-monitor/eod') {
+      await route.fulfill({
+        json: {
+          trade_date: '2026-06-08',
+          freshness: {
+            mode: 'eod',
+            label: 'Last completed trading day',
+            is_realtime: false,
+            latest_market_date: '2026-06-08',
+            latest_factor_date: '2026-06-08',
+            latest_score_date: '2026-06-08'
+          },
+          coverage: {
+            market_assets: 5207,
+            score_assets: 5207,
+            factor_count: 43
+          },
+          market_breadth: {
+            advancers: 2800,
+            decliners: 2200,
+            limit_up: 36,
+            limit_down: 9,
+            advancing_ratio: 0.56,
+            turnover_change_pct: 0.02,
+            status: 'ok'
+          },
+          index_snapshot: [],
+          sector_strength: { strongest: [], weakest: [], status: 'ok' },
+          unusual_moves: [],
+          watchlist_alerts: [],
+          strategy_signal_summary: {
+            topn_preview_count: 1,
+            topn_preview: [topNScore],
+            risk_filter_counts: {}
+          },
+          generated_reports: [],
+          warnings: []
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/public-news') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              news_id: 'news-1',
+              source: 'sina_finance',
+              source_channel: 'market',
+              category: 'market',
+              title: '600000 浦发银行公告',
+              summary: 'fixture news',
+              url: 'https://example.com/news/1',
+              published_at: '2026-06-08T09:30:00',
+              collected_at: '2026-06-08T09:31:00',
+              raw_id: 'news-1',
+              raw_payload: {},
+              status: 'active'
+            }
+          ],
+          warnings: []
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/assets/000001.SZ/profile') {
       await route.fulfill({ json: makeAssetProfile() });
       return;
@@ -460,7 +527,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByText('Mid Trend Combo')).toBeVisible();
   await expect(page.getByText('Tech Bottleneck Combo')).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
-  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
+  await expect(page.getByText('candidate pool')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
@@ -496,15 +563,15 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByRole('button', { name: 'Load Cached Replay Comparison' })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'strategy' })).not.toContainText('Manual V1 TopN Rotation');
   await page.getByRole('combobox', { name: 'strategy' }).selectOption('lhb_shortline');
-  await page.getByRole('button', { name: 'Run Fresh Backtest' }).click();
+  await page.getByRole('button', { name: 'Run Backtest' }).click();
   await expect(page.getByRole('heading', { name: 'Validated backtest' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Result Summary' })).toBeVisible();
   await expect(page.getByText('LHB Shortline Combo').last()).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'combo_scheme' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'total_return' })).toBeVisible();
-  const positionsSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Positions' }) });
-  await expect(positionsSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
-  await page.getByRole('button', { name: 'Run Fresh Comparison' }).click();
+  await expect(page.getByText('Total Return')).toBeVisible();
+  await expect(page.getByText('+12.00%', { exact: true })).toBeVisible();
+  const tradesSection = page.locator('.backtest-result-section').filter({ has: page.getByRole('heading', { name: 'Completed Trades' }) });
+  await expect(tradesSection.getByRole('cell', { name: 'CN:SZ:300951' })).toBeVisible();
+  await page.getByRole('button', { name: 'Run Comparison' }).click();
   await expect(page.getByRole('heading', { name: 'Strategy Comparison' })).toBeVisible();
   await expect(page.getByText('0 / 3 completed')).toBeVisible();
   const comparisonTable = page.locator('.backtest-comparison-table');

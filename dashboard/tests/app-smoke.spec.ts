@@ -70,6 +70,71 @@ async function mockDashboardApi(page: Page) {
     });
   });
 
+  await page.route('/api/market-monitor/eod**', async (route) => {
+    await route.fulfill({
+      json: {
+        trade_date: '2026-06-10',
+        freshness: {
+          mode: 'eod',
+          label: 'Last completed trading day',
+          is_realtime: false,
+          latest_market_date: '2026-06-10',
+          latest_factor_date: '2026-06-08',
+          latest_score_date: '2026-06-08'
+        },
+        coverage: {
+          market_assets: 5195,
+          score_assets: 231,
+          factor_count: 41
+        },
+        market_breadth: {
+          advancers: 2400,
+          decliners: 2100,
+          limit_up: 42,
+          limit_down: 8,
+          advancing_ratio: 0.53,
+          turnover_change_pct: 0.04,
+          status: 'ok'
+        },
+        index_snapshot: [],
+        sector_strength: { strongest: [], weakest: [], status: 'ok' },
+        unusual_moves: [],
+        watchlist_alerts: [],
+        strategy_signal_summary: {
+          topn_preview_count: 1,
+          topn_preview: [],
+          risk_filter_counts: {}
+        },
+        generated_reports: [],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/public-news**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: 'market',
+            category: 'market',
+            title: '600000 浦发银行公告',
+            summary: 'fixture news',
+            url: 'https://example.com/news/1',
+            published_at: '2026-06-10T09:30:00',
+            collected_at: '2026-06-10T09:31:00',
+            raw_id: 'news-1',
+            raw_payload: {},
+            status: 'active'
+          }
+        ],
+        warnings: []
+      }
+    });
+  });
+
   await page.route('/api/strategies/catalog**', async (route) => {
     await route.fulfill({
       json: {
@@ -650,12 +715,13 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
 
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('Latest Market Data')).toBeVisible();
+  await expect(page.getByText('Market Date')).toBeVisible();
+  await expect(page.getByText('EOD Monitor')).toBeVisible();
   await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'LHB Shortline Combo' })).toBeVisible();
   await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Mid Trend Combo' })).toBeVisible();
   await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Tech Bottleneck Combo' })).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
-  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
+  await expect(page.getByText('candidate pool')).toBeVisible();
   await expect(page.getByText('CN:SZ:300951')).toBeVisible();
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
@@ -678,7 +744,7 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('manual_v1 factor-score candidate pool, not a combo strategy result')).toBeVisible();
+  await expect(page.getByText('candidate pool')).toBeVisible();
   await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
   await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
