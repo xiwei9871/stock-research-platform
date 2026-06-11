@@ -1,4 +1,5 @@
 import type {
+  AssetSearchResponse,
   AssetProfile,
   BarPoint,
   BacktestRunRequest,
@@ -32,6 +33,7 @@ import type {
   StrategySignal,
   StrategyTrade,
   StrategyValidationRun,
+  WatchlistResponse,
   WatchlistSignalRow
 } from './types';
 
@@ -81,6 +83,20 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
   searchParams.set('limit', String(params.limit ?? 100));
   searchParams.set('offset', String(params.offset ?? 0));
   return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function searchAssets(q: string, limit = 10) {
+  const payload = await getJson<AssetSearchResponse>(
+    `/api/assets/search?q=${encodeURIComponent(q)}&limit=${limit}`
+  );
+  return payload.items;
+}
+
+export async function fetchWatchlistSignals(watchlistId: string, tradeDate: string): Promise<WatchlistSignalRow[]> {
+  const payload = await getJson<WatchlistResponse>(
+    `/api/watchlists/${encodeURIComponent(watchlistId)}?trade_date=${encodeURIComponent(tradeDate)}`
+  );
+  return payload.items;
 }
 
 export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {

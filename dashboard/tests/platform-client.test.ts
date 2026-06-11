@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchWatchlistSignals, searchAssets } from '../src/api/client';
 
 describe('platform API clients', () => {
   afterEach(() => {
@@ -114,5 +115,52 @@ describe('platform API clients', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backtestRequest)
     });
+  });
+
+  it('searches assets through the dashboard API', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [{ asset_id: '000001.SZ', symbol: '000001', name: '平安银行', exchange: 'SZ', board: null, is_active: true }]
+      })
+    } as Response);
+
+    const items = await searchAssets('平安', 5);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assets/search?q=%E5%B9%B3%E5%AE%89&limit=5');
+    expect(items).toEqual([
+      { asset_id: '000001.SZ', symbol: '000001', name: '平安银行', exchange: 'SZ', board: null, is_active: true }
+    ]);
+  });
+
+  it('fetches watchlist signal rows for an EOD date', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        watchlist_id: 'default',
+        trade_date: '2026-06-08',
+        items: [
+          {
+            watchlist_id: 'default',
+            trade_date: '2026-06-08',
+            asset_id: '000001.SZ',
+            stock_code: '000001',
+            stock_name: '平安银行',
+            priority: 8,
+            signal_score: 82.4,
+            primary_signal: 'candidate',
+            signal_tags: ['momentum'],
+            risk_tags: ['earnings'],
+            must_watch: true,
+            reason_json: { next_action: 'review close above 10d high' }
+          }
+        ]
+      })
+    } as Response);
+
+    const items = await fetchWatchlistSignals('default', '2026-06-08');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/watchlists/default?trade_date=2026-06-08');
+    expect(items[0].asset_id).toBe('000001.SZ');
   });
 });

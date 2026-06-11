@@ -7,6 +7,10 @@ export type AssetSummary = {
   is_active: boolean;
 };
 
+export type AssetSearchResponse = {
+  items: AssetSummary[];
+};
+
 export type BarPoint = {
   time: string;
   open: number | null;
@@ -39,6 +43,12 @@ export type WatchlistSignalRow = {
   risk_tags: string[];
   must_watch: boolean;
   reason_json: Record<string, unknown>;
+};
+
+export type WatchlistResponse = {
+  watchlist_id: string;
+  trade_date: string;
+  items: WatchlistSignalRow[];
 };
 
 export type ReportLink = {
