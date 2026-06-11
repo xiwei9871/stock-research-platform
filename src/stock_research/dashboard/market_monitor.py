@@ -14,10 +14,22 @@ def build_market_monitor_eod(
 ) -> dict[str, Any]:
     summary = load_platform_summary(score_version=score_version, top_n=top_n)
     latest_market_date = str(summary.get("latest_market_date") or "")
+    latest_factor_date = str(summary.get("latest_factor_date") or "")
+    latest_score_date = str(summary.get("latest_score_date") or "")
     selected_trade_date = trade_date or latest_market_date
     warnings: list[str] = []
     if not selected_trade_date:
         warnings.append("latest complete market date is unavailable")
+    if latest_score_date and selected_trade_date and latest_score_date != selected_trade_date:
+        warnings.append(
+            f"latest score date {latest_score_date} differs from "
+            f"market monitor trade date {selected_trade_date}"
+        )
+    if latest_factor_date and selected_trade_date and latest_factor_date != selected_trade_date:
+        warnings.append(
+            f"latest factor date {latest_factor_date} differs from "
+            f"market monitor trade date {selected_trade_date}"
+        )
 
     topn_preview = list(summary.get("topn_preview") or [])
     reports = load_report_links(selected_trade_date) if selected_trade_date else []
@@ -29,8 +41,8 @@ def build_market_monitor_eod(
             "label": "Last Completed Trading Day",
             "is_realtime": False,
             "latest_market_date": latest_market_date,
-            "latest_factor_date": summary.get("latest_factor_date") or "",
-            "latest_score_date": summary.get("latest_score_date") or "",
+            "latest_factor_date": latest_factor_date,
+            "latest_score_date": latest_score_date,
         },
         "coverage": {
             "market_assets": int(summary.get("market_asset_count") or 0),

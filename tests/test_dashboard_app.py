@@ -721,10 +721,15 @@ def test_dashboard_api_cli_dispatches_to_runner(monkeypatch):
 
 
 def test_market_monitor_eod_route_returns_payload(monkeypatch):
-    monkeypatch.setattr(
-        dashboard_app,
-        "build_market_monitor_eod",
-        lambda trade_date=None, score_version="manual_v1", top_n=5: {
+    captured = {}
+
+    def fake_build_market_monitor_eod(trade_date=None, score_version="manual_v1", top_n=5):
+        captured["kwargs"] = {
+            "trade_date": trade_date,
+            "score_version": score_version,
+            "top_n": top_n,
+        }
+        return {
             "trade_date": trade_date or "2026-06-10",
             "freshness": {"mode": "eod", "is_realtime": False},
             "coverage": {"market_assets": 5300, "score_assets": 3100, "factor_count": 42},
@@ -740,12 +745,27 @@ def test_market_monitor_eod_route_returns_payload(monkeypatch):
             },
             "generated_reports": [],
             "warnings": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_market_monitor_eod",
+        fake_build_market_monitor_eod,
     )
     client = TestClient(dashboard_app.create_app())
 
-    response = client.get("/api/market-monitor/eod?trade_date=2026-06-10&top_n=3")
+    response = client.get(
+        "/api/market-monitor/eod"
+        "?trade_date=2026-06-10"
+        "&score_version=manual_v2"
+        "&top_n=3"
+    )
 
     assert response.status_code == 200
+    assert captured["kwargs"] == {
+        "trade_date": "2026-06-10",
+        "score_version": "manual_v2",
+        "top_n": 3,
+    }
     assert response.json()["trade_date"] == "2026-06-10"
     assert response.json()["freshness"]["is_realtime"] is False

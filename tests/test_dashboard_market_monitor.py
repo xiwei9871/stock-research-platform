@@ -68,3 +68,33 @@ def test_build_market_monitor_eod_returns_warning_without_market_date(monkeypatc
 
     assert payload["trade_date"] == ""
     assert "latest complete market date is unavailable" in payload["warnings"]
+
+
+def test_build_market_monitor_eod_warns_when_score_or_factor_dates_differ(monkeypatch):
+    monkeypatch.setattr(
+        market_monitor,
+        "load_platform_summary",
+        lambda score_version="manual_v1", top_n=5: {
+            "latest_market_date": "2026-06-10",
+            "latest_factor_date": "2026-06-08",
+            "latest_score_date": "2026-06-09",
+            "market_asset_count": 5300,
+            "score_asset_count": 3100,
+            "factor_count": 42,
+            "topn_preview": [],
+        },
+    )
+    monkeypatch.setattr(market_monitor, "load_report_links", lambda trade_date: [])
+
+    payload = market_monitor.build_market_monitor_eod(trade_date="2026-06-10")
+
+    assert payload["freshness"]["latest_factor_date"] == "2026-06-08"
+    assert payload["freshness"]["latest_score_date"] == "2026-06-09"
+    assert (
+        "latest score date 2026-06-09 differs from market monitor trade date 2026-06-10"
+        in payload["warnings"]
+    )
+    assert (
+        "latest factor date 2026-06-08 differs from market monitor trade date 2026-06-10"
+        in payload["warnings"]
+    )
