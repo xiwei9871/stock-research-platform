@@ -67,6 +67,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   cleanup();
 });
 
@@ -81,6 +82,22 @@ describe('ResearchReportsWorkspace', () => {
   });
 
   it('defaults the report end date to today', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    await waitFor(() => {
+      expect(apiMocks.fetchResearchReports).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date: '2026-03-01',
+          end_date: '2026-06-12'
+        })
+      );
+    });
+  });
+
+  it('defaults the report end date to the local calendar date near a UTC boundary', async () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles');
+    vi.setSystemTime(new Date(2026, 5, 12, 23, 30, 0));
+
     render(<ResearchReportsWorkspace />);
 
     await waitFor(() => {
