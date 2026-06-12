@@ -79,6 +79,168 @@ def build_scored_candidates(
     ).reset_index(drop=True)
 
 
+def build_yanbaoke_inventory_plan(
+    *,
+    candidates: pd.DataFrame,
+    existing_coverage: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+    sector_config: pd.DataFrame | None = None,
+) -> dict[str, Any]:
+    scored = build_scored_candidates(
+        candidates,
+        existing_coverage=existing_coverage,
+        sector_config=sector_config,
+    )
+    scored = _filter_report_window(scored, start_date=start_date, end_date=end_date)
+    sector_gap = build_sector_gap_matrix(scored)
+    asset_gap = build_asset_gap_matrix(scored)
+    priority_queue = scored.sort_values(
+        ["priority_score", "report_date", "report_id"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)
+    report = render_inventory_report(
+        scored,
+        sector_gap,
+        asset_gap,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "candidate_reports": target_dir / "yanbaoke_candidate_reports.csv",
+        "sector_gap_matrix": target_dir / "yanbaoke_sector_gap_matrix.csv",
+        "asset_gap_matrix": target_dir / "yanbaoke_asset_gap_matrix.csv",
+        "priority_queue": target_dir / "yanbaoke_priority_queue.csv",
+        "report": target_dir / "yanbaoke_backfill_inventory_report.md",
+    }
+    scored.to_csv(paths["candidate_reports"], index=False)
+    sector_gap.to_csv(paths["sector_gap_matrix"], index=False)
+    asset_gap.to_csv(paths["asset_gap_matrix"], index=False)
+    priority_queue.to_csv(paths["priority_queue"], index=False)
+    paths["report"].write_text(report, encoding="utf-8")
+
+    return {
+        "candidates": scored,
+        "sector_gap_matrix": sector_gap,
+        "asset_gap_matrix": asset_gap,
+        "priority_queue": priority_queue,
+        "report": report,
+        "paths": {name: str(path) for name, path in paths.items()},
+    }
+
+
+def build_sector_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "sector_priority",
+        "theme_bucket",
+        "candidate_count",
+        "p1_count",
+        "p2_count",
+        "duplicate_count",
+        "max_priority_score",
+    ]
+    if scored.empty:
+        return pd.DataFrame(columns=columns)
+
+    frame = scored.copy()
+    frame["p1_count"] = frame["report_type_bucket"].eq("P1").astype(int)
+    frame["p2_count"] = frame["report_type_bucket"].eq("P2").astype(int)
+    frame["duplicate_count"] = frame["coverage_gap_reason"].eq("existing_duplicate").astype(int)
+    grouped = (
+        frame.groupby(["sector_priority", "theme_bucket"], dropna=False)
+        .agg(
+            candidate_count=("report_id", "size"),
+            p1_count=("p1_count", "sum"),
+            p2_count=("p2_count", "sum"),
+            duplicate_count=("duplicate_count", "sum"),
+            max_priority_score=("priority_score", "max"),
+        )
+        .reset_index()
+    )
+    return grouped.sort_values(
+        ["sector_priority", "max_priority_score", "candidate_count", "theme_bucket"],
+        ascending=[True, False, False, True],
+    ).reset_index(drop=True)[columns]
+
+
+def build_asset_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "stock_code",
+        "stock_name",
+        "theme_bucket",
+        "candidate_count",
+        "best_priority_score",
+        "p1_count",
+    ]
+    if scored.empty or "stock_code" not in scored.columns:
+        return pd.DataFrame(columns=columns)
+
+    frame = scored.copy()
+    frame = frame[frame["stock_code"].astype("string").fillna("").str.strip().ne("")]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    frame["p1_count"] = frame["report_type_bucket"].eq("P1").astype(int)
+    grouped = (
+        frame.groupby(["stock_code", "stock_name", "theme_bucket"], dropna=False)
+        .agg(
+            candidate_count=("report_id", "size"),
+            best_priority_score=("priority_score", "max"),
+            p1_count=("p1_count", "sum"),
+        )
+        .reset_index()
+    )
+    return grouped.sort_values(
+        ["best_priority_score", "candidate_count", "stock_code"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)[columns]
+
+
+def render_inventory_report(
+    scored: pd.DataFrame,
+    sector_gap: pd.DataFrame,
+    asset_gap: pd.DataFrame,
+    *,
+    start_date: str,
+    end_date: str,
+) -> str:
+    priority_distribution = (
+        scored["sector_priority"].value_counts().rename_axis("sector_priority").reset_index(name="candidate_count")
+        if "sector_priority" in scored.columns
+        else pd.DataFrame(columns=["sector_priority", "candidate_count"])
+    )
+    top_sector_gaps = sector_gap.head(10)
+    top_asset_gaps = asset_gap.head(10)
+    return "\n".join(
+        [
+            "# Yanbaoke Report Backfill Inventory",
+            "",
+            f"Window: {start_date} to {end_date}",
+            "",
+            f"Candidate count: {len(scored)}",
+            f"Sector group count: {len(sector_gap)}",
+            f"Asset group count: {len(asset_gap)}",
+            "",
+            "## Priority Distribution",
+            "",
+            _markdown_table(priority_distribution),
+            "",
+            "## Top Sector Gaps",
+            "",
+            _markdown_table(top_sector_gaps),
+            "",
+            "## Top Asset Gaps",
+            "",
+            _markdown_table(top_asset_gaps),
+            "",
+        ]
+    )
+
+
 def classify_report_type_bucket(title: Any) -> str:
     text = "" if _is_missing(title) else str(title)
     if any(keyword in text for keyword in ["深度", "首次覆盖", "行业策略", "年度策略", "中期策略", "专题", "框架"]):
@@ -112,6 +274,25 @@ def _normalize_candidate_columns(frame: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     return result
+
+
+def _filter_report_window(scored: pd.DataFrame, *, start_date: str, end_date: str) -> pd.DataFrame:
+    if scored.empty:
+        return scored.copy()
+    dates = pd.to_datetime(scored["report_date"], errors="coerce")
+    start = pd.to_datetime(start_date)
+    end = pd.to_datetime(end_date)
+    return scored.loc[dates.between(start, end, inclusive="both")].reset_index(drop=True)
+
+
+def _markdown_table(frame: pd.DataFrame) -> str:
+    if frame.empty:
+        return "_None_"
+    text_frame = frame.fillna("").astype(str)
+    header = "| " + " | ".join(text_frame.columns) + " |"
+    separator = "| " + " | ".join(["---"] * len(text_frame.columns)) + " |"
+    rows = ["| " + " | ".join(row) + " |" for row in text_frame.to_numpy()]
+    return "\n".join([header, separator, *rows])
 
 
 def _normalize_text(value: Any) -> str:

@@ -1,6 +1,12 @@
+from pathlib import Path
+
 import pandas as pd
 
-from stock_research.yanbaoke_report_backfill import build_scored_candidates, load_sector_priority_config
+from stock_research.yanbaoke_report_backfill import (
+    build_scored_candidates,
+    build_yanbaoke_inventory_plan,
+    load_sector_priority_config,
+)
 
 
 def test_load_sector_priority_config_contains_default_quota_buckets():
@@ -71,3 +77,49 @@ def test_build_scored_candidates_empty_candidates_returns_shaped_frame():
         "coverage_gap_reason",
         "priority_score",
     } <= set(scored.columns)
+
+
+def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            },
+            {
+                "report_id": "r2",
+                "report_date": "2025-08-10",
+                "title": "行业深度：银行资产质量",
+                "broker": "招商证券",
+                "stock_code": "",
+                "stock_name": "",
+                "industry_lv1": "银行",
+                "industry_lv2": "银行",
+                "theme": "银行",
+            },
+        ]
+    )
+
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    assert Path(result["paths"]["candidate_reports"]).exists()
+    assert Path(result["paths"]["sector_gap_matrix"]).exists()
+    assert Path(result["paths"]["asset_gap_matrix"]).exists()
+    assert Path(result["paths"]["priority_queue"]).exists()
+    assert Path(result["paths"]["report"]).exists()
+    sector_gap = pd.read_csv(result["paths"]["sector_gap_matrix"])
+    assert set(sector_gap["sector_priority"]) >= {"P0", "P2"}
+    assert "Yanbaoke Report Backfill Inventory" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
