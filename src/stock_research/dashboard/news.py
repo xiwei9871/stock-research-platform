@@ -119,21 +119,26 @@ def _asset_rows_from_db(service: str) -> list[dict[str, str]]:
         rows = fetch_all(
             conn,
             """
-            SELECT asset_id, ts_code, name
+            SELECT asset_id, symbol, ts_code, name
             FROM core.asset_master
             WHERE asset_id IS NOT NULL
-              AND ts_code IS NOT NULL
+              AND symbol IS NOT NULL
               AND name IS NOT NULL
             """,
         )
-    return [
-        {
-            "asset_id": str(row.get("asset_id") or ""),
-            "ts_code": str(row.get("ts_code") or ""),
-            "name": str(row.get("name") or ""),
-        }
-        for row in rows
-    ]
+    assets: list[dict[str, str]] = []
+    for row in rows:
+        symbol = str(row.get("symbol") or "")
+        ts_code = str(row.get("ts_code") or symbol)
+        assets.append(
+            {
+                "asset_id": str(row.get("asset_id") or ""),
+                "symbol": symbol,
+                "ts_code": ts_code,
+                "name": str(row.get("name") or ""),
+            }
+        )
+    return assets
 
 
 def _dedupe_mentions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -318,9 +323,13 @@ class NewsMentionMapper:
 
     def _match_method(self, text: str, asset: dict[str, str]) -> str:
         ts_code = asset.get("ts_code", "")
-        symbol = ts_code.split(".")[0] if "." in ts_code else ts_code
+        symbol = asset.get("symbol", "") or (ts_code.split(".")[0] if "." in ts_code else ts_code)
         name = asset.get("name", "")
-        if ts_code and re.search(rf"(?<![A-Za-z0-9]){re.escape(ts_code)}(?![A-Za-z0-9])", text):
+        if (
+            ts_code
+            and "." in ts_code
+            and re.search(rf"(?<![A-Za-z0-9]){re.escape(ts_code)}(?![A-Za-z0-9])", text)
+        ):
             return "ts_code_exact"
         if symbol and re.search(rf"(?<![A-Za-z0-9]){re.escape(symbol)}(?![A-Za-z0-9])", text):
             return "symbol_exact"
@@ -512,7 +521,10 @@ def load_asset_news(
     source: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
-    bounded_lookback = max(1, int(lookback_days or 7))
+    try:
+        bounded_lookback = max(1, int(lookback_days or 7))
+    except (TypeError, ValueError):
+        bounded_lookback = 7
     start_time = (date.today() - timedelta(days=bounded_lookback)).isoformat()
     store = NewsEventStore(service=service)
     payload = store.list_news(
@@ -522,18 +534,26 @@ def load_asset_news(
         start_time=start_time,
         limit=limit,
     )
+    summary_payload = store.list_news(
+        asset_id=asset_id,
+        category=category,
+        source=source,
+        start_time=start_time,
+        limit=MAX_LIMIT,
+    )
     items = payload["items"]
+    summary_items = summary_payload["items"]
     today = date.today()
     return {
         "asset_id": asset_id,
         "items": items,
         "summary": {
-            "news_count_1d": _news_count_since(items, today, 1),
-            "news_count_3d": _news_count_since(items, today, 3),
-            "news_count_7d": _news_count_since(items, today, 7),
-            "latest_published_at": items[0]["published_at"] if items else "",
-            "source_count": len({item["source"] for item in items}),
-            "category_counts": _category_counts_from_items(items),
+            "news_count_1d": _news_count_since(summary_items, today, 1),
+            "news_count_3d": _news_count_since(summary_items, today, 3),
+            "news_count_7d": _news_count_since(summary_items, today, 7),
+            "latest_published_at": summary_items[0]["published_at"] if summary_items else "",
+            "source_count": len({item["source"] for item in summary_items}),
+            "category_counts": _category_counts_from_items(summary_items),
         },
         "warnings": payload["warnings"],
     }

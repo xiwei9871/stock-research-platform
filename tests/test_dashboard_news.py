@@ -20,6 +20,7 @@ class FakeDb:
     def __init__(self) -> None:
         self.source_rows: dict[str, dict[str, Any]] = {}
         self.mention_rows: list[dict[str, Any]] = []
+        self.asset_rows: list[dict[str, Any]] = []
         self.calls: list[tuple[str, list[Any]]] = []
 
     def fetch_all(self, _conn: FakeConn, sql: str, params: list[Any] | None = None):
@@ -39,9 +40,15 @@ class FakeDb:
             ]
         if compact.startswith("SELECT COUNT(*) AS total"):
             return [{"total": len(self._filtered_source_rows(compact, params or []))}]
+        if "FROM core.asset_master" in compact:
+            return self.asset_rows
         if "FROM research.news_event_source s LEFT JOIN research.news_event_mention m" in compact:
             rows = self._filtered_source_rows(compact, params or [])
             rows = sorted(rows, key=lambda row: row["published_at"], reverse=True)
+            if "LIMIT %s OFFSET %s" in compact:
+                limit = int((params or [0, 0])[-2])
+                offset = int((params or [0, 0])[-1])
+                rows = rows[offset : offset + limit]
             return [
                 {
                     **row,
@@ -389,6 +396,49 @@ def test_news_mention_mapper_dedupes_same_asset_with_code_and_name(
     assert fake.mention_rows[0]["asset_id"] == "CN:SH:600519"
 
 
+def test_news_mention_mapper_loads_assets_with_nullable_ts_code(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    fake.asset_rows.append(
+        {
+            "asset_id": "CN:SH:600519",
+            "symbol": "600519",
+            "ts_code": None,
+            "name": "贵州茅台",
+        }
+    )
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute", fake.execute)
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+
+    mapper = news.NewsMentionMapper(service="test")
+    result = mapper.map_items(
+        [
+            make_item(
+                title="600519发布经营快讯",
+                summary="",
+                url="https://finance.sina.com.cn/doc/nullable-ts-code.shtml",
+                raw_id="nullable-ts-code",
+            )
+        ]
+    )
+
+    assert result == {"mentions": 1}
+    assert mapper.assets == [
+        {
+            "asset_id": "CN:SH:600519",
+            "symbol": "600519",
+            "ts_code": "600519",
+            "name": "贵州茅台",
+        }
+    ]
+    assert fake.mention_rows[0]["mapping_method"] == "symbol_exact"
+
+
 def test_news_mention_mapper_deletes_stale_mentions_when_no_matches(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -466,9 +516,10 @@ def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.Monkey
             }
         )
 
-    payload = news.load_asset_news("CN:SH:600519", limit=5, service="test")
+    payload = news.load_asset_news("CN:SH:600519", limit=1, service="test")
 
     assert payload["asset_id"] == "CN:SH:600519"
+    assert len(payload["items"]) == 1
     assert payload["items"][0]["stocks"][0]["stock_name"] == "贵州茅台"
     assert payload["summary"]["news_count_1d"] == 1
     assert payload["summary"]["news_count_3d"] == 2
