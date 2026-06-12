@@ -1254,8 +1254,7 @@ table.data-table td {
   }
 
   .platform-nav {
-    position: sticky;
-    top: 0;
+    position: static;
     z-index: 2;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

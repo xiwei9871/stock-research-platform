@@ -24,6 +24,11 @@ type WorkspaceMode =
   | 'data'
   | 'generatedReports';
 
+type QueryHandoff = {
+  query: string;
+  version: number;
+};
+
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
   { mode: 'market', label: 'Market Monitor' },
@@ -40,9 +45,9 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
   const [selectedAssetId, setSelectedAssetId] = useState('000001.SZ');
-  const [newsInitialQuery, setNewsInitialQuery] = useState('');
-  const [researchReportsInitialQuery, setResearchReportsInitialQuery] = useState('');
-  const [generatedReportsInitialQuery, setGeneratedReportsInitialQuery] = useState('');
+  const [newsHandoff, setNewsHandoff] = useState<QueryHandoff>({ query: '', version: 0 });
+  const [researchReportsHandoff, setResearchReportsHandoff] = useState<QueryHandoff>({ query: '', version: 0 });
+  const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<QueryHandoff>({ query: '', version: 0 });
 
   function openStockWorkspace(assetId: string) {
     setSelectedAssetId(assetId);
@@ -57,19 +62,22 @@ export function AppShell() {
     }
 
     if (target.workspace === 'news') {
-      setNewsInitialQuery(target.q ?? result.title);
+      const query = target.q ?? result.title;
+      setNewsHandoff((current) => ({ query, version: current.version + 1 }));
       setWorkspaceMode('news');
       return;
     }
 
     if (target.workspace === 'researchReports') {
-      setResearchReportsInitialQuery(target.q ?? result.title);
+      const query = target.q ?? result.title;
+      setResearchReportsHandoff((current) => ({ query, version: current.version + 1 }));
       setWorkspaceMode('researchReports');
       return;
     }
 
     if (target.workspace === 'generatedReports') {
-      setGeneratedReportsInitialQuery(target.q ?? result.title);
+      const query = target.q ?? result.title;
+      setGeneratedReportsHandoff((current) => ({ query, version: current.version + 1 }));
       setWorkspaceMode('generatedReports');
     }
   }
@@ -99,18 +107,28 @@ export function AppShell() {
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={(mode) => setWorkspaceMode(mode)} /> : null}
           {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
           {workspaceMode === 'researchReports' ? (
-            <ResearchReportsWorkspace initialQuery={researchReportsInitialQuery} />
+            <ResearchReportsWorkspace
+              key={`researchReports:${researchReportsHandoff.version}`}
+              initialQuery={researchReportsHandoff.query}
+            />
           ) : null}
           {workspaceMode === 'stock' ? <StockWorkspace initialAssetId={selectedAssetId} /> : null}
           {workspaceMode === 'watchlist' ? <WatchlistWorkspace onOpenAsset={openStockWorkspace} /> : null}
           {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace /> : null}
           {workspaceMode === 'generatedReports' ? (
-            <GeneratedReportsWorkspace initialQuery={generatedReportsInitialQuery} />
+            <GeneratedReportsWorkspace
+              key={`generatedReports:${generatedReportsHandoff.version}`}
+              initialQuery={generatedReportsHandoff.query}
+            />
           ) : null}
           {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}
           {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
           {workspaceMode === 'news' ? (
-            <NewsWorkspace initialQuery={newsInitialQuery} onOpenAsset={openStockWorkspace} />
+            <NewsWorkspace
+              key={`news:${newsHandoff.version}`}
+              initialQuery={newsHandoff.query}
+              onOpenAsset={openStockWorkspace}
+            />
           ) : null}
         </section>
       </div>

@@ -1006,6 +1006,65 @@ describe('dashboard app shell', () => {
     }
   });
 
+  it('reapplies the News query when selecting the same global search result again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const newsResult = makeGlobalSearchResult({
+        type: 'news',
+        id: 'news-1',
+        title: '贵州茅台新闻',
+        subtitle: '7x24',
+        target: { workspace: 'news', q: '茅台' }
+      });
+      apiMocks.fetchGlobalSearch
+        .mockResolvedValueOnce(makeGlobalSearchPayload(newsResult))
+        .mockResolvedValueOnce(makeGlobalSearchPayload(newsResult));
+      apiMocks.fetchPublicNews.mockResolvedValue({
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '贵州茅台新闻',
+            summary: '茅台公告摘要',
+            url: 'https://finance.sina.com.cn/live/maotai',
+            published_at: '2026-06-11 09:00:00',
+            collected_at: '2026-06-11T09:01:00+00:00',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+
+      render(<App />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      const newsSearch = await screen.findByLabelText('news search');
+      expect(newsSearch).toHaveValue('茅台');
+
+      fireEvent.change(newsSearch, { target: { value: '别的' } });
+      expect(newsSearch).toHaveValue('别的');
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      expect(screen.getByLabelText('news search')).toHaveValue('茅台');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders EOD market monitor data without implying realtime data', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
 
