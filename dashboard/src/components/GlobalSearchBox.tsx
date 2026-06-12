@@ -64,6 +64,10 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
     requestIdRef.current += 1;
     setDismissedQuery(null);
     setQuery(nextQuery);
+    setPayload(null);
+    setError(null);
+    setIsSearching(false);
+    setHighlightedIndex(-1);
   }
 
   function clearSearch() {
@@ -136,7 +140,7 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
       />
 
       {isMenuOpen ? (
-        <div aria-label="Global search results" className="global-search-menu" id="global-search-results" role="listbox">
+        <div aria-label="Global search results" className="global-search-menu">
           {isSearching ? <div className="global-search-status">Searching...</div> : null}
           {error ? <div className="global-search-error">{error}</div> : null}
           {!isSearching && !error && payload && results.length === 0 ? (
@@ -149,11 +153,17 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
               ))}
             </div>
           ) : null}
-          {!error
-            ? groups.map((group) =>
+          {!error && results.length ? (
+            <div id="global-search-results" role="listbox">
+              {groups.map((group) =>
                 group.items.length ? (
-                  <section className="global-search-group" key={group.key} aria-label={group.label}>
-                    <h3>{group.label}</h3>
+                  <div
+                    aria-label={group.label}
+                    className="global-search-group"
+                    key={group.key}
+                    role="group"
+                  >
+                    <div className="global-search-group-heading">{group.label}</div>
                     {group.items.map((result) => {
                       const resultIndex = results.indexOf(result);
                       const isHighlighted = resultIndex === highlightedIndex;
@@ -174,10 +184,11 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
                         </div>
                       );
                     })}
-                  </section>
+                  </div>
                 ) : null
-              )
-            : null}
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -73,8 +73,9 @@ describe('GlobalSearchBox', () => {
     await searchFor('  茅台  ');
 
     expect(apiMocks.fetchGlobalSearch).toHaveBeenCalledWith('茅台', 5);
-    expect(await screen.findByRole('heading', { name: 'Stocks' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'News' })).toBeInTheDocument();
+    const listbox = await screen.findByRole('listbox');
+    expect(within(listbox).getByRole('group', { name: 'Stocks' })).toBeInTheDocument();
+    expect(within(listbox).getByRole('group', { name: 'News' })).toBeInTheDocument();
     expect(screen.getByText('partial news index')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('option', { name: /茅台新闻 公告摘要/ }));
@@ -194,5 +195,29 @@ describe('GlobalSearchBox', () => {
 
     expect(onOpenResult).toHaveBeenCalledWith(second);
     expect(within(screen.queryByRole('listbox') ?? document.body).queryByText('平安银行')).not.toBeInTheDocument();
+  });
+
+  it('clears highlighted old results immediately when the query changes', async () => {
+    const first = makeResult({ id: 'CN:SH:600519', title: '贵州茅台' });
+    const onOpenResult = vi.fn();
+    apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+      makePayload({
+        groups: [{ key: 'assets', label: 'Stocks', items: [first] }]
+      })
+    );
+
+    render(<GlobalSearchBox onOpenResult={onOpenResult} />);
+    await searchFor('茅台');
+
+    const input = screen.getByLabelText('Global search');
+    await screen.findByText('贵州茅台');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+
+    fireEvent.change(input, { target: { value: '浦发' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onOpenResult).not.toHaveBeenCalled();
+    expect(screen.queryByText('贵州茅台')).not.toBeInTheDocument();
+    expect(input).not.toHaveAttribute('aria-activedescendant');
   });
 });
