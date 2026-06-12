@@ -229,6 +229,40 @@ describe('StockWorkspace', () => {
     expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('CN:SH:600519', { limit: 8, lookbackDays: 7 });
   });
 
+  it('shows a loading state while selected stock news is loading', async () => {
+    const pendingNews = deferred<AssetNewsResponse>();
+    apiMocks.fetchAssetNews.mockReturnValueOnce(pendingNews.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(await screen.findByText('Loading...')).toBeInTheDocument();
+
+    await act(async () => {
+      pendingNews.resolve(newsPayload);
+      await pendingNews.promise;
+    });
+  });
+
+  it('shows an error when selected stock news fails to load', async () => {
+    apiMocks.fetchAssetNews.mockRejectedValueOnce(new Error('news failed'));
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(await screen.findByText('news failed')).toBeInTheDocument();
+    expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
+  });
+
+  it('renders warnings returned with selected stock news', async () => {
+    apiMocks.fetchAssetNews.mockResolvedValueOnce(makeAssetNews({ warnings: ['partial news store coverage'] }));
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
+    expect(screen.getByText('partial news store coverage')).toBeInTheDocument();
+  });
+
   it('does not render asset news responses for a different stock', async () => {
     apiMocks.fetchAssetNews.mockResolvedValueOnce(
       makeAssetNews({
