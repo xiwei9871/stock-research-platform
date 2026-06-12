@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -645,3 +646,55 @@ def test_load_asset_news_skips_malformed_published_at_for_bucket_counts(
     assert payload["summary"]["news_count_1d"] == 0
     assert payload["summary"]["news_count_3d"] == 0
     assert payload["summary"]["news_count_7d"] == 0
+
+
+def test_public_news_ingestion_writes_db_and_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fake = FakeDb()
+    item = make_item()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute", fake.execute)
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
+
+    service = news.PublicNewsIngestionService(
+        store=news.NewsEventStore(service="test"),
+        fallback_store=JsonPublicNewsStore(tmp_path / "public_news.json"),
+        mention_mapper=news.NewsMentionMapper(assets=[], service="test"),
+    )
+    result = service.refresh()
+
+    assert result["items_received"] == 1
+    assert result["stored"] == 1
+    assert result["mentions"] == 0
+    assert fake.source_rows[item.news_id]["title"] == item.title
+
+
+def test_load_public_news_falls_back_to_json_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    fallback.upsert_items([make_item(title="缓存新闻")])
+
+    class FailingStore(news.NewsEventStore):
+        def list_news(self, **_kwargs):
+            raise RuntimeError("db offline")
+
+    payload = news.load_public_news_for_dashboard(
+        limit=5,
+        store=FailingStore(service="test"),
+        fallback_store=fallback,
+    )
+
+    assert payload["items"][0]["title"] == "缓存新闻"
+    assert payload["summary"]["source_count"] == 1
+    assert "fallback json cache used: db offline" in payload["warnings"]

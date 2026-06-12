@@ -54,7 +54,9 @@ class PublicNewsService:
 
 
 def refresh_public_news_for_dashboard() -> dict[str, Any]:
-    return PublicNewsService().refresh()
+    from stock_research.dashboard.news import refresh_public_news_for_dashboard as refresh_db_news
+
+    return refresh_db_news()
 
 
 def load_public_news_for_dashboard(
@@ -62,13 +64,23 @@ def load_public_news_for_dashboard(
     source: str | None = None,
     category: str | None = None,
     q: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    asset_id: str | None = None,
+    ts_code: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
-    return PublicNewsService().list_items(
+    from stock_research.dashboard.news import load_public_news_for_dashboard as load_db_news
+
+    return load_db_news(
         source=source,
         category=category,
         q=q,
+        start_time=start_time,
+        end_time=end_time,
+        asset_id=asset_id,
+        ts_code=ts_code,
         limit=limit,
         offset=offset,
     )

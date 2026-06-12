@@ -17,6 +17,11 @@ from stock_research.dashboard.factors import (
     parse_factor_selection,
 )
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
+from stock_research.dashboard.news import (
+    load_asset_news,
+    load_public_news_for_dashboard,
+    refresh_public_news_for_dashboard,
+)
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
@@ -55,11 +60,6 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
-from stock_research.public_news.service import (
-    load_public_news_for_dashboard,
-    refresh_public_news_for_dashboard,
-)
-
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API")
@@ -94,6 +94,10 @@ def create_app() -> FastAPI:
         source: str | None = None,
         category: str | None = None,
         q: str | None = None,
+        start_time: str | None = None,
+        end_time: str | None = None,
+        asset_id: str | None = None,
+        ts_code: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ):
@@ -101,6 +105,10 @@ def create_app() -> FastAPI:
             source=source,
             category=category,
             q=q,
+            start_time=start_time,
+            end_time=end_time,
+            asset_id=asset_id,
+            ts_code=ts_code,
             limit=limit,
             offset=offset,
         )
@@ -144,6 +152,22 @@ def create_app() -> FastAPI:
     @app.get("/api/assets/{asset_id}/research-reports")
     def asset_research_reports(asset_id: str, limit: int = 10, lookback_days: int = 90):
         return load_asset_research_reports(asset_id, limit=limit, lookback_days=lookback_days)
+
+    @app.get("/api/assets/{asset_id}/news")
+    def asset_news(
+        asset_id: str,
+        limit: int = 20,
+        lookback_days: int = 7,
+        category: str | None = None,
+        source: str | None = None,
+    ):
+        return load_asset_news(
+            asset_id,
+            limit=limit,
+            lookback_days=lookback_days,
+            category=category,
+            source=source,
+        )
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):

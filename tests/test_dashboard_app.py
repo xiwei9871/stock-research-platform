@@ -41,7 +41,9 @@ def test_public_news_route_returns_filtered_items(monkeypatch):
     client = TestClient(dashboard_app.create_app())
 
     response = client.get(
-        "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2"
+        "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF"
+        "&start_time=2026-06-01T00:00:00&end_time=2026-06-12T23:59:59"
+        "&asset_id=CN:SH:600519&ts_code=600519.SH&limit=10&offset=2"
     )
 
     assert response.status_code == 200
@@ -49,6 +51,10 @@ def test_public_news_route_returns_filtered_items(monkeypatch):
         "source": "sina_finance",
         "category": "live",
         "q": "快讯",
+        "start_time": "2026-06-01T00:00:00",
+        "end_time": "2026-06-12T23:59:59",
+        "asset_id": "CN:SH:600519",
+        "ts_code": "600519.SH",
         "limit": 10,
         "offset": 2,
     }
@@ -73,6 +79,26 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["counts_by_category"] == {"live": 2}
+
+
+def test_asset_news_endpoint(monkeypatch):
+    from stock_research.dashboard import app as dashboard_app
+
+    def fake_load_asset_news(asset_id, **kwargs):
+        return {
+            "asset_id": asset_id,
+            "items": [],
+            "summary": {"news_count_1d": 0, "news_count_3d": 0, "news_count_7d": 0},
+            "warnings": ["no matching public news items"],
+        }
+
+    monkeypatch.setattr(dashboard_app, "load_asset_news", fake_load_asset_news)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/assets/CN:SH:600519/news?limit=5&lookback_days=7")
+
+    assert response.status_code == 200
+    assert response.json()["asset_id"] == "CN:SH:600519"
 
 
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):

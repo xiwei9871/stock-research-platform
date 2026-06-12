@@ -2,18 +2,23 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute, execute_many, fetch_all
 from stock_research.public_news.models import PublicNewsItem
+from stock_research.public_news.sina_adapter import fetch_sina_public_news
+from stock_research.public_news.store import JsonPublicNewsStore
 
 
 MAX_LIMIT = 300
 DEFAULT_LIMIT = 100
 VALID_SOURCE_STATUSES = {"available", "permission_denied", "disabled"}
+DEFAULT_PUBLIC_NEWS_CACHE = Path("outputs/dashboard/public_news_cache.json")
 
 
 def _bounded_limit(value: int | None) -> int:
@@ -539,6 +544,190 @@ class NewsEventStore:
             return _run(conn)
         with connect(self.service) as active_conn:
             return _run(active_conn)
+
+
+class PublicNewsIngestionService:
+    def __init__(
+        self,
+        *,
+        store: NewsEventStore | None = None,
+        fallback_store: JsonPublicNewsStore | None = None,
+        mention_mapper: NewsMentionMapper | None = None,
+    ) -> None:
+        self.store = store or NewsEventStore()
+        self.fallback_store = fallback_store or JsonPublicNewsStore(DEFAULT_PUBLIC_NEWS_CACHE)
+        self.mention_mapper = mention_mapper or NewsMentionMapper()
+
+    def refresh(self) -> dict[str, Any]:
+        try:
+            items, warnings = fetch_sina_public_news()
+        except Exception as exc:
+            items = []
+            warnings = [f"sina_finance refresh failed: {exc}"]
+        db_result = self.store.upsert_public_items(items) if items else {"received": 0, "stored": 0}
+        cache_result = self.fallback_store.upsert_items(items) if items else {"received": 0, "stored": 0}
+        mention_result = self.mention_mapper.map_items(items) if items else {"mentions": 0}
+        counts_by_category = dict(Counter(item.category for item in items))
+        return {
+            **db_result,
+            "items_received": len(items),
+            "fallback_cache_stored": cache_result["stored"],
+            "mentions": mention_result["mentions"],
+            "counts_by_category": counts_by_category,
+            "warnings": warnings,
+        }
+
+
+def _fallback_public_news_item(item: PublicNewsItem) -> dict[str, Any]:
+    row = item.to_dict()
+    return {
+        **row,
+        "id": row["news_id"],
+        "stocks": [],
+        "metadata": {},
+    }
+
+
+def _fallback_public_news_matches(
+    item: PublicNewsItem,
+    *,
+    source: str | None,
+    category: str | None,
+    q: str | None,
+    start_time: str | None,
+    end_time: str | None,
+) -> bool:
+    if source and item.source != source:
+        return False
+    if category and category != "all" and item.category != category:
+        return False
+    if q:
+        needle = q.strip().lower()
+        if needle and needle not in item.title.lower() and needle not in item.summary.lower():
+            return False
+    if start_time and item.published_at < start_time:
+        return False
+    if end_time and item.published_at > end_time:
+        return False
+    return True
+
+
+def _fallback_public_news_payload(
+    *,
+    fallback_store: JsonPublicNewsStore,
+    warning: str,
+    source: str | None = None,
+    category: str | None = None,
+    q: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
+) -> dict[str, Any]:
+    bounded_limit = _bounded_limit(limit)
+    bounded_offset = _bounded_offset(offset)
+    filtered = [
+        item
+        for item in fallback_store.load_all()
+        if _fallback_public_news_matches(
+            item,
+            source=source,
+            category=category,
+            q=q,
+            start_time=start_time,
+            end_time=end_time,
+        )
+    ]
+    filtered = sorted(filtered, key=lambda item: item.published_at, reverse=True)
+    page = filtered[bounded_offset : bounded_offset + bounded_limit]
+    source_counts = Counter(item.source for item in filtered)
+    category_counts = Counter(item.category or "other" for item in filtered)
+    warnings = [warning]
+    if not page:
+        warnings.append("no cached public news items")
+    return {
+        "items": [_fallback_public_news_item(item) for item in page],
+        "total": len(filtered),
+        "limit": bounded_limit,
+        "offset": bounded_offset,
+        "summary": {
+            "total_news": len(filtered),
+            "latest_published_at": filtered[0].published_at if filtered else "",
+            "latest_collected_at": max((item.collected_at for item in filtered), default=""),
+            "source_count": len(source_counts),
+            "source_counts": [
+                {"name": name, "rows": rows}
+                for name, rows in sorted(source_counts.items(), key=lambda item: (-item[1], item[0]))
+            ],
+            "category_counts": [
+                {"name": name, "rows": rows}
+                for name, rows in sorted(category_counts.items(), key=lambda item: (-item[1], item[0]))
+            ],
+        },
+        "warnings": warnings,
+    }
+
+
+def load_public_news_for_dashboard(
+    *,
+    source: str | None = None,
+    category: str | None = None,
+    q: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    asset_id: str | None = None,
+    ts_code: str | None = None,
+    limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
+    store: NewsEventStore | None = None,
+    fallback_store: JsonPublicNewsStore | None = None,
+) -> dict[str, Any]:
+    active_store = store or NewsEventStore()
+    active_fallback_store = fallback_store or JsonPublicNewsStore(DEFAULT_PUBLIC_NEWS_CACHE)
+    try:
+        payload = active_store.list_news(
+            source=source,
+            category=category,
+            q=q,
+            start_time=start_time,
+            end_time=end_time,
+            asset_id=asset_id,
+            ts_code=ts_code,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        return _fallback_public_news_payload(
+            fallback_store=active_fallback_store,
+            warning=f"fallback json cache used: {exc}",
+            source=source,
+            category=category,
+            q=q,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            offset=offset,
+        )
+    if payload.get("items"):
+        return payload
+    fallback_payload = _fallback_public_news_payload(
+        fallback_store=active_fallback_store,
+        warning="fallback json cache used: no db public news items",
+        source=source,
+        category=category,
+        q=q,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+        offset=offset,
+    )
+    if fallback_payload["items"]:
+        return fallback_payload
+    return payload
+
+
+def refresh_public_news_for_dashboard() -> dict[str, Any]:
+    return PublicNewsIngestionService().refresh()
 
 
 def load_asset_news(
