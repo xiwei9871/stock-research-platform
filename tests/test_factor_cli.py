@@ -7105,3 +7105,106 @@ def test_free_enrichment_backfill_cli_dispatches_and_prints_artifacts(monkeypatc
         "free_enrichment_backfill|failures|outputs/free/dataset_failures.csv",
         "free_enrichment_backfill|datasets|2",
     ]
+
+
+def test_cli_accepts_yanbaoke_report_backfill_plan_command():
+    args = build_parser().parse_args(
+        [
+            "yanbaoke-report-backfill-plan",
+            "--candidate-path",
+            "data/candidates.csv",
+            "--existing-coverage-path",
+            "data/existing.csv",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-12",
+            "--output-dir",
+            "outputs/yanbaoke",
+        ]
+    )
+
+    assert args.command == "yanbaoke-report-backfill-plan"
+    assert args.candidate_path == "data/candidates.csv"
+    assert args.existing_coverage_path == "data/existing.csv"
+    assert args.start_date == "2025-01-01"
+    assert args.end_date == "2026-06-12"
+    assert args.output_dir == "outputs/yanbaoke"
+
+
+def test_cli_dispatches_yanbaoke_report_backfill_plan(monkeypatch, tmp_path, capsys):
+    candidate_path = tmp_path / "candidates.csv"
+    existing_coverage_path = tmp_path / "existing.csv"
+    pd.DataFrame(
+        [
+            {"asset_id": "1", "report_date": "2026-01-31"},
+            {"asset_id": "2", "report_date": "2026-02-28"},
+        ]
+    ).to_csv(candidate_path, index=False)
+    pd.DataFrame([{"asset_id": "1", "report_date": "2026-01-31"}]).to_csv(
+        existing_coverage_path,
+        index=False,
+    )
+
+    calls = []
+
+    def fake_build_yanbaoke_inventory_plan(**kwargs):
+        calls.append(kwargs)
+        assert str(kwargs["candidates"]["asset_id"].dtype) == "string"
+        assert str(kwargs["existing_coverage"]["asset_id"].dtype) == "string"
+        return {
+            "paths": {
+                "candidate_reports": "outputs/yanbaoke/candidate_reports.csv",
+                "existing_report_coverage": "outputs/yanbaoke/existing_report_coverage.csv",
+                "gap_matrix": "outputs/yanbaoke/gap_matrix.csv",
+                "sector_gap_matrix": "outputs/yanbaoke/sector_gap_matrix.csv",
+                "asset_gap_matrix": "outputs/yanbaoke/asset_gap_matrix.csv",
+                "priority_queue": "outputs/yanbaoke/priority_queue.csv",
+                "pilot_queue": "outputs/yanbaoke/pilot_queue.csv",
+                "report": "outputs/yanbaoke/report.md",
+            },
+            "candidates": pd.DataFrame([{"asset_id": "1"}, {"asset_id": "2"}]),
+            "pilot_queue": pd.DataFrame([{"asset_id": "1"}]),
+        }
+
+    monkeypatch.setattr(cli, "build_yanbaoke_inventory_plan", fake_build_yanbaoke_inventory_plan)
+
+    cli.main_for_args(
+        [
+            "yanbaoke-report-backfill-plan",
+            "--candidate-path",
+            str(candidate_path),
+            "--existing-coverage-path",
+            str(existing_coverage_path),
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-12",
+            "--output-dir",
+            "outputs/yanbaoke",
+        ]
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["start_date"] == "2025-01-01"
+    assert calls[0]["end_date"] == "2026-06-12"
+    assert calls[0]["output_dir"] == "outputs/yanbaoke"
+    assert calls[0]["candidates"].to_dict("records") == [
+        {"asset_id": "1", "report_date": "2026-01-31"},
+        {"asset_id": "2", "report_date": "2026-02-28"},
+    ]
+    assert calls[0]["existing_coverage"].to_dict("records") == [
+        {"asset_id": "1", "report_date": "2026-01-31"}
+    ]
+    assert capsys.readouterr().out.strip().splitlines() == [
+        "yanbaoke_report_backfill_plan|candidate_reports|outputs/yanbaoke/candidate_reports.csv",
+        "yanbaoke_report_backfill_plan|existing_report_coverage|outputs/yanbaoke/existing_report_coverage.csv",
+        "yanbaoke_report_backfill_plan|gap_matrix|outputs/yanbaoke/gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|sector_gap_matrix|outputs/yanbaoke/sector_gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|asset_gap_matrix|outputs/yanbaoke/asset_gap_matrix.csv",
+        "yanbaoke_report_backfill_plan|priority_queue|outputs/yanbaoke/priority_queue.csv",
+        "yanbaoke_report_backfill_plan|pilot_queue|outputs/yanbaoke/pilot_queue.csv",
+        "yanbaoke_report_backfill_plan|report|outputs/yanbaoke/report.md",
+        "yanbaoke_report_backfill_plan|candidate_rows|2",
+        "yanbaoke_report_backfill_plan|pilot_rows|1",
+    ]

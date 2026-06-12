@@ -452,6 +452,7 @@ from stock_research.stock_report_web_collection import (
     run_stock_report_search_plan,
     run_stock_report_web_source_collection,
 )
+from stock_research.yanbaoke_report_backfill import build_yanbaoke_inventory_plan
 from stock_research.hibor_reports import (
     build_hibor_a_tier_backfill_plan,
     build_hibor_download_queue,
@@ -3264,6 +3265,13 @@ def build_parser() -> argparse.ArgumentParser:
     stock_report_pdf_backfill_watchdog.add_argument("--report-account", default="jarvis")
     stock_report_pdf_backfill_watchdog.add_argument("--openclaw-bin", default="openclaw")
     stock_report_pdf_backfill_watchdog.add_argument("--report-dry-run", action="store_true")
+
+    yanbaoke_report_backfill_plan = subparsers.add_parser("yanbaoke-report-backfill-plan")
+    yanbaoke_report_backfill_plan.add_argument("--candidate-path", required=True)
+    yanbaoke_report_backfill_plan.add_argument("--existing-coverage-path")
+    yanbaoke_report_backfill_plan.add_argument("--start-date", default="2025-01-01")
+    yanbaoke_report_backfill_plan.add_argument("--end-date", default="2026-06-12")
+    yanbaoke_report_backfill_plan.add_argument("--output-dir", default="outputs/research/yanbaoke_backfill")
 
     hibor_download_queue = subparsers.add_parser("build-hibor-download-queue")
     hibor_download_queue.add_argument("--candidates-path", required=True)
@@ -6386,6 +6394,30 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"stock_report_pdf_backfill_watchdog|parse_error|{summary.failed_tasks}")
         print(f"stock_report_pdf_backfill_watchdog|pending|{summary.pending_tasks}")
         print(f"stock_report_pdf_backfill_watchdog|target_price_rows|{summary.total_rows_written}")
+    elif args.command == "yanbaoke-report-backfill-plan":
+        candidates = pd.read_csv(args.candidate_path, dtype="string", low_memory=False)
+        existing_coverage = (
+            pd.read_csv(args.existing_coverage_path, dtype="string", low_memory=False)
+            if args.existing_coverage_path
+            else pd.DataFrame()
+        )
+        result = build_yanbaoke_inventory_plan(
+            candidates=candidates,
+            existing_coverage=existing_coverage,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"yanbaoke_report_backfill_plan|candidate_reports|{result['paths']['candidate_reports']}")
+        print(f"yanbaoke_report_backfill_plan|existing_report_coverage|{result['paths']['existing_report_coverage']}")
+        print(f"yanbaoke_report_backfill_plan|gap_matrix|{result['paths']['gap_matrix']}")
+        print(f"yanbaoke_report_backfill_plan|sector_gap_matrix|{result['paths']['sector_gap_matrix']}")
+        print(f"yanbaoke_report_backfill_plan|asset_gap_matrix|{result['paths']['asset_gap_matrix']}")
+        print(f"yanbaoke_report_backfill_plan|priority_queue|{result['paths']['priority_queue']}")
+        print(f"yanbaoke_report_backfill_plan|pilot_queue|{result['paths']['pilot_queue']}")
+        print(f"yanbaoke_report_backfill_plan|report|{result['paths']['report']}")
+        print(f"yanbaoke_report_backfill_plan|candidate_rows|{len(result['candidates'])}")
+        print(f"yanbaoke_report_backfill_plan|pilot_rows|{len(result['pilot_queue'])}")
     elif args.command == "build-hibor-download-queue":
         pandas_module = __import__("pandas")
         candidates = pandas_module.read_csv(args.candidates_path, low_memory=False)
