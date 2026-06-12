@@ -792,3 +792,34 @@ def test_public_news_ingestion_keeps_successful_counts_when_later_stages_fail(
     assert result["mentions"] == 0
     assert "fallback cache write failed: cache write failed" in result["warnings"]
     assert "mention mapping failed: mention mapping failed" in result["warnings"]
+
+
+def test_public_news_ingestion_handles_default_mapper_construction_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fake = FakeDb()
+    item = make_item()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
+    monkeypatch.setattr(
+        news,
+        "_asset_rows_from_db",
+        lambda _service: (_ for _ in ()).throw(RuntimeError("asset db offline")),
+    )
+
+    service = news.PublicNewsIngestionService(
+        store=news.NewsEventStore(service="test"),
+        fallback_store=JsonPublicNewsStore(tmp_path / "public_news.json"),
+    )
+    result = service.refresh()
+
+    assert result["items_received"] == 1
+    assert result["stored"] == 1
+    assert result["fallback_cache_stored"] == 1
+    assert result["mentions"] == 0
+    assert "mention mapping failed: asset db offline" in result["warnings"]

@@ -556,7 +556,7 @@ class PublicNewsIngestionService:
     ) -> None:
         self.store = store or NewsEventStore()
         self.fallback_store = fallback_store or JsonPublicNewsStore(DEFAULT_PUBLIC_NEWS_CACHE)
-        self.mention_mapper = mention_mapper or NewsMentionMapper()
+        self.mention_mapper = mention_mapper
 
     def refresh(self) -> dict[str, Any]:
         try:
@@ -578,7 +578,8 @@ class PublicNewsIngestionService:
             except Exception as exc:
                 warnings.append(f"fallback cache write failed: {exc}")
             try:
-                mention_result = self.mention_mapper.map_items(items)
+                mention_mapper = self.mention_mapper or NewsMentionMapper()
+                mention_result = mention_mapper.map_items(items)
             except Exception as exc:
                 warnings.append(f"mention mapping failed: {exc}")
         counts_by_category = dict(Counter(item.category for item in items))
