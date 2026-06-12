@@ -62,6 +62,37 @@ def test_build_scored_candidates_prioritizes_deep_p0_missing_coverage():
     assert top["priority_score"] > scored.loc[scored["report_id"].eq("r2"), "priority_score"].iloc[0]
 
 
+def test_build_scored_candidates_priority_score_exposes_component_columns():
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头成长空间打开",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        ]
+    )
+
+    scored = build_scored_candidates(candidates, existing_coverage=pd.DataFrame())
+
+    component_columns = [
+        "report_type_score",
+        "sector_score",
+        "broker_score",
+        "time_score",
+        "scarcity_score",
+    ]
+    assert set(component_columns) <= set(scored.columns)
+    row = scored.iloc[0]
+    assert row[component_columns].sum() == row["priority_score"]
+
+
 def test_build_scored_candidates_empty_candidates_returns_shaped_frame():
     scored = build_scored_candidates(pd.DataFrame(), existing_coverage=pd.DataFrame())
 
@@ -76,6 +107,11 @@ def test_build_scored_candidates_empty_candidates_returns_shaped_frame():
         "sector_pilot_quota",
         "asset_priority",
         "coverage_gap_reason",
+        "report_type_score",
+        "sector_score",
+        "broker_score",
+        "time_score",
+        "scarcity_score",
         "priority_score",
     } <= set(scored.columns)
 
@@ -163,7 +199,7 @@ def test_build_sector_quota_pilot_queue_deduplicates_report_id():
                 "report_id": "same-report",
                 "report_date": "2026-04-20",
                 "normalized_broker": "中信证券",
-                "stock_code": "000001.SZ",
+                "stock_code": "",
                 "normalized_title": "公司深度报告",
                 "sector_quota_bucket": "p0_growth_tech_healthcare",
                 "coverage_gap_reason": "missing_asset_report",
@@ -172,6 +208,47 @@ def test_build_sector_quota_pilot_queue_deduplicates_report_id():
             {
                 "report_id": "same-report",
                 "report_date": "2026-04-19",
+                "normalized_broker": "中信证券",
+                "stock_code": "",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 95.0,
+            },
+            {
+                "report_id": "unique-report",
+                "report_date": "2026-04-18",
+                "normalized_broker": "中信证券",
+                "stock_code": "000002.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 80.0,
+            },
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(scored, total_limit=3)
+
+    assert pilot["report_id"].tolist() == ["same-report", "unique-report"]
+
+
+def test_build_sector_quota_pilot_queue_deduplicates_same_report_with_different_report_id():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "vendor-a",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 100.0,
+            },
+            {
+                "report_id": "vendor-b",
+                "report_date": "2026-04-20",
                 "normalized_broker": "中信证券",
                 "stock_code": "000001.SZ",
                 "normalized_title": "公司深度报告",
@@ -194,7 +271,7 @@ def test_build_sector_quota_pilot_queue_deduplicates_report_id():
 
     pilot = build_sector_quota_pilot_queue(scored, total_limit=3)
 
-    assert pilot["report_id"].tolist() == ["same-report", "unique-report"]
+    assert pilot["report_id"].tolist() == ["vendor-a", "unique-report"]
 
 
 def test_build_sector_quota_pilot_queue_quota_shortfall_fills_sorted_remainder():
@@ -282,6 +359,52 @@ def test_build_sector_quota_pilot_queue_empty_scored_preserves_columns_with_rank
 
     assert pilot.empty
     assert list(pilot.columns) == [*scored.columns, "pilot_rank"]
+
+
+def test_build_scored_candidates_existing_duplicate_requires_same_report_date():
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "same-date",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            },
+            {
+                "report_id": "different-date",
+                "report_date": "2026-04-21",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            },
+        ]
+    )
+    existing = pd.DataFrame(
+        [
+            {
+                "report_date": "2026-04-20",
+                "normalized_title": "公司深度报告：AI算力龙头",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "report_type": "P1",
+            }
+        ]
+    )
+
+    scored = build_scored_candidates(candidates, existing_coverage=existing)
+
+    reasons = dict(zip(scored["report_id"], scored["coverage_gap_reason"], strict=True))
+    assert reasons["same-date"] == "existing_duplicate"
+    assert reasons["different-date"] != "existing_duplicate"
 
 
 def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
@@ -399,9 +522,22 @@ def test_yanbaoke_inventory_plan_outputs_expected_columns(tmp_path: Path):
         "sector_quota_bucket",
         "asset_priority",
         "coverage_gap_reason",
+        "report_type_score",
+        "sector_score",
+        "broker_score",
+        "time_score",
+        "scarcity_score",
         "priority_score",
     }
     assert expected_columns.issubset(set(priority.columns))
+    component_columns = [
+        "report_type_score",
+        "sector_score",
+        "broker_score",
+        "time_score",
+        "scarcity_score",
+    ]
+    assert priority.loc[0, component_columns].sum() == priority.loc[0, "priority_score"]
 
 
 def test_build_yanbaoke_inventory_plan_allows_missing_existing_coverage(tmp_path: Path):

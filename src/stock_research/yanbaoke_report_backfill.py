@@ -40,6 +40,14 @@ A_TIER_BROKER_KEYWORDS = (
     "汇丰",
 )
 
+PRIORITY_SCORE_COMPONENT_COLUMNS = [
+    "report_type_score",
+    "sector_score",
+    "broker_score",
+    "time_score",
+    "scarcity_score",
+]
+
 
 def load_sector_priority_config(path: str | Path | None = None) -> pd.DataFrame:
     config_path = Path(path) if path is not None else DEFAULT_SECTOR_PRIORITY_PATH
@@ -71,6 +79,8 @@ def build_scored_candidates(
         frame["sector_pilot_quota"] = pd.Series(dtype="int64")
         frame["asset_priority"] = pd.Series(dtype="string")
         frame["coverage_gap_reason"] = pd.Series(dtype="string")
+        for column in PRIORITY_SCORE_COMPONENT_COLUMNS:
+            frame[column] = pd.Series(dtype="float64")
         frame["priority_score"] = pd.Series(dtype="float64")
         return frame.sort_values(
             ["priority_score", "report_date", "report_id"],
@@ -80,7 +90,9 @@ def build_scored_candidates(
     frame[["theme_bucket", "sector_priority", "sector_quota_bucket", "sector_pilot_quota"]] = sector_fields
     frame["asset_priority"] = frame.apply(_asset_priority, axis=1)
     frame["coverage_gap_reason"] = frame.apply(lambda row: _coverage_gap_reason(row, existing), axis=1)
-    frame["priority_score"] = frame.apply(_priority_score, axis=1)
+    score_components = frame.apply(_priority_score_components, axis=1, result_type="expand")
+    frame[PRIORITY_SCORE_COMPONENT_COLUMNS] = score_components
+    frame["priority_score"] = frame[PRIORITY_SCORE_COMPONENT_COLUMNS].sum(axis=1).astype(float)
     return frame.sort_values(
         ["priority_score", "report_date", "report_id"],
         ascending=[False, False, True],
@@ -209,16 +221,18 @@ def build_sector_quota_pilot_queue(
 
 
 def _pilot_candidate_key(row: pd.Series) -> Any:
-    report_id = str(row.get("report_id", "")).strip()
-    if report_id:
-        return ("report_id", report_id)
-    return (
-        "composite",
+    composite_parts = (
         str(row.get("report_date", "")).strip(),
         str(row.get("normalized_broker", "")).strip(),
         str(row.get("stock_code", "")).strip(),
         str(row.get("normalized_title", "")).strip(),
     )
+    if all(composite_parts):
+        return ("composite", *composite_parts)
+    report_id = str(row.get("report_id", "")).strip()
+    if report_id:
+        return ("report_id", report_id)
+    return ("composite", *composite_parts)
 
 
 def build_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
@@ -352,6 +366,8 @@ def render_inventory_report(
             f"Candidate count: {len(scored)}",
             f"Sector group count: {len(sector_gap)}",
             f"Asset group count: {len(asset_gap)}",
+            "",
+            "Priority queue CSV includes priority score component columns.",
             "",
             "## Priority Distribution",
             "",
@@ -496,21 +512,24 @@ def _coverage_gap_reason(row: pd.Series, existing: pd.DataFrame) -> str:
     if existing.empty:
         return "missing_asset_report" if str(row.get("stock_code", "")).strip() else "missing_sector_report"
     normalized = existing.copy()
-    for column in ["stock_code", "normalized_title", "normalized_broker"]:
+    for column in ["report_date", "stock_code", "normalized_title", "normalized_broker"]:
         if column not in normalized.columns:
             normalized[column] = ""
+    normalized["report_date"] = normalized["report_date"].map(_normalize_report_date)
+    for column in ["stock_code", "normalized_title", "normalized_broker"]:
         normalized[column] = normalized[column].astype("string").fillna("").map(_normalize_text)
+    same_date = normalized["report_date"].eq(_normalize_report_date(row.get("report_date", "")))
     same_asset = normalized["stock_code"].eq(_normalize_text(row.get("stock_code", "")))
     same_title = normalized["normalized_title"].eq(_normalize_text(row.get("title", "")))
     same_broker = normalized["normalized_broker"].eq(_normalize_text(row.get("broker", "")))
-    if bool((same_asset & same_title & same_broker).any()):
+    if bool((same_date & same_asset & same_title & same_broker).any()):
         return "existing_duplicate"
     if str(row.get("stock_code", "")).strip() and not bool(same_asset.any()):
         return "missing_asset_report"
     return "missing_sector_report"
 
 
-def _priority_score(row: pd.Series) -> float:
+def _priority_score_components(row: pd.Series) -> pd.Series:
     report_type_score = {"P1": 30, "P2": 20, "P3": 5}.get(str(row.get("report_type_bucket")), 0)
     sector_score = {"P0": 25, "P1": 18, "P2": 10, "P3": 0}.get(str(row.get("sector_priority")), 0)
     broker = str(row.get("broker", ""))
@@ -522,4 +541,21 @@ def _priority_score(row: pd.Series) -> float:
         "missing_sector_report": 8,
         "existing_duplicate": -30,
     }.get(str(row.get("coverage_gap_reason")), 0)
-    return float(report_type_score + sector_score + broker_score + time_score + gap_score)
+    return pd.Series(
+        {
+            "report_type_score": float(report_type_score),
+            "sector_score": float(sector_score),
+            "broker_score": float(broker_score),
+            "time_score": float(time_score),
+            "scarcity_score": float(gap_score),
+        }
+    )
+
+
+def _normalize_report_date(value: Any) -> str:
+    if _is_missing(value):
+        return ""
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return str(value).strip()
+    return parsed.strftime("%Y-%m-%d")
