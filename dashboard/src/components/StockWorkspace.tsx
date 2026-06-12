@@ -239,6 +239,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
 
     setIsResearchReportsLoading(true);
     setResearchReportsError(null);
+    setResearchReports(null);
 
     fetchAssetResearchReports(profile.canonical_asset_id, { limit: 5, lookbackDays: 90 })
       .then((payload) => {

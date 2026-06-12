@@ -86,30 +86,10 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-const newsPayload: PublicNewsResponse = {
-  warnings: [],
-  items: [
-    {
-      news_id: 'n1',
-      source: 'sina_finance',
-      source_channel: 'company',
-      category: 'company',
-      title: '000001 平安银行公告',
-      summary: '公司新闻',
-      url: 'https://example.com/news/1',
-      published_at: '2026-06-08T09:30:00',
-      collected_at: '2026-06-08T09:31:00',
-      raw_id: 'n1',
-      raw_payload: {},
-      status: 'active'
-    }
-  ]
-};
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
-  apiMocks.fetchAssetResearchReports.mockResolvedValue({
+function makeResearchReports(
+  overrides: Partial<AssetResearchReportResponse> = {}
+): AssetResearchReportResponse {
+  return {
     asset_id: '000001.SZ',
     summary: {
       report_count_30d: 2,
@@ -148,8 +128,35 @@ beforeEach(() => {
         metadata: {}
       }
     ],
-    warnings: []
-  });
+    warnings: [],
+    ...overrides
+  };
+}
+
+const newsPayload: PublicNewsResponse = {
+  warnings: [],
+  items: [
+    {
+      news_id: 'n1',
+      source: 'sina_finance',
+      source_channel: 'company',
+      category: 'company',
+      title: '000001 平安银行公告',
+      summary: '公司新闻',
+      url: 'https://example.com/news/1',
+      published_at: '2026-06-08T09:30:00',
+      collected_at: '2026-06-08T09:31:00',
+      raw_id: 'n1',
+      raw_payload: {},
+      status: 'active'
+    }
+  ]
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
+  apiMocks.fetchAssetResearchReports.mockResolvedValue(makeResearchReports());
   apiMocks.fetchPublicNews.mockResolvedValue(newsPayload);
   apiMocks.searchAssets.mockResolvedValue([]);
 });
@@ -224,7 +231,14 @@ describe('StockWorkspace', () => {
     const secondProfile = makeProfile({
       asset_id: '600000.SH',
       canonical_asset_id: '600000.SH',
-      asset: { asset_id: '600000.SH', symbol: '600000', name: '浦发银行', exchange: 'SH', board: null, is_active: true },
+      asset: {
+        asset_id: '600000.SH',
+        symbol: '600000',
+        name: '浦发银行',
+        exchange: 'SH',
+        board: null,
+        is_active: true
+      },
       signals: [],
       decisions: [],
       outcomes: [],
@@ -267,6 +281,74 @@ describe('StockWorkspace', () => {
     expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
     expect(screen.getByText('90d reports 4')).toBeInTheDocument();
     expect(apiMocks.fetchAssetResearchReports).toHaveBeenCalledWith('000001.SZ', { limit: 5, lookbackDays: 90 });
+  });
+
+  it('clears stale research reports while loading reports for a newly selected stock', async () => {
+    const secondReports = deferred<AssetResearchReportResponse>();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: { asset_id: '600000.SH', symbol: '600000', name: '浦发银行', exchange: 'SH', board: null, is_active: true },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
+    apiMocks.fetchAssetResearchReports
+      .mockResolvedValueOnce(makeResearchReports())
+      .mockReturnValueOnce(secondReports.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
+    expect(screen.getByText('90d reports 4')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetResearchReports).toHaveBeenLastCalledWith('600000.SH', {
+        limit: 5,
+        lookbackDays: 90
+      })
+    );
+
+    expect(screen.queryByText('平安银行深度报告')).not.toBeInTheDocument();
+    expect(screen.queryByText('90d reports 4')).not.toBeInTheDocument();
+
+    await act(async () => {
+      secondReports.resolve(
+        makeResearchReports({
+          asset_id: '600000.SH',
+          summary: {
+            report_count_30d: 1,
+            report_count_90d: 2,
+            broker_coverage_count_90d: 1,
+            latest_report_date: '2026-06-04',
+            latest_rating: '增持',
+            latest_target_price: 12.3
+          },
+          items: [
+            {
+              ...makeResearchReports().items[0],
+              report_id: 'r2',
+              asset_id: '600000.SH',
+              ts_code: '600000.SH',
+              stock_name: '浦发银行',
+              report_title: '浦发银行跟踪报告',
+              broker: '中信证券',
+              source_url: 'https://example.com/r2'
+            }
+          ]
+        })
+      );
+      await secondReports.promise;
+    });
+
+    expect(await screen.findByText('浦发银行跟踪报告')).toBeInTheDocument();
   });
 
   it('does not show stale research reports after a later profile load clears the profile', async () => {

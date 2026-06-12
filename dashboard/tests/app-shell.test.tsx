@@ -54,6 +54,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchMarketMonitorEod: vi.fn(),
   fetchResearchReportSummary: vi.fn(),
   fetchResearchReports: vi.fn(),
+  fetchAssetResearchReports: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -736,6 +737,19 @@ describe('dashboard app shell', () => {
       total: 1,
       limit: 50,
       offset: 0,
+      warnings: []
+    });
+    apiMocks.fetchAssetResearchReports.mockResolvedValue({
+      asset_id: 'CN:SZ:000001',
+      summary: {
+        report_count_30d: 0,
+        report_count_90d: 0,
+        broker_coverage_count_90d: 0,
+        latest_report_date: null,
+        latest_rating: null,
+        latest_target_price: null
+      },
+      items: [],
       warnings: []
     });
   });
