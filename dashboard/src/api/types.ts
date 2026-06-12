@@ -601,6 +601,9 @@ export type PublicNewsStockMention = {
   mention_role?: string;
   mention_confidence?: number | null;
   mapping_method?: string;
+  theme_name?: string;
+  theme_confidence?: number | null;
+  trade_date?: string;
 };
 
 export type CountRow = {

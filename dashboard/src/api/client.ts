@@ -127,7 +127,9 @@ export async function fetchAssetNews(
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   if (params.category) searchParams.set('category', params.category);
   if (params.source) searchParams.set('source', params.source);
-  return getJson(`/api/assets/${encodeURIComponent(assetId)}/news?${searchParams.toString()}`);
+  const query = searchParams.toString();
+  const path = `/api/assets/${encodeURIComponent(assetId)}/news`;
+  return getJson(query ? `${path}?${query}` : path);
 }
 
 export async function fetchResearchReportSummary(): Promise<ResearchReportSummary> {

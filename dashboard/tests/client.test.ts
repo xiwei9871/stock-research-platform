@@ -120,6 +120,25 @@ describe('dashboard API client', () => {
     expect(result.asset_id).toBe('CN:SH:600519');
   });
 
+  it('fetches asset news without trailing query when params are omitted', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          asset_id: 'CN:SH:600519',
+          items: [],
+          summary: { news_count_1d: 0, news_count_3d: 0, news_count_7d: 0 },
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchAssetNews('CN:SH:600519');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assets/CN%3ASH%3A600519/news');
+  });
+
   it('refreshes public news through POST', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
