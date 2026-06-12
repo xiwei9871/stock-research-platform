@@ -13,6 +13,7 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const trimmedQuery = query.trim();
@@ -22,7 +23,7 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
   const isMenuOpen = hasSearched && (isSearching || Boolean(error) || Boolean(payload));
 
   useEffect(() => {
-    if (trimmedQuery.length < 2) {
+    if (trimmedQuery.length < 2 || dismissedQuery === trimmedQuery) {
       requestIdRef.current += 1;
       setPayload(null);
       setError(null);
@@ -57,10 +58,17 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [trimmedQuery]);
+  }, [dismissedQuery, trimmedQuery]);
+
+  function handleQueryChange(nextQuery: string) {
+    requestIdRef.current += 1;
+    setDismissedQuery(null);
+    setQuery(nextQuery);
+  }
 
   function clearSearch() {
     requestIdRef.current += 1;
+    setDismissedQuery(null);
     setQuery('');
     setPayload(null);
     setError(null);
@@ -76,6 +84,8 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Escape') {
       event.preventDefault();
+      requestIdRef.current += 1;
+      setDismissedQuery(trimmedQuery);
       setPayload(null);
       setError(null);
       setIsSearching(false);
@@ -117,7 +127,7 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
         aria-expanded={isMenuOpen}
         aria-label="Global search"
         autoComplete="off"
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => handleQueryChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Search stocks, news, reports"
         role="combobox"

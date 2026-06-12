@@ -126,6 +126,52 @@ describe('GlobalSearchBox', () => {
     expect(screen.queryByText('贵州茅台')).not.toBeInTheDocument();
   });
 
+  it('ignores an in-flight response after the input changes before the next debounce starts', async () => {
+    let resolveFirst: (payload: GlobalSearchResponse) => void = () => undefined;
+    apiMocks.fetchGlobalSearch.mockReturnValueOnce(new Promise<GlobalSearchResponse>((resolve) => {
+      resolveFirst = resolve;
+    }));
+
+    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+
+    await searchFor('茅台');
+    fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '浦发' } });
+
+    await act(async () => {
+      resolveFirst(
+        makePayload({
+          query: '茅台',
+          groups: [{ key: 'assets', label: 'Stocks', items: [makeResult({ title: '贵州茅台' })] }]
+        })
+      );
+    });
+
+    expect(screen.queryByText('贵州茅台')).not.toBeInTheDocument();
+  });
+
+  it('does not reopen the menu when an in-flight response resolves after Escape', async () => {
+    let resolveSearch: (payload: GlobalSearchResponse) => void = () => undefined;
+    apiMocks.fetchGlobalSearch.mockReturnValueOnce(new Promise<GlobalSearchResponse>((resolve) => {
+      resolveSearch = resolve;
+    }));
+
+    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+
+    await searchFor('茅台');
+    fireEvent.keyDown(screen.getByLabelText('Global search'), { key: 'Escape' });
+
+    await act(async () => {
+      resolveSearch(
+        makePayload({
+          groups: [{ key: 'assets', label: 'Stocks', items: [makeResult({ title: '贵州茅台' })] }]
+        })
+      );
+    });
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('贵州茅台')).not.toBeInTheDocument();
+  });
+
   it('opens the highlighted result with ArrowDown and Enter', async () => {
     const first = makeResult({ id: 'CN:SH:600519', title: '贵州茅台' });
     const second = makeResult({ id: 'CN:SZ:000001', title: '平安银行', subtitle: '000001.SZ' });
