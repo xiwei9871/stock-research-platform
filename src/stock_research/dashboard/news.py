@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect, execute_many, fetch_all
+from stock_research.db import connect, execute, execute_many, fetch_all
 from stock_research.public_news.models import PublicNewsItem
 
 
@@ -113,6 +114,48 @@ def _item_to_source_row(item: PublicNewsItem) -> dict[str, Any]:
     }
 
 
+def _asset_rows_from_db(service: str) -> list[dict[str, str]]:
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT asset_id, ts_code, name
+            FROM core.asset_master
+            WHERE asset_id IS NOT NULL
+              AND ts_code IS NOT NULL
+              AND name IS NOT NULL
+            """,
+        )
+    return [
+        {
+            "asset_id": str(row.get("asset_id") or ""),
+            "ts_code": str(row.get("ts_code") or ""),
+            "name": str(row.get("name") or ""),
+        }
+        for row in rows
+    ]
+
+
+def _dedupe_mentions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str]] = set()
+    deduped: list[dict[str, Any]] = []
+    for row in rows:
+        key = (row["source_event_id"], row["asset_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
+def _published_trade_date(value: str) -> str | None:
+    text = str(value or "")[:10]
+    try:
+        return date.fromisoformat(text).isoformat()
+    except ValueError:
+        return None
+
+
 def _stock_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "asset_id": str(row.get("asset_id") or ""),
@@ -151,6 +194,14 @@ def _news_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _category_counts_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for item in items:
+        category = str(item.get("category") or "other")
+        counts[category] = counts.get(category, 0) + 1
+    return [{"name": name, "rows": rows} for name, rows in sorted(counts.items())]
+
+
 def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -184,6 +235,82 @@ def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
         clauses.append("m.ts_code = %s")
         params.append(ts_code)
     return clauses, params
+
+
+class NewsMentionMapper:
+    def __init__(
+        self,
+        *,
+        assets: list[dict[str, str]] | None = None,
+        service: str = SETTINGS.research_service,
+    ) -> None:
+        self.service = service
+        self.assets = assets if assets is not None else _asset_rows_from_db(service)
+
+    def map_items(self, items: Iterable[PublicNewsItem]) -> dict[str, int]:
+        rows: list[dict[str, Any]] = []
+        for item in items:
+            text = f"{item.title} {item.summary} {item.url}"
+            for asset in self.assets:
+                mapping_method = self._match_method(text, asset)
+                if not mapping_method:
+                    continue
+                rows.append(
+                    {
+                        "source_event_id": item.news_id,
+                        "asset_id": asset["asset_id"],
+                        "ts_code": asset["ts_code"],
+                        "stock_name": asset["name"],
+                        "mention_role": "subject",
+                        "mention_confidence": 1.0,
+                        "theme_name": None,
+                        "theme_confidence": None,
+                        "mapping_method": mapping_method,
+                        "trade_date": _published_trade_date(item.published_at),
+                    }
+                )
+        deduped = _dedupe_mentions(rows)
+        if not deduped:
+            return {"mentions": 0}
+        source_event_ids = sorted({row["source_event_id"] for row in deduped})
+        with connect(self.service) as conn:
+            execute(
+                conn,
+                """
+                DELETE FROM research.news_event_mention
+                WHERE source_event_id = ANY(%s)
+                """,
+                [source_event_ids],
+            )
+            execute_many(
+                conn,
+                """
+                INSERT INTO research.news_event_mention (
+                    source_event_id, asset_id, ts_code, stock_name, mention_role,
+                    mention_confidence, theme_name, theme_confidence, mapping_method,
+                    trade_date
+                )
+                VALUES (
+                    %(source_event_id)s, %(asset_id)s, %(ts_code)s, %(stock_name)s,
+                    %(mention_role)s, %(mention_confidence)s, %(theme_name)s,
+                    %(theme_confidence)s, %(mapping_method)s, %(trade_date)s
+                )
+                """,
+                deduped,
+            )
+        return {"mentions": len(deduped)}
+
+    def _match_method(self, text: str, asset: dict[str, str]) -> str:
+        ts_code = asset.get("ts_code", "")
+        symbol = ts_code.split(".")[0] if "." in ts_code else ts_code
+        name = asset.get("name", "")
+        if ts_code and re.search(rf"(?<![A-Za-z0-9]){re.escape(ts_code)}(?![A-Za-z0-9])", text):
+            return "ts_code_exact"
+        if symbol and re.search(rf"(?<!\d){re.escape(symbol)}(?!\d)", text):
+            return "symbol_exact"
+        if name and name in text:
+            return "stock_name_exact"
+        return ""
 
 
 class NewsEventStore:
@@ -358,3 +485,38 @@ class NewsEventStore:
             return _run(conn)
         with connect(self.service) as active_conn:
             return _run(active_conn)
+
+
+def load_asset_news(
+    asset_id: str,
+    *,
+    limit: int = 20,
+    lookback_days: int = 7,
+    category: str | None = None,
+    source: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    bounded_lookback = max(1, int(lookback_days or 7))
+    start_time = (date.today() - timedelta(days=bounded_lookback)).isoformat()
+    store = NewsEventStore(service=service)
+    payload = store.list_news(
+        asset_id=asset_id,
+        category=category,
+        source=source,
+        start_time=start_time,
+        limit=limit,
+    )
+    items = payload["items"]
+    return {
+        "asset_id": asset_id,
+        "items": items,
+        "summary": {
+            "news_count_1d": len(items),
+            "news_count_3d": len(items),
+            "news_count_7d": len(items),
+            "latest_published_at": items[0]["published_at"] if items else "",
+            "source_count": len({item["source"] for item in items}),
+            "category_counts": _category_counts_from_items(items),
+        },
+        "warnings": payload["warnings"],
+    }

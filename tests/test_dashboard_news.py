@@ -82,6 +82,38 @@ class FakeDb:
             category = params[param_index]
             param_index += 1
             rows = [row for row in rows if row["metadata"].get("category") == category]
+        if "s.published_at >= %s" in compact_sql:
+            start_time = params[param_index]
+            param_index += 1
+            rows = [row for row in rows if row["published_at"] >= start_time]
+        if "s.published_at <= %s" in compact_sql:
+            end_time = params[param_index]
+            param_index += 1
+            rows = [row for row in rows if row["published_at"] <= end_time]
+        if "m.asset_id = %s" in compact_sql:
+            asset_id = params[param_index]
+            param_index += 1
+            rows = [
+                row
+                for row in rows
+                if any(
+                    mention["source_event_id"] == row["source_event_id"]
+                    and mention["asset_id"] == asset_id
+                    for mention in self.mention_rows
+                )
+            ]
+        if "m.ts_code = %s" in compact_sql:
+            ts_code = params[param_index]
+            param_index += 1
+            rows = [
+                row
+                for row in rows
+                if any(
+                    mention["source_event_id"] == row["source_event_id"]
+                    and mention["ts_code"] == ts_code
+                    for mention in self.mention_rows
+                )
+            ]
         return rows
 
     def execute_many(self, _conn: FakeConn, sql: str, rows: list[dict[str, Any]]):
@@ -243,3 +275,68 @@ def test_news_event_store_lists_by_category_with_summary(monkeypatch: pytest.Mon
     ]
     assert payload["items"][0]["category"] == "live"
     assert payload["items"][0]["stocks"] == []
+
+
+def test_news_mention_mapper_links_exact_stock_names(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    fake.source_rows["event-1"] = {
+        "source_event_id": "event-1",
+        "source_name": "sina_finance",
+        "source_channel": "公司",
+        "title": "贵州茅台披露经营数据",
+        "content": "贵州茅台营收保持增长",
+        "published_at": "2026-06-12 09:30:00",
+        "collected_at": "2026-06-12 09:31:00",
+        "url": "https://finance.sina.com.cn/doc/maotai.shtml",
+        "source_status": "available",
+        "metadata": {"category": "company"},
+    }
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute", fake.execute)
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+
+    mapper = news.NewsMentionMapper(
+        assets=[
+            {"asset_id": "CN:SH:600519", "ts_code": "600519.SH", "name": "贵州茅台"},
+            {"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "name": "平安银行"},
+        ],
+        service="test",
+    )
+    result = mapper.map_items([make_item(title="贵州茅台披露经营数据", category="company")])
+
+    assert result == {"mentions": 1}
+    assert fake.mention_rows[0]["asset_id"] == "CN:SH:600519"
+    assert fake.mention_rows[0]["ts_code"] == "600519.SH"
+    assert fake.mention_rows[0]["mapping_method"] == "stock_name_exact"
+
+
+def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute", fake.execute)
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    store = news.NewsEventStore(service="test")
+    item = make_item(category="company")
+    store.upsert_public_items([item])
+    fake.mention_rows.append(
+        {
+            "source_event_id": item.news_id,
+            "asset_id": "CN:SH:600519",
+            "ts_code": "600519.SH",
+            "stock_name": "贵州茅台",
+            "mention_role": "subject",
+            "mention_confidence": 1.0,
+            "mapping_method": "stock_name_exact",
+        }
+    )
+
+    payload = news.load_asset_news("CN:SH:600519", limit=5, service="test")
+
+    assert payload["asset_id"] == "CN:SH:600519"
+    assert payload["items"][0]["stocks"][0]["stock_name"] == "贵州茅台"
+    assert payload["summary"]["news_count_7d"] >= 0
