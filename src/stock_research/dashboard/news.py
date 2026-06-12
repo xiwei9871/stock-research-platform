@@ -202,6 +202,19 @@ def _category_counts_from_items(items: list[dict[str, Any]]) -> list[dict[str, A
     return [{"name": name, "rows": rows} for name, rows in sorted(counts.items())]
 
 
+def _news_count_since(items: list[dict[str, Any]], today: date, days: int) -> int:
+    start_date = today - timedelta(days=days - 1)
+    count = 0
+    for item in items:
+        try:
+            published_date = date.fromisoformat(str(item.get("published_at") or "")[:10])
+        except ValueError:
+            continue
+        if start_date <= published_date <= today:
+            count += 1
+    return count
+
+
 def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -309,7 +322,7 @@ class NewsMentionMapper:
         name = asset.get("name", "")
         if ts_code and re.search(rf"(?<![A-Za-z0-9]){re.escape(ts_code)}(?![A-Za-z0-9])", text):
             return "ts_code_exact"
-        if symbol and re.search(rf"(?<!\d){re.escape(symbol)}(?!\d)", text):
+        if symbol and re.search(rf"(?<![A-Za-z0-9]){re.escape(symbol)}(?![A-Za-z0-9])", text):
             return "symbol_exact"
         if name and name in text:
             return "stock_name_exact"
@@ -510,13 +523,14 @@ def load_asset_news(
         limit=limit,
     )
     items = payload["items"]
+    today = date.today()
     return {
         "asset_id": asset_id,
         "items": items,
         "summary": {
-            "news_count_1d": len(items),
-            "news_count_3d": len(items),
-            "news_count_7d": len(items),
+            "news_count_1d": _news_count_since(items, today, 1),
+            "news_count_3d": _news_count_since(items, today, 3),
+            "news_count_7d": _news_count_since(items, today, 7),
             "latest_published_at": items[0]["published_at"] if items else "",
             "source_count": len({item["source"] for item in items}),
             "category_counts": _category_counts_from_items(items),
