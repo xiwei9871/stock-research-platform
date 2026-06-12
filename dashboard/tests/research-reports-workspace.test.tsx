@@ -43,6 +43,8 @@ function makeReport(overrides: Partial<ResearchReportItem> = {}): ResearchReport
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date('2026-06-12T10:00:00Z'));
   vi.clearAllMocks();
   apiMocks.fetchResearchReportSummary.mockResolvedValue({
     total_reports: 57418,
@@ -64,6 +66,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
 });
 
@@ -75,6 +78,19 @@ describe('ResearchReportsWorkspace', () => {
     expect(await screen.findByText('贵州茅台深度报告')).toBeInTheDocument();
     expect(screen.getByText('华泰证券')).toBeInTheDocument();
     expect(screen.getByText('买入')).toBeInTheDocument();
+  });
+
+  it('defaults the report end date to today', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    await waitFor(() => {
+      expect(apiMocks.fetchResearchReports).toHaveBeenCalledWith(
+        expect.objectContaining({
+          start_date: '2026-03-01',
+          end_date: '2026-06-12'
+        })
+      );
+    });
   });
 
   it('submits filters to the API', async () => {

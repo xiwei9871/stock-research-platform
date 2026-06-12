@@ -3,7 +3,6 @@ import { fetchResearchReportSummary, fetchResearchReports } from '../api/client'
 import type { ResearchReportItem, ResearchReportResponse, ResearchReportSummary } from '../api/types';
 
 const DEFAULT_START_DATE = '2026-03-01';
-const DEFAULT_END_DATE = '2026-06-11';
 const PAGE_LIMIT = 50;
 
 type ReportFilters = {
@@ -18,6 +17,10 @@ type ReportFilters = {
 
 function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString('en-US') : '-';
+}
+
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function formatText(value: string | null | undefined) {
@@ -68,7 +71,7 @@ export function ResearchReportsWorkspace() {
   const [rating, setRating] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
-  const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
+  const [endDate, setEndDate] = useState(getTodayDate);
   const [hasTargetPrice, setHasTargetPrice] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [isReportsLoading, setIsReportsLoading] = useState(false);
@@ -146,7 +149,7 @@ export function ResearchReportsWorkspace() {
       rating: '',
       sourceName: '',
       startDate: DEFAULT_START_DATE,
-      endDate: DEFAULT_END_DATE,
+      endDate: getTodayDate(),
       hasTargetPrice: false
     });
 

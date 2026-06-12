@@ -835,7 +835,7 @@ describe('dashboard app shell', () => {
     expect(screen.queryByRole('button', { name: 'Open Reports workspace' })).not.toBeInTheDocument();
   });
 
-  it('opens phase one placeholder workspaces from the redesigned navigation', async () => {
+  it('opens redesigned workspaces from navigation', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
