@@ -361,6 +361,49 @@ def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     assert "Yanbaoke Report Backfill Inventory" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
 
 
+def test_yanbaoke_inventory_plan_outputs_expected_columns(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        ]
+    )
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=pd.DataFrame(),
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    priority = pd.read_csv(result["paths"]["priority_queue"])
+    expected_columns = {
+        "report_id",
+        "report_date",
+        "title",
+        "broker",
+        "stock_code",
+        "industry_lv1",
+        "industry_lv2",
+        "theme_bucket",
+        "sector_priority",
+        "sector_quota_bucket",
+        "asset_priority",
+        "coverage_gap_reason",
+        "priority_score",
+    }
+    assert expected_columns.issubset(set(priority.columns))
+
+
 def test_build_yanbaoke_inventory_plan_allows_missing_existing_coverage(tmp_path: Path):
     candidates = pd.DataFrame(
         [
