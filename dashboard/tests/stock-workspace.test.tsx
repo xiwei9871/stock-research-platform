@@ -102,6 +102,7 @@ function makeResearchReports(
     items: [
       {
         report_id: 'r1',
+        event_key: 'r1:000001.SZ',
         asset_id: '000001.SZ',
         ts_code: '000001.SZ',
         stock_name: '平安银行',
@@ -342,6 +343,7 @@ describe('StockWorkspace', () => {
             {
               ...makeResearchReports().items[0],
               report_id: 'r2',
+              event_key: 'r2:600000.SH',
               asset_id: '600000.SH',
               ts_code: '600000.SH',
               stock_name: '浦发银行',
