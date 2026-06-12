@@ -285,6 +285,7 @@ describe('StockWorkspace', () => {
 
   it('clears stale research reports while loading reports for a newly selected stock', async () => {
     const secondReports = deferred<AssetResearchReportResponse>();
+    let staleReportVisibleWhenSecondFetchStarted: boolean | null = null;
     const secondProfile = makeProfile({
       asset_id: '600000.SH',
       canonical_asset_id: '600000.SH',
@@ -298,7 +299,13 @@ describe('StockWorkspace', () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
     apiMocks.fetchAssetResearchReports
       .mockResolvedValueOnce(makeResearchReports())
-      .mockReturnValueOnce(secondReports.promise);
+      .mockImplementationOnce(() => {
+        staleReportVisibleWhenSecondFetchStarted =
+          document.body.textContent?.includes('平安银行深度报告') ||
+          document.body.textContent?.includes('90d reports 4') ||
+          false;
+        return secondReports.promise;
+      });
 
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
@@ -309,15 +316,15 @@ describe('StockWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    expect(staleReportVisibleWhenSecondFetchStarted).toBe(false);
+    expect(screen.queryByText('平安银行深度报告')).not.toBeInTheDocument();
+    expect(screen.queryByText('90d reports 4')).not.toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchAssetResearchReports).toHaveBeenLastCalledWith('600000.SH', {
         limit: 5,
         lookbackDays: 90
       })
     );
-
-    expect(screen.queryByText('平安银行深度报告')).not.toBeInTheDocument();
-    expect(screen.queryByText('90d reports 4')).not.toBeInTheDocument();
 
     await act(async () => {
       secondReports.resolve(

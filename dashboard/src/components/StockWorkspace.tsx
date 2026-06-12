@@ -269,6 +269,8 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const identitySymbol = profile?.asset?.symbol ?? profile?.asset_id ?? assetId;
   const factorRows = getFactorRows(profile);
   const close = latestClose(profile);
+  const visibleResearchReports =
+    researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
 
   return (
     <section className="workspace-stack" aria-label="Stock Workspace workspace">
@@ -451,32 +453,32 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                 {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
               </div>
               {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
-              {researchReports ? (
+              {visibleResearchReports ? (
                 <section className="stock-summary-strip" aria-label="Stock research report summary">
                   <div>
                     <span>Coverage</span>
-                    <strong>90d reports {researchReports.summary.report_count_90d}</strong>
+                    <strong>90d reports {visibleResearchReports.summary.report_count_90d}</strong>
                   </div>
                   <div>
                     <span>30d Reports</span>
-                    <strong>{researchReports.summary.report_count_30d}</strong>
+                    <strong>{visibleResearchReports.summary.report_count_30d}</strong>
                   </div>
                   <div>
                     <span>Brokers</span>
-                    <strong>{researchReports.summary.broker_coverage_count_90d} brokers</strong>
+                    <strong>{visibleResearchReports.summary.broker_coverage_count_90d} brokers</strong>
                   </div>
                   <div>
                     <span>Latest Rating</span>
-                    <strong>{formatValue(researchReports.summary.latest_rating)}</strong>
+                    <strong>{formatValue(visibleResearchReports.summary.latest_rating)}</strong>
                   </div>
                   <div>
                     <span>Target Price</span>
-                    <strong>{formatValue(researchReports.summary.latest_target_price)}</strong>
+                    <strong>{formatValue(visibleResearchReports.summary.latest_target_price)}</strong>
                   </div>
                 </section>
               ) : null}
               <div className="compact-news-list">
-                {(researchReports?.items ?? []).map((report) =>
+                {(visibleResearchReports?.items ?? []).map((report) =>
                   report.source_url ? (
                     <a
                       key={report.report_id}
@@ -500,7 +502,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                   )
                 )}
               </div>
-              {!isResearchReportsLoading && !researchReportsError && (researchReports?.items.length ?? 0) === 0 ? (
+              {!isResearchReportsLoading && !researchReportsError && (visibleResearchReports?.items.length ?? 0) === 0 ? (
                 <p className="muted">No research reports found.</p>
               ) : null}
             </article>
