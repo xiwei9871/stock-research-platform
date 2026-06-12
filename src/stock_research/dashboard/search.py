@@ -182,7 +182,12 @@ def _generated_report_item(row: dict[str, Any], query: str) -> dict[str, Any]:
         title=str(row.get("title") or path),
         subtitle=str(row.get("report_type") or row.get("format") or ""),
         timestamp=str(row.get("trade_date") or ""),
-        target={"workspace": "generatedReports", "path": path, "q": query},
+        target={
+            "workspace": "generatedReports",
+            "path": path,
+            "q": query,
+            "trade_date": row.get("trade_date"),
+        },
         score=60,
         metadata={
             "report_type": row.get("report_type"),

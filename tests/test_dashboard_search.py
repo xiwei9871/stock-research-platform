@@ -107,6 +107,7 @@ def test_load_global_search_returns_grouped_results(monkeypatch):
     assert groups["news"]["items"][0]["metadata"]["stocks"][0]["asset_id"] == "CN:SH:600519"
     assert groups["research_reports"]["items"][0]["target"]["workspace"] == "researchReports"
     assert groups["generated_reports"]["items"][0]["target"]["workspace"] == "generatedReports"
+    assert groups["generated_reports"]["items"][0]["target"]["trade_date"] == "2026-06-12"
     for group in payload["groups"]:
         for item in group["items"]:
             assert set(item) == {

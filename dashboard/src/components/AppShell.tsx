@@ -26,6 +26,7 @@ type WorkspaceMode =
 
 type QueryHandoff = {
   query: string;
+  tradeDate?: string;
   version: number;
 };
 
@@ -77,7 +78,11 @@ export function AppShell() {
 
     if (target.workspace === 'generatedReports') {
       const query = target.q ?? result.title;
-      setGeneratedReportsHandoff((current) => ({ query, version: current.version + 1 }));
+      setGeneratedReportsHandoff((current) => ({
+        query,
+        tradeDate: target.trade_date ?? result.trade_date,
+        version: current.version + 1
+      }));
       setWorkspaceMode('generatedReports');
     }
   }
@@ -119,6 +124,7 @@ export function AppShell() {
             <GeneratedReportsWorkspace
               key={`generatedReports:${generatedReportsHandoff.version}`}
               initialQuery={generatedReportsHandoff.query}
+              initialTradeDate={generatedReportsHandoff.tradeDate}
             />
           ) : null}
           {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}

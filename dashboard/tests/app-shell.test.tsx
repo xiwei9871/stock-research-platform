@@ -1065,6 +1065,62 @@ describe('dashboard app shell', () => {
     }
   });
 
+  it('opens Generated Reports with the global search result trade date', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(
+          makeGlobalSearchResult({
+            type: 'generated_report',
+            id: 'generated:/reports/daily-topn.html',
+            title: 'Daily TopN',
+            subtitle: 'daily_topn_report',
+            target: {
+              workspace: 'generatedReports',
+              q: 'Daily',
+              trade_date: '2026-06-10'
+            } as GlobalSearchResult['target']
+          }),
+          'Daily'
+        )
+      );
+      apiMocks.fetchOverview.mockResolvedValue({
+        ...makeOverview({ trade_date: '2026-06-10' }),
+        reports: [
+          {
+            report_type: 'daily_topn_report',
+            title: 'Daily TopN',
+            path: '/reports/daily-topn.html',
+            format: 'html',
+            trade_date: '2026-06-10'
+          }
+        ]
+      });
+
+      render(<App />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: 'Daily' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /Daily TopN daily_topn_report/ }));
+
+      expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+      expect(screen.getByLabelText('generated reports search')).toHaveValue('Daily');
+      await waitFor(() =>
+        expect(apiMocks.fetchOverview).toHaveBeenLastCalledWith({
+          tradeDate: '2026-06-10',
+          scoreVersion: 'manual_v1',
+          watchlistId: 'default',
+          topN: 5
+        })
+      );
+      expect(await screen.findByText('Daily TopN')).toBeVisible();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders EOD market monitor data without implying realtime data', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
 

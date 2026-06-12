@@ -13,15 +13,17 @@ type ReportsWorkspaceProps = {
   description?: string;
   ariaLabel?: string;
   initialQuery?: string;
+  initialTradeDate?: string;
 };
 
 export function ReportsWorkspace({
   title = 'Reports',
   description = 'Local research artifacts and generated reports.',
   ariaLabel,
-  initialQuery = ''
+  initialQuery = '',
+  initialTradeDate = DEFAULT_TRADE_DATE
 }: ReportsWorkspaceProps = {}) {
-  const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
+  const [tradeDate, setTradeDate] = useState(initialTradeDate);
   const [query, setQuery] = useState(initialQuery);
   const [reports, setReports] = useState<ReportLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,13 +63,14 @@ export function ReportsWorkspace({
 
   useEffect(() => {
     isMountedRef.current = true;
-    loadReports(DEFAULT_TRADE_DATE);
+    setTradeDate(initialTradeDate);
+    loadReports(initialTradeDate);
 
     return () => {
       isMountedRef.current = false;
       requestIdRef.current += 1;
     };
-  }, [loadReports]);
+  }, [initialTradeDate, loadReports]);
 
   useEffect(() => {
     setQuery(initialQuery);

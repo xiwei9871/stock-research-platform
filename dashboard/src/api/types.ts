@@ -20,6 +20,7 @@ export type GlobalSearchTarget = {
   report_id?: string;
   path?: string;
   q?: string;
+  trade_date?: string;
 };
 
 export type GlobalSearchResult = {
