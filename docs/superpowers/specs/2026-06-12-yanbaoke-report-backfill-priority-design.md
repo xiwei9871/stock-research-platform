@@ -33,7 +33,7 @@ Out of scope:
 - Automatic trading decisions.
 - Treating report text as redistributable content.
 - Exhaustive download of every Yanbaoke report before core coverage has been validated.
-- Changing existing factor, watchlist, or trading research logic unless report metadata becomes an approved input in a later scope.
+- Changing existing factor, watchlist, or trading research logic unless report metadata becomes an approved input in a separate approved scope.
 
 ## Time Window
 
@@ -61,6 +61,39 @@ Each candidate report receives a score from five dimensions.
 | Scarcity | 10% | missing in current database, rare broker coverage, uncovered industry |
 
 The first implementation can use deterministic rules rather than machine learning. The priority score must be explainable in the coverage report so low-quality quota consumption is visible.
+
+## Sector Priority
+
+The candidate inventory must be organized by both stock and sector. A report should not enter the first pilot batch only because it is recent or because its asset has many available reports. The priority queue must include:
+
+- `industry_lv1`
+- `industry_lv2`
+- `theme_bucket`
+- `sector_priority`
+- `sector_quota_bucket`
+- `asset_priority`
+- `coverage_gap_reason`
+
+Default sector priority:
+
+| Priority | Sector bucket | First-pass policy |
+| --- | --- | --- |
+| P0 | AI compute, semiconductor, advanced packaging, domestic substitution, robotics, low-altitude economy, autonomous driving, innovative drugs, medical devices, CXO | Fill deep reports, initiations, sector frameworks, and material earnings reviews first. |
+| P1 | power equipment, new energy, storage, grid, defense, satellite chain, export chain, cross-border commerce, machinery, appliances, consumer recovery, food and beverage, tourism, aesthetic medicine | Fill core leaders and sector framework reports after P0 gaps. |
+| P2 | banks, insurance, brokers, real estate chain, coal, non-ferrous metals, chemicals, steel, broad macro and strategy | Prefer strategy, supply-demand frameworks, and important policy-window reports. |
+| P3 | ordinary short-comment-heavy sectors or reports without a clear asset/sector gap | Use only after core gaps are explained or when attached to a high-priority asset/window. |
+
+The first 3,000-report pilot should use sector quotas rather than a single global top-N cut:
+
+| Bucket | Pilot quota |
+| --- | ---: |
+| P0 growth and technology / healthcare mainlines | 1,200 |
+| P1 policy, prosperity, export, and consumption mainlines | 900 |
+| P2 financial, real estate, cycle, macro, and strategy | 500 |
+| Cross-sector macro / allocation / thematic reports | 300 |
+| Manual correction reserve | 100 |
+
+Within each bucket, sort by the full priority score and coverage gap. If a bucket lacks enough valid Priority 1 or Priority 2 reports, unused quota flows to the highest-scoring uncovered bucket, not to low-value duplicates.
 
 ## Report Type Buckets
 
