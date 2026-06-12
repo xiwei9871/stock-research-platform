@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAssetProfile, fetchAssetResearchReports, fetchPublicNews, searchAssets } from '../api/client';
-import type { AssetProfile, AssetResearchReportResponse, AssetSummary, PublicNewsItem } from '../api/types';
+import { fetchAssetNews, fetchAssetProfile, fetchAssetResearchReports, searchAssets } from '../api/client';
+import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse, AssetSummary } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
@@ -81,7 +81,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
   const [profile, setProfile] = useState<AssetProfile | null>(null);
-  const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
+  const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
   const [assetMatches, setAssetMatches] = useState<AssetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -190,9 +190,9 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   }, [initialAssetId]);
 
   useEffect(() => {
-    if (!profile) {
+    if (!profile?.canonical_asset_id) {
       newsRequestIdRef.current += 1;
-      setNewsItems([]);
+      setAssetNews(null);
       setIsNewsLoading(false);
       setNewsError(null);
       return;
@@ -200,22 +200,21 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
 
     const requestId = newsRequestIdRef.current + 1;
     newsRequestIdRef.current = requestId;
-    const symbol = profile.asset?.symbol ?? profile.asset_id;
-    const name = profile.asset?.name ?? profile.asset_id;
 
     setIsNewsLoading(true);
     setNewsError(null);
+    setAssetNews(null);
 
-    fetchPublicNews({ source: 'sina_finance', q: `${symbol} ${name}`, limit: 20 })
+    fetchAssetNews(profile.canonical_asset_id, { limit: 8, lookbackDays: 7 })
       .then((payload) => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
-          setNewsItems(payload.items);
+          setAssetNews(payload);
         }
       })
       .catch((err: unknown) => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
           setNewsError(err instanceof Error ? err.message : String(err));
-          setNewsItems([]);
+          setAssetNews(null);
         }
       })
       .finally(() => {
@@ -223,7 +222,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
           setIsNewsLoading(false);
         }
       });
-  }, [profile]);
+  }, [profile?.canonical_asset_id]);
 
   useEffect(() => {
     if (!profile) {
@@ -388,16 +387,35 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                 <h2>Related News</h2>
                 {isNewsLoading ? <span className="muted">Loading...</span> : null}
               </div>
+              {assetNews ? (
+                <div className="metric-grid compact">
+                  <span>
+                    <span>1d News</span>
+                    <strong>{assetNews.summary.news_count_1d}</strong>
+                  </span>
+                  <span>
+                    <span>7d News</span>
+                    <strong>{assetNews.summary.news_count_7d}</strong>
+                  </span>
+                  <span>
+                    <span>Sources</span>
+                    <strong>{assetNews.summary.source_count ?? 0}</strong>
+                  </span>
+                </div>
+              ) : null}
               {newsError ? <p className="error-text">{newsError}</p> : null}
+              {assetNews?.warnings?.length ? <p className="muted">{assetNews.warnings.join(' | ')}</p> : null}
               <div className="compact-news-list">
-                {newsItems.map((item) => (
+                {(assetNews?.items ?? []).map((item) => (
                   <a key={item.news_id} className="evidence-link-row" href={item.url} target="_blank" rel="noreferrer">
                     <strong>{item.title}</strong>
                     <span>{item.published_at.slice(0, 10)}</span>
                   </a>
                 ))}
               </div>
-              {!isNewsLoading && newsItems.length === 0 ? <p className="muted">No related news found.</p> : null}
+              {!isNewsLoading && !newsError && (assetNews?.items.length ?? 0) === 0 ? (
+                <p className="muted">No related news found.</p>
+              ) : null}
             </article>
 
             <article className="workspace-band">

@@ -2,12 +2,12 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace } from '../src/components/StockWorkspace';
-import type { AssetProfile, AssetResearchReportResponse, PublicNewsResponse } from '../src/api/types';
+import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchAssetNews: vi.fn(),
   fetchAssetProfile: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
-  fetchPublicNews: vi.fn(),
   searchAssets: vi.fn()
 }));
 
@@ -134,31 +134,41 @@ function makeResearchReports(
   };
 }
 
-const newsPayload: PublicNewsResponse = {
-  warnings: [],
+const newsPayload: AssetNewsResponse = {
+  asset_id: 'CN:SH:600519',
   items: [
     {
-      news_id: 'n1',
+      news_id: 'news-1',
       source: 'sina_finance',
-      source_channel: 'company',
+      source_channel: '公司',
       category: 'company',
-      title: '000001 平安银行公告',
-      summary: '公司新闻',
-      url: 'https://example.com/news/1',
-      published_at: '2026-06-08T09:30:00',
-      collected_at: '2026-06-08T09:31:00',
-      raw_id: 'n1',
+      title: '贵州茅台相关新闻',
+      summary: '',
+      url: 'https://finance.sina.com.cn/doc/news.shtml',
+      published_at: '2026-06-12T01:30:00+00:00',
+      collected_at: '2026-06-12T01:31:00+00:00',
+      raw_id: 'news-1',
       raw_payload: {},
-      status: 'active'
+      status: 'available',
+      stocks: [{ asset_id: 'CN:SH:600519', ts_code: '600519.SH', stock_name: '贵州茅台' }]
     }
-  ]
+  ],
+  summary: {
+    news_count_1d: 1,
+    news_count_3d: 1,
+    news_count_7d: 1,
+    latest_published_at: '2026-06-12T01:30:00+00:00',
+    source_count: 1,
+    category_counts: [{ name: 'company', rows: 1 }]
+  },
+  warnings: []
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
   apiMocks.fetchAssetResearchReports.mockResolvedValue(makeResearchReports());
-  apiMocks.fetchPublicNews.mockResolvedValue(newsPayload);
+  apiMocks.fetchAssetNews.mockResolvedValue(newsPayload);
   apiMocks.searchAssets.mockResolvedValue([]);
 });
 
@@ -175,9 +185,31 @@ describe('StockWorkspace', () => {
     expect(screen.getAllByText('momentum').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Score Component')).toHaveLength(2);
     expect(screen.getByText('quality')).toBeInTheDocument();
-    expect(await screen.findByText('000001 平安银行公告')).toBeInTheDocument();
+    expect(await screen.findByText('贵州茅台相关新闻')).toBeInTheDocument();
     expect(screen.getByText('candidate')).toBeInTheDocument();
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
+  });
+
+  it('loads db-linked asset news for the selected stock', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        asset_id: 'CN:SH:600519',
+        canonical_asset_id: 'CN:SH:600519',
+        asset: {
+          asset_id: 'CN:SH:600519',
+          symbol: '600519',
+          name: '贵州茅台',
+          exchange: 'SH',
+          board: null,
+          is_active: true
+        }
+      })
+    );
+
+    render(<StockWorkspace initialAssetId="600519" />);
+
+    expect(await screen.findByText('贵州茅台相关新闻')).toBeInTheDocument();
+    expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('CN:SH:600519', { limit: 8, lookbackDays: 7 });
   });
 
   it('normalizes six digit stock input before loading', async () => {
@@ -227,8 +259,8 @@ describe('StockWorkspace', () => {
   });
 
   it('does not show stale news after a later profile load clears the profile', async () => {
-    const firstNews = deferred<PublicNewsResponse>();
-    const secondNews = deferred<PublicNewsResponse>();
+    const firstNews = deferred<AssetNewsResponse>();
+    const secondNews = deferred<AssetNewsResponse>();
     const secondProfile = makeProfile({
       asset_id: '600000.SH',
       canonical_asset_id: '600000.SH',
@@ -250,12 +282,12 @@ describe('StockWorkspace', () => {
       .mockResolvedValueOnce(makeProfile())
       .mockRejectedValueOnce(new Error('profile failed'))
       .mockResolvedValueOnce(secondProfile);
-    apiMocks.fetchPublicNews.mockReturnValueOnce(firstNews.promise).mockReturnValueOnce(secondNews.promise);
+    apiMocks.fetchAssetNews.mockReturnValueOnce(firstNews.promise).mockReturnValueOnce(secondNews.promise);
 
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
-    await waitFor(() => expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledTimes(1));
 
     fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
@@ -267,13 +299,13 @@ describe('StockWorkspace', () => {
       await firstNews.promise;
     });
 
-    expect(screen.queryByText('000001 平安银行公告')).not.toBeInTheDocument();
+    expect(screen.queryByText('贵州茅台相关新闻')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
-    await waitFor(() => expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText('000001 平安银行公告')).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('贵州茅台相关新闻')).not.toBeInTheDocument();
   });
 
   it('loads research reports for the selected stock', async () => {
