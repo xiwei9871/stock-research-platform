@@ -10,12 +10,15 @@ import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnal
 import { ShadowOutcomesPanel } from '../src/components/ShadowOutcomesPanel';
 import type {
   BarPoint,
+  AssetProfile,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
   MarketMonitorPayload,
+  GlobalSearchResponse,
+  GlobalSearchResult,
   OutcomeAnalyticsRow,
   ScoreRow,
   ShadowAnalyticsReviewRow,
@@ -32,6 +35,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchOverview: vi.fn(),
+  fetchAssetProfile: vi.fn(),
+  fetchAssetNews: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
@@ -42,6 +47,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchOutcomeAnalytics: vi.fn(),
   fetchPublicNews: vi.fn(),
   refreshPublicNews: vi.fn(),
+  fetchGlobalSearch: vi.fn(),
+  searchAssets: vi.fn(),
   fetchShadowAnalyticsReview: vi.fn(),
   fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowFollowUpResolution: vi.fn(),
@@ -151,6 +158,48 @@ function makeBars(count: number): BarPoint[] {
     volume: 100,
     amount: 1000
   }));
+}
+
+function makeAssetProfile(assetId = 'CN:SH:600519'): AssetProfile {
+  return {
+    asset_id: assetId,
+    canonical_asset_id: assetId,
+    asset: {
+      asset_id: assetId,
+      symbol: '600519',
+      name: '贵州茅台',
+      exchange: 'SH',
+      board: null,
+      is_active: true
+    },
+    bars: makeBars(1),
+    score: makeScore(assetId),
+    signals: [],
+    decisions: [],
+    outcomes: [],
+    factor_values: [],
+    coverage: {}
+  };
+}
+
+function makeGlobalSearchResult(overrides: Partial<GlobalSearchResult> = {}): GlobalSearchResult {
+  return {
+    type: 'asset',
+    id: 'CN:SH:600519',
+    title: '贵州茅台',
+    subtitle: '600519.SH',
+    metadata: {},
+    target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
+    ...overrides
+  };
+}
+
+function makeGlobalSearchPayload(result: GlobalSearchResult, query = '茅台'): GlobalSearchResponse {
+  return {
+    query,
+    groups: [{ key: 'test', label: 'Results', items: [result] }],
+    warnings: []
+  };
 }
 
 function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {}): MarketMonitorPayload {
@@ -679,6 +728,14 @@ describe('dashboard app shell', () => {
       trades: []
     });
     apiMocks.fetchOverview.mockResolvedValue(makeOverview());
+    apiMocks.fetchAssetProfile.mockResolvedValue(makeAssetProfile('000001.SZ'));
+    apiMocks.fetchAssetNews.mockResolvedValue({
+      asset_id: '000001.SZ',
+      items: [],
+      summary: { news_count_1d: 0, news_count_3d: 0, news_count_7d: 0, source_count: 0 },
+      warnings: []
+    });
+    apiMocks.searchAssets.mockResolvedValue([]);
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
     apiMocks.fetchAssetSignals.mockResolvedValue(makeSignals());
@@ -709,6 +766,11 @@ describe('dashboard app shell', () => {
       stored: 1,
       items_received: 1,
       counts_by_category: { live: 1 },
+      warnings: []
+    });
+    apiMocks.fetchGlobalSearch.mockResolvedValue({
+      query: '茅台',
+      groups: [],
       warnings: []
     });
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
@@ -863,6 +925,85 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
     expect(await screen.findByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
+  });
+
+  it('opens the Stock workspace from a global search stock result', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(makeGlobalSearchResult(), '600519')
+      );
+      apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeAssetProfile('CN:SH:600519'));
+
+      render(<App />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '600519' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台 600519.SH/ }));
+
+      expect(await screen.findByRole('heading', { name: /贵州茅台 CN:SH:600519/ })).toBeInTheDocument();
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        'CN:SH:600519',
+        '2026-06-08',
+        '2025-12-10',
+        '2026-06-08',
+        'manual_v1',
+        'qfq'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens the News workspace with the global search result query', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+        makeGlobalSearchPayload(
+          makeGlobalSearchResult({
+            type: 'news',
+            id: 'news-1',
+            title: '贵州茅台新闻',
+            subtitle: '7x24',
+            target: { workspace: 'news', q: '茅台' }
+          })
+        )
+      );
+      apiMocks.fetchPublicNews.mockResolvedValue({
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: '7x24',
+            category: 'live',
+            title: '贵州茅台新闻',
+            summary: '茅台公告摘要',
+            url: 'https://finance.sina.com.cn/live/maotai',
+            published_at: '2026-06-11 09:00:00',
+            collected_at: '2026-06-11T09:01:00+00:00',
+            raw_id: '',
+            raw_payload: {},
+            status: 'available'
+          }
+        ],
+        warnings: []
+      });
+
+      render(<App />);
+
+      fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      fireEvent.click(await screen.findByRole('option', { name: /贵州茅台新闻 7x24/ }));
+
+      expect(await screen.findByRole('heading', { name: 'News', level: 1 })).toBeVisible();
+      expect(screen.getByLabelText('news search')).toHaveValue('茅台');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders EOD market monitor data without implying realtime data', async () => {
