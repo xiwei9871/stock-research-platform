@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResearchReportsWorkspace } from '../src/components/ResearchReportsWorkspace';
 import type { ResearchReportItem } from '../src/api/types';
@@ -13,6 +13,7 @@ vi.mock('../src/api/client', () => apiMocks);
 
 function makeReport(overrides: Partial<ResearchReportItem> = {}): ResearchReportItem {
   return {
+    event_key: 'r1:600519.SH',
     report_id: 'r1',
     asset_id: 'CN:SH:600519',
     ts_code: '600519.SH',
@@ -161,6 +162,45 @@ describe('ResearchReportsWorkspace', () => {
     expect(screen.getByRole('heading', { name: '贵州茅台深度报告' })).toBeInTheDocument();
     expect(screen.getByText('company view')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Source' })).toHaveAttribute('href', 'https://example.com/r1');
+  });
+
+  it('opens the selected event when rows share a report id', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    apiMocks.fetchResearchReports.mockResolvedValueOnce({
+      items: [
+        makeReport({
+          event_key: 'r1:600519.SH',
+          report_title: '同名报告',
+          stock_name: '贵州茅台',
+          ts_code: '600519.SH',
+          company_view: 'A'
+        }),
+        makeReport({
+          event_key: 'r1:000001.SZ',
+          report_title: '同名报告',
+          stock_name: '平安银行',
+          ts_code: '000001.SZ',
+          company_view: 'B'
+        })
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+      warnings: []
+    });
+
+    render(<ResearchReportsWorkspace />);
+
+    const buttons = await screen.findAllByRole('button', { name: 'Open report 同名报告' });
+    fireEvent.click(buttons[1]);
+
+    const detail = screen.getByLabelText('Research report detail');
+    expect(within(detail).getByText(/平安银行/)).toBeInTheDocument();
+    expect(within(detail).getByText('B')).toBeInTheDocument();
+    expect(
+      consoleErrorSpy.mock.calls.some((call) => call.join(' ').includes('Encountered two children with the same key'))
+    ).toBe(false);
+    consoleErrorSpy.mockRestore();
   });
 
   it('shows an empty state', async () => {

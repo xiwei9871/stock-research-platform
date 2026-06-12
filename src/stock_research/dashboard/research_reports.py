@@ -127,7 +127,7 @@ def list_research_reports(
             FROM research.stock_report_source s
             JOIN research.stock_report_event e USING (report_id)
             {where_sql}
-            ORDER BY s.publish_date DESC NULLS LAST, s.updated_at DESC, s.report_id
+            ORDER BY s.publish_date DESC NULLS LAST, s.updated_at DESC, s.report_id, e.ts_code
             LIMIT %s OFFSET %s
             """,
             [*params, bounded_limit, bounded_offset],
@@ -185,7 +185,7 @@ def load_asset_research_reports(
             FROM research.stock_report_source s
             JOIN research.stock_report_event e USING (report_id)
             WHERE e.asset_id = %s OR e.ts_code = %s
-            ORDER BY s.publish_date DESC NULLS LAST, s.updated_at DESC, s.report_id
+            ORDER BY s.publish_date DESC NULLS LAST, s.updated_at DESC, s.report_id, e.ts_code
             LIMIT %s
             """,
             [asset_id, asset_id, bounded_limit],
@@ -250,10 +250,13 @@ def _build_filters(**filters: Any) -> tuple[list[str], list[Any]]:
 
 def _report_row(row: dict[str, Any]) -> dict[str, Any]:
     metadata = row.get("metadata")
+    report_id = str(row.get("report_id") or "")
+    ts_code = str(row.get("ts_code") or "")
     return {
-        "report_id": str(row.get("report_id") or ""),
+        "event_key": f"{report_id}:{ts_code}",
+        "report_id": report_id,
         "asset_id": str(row.get("asset_id") or ""),
-        "ts_code": str(row.get("ts_code") or ""),
+        "ts_code": ts_code,
         "stock_name": str(row.get("stock_name") or ""),
         "industry_name": str(row.get("industry_name") or ""),
         "report_title": str(row.get("report_title") or ""),

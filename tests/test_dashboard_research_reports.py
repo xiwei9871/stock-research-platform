@@ -104,6 +104,7 @@ def test_list_research_reports_passes_filters_and_pagination(monkeypatch):
     assert result["total"] == 1
     assert result["limit"] == 25
     assert result["offset"] == 5
+    assert result["items"][0]["event_key"] == "r1:600519.SH"
     assert result["items"][0]["stock_name"] == "贵州茅台"
     assert result["items"][0]["publish_date"] == "2026-06-03"
     total_sql, total_params = captured[0]
@@ -123,6 +124,7 @@ def test_list_research_reports_passes_filters_and_pagination(monkeypatch):
     list_sql, list_params = captured[1]
     assert "target_price IS NOT NULL" in list_sql
     assert "s.broker ILIKE %s" in list_sql
+    assert "s.report_id, e.ts_code" in list_sql
     assert list_params[-2:] == [25, 5]
 
 
@@ -205,6 +207,7 @@ def test_load_asset_research_reports_returns_summary(monkeypatch):
     assert result["asset_id"] == "600519.SH"
     assert result["summary"]["report_count_90d"] == 4
     assert result["summary"]["latest_rating"] == "买入"
+    assert result["items"][0]["event_key"] == "r1:600519.SH"
     assert result["items"][0]["report_title"] == "贵州茅台深度报告"
 
 

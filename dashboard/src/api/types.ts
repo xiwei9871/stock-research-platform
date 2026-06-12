@@ -688,6 +688,7 @@ export type ResearchReportSummary = {
 };
 
 export type ResearchReportItem = {
+  event_key: string;
   report_id: string;
   asset_id: string;
   ts_code: string;

@@ -106,7 +106,7 @@ export function ResearchReportsWorkspace() {
           if (!current) {
             return null;
           }
-          return nextPayload.items.find((item) => item.report_id === current.report_id) ?? null;
+          return nextPayload.items.find((item) => item.event_key === current.event_key) ?? null;
         });
       } catch (err: unknown) {
         if (!isLatestReportsRequest(requestId)) {
@@ -278,7 +278,7 @@ export function ResearchReportsWorkspace() {
                 </thead>
                 <tbody>
                   {reports.map((item) => (
-                    <tr key={item.report_id}>
+                    <tr key={item.event_key}>
                       <td>{formatText(item.publish_date)}</td>
                       <td>
                         <button
