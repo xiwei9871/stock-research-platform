@@ -577,11 +577,12 @@ class PublicNewsIngestionService:
                 cache_result = self.fallback_store.upsert_items(items)
             except Exception as exc:
                 warnings.append(f"fallback cache write failed: {exc}")
-            try:
-                mention_mapper = self.mention_mapper or NewsMentionMapper()
-                mention_result = mention_mapper.map_items(items)
-            except Exception as exc:
-                warnings.append(f"mention mapping failed: {exc}")
+            if db_result["stored"] > 0:
+                try:
+                    mention_mapper = self.mention_mapper or NewsMentionMapper()
+                    mention_result = mention_mapper.map_items(items)
+                except Exception as exc:
+                    warnings.append(f"mention mapping failed: {exc}")
         counts_by_category = dict(Counter(item.category for item in items))
         return {
             **db_result,
@@ -780,7 +781,8 @@ def load_public_news_for_dashboard(
         )
     if payload.get("items"):
         return payload
-    if has_filters or _bounded_offset(offset) > 0 or int(payload.get("total") or 0) != 0:
+    db_total_news = int((payload.get("summary") or {}).get("total_news") or 0)
+    if has_asset_filter or _bounded_offset(offset) > 0 or db_total_news != 0:
         return payload
     fallback_payload = _fallback_public_news_payload(
         fallback_store=active_fallback_store,

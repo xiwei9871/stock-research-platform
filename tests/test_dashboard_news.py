@@ -729,6 +729,32 @@ def test_load_public_news_does_not_fallback_when_filtered_db_query_is_empty(
     assert payload["warnings"] == ["no matching public news items"]
 
 
+def test_load_public_news_uses_json_fallback_for_filtered_empty_db(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    fallback.upsert_items([make_item(source="sina_finance", title="缓存新浪新闻")])
+
+    payload = news.load_public_news_for_dashboard(
+        source="sina_finance",
+        limit=5,
+        store=news.NewsEventStore(service="test"),
+        fallback_store=fallback,
+    )
+
+    assert payload["items"][0]["title"] == "缓存新浪新闻"
+    assert payload["total"] == 1
+    assert "fallback json cache used: no db public news items" in payload["warnings"]
+
+
 def test_load_public_news_does_not_use_json_fallback_for_asset_db_failure(
     tmp_path: Path,
 ):
@@ -792,6 +818,44 @@ def test_public_news_ingestion_keeps_successful_counts_when_later_stages_fail(
     assert result["mentions"] == 0
     assert "fallback cache write failed: cache write failed" in result["warnings"]
     assert "mention mapping failed: mention mapping failed" in result["warnings"]
+
+
+def test_public_news_ingestion_skips_mentions_when_db_upsert_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    class FailingStore(news.NewsEventStore):
+        def upsert_public_items(self, _items):
+            raise RuntimeError("db write failed")
+
+    class TrackingMentionMapper(news.NewsMentionMapper):
+        def __init__(self):
+            self.called = False
+
+        def map_items(self, _items):
+            self.called = True
+            raise AssertionError("mention mapper should not run after db upsert failure")
+
+    item = make_item()
+    mapper = TrackingMentionMapper()
+    monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
+
+    service = news.PublicNewsIngestionService(
+        store=FailingStore(service="test"),
+        fallback_store=JsonPublicNewsStore(tmp_path / "public_news.json"),
+        mention_mapper=mapper,
+    )
+    result = service.refresh()
+
+    assert result["stored"] == 0
+    assert result["fallback_cache_stored"] == 1
+    assert result["mentions"] == 0
+    assert mapper.called is False
+    assert "db upsert failed: db write failed" in result["warnings"]
+    assert all("mention mapping failed" not in warning for warning in result["warnings"])
 
 
 def test_public_news_ingestion_handles_default_mapper_construction_failure(
