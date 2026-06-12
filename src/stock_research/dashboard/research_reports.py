@@ -30,7 +30,7 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
         source_counts = fetch_all(
             conn,
             """
-            SELECT s.source_name, COUNT(*) AS rows
+            SELECT s.source_name, COUNT(DISTINCT s.report_id) AS rows
             FROM research.stock_report_source s
             JOIN research.stock_report_event e USING (report_id)
             GROUP BY s.source_name
@@ -52,7 +52,7 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
         broker_counts = fetch_all(
             conn,
             """
-            SELECT NULLIF(TRIM(s.broker), '') AS broker, COUNT(*) AS rows
+            SELECT NULLIF(TRIM(s.broker), '') AS broker, COUNT(DISTINCT s.report_id) AS rows
             FROM research.stock_report_source s
             JOIN research.stock_report_event e USING (report_id)
             GROUP BY broker
@@ -249,6 +249,7 @@ def _build_filters(**filters: Any) -> tuple[list[str], list[Any]]:
 
 
 def _report_row(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = row.get("metadata")
     return {
         "report_id": str(row.get("report_id") or ""),
         "asset_id": str(row.get("asset_id") or ""),
@@ -274,7 +275,7 @@ def _report_row(row: dict[str, Any]) -> dict[str, Any]:
         "company_view": str(row.get("company_view") or ""),
         "industry_view": str(row.get("industry_view") or ""),
         "risk_summary": str(row.get("risk_summary") or ""),
-        "metadata": dict(row.get("metadata") or {}),
+        "metadata": metadata if isinstance(metadata, dict) else {},
     }
 
 

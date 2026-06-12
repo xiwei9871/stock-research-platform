@@ -39,6 +39,8 @@ def test_research_report_summary_returns_counts(monkeypatch):
     assert result["rating_counts"] == [{"rating": "买入", "rows": 2}]
     assert result["broker_counts"] == [{"broker": "华泰证券", "rows": 2}]
     assert "COUNT(DISTINCT s.report_id) AS total_reports" in calls[0][0]
+    assert "COUNT(DISTINCT s.report_id) AS rows" in calls[1][0]
+    assert "COUNT(DISTINCT s.report_id) AS rows" in calls[3][0]
     for sql, _params in calls[1:]:
         assert "FROM research.stock_report_source s" in sql
         assert "JOIN research.stock_report_event e USING (report_id)" in sql
@@ -102,6 +104,20 @@ def test_list_research_reports_passes_filters_and_pagination(monkeypatch):
     assert result["offset"] == 5
     assert result["items"][0]["stock_name"] == "贵州茅台"
     assert result["items"][0]["publish_date"] == "2026-06-03"
+    total_sql, total_params = captured[0]
+    assert "COUNT(*) AS total" in total_sql
+    assert "COUNT(DISTINCT report_id)" not in total_sql
+    assert total_params == [
+        "%茅台%",
+        "%茅台%",
+        "%茅台%",
+        "%茅台%",
+        "cfi_ybyl",
+        "%华泰%",
+        "买入",
+        "2026-06-01",
+        "2026-06-05",
+    ]
     list_sql, list_params = captured[1]
     assert "target_price IS NOT NULL" in list_sql
     assert "s.broker ILIKE %s" in list_sql
@@ -188,6 +204,13 @@ def test_load_asset_research_reports_returns_summary(monkeypatch):
     assert result["summary"]["report_count_90d"] == 4
     assert result["summary"]["latest_rating"] == "买入"
     assert result["items"][0]["report_title"] == "贵州茅台深度报告"
+
+
+def test_report_row_returns_empty_metadata_for_non_dict_values():
+    for metadata in (["provider"], "provider"):
+        result = research_reports._report_row({"metadata": metadata})
+
+        assert result["metadata"] == {}
 
 
 class DummyConnection:
