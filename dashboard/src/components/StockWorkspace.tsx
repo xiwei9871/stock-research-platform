@@ -89,7 +89,8 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const [isResearchReportsLoading, setIsResearchReportsLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsError, setNewsError] = useState<{ assetId: string; message: string } | null>(null);
+  const [newsLoadingAssetId, setNewsLoadingAssetId] = useState<string | null>(null);
   const [researchReportsError, setResearchReportsError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const mountedRef = useRef(false);
@@ -194,18 +195,21 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       newsRequestIdRef.current += 1;
       setAssetNews(null);
       setIsNewsLoading(false);
+      setNewsLoadingAssetId(null);
       setNewsError(null);
       return;
     }
 
+    const newsAssetId = profile.canonical_asset_id;
     const requestId = newsRequestIdRef.current + 1;
     newsRequestIdRef.current = requestId;
 
     setIsNewsLoading(true);
+    setNewsLoadingAssetId(newsAssetId);
     setNewsError(null);
     setAssetNews(null);
 
-    fetchAssetNews(profile.canonical_asset_id, { limit: 8, lookbackDays: 7 })
+    fetchAssetNews(newsAssetId, { limit: 8, lookbackDays: 7 })
       .then((payload) => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
           setAssetNews(payload);
@@ -213,13 +217,14 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       })
       .catch((err: unknown) => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
-          setNewsError(err instanceof Error ? err.message : String(err));
+          setNewsError({ assetId: newsAssetId, message: err instanceof Error ? err.message : String(err) });
           setAssetNews(null);
         }
       })
       .finally(() => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
           setIsNewsLoading(false);
+          setNewsLoadingAssetId(null);
         }
       });
   }, [profile?.canonical_asset_id]);
@@ -270,6 +275,11 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const close = latestClose(profile);
   const visibleAssetNews =
     assetNews && profile && assetNews.asset_id === profile.canonical_asset_id ? assetNews : null;
+  const visibleNewsError =
+    newsError && profile && newsError.assetId === profile.canonical_asset_id ? newsError.message : null;
+  const isVisibleNewsLoading = Boolean(
+    isNewsLoading && profile && newsLoadingAssetId === profile.canonical_asset_id
+  );
   const visibleResearchReports =
     researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
 
@@ -387,7 +397,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
             <article className="workspace-band">
               <div className="section-heading">
                 <h2>Related News</h2>
-                {isNewsLoading ? <span className="muted">Loading...</span> : null}
+                {isVisibleNewsLoading ? <span className="muted">Loading...</span> : null}
               </div>
               {visibleAssetNews ? (
                 <div className="metric-grid compact">
@@ -405,7 +415,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                   </span>
                 </div>
               ) : null}
-              {newsError ? <p className="error-text">{newsError}</p> : null}
+              {visibleNewsError ? <p className="error-text">{visibleNewsError}</p> : null}
               {visibleAssetNews?.warnings?.length ? <p className="muted">{visibleAssetNews.warnings.join(' | ')}</p> : null}
               <div className="compact-news-list">
                 {(visibleAssetNews?.items ?? []).map((item) => (
@@ -415,7 +425,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                   </a>
                 ))}
               </div>
-              {!isNewsLoading && !newsError && (visibleAssetNews?.items.length ?? 0) === 0 ? (
+              {!isVisibleNewsLoading && !visibleNewsError && (visibleAssetNews?.items.length ?? 0) === 0 ? (
                 <p className="muted">No related news found.</p>
               ) : null}
             </article>

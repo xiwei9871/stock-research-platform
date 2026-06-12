@@ -322,6 +322,52 @@ describe('StockWorkspace', () => {
     await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenLastCalledWith('600000.SH', { limit: 8, lookbackDays: 7 }));
   });
 
+  it('does not show stale news errors after a new stock profile is visible', async () => {
+    const firstNews = deferred<AssetNewsResponse>();
+    const secondNews = deferred<AssetNewsResponse>();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: {
+        asset_id: '600000.SH',
+        symbol: '600000',
+        name: '浦发银行',
+        exchange: 'SH',
+        board: null,
+        is_active: true
+      },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
+    apiMocks.fetchAssetNews.mockReturnValueOnce(firstNews.promise).mockReturnValueOnce(secondNews.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('000001.SZ', { limit: 8, lookbackDays: 7 }));
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+
+    await act(async () => {
+      firstNews.reject(new Error('old news failed'));
+      await firstNews.promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByText('old news failed')).not.toBeInTheDocument();
+
+    await act(async () => {
+      secondNews.resolve(makeAssetNews({ asset_id: '600000.SH', items: [] }));
+      await secondNews.promise;
+    });
+  });
+
   it('normalizes six digit stock input before loading', async () => {
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
