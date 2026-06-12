@@ -248,8 +248,9 @@ class NewsMentionMapper:
         self.assets = assets if assets is not None else _asset_rows_from_db(service)
 
     def map_items(self, items: Iterable[PublicNewsItem]) -> dict[str, int]:
+        item_list = list(items)
         rows: list[dict[str, Any]] = []
-        for item in items:
+        for item in item_list:
             text = f"{item.title} {item.summary} {item.url}"
             for asset in self.assets:
                 mapping_method = self._match_method(text, asset)
@@ -270,9 +271,9 @@ class NewsMentionMapper:
                     }
                 )
         deduped = _dedupe_mentions(rows)
-        if not deduped:
+        source_event_ids = sorted({item.news_id for item in item_list})
+        if not source_event_ids:
             return {"mentions": 0}
-        source_event_ids = sorted({row["source_event_id"] for row in deduped})
         with connect(self.service) as conn:
             execute(
                 conn,
@@ -282,6 +283,8 @@ class NewsMentionMapper:
                 """,
                 [source_event_ids],
             )
+            if not deduped:
+                return {"mentions": 0}
             execute_many(
                 conn,
                 """

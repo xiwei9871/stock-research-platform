@@ -312,6 +312,44 @@ def test_news_mention_mapper_links_exact_stock_names(monkeypatch: pytest.MonkeyP
     assert fake.mention_rows[0]["mapping_method"] == "stock_name_exact"
 
 
+def test_news_mention_mapper_deletes_stale_mentions_when_no_matches(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    stale_item = make_item(
+        title="宏观政策更新",
+        summary="行业观察",
+        url="https://finance.sina.com.cn/doc/macro.shtml",
+    )
+    fake.mention_rows.append(
+        {
+            "source_event_id": stale_item.news_id,
+            "asset_id": "CN:SH:600519",
+            "ts_code": "600519.SH",
+            "stock_name": "贵州茅台",
+            "mention_role": "subject",
+            "mention_confidence": 1.0,
+            "mapping_method": "stock_name_exact",
+        }
+    )
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute", fake.execute)
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+
+    mapper = news.NewsMentionMapper(
+        assets=[
+            {"asset_id": "CN:SH:600519", "ts_code": "600519.SH", "name": "贵州茅台"},
+        ],
+        service="test",
+    )
+    result = mapper.map_items([stale_item])
+
+    assert result == {"mentions": 0}
+    assert fake.mention_rows == []
+
+
 def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.MonkeyPatch):
     from stock_research.dashboard import news
 
