@@ -38,6 +38,7 @@ from stock_research.dashboard.scores import (
     load_top_scores_for_dashboard,
     search_assets,
 )
+from stock_research.dashboard.search import load_global_search
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
 from stock_research.dashboard.shadow_analytics_review import load_shadow_analytics_review_summary
 from stock_research.dashboard.shadow_outcome_analytics import load_shadow_outcome_analytics_summary
@@ -116,6 +117,10 @@ def create_app() -> FastAPI:
     @app.post("/api/public-news/refresh")
     def public_news_refresh():
         return refresh_public_news_for_dashboard()
+
+    @app.get("/api/search")
+    def global_search(q: str, limit: int = 5):
+        return load_global_search(q, limit=limit)
 
     @app.get("/api/research-reports/summary")
     def research_report_summary():

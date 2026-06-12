@@ -81,6 +81,37 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
     assert response.json()["counts_by_category"] == {"live": 2}
 
 
+def test_global_search_route_forwards_query(monkeypatch):
+    captured = {}
+
+    def fake_load_global_search(q, *, limit=5):
+        captured["q"] = q
+        captured["limit"] = limit
+        return {
+            "query": q,
+            "groups": [{"key": "assets", "label": "Assets", "items": []}],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_global_search",
+        fake_load_global_search,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/search?q=maotai&limit=3")
+
+    assert response.status_code == 200
+    assert captured == {"q": "maotai", "limit": 3}
+    assert response.json() == {
+        "query": "maotai",
+        "groups": [{"key": "assets", "label": "Assets", "items": []}],
+        "warnings": [],
+    }
+
+
 def test_asset_news_endpoint(monkeypatch):
     from stock_research.dashboard import app as dashboard_app
 
