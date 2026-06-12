@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from stock_research.yanbaoke_report_backfill import (
+    build_sector_quota_pilot_queue,
     build_scored_candidates,
     build_yanbaoke_inventory_plan,
     load_sector_priority_config,
@@ -79,6 +80,50 @@ def test_build_scored_candidates_empty_candidates_returns_shaped_frame():
     } <= set(scored.columns)
 
 
+def test_build_sector_quota_pilot_queue_respects_bucket_caps():
+    rows = []
+    for idx in range(5):
+        rows.append(
+            {
+                "report_id": f"p0-{idx}",
+                "report_date": "2026-04-20",
+                "title": f"公司深度报告：AI算力 {idx}",
+                "broker": "中信证券",
+                "stock_code": f"00000{idx}.SZ",
+                "stock_name": f"算力{idx}",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        )
+    for idx in range(5):
+        rows.append(
+            {
+                "report_id": f"p2-{idx}",
+                "report_date": "2025-08-10",
+                "title": f"行业深度：银行 {idx}",
+                "broker": "招商证券",
+                "stock_code": "",
+                "stock_name": "",
+                "industry_lv1": "银行",
+                "industry_lv2": "银行",
+                "theme": "银行",
+            }
+        )
+    scored = build_scored_candidates(pd.DataFrame(rows), existing_coverage=pd.DataFrame())
+
+    pilot = build_sector_quota_pilot_queue(
+        scored,
+        quota_by_bucket={"p0_growth_tech_healthcare": 2, "p2_finance_real_estate_cycle_macro": 1},
+        total_limit=3,
+    )
+
+    assert len(pilot) == 3
+    assert (pilot["sector_quota_bucket"] == "p0_growth_tech_healthcare").sum() == 2
+    assert (pilot["sector_quota_bucket"] == "p2_finance_real_estate_cycle_macro").sum() == 1
+    assert pilot["pilot_rank"].tolist() == [1, 2, 3]
+
+
 def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     candidates = pd.DataFrame(
         [
@@ -121,8 +166,12 @@ def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     assert Path(result["paths"]["existing_report_coverage"]).exists()
     assert Path(result["paths"]["gap_matrix"]).exists()
     assert Path(result["paths"]["priority_queue"]).exists()
+    assert Path(result["paths"]["pilot_queue"]).exists()
     assert Path(result["paths"]["report"]).exists()
-    assert {"existing_report_coverage", "gap_matrix"} <= set(result["paths"])
+    assert {"existing_report_coverage", "gap_matrix", "pilot_queue"} <= set(result["paths"])
+    assert "pilot_queue" in result
+    pilot_queue = pd.read_csv(result["paths"]["pilot_queue"])
+    assert pilot_queue["pilot_rank"].tolist() == [1, 2]
     sector_gap = pd.read_csv(result["paths"]["sector_gap_matrix"])
     assert set(sector_gap["sector_priority"]) >= {"P0", "P2"}
     existing_coverage = pd.read_csv(result["paths"]["existing_report_coverage"])

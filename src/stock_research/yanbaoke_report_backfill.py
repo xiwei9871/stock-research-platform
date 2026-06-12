@@ -9,6 +9,14 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SECTOR_PRIORITY_PATH = PROJECT_ROOT / "config" / "yanbaoke_sector_priority.csv"
 
+DEFAULT_PILOT_QUOTA_BY_BUCKET = {
+    "p0_growth_tech_healthcare": 1200,
+    "p1_policy_prosperity_export_consumption": 900,
+    "p2_finance_real_estate_cycle_macro": 500,
+    "cross_sector_macro_theme": 300,
+    "manual_correction_reserve": 100,
+}
+
 A_TIER_BROKER_KEYWORDS = (
     "中信证券",
     "中金",
@@ -102,6 +110,7 @@ def build_yanbaoke_inventory_plan(
         ["priority_score", "report_date", "report_id"],
         ascending=[False, False, True],
     ).reset_index(drop=True)
+    pilot_queue = build_sector_quota_pilot_queue(scored, total_limit=3000)
     report = render_inventory_report(
         scored,
         sector_gap,
@@ -119,6 +128,7 @@ def build_yanbaoke_inventory_plan(
         "sector_gap_matrix": target_dir / "yanbaoke_sector_gap_matrix.csv",
         "asset_gap_matrix": target_dir / "yanbaoke_asset_gap_matrix.csv",
         "priority_queue": target_dir / "yanbaoke_priority_queue.csv",
+        "pilot_queue": target_dir / "yanbaoke_pilot_queue_top3000.csv",
         "report": target_dir / "yanbaoke_backfill_inventory_report.md",
     }
     scored.to_csv(paths["candidate_reports"], index=False)
@@ -127,6 +137,7 @@ def build_yanbaoke_inventory_plan(
     sector_gap.to_csv(paths["sector_gap_matrix"], index=False)
     asset_gap.to_csv(paths["asset_gap_matrix"], index=False)
     priority_queue.to_csv(paths["priority_queue"], index=False)
+    pilot_queue.to_csv(paths["pilot_queue"], index=False)
     paths["report"].write_text(report, encoding="utf-8")
 
     return {
@@ -136,9 +147,52 @@ def build_yanbaoke_inventory_plan(
         "sector_gap_matrix": sector_gap,
         "asset_gap_matrix": asset_gap,
         "priority_queue": priority_queue,
+        "pilot_queue": pilot_queue,
         "report": report,
         "paths": {name: str(path) for name, path in paths.items()},
     }
+
+
+def build_sector_quota_pilot_queue(
+    scored: pd.DataFrame,
+    *,
+    quota_by_bucket: dict[str, int] | None = None,
+    total_limit: int = 3000,
+) -> pd.DataFrame:
+    queue_columns = list(scored.columns)
+    if "pilot_rank" not in queue_columns:
+        queue_columns.append("pilot_rank")
+    if scored.empty or total_limit <= 0:
+        return pd.DataFrame(columns=queue_columns)
+
+    quotas = quota_by_bucket if quota_by_bucket is not None else DEFAULT_PILOT_QUOTA_BY_BUCKET
+    eligible = scored.loc[~scored["coverage_gap_reason"].eq("existing_duplicate")].copy()
+    if eligible.empty:
+        return pd.DataFrame(columns=queue_columns)
+
+    sort_columns = ["priority_score", "report_date", "report_id"]
+    sort_ascending = [False, False, True]
+    selected_parts = []
+    selected_indexes: set[Any] = set()
+    for bucket, quota in quotas.items():
+        if bucket == "manual_correction_reserve" or quota <= 0:
+            continue
+        bucket_frame = eligible.loc[eligible["sector_quota_bucket"].eq(bucket)]
+        bucket_frame = bucket_frame.sort_values(sort_columns, ascending=sort_ascending).head(quota)
+        if bucket_frame.empty:
+            continue
+        selected_parts.append(bucket_frame)
+        selected_indexes.update(bucket_frame.index)
+
+    selected = pd.concat(selected_parts) if selected_parts else eligible.head(0)
+    if len(selected) < total_limit:
+        remaining = eligible.loc[~eligible.index.isin(selected_indexes)]
+        remaining = remaining.sort_values(sort_columns, ascending=sort_ascending)
+        selected = pd.concat([selected, remaining.head(total_limit - len(selected))])
+
+    selected = selected.head(total_limit).reset_index(drop=True)
+    selected["pilot_rank"] = range(1, len(selected) + 1)
+    return selected[queue_columns]
 
 
 def build_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
