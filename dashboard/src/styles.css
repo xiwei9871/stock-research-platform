@@ -1632,3 +1632,127 @@ table.data-table td {
   color: #205493;
   text-decoration: none;
 }
+
+.research-report-toolbar {
+  align-items: end;
+}
+
+.inline-check {
+  display: flex !important;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  color: #475467;
+}
+
+.inline-check input {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.research-report-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.research-report-table td:nth-child(2) {
+  min-width: 220px;
+}
+
+.research-report-table td:nth-child(2) button {
+  display: block;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: #205493;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.research-report-table td:nth-child(2) span {
+  display: block;
+  margin-top: 2px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.research-report-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.research-report-detail h3 {
+  margin: 0 0 4px;
+  color: #263241;
+  font-size: 13px;
+}
+
+.research-report-detail p {
+  margin: 0;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.detail-grid div {
+  min-width: 0;
+  border: 1px solid #edf1f5;
+  border-radius: 5px;
+  background: #fbfcfe;
+  padding: 7px 8px;
+}
+
+.detail-grid dt {
+  color: #667085;
+  font-size: 11px;
+}
+
+.detail-grid dd {
+  margin: 2px 0 0;
+  color: #17202a;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.button-row a {
+  min-height: 30px;
+  border: 1px solid #c4cbd6;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #205493;
+  padding: 6px 10px;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .research-report-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .research-report-detail {
+    order: -1;
+  }
+}
