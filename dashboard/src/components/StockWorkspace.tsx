@@ -481,7 +481,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                 {(visibleResearchReports?.items ?? []).map((report) =>
                   report.source_url ? (
                     <a
-                      key={report.report_id}
+                      key={report.event_key}
                       className="evidence-link-row"
                       href={report.source_url}
                       target="_blank"
@@ -493,7 +493,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                       </span>
                     </a>
                   ) : (
-                    <div key={report.report_id} className="evidence-link-row">
+                    <div key={report.event_key} className="evidence-link-row">
                       <strong>{report.report_title}</strong>
                       <span>
                         {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
