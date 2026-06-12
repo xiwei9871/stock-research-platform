@@ -18,7 +18,7 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
             conn,
             """
             SELECT
-                COUNT(*) AS total_reports,
+                COUNT(DISTINCT s.report_id) AS total_reports,
                 COUNT(DISTINCT e.ts_code) AS covered_stocks,
                 MAX(s.publish_date) AS latest_publish_date,
                 (SELECT MAX(trade_date) FROM research.stock_report_feature_daily) AS latest_feature_date,
@@ -32,7 +32,8 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
             """
             SELECT s.source_name, COUNT(*) AS rows
             FROM research.stock_report_source s
-            GROUP BY source_name
+            JOIN research.stock_report_event e USING (report_id)
+            GROUP BY s.source_name
             ORDER BY rows DESC, source_name
             LIMIT 20
             """,
@@ -41,7 +42,8 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
             conn,
             """
             SELECT NULLIF(TRIM(e.rating), '') AS rating, COUNT(*) AS rows
-            FROM research.stock_report_event e
+            FROM research.stock_report_source s
+            JOIN research.stock_report_event e USING (report_id)
             GROUP BY rating
             ORDER BY rows DESC NULLS LAST
             LIMIT 20
@@ -52,6 +54,7 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
             """
             SELECT NULLIF(TRIM(s.broker), '') AS broker, COUNT(*) AS rows
             FROM research.stock_report_source s
+            JOIN research.stock_report_event e USING (report_id)
             GROUP BY broker
             ORDER BY rows DESC NULLS LAST
             LIMIT 20
@@ -280,7 +283,8 @@ def _count_row(row: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def _bounded_limit(limit: int) -> int:
-    return max(1, min(MAX_LIMIT, int(limit or DEFAULT_LIMIT)))
+    requested_limit = DEFAULT_LIMIT if limit is None else int(limit)
+    return max(1, min(MAX_LIMIT, requested_limit))
 
 
 def _clean(value: object) -> str:

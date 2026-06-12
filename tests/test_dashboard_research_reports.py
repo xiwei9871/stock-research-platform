@@ -8,7 +8,7 @@ def test_research_report_summary_returns_counts(monkeypatch):
 
     def fake_fetch_all(conn, sql, params=None):
         calls.append((sql, params))
-        if "COUNT(*) AS total_reports" in sql:
+        if "COUNT(DISTINCT s.report_id) AS total_reports" in sql:
             return [
                 {
                     "total_reports": 3,
@@ -18,7 +18,7 @@ def test_research_report_summary_returns_counts(monkeypatch):
                     "source_count": 2,
                 }
             ]
-        if "GROUP BY source_name" in sql:
+        if "GROUP BY s.source_name" in sql:
             return [{"source_name": "cfi_ybyl", "rows": 2}]
         if "GROUP BY rating" in sql:
             return [{"rating": "买入", "rows": 2}]
@@ -38,6 +38,10 @@ def test_research_report_summary_returns_counts(monkeypatch):
     assert result["source_counts"] == [{"source_name": "cfi_ybyl", "rows": 2}]
     assert result["rating_counts"] == [{"rating": "买入", "rows": 2}]
     assert result["broker_counts"] == [{"broker": "华泰证券", "rows": 2}]
+    assert "COUNT(DISTINCT s.report_id) AS total_reports" in calls[0][0]
+    for sql, _params in calls[1:]:
+        assert "FROM research.stock_report_source s" in sql
+        assert "JOIN research.stock_report_event e USING (report_id)" in sql
 
 
 def test_list_research_reports_passes_filters_and_pagination(monkeypatch):
@@ -102,6 +106,34 @@ def test_list_research_reports_passes_filters_and_pagination(monkeypatch):
     assert "target_price IS NOT NULL" in list_sql
     assert "s.broker ILIKE %s" in list_sql
     assert list_params[-2:] == [25, 5]
+
+
+def test_list_research_reports_bounds_limit_to_minimum(monkeypatch):
+    def fake_fetch_all(conn, sql, params=None):
+        if "COUNT(*) AS total" in sql:
+            return [{"total": 0}]
+        return []
+
+    monkeypatch.setattr(research_reports, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(research_reports, "fetch_all", fake_fetch_all)
+
+    result = research_reports.list_research_reports(limit=0, service="test")
+
+    assert result["limit"] == 1
+
+
+def test_list_research_reports_bounds_limit_to_maximum(monkeypatch):
+    def fake_fetch_all(conn, sql, params=None):
+        if "COUNT(*) AS total" in sql:
+            return [{"total": 0}]
+        return []
+
+    monkeypatch.setattr(research_reports, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(research_reports, "fetch_all", fake_fetch_all)
+
+    result = research_reports.list_research_reports(limit=999, service="test")
+
+    assert result["limit"] == 200
 
 
 def test_load_asset_research_reports_returns_summary(monkeypatch):
