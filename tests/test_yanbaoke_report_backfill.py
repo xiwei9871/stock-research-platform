@@ -192,34 +192,34 @@ def test_build_sector_quota_pilot_queue_excludes_existing_duplicates():
     assert pilot["report_id"].tolist() == ["eligible"]
 
 
-def test_build_sector_quota_pilot_queue_deduplicates_report_id():
+def test_build_sector_quota_pilot_queue_uses_report_id_when_composite_key_is_unusable():
     scored = pd.DataFrame(
         [
-            {
-                "report_id": "same-report",
-                "report_date": "2026-04-20",
-                "normalized_broker": "中信证券",
-                "stock_code": "",
-                "normalized_title": "公司深度报告",
+                {
+                    "report_id": "same-report",
+                    "report_date": "",
+                    "normalized_broker": "中信证券",
+                    "stock_code": "",
+                    "normalized_title": "公司深度报告",
                 "sector_quota_bucket": "p0_growth_tech_healthcare",
                 "coverage_gap_reason": "missing_asset_report",
                 "priority_score": 100.0,
             },
-            {
-                "report_id": "same-report",
-                "report_date": "2026-04-19",
-                "normalized_broker": "中信证券",
-                "stock_code": "",
-                "normalized_title": "公司深度报告",
+                {
+                    "report_id": "same-report",
+                    "report_date": "",
+                    "normalized_broker": "中信证券",
+                    "stock_code": "",
+                    "normalized_title": "公司深度报告",
                 "sector_quota_bucket": "p0_growth_tech_healthcare",
                 "coverage_gap_reason": "missing_asset_report",
                 "priority_score": 95.0,
             },
-            {
-                "report_id": "unique-report",
-                "report_date": "2026-04-18",
-                "normalized_broker": "中信证券",
-                "stock_code": "000002.SZ",
+                {
+                    "report_id": "unique-report",
+                    "report_date": "",
+                    "normalized_broker": "中信证券",
+                    "stock_code": "000002.SZ",
                 "normalized_title": "公司深度报告",
                 "sector_quota_bucket": "p0_growth_tech_healthcare",
                 "coverage_gap_reason": "missing_asset_report",
@@ -272,6 +272,47 @@ def test_build_sector_quota_pilot_queue_deduplicates_same_report_with_different_
     pilot = build_sector_quota_pilot_queue(scored, total_limit=3)
 
     assert pilot["report_id"].tolist() == ["vendor-a", "unique-report"]
+
+
+def test_build_sector_quota_pilot_queue_deduplicates_sector_report_without_stock_code():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "vendor-a",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "",
+                "normalized_title": "行业深度报告",
+                "sector_quota_bucket": "p2_finance_real_estate_cycle_macro",
+                "coverage_gap_reason": "missing_sector_report",
+                "priority_score": 100.0,
+            },
+            {
+                "report_id": "vendor-b",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "",
+                "normalized_title": "行业深度报告",
+                "sector_quota_bucket": "p2_finance_real_estate_cycle_macro",
+                "coverage_gap_reason": "missing_sector_report",
+                "priority_score": 95.0,
+            },
+            {
+                "report_id": "unique-sector",
+                "report_date": "2026-04-19",
+                "normalized_broker": "中信证券",
+                "stock_code": "",
+                "normalized_title": "行业专题报告",
+                "sector_quota_bucket": "p2_finance_real_estate_cycle_macro",
+                "coverage_gap_reason": "missing_sector_report",
+                "priority_score": 80.0,
+            },
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(scored, total_limit=3)
+
+    assert pilot["report_id"].tolist() == ["vendor-a", "unique-sector"]
 
 
 def test_build_sector_quota_pilot_queue_quota_shortfall_fills_sorted_remainder():

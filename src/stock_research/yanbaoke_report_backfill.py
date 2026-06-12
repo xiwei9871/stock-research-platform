@@ -221,18 +221,16 @@ def build_sector_quota_pilot_queue(
 
 
 def _pilot_candidate_key(row: pd.Series) -> Any:
-    composite_parts = (
-        str(row.get("report_date", "")).strip(),
-        str(row.get("normalized_broker", "")).strip(),
-        str(row.get("stock_code", "")).strip(),
-        str(row.get("normalized_title", "")).strip(),
-    )
-    if all(composite_parts):
-        return ("composite", *composite_parts)
+    report_date = str(row.get("report_date", "")).strip()
+    normalized_broker = str(row.get("normalized_broker", "")).strip()
+    stock_code = str(row.get("stock_code", "")).strip()
+    normalized_title = str(row.get("normalized_title", "")).strip()
+    if report_date and normalized_broker and normalized_title:
+        return ("composite", report_date, normalized_broker, stock_code, normalized_title)
     report_id = str(row.get("report_id", "")).strip()
     if report_id:
         return ("report_id", report_id)
-    return ("composite", *composite_parts)
+    return ("composite", report_date, normalized_broker, stock_code, normalized_title)
 
 
 def build_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
