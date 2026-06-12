@@ -14,6 +14,7 @@ import type {
   FactorLibraryRow,
   FactorScorePreview,
   FactorSelection,
+  GlobalSearchResponse,
   MarketMonitorPayload,
   OutcomeAnalyticsRow,
   PlatformSummary,
@@ -167,6 +168,10 @@ export async function searchAssets(q: string, limit = 10) {
     `/api/assets/search?q=${encodeURIComponent(q)}&limit=${limit}`
   );
   return payload.items;
+}
+
+export async function fetchGlobalSearch(q: string, limit = 5): Promise<GlobalSearchResponse> {
+  return getJson(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`);
 }
 
 export async function fetchWatchlistSignals(watchlistId: string, tradeDate: string): Promise<WatchlistSignalRow[]> {

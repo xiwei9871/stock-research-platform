@@ -6,6 +6,7 @@ import {
   fetchAssetResearchReports,
   fetchExperimentProposals,
   fetchExperimentReplay,
+  fetchGlobalSearch,
   fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
   fetchOverview,
@@ -137,6 +138,41 @@ describe('dashboard API client', () => {
     await fetchAssetNews('CN:SH:600519');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/assets/CN%3ASH%3A600519/news');
+  });
+
+  it('fetches global search results with query and limit', async () => {
+    const body = {
+      query: '600519',
+      groups: [
+        {
+          key: 'assets',
+          label: 'Stocks',
+          items: [
+            {
+              id: 'asset:CN:SH:600519',
+              type: 'asset',
+              title: '贵州茅台',
+              subtitle: '600519 / SH',
+              timestamp: '',
+              target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
+              score: 100,
+              metadata: { symbol: '600519' }
+            }
+          ]
+        }
+      ],
+      warnings: []
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => body
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchGlobalSearch('600519', 3);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/search?q=600519&limit=3');
+    expect(result).toBe(body);
   });
 
   it('refreshes public news through POST', async () => {

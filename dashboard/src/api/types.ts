@@ -11,6 +11,45 @@ export type AssetSearchResponse = {
   items: AssetSummary[];
 };
 
+export type GlobalSearchResultType = 'asset' | 'news' | 'research_report' | 'generated_report' | string;
+
+export type GlobalSearchTarget = {
+  workspace: 'stock' | 'news' | 'researchReports' | 'generatedReports' | string;
+  asset_id?: string;
+  news_id?: string;
+  report_id?: string;
+  path?: string;
+  q?: string;
+};
+
+export type GlobalSearchResult = {
+  type: GlobalSearchResultType;
+  id: string;
+  title: string;
+  subtitle: string;
+  metadata: Record<string, unknown>;
+  meta?: Record<string, unknown>;
+  target: GlobalSearchTarget;
+  score?: number;
+  asset_id?: string;
+  source?: string;
+  timestamp?: string;
+  trade_date?: string;
+  link?: string;
+};
+
+export type GlobalSearchGroup = {
+  key: 'assets' | 'news' | 'research_reports' | 'generated_reports' | string;
+  label: string;
+  items: GlobalSearchResult[];
+};
+
+export type GlobalSearchResponse = {
+  query: string;
+  groups: GlobalSearchGroup[];
+  warnings: string[];
+};
+
 export type BarPoint = {
   time: string;
   open: number | null;
