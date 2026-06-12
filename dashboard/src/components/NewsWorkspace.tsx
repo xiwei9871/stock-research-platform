@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPublicNews, refreshPublicNews } from '../api/client';
-import type { PublicNewsItem } from '../api/types';
+import type { PublicNewsItem, PublicNewsSummary } from '../api/types';
 
 const CATEGORIES = [
   { id: 'all', label: '全部' },
@@ -55,6 +55,7 @@ export function getNewsAssetCandidate(item: PublicNewsItem) {
 
 export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
+  const [summary, setSummary] = useState<PublicNewsSummary | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
@@ -82,8 +83,9 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
       const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
       if (isLatestRequest(requestId)) {
         setItems(payload.items);
+        setSummary(payload.summary ?? null);
         setWarnings(payload.warnings ?? []);
-        setLastUpdatedAt(new Date().toLocaleTimeString());
+        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
       }
     } catch (err: unknown) {
       if (isLatestRequest(requestId)) {
@@ -101,8 +103,9 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
       const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
       if (isLatestRequest(requestId)) {
         setItems(payload.items);
+        setSummary(payload.summary ?? null);
         setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
-        setLastUpdatedAt(new Date().toLocaleTimeString());
+        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         setIsLoading(false);
       }
     } catch (err: unknown) {
@@ -159,7 +162,12 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
       <section className="workspace-panel">
         <div className="section-heading">
           <h2>新浪财经</h2>
-          {lastUpdatedAt ? <span className="muted">Last updated {lastUpdatedAt}</span> : null}
+          {summary?.latest_collected_at ? (
+            <span className="muted">DB collected {summary.latest_collected_at}</span>
+          ) : lastUpdatedAt ? (
+            <span className="muted">Last updated {lastUpdatedAt}</span>
+          ) : null}
+          {summary?.total_news !== undefined ? <span className="metric-chip">{summary.total_news} rows</span> : null}
           <button type="button" onClick={handleRefresh} disabled={isRefreshing}>
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -184,43 +192,51 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
             ))}
           </div>
         </div>
-        {warnings.length > 0 ? <p className="muted">{warnings[0]}</p> : null}
+        {warnings.length > 0 ? (
+          <div className="warning-strip">
+            {warnings.map((warning) => (
+              <span key={warning}>{warning}</span>
+            ))}
+          </div>
+        ) : null}
         {isLoading ? (
           <p className="muted">Loading news...</p>
         ) : visibleItems.length === 0 ? (
           <p className="muted">No news for current filters.</p>
         ) : (
           <div className="news-feed">
-            {visibleItems.map((item) => {
-              const assetCandidate = getNewsAssetCandidate(item);
-              return (
-                <article key={item.news_id} className="news-feed-row">
-                  <div className="news-feed-meta">
-                    <span>{item.published_at.slice(5, 16)}</span>
-                    <span>{labelForCategory(item.category)}</span>
-                    <span>{item.source_channel}</span>
-                    {assetCandidate ? (
+            {visibleItems.map((item) => (
+              <article key={item.news_id} className="news-feed-row">
+                <div className="news-feed-meta">
+                  <span>{item.published_at.slice(5, 16)}</span>
+                  <span>{labelForCategory(item.category)}</span>
+                  <span>{item.source_channel}</span>
+                </div>
+                {item.url ? (
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    {item.title}
+                  </a>
+                ) : (
+                  <strong>{item.title}</strong>
+                )}
+                {item.summary ? <p>{item.summary}</p> : null}
+                {(item.stocks ?? []).length > 0 ? (
+                  <div className="news-stock-row">
+                    {(item.stocks ?? []).map((stock) => (
                       <button
-                        className="compact-action-button"
+                        key={stock.asset_id || stock.ts_code}
                         type="button"
-                        aria-label={`Open ${assetCandidate}`}
-                        onClick={() => onOpenAsset?.(assetCandidate)}
+                        className="link-chip"
+                        aria-label={`Open ${stock.stock_name || stock.ts_code} in Stock Workspace`}
+                        onClick={() => onOpenAsset?.(stock.asset_id || stock.ts_code)}
                       >
-                        Open Stock
+                        {stock.stock_name || stock.ts_code}
                       </button>
-                    ) : null}
+                    ))}
                   </div>
-                  {item.url ? (
-                    <a href={item.url} target="_blank" rel="noreferrer">
-                      {item.title}
-                    </a>
-                  ) : (
-                    <strong>{item.title}</strong>
-                  )}
-                  {item.summary ? <p>{item.summary}</p> : null}
-                </article>
-              );
-            })}
+                ) : null}
+              </article>
+            ))}
           </div>
         )}
       </section>

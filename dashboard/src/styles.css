@@ -523,6 +523,28 @@ body {
   font-size: 13px;
 }
 
+.metric-chip {
+  border: 1px solid #cfd8e3;
+  border-radius: 999px;
+  background: #f7f9fc;
+  color: #344054;
+  padding: 2px 7px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.warning-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 1px solid #f3d6a2;
+  border-radius: 6px;
+  background: #fff8e6;
+  color: #8a4b00;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
 .tag-stack {
   display: flex;
   flex-wrap: wrap;
@@ -1328,6 +1350,25 @@ table.data-table td {
   gap: 8px;
   color: #667085;
   font-size: 12px;
+}
+
+.news-stock-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.link-chip {
+  border: 1px solid #cfd8e3;
+  border-radius: 6px;
+  background: #f7f9fc;
+  color: #202936;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
 }
 
 .queue-filters {
