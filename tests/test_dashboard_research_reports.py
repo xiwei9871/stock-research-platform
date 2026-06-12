@@ -1,5 +1,7 @@
 from datetime import date
 
+from fastapi.testclient import TestClient
+from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import research_reports
 
 
@@ -219,3 +221,75 @@ class DummyConnection:
 
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+def test_research_report_summary_route(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_research_report_summary",
+        lambda: {
+            "total_reports": 3,
+            "covered_stocks": 2,
+            "latest_publish_date": "2026-06-03",
+            "latest_feature_date": "2026-06-02",
+            "source_count": 2,
+            "source_counts": [],
+            "rating_counts": [],
+            "broker_counts": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/research-reports/summary")
+
+    assert response.status_code == 200
+    assert response.json()["total_reports"] == 3
+
+
+def test_research_reports_route_forwards_filters(monkeypatch):
+    captured = {}
+
+    def fake_list_research_reports(**kwargs):
+        captured.update(kwargs)
+        return {"items": [], "total": 0, "limit": kwargs["limit"], "offset": kwargs["offset"], "warnings": []}
+
+    monkeypatch.setattr(dashboard_app, "list_research_reports", fake_list_research_reports)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/research-reports?q=%E8%8C%85%E5%8F%B0&broker=%E5%8D%8E%E6%B3%B0"
+        "&rating=%E4%B9%B0%E5%85%A5&source_name=cfi_ybyl&start_date=2026-06-01"
+        "&end_date=2026-06-05&has_target_price=true&limit=25&offset=5"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "q": "茅台",
+        "asset_id": None,
+        "ts_code": None,
+        "broker": "华泰",
+        "rating": "买入",
+        "source_name": "cfi_ybyl",
+        "start_date": "2026-06-01",
+        "end_date": "2026-06-05",
+        "has_target_price": True,
+        "limit": 25,
+        "offset": 5,
+    }
+
+
+def test_asset_research_reports_route(monkeypatch):
+    captured = {}
+
+    def fake_load_asset_research_reports(asset_id, limit, lookback_days):
+        captured["args"] = [asset_id, limit, lookback_days]
+        return {"asset_id": asset_id, "summary": {"report_count_90d": 4}, "items": [], "warnings": []}
+
+    monkeypatch.setattr(dashboard_app, "load_asset_research_reports", fake_load_asset_research_reports)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/assets/600519.SH/research-reports?limit=5&lookback_days=90")
+
+    assert response.status_code == 200
+    assert captured["args"] == ["600519.SH", 5, 90]
+    assert response.json()["summary"]["report_count_90d"] == 4

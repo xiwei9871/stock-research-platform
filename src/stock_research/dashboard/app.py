@@ -22,6 +22,11 @@ from stock_research.dashboard.outcome_analytics import load_outcome_analytics_su
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
+from stock_research.dashboard.research_reports import (
+    list_research_reports,
+    load_asset_research_reports,
+    load_research_report_summary,
+)
 from stock_research.dashboard.scores import (
     load_asset_detail,
     load_asset_score_for_dashboard,
@@ -103,6 +108,42 @@ def create_app() -> FastAPI:
     @app.post("/api/public-news/refresh")
     def public_news_refresh():
         return refresh_public_news_for_dashboard()
+
+    @app.get("/api/research-reports/summary")
+    def research_report_summary():
+        return load_research_report_summary()
+
+    @app.get("/api/research-reports")
+    def research_reports(
+        q: str | None = None,
+        asset_id: str | None = None,
+        ts_code: str | None = None,
+        broker: str | None = None,
+        rating: str | None = None,
+        source_name: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        has_target_price: bool | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        return list_research_reports(
+            q=q,
+            asset_id=asset_id,
+            ts_code=ts_code,
+            broker=broker,
+            rating=rating,
+            source_name=source_name,
+            start_date=start_date,
+            end_date=end_date,
+            has_target_price=has_target_price,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.get("/api/assets/{asset_id}/research-reports")
+    def asset_research_reports(asset_id: str, limit: int = 10, lookback_days: int = 90):
+        return load_asset_research_reports(asset_id, limit=limit, lookback_days=lookback_days)
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):
