@@ -220,6 +220,35 @@ def _news_count_since(items: list[dict[str, Any]], today: date, days: int) -> in
     return count
 
 
+def _load_all_asset_news_for_summary(
+    store: "NewsEventStore",
+    *,
+    asset_id: str,
+    category: str | None,
+    source: str | None,
+    start_time: str,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    offset = 0
+    total: int | None = None
+    while total is None or offset < total:
+        payload = store.list_news(
+            asset_id=asset_id,
+            category=category,
+            source=source,
+            start_time=start_time,
+            limit=MAX_LIMIT,
+            offset=offset,
+        )
+        page_items = payload["items"]
+        items.extend(page_items)
+        total = int(payload.get("total") or 0)
+        if not page_items:
+            break
+        offset += len(page_items)
+    return items
+
+
 def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -525,7 +554,8 @@ def load_asset_news(
         bounded_lookback = max(1, int(lookback_days or 7))
     except (TypeError, ValueError):
         bounded_lookback = 7
-    start_time = (date.today() - timedelta(days=bounded_lookback)).isoformat()
+    today = date.today()
+    start_time = (today - timedelta(days=bounded_lookback - 1)).isoformat()
     store = NewsEventStore(service=service)
     payload = store.list_news(
         asset_id=asset_id,
@@ -534,16 +564,14 @@ def load_asset_news(
         start_time=start_time,
         limit=limit,
     )
-    summary_payload = store.list_news(
+    summary_items = _load_all_asset_news_for_summary(
+        store,
         asset_id=asset_id,
         category=category,
         source=source,
         start_time=start_time,
-        limit=MAX_LIMIT,
     )
     items = payload["items"]
-    summary_items = summary_payload["items"]
-    today = date.today()
     return {
         "asset_id": asset_id,
         "items": items,

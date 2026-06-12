@@ -527,6 +527,85 @@ def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.Monkey
     assert payload["summary"]["source_count"] == 1
 
 
+def test_load_asset_news_summary_pages_beyond_batch_size(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "MAX_LIMIT", 2)
+    monkeypatch.setattr(news, "date", FixedDate)
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    store = news.NewsEventStore(service="test")
+    items = [
+        make_item(category="company", raw_id="batch-1", url="https://finance.sina.com.cn/doc/batch-1.shtml"),
+        make_item(category="company", raw_id="batch-2", url="https://finance.sina.com.cn/doc/batch-2.shtml"),
+        make_item(category="company", raw_id="batch-3", url="https://finance.sina.com.cn/doc/batch-3.shtml"),
+    ]
+    store.upsert_public_items(items)
+    for item in items:
+        fake.mention_rows.append(
+            {
+                "source_event_id": item.news_id,
+                "asset_id": "CN:SH:600519",
+                "ts_code": "600519.SH",
+                "stock_name": "贵州茅台",
+                "mention_role": "subject",
+                "mention_confidence": 1.0,
+                "mapping_method": "stock_name_exact",
+            }
+        )
+
+    payload = news.load_asset_news("CN:SH:600519", limit=1, service="test")
+
+    assert len(payload["items"]) == 1
+    assert payload["summary"]["news_count_1d"] == 3
+    assert payload["summary"]["news_count_7d"] == 3
+
+
+def test_load_asset_news_uses_inclusive_lookback_window(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "date", FixedDate)
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    store = news.NewsEventStore(service="test")
+    items = [
+        make_item(
+            category="company",
+            published_at="2026-06-06 09:30:00",
+            raw_id="lookback-included",
+            url="https://finance.sina.com.cn/doc/lookback-included.shtml",
+        ),
+        make_item(
+            category="company",
+            published_at="2026-06-05 09:30:00",
+            raw_id="lookback-excluded",
+            url="https://finance.sina.com.cn/doc/lookback-excluded.shtml",
+        ),
+    ]
+    store.upsert_public_items(items)
+    for item in items:
+        fake.mention_rows.append(
+            {
+                "source_event_id": item.news_id,
+                "asset_id": "CN:SH:600519",
+                "ts_code": "600519.SH",
+                "stock_name": "贵州茅台",
+                "mention_role": "subject",
+                "mention_confidence": 1.0,
+                "mapping_method": "stock_name_exact",
+            }
+        )
+
+    payload = news.load_asset_news("CN:SH:600519", lookback_days=7, limit=10, service="test")
+
+    assert [item["raw_id"] for item in payload["items"]] == ["lookback-included"]
+    assert payload["summary"]["news_count_7d"] == 1
+
+
 def test_load_asset_news_skips_malformed_published_at_for_bucket_counts(
     monkeypatch: pytest.MonkeyPatch,
 ):
