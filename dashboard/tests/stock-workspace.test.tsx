@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace } from '../src/components/StockWorkspace';
 import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse } from '../src/api/types';
@@ -236,7 +236,9 @@ describe('StockWorkspace', () => {
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
-    expect(await screen.findByText('Loading...')).toBeInTheDocument();
+    const newsSection = screen.getByRole('heading', { name: 'Related News' }).closest('article');
+    expect(newsSection).not.toBeNull();
+    expect(within(newsSection as HTMLElement).getByText('Loading...')).toBeInTheDocument();
 
     await act(async () => {
       pendingNews.resolve(newsPayload);
