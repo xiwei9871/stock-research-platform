@@ -1,6 +1,7 @@
 import type {
   AssetSearchResponse,
   AssetProfile,
+  AssetResearchReportResponse,
   BarPoint,
   BacktestRunRequest,
   BacktestRunResult,
@@ -17,6 +18,8 @@ import type {
   PlatformSummary,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
+  ResearchReportResponse,
+  ResearchReportSummary,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -58,6 +61,20 @@ type PublicNewsParams = {
   offset?: number;
 };
 
+type ResearchReportParams = {
+  q?: string;
+  asset_id?: string;
+  ts_code?: string;
+  broker?: string;
+  rating?: string;
+  source_name?: string;
+  start_date?: string;
+  end_date?: string;
+  has_target_price?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
   return getJson(
     `/api/dashboard/overview?trade_date=${encodeURIComponent(params.tradeDate)}` +
@@ -83,6 +100,36 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
   searchParams.set('limit', String(params.limit ?? 100));
   searchParams.set('offset', String(params.offset ?? 0));
   return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function fetchResearchReportSummary(): Promise<ResearchReportSummary> {
+  return getJson('/api/research-reports/summary');
+}
+
+export async function fetchResearchReports(params: ResearchReportParams = {}): Promise<ResearchReportResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set('q', params.q);
+  if (params.asset_id) searchParams.set('asset_id', params.asset_id);
+  if (params.ts_code) searchParams.set('ts_code', params.ts_code);
+  if (params.broker) searchParams.set('broker', params.broker);
+  if (params.rating) searchParams.set('rating', params.rating);
+  if (params.source_name) searchParams.set('source_name', params.source_name);
+  if (params.start_date) searchParams.set('start_date', params.start_date);
+  if (params.end_date) searchParams.set('end_date', params.end_date);
+  if (params.has_target_price !== undefined) searchParams.set('has_target_price', String(params.has_target_price));
+  searchParams.set('limit', String(params.limit ?? 50));
+  searchParams.set('offset', String(params.offset ?? 0));
+  return getJson(`/api/research-reports?${searchParams.toString()}`);
+}
+
+export async function fetchAssetResearchReports(
+  assetId: string,
+  options: { limit?: number; lookbackDays?: number } = {}
+): Promise<AssetResearchReportResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('limit', String(options.limit ?? 10));
+  searchParams.set('lookback_days', String(options.lookbackDays ?? 90));
+  return getJson(`/api/assets/${encodeURIComponent(assetId)}/research-reports?${searchParams.toString()}`);
 }
 
 export async function searchAssets(q: string, limit = 10) {

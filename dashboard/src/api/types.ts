@@ -668,3 +668,73 @@ export type MarketMonitorPayload = {
   generated_reports: ReportLink[];
   warnings: string[];
 };
+
+export type ResearchReportCount = {
+  rows: number;
+  source_name?: string;
+  rating?: string;
+  broker?: string;
+};
+
+export type ResearchReportSummary = {
+  total_reports: number;
+  covered_stocks: number;
+  latest_publish_date: string | null;
+  latest_feature_date: string | null;
+  source_count: number;
+  source_counts: ResearchReportCount[];
+  rating_counts: ResearchReportCount[];
+  broker_counts: ResearchReportCount[];
+};
+
+export type ResearchReportItem = {
+  report_id: string;
+  asset_id: string;
+  ts_code: string;
+  stock_name: string;
+  industry_name: string;
+  report_title: string;
+  publish_date: string | null;
+  report_date: string | null;
+  broker: string;
+  analyst: string;
+  rating: string;
+  rating_change: string;
+  target_price: number | null;
+  target_upside: number | null;
+  source_type: string;
+  source_name: string;
+  source_confidence: number | null;
+  public_access: boolean;
+  copyright_note: string;
+  source_url: string;
+  raw_summary: string;
+  company_view: string;
+  industry_view: string;
+  risk_summary: string;
+  metadata: Record<string, unknown>;
+};
+
+export type ResearchReportResponse = {
+  items: ResearchReportItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  warnings: string[];
+};
+
+export type AssetResearchReportSummary = {
+  report_count_30d: number;
+  report_count_90d: number;
+  broker_coverage_count_90d: number;
+  latest_report_date: string | null;
+  latest_rating: string;
+  latest_target_price: number | null;
+};
+
+export type AssetResearchReportResponse = {
+  asset_id: string;
+  summary: AssetResearchReportSummary;
+  items: ResearchReportItem[];
+  warnings: string[];
+};

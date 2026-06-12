@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   fetchAssetDecisions,
   fetchAssetOutcomes,
+  fetchAssetResearchReports,
   fetchExperimentProposals,
   fetchExperimentReplay,
   fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
+  fetchResearchReportSummary,
+  fetchResearchReports,
   refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
@@ -96,6 +99,64 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/public-news/refresh', { method: 'POST' });
     expect(result.counts_by_category.live).toBe(2);
+  });
+
+  it('fetches research report summary', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ total_reports: 57418, covered_stocks: 3367, source_counts: [] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchReportSummary();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research-reports/summary');
+    expect(result.total_reports).toBe(57418);
+  });
+
+  it('fetches research reports with filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{ report_id: 'r1', stock_name: '贵州茅台' }],
+        total: 1,
+        limit: 25,
+        offset: 5,
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchReports({
+      q: '茅台',
+      broker: '华泰',
+      rating: '买入',
+      source_name: 'cfi_ybyl',
+      start_date: '2026-06-01',
+      end_date: '2026-06-05',
+      has_target_price: true,
+      limit: 25,
+      offset: 5
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/research-reports?q=%E8%8C%85%E5%8F%B0&broker=%E5%8D%8E%E6%B3%B0&rating=%E4%B9%B0%E5%85%A5' +
+        '&source_name=cfi_ybyl&start_date=2026-06-01&end_date=2026-06-05&has_target_price=true&limit=25&offset=5'
+    );
+    expect(result.items[0].stock_name).toBe('贵州茅台');
+  });
+
+  it('fetches asset research reports', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ asset_id: '600519.SH', summary: { report_count_90d: 4 }, items: [], warnings: [] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchAssetResearchReports('600519.SH', { limit: 5, lookbackDays: 90 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assets/600519.SH/research-reports?limit=5&lookback_days=90');
+    expect(result.summary.report_count_90d).toBe(4);
   });
 
   it('fetches asset decisions with date range and limit', async () => {
