@@ -16,8 +16,8 @@ GROUPS = [
 ]
 
 
-def load_global_search(q: str, *, limit: int = 5) -> dict[str, Any]:
-    query = q.strip()
+def load_global_search(q: object, *, limit: int = 5) -> dict[str, Any]:
+    query = str(q or "").strip()
     groups = _empty_groups()
     if len(query) < 2:
         return {"query": query, "groups": groups, "warnings": []}

@@ -138,6 +138,27 @@ def test_load_global_search_short_query_returns_empty_groups(monkeypatch):
     assert payload["warnings"] == []
 
 
+def test_load_global_search_coerces_missing_or_non_string_query(monkeypatch):
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("short coerced queries should not hit read models")
+
+    monkeypatch.setattr(search, "search_assets", fail_if_called)
+    monkeypatch.setattr(search, "load_public_news_for_dashboard", fail_if_called)
+    monkeypatch.setattr(search, "list_research_reports", fail_if_called)
+    monkeypatch.setattr(search, "load_platform_summary", fail_if_called)
+    monkeypatch.setattr(search, "load_report_links", fail_if_called)
+
+    missing_payload = search.load_global_search(None, limit=3)
+    numeric_payload = search.load_global_search(6, limit=3)
+
+    assert missing_payload["query"] == ""
+    assert all(group["items"] == [] for group in missing_payload["groups"])
+    assert numeric_payload["query"] == "6"
+    assert all(group["items"] == [] for group in numeric_payload["groups"])
+    assert missing_payload["warnings"] == []
+    assert numeric_payload["warnings"] == []
+
+
 def test_load_global_search_keeps_other_groups_when_one_fails(monkeypatch):
     monkeypatch.setattr(search, "search_assets", lambda q, limit: [])
     monkeypatch.setattr(
