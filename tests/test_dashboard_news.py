@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -26,11 +24,22 @@ class FakeDb:
     def fetch_all(self, _conn: FakeConn, sql: str, params: list[Any] | None = None):
         self.calls.append((sql, list(params or [])))
         compact = " ".join(sql.split())
-        if "FROM research.news_event_source s LEFT JOIN research.news_event_mention m" in compact:
+        if compact.startswith("SELECT COUNT(*) AS total_news"):
             rows = list(self.source_rows.values())
-            if "metadata->>'category' = %s" in compact:
-                category = params[0]
-                rows = [row for row in rows if row["metadata"].get("category") == category]
+            latest_published_at = max((row["published_at"] for row in rows), default=None)
+            latest_collected_at = max((row["collected_at"] for row in rows), default=None)
+            return [
+                {
+                    "total_news": len(rows),
+                    "latest_published_at": latest_published_at,
+                    "latest_collected_at": latest_collected_at,
+                    "source_count": len({row["source_name"] for row in rows}),
+                }
+            ]
+        if compact.startswith("SELECT COUNT(*) AS total"):
+            return [{"total": len(self._filtered_source_rows(compact, params or []))}]
+        if "FROM research.news_event_source s LEFT JOIN research.news_event_mention m" in compact:
+            rows = self._filtered_source_rows(compact, params or [])
             rows = sorted(rows, key=lambda row: row["published_at"], reverse=True)
             return [
                 {
@@ -43,23 +52,37 @@ class FakeDb:
                 }
                 for row in rows
             ]
-        if compact.startswith("SELECT COUNT(*) AS total"):
-            return [{"total": len(self.source_rows)}]
-        if compact.startswith("SELECT COUNT(*) AS total_news"):
-            latest = max((row["published_at"] for row in self.source_rows.values()), default=None)
-            return [
-                {
-                    "total_news": len(self.source_rows),
-                    "latest_published_at": latest,
-                    "latest_collected_at": latest,
-                    "source_count": len({row["source_name"] for row in self.source_rows.values()}),
-                }
-            ]
         if "GROUP BY source_name" in compact:
-            return [{"name": "sina_finance", "rows": len(self.source_rows)}]
+            counts: dict[str, int] = {}
+            for row in self.source_rows.values():
+                counts[row["source_name"]] = counts.get(row["source_name"], 0) + 1
+            return [
+                {"name": name, "rows": rows}
+                for name, rows in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+            ]
         if "GROUP BY name" in compact:
-            return [{"name": "live", "rows": len(self.source_rows)}]
+            counts: dict[str, int] = {}
+            for row in self.source_rows.values():
+                name = row["metadata"].get("category") or "other"
+                counts[name] = counts.get(name, 0) + 1
+            return [
+                {"name": name, "rows": rows}
+                for name, rows in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+            ]
         raise AssertionError(f"unexpected query: {compact}")
+
+    def _filtered_source_rows(self, compact_sql: str, params: list[Any]) -> list[dict[str, Any]]:
+        rows = list(self.source_rows.values())
+        param_index = 0
+        if "s.source_name = %s" in compact_sql:
+            source_name = params[param_index]
+            param_index += 1
+            rows = [row for row in rows if row["source_name"] == source_name]
+        if "metadata->>'category' = %s" in compact_sql:
+            category = params[param_index]
+            param_index += 1
+            rows = [row for row in rows if row["metadata"].get("category") == category]
+        return rows
 
     def execute_many(self, _conn: FakeConn, sql: str, rows: list[dict[str, Any]]):
         self.calls.append((sql, rows))
@@ -123,6 +146,45 @@ def test_news_event_store_upserts_public_news_items(monkeypatch: pytest.MonkeyPa
     assert stored["source_status"] == "available"
 
 
+def test_news_event_store_falls_back_when_published_at_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    store = news.NewsEventStore(service="test")
+
+    store.upsert_public_items(
+        [
+            make_item(
+                url="https://finance.sina.com.cn/doc/missing-time.shtml",
+                published_at="",
+                collected_at="2026-06-12T10:30:00+00:00",
+                raw_id="raw-missing-time",
+            )
+        ]
+    )
+
+    stored = next(iter(fake.source_rows.values()))
+    assert stored["published_at"] == "2026-06-12T10:30:00+00:00"
+
+
+def test_news_event_store_normalizes_invalid_status(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    store = news.NewsEventStore(service="test")
+
+    store.upsert_public_items([make_item(status="archived")])
+
+    stored = next(iter(fake.source_rows.values()))
+    assert stored["source_status"] == "available"
+
+
 def test_news_event_store_lists_by_category_with_summary(monkeypatch: pytest.MonkeyPatch):
     from stock_research.dashboard import news
 
@@ -131,13 +193,27 @@ def test_news_event_store_lists_by_category_with_summary(monkeypatch: pytest.Mon
     monkeypatch.setattr(news, "execute_many", fake.execute_many)
     monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
     store = news.NewsEventStore(service="test")
-    store.upsert_public_items([make_item()])
+    store.upsert_public_items(
+        [
+            make_item(),
+            make_item(
+                category="announcement",
+                title="宁德时代 300750 发布公告",
+                url="https://finance.sina.com.cn/doc/announcement.shtml",
+                raw_id="raw-2",
+            ),
+        ]
+    )
 
     payload = store.list_news(category="live", limit=20)
 
     assert payload["total"] == 1
-    assert payload["summary"]["total_news"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["summary"]["total_news"] == 2
     assert payload["summary"]["latest_published_at"].startswith("2026-06-12")
-    assert payload["summary"]["category_counts"] == [{"name": "live", "rows": 1}]
+    assert payload["summary"]["category_counts"] == [
+        {"name": "announcement", "rows": 1},
+        {"name": "live", "rows": 1},
+    ]
     assert payload["items"][0]["category"] == "live"
     assert payload["items"][0]["stocks"] == []

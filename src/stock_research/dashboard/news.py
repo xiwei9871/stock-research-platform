@@ -12,6 +12,7 @@ from stock_research.public_news.models import PublicNewsItem
 
 MAX_LIMIT = 300
 DEFAULT_LIMIT = 100
+VALID_SOURCE_STATUSES = {"available", "permission_denied", "disabled"}
 
 
 def _bounded_limit(value: int | None) -> int:
@@ -55,6 +56,15 @@ def _timestamp_to_string(value: object) -> str:
     return str(value)
 
 
+def _source_timestamp(item: PublicNewsItem) -> str:
+    return _clean(item.published_at) or _clean(item.collected_at) or datetime.now(UTC).isoformat()
+
+
+def _source_status(item: PublicNewsItem) -> str:
+    status = _clean(item.status)
+    return status if status in VALID_SOURCE_STATUSES else "available"
+
+
 def _count_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"name": str(row.get("name") or ""), "rows": int(row.get("rows") or 0)} for row in rows]
 
@@ -71,12 +81,12 @@ def _item_to_source_row(item: PublicNewsItem) -> dict[str, Any]:
         "source_channel": item.source_channel,
         "title": item.title,
         "content": item.summary,
-        "published_at": item.published_at,
+        "published_at": _source_timestamp(item),
         "collected_at": item.collected_at or datetime.now(UTC).isoformat(),
         "language": "zh",
         "url": item.url or None,
         "hash_key": item.news_id,
-        "source_status": item.status or "available",
+        "source_status": _source_status(item),
         "metadata": json.dumps(metadata, ensure_ascii=False),
     }
 
@@ -253,6 +263,9 @@ class NewsEventStore:
                                 'mapping_method', m.mapping_method,
                                 'trade_date', m.trade_date
                             )
+                            ORDER BY m.mention_confidence DESC NULLS LAST,
+                                     m.ts_code,
+                                     m.asset_id
                         ) FILTER (WHERE m.mention_id IS NOT NULL),
                         '[]'::jsonb
                     ) AS stocks
@@ -310,26 +323,6 @@ class NewsEventStore:
                 """,
             )
             row = summary_rows[0] if summary_rows else {}
-            if "total_news" not in row and "total" in row:
-                latest_rows = fetch_all(
-                    active_conn,
-                    """
-                    SELECT s.source_event_id, s.source_name, s.source_channel, s.title,
-                           s.content, s.published_at, s.collected_at, s.url,
-                           s.source_status, s.metadata, '[]'::jsonb AS stocks
-                    FROM research.news_event_source s
-                    LEFT JOIN research.news_event_mention m USING (source_event_id)
-                    ORDER BY s.published_at DESC
-                    LIMIT 1
-                    """,
-                )
-                latest_row = latest_rows[0] if latest_rows else {}
-                row = {
-                    "total_news": row.get("total"),
-                    "latest_published_at": latest_row.get("published_at"),
-                    "latest_collected_at": latest_row.get("collected_at"),
-                    "source_count": len(source_counts),
-                }
             return {
                 "total_news": int(row.get("total_news") or 0),
                 "latest_published_at": _timestamp_to_string(row.get("latest_published_at")),
