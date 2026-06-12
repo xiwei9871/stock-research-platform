@@ -150,3 +150,39 @@ def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     assert set(gap_matrix["industry_lv1"]) == {"计算机", "银行"}
     assert gap_matrix["candidate_count"].sum() == 2
     assert "Yanbaoke Report Backfill Inventory" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+
+def test_build_yanbaoke_inventory_plan_allows_missing_existing_coverage(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        ]
+    )
+
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=None,
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    assert Path(result["paths"]["existing_report_coverage"]).exists()
+    assert result["existing_report_coverage"].empty
+    assert list(result["existing_report_coverage"].columns) == [
+        "report_date",
+        "normalized_title",
+        "normalized_broker",
+        "stock_code",
+        "report_type",
+    ]

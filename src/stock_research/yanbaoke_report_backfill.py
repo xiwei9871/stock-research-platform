@@ -82,15 +82,16 @@ def build_scored_candidates(
 def build_yanbaoke_inventory_plan(
     *,
     candidates: pd.DataFrame,
-    existing_coverage: pd.DataFrame,
+    existing_coverage: pd.DataFrame | None,
     start_date: str,
     end_date: str,
     output_dir: str | Path,
     sector_config: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
+    coverage = _shape_existing_coverage(existing_coverage)
     scored = build_scored_candidates(
         candidates,
-        existing_coverage=existing_coverage,
+        existing_coverage=coverage,
         sector_config=sector_config,
     )
     scored = _filter_report_window(scored, start_date=start_date, end_date=end_date)
@@ -120,7 +121,6 @@ def build_yanbaoke_inventory_plan(
         "priority_queue": target_dir / "yanbaoke_priority_queue.csv",
         "report": target_dir / "yanbaoke_backfill_inventory_report.md",
     }
-    coverage = _shape_existing_coverage(existing_coverage)
     scored.to_csv(paths["candidate_reports"], index=False)
     coverage.to_csv(paths["existing_report_coverage"], index=False)
     gap_matrix.to_csv(paths["gap_matrix"], index=False)
@@ -337,8 +337,8 @@ def _filter_report_window(scored: pd.DataFrame, *, start_date: str, end_date: st
     return scored.loc[dates.between(start, end, inclusive="both")].reset_index(drop=True)
 
 
-def _shape_existing_coverage(existing_coverage: pd.DataFrame) -> pd.DataFrame:
-    if not existing_coverage.empty:
+def _shape_existing_coverage(existing_coverage: pd.DataFrame | None) -> pd.DataFrame:
+    if existing_coverage is not None and not existing_coverage.empty:
         return existing_coverage.copy()
     return pd.DataFrame(
         columns=[
