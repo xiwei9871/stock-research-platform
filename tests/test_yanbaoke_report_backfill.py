@@ -118,8 +118,35 @@ def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     assert Path(result["paths"]["candidate_reports"]).exists()
     assert Path(result["paths"]["sector_gap_matrix"]).exists()
     assert Path(result["paths"]["asset_gap_matrix"]).exists()
+    assert Path(result["paths"]["existing_report_coverage"]).exists()
+    assert Path(result["paths"]["gap_matrix"]).exists()
     assert Path(result["paths"]["priority_queue"]).exists()
     assert Path(result["paths"]["report"]).exists()
+    assert {"existing_report_coverage", "gap_matrix"} <= set(result["paths"])
     sector_gap = pd.read_csv(result["paths"]["sector_gap_matrix"])
     assert set(sector_gap["sector_priority"]) >= {"P0", "P2"}
+    existing_coverage = pd.read_csv(result["paths"]["existing_report_coverage"])
+    assert list(existing_coverage.columns) == [
+        "report_date",
+        "normalized_title",
+        "normalized_broker",
+        "stock_code",
+        "report_type",
+    ]
+    gap_matrix = pd.read_csv(result["paths"]["gap_matrix"])
+    assert {
+        "month",
+        "normalized_broker",
+        "industry_lv1",
+        "industry_lv2",
+        "stock_code",
+        "stock_name",
+        "report_type_bucket",
+        "coverage_gap_reason",
+        "candidate_count",
+        "max_priority_score",
+    } <= set(gap_matrix.columns)
+    assert set(gap_matrix["month"]) == {"2026-04", "2025-08"}
+    assert set(gap_matrix["industry_lv1"]) == {"计算机", "银行"}
+    assert gap_matrix["candidate_count"].sum() == 2
     assert "Yanbaoke Report Backfill Inventory" in Path(result["paths"]["report"]).read_text(encoding="utf-8")

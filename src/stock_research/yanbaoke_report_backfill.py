@@ -96,6 +96,7 @@ def build_yanbaoke_inventory_plan(
     scored = _filter_report_window(scored, start_date=start_date, end_date=end_date)
     sector_gap = build_sector_gap_matrix(scored)
     asset_gap = build_asset_gap_matrix(scored)
+    gap_matrix = build_gap_matrix(scored)
     priority_queue = scored.sort_values(
         ["priority_score", "report_date", "report_id"],
         ascending=[False, False, True],
@@ -112,12 +113,17 @@ def build_yanbaoke_inventory_plan(
     target_dir.mkdir(parents=True, exist_ok=True)
     paths = {
         "candidate_reports": target_dir / "yanbaoke_candidate_reports.csv",
+        "existing_report_coverage": target_dir / "existing_report_coverage.csv",
+        "gap_matrix": target_dir / "yanbaoke_gap_matrix.csv",
         "sector_gap_matrix": target_dir / "yanbaoke_sector_gap_matrix.csv",
         "asset_gap_matrix": target_dir / "yanbaoke_asset_gap_matrix.csv",
         "priority_queue": target_dir / "yanbaoke_priority_queue.csv",
         "report": target_dir / "yanbaoke_backfill_inventory_report.md",
     }
+    coverage = _shape_existing_coverage(existing_coverage)
     scored.to_csv(paths["candidate_reports"], index=False)
+    coverage.to_csv(paths["existing_report_coverage"], index=False)
+    gap_matrix.to_csv(paths["gap_matrix"], index=False)
     sector_gap.to_csv(paths["sector_gap_matrix"], index=False)
     asset_gap.to_csv(paths["asset_gap_matrix"], index=False)
     priority_queue.to_csv(paths["priority_queue"], index=False)
@@ -125,12 +131,58 @@ def build_yanbaoke_inventory_plan(
 
     return {
         "candidates": scored,
+        "existing_report_coverage": coverage,
+        "gap_matrix": gap_matrix,
         "sector_gap_matrix": sector_gap,
         "asset_gap_matrix": asset_gap,
         "priority_queue": priority_queue,
         "report": report,
         "paths": {name: str(path) for name, path in paths.items()},
     }
+
+
+def build_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "month",
+        "normalized_broker",
+        "industry_lv1",
+        "industry_lv2",
+        "stock_code",
+        "stock_name",
+        "report_type_bucket",
+        "coverage_gap_reason",
+        "candidate_count",
+        "max_priority_score",
+    ]
+    if scored.empty:
+        return pd.DataFrame(columns=columns)
+
+    frame = scored.copy()
+    frame["month"] = pd.to_datetime(frame["report_date"], errors="coerce").dt.strftime("%Y-%m").fillna("")
+    grouped = (
+        frame.groupby(
+            [
+                "month",
+                "normalized_broker",
+                "industry_lv1",
+                "industry_lv2",
+                "stock_code",
+                "stock_name",
+                "report_type_bucket",
+                "coverage_gap_reason",
+            ],
+            dropna=False,
+        )
+        .agg(
+            candidate_count=("report_id", "size"),
+            max_priority_score=("priority_score", "max"),
+        )
+        .reset_index()
+    )
+    return grouped.sort_values(
+        ["month", "max_priority_score", "candidate_count"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)[columns]
 
 
 def build_sector_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:
@@ -283,6 +335,20 @@ def _filter_report_window(scored: pd.DataFrame, *, start_date: str, end_date: st
     start = pd.to_datetime(start_date)
     end = pd.to_datetime(end_date)
     return scored.loc[dates.between(start, end, inclusive="both")].reset_index(drop=True)
+
+
+def _shape_existing_coverage(existing_coverage: pd.DataFrame) -> pd.DataFrame:
+    if not existing_coverage.empty:
+        return existing_coverage.copy()
+    return pd.DataFrame(
+        columns=[
+            "report_date",
+            "normalized_title",
+            "normalized_broker",
+            "stock_code",
+            "report_type",
+        ]
+    )
 
 
 def _markdown_table(frame: pd.DataFrame) -> str:
