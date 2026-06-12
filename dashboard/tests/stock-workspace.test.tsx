@@ -2,10 +2,11 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace } from '../src/components/StockWorkspace';
-import type { AssetProfile, PublicNewsResponse } from '../src/api/types';
+import type { AssetProfile, AssetResearchReportResponse, PublicNewsResponse } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
   fetchAssetProfile: vi.fn(),
+  fetchAssetResearchReports: vi.fn(),
   fetchPublicNews: vi.fn(),
   searchAssets: vi.fn()
 }));
@@ -108,6 +109,47 @@ const newsPayload: PublicNewsResponse = {
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
+  apiMocks.fetchAssetResearchReports.mockResolvedValue({
+    asset_id: '000001.SZ',
+    summary: {
+      report_count_30d: 2,
+      report_count_90d: 4,
+      broker_coverage_count_90d: 3,
+      latest_report_date: '2026-06-03',
+      latest_rating: '买入',
+      latest_target_price: 19.5
+    },
+    items: [
+      {
+        report_id: 'r1',
+        asset_id: '000001.SZ',
+        ts_code: '000001.SZ',
+        stock_name: '平安银行',
+        industry_name: '银行',
+        report_title: '平安银行深度报告',
+        publish_date: '2026-06-03',
+        report_date: '2026-06-03',
+        broker: '华泰证券',
+        analyst: '',
+        rating: '买入',
+        rating_change: '',
+        target_price: 19.5,
+        target_upside: null,
+        source_type: 'public_web_search_result',
+        source_name: 'cfi_ybyl',
+        source_confidence: 0.8,
+        public_access: true,
+        copyright_note: 'metadata only',
+        source_url: 'https://example.com/r1',
+        raw_summary: '',
+        company_view: '',
+        industry_view: '',
+        risk_summary: '',
+        metadata: {}
+      }
+    ],
+    warnings: []
+  });
   apiMocks.fetchPublicNews.mockResolvedValue(newsPayload);
   apiMocks.searchAssets.mockResolvedValue([]);
 });
@@ -217,5 +259,45 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     await waitFor(() => expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('000001 平安银行公告')).not.toBeInTheDocument();
+  });
+
+  it('loads research reports for the selected stock', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
+    expect(screen.getByText('90d reports 4')).toBeInTheDocument();
+    expect(apiMocks.fetchAssetResearchReports).toHaveBeenCalledWith('000001.SZ', { limit: 5, lookbackDays: 90 });
+  });
+
+  it('does not show stale research reports after a later profile load clears the profile', async () => {
+    const firstReports = deferred<AssetResearchReportResponse>();
+    apiMocks.fetchAssetResearchReports.mockReturnValueOnce(firstReports.promise);
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockRejectedValueOnce(new Error('not found'));
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+    await screen.findByRole('heading', { name: /平安银行/ });
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    await screen.findByText('not found');
+
+    await act(async () => {
+      firstReports.resolve({
+        asset_id: '000001.SZ',
+        summary: {
+          report_count_30d: 2,
+          report_count_90d: 4,
+          broker_coverage_count_90d: 3,
+          latest_report_date: '2026-06-03',
+          latest_rating: '买入',
+          latest_target_price: 19.5
+        },
+        items: [],
+        warnings: []
+      });
+    });
+
+    expect(screen.queryByText('90d reports 4')).not.toBeInTheDocument();
   });
 });

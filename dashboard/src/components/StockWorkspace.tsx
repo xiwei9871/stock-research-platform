@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAssetProfile, fetchPublicNews, searchAssets } from '../api/client';
-import type { AssetProfile, AssetSummary, PublicNewsItem } from '../api/types';
+import { fetchAssetProfile, fetchAssetResearchReports, fetchPublicNews, searchAssets } from '../api/client';
+import type { AssetProfile, AssetResearchReportResponse, AssetSummary, PublicNewsItem } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
@@ -82,16 +82,20 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
   const [profile, setProfile] = useState<AssetProfile | null>(null);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
+  const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
   const [assetMatches, setAssetMatches] = useState<AssetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
+  const [isResearchReportsLoading, setIsResearchReportsLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newsError, setNewsError] = useState<string | null>(null);
+  const [researchReportsError, setResearchReportsError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const profileRequestIdRef = useRef(0);
   const newsRequestIdRef = useRef(0);
+  const researchReportsRequestIdRef = useRef(0);
   const searchRequestIdRef = useRef(0);
 
   const isLatestProfileRequest = useCallback((requestId: number) => {
@@ -180,6 +184,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       mountedRef.current = false;
       profileRequestIdRef.current += 1;
       newsRequestIdRef.current += 1;
+      researchReportsRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
   }, [initialAssetId]);
@@ -216,6 +221,40 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       .finally(() => {
         if (mountedRef.current && requestId === newsRequestIdRef.current) {
           setIsNewsLoading(false);
+        }
+      });
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile) {
+      researchReportsRequestIdRef.current += 1;
+      setResearchReports(null);
+      setIsResearchReportsLoading(false);
+      setResearchReportsError(null);
+      return;
+    }
+
+    const requestId = researchReportsRequestIdRef.current + 1;
+    researchReportsRequestIdRef.current = requestId;
+
+    setIsResearchReportsLoading(true);
+    setResearchReportsError(null);
+
+    fetchAssetResearchReports(profile.canonical_asset_id, { limit: 5, lookbackDays: 90 })
+      .then((payload) => {
+        if (mountedRef.current && requestId === researchReportsRequestIdRef.current) {
+          setResearchReports(payload);
+        }
+      })
+      .catch((err: unknown) => {
+        if (mountedRef.current && requestId === researchReportsRequestIdRef.current) {
+          setResearchReportsError(err instanceof Error ? err.message : String(err));
+          setResearchReports(null);
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current && requestId === researchReportsRequestIdRef.current) {
+          setIsResearchReportsLoading(false);
         }
       });
   }, [profile]);
@@ -407,10 +446,62 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
 
             <article className="workspace-band">
               <div className="section-heading">
-                <h2>Research Reports Phase 3</h2>
-                <span className="status-chip neutral">not connected</span>
+                <h2>Research Reports</h2>
+                {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
               </div>
-              <p className="muted">External research report adapters are intentionally deferred.</p>
+              {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
+              {researchReports ? (
+                <section className="stock-summary-strip" aria-label="Stock research report summary">
+                  <div>
+                    <span>Coverage</span>
+                    <strong>90d reports {researchReports.summary.report_count_90d}</strong>
+                  </div>
+                  <div>
+                    <span>30d Reports</span>
+                    <strong>{researchReports.summary.report_count_30d}</strong>
+                  </div>
+                  <div>
+                    <span>Brokers</span>
+                    <strong>{researchReports.summary.broker_coverage_count_90d} brokers</strong>
+                  </div>
+                  <div>
+                    <span>Latest Rating</span>
+                    <strong>{formatValue(researchReports.summary.latest_rating)}</strong>
+                  </div>
+                  <div>
+                    <span>Target Price</span>
+                    <strong>{formatValue(researchReports.summary.latest_target_price)}</strong>
+                  </div>
+                </section>
+              ) : null}
+              <div className="compact-news-list">
+                {(researchReports?.items ?? []).map((report) =>
+                  report.source_url ? (
+                    <a
+                      key={report.report_id}
+                      className="evidence-link-row"
+                      href={report.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <strong>{report.report_title}</strong>
+                      <span>
+                        {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
+                      </span>
+                    </a>
+                  ) : (
+                    <div key={report.report_id} className="evidence-link-row">
+                      <strong>{report.report_title}</strong>
+                      <span>
+                        {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
+                      </span>
+                    </div>
+                  )
+                )}
+              </div>
+              {!isResearchReportsLoading && !researchReportsError && (researchReports?.items.length ?? 0) === 0 ? (
+                <p className="muted">No research reports found.</p>
+              ) : null}
             </article>
 
             <article className="workspace-band">
