@@ -338,6 +338,7 @@ function makeExperimentReplay(): ExperimentReplayRow[] {
 
 function makeResearchReport() {
   return {
+    event_key: 'app-shell-r1:000001.SZ',
     report_id: 'app-shell-r1',
     asset_id: 'CN:SZ:000001',
     ts_code: '000001.SZ',
