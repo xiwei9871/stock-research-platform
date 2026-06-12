@@ -260,11 +260,7 @@ def render_inventory_report(
     start_date: str,
     end_date: str,
 ) -> str:
-    priority_distribution = (
-        scored["sector_priority"].value_counts().rename_axis("sector_priority").reset_index(name="candidate_count")
-        if "sector_priority" in scored.columns
-        else pd.DataFrame(columns=["sector_priority", "candidate_count"])
-    )
+    priority_distribution = _priority_distribution(scored)
     top_sector_gaps = sector_gap.head(10)
     top_asset_gaps = asset_gap.head(10)
     return "\n".join(
@@ -338,16 +334,34 @@ def _filter_report_window(scored: pd.DataFrame, *, start_date: str, end_date: st
 
 
 def _shape_existing_coverage(existing_coverage: pd.DataFrame | None) -> pd.DataFrame:
-    if existing_coverage is not None and not existing_coverage.empty:
-        return existing_coverage.copy()
-    return pd.DataFrame(
-        columns=[
-            "report_date",
-            "normalized_title",
-            "normalized_broker",
-            "stock_code",
-            "report_type",
-        ]
+    canonical = [
+        "report_date",
+        "normalized_title",
+        "normalized_broker",
+        "stock_code",
+        "report_type",
+    ]
+    if existing_coverage is None:
+        return pd.DataFrame(columns=canonical)
+
+    coverage = existing_coverage.copy()
+    for column in canonical:
+        if column not in coverage.columns:
+            coverage[column] = ""
+    extra_columns = [column for column in coverage.columns if column not in canonical]
+    return coverage[canonical + extra_columns]
+
+
+def _priority_distribution(scored: pd.DataFrame) -> pd.DataFrame:
+    columns = ["sector_priority", "report_type_bucket", "candidate_count"]
+    if scored.empty or not {"sector_priority", "report_type_bucket"} <= set(scored.columns):
+        return pd.DataFrame(columns=columns)
+    return (
+        scored.groupby(["sector_priority", "report_type_bucket"], dropna=False)
+        .size()
+        .reset_index(name="candidate_count")
+        .sort_values(["sector_priority", "report_type_bucket"])
+        .reset_index(drop=True)[columns]
     )
 
 

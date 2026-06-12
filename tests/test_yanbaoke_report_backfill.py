@@ -186,3 +186,113 @@ def test_build_yanbaoke_inventory_plan_allows_missing_existing_coverage(tmp_path
         "stock_code",
         "report_type",
     ]
+
+
+def test_build_yanbaoke_inventory_plan_stabilizes_existing_coverage_columns(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        ]
+    )
+    existing = pd.DataFrame([{"stock_code": "000001.SZ", "source": "manual"}])
+
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=existing,
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    coverage = pd.read_csv(result["paths"]["existing_report_coverage"])
+    assert list(coverage.columns[:5]) == [
+        "report_date",
+        "normalized_title",
+        "normalized_broker",
+        "stock_code",
+        "report_type",
+    ]
+    assert "source" in coverage.columns
+
+
+def test_inventory_report_priority_distribution_includes_report_type_bucket(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            }
+        ]
+    )
+
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=None,
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    report = Path(result["paths"]["report"]).read_text(encoding="utf-8")
+    assert "report_type_bucket" in report
+    assert "| sector_priority | report_type_bucket | candidate_count |" in report
+
+
+def test_build_yanbaoke_inventory_plan_excludes_candidates_outside_date_window(tmp_path: Path):
+    candidates = pd.DataFrame(
+        [
+            {
+                "report_id": "inside",
+                "report_date": "2026-04-20",
+                "title": "公司深度报告：AI算力龙头",
+                "broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "stock_name": "算力龙头",
+                "industry_lv1": "计算机",
+                "industry_lv2": "AI算力",
+                "theme": "AI算力",
+            },
+            {
+                "report_id": "outside",
+                "report_date": "2024-12-31",
+                "title": "行业深度：银行资产质量",
+                "broker": "招商证券",
+                "stock_code": "",
+                "stock_name": "",
+                "industry_lv1": "银行",
+                "industry_lv2": "银行",
+                "theme": "银行",
+            },
+        ]
+    )
+
+    result = build_yanbaoke_inventory_plan(
+        candidates=candidates,
+        existing_coverage=None,
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        output_dir=tmp_path,
+    )
+
+    candidate_reports = pd.read_csv(result["paths"]["candidate_reports"])
+    gap_matrix = pd.read_csv(result["paths"]["gap_matrix"])
+    assert set(candidate_reports["report_id"]) == {"inside"}
+    assert gap_matrix["candidate_count"].sum() == 1
+    assert set(gap_matrix["industry_lv1"]) == {"计算机"}
