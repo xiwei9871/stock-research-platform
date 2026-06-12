@@ -52,6 +52,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchResearchReportSummary: vi.fn(),
+  fetchResearchReports: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -331,6 +333,36 @@ function makeExperimentReplay(): ExperimentReplayRow[] {
       production_write_enabled: false
     }
   ];
+}
+
+function makeResearchReport() {
+  return {
+    report_id: 'app-shell-r1',
+    asset_id: 'CN:SZ:000001',
+    ts_code: '000001.SZ',
+    stock_name: 'Ping An Bank',
+    industry_name: 'Banking',
+    report_title: 'Ping An Bank Initiation',
+    publish_date: '2026-06-03',
+    report_date: '2026-06-03',
+    broker: 'Example Securities',
+    analyst: 'Analyst A',
+    rating: 'Buy',
+    rating_change: 'Maintain',
+    target_price: 15.5,
+    target_upside: 0.12,
+    source_type: 'public_web_search_result',
+    source_name: 'example_source',
+    source_confidence: 0.8,
+    public_access: true,
+    copyright_note: 'metadata only',
+    source_url: 'https://example.com/report',
+    raw_summary: 'summary',
+    company_view: 'company view',
+    industry_view: 'industry view',
+    risk_summary: 'risk',
+    metadata: {}
+  };
 }
 
 function makeShadowWatchlist(): ShadowWatchlistRow[] {
@@ -689,6 +721,23 @@ describe('dashboard app shell', () => {
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchResearchReportSummary.mockResolvedValue({
+      total_reports: 1,
+      covered_stocks: 1,
+      latest_publish_date: '2026-06-03',
+      latest_feature_date: '2026-06-02',
+      source_count: 1,
+      source_counts: [{ source_name: 'example_source', rows: 1 }],
+      rating_counts: [{ rating: 'Buy', rows: 1 }],
+      broker_counts: [{ broker: 'Example Securities', rows: 1 }]
+    });
+    apiMocks.fetchResearchReports.mockResolvedValue({
+      items: [makeResearchReport()],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      warnings: []
+    });
   });
 
   afterEach(() => {
@@ -791,7 +840,8 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
     expect(await screen.findByRole('heading', { name: 'Research Reports' })).toBeInTheDocument();
-    expect(screen.getByText('External broker and institution reports will be stock-first in Phase 3.')).toBeInTheDocument();
+    expect(screen.getByText('Total Reports')).toBeInTheDocument();
+    expect(await screen.findByText('Ping An Bank Initiation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
     expect(await screen.findByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();

@@ -1659,6 +1659,15 @@ table.data-table td {
   align-items: start;
 }
 
+.research-report-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.research-report-table {
+  min-width: 860px;
+}
+
 .research-report-table td:nth-child(2) {
   min-width: 220px;
 }

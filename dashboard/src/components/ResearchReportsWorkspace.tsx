@@ -258,44 +258,46 @@ export function ResearchReportsWorkspace() {
             </span>
           </div>
           {reports.length > 0 ? (
-            <table className="compact-table research-report-table">
-              <thead>
-                <tr>
-                  <th>Publish</th>
-                  <th>Report</th>
-                  <th>Broker</th>
-                  <th>Rating</th>
-                  <th>Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reports.map((item) => (
-                  <tr key={item.report_id}>
-                    <td>{formatText(item.publish_date)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        aria-label={`Open report ${item.report_title}`}
-                        onClick={() => setSelectedReport(item)}
-                      >
-                        {item.report_title}
-                      </button>
-                      <span>
-                        {formatText(item.ts_code)} / {formatText(item.stock_name)}
-                      </span>
-                    </td>
-                    <td>{formatText(item.broker)}</td>
-                    <td>
-                      <span className="status-chip neutral">{formatText(item.rating)}</span>
-                    </td>
-                    <td>
-                      {formatCurrency(item.target_price)}
-                      <span className="muted"> {formatPercent(item.target_upside)}</span>
-                    </td>
+            <div className="research-report-table-scroll">
+              <table className="compact-table research-report-table">
+                <thead>
+                  <tr>
+                    <th>Publish</th>
+                    <th>Report</th>
+                    <th>Broker</th>
+                    <th>Rating</th>
+                    <th>Target</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {reports.map((item) => (
+                    <tr key={item.report_id}>
+                      <td>{formatText(item.publish_date)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          aria-label={`Open report ${item.report_title}`}
+                          onClick={() => setSelectedReport(item)}
+                        >
+                          {item.report_title}
+                        </button>
+                        <span>
+                          {formatText(item.ts_code)} / {formatText(item.stock_name)}
+                        </span>
+                      </td>
+                      <td>{formatText(item.broker)}</td>
+                      <td>
+                        <span className="status-chip neutral">{formatText(item.rating)}</span>
+                      </td>
+                      <td>
+                        {formatCurrency(item.target_price)}
+                        <span className="muted"> {formatPercent(item.target_upside)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
           {!isReportsLoading && reports.length === 0 ? <p className="muted">No matching research reports.</p> : null}
           {reportsPayload?.warnings.map((warning) => (
