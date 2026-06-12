@@ -56,6 +56,18 @@ def build_scored_candidates(
     frame["normalized_title"] = frame["title"].map(_normalize_text)
     frame["normalized_broker"] = frame["broker"].map(_normalize_text)
     frame["report_type_bucket"] = frame["title"].map(classify_report_type_bucket)
+    if frame.empty:
+        frame["theme_bucket"] = pd.Series(dtype="string")
+        frame["sector_priority"] = pd.Series(dtype="string")
+        frame["sector_quota_bucket"] = pd.Series(dtype="string")
+        frame["sector_pilot_quota"] = pd.Series(dtype="int64")
+        frame["asset_priority"] = pd.Series(dtype="string")
+        frame["coverage_gap_reason"] = pd.Series(dtype="string")
+        frame["priority_score"] = pd.Series(dtype="float64")
+        return frame.sort_values(
+            ["priority_score", "report_date", "report_id"],
+            ascending=[False, False, True],
+        ).reset_index(drop=True)
     sector_fields = frame.apply(lambda row: _classify_sector(row, sector_rules), axis=1, result_type="expand")
     frame[["theme_bucket", "sector_priority", "sector_quota_bucket", "sector_pilot_quota"]] = sector_fields
     frame["asset_priority"] = frame.apply(_asset_priority, axis=1)

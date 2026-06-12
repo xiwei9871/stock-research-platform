@@ -53,3 +53,21 @@ def test_build_scored_candidates_prioritizes_deep_p0_missing_coverage():
     assert top["sector_quota_bucket"] == "p0_growth_tech_healthcare"
     assert top["coverage_gap_reason"] == "missing_asset_report"
     assert top["priority_score"] > scored.loc[scored["report_id"].eq("r2"), "priority_score"].iloc[0]
+
+
+def test_build_scored_candidates_empty_candidates_returns_shaped_frame():
+    scored = build_scored_candidates(pd.DataFrame(), existing_coverage=pd.DataFrame())
+
+    assert scored.empty
+    assert {
+        "normalized_title",
+        "normalized_broker",
+        "report_type_bucket",
+        "theme_bucket",
+        "sector_priority",
+        "sector_quota_bucket",
+        "sector_pilot_quota",
+        "asset_priority",
+        "coverage_gap_reason",
+        "priority_score",
+    } <= set(scored.columns)
