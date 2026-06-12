@@ -86,9 +86,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function makeResearchReports(
-  overrides: Partial<AssetResearchReportResponse> = {}
-): AssetResearchReportResponse {
+function makeResearchReports(overrides: Partial<AssetResearchReportResponse> = {}): AssetResearchReportResponse {
   return {
     asset_id: '000001.SZ',
     summary: {
@@ -134,35 +132,41 @@ function makeResearchReports(
   };
 }
 
-const newsPayload: AssetNewsResponse = {
-  asset_id: 'CN:SH:600519',
-  items: [
-    {
-      news_id: 'news-1',
-      source: 'sina_finance',
-      source_channel: '公司',
-      category: 'company',
-      title: '贵州茅台相关新闻',
-      summary: '',
-      url: 'https://finance.sina.com.cn/doc/news.shtml',
-      published_at: '2026-06-12T01:30:00+00:00',
-      collected_at: '2026-06-12T01:31:00+00:00',
-      raw_id: 'news-1',
-      raw_payload: {},
-      status: 'available',
-      stocks: [{ asset_id: 'CN:SH:600519', ts_code: '600519.SH', stock_name: '贵州茅台' }]
-    }
-  ],
-  summary: {
-    news_count_1d: 1,
-    news_count_3d: 1,
-    news_count_7d: 1,
-    latest_published_at: '2026-06-12T01:30:00+00:00',
-    source_count: 1,
-    category_counts: [{ name: 'company', rows: 1 }]
-  },
-  warnings: []
-};
+function makeAssetNews(overrides: Partial<AssetNewsResponse> = {}): AssetNewsResponse {
+  const assetId = overrides.asset_id ?? '000001.SZ';
+  return {
+    asset_id: assetId,
+    items: [
+      {
+        news_id: 'news-1',
+        source: 'sina_finance',
+        source_channel: '公司',
+        category: 'company',
+        title: '平安银行相关新闻',
+        summary: '',
+        url: 'https://finance.sina.com.cn/doc/news.shtml',
+        published_at: '2026-06-12T01:30:00+00:00',
+        collected_at: '2026-06-12T01:31:00+00:00',
+        raw_id: 'news-1',
+        raw_payload: {},
+        status: 'available',
+        stocks: [{ asset_id: assetId, ts_code: '000001.SZ', stock_name: '平安银行' }]
+      }
+    ],
+    summary: {
+      news_count_1d: 1,
+      news_count_3d: 1,
+      news_count_7d: 1,
+      latest_published_at: '2026-06-12T01:30:00+00:00',
+      source_count: 1,
+      category_counts: [{ name: 'company', rows: 1 }]
+    },
+    warnings: [],
+    ...overrides
+  };
+}
+
+const newsPayload = makeAssetNews();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -185,7 +189,7 @@ describe('StockWorkspace', () => {
     expect(screen.getAllByText('momentum').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Score Component')).toHaveLength(2);
     expect(screen.getByText('quality')).toBeInTheDocument();
-    expect(await screen.findByText('贵州茅台相关新闻')).toBeInTheDocument();
+    expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
     expect(screen.getByText('candidate')).toBeInTheDocument();
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
   });
@@ -205,11 +209,81 @@ describe('StockWorkspace', () => {
         }
       })
     );
+    apiMocks.fetchAssetNews.mockResolvedValueOnce(
+      makeAssetNews({
+        asset_id: 'CN:SH:600519',
+        items: [
+          {
+            ...makeAssetNews().items[0],
+            news_id: 'news-600519',
+            title: '贵州茅台相关新闻',
+            stocks: [{ asset_id: 'CN:SH:600519', ts_code: '600519.SH', stock_name: '贵州茅台' }]
+          }
+        ]
+      })
+    );
 
     render(<StockWorkspace initialAssetId="600519" />);
 
     expect(await screen.findByText('贵州茅台相关新闻')).toBeInTheDocument();
     expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('CN:SH:600519', { limit: 8, lookbackDays: 7 });
+  });
+
+  it('does not render asset news responses for a different stock', async () => {
+    apiMocks.fetchAssetNews.mockResolvedValueOnce(
+      makeAssetNews({
+        asset_id: '600000.SH',
+        items: [
+          {
+            ...makeAssetNews().items[0],
+            news_id: 'news-mismatch',
+            title: '浦发银行不应显示的新闻',
+            stocks: [{ asset_id: '600000.SH', ts_code: '600000.SH', stock_name: '浦发银行' }]
+          }
+        ]
+      })
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledWith('000001.SZ', { limit: 8, lookbackDays: 7 }));
+    await waitFor(() => expect(screen.getByText('No related news found.')).toBeInTheDocument());
+    expect(screen.queryByText('浦发银行不应显示的新闻')).not.toBeInTheDocument();
+  });
+
+  it('hides the previous stock news as soon as a new stock profile is visible', async () => {
+    const secondNews = deferred<AssetNewsResponse>();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: {
+        asset_id: '600000.SH',
+        symbol: '600000',
+        name: '浦发银行',
+        exchange: 'SH',
+        board: null,
+        is_active: true
+      },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
+    apiMocks.fetchAssetNews.mockResolvedValueOnce(makeAssetNews()).mockReturnValueOnce(secondNews.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenLastCalledWith('600000.SH', { limit: 8, lookbackDays: 7 }));
   });
 
   it('normalizes six digit stock input before loading', async () => {
@@ -299,13 +373,13 @@ describe('StockWorkspace', () => {
       await firstNews.promise;
     });
 
-    expect(screen.queryByText('贵州茅台相关新闻')).not.toBeInTheDocument();
+    expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     await waitFor(() => expect(apiMocks.fetchAssetNews).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText('贵州茅台相关新闻')).not.toBeInTheDocument();
+    expect(screen.queryByText('平安银行相关新闻')).not.toBeInTheDocument();
   });
 
   it('loads research reports for the selected stock', async () => {

@@ -268,6 +268,8 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
   const identitySymbol = profile?.asset?.symbol ?? profile?.asset_id ?? assetId;
   const factorRows = getFactorRows(profile);
   const close = latestClose(profile);
+  const visibleAssetNews =
+    assetNews && profile && assetNews.asset_id === profile.canonical_asset_id ? assetNews : null;
   const visibleResearchReports =
     researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
 
@@ -387,33 +389,33 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
                 <h2>Related News</h2>
                 {isNewsLoading ? <span className="muted">Loading...</span> : null}
               </div>
-              {assetNews ? (
+              {visibleAssetNews ? (
                 <div className="metric-grid compact">
                   <span>
                     <span>1d News</span>
-                    <strong>{assetNews.summary.news_count_1d}</strong>
+                    <strong>{visibleAssetNews.summary.news_count_1d}</strong>
                   </span>
                   <span>
                     <span>7d News</span>
-                    <strong>{assetNews.summary.news_count_7d}</strong>
+                    <strong>{visibleAssetNews.summary.news_count_7d}</strong>
                   </span>
                   <span>
                     <span>Sources</span>
-                    <strong>{assetNews.summary.source_count ?? 0}</strong>
+                    <strong>{visibleAssetNews.summary.source_count ?? 0}</strong>
                   </span>
                 </div>
               ) : null}
               {newsError ? <p className="error-text">{newsError}</p> : null}
-              {assetNews?.warnings?.length ? <p className="muted">{assetNews.warnings.join(' | ')}</p> : null}
+              {visibleAssetNews?.warnings?.length ? <p className="muted">{visibleAssetNews.warnings.join(' | ')}</p> : null}
               <div className="compact-news-list">
-                {(assetNews?.items ?? []).map((item) => (
+                {(visibleAssetNews?.items ?? []).map((item) => (
                   <a key={item.news_id} className="evidence-link-row" href={item.url} target="_blank" rel="noreferrer">
                     <strong>{item.title}</strong>
                     <span>{item.published_at.slice(0, 10)}</span>
                   </a>
                 ))}
               </div>
-              {!isNewsLoading && !newsError && (assetNews?.items.length ?? 0) === 0 ? (
+              {!isNewsLoading && !newsError && (visibleAssetNews?.items.length ?? 0) === 0 ? (
                 <p className="muted">No related news found.</p>
               ) : null}
             </article>
