@@ -135,6 +135,100 @@ async function mockDashboardApi(page: Page) {
     });
   });
 
+  await page.route('/api/search?**', async (route) => {
+    await route.fulfill({
+      json: {
+        query: '600519',
+        groups: [
+          {
+            key: 'assets',
+            label: 'Stocks',
+            items: [
+              {
+                type: 'asset',
+                id: 'CN:SH:600519',
+                title: '贵州茅台',
+                subtitle: '600519 SH',
+                metadata: { symbol: '600519', exchange: 'SH' },
+                target: { workspace: 'stock', asset_id: 'CN:SH:600519' }
+              }
+            ]
+          }
+        ],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/assets/search?**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            asset_id: 'CN:SH:600519',
+            symbol: '600519',
+            name: '贵州茅台',
+            exchange: 'SH',
+            board: null,
+            is_active: true
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/profile**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        canonical_asset_id: 'CN:SH:600519',
+        asset: {
+          asset_id: 'CN:SH:600519',
+          symbol: '600519',
+          name: '贵州茅台',
+          exchange: 'SH',
+          board: null,
+          is_active: true
+        },
+        bars: [{ time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }],
+        score: {
+          trade_date: '2026-05-29',
+          asset_id: 'CN:SH:600519',
+          rank: 1,
+          score_total: 91.2,
+          score_version: 'manual_v1',
+          score_components: {}
+        },
+        signals: [],
+        decisions: [],
+        outcomes: [],
+        factor_values: [],
+        coverage: {}
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/news**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        items: [],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/research-reports**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        summary: { report_count_90d: 0 },
+        items: [],
+        warnings: []
+      }
+    });
+  });
+
   await page.route('/api/strategies/catalog**', async (route) => {
     await route.fulfill({
       json: {
@@ -731,6 +825,10 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
   await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
   await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
+
+  await page.getByLabel('Global search').fill('600519');
+  await page.getByRole('option', { name: /贵州茅台/ }).click();
+  await expect(page.getByRole('heading', { name: /Stock Workspace|贵州茅台/ })).toBeVisible();
 
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
