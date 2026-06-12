@@ -171,6 +171,32 @@ def test_news_event_store_falls_back_when_published_at_is_empty(
     assert stored["published_at"] == "2026-06-12T10:30:00+00:00"
 
 
+def test_news_event_store_falls_back_when_published_at_is_malformed(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    store = news.NewsEventStore(service="test")
+
+    store.upsert_public_items(
+        [
+            make_item(
+                url="https://finance.sina.com.cn/doc/malformed-time.shtml",
+                published_at="not-a-real-time",
+                collected_at="2026-06-12T10:45:00+00:00",
+                raw_id="raw-malformed-time",
+            )
+        ]
+    )
+
+    stored = next(iter(fake.source_rows.values()))
+    assert stored["published_at"] == "2026-06-12T10:45:00+00:00"
+    assert stored["collected_at"] == "2026-06-12T10:45:00+00:00"
+
+
 def test_news_event_store_normalizes_invalid_status(monkeypatch: pytest.MonkeyPatch):
     from stock_research.dashboard import news
 

@@ -56,8 +56,30 @@ def _timestamp_to_string(value: object) -> str:
     return str(value)
 
 
+def _coerce_db_timestamp(value: object) -> str:
+    text = _clean(value)
+    if not text:
+        return ""
+    normalized = text.replace("Z", "+00:00")
+    for candidate in (normalized, normalized.replace(" ", "T", 1)):
+        try:
+            datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+        return normalized
+    return ""
+
+
 def _source_timestamp(item: PublicNewsItem) -> str:
-    return _clean(item.published_at) or _clean(item.collected_at) or datetime.now(UTC).isoformat()
+    return (
+        _coerce_db_timestamp(item.published_at)
+        or _coerce_db_timestamp(item.collected_at)
+        or datetime.now(UTC).isoformat()
+    )
+
+
+def _collected_timestamp(item: PublicNewsItem) -> str:
+    return _coerce_db_timestamp(item.collected_at) or datetime.now(UTC).isoformat()
 
 
 def _source_status(item: PublicNewsItem) -> str:
@@ -82,7 +104,7 @@ def _item_to_source_row(item: PublicNewsItem) -> dict[str, Any]:
         "title": item.title,
         "content": item.summary,
         "published_at": _source_timestamp(item),
-        "collected_at": item.collected_at or datetime.now(UTC).isoformat(),
+        "collected_at": _collected_timestamp(item),
         "language": "zh",
         "url": item.url or None,
         "hash_key": item.news_id,
