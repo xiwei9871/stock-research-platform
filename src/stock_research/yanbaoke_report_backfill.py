@@ -172,27 +172,53 @@ def build_sector_quota_pilot_queue(
 
     sort_columns = ["priority_score", "report_date", "report_id"]
     sort_ascending = [False, False, True]
-    selected_parts = []
-    selected_indexes: set[Any] = set()
+    selected_rows = []
+    selected_keys: set[Any] = set()
     for bucket, quota in quotas.items():
         if bucket == "manual_correction_reserve" or quota <= 0:
             continue
         bucket_frame = eligible.loc[eligible["sector_quota_bucket"].eq(bucket)]
-        bucket_frame = bucket_frame.sort_values(sort_columns, ascending=sort_ascending).head(quota)
-        if bucket_frame.empty:
-            continue
-        selected_parts.append(bucket_frame)
-        selected_indexes.update(bucket_frame.index)
+        bucket_frame = bucket_frame.sort_values(sort_columns, ascending=sort_ascending)
+        bucket_selected_count = 0
+        for _, row in bucket_frame.iterrows():
+            candidate_key = _pilot_candidate_key(row)
+            if candidate_key in selected_keys:
+                continue
+            selected_rows.append(row)
+            selected_keys.add(candidate_key)
+            bucket_selected_count += 1
+            if len(selected_rows) >= total_limit or bucket_selected_count >= quota:
+                break
+        if len(selected_rows) >= total_limit:
+            break
 
-    selected = pd.concat(selected_parts) if selected_parts else eligible.head(0)
-    if len(selected) < total_limit:
-        remaining = eligible.loc[~eligible.index.isin(selected_indexes)]
-        remaining = remaining.sort_values(sort_columns, ascending=sort_ascending)
-        selected = pd.concat([selected, remaining.head(total_limit - len(selected))])
+    if len(selected_rows) < total_limit:
+        remaining = eligible.sort_values(sort_columns, ascending=sort_ascending)
+        for _, row in remaining.iterrows():
+            candidate_key = _pilot_candidate_key(row)
+            if candidate_key in selected_keys:
+                continue
+            selected_rows.append(row)
+            selected_keys.add(candidate_key)
+            if len(selected_rows) >= total_limit:
+                break
 
-    selected = selected.head(total_limit).reset_index(drop=True)
+    selected = pd.DataFrame(selected_rows, columns=scored.columns).head(total_limit).reset_index(drop=True)
     selected["pilot_rank"] = range(1, len(selected) + 1)
     return selected[queue_columns]
+
+
+def _pilot_candidate_key(row: pd.Series) -> Any:
+    report_id = str(row.get("report_id", "")).strip()
+    if report_id:
+        return ("report_id", report_id)
+    return (
+        "composite",
+        str(row.get("report_date", "")).strip(),
+        str(row.get("normalized_broker", "")).strip(),
+        str(row.get("stock_code", "")).strip(),
+        str(row.get("normalized_title", "")).strip(),
+    )
 
 
 def build_gap_matrix(scored: pd.DataFrame) -> pd.DataFrame:

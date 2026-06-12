@@ -124,6 +124,166 @@ def test_build_sector_quota_pilot_queue_respects_bucket_caps():
     assert pilot["pilot_rank"].tolist() == [1, 2, 3]
 
 
+def test_build_sector_quota_pilot_queue_excludes_existing_duplicates():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "duplicate",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "existing_duplicate",
+                "priority_score": 100.0,
+            },
+            {
+                "report_id": "eligible",
+                "report_date": "2026-04-19",
+                "normalized_broker": "中信证券",
+                "stock_code": "000002.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 90.0,
+            },
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(scored, total_limit=2)
+
+    assert pilot["coverage_gap_reason"].tolist() == ["missing_asset_report"]
+    assert pilot["report_id"].tolist() == ["eligible"]
+
+
+def test_build_sector_quota_pilot_queue_deduplicates_report_id():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "same-report",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 100.0,
+            },
+            {
+                "report_id": "same-report",
+                "report_date": "2026-04-19",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 95.0,
+            },
+            {
+                "report_id": "unique-report",
+                "report_date": "2026-04-18",
+                "normalized_broker": "中信证券",
+                "stock_code": "000002.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 80.0,
+            },
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(scored, total_limit=3)
+
+    assert pilot["report_id"].tolist() == ["same-report", "unique-report"]
+
+
+def test_build_sector_quota_pilot_queue_quota_shortfall_fills_sorted_remainder():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "p0",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 100.0,
+            },
+            {
+                "report_id": "p2-high",
+                "report_date": "2026-04-19",
+                "normalized_broker": "招商证券",
+                "stock_code": "",
+                "normalized_title": "行业深度报告",
+                "sector_quota_bucket": "p2_finance_real_estate_cycle_macro",
+                "coverage_gap_reason": "missing_sector_report",
+                "priority_score": 90.0,
+            },
+            {
+                "report_id": "p1-mid",
+                "report_date": "2026-04-18",
+                "normalized_broker": "华泰",
+                "stock_code": "000003.SZ",
+                "normalized_title": "行业专题",
+                "sector_quota_bucket": "p1_policy_prosperity_export_consumption",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 80.0,
+            },
+            {
+                "report_id": "p2-low",
+                "report_date": "2026-04-17",
+                "normalized_broker": "招商证券",
+                "stock_code": "",
+                "normalized_title": "行业点评",
+                "sector_quota_bucket": "p2_finance_real_estate_cycle_macro",
+                "coverage_gap_reason": "missing_sector_report",
+                "priority_score": 70.0,
+            },
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(
+        scored,
+        quota_by_bucket={"p0_growth_tech_healthcare": 2},
+        total_limit=3,
+    )
+
+    assert pilot["report_id"].tolist() == ["p0", "p2-high", "p1-mid"]
+    assert pilot["pilot_rank"].tolist() == [1, 2, 3]
+
+
+def test_build_sector_quota_pilot_queue_non_positive_limit_returns_shaped_empty():
+    scored = pd.DataFrame(
+        [
+            {
+                "report_id": "r1",
+                "report_date": "2026-04-20",
+                "normalized_broker": "中信证券",
+                "stock_code": "000001.SZ",
+                "normalized_title": "公司深度报告",
+                "sector_quota_bucket": "p0_growth_tech_healthcare",
+                "coverage_gap_reason": "missing_asset_report",
+                "priority_score": 100.0,
+            }
+        ]
+    )
+
+    pilot = build_sector_quota_pilot_queue(scored, total_limit=0)
+
+    assert pilot.empty
+    assert list(pilot.columns) == [*scored.columns, "pilot_rank"]
+
+
+def test_build_sector_quota_pilot_queue_empty_scored_preserves_columns_with_rank():
+    scored = build_scored_candidates(pd.DataFrame(), existing_coverage=pd.DataFrame())
+
+    pilot = build_sector_quota_pilot_queue(scored)
+
+    assert pilot.empty
+    assert list(pilot.columns) == [*scored.columns, "pilot_rank"]
+
+
 def test_build_yanbaoke_inventory_plan_writes_gap_matrices(tmp_path: Path):
     candidates = pd.DataFrame(
         [
