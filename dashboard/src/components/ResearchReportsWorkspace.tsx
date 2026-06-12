@@ -232,7 +232,7 @@ export function ResearchReportsWorkspace() {
             onChange={(event) => setEndDate(event.target.value)}
           />
         </label>
-        <label className="inline-check">
+        <label className="research-report-inline-check">
           <input
             aria-label="research report has target price"
             type="checkbox"
@@ -312,7 +312,7 @@ export function ResearchReportsWorkspace() {
                 <h2>{selectedReport.report_title}</h2>
                 <span className="status-chip neutral">{formatText(selectedReport.source_name)}</span>
               </div>
-              <dl className="detail-grid">
+              <dl className="research-report-detail-grid">
                 <div>
                   <dt>Stock</dt>
                   <dd>
@@ -356,7 +356,7 @@ export function ResearchReportsWorkspace() {
                 <h3>Risk Summary</h3>
                 <p>{formatText(selectedReport.risk_summary)}</p>
               </section>
-              <div className="button-row">
+              <div className="research-report-button-row">
                 {selectedReport.source_url ? (
                   <a href={selectedReport.source_url} target="_blank" rel="noreferrer">
                     Open Source

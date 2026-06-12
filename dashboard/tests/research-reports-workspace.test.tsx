@@ -84,13 +84,39 @@ describe('ResearchReportsWorkspace', () => {
     fireEvent.change(screen.getByLabelText('research report query'), { target: { value: '茅台' } });
     fireEvent.change(screen.getByLabelText('research report broker'), { target: { value: '华泰' } });
     fireEvent.change(screen.getByLabelText('research report rating'), { target: { value: '买入' } });
+    fireEvent.change(screen.getByLabelText('research report source'), { target: { value: 'cfi_ybyl' } });
+    fireEvent.change(screen.getByLabelText('research report start date'), { target: { value: '2026-04-01' } });
+    fireEvent.change(screen.getByLabelText('research report end date'), { target: { value: '2026-06-01' } });
     fireEvent.click(screen.getByLabelText('research report has target price'));
     fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
 
     await waitFor(() => {
       expect(apiMocks.fetchResearchReports).toHaveBeenLastCalledWith(
-        expect.objectContaining({ q: '茅台', broker: '华泰', rating: '买入', has_target_price: true })
+        expect.objectContaining({
+          q: '茅台',
+          broker: '华泰',
+          rating: '买入',
+          source_name: 'cfi_ybyl',
+          start_date: '2026-04-01',
+          end_date: '2026-06-01',
+          limit: 50,
+          offset: 0,
+          has_target_price: true
+        })
       );
+    });
+  });
+
+  it('omits has_target_price when the target checkbox is unchecked', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    await screen.findByText('贵州茅台深度报告');
+    fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
+
+    await waitFor(() => {
+      const lastCall = apiMocks.fetchResearchReports.mock.calls.at(-1);
+      expect(lastCall).toBeDefined();
+      expect(lastCall?.[0].has_target_price).toBeUndefined();
     });
   });
 

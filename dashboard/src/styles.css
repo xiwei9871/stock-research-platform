@@ -1637,7 +1637,7 @@ table.data-table td {
   align-items: end;
 }
 
-.inline-check {
+.research-report-inline-check {
   display: flex !important;
   min-height: 32px;
   align-items: center;
@@ -1645,7 +1645,7 @@ table.data-table td {
   color: #475467;
 }
 
-.inline-check input {
+.research-report-inline-check input {
   width: 16px;
   min-width: 16px;
   height: 16px;
@@ -1702,14 +1702,14 @@ table.data-table td {
   overflow-wrap: anywhere;
 }
 
-.detail-grid {
+.research-report-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
 
-.detail-grid div {
+.research-report-detail-grid div {
   min-width: 0;
   border: 1px solid #edf1f5;
   border-radius: 5px;
@@ -1717,26 +1717,26 @@ table.data-table td {
   padding: 7px 8px;
 }
 
-.detail-grid dt {
+.research-report-detail-grid dt {
   color: #667085;
   font-size: 11px;
 }
 
-.detail-grid dd {
+.research-report-detail-grid dd {
   margin: 2px 0 0;
   color: #17202a;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
 
-.button-row {
+.research-report-button-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.button-row a {
+.research-report-button-row a {
   min-height: 30px;
   border: 1px solid #c4cbd6;
   border-radius: 5px;
