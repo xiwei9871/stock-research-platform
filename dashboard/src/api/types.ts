@@ -594,7 +594,31 @@ export type StrategyReplayPayload = {
   artifacts: StrategyEvidenceArtifact[];
 };
 
+export type PublicNewsStockMention = {
+  asset_id: string;
+  ts_code: string;
+  stock_name: string;
+  mention_role?: string;
+  mention_confidence?: number | null;
+  mapping_method?: string;
+};
+
+export type CountRow = {
+  name: string;
+  rows: number;
+};
+
+export type PublicNewsSummary = {
+  total_news?: number;
+  latest_published_at?: string;
+  latest_collected_at?: string;
+  source_count?: number;
+  source_counts?: CountRow[];
+  category_counts?: CountRow[];
+};
+
 export type PublicNewsItem = {
+  id?: string;
   news_id: string;
   source: string;
   source_channel: string;
@@ -607,10 +631,32 @@ export type PublicNewsItem = {
   raw_id: string;
   raw_payload: Record<string, unknown>;
   status: string;
+  stocks?: PublicNewsStockMention[];
+  metadata?: Record<string, unknown>;
 };
 
 export type PublicNewsResponse = {
   items: PublicNewsItem[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  summary?: PublicNewsSummary;
+  warnings: string[];
+};
+
+export type AssetNewsSummary = {
+  news_count_1d: number;
+  news_count_3d: number;
+  news_count_7d: number;
+  latest_published_at?: string;
+  source_count?: number;
+  category_counts?: CountRow[];
+};
+
+export type AssetNewsResponse = {
+  asset_id: string;
+  items: PublicNewsItem[];
+  summary: AssetNewsSummary;
   warnings: string[];
 };
 

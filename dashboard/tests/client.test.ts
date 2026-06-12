@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   fetchAssetDecisions,
+  fetchAssetNews,
   fetchAssetOutcomes,
   fetchAssetResearchReports,
   fetchExperimentProposals,
@@ -67,25 +68,56 @@ describe('dashboard API client', () => {
     expect(result.freshness.is_realtime).toBe(false);
   });
 
-  it('fetches public news with filters and pagination', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ items: [{ news_id: 'news-1', title: '全球快讯' }], warnings: [] })
-    });
+  it('fetches public news with db filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [],
+          total: 0,
+          limit: 10,
+          offset: 2,
+          summary: { total_news: 0, source_count: 0, source_counts: [], category_counts: [] },
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await fetchPublicNews({
+    await fetchPublicNews({
       source: 'sina_finance',
       category: 'live',
       q: '快讯',
+      startTime: '2026-06-12T00:00:00',
+      endTime: '2026-06-12T23:59:59',
+      assetId: 'CN:SH:600519',
       limit: 10,
       offset: 2
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2'
+      '/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&start_time=2026-06-12T00%3A00%3A00&end_time=2026-06-12T23%3A59%3A59&asset_id=CN%3ASH%3A600519&limit=10&offset=2'
     );
-    expect(result.items[0].title).toBe('全球快讯');
+  });
+
+  it('fetches asset news', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          asset_id: 'CN:SH:600519',
+          items: [],
+          summary: { news_count_1d: 0, news_count_3d: 0, news_count_7d: 0 },
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchAssetNews('CN:SH:600519', { limit: 5, lookbackDays: 7 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assets/CN%3ASH%3A600519/news?limit=5&lookback_days=7');
+    expect(result.asset_id).toBe('CN:SH:600519');
   });
 
   it('refreshes public news through POST', async () => {

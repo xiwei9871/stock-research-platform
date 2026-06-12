@@ -1,4 +1,5 @@
 import type {
+  AssetNewsResponse,
   AssetSearchResponse,
   AssetProfile,
   AssetResearchReportResponse,
@@ -57,8 +58,19 @@ type PublicNewsParams = {
   source?: string;
   category?: string;
   q?: string;
+  startTime?: string;
+  endTime?: string;
+  assetId?: string;
+  tsCode?: string;
   limit?: number;
   offset?: number;
+};
+
+type AssetNewsParams = {
+  limit?: number;
+  lookbackDays?: number;
+  category?: string;
+  source?: string;
 };
 
 type ResearchReportParams = {
@@ -97,9 +109,25 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
   if (params.source) searchParams.set('source', params.source);
   if (params.category) searchParams.set('category', params.category);
   if (params.q) searchParams.set('q', params.q);
+  if (params.startTime) searchParams.set('start_time', params.startTime);
+  if (params.endTime) searchParams.set('end_time', params.endTime);
+  if (params.assetId) searchParams.set('asset_id', params.assetId);
+  if (params.tsCode) searchParams.set('ts_code', params.tsCode);
   searchParams.set('limit', String(params.limit ?? 100));
   searchParams.set('offset', String(params.offset ?? 0));
   return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function fetchAssetNews(
+  assetId: string,
+  params: AssetNewsParams = {}
+): Promise<AssetNewsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
+  if (params.category) searchParams.set('category', params.category);
+  if (params.source) searchParams.set('source', params.source);
+  return getJson(`/api/assets/${encodeURIComponent(assetId)}/news?${searchParams.toString()}`);
 }
 
 export async function fetchResearchReportSummary(): Promise<ResearchReportSummary> {
