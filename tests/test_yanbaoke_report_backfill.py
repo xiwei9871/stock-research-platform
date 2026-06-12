@@ -1,7 +1,3 @@
-from pathlib import Path
-
-import pandas as pd
-
 from stock_research.yanbaoke_report_backfill import load_sector_priority_config
 
 
