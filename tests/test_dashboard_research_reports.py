@@ -259,14 +259,15 @@ def test_research_reports_route_forwards_filters(monkeypatch):
     response = client.get(
         "/api/research-reports?q=%E8%8C%85%E5%8F%B0&broker=%E5%8D%8E%E6%B3%B0"
         "&rating=%E4%B9%B0%E5%85%A5&source_name=cfi_ybyl&start_date=2026-06-01"
-        "&end_date=2026-06-05&has_target_price=true&limit=25&offset=5"
+        "&end_date=2026-06-05&has_target_price=true&asset_id=CN:SH:600519"
+        "&ts_code=600519.SH&limit=25&offset=5"
     )
 
     assert response.status_code == 200
     assert captured == {
         "q": "茅台",
-        "asset_id": None,
-        "ts_code": None,
+        "asset_id": "CN:SH:600519",
+        "ts_code": "600519.SH",
         "broker": "华泰",
         "rating": "买入",
         "source_name": "cfi_ybyl",
