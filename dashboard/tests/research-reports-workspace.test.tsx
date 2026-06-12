@@ -73,6 +73,21 @@ afterEach(() => {
 });
 
 describe('ResearchReportsWorkspace', () => {
+  it('uses the initial query and loads matching reports', async () => {
+    const { rerender } = render(<ResearchReportsWorkspace initialQuery="茅台" />);
+
+    expect(screen.getByDisplayValue('茅台')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMocks.fetchResearchReports).toHaveBeenLastCalledWith(expect.objectContaining({ q: '茅台' }));
+    });
+
+    rerender(<ResearchReportsWorkspace initialQuery="平安" />);
+    expect(screen.getByDisplayValue('平安')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMocks.fetchResearchReports).toHaveBeenLastCalledWith(expect.objectContaining({ q: '平安' }));
+    });
+  });
+
   it('loads summary and report rows', async () => {
     render(<ResearchReportsWorkspace />);
 

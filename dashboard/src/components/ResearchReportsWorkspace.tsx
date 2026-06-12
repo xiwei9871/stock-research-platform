@@ -15,6 +15,10 @@ type ReportFilters = {
   hasTargetPrice: boolean;
 };
 
+type ResearchReportsWorkspaceProps = {
+  initialQuery?: string;
+};
+
 function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString('en-US') : '-';
 }
@@ -66,11 +70,11 @@ function buildReportParams(filters: ReportFilters) {
   return params;
 }
 
-export function ResearchReportsWorkspace() {
+export function ResearchReportsWorkspace({ initialQuery = '' }: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
   const [selectedReport, setSelectedReport] = useState<ResearchReportItem | null>(null);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQuery);
   const [broker, setBroker] = useState('');
   const [rating, setRating] = useState('');
   const [sourceName, setSourceName] = useState('');
@@ -83,6 +87,15 @@ export function ResearchReportsWorkspace() {
   const [reportsError, setReportsError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const reportsRequestIdRef = useRef(0);
+  const filtersRef = useRef<ReportFilters>({
+    q: initialQuery,
+    broker: '',
+    rating: '',
+    sourceName: '',
+    startDate: DEFAULT_START_DATE,
+    endDate: getTodayDate(),
+    hasTargetPrice: false
+  });
 
   const isLatestReportsRequest = useCallback((requestId: number) => {
     return mountedRef.current && requestId === reportsRequestIdRef.current;
@@ -147,25 +160,28 @@ export function ResearchReportsWorkspace() {
         }
       });
 
-    void loadReports({
-      q: '',
-      broker: '',
-      rating: '',
-      sourceName: '',
-      startDate: DEFAULT_START_DATE,
-      endDate: getTodayDate(),
-      hasTargetPrice: false
-    });
-
     return () => {
       mountedRef.current = false;
       reportsRequestIdRef.current += 1;
     };
-  }, [loadReports]);
+  }, []);
+
+  useEffect(() => {
+    filtersRef.current = { q, broker, rating, sourceName, startDate, endDate, hasTargetPrice };
+  });
+
+  useEffect(() => {
+    const nextFilters = { ...filtersRef.current, q: initialQuery };
+    filtersRef.current = nextFilters;
+    setQ(initialQuery);
+    void loadReports(nextFilters);
+  }, [initialQuery, loadReports]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    void loadReports({ q, broker, rating, sourceName, startDate, endDate, hasTargetPrice });
+    const nextFilters = { q, broker, rating, sourceName, startDate, endDate, hasTargetPrice };
+    filtersRef.current = nextFilters;
+    void loadReports(nextFilters);
   };
 
   const reports = reportsPayload?.items ?? [];

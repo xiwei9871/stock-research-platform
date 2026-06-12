@@ -18,6 +18,7 @@ const CATEGORIES = [
 const NEWS_REFRESH_INTERVAL_MS = 60000;
 
 type NewsWorkspaceProps = {
+  initialQuery?: string;
   onOpenAsset?: (assetId: string) => void;
 };
 
@@ -53,12 +54,12 @@ export function getNewsAssetCandidate(item: PublicNewsItem) {
   return null;
 }
 
-export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
+export function NewsWorkspace({ initialQuery = '', onOpenAsset }: NewsWorkspaceProps) {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
   const [summary, setSummary] = useState<PublicNewsSummary | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [category, setCategory] = useState('all');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>('');
@@ -130,6 +131,10 @@ export function NewsWorkspace({ onOpenAsset }: NewsWorkspaceProps) {
       requestIdRef.current += 1;
     };
   }, [loadInitialNews, refreshNews]);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLowerCase();

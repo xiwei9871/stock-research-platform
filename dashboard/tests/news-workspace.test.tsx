@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GeneratedReportsWorkspace } from '../src/components/GeneratedReportsWorkspace';
 import { getNewsAssetCandidate, NewsWorkspace } from '../src/components/NewsWorkspace';
+import { ReportsWorkspace } from '../src/components/ReportsWorkspace';
 import type { PublicNewsItem, PublicNewsResponse } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchOverview: vi.fn(),
   fetchPublicNews: vi.fn(),
   refreshPublicNews: vi.fn()
 }));
@@ -42,6 +45,22 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchPublicNews.mockResolvedValue(newsPayload);
   apiMocks.refreshPublicNews.mockResolvedValue({ stored: 1, items_received: 1, counts_by_category: {}, warnings: [] });
+  apiMocks.fetchOverview.mockResolvedValue({
+    reports: [
+      {
+        title: '茅台 validation report',
+        report_type: 'validation',
+        path: '/reports/validation-moutai.html',
+        trade_date: '2026-06-08'
+      },
+      {
+        title: '平安银行 risk report',
+        report_type: 'risk',
+        path: '/reports/risk-pingan.html',
+        trade_date: '2026-06-07'
+      }
+    ]
+  });
 });
 
 afterEach(() => {
@@ -55,6 +74,14 @@ describe('getNewsAssetCandidate', () => {
 });
 
 describe('NewsWorkspace', () => {
+  it('uses the initial query as the news search input value', () => {
+    const { rerender } = render(<NewsWorkspace initialQuery="茅台" />);
+
+    expect(screen.getByDisplayValue('茅台')).toBeInTheDocument();
+    rerender(<NewsWorkspace initialQuery="平安" />);
+    expect(screen.getByDisplayValue('平安')).toBeInTheDocument();
+  });
+
   it('opens a stock when a news item has an API stock mention', async () => {
     const onOpenAsset = vi.fn();
     render(<NewsWorkspace onOpenAsset={onOpenAsset} />);
@@ -106,5 +133,30 @@ describe('NewsWorkspace', () => {
 
     expect(await screen.findByText('缓存新闻')).toBeInTheDocument();
     expect(screen.getByText('fallback json cache used: db offline')).toBeInTheDocument();
+  });
+});
+
+describe('ReportsWorkspace', () => {
+  it('filters generated reports by the initial query', async () => {
+    const { rerender } = render(<ReportsWorkspace initialQuery="茅台" />);
+
+    expect(screen.getByLabelText('generated reports search')).toHaveDisplayValue('茅台');
+    expect(await screen.findByText('茅台 validation report')).toBeInTheDocument();
+    expect(screen.queryByText('平安银行 risk report')).not.toBeInTheDocument();
+
+    rerender(<ReportsWorkspace initialQuery="平安" />);
+    expect(screen.getByLabelText('generated reports search')).toHaveDisplayValue('平安');
+    expect(await screen.findByText('平安银行 risk report')).toBeInTheDocument();
+    expect(screen.queryByText('茅台 validation report')).not.toBeInTheDocument();
+  });
+});
+
+describe('GeneratedReportsWorkspace', () => {
+  it('passes the initial query to the reports workspace', async () => {
+    render(<GeneratedReportsWorkspace initialQuery="validation" />);
+
+    expect(screen.getByLabelText('generated reports search')).toHaveDisplayValue('validation');
+    expect(await screen.findByText('茅台 validation report')).toBeInTheDocument();
+    expect(screen.queryByText('平安银行 risk report')).not.toBeInTheDocument();
   });
 });
