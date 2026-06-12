@@ -84,7 +84,11 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
 def test_asset_news_endpoint(monkeypatch):
     from stock_research.dashboard import app as dashboard_app
 
+    captured = {}
+
     def fake_load_asset_news(asset_id, **kwargs):
+        captured["asset_id"] = asset_id
+        captured.update(kwargs)
         return {
             "asset_id": asset_id,
             "items": [],
@@ -95,9 +99,19 @@ def test_asset_news_endpoint(monkeypatch):
     monkeypatch.setattr(dashboard_app, "load_asset_news", fake_load_asset_news)
     client = TestClient(dashboard_app.create_app())
 
-    response = client.get("/api/assets/CN:SH:600519/news?limit=5&lookback_days=7")
+    response = client.get(
+        "/api/assets/CN:SH:600519/news"
+        "?limit=5&lookback_days=7&category=company&source=sina_finance"
+    )
 
     assert response.status_code == 200
+    assert captured == {
+        "asset_id": "CN:SH:600519",
+        "limit": 5,
+        "lookback_days": 7,
+        "category": "company",
+        "source": "sina_finance",
+    }
     assert response.json()["asset_id"] == "CN:SH:600519"
 
 

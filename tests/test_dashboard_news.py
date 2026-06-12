@@ -698,3 +698,97 @@ def test_load_public_news_falls_back_to_json_cache(
     assert payload["items"][0]["title"] == "缓存新闻"
     assert payload["summary"]["source_count"] == 1
     assert "fallback json cache used: db offline" in payload["warnings"]
+
+
+def test_load_public_news_does_not_fallback_when_filtered_db_query_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    store = news.NewsEventStore(service="test")
+    store.upsert_public_items([make_item(category="live")])
+
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    fallback.upsert_items([make_item(category="announcement", title="陈旧缓存公告")])
+
+    payload = news.load_public_news_for_dashboard(
+        category="announcement",
+        limit=5,
+        store=store,
+        fallback_store=fallback,
+    )
+
+    assert payload["items"] == []
+    assert payload["total"] == 0
+    assert payload["warnings"] == ["no matching public news items"]
+
+
+def test_load_public_news_does_not_use_json_fallback_for_asset_db_failure(
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    fallback.upsert_items([make_item(title="不应返回的通用缓存")])
+
+    class FailingStore(news.NewsEventStore):
+        def list_news(self, **_kwargs):
+            raise RuntimeError("db offline")
+
+    payload = news.load_public_news_for_dashboard(
+        asset_id="CN:SH:600519",
+        limit=5,
+        store=FailingStore(service="test"),
+        fallback_store=fallback,
+    )
+
+    assert payload["items"] == []
+    assert payload["total"] == 0
+    assert any("db offline" in warning for warning in payload["warnings"])
+    assert all("fallback json cache used" not in warning for warning in payload["warnings"])
+
+
+def test_public_news_ingestion_keeps_successful_counts_when_later_stages_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    class FailingFallbackStore(JsonPublicNewsStore):
+        def upsert_items(self, _items):
+            raise RuntimeError("cache write failed")
+
+    class FailingMentionMapper(news.NewsMentionMapper):
+        def __init__(self):
+            pass
+
+        def map_items(self, _items):
+            raise RuntimeError("mention mapping failed")
+
+    fake = FakeDb()
+    item = make_item()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
+
+    service = news.PublicNewsIngestionService(
+        store=news.NewsEventStore(service="test"),
+        fallback_store=FailingFallbackStore(tmp_path / "public_news.json"),
+        mention_mapper=FailingMentionMapper(),
+    )
+    result = service.refresh()
+
+    assert result["items_received"] == 1
+    assert result["stored"] == 1
+    assert result["fallback_cache_stored"] == 0
+    assert result["mentions"] == 0
+    assert "fallback cache write failed: cache write failed" in result["warnings"]
+    assert "mention mapping failed: mention mapping failed" in result["warnings"]

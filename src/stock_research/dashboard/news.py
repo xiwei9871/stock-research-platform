@@ -564,9 +564,23 @@ class PublicNewsIngestionService:
         except Exception as exc:
             items = []
             warnings = [f"sina_finance refresh failed: {exc}"]
-        db_result = self.store.upsert_public_items(items) if items else {"received": 0, "stored": 0}
-        cache_result = self.fallback_store.upsert_items(items) if items else {"received": 0, "stored": 0}
-        mention_result = self.mention_mapper.map_items(items) if items else {"mentions": 0}
+        warnings = list(warnings)
+        db_result = {"received": 0, "stored": 0}
+        cache_result = {"received": 0, "stored": 0}
+        mention_result = {"mentions": 0}
+        if items:
+            try:
+                db_result = self.store.upsert_public_items(items)
+            except Exception as exc:
+                warnings.append(f"db upsert failed: {exc}")
+            try:
+                cache_result = self.fallback_store.upsert_items(items)
+            except Exception as exc:
+                warnings.append(f"fallback cache write failed: {exc}")
+            try:
+                mention_result = self.mention_mapper.map_items(items)
+            except Exception as exc:
+                warnings.append(f"mention mapping failed: {exc}")
         counts_by_category = dict(Counter(item.category for item in items))
         return {
             **db_result,
@@ -668,6 +682,45 @@ def _fallback_public_news_payload(
     }
 
 
+def _empty_public_news_payload(
+    *,
+    warning: str,
+    limit: int = DEFAULT_LIMIT,
+    offset: int = 0,
+) -> dict[str, Any]:
+    return {
+        "items": [],
+        "total": 0,
+        "limit": _bounded_limit(limit),
+        "offset": _bounded_offset(offset),
+        "summary": {
+            "total_news": 0,
+            "latest_published_at": "",
+            "latest_collected_at": "",
+            "source_count": 0,
+            "source_counts": [],
+            "category_counts": [],
+        },
+        "warnings": [warning],
+    }
+
+
+def _has_public_news_filters(
+    *,
+    source: str | None,
+    category: str | None,
+    q: str | None,
+    start_time: str | None,
+    end_time: str | None,
+    asset_id: str | None,
+    ts_code: str | None,
+) -> bool:
+    cleaned_category = _clean(category)
+    return any(_clean(value) for value in (source, q, start_time, end_time, asset_id, ts_code)) or (
+        bool(cleaned_category) and cleaned_category != "all"
+    )
+
+
 def load_public_news_for_dashboard(
     *,
     source: str | None = None,
@@ -684,6 +737,16 @@ def load_public_news_for_dashboard(
 ) -> dict[str, Any]:
     active_store = store or NewsEventStore()
     active_fallback_store = fallback_store or JsonPublicNewsStore(DEFAULT_PUBLIC_NEWS_CACHE)
+    has_asset_filter = bool(_clean(asset_id) or _clean(ts_code))
+    has_filters = _has_public_news_filters(
+        source=source,
+        category=category,
+        q=q,
+        start_time=start_time,
+        end_time=end_time,
+        asset_id=asset_id,
+        ts_code=ts_code,
+    )
     try:
         payload = active_store.list_news(
             source=source,
@@ -697,6 +760,12 @@ def load_public_news_for_dashboard(
             offset=offset,
         )
     except Exception as exc:
+        if has_asset_filter:
+            return _empty_public_news_payload(
+                warning=f"public news db unavailable for asset-filtered request: {exc}",
+                limit=limit,
+                offset=offset,
+            )
         return _fallback_public_news_payload(
             fallback_store=active_fallback_store,
             warning=f"fallback json cache used: {exc}",
@@ -709,6 +778,8 @@ def load_public_news_for_dashboard(
             offset=offset,
         )
     if payload.get("items"):
+        return payload
+    if has_filters or _bounded_offset(offset) > 0 or int(payload.get("total") or 0) != 0:
         return payload
     fallback_payload = _fallback_public_news_payload(
         fallback_store=active_fallback_store,
