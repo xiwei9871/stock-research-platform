@@ -148,7 +148,7 @@ body {
 
 .global-search-result-main {
   display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(64px, 0.65fr);
   align-items: baseline;
   gap: 4px;
   min-width: 0;
