@@ -178,6 +178,8 @@ describe('dashboard API client', () => {
               timestamp: '',
               target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
               score: 100,
+              match_reason: 'Exact code match',
+              match_fields: ['symbol'],
               metadata: { symbol: '600519' }
             }
           ]

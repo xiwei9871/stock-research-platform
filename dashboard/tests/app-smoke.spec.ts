@@ -149,6 +149,9 @@ async function mockDashboardApi(page: Page) {
                 id: 'CN:SH:600519',
                 title: '贵州茅台',
                 subtitle: '600519 SH',
+                score: 95,
+                match_reason: 'Exact code match',
+                match_fields: ['symbol'],
                 metadata: { symbol: '600519', exchange: 'SH' },
                 target: { workspace: 'stock', asset_id: 'CN:SH:600519' }
               }

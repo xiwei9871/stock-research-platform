@@ -191,6 +191,8 @@ function makeGlobalSearchResult(overrides: Partial<GlobalSearchResult> = {}): Gl
     subtitle: '600519.SH',
     metadata: {},
     target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
+    match_reason: 'Exact code match',
+    match_fields: ['symbol'],
     ...overrides
   };
 }
