@@ -2,13 +2,13 @@
 
 ## Goal
 
-Build a conservative news ingestion and filtering layer for the dashboard News tab. The system should collect public financial news on a 30-minute cadence, admit only high-quality candidates, and show at most three relevant items per refresh window.
+Build a conservative news ingestion and filtering layer for the dashboard News tab. The system should collect public financial news on a 30-minute cadence, admit only high-quality candidates, persist at most three accepted items per refresh window, and show those same accepted items in the News tab.
 
 The default optimization target is short-term trading relevance: theme catalysts, market emotion, policy shocks, sector supply-demand changes, listed-company events, and risk events.
 
 ## Non-Goals
 
-- Do not ingest every Sina headline into the default News tab.
+- Do not ingest every Sina headline into the default News tab or downstream news-chain sentiment inputs.
 - Do not present low-score news just to fill three slots.
 - Do not rely on a large language model for V1 ranking.
 - Do not claim continuous 24-hour collection unless a backend scheduler is running.
@@ -19,9 +19,10 @@ The default optimization target is short-term trading relevance: theme catalysts
 1. A backend news collector runs every 30 minutes.
 2. Each run fetches a candidate pool from existing public sources, initially Sina Finance 7x24 plus finance homepage categories.
 3. Candidates pass through a quality gate before they are eligible for dashboard display.
-4. Accepted candidates are upserted into the news store with quality score, relevance reasons, and rejection metadata when useful.
-5. `/api/public-news` serves filtered results from the backend, not a client-side slice of the latest 200 rows.
-6. The News tab defaults to the latest accepted Top 3 items.
+4. Only the top three accepted candidates are upserted into the news store with quality score and relevance reasons.
+5. Rejected candidates are not stored as default news-chain inputs; the run keeps aggregate rejection counters for audit.
+6. `/api/public-news` serves filtered results from the backend, not a client-side slice of the latest 200 rows.
+7. The News tab defaults to the same accepted Top 3 items that were persisted.
 
 ## Quality Gate
 
@@ -42,7 +43,7 @@ Scoring produces a 0-100 quality score:
 - Risk relevance: fraud, investigation, downgrade, debt pressure, accident, export control, and major negative events are kept when market-relevant.
 - Duplicate and low-signal penalties reduce repeated or vague items.
 
-Default admission threshold is `quality_score >= 70`. If fewer than three candidates meet the threshold, the run returns fewer than three items and the UI states that no additional high-quality news passed the gate.
+Default admission threshold is `quality_score >= 70`. If fewer than three candidates meet the threshold, the run stores and returns fewer than three items. The UI states that no additional high-quality news passed the gate. The system must not keep lower-quality candidates as hidden downstream sentiment inputs.
 
 ## Server-Side Filtering
 
@@ -74,13 +75,13 @@ Scheduler behavior:
 - Then run every 30 minutes.
 - Use an in-process lock to prevent overlapping refreshes.
 - Keep the last successful refresh timestamp and last error available to the API.
-- Store only admitted high-quality items for default display, while preserving enough counters to audit rejected candidates.
+- Store only the top three admitted high-quality items for default display and downstream news-chain sentiment inputs, while preserving aggregate counters to audit rejected candidates.
 
 ## Frontend
 
 The News tab should show:
 
-- Top 3 accepted news items by default.
+- The stored Top 3 accepted news items by default.
 - Latest collection time and next scheduled collection time.
 - Quality score and short reasons, such as `policy`, `semiconductor`, `mapped_stock`, `risk_event`.
 - Server-side filters for category, search, and stock links.
@@ -101,7 +102,7 @@ Backend tests should cover:
 
 - Hard rejection rules.
 - Score calculation for high-value and low-value examples.
-- Top 3 per run.
+- At most three persisted accepted items per run.
 - No filler when fewer than three pass.
 - Server-side filters.
 - Scheduler lock and refresh metadata.
@@ -117,7 +118,8 @@ Frontend tests should cover:
 ## Acceptance Criteria
 
 - News refresh cadence is 30 minutes.
-- Default News tab renders at most three accepted items.
+- Each refresh run persists at most three accepted items.
+- Default News tab renders those same persisted accepted items.
 - Each displayed item has a quality score and reasons.
 - Low-quality candidates are rejected before default display.
 - Search and category filters are served by the backend.
