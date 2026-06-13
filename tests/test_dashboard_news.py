@@ -143,7 +143,7 @@ class FakeDb:
                     for mention in self.mention_rows
                 )
             ]
-        if "COALESCE((s.metadata->'quality'->>'score')::numeric, 0) >= %s" in compact_sql:
+        if "CASE WHEN s.metadata->'quality'->>'score' ~" in compact_sql and "END >= %s" in compact_sql:
             min_quality_score = params[param_index]
             param_index += 1
             rows = [
@@ -417,14 +417,38 @@ def test_news_event_store_orders_by_quality_before_recency(monkeypatch: pytest.M
             "source_status": "available",
             "metadata": {"category": "market", "quality": {"score": "88.5", "reasons": "policy"}},
         },
+        "bad-score": {
+            "source_event_id": "bad-score",
+            "source_name": "sina_finance",
+            "source_channel": "sina_live",
+            "title": "历史脏数据",
+            "content": "",
+            "published_at": "2026-06-13T06:00:00+00:00",
+            "collected_at": "2026-06-13T06:00:10+00:00",
+            "url": "https://finance.sina.com.cn/bad-score.shtml",
+            "source_status": "available",
+            "metadata": {"category": "other", "quality": {"score": "not-a-number"}},
+        },
     }
 
     payload = news.NewsEventStore(service="test").list_news(source="sina_finance", limit=3)
 
-    assert [item["news_id"] for item in payload["items"]] == ["older-high", "newer-low"]
+    assert [item["news_id"] for item in payload["items"]] == [
+        "older-high",
+        "newer-low",
+        "bad-score",
+    ]
     assert payload["items"][0]["quality_score"] == 88
     assert payload["items"][0]["quality_reasons"] == []
     assert payload["items"][0]["quality_run_id"] == ""
+    quality_sql = next(
+        " ".join(sql.split())
+        for sql, _params in fake.calls
+        if "FROM research.news_event_source s LEFT JOIN research.news_event_mention m"
+        in " ".join(sql.split())
+    )
+    assert "CASE WHEN s.metadata->'quality'->>'score' ~" in quality_sql
+    assert "COALESCE((s.metadata->'quality'->>'score')::numeric, 0)" not in quality_sql
 
 
 def test_news_mention_mapper_links_exact_stock_names(monkeypatch: pytest.MonkeyPatch):

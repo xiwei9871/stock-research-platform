@@ -21,6 +21,10 @@ DEFAULT_LIMIT = 100
 VALID_SOURCE_STATUSES = {"available", "permission_denied", "disabled"}
 DEFAULT_PUBLIC_NEWS_CACHE = Path("outputs/dashboard/public_news_cache.json")
 FetchPublicNewsResult = tuple[Iterable[PublicNewsItem], Iterable[str]] | Iterable[PublicNewsItem]
+QUALITY_SCORE_SQL = (
+    "CASE WHEN s.metadata->'quality'->>'score' ~ '^-?[0-9]+(\\.[0-9]+)?$' "
+    "THEN (s.metadata->'quality'->>'score')::numeric ELSE 0 END"
+)
 
 
 def _bounded_limit(value: int | None) -> int:
@@ -315,7 +319,7 @@ def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
         except (TypeError, ValueError):
             min_score = 0
         if min_score > 0:
-            clauses.append("COALESCE((s.metadata->'quality'->>'score')::numeric, 0) >= %s")
+            clauses.append(f"{QUALITY_SCORE_SQL} >= %s")
             params.append(min_score)
     return clauses, params
 
@@ -515,7 +519,7 @@ class NewsEventStore:
                 {where_sql}
                 GROUP BY s.source_event_id
                 ORDER BY
-                    COALESCE((s.metadata->'quality'->>'score')::numeric, 0) DESC,
+                    {QUALITY_SCORE_SQL} DESC,
                     s.published_at DESC,
                     s.collected_at DESC,
                     s.source_event_id
@@ -755,7 +759,7 @@ def _fallback_public_news_payload(
         "offset": bounded_offset,
         "summary": {
             "total_news": len(filtered),
-            "latest_published_at": filtered[0].published_at if filtered else "",
+            "latest_published_at": max((item.published_at for item in filtered), default=""),
             "latest_collected_at": max((item.collected_at for item in filtered), default=""),
             "source_count": len(source_counts),
             "source_counts": [
