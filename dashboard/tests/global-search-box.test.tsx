@@ -96,6 +96,12 @@ describe('GlobalSearchBox', () => {
             label: 'Assets',
             items: [
               makeResult({
+                id: 'CN:SH:601318',
+                title: '中国平安',
+                subtitle: '',
+                match_reason: 'Title match'
+              }),
+              makeResult({
                 id: 'CN:SH:600519',
                 title: '贵州茅台',
                 subtitle: '600519.SH',
@@ -111,9 +117,14 @@ describe('GlobalSearchBox', () => {
     render(<GlobalSearchBox onOpenResult={vi.fn()} />);
     await searchFor('600519');
 
+    const titleOnlyOption = await screen.findByRole('option', { name: /中国平安 Title match/ });
+    const titleOnlyMain = titleOnlyOption.querySelector('.global-search-result-main');
+    expect(titleOnlyMain).not.toBeNull();
+    expect(titleOnlyMain).not.toHaveClass('has-subtitle');
+
     const option = await screen.findByRole('option', { name: /贵州茅台 600519\.SH Exact code match/ });
     expect(within(option).getByText('Exact code match')).toBeInTheDocument();
-    expect(option.querySelector('.global-search-result-main')).not.toBeNull();
+    expect(option.querySelector('.global-search-result-main')).toHaveClass('has-subtitle');
   });
 
   it('does not call the API for a one-character query', async () => {

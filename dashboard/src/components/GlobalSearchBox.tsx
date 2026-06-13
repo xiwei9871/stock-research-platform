@@ -167,6 +167,7 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
                     {group.items.map((result) => {
                       const resultIndex = results.indexOf(result);
                       const isHighlighted = resultIndex === highlightedIndex;
+                      const hasSubtitle = Boolean(result.subtitle);
                       return (
                         <div
                           aria-selected={isHighlighted}
@@ -178,9 +179,9 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
                           tabIndex={-1}
                         >
                           <span className="global-search-result-text">
-                            <span className="global-search-result-main">
+                            <span className={hasSubtitle ? 'global-search-result-main has-subtitle' : 'global-search-result-main'}>
                               <span className="global-search-result-title">{result.title}</span>
-                              {result.subtitle ? (
+                              {hasSubtitle ? (
                                 <span className="global-search-result-subtitle">{result.subtitle}</span>
                               ) : null}
                             </span>
