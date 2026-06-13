@@ -650,11 +650,26 @@ class PublicNewsIngestionService:
 
 def _fallback_public_news_item(item: PublicNewsItem) -> dict[str, Any]:
     row = item.to_dict()
+    metadata = {
+        "category": item.category or "other",
+        "raw_id": item.raw_id,
+        "raw_payload": row.get("raw_payload") if isinstance(row.get("raw_payload"), dict) else {},
+    }
+    quality = (
+        metadata["raw_payload"].get("quality")
+        if isinstance(metadata["raw_payload"].get("quality"), dict)
+        else {}
+    )
+    if quality:
+        metadata["quality"] = quality
     return {
         **row,
         "id": row["news_id"],
         "stocks": [],
-        "metadata": {},
+        "metadata": metadata,
+        "quality_score": _quality_score(quality.get("score")),
+        "quality_reasons": _quality_reasons(quality.get("reasons")),
+        "quality_run_id": str(quality.get("run_id") or ""),
     }
 
 
@@ -666,6 +681,7 @@ def _fallback_public_news_matches(
     q: str | None,
     start_time: str | None,
     end_time: str | None,
+    min_quality_score: int | None,
 ) -> bool:
     if source and item.source != source:
         return False
@@ -679,7 +695,22 @@ def _fallback_public_news_matches(
         return False
     if end_time and item.published_at > end_time:
         return False
+    if min_quality_score is not None:
+        try:
+            min_score = int(min_quality_score)
+        except (TypeError, ValueError):
+            min_score = 0
+        quality = item.raw_payload.get("quality") if isinstance(item.raw_payload, dict) else {}
+        score = _quality_score(quality.get("score")) if isinstance(quality, dict) else None
+        if min_score > 0 and (score is None or score < min_score):
+            return False
     return True
+
+
+def _fallback_quality_sort_key(item: PublicNewsItem) -> tuple[int, str, str]:
+    quality = item.raw_payload.get("quality") if isinstance(item.raw_payload, dict) else {}
+    score = _quality_score(quality.get("score")) if isinstance(quality, dict) else None
+    return (score or 0, item.published_at, item.collected_at)
 
 
 def _fallback_public_news_payload(
@@ -691,6 +722,7 @@ def _fallback_public_news_payload(
     q: str | None = None,
     start_time: str | None = None,
     end_time: str | None = None,
+    min_quality_score: int | None = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -706,9 +738,10 @@ def _fallback_public_news_payload(
             q=q,
             start_time=start_time,
             end_time=end_time,
+            min_quality_score=min_quality_score,
         )
     ]
-    filtered = sorted(filtered, key=lambda item: item.published_at, reverse=True)
+    filtered = sorted(filtered, key=_fallback_quality_sort_key, reverse=True)
     page = filtered[bounded_offset : bounded_offset + bounded_limit]
     source_counts = Counter(item.source for item in filtered)
     category_counts = Counter(item.category or "other" for item in filtered)
@@ -836,6 +869,7 @@ def load_public_news_for_dashboard(
             q=q,
             start_time=start_time,
             end_time=end_time,
+            min_quality_score=min_quality_score,
             limit=limit,
             offset=offset,
         )
@@ -852,6 +886,7 @@ def load_public_news_for_dashboard(
         q=q,
         start_time=start_time,
         end_time=end_time,
+        min_quality_score=min_quality_score,
         limit=limit,
         offset=offset,
     )

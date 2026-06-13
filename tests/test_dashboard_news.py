@@ -1259,6 +1259,55 @@ def test_load_public_news_uses_json_fallback_for_filtered_empty_db(
     assert "fallback json cache used: no db public news items" in payload["warnings"]
 
 
+def test_load_public_news_json_fallback_respects_quality_filter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    fallback.upsert_items(
+        [
+            make_item(
+                news_id="fallback-low",
+                title="低质量缓存新闻",
+                raw_payload={"quality": {"score": 45, "reasons": ["other"]}},
+            ),
+            make_item(
+                news_id="fallback-high",
+                title="政策推动半导体产业链订单增长",
+                raw_payload={
+                    "quality": {
+                        "score": "88.5",
+                        "reasons": ["policy", "sector_specific"],
+                        "run_id": "public-news-20260613T040000Z",
+                    }
+                },
+            ),
+        ]
+    )
+
+    payload = news.load_public_news_for_dashboard(
+        source="sina_finance",
+        min_quality_score=70,
+        limit=5,
+        store=news.NewsEventStore(service="test"),
+        fallback_store=fallback,
+    )
+
+    assert [item["news_id"] for item in payload["items"]] == ["fallback-high"]
+    assert payload["items"][0]["quality_score"] == 88
+    assert payload["items"][0]["quality_reasons"] == ["policy", "sector_specific"]
+    assert payload["items"][0]["quality_run_id"] == "public-news-20260613T040000Z"
+    assert payload["total"] == 1
+    assert "fallback json cache used: no db public news items" in payload["warnings"]
+
+
 def test_load_public_news_does_not_use_json_fallback_for_asset_db_failure(
     tmp_path: Path,
 ):
