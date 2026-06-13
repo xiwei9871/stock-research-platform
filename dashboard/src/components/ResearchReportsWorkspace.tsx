@@ -74,8 +74,8 @@ function buildReportParams(filters: ReportFilters) {
 
 export function ResearchReportsWorkspace({
   initialQuery = '',
-  initialEventKey: _initialEventKey,
-  initialReportId: _initialReportId
+  initialEventKey,
+  initialReportId
 }: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
@@ -121,12 +121,6 @@ export function ResearchReportsWorkspace({
           return;
         }
         setReportsPayload(nextPayload);
-        setSelectedReport((current) => {
-          if (!current) {
-            return null;
-          }
-          return nextPayload.items.find((item) => item.event_key === current.event_key) ?? null;
-        });
       } catch (err: unknown) {
         if (!isLatestReportsRequest(requestId)) {
           return;
@@ -191,6 +185,34 @@ export function ResearchReportsWorkspace({
   };
 
   const reports = reportsPayload?.items ?? [];
+
+  useEffect(() => {
+    if (!reports.length) {
+      setSelectedReport(null);
+      return;
+    }
+
+    const deepLinkedReport = reports.find(
+      (report) =>
+        (initialEventKey && report.event_key === initialEventKey) ||
+        (!initialEventKey && initialReportId && report.report_id === initialReportId)
+    );
+
+    if (deepLinkedReport) {
+      setSelectedReport(deepLinkedReport);
+      return;
+    }
+
+    setSelectedReport((current) => {
+      if (current) {
+        const preserved = reports.find((report) => report.event_key === current.event_key);
+        if (preserved) {
+          return preserved;
+        }
+      }
+      return reports[0] ?? null;
+    });
+  }, [reports, initialEventKey, initialReportId]);
 
   return (
     <section className="workspace-stack" aria-label="Research Reports workspace">

@@ -90,11 +90,12 @@ describe('ResearchReportsWorkspace', () => {
 
   it('loads summary and report rows', async () => {
     render(<ResearchReportsWorkspace />);
+    const results = screen.getByLabelText('Research report results');
 
     expect(await screen.findByText('57,418')).toBeInTheDocument();
-    expect(await screen.findByText('贵州茅台深度报告')).toBeInTheDocument();
-    expect(screen.getByText('华泰证券')).toBeInTheDocument();
-    expect(screen.getByText('买入')).toBeInTheDocument();
+    expect(await within(results).findByRole('button', { name: 'Open report 贵州茅台深度报告' })).toBeInTheDocument();
+    expect(within(results).getByText('华泰证券')).toBeInTheDocument();
+    expect(within(results).getByText('买入')).toBeInTheDocument();
   });
 
   it('defaults the report end date to today', async () => {
@@ -216,6 +217,50 @@ describe('ResearchReportsWorkspace', () => {
       consoleErrorSpy.mock.calls.some((call) => call.join(' ').includes('Encountered two children with the same key'))
     ).toBe(false);
     consoleErrorSpy.mockRestore();
+  });
+
+  it('selects the initial event key after reports load', async () => {
+    apiMocks.fetchResearchReports.mockResolvedValueOnce({
+      items: [
+        {
+          event_key: 'r-old:CN:SH:600519',
+          report_id: 'r-old',
+          asset_id: 'CN:SH:600519',
+          ts_code: '600519.SH',
+          stock_name: '贵州茅台',
+          report_title: '贵州茅台旧报告',
+          broker: '中信证券',
+          analyst: '张三',
+          industry_name: '白酒',
+          published_at: '2026-06-01T10:00:00+08:00',
+          rating: '买入',
+          target_price: null,
+          summary: '旧报告'
+        },
+        {
+          event_key: 'r-new:CN:SH:600519',
+          report_id: 'r-new',
+          asset_id: 'CN:SH:600519',
+          ts_code: '600519.SH',
+          stock_name: '贵州茅台',
+          report_title: '贵州茅台深度跟踪',
+          broker: '国泰君安',
+          analyst: '李四',
+          industry_name: '白酒',
+          published_at: '2026-06-12T10:00:00+08:00',
+          rating: '增持',
+          target_price: null,
+          summary: '新报告'
+        }
+      ],
+      count: 2,
+      warnings: []
+    });
+
+    render(<ResearchReportsWorkspace initialQuery="茅台" initialEventKey="r-new:CN:SH:600519" />);
+
+    expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '贵州茅台旧报告' })).not.toBeInTheDocument();
   });
 
   it('shows an empty state', async () => {
