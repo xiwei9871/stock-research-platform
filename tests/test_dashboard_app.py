@@ -43,7 +43,7 @@ def test_public_news_route_returns_filtered_items(monkeypatch):
     response = client.get(
         "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF"
         "&start_time=2026-06-01T00:00:00&end_time=2026-06-12T23:59:59"
-        "&asset_id=CN:SH:600519&ts_code=600519.SH&limit=10&offset=2"
+        "&asset_id=CN:SH:600519&ts_code=600519.SH&min_quality_score=70&limit=10&offset=2"
     )
 
     assert response.status_code == 200
@@ -55,6 +55,7 @@ def test_public_news_route_returns_filtered_items(monkeypatch):
         "end_time": "2026-06-12T23:59:59",
         "asset_id": "CN:SH:600519",
         "ts_code": "600519.SH",
+        "min_quality_score": 70,
         "limit": 10,
         "offset": 2,
     }

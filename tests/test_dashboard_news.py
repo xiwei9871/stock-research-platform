@@ -53,7 +53,19 @@ class FakeDb:
             return self.asset_rows
         if "FROM research.news_event_source s LEFT JOIN research.news_event_mention m" in compact:
             rows = self._filtered_source_rows(compact, params or [])
-            rows = sorted(rows, key=lambda row: row["published_at"], reverse=True)
+            if "metadata->'quality'->>'score'" in compact:
+                rows = sorted(
+                    rows,
+                    key=lambda row: (
+                        self._quality_score(row),
+                        row["published_at"],
+                        row["collected_at"],
+                        row["source_event_id"],
+                    ),
+                    reverse=True,
+                )
+            else:
+                rows = sorted(rows, key=lambda row: row["published_at"], reverse=True)
             if "LIMIT %s OFFSET %s" in compact:
                 limit = int((params or [0, 0])[-2])
                 offset = int((params or [0, 0])[-1])
@@ -131,7 +143,21 @@ class FakeDb:
                     for mention in self.mention_rows
                 )
             ]
+        if "COALESCE((s.metadata->'quality'->>'score')::numeric, 0) >= %s" in compact_sql:
+            min_quality_score = params[param_index]
+            param_index += 1
+            rows = [
+                row for row in rows if self._quality_score(row) >= float(min_quality_score or 0)
+            ]
         return rows
+
+    def _quality_score(self, row: dict[str, Any]) -> float:
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        quality = metadata.get("quality") if isinstance(metadata.get("quality"), dict) else {}
+        try:
+            return float(quality.get("score") or 0)
+        except (TypeError, ValueError):
+            return 0.0
 
     def execute_many(self, _conn: FakeConn, sql: str, rows: list[dict[str, Any]]):
         self.calls.append((sql, rows))
@@ -306,6 +332,99 @@ def test_news_event_store_lists_by_category_with_summary(monkeypatch: pytest.Mon
     ]
     assert payload["items"][0]["category"] == "live"
     assert payload["items"][0]["stocks"] == []
+
+
+def test_news_event_store_filters_and_orders_by_quality(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    fake.source_rows = {
+        "low": {
+            "source_event_id": "low",
+            "source_name": "sina_finance",
+            "source_channel": "sina_live",
+            "title": "普通观点",
+            "content": "",
+            "published_at": "2026-06-13T05:00:00+00:00",
+            "collected_at": "2026-06-13T05:00:10+00:00",
+            "url": "https://finance.sina.com.cn/low.shtml",
+            "source_status": "available",
+            "metadata": {"category": "other", "quality": {"score": 45, "reasons": ["other"]}},
+        },
+        "high": {
+            "source_event_id": "high",
+            "source_name": "sina_finance",
+            "source_channel": "sina_live",
+            "title": "政策推动半导体产业链订单增长",
+            "content": "",
+            "published_at": "2026-06-13T04:00:00+00:00",
+            "collected_at": "2026-06-13T04:00:10+00:00",
+            "url": "https://finance.sina.com.cn/high.shtml",
+            "source_status": "available",
+            "metadata": {
+                "category": "market",
+                "quality": {
+                    "score": 88,
+                    "reasons": ["policy", "sector_specific"],
+                    "run_id": "public-news-20260613T040000Z",
+                },
+            },
+        },
+    }
+
+    payload = news.NewsEventStore(service="test").list_news(
+        source="sina_finance",
+        min_quality_score=70,
+        limit=3,
+    )
+
+    assert [item["news_id"] for item in payload["items"]] == ["high"]
+    assert payload["items"][0]["quality_score"] == 88
+    assert payload["items"][0]["quality_reasons"] == ["policy", "sector_specific"]
+    assert payload["items"][0]["quality_run_id"] == "public-news-20260613T040000Z"
+
+
+def test_news_event_store_orders_by_quality_before_recency(monkeypatch: pytest.MonkeyPatch):
+    from stock_research.dashboard import news
+
+    fake = FakeDb()
+    monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
+    monkeypatch.setattr(news, "fetch_all", fake.fetch_all)
+    fake.source_rows = {
+        "newer-low": {
+            "source_event_id": "newer-low",
+            "source_name": "sina_finance",
+            "source_channel": "sina_live",
+            "title": "普通观点",
+            "content": "",
+            "published_at": "2026-06-13T05:00:00+00:00",
+            "collected_at": "2026-06-13T05:00:10+00:00",
+            "url": "https://finance.sina.com.cn/newer-low.shtml",
+            "source_status": "available",
+            "metadata": {"category": "other", "quality": {"score": "45"}},
+        },
+        "older-high": {
+            "source_event_id": "older-high",
+            "source_name": "sina_finance",
+            "source_channel": "sina_live",
+            "title": "政策推动半导体产业链订单增长",
+            "content": "",
+            "published_at": "2026-06-13T04:00:00+00:00",
+            "collected_at": "2026-06-13T04:00:10+00:00",
+            "url": "https://finance.sina.com.cn/older-high.shtml",
+            "source_status": "available",
+            "metadata": {"category": "market", "quality": {"score": "88.5", "reasons": "policy"}},
+        },
+    }
+
+    payload = news.NewsEventStore(service="test").list_news(source="sina_finance", limit=3)
+
+    assert [item["news_id"] for item in payload["items"]] == ["older-high", "newer-low"]
+    assert payload["items"][0]["quality_score"] == 88
+    assert payload["items"][0]["quality_reasons"] == []
+    assert payload["items"][0]["quality_run_id"] == ""
 
 
 def test_news_mention_mapper_links_exact_stock_names(monkeypatch: pytest.MonkeyPatch):

@@ -185,9 +185,23 @@ def _stock_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _quality_score(value: object) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _quality_reasons(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(reason) for reason in value if reason is not None]
+
+
 def _news_row(row: dict[str, Any]) -> dict[str, Any]:
     metadata = _json_metadata(row.get("metadata"))
     category = str(metadata.get("category") or row.get("category") or "other")
+    quality = metadata.get("quality") if isinstance(metadata.get("quality"), dict) else {}
     stocks_value = row.get("stocks")
     stocks = [_stock_row(stock) for stock in stocks_value] if isinstance(stocks_value, list) else []
     return {
@@ -206,6 +220,9 @@ def _news_row(row: dict[str, Any]) -> dict[str, Any]:
         "status": str(row.get("source_status") or "available"),
         "stocks": stocks,
         "metadata": metadata,
+        "quality_score": _quality_score(quality.get("score")),
+        "quality_reasons": _quality_reasons(quality.get("reasons")),
+        "quality_run_id": str(quality.get("run_id") or ""),
     }
 
 
@@ -291,6 +308,15 @@ def _build_news_filters(**filters: Any) -> tuple[list[str], list[Any]]:
     if ts_code:
         clauses.append("m.ts_code = %s")
         params.append(ts_code)
+    min_quality_score = filters.get("min_quality_score")
+    if min_quality_score is not None:
+        try:
+            min_score = int(min_quality_score)
+        except (TypeError, ValueError):
+            min_score = 0
+        if min_score > 0:
+            clauses.append("COALESCE((s.metadata->'quality'->>'score')::numeric, 0) >= %s")
+            params.append(min_score)
     return clauses, params
 
 
@@ -427,6 +453,7 @@ class NewsEventStore:
         end_time: str | None = None,
         asset_id: str | None = None,
         ts_code: str | None = None,
+        min_quality_score: int | None = None,
         limit: int = DEFAULT_LIMIT,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -438,6 +465,7 @@ class NewsEventStore:
             end_time=end_time,
             asset_id=asset_id,
             ts_code=ts_code,
+            min_quality_score=min_quality_score,
         )
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         bounded_limit = _bounded_limit(limit)
@@ -486,7 +514,11 @@ class NewsEventStore:
                 LEFT JOIN research.news_event_mention m USING (source_event_id)
                 {where_sql}
                 GROUP BY s.source_event_id
-                ORDER BY s.published_at DESC, s.collected_at DESC, s.source_event_id
+                ORDER BY
+                    COALESCE((s.metadata->'quality'->>'score')::numeric, 0) DESC,
+                    s.published_at DESC,
+                    s.collected_at DESC,
+                    s.source_event_id
                 LIMIT %s OFFSET %s
                 """,
                 [*params, bounded_limit, bounded_offset],
@@ -738,10 +770,13 @@ def _has_public_news_filters(
     end_time: str | None,
     asset_id: str | None,
     ts_code: str | None,
+    min_quality_score: int | None,
 ) -> bool:
     cleaned_category = _clean(category)
-    return any(_clean(value) for value in (source, q, start_time, end_time, asset_id, ts_code)) or (
-        bool(cleaned_category) and cleaned_category != "all"
+    return (
+        any(_clean(value) for value in (source, q, start_time, end_time, asset_id, ts_code))
+        or min_quality_score is not None
+        or (bool(cleaned_category) and cleaned_category != "all")
     )
 
 
@@ -754,6 +789,7 @@ def load_public_news_for_dashboard(
     end_time: str | None = None,
     asset_id: str | None = None,
     ts_code: str | None = None,
+    min_quality_score: int | None = None,
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
     store: NewsEventStore | None = None,
@@ -770,6 +806,7 @@ def load_public_news_for_dashboard(
         end_time=end_time,
         asset_id=asset_id,
         ts_code=ts_code,
+        min_quality_score=min_quality_score,
     )
     try:
         payload = active_store.list_news(
@@ -780,6 +817,7 @@ def load_public_news_for_dashboard(
             end_time=end_time,
             asset_id=asset_id,
             ts_code=ts_code,
+            min_quality_score=min_quality_score,
             limit=limit,
             offset=offset,
         )

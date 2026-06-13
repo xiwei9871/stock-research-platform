@@ -99,6 +99,7 @@ def create_app() -> FastAPI:
         end_time: str | None = None,
         asset_id: str | None = None,
         ts_code: str | None = None,
+        min_quality_score: int | None = None,
         limit: int = 100,
         offset: int = 0,
     ):
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
             end_time=end_time,
             asset_id=asset_id,
             ts_code=ts_code,
+            min_quality_score=min_quality_score,
             limit=limit,
             offset=offset,
         )
