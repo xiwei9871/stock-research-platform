@@ -141,7 +141,16 @@ body {
 }
 
 .global-search-result-text {
-  display: block;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.global-search-result-main {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -152,7 +161,8 @@ body {
 }
 
 .global-search-result-title,
-.global-search-result-subtitle {
+.global-search-result-subtitle,
+.global-search-option-reason {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -163,10 +173,6 @@ body {
   font-weight: 700;
 }
 
-.global-search-result-title + .global-search-result-subtitle::before {
-  content: " ";
-}
-
 .global-search-result-subtitle {
   color: #667085;
   font-size: 12px;
@@ -174,10 +180,6 @@ body {
 
 .global-search-option-reason {
   display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--muted-text);
   font-size: 11px;
   line-height: 1.3;

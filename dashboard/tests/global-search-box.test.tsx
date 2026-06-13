@@ -111,7 +111,9 @@ describe('GlobalSearchBox', () => {
     render(<GlobalSearchBox onOpenResult={vi.fn()} />);
     await searchFor('600519');
 
-    expect(await screen.findByText('Exact code match')).toBeInTheDocument();
+    const option = await screen.findByRole('option', { name: /贵州茅台 600519\.SH Exact code match/ });
+    expect(within(option).getByText('Exact code match')).toBeInTheDocument();
+    expect(option.querySelector('.global-search-result-main')).not.toBeNull();
   });
 
   it('does not call the API for a one-character query', async () => {
