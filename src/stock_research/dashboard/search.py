@@ -81,6 +81,7 @@ def _asset_relevance(row: dict[str, Any], query: str) -> tuple[int, str, list[st
     ts_code_forms = _code_forms(ts_code)
     symbol = _normalise_query(row.get("symbol"))
     name = _normalise_query(row.get("name"))
+    stock_name = _normalise_query(row.get("stock_name"))
 
     if query and query == asset_id:
         return 100, "Exact code match", ["asset_id"]
@@ -90,10 +91,14 @@ def _asset_relevance(row: dict[str, Any], query: str) -> tuple[int, str, list[st
         return 94, "Exact code match", ["ts_code"]
     if query and query == name:
         return 90, "Stock name match", ["name"]
+    if query and query == stock_name:
+        return 90, "Stock name match", ["stock_name"]
     if query and symbol.startswith(query):
         return 80, "Stock symbol prefix match", ["symbol"]
     if _contains(name, query):
         return 70, "Stock name match", ["name"]
+    if _contains(stock_name, query):
+        return 70, "Stock name match", ["stock_name"]
     return 10, "Source result", ["source"]
 
 
@@ -130,6 +135,7 @@ def _research_report_relevance(row: dict[str, Any], query: str) -> tuple[int, st
 
     title = _normalise_query(row.get("report_title"))
     broker = _normalise_query(row.get("broker"))
+    analyst = _normalise_query(row.get("analyst"))
     industry_name = _normalise_query(row.get("industry_name"))
     if query and query == title:
         return 85, "Research report title match", ["report_title"]
@@ -137,6 +143,8 @@ def _research_report_relevance(row: dict[str, Any], query: str) -> tuple[int, st
         return 75, "Research report title match", ["report_title"]
     if _contains(broker, query):
         return 55, "Broker match", ["broker"]
+    if _contains(analyst, query):
+        return 52, "Analyst match", ["analyst"]
     if _contains(industry_name, query):
         return 50, "Industry match", ["industry_name"]
     return 10, "Source result", ["source"]

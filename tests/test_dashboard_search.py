@@ -173,7 +173,7 @@ def test_load_global_search_returns_asset_match_reasons_and_relevance(monkeypatc
     assert "symbol" in assets[0]["match_fields"]
 
 
-def test_load_global_search_news_linked_stock_has_match_reason(monkeypatch):
+def test_load_global_search_news_linked_stock_name_has_match_reason(monkeypatch):
     monkeypatch.setattr(search, "search_assets", lambda q, limit=5: [])
     monkeypatch.setattr(
         search,
@@ -191,9 +191,7 @@ def test_load_global_search_news_linked_stock_has_match_reason(monkeypatch):
                     "stocks": [
                         {
                             "asset_id": "CN:SH:600519",
-                            "symbol": "600519",
-                            "ts_code": "600519.SH",
-                            "name": "贵州茅台",
+                            "stock_name": "贵州茅台",
                         }
                     ],
                 }
@@ -212,7 +210,7 @@ def test_load_global_search_news_linked_stock_has_match_reason(monkeypatch):
     )
     monkeypatch.setattr(search, "load_report_links", lambda trade_date: [])
 
-    payload = search.load_global_search("600519", limit=5)
+    payload = search.load_global_search("茅台", limit=5)
     item = payload["groups"][1]["items"][0]
 
     assert item["target"]["news_id"] == "sina_finance:n1"
@@ -262,6 +260,95 @@ def test_load_global_search_research_report_target_includes_event_key(monkeypatc
     assert item["target"]["report_id"] == "r1"
     assert item["match_reason"] == "Exact code match"
     assert "ts_code" in item["match_fields"]
+
+
+def test_load_global_search_research_report_analyst_match_reason(monkeypatch):
+    monkeypatch.setattr(search, "search_assets", lambda q, limit=5: [])
+    monkeypatch.setattr(
+        search,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: {"items": []},
+    )
+    monkeypatch.setattr(
+        search,
+        "list_research_reports",
+        lambda **kwargs: {
+            "items": [
+                {
+                    "event_key": "r1:CN:SH:600519",
+                    "report_id": "r1",
+                    "asset_id": "CN:SH:600519",
+                    "ts_code": "600519.SH",
+                    "stock_name": "贵州茅台",
+                    "report_title": "贵州茅台深度跟踪",
+                    "broker": "中信证券",
+                    "analyst": "张三",
+                    "industry_name": "白酒",
+                    "published_at": "2026-06-11T10:00:00+08:00",
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        search,
+        "load_platform_summary",
+        lambda: {"latest_market_date": "2026-06-12"},
+    )
+    monkeypatch.setattr(search, "load_report_links", lambda trade_date: [])
+
+    payload = search.load_global_search("张三", limit=5)
+    item = payload["groups"][2]["items"][0]
+
+    assert item["match_reason"] == "Analyst match"
+    assert item["match_fields"] == ["analyst"]
+
+
+def test_load_global_search_news_same_score_sorts_newer_first(monkeypatch):
+    monkeypatch.setattr(search, "search_assets", lambda q, limit=5: [])
+    monkeypatch.setattr(
+        search,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: {
+            "items": [
+                {
+                    "news_id": "news-older",
+                    "source": "sina_finance",
+                    "category": "公司",
+                    "title": "经营公告",
+                    "summary": "旧消息",
+                    "published_at": "2026-06-12T09:30:00+08:00",
+                    "url": "https://example.com/older",
+                    "stocks": [],
+                },
+                {
+                    "news_id": "news-newer",
+                    "source": "sina_finance",
+                    "category": "公司",
+                    "title": "经营公告",
+                    "summary": "新消息",
+                    "published_at": "2026-06-12T10:30:00+08:00",
+                    "url": "https://example.com/newer",
+                    "stocks": [],
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        search,
+        "list_research_reports",
+        lambda **kwargs: {"items": []},
+    )
+    monkeypatch.setattr(
+        search,
+        "load_platform_summary",
+        lambda: {"latest_market_date": "2026-06-12"},
+    )
+    monkeypatch.setattr(search, "load_report_links", lambda trade_date: [])
+
+    payload = search.load_global_search("经营公告", limit=1)
+    item = payload["groups"][1]["items"][0]
+
+    assert item["target"]["news_id"] == "news-newer"
 
 
 def test_load_global_search_generated_report_keeps_trade_date_and_match_reason(monkeypatch):
