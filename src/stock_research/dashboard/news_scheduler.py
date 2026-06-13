@@ -38,6 +38,7 @@ class PublicNewsScheduler:
 
         self._running = True
         async with self._lock:
+            completed = False
             try:
                 result = self.refresh()
                 if inspect.isawaitable(result):
@@ -45,11 +46,16 @@ class PublicNewsScheduler:
                 now = self._now()
                 self._last_success_at = now.isoformat()
                 self._last_error = ""
+                completed = True
             except Exception as exc:
                 now = self._now()
                 self._last_error = str(exc)
+                completed = True
             finally:
-                self._next_run_at = (now + timedelta(seconds=self.interval_seconds)).isoformat()
+                if completed:
+                    self._next_run_at = (
+                        now + timedelta(seconds=self.interval_seconds)
+                    ).isoformat()
                 self._running = False
 
     def start(self) -> None:

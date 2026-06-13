@@ -293,6 +293,31 @@ def test_public_news_scheduler_failure_records_error_without_raising():
     asyncio.run(run_test())
 
 
+def test_public_news_scheduler_stop_cleans_up_during_active_refresh():
+    from stock_research.dashboard.news_scheduler import PublicNewsScheduler
+
+    started = asyncio.Event()
+
+    async def refresh():
+        started.set()
+        await asyncio.sleep(60)
+        return {"stored": 1}
+
+    async def run_test():
+        scheduler = PublicNewsScheduler(refresh, interval_seconds=60)
+        scheduler.start()
+        await started.wait()
+
+        await scheduler.stop()
+
+        status = scheduler.status()
+        assert status["running"] is False
+        assert status["next_run_at"] == ""
+        assert status["last_error"] == ""
+
+    asyncio.run(run_test())
+
+
 def test_news_event_store_upserts_public_news_items(monkeypatch: pytest.MonkeyPatch):
     from stock_research.dashboard import news
 
