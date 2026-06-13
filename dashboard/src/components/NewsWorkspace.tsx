@@ -264,8 +264,6 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
                 <article
                   key={item.news_id}
                   className={`news-feed-row${isSelected ? ' news-feed-row--selected' : ''}`}
-                  aria-label={isSelected ? 'Selected news result' : undefined}
-                  aria-current={isSelected ? 'true' : undefined}
                 >
                   <div className="news-feed-meta">
                     <span>{item.published_at.slice(5, 16)}</span>

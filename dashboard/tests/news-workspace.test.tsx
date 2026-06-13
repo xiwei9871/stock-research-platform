@@ -118,7 +118,20 @@ describe('NewsWorkspace', () => {
 
     render(<NewsWorkspace initialQuery="600519" initialNewsId="sina_finance:n1" />);
 
-    expect(await screen.findByLabelText('Selected news result')).toHaveTextContent('贵州茅台公告');
+    const title = await screen.findByText('贵州茅台公告');
+    const row = title.closest('article');
+
+    expect(title).toBeInTheDocument();
+    expect(row).toHaveClass('news-feed-row--selected');
+    expect(row).not.toHaveAttribute('aria-label', 'Selected news result');
+    expect(row).not.toHaveAttribute('aria-current');
+  });
+
+  it('does not mark a row when the initial news id does not match', async () => {
+    render(<NewsWorkspace initialNewsId="sina_finance:missing" />);
+
+    expect(await screen.findByText('600000 浦发银行公告')).toBeInTheDocument();
+    expect(document.querySelector('.news-feed-row--selected')).toBeNull();
   });
 
   it('uses the initial query as the news search input value', () => {
