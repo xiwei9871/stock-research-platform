@@ -14,7 +14,7 @@ export type AssetSearchResponse = {
 export type GlobalSearchResultType = 'asset' | 'news' | 'research_report' | 'generated_report' | string;
 
 export type GlobalSearchTarget = {
-  workspace: string;
+  workspace: 'stock' | 'news' | 'researchReports' | 'generatedReports' | string;
   asset_id?: string;
   news_id?: string;
   report_id?: string;
@@ -28,8 +28,8 @@ export type GlobalSearchResult = {
   type: GlobalSearchResultType;
   id: string;
   title: string;
-  subtitle?: string;
-  metadata?: Record<string, unknown>;
+  subtitle: string;
+  metadata: Record<string, unknown>;
   meta?: Record<string, unknown>;
   target: GlobalSearchTarget;
   score?: number;
