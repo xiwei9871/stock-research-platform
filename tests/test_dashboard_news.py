@@ -720,6 +720,153 @@ def test_news_quality_gate_rejects_low_signal_and_does_not_fill_three_slots():
     assert result.rejection_counts["below_threshold"] >= 1
 
 
+def test_news_quality_gate_rejects_missing_title_and_url():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    result = evaluate_public_news_items(
+        [
+            make_item(
+                news_id="missing-title",
+                title="",
+                url="https://finance.sina.com.cn/missing-title.shtml",
+            ),
+            make_item(
+                news_id="missing-url",
+                title="央行开展逆回购操作 资金面流动性维持合理充裕",
+                url="",
+            ),
+        ],
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert result.accepted_items == []
+    assert result.rejection_counts["missing_title"] == 1
+    assert result.rejection_counts["missing_url"] == 1
+
+
+def test_news_quality_gate_rejects_duplicate_url_or_title_after_first_acceptance():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    result = evaluate_public_news_items(
+        [
+            make_item(
+                news_id="first",
+                title="国家发改委出台半导体产业链支持政策",
+                summary="政策支持、产业链、订单、涨价预期均明确",
+                category="market",
+                published_at="2026-06-13T05:00:00+00:00",
+                url="https://finance.sina.com.cn/duplicate.shtml",
+            ),
+            make_item(
+                news_id="duplicate-url",
+                title="央行开展逆回购操作 资金面流动性维持合理充裕",
+                summary="市场流动性、利率、资金价格具备交易参考价值",
+                category="macro",
+                published_at="2026-06-13T05:05:00+00:00",
+                url="https://finance.sina.com.cn/duplicate.shtml",
+            ),
+            make_item(
+                news_id="duplicate-title",
+                title="国家发改委出台半导体产业链支持政策",
+                summary="政策支持、产业链、订单、涨价预期均明确",
+                category="market",
+                published_at="2026-06-13T05:10:00+00:00",
+                url="https://finance.sina.com.cn/duplicate-title.shtml",
+            ),
+        ],
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert [item.news_id for item in result.accepted_items] == ["first"]
+    assert result.rejection_counts["duplicate"] == 2
+
+
+def test_news_quality_gate_treats_naive_public_news_timestamp_as_china_local_time():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    result = evaluate_public_news_items(
+        [
+            make_item(
+                news_id="stale-china-local",
+                title="国家发改委出台半导体产业链支持政策",
+                summary="政策支持、产业链、订单、涨价预期均明确",
+                category="market",
+                published_at="2026-06-12 07:00:00",
+                url="https://finance.sina.com.cn/stale-china-local.shtml",
+            )
+        ],
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert result.accepted_items == []
+    assert result.rejection_counts["stale"] == 1
+
+
+def test_news_quality_gate_adds_metadata_without_mutating_original_payload():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    original_payload = {"href": "/policy.shtml"}
+    item = make_item(
+        news_id="metadata",
+        title="国家发改委出台半导体产业链支持政策",
+        summary="政策支持、产业链、订单、涨价预期均明确",
+        category="market",
+        published_at="2026-06-13T05:00:00+00:00",
+        url="https://finance.sina.com.cn/metadata.shtml",
+        raw_payload=original_payload,
+    )
+
+    result = evaluate_public_news_items(
+        [item],
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert "quality" not in item.raw_payload
+    assert item.raw_payload == original_payload
+    accepted_item = result.accepted_items[0]
+    assert accepted_item is not item
+    quality = accepted_item.raw_payload["quality"]
+    assert quality["run_id"] == "public-news-20260613T060000Z"
+    assert quality["accepted_at"] == "2026-06-13T06:00:00+00:00"
+    assert quality["score"] >= 70
+    assert "policy" in quality["reasons"]
+    assert "quality" not in original_payload
+
+
+def test_news_quality_gate_clamps_custom_threshold_and_max_accepted():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    items = [
+        make_item(
+            news_id="low-score",
+            title="今日财经早餐",
+            summary="市场消息",
+            category="other",
+            published_at="2026-06-13T05:00:00+00:00",
+            url="https://finance.sina.com.cn/low-score.shtml",
+        )
+    ]
+
+    zero_slots = evaluate_public_news_items(
+        items,
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+        threshold=-10,
+        max_accepted=-1,
+    )
+    high_threshold = evaluate_public_news_items(
+        items,
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+        threshold=120,
+    )
+
+    assert zero_slots.threshold == 0
+    assert zero_slots.max_accepted == 0
+    assert zero_slots.accepted_items == []
+    assert zero_slots.rejection_counts["overflow"] == 1
+    assert high_threshold.threshold == 100
+    assert high_threshold.rejection_counts["below_threshold"] == 1
+
+
 def test_public_news_ingestion_writes_db_and_cache(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

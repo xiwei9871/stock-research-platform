@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 from stock_research.public_news.models import PublicNewsItem
 
 NEWS_QUALITY_THRESHOLD = 70
 NEWS_MAX_ACCEPTED_PER_RUN = 3
 NEWS_FRESHNESS_HOURS = 24
+SOURCE_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 LOW_SIGNAL_TOKENS = (
     "更多精彩",
@@ -88,6 +90,8 @@ def evaluate_public_news_items(
     threshold: int = NEWS_QUALITY_THRESHOLD,
     max_accepted: int = NEWS_MAX_ACCEPTED_PER_RUN,
 ) -> NewsQualityResult:
+    threshold = max(0, min(100, threshold))
+    max_accepted = max(0, max_accepted)
     current_time = _as_utc(now or datetime.now(UTC))
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
@@ -261,5 +265,5 @@ def _parse_timestamp(value: str) -> datetime | None:
 
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
+        return value.replace(tzinfo=SOURCE_TIMEZONE).astimezone(UTC)
     return value.astimezone(UTC)
