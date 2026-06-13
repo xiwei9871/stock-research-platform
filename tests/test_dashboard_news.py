@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from stock_research.public_news.models import PublicNewsItem
+
+
+def fresh_china_timestamp() -> str:
+    return (datetime.now(UTC) + timedelta(hours=8)).replace(
+        tzinfo=None,
+        microsecond=0,
+    ).isoformat(sep=" ")
 
 
 class FakeConn:
@@ -875,10 +882,14 @@ def test_public_news_ingestion_writes_db_and_cache(
     from stock_research.public_news.store import JsonPublicNewsStore
 
     fake = FakeDb()
-    item = make_item()
     monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
     monkeypatch.setattr(news, "execute", fake.execute)
     monkeypatch.setattr(news, "execute_many", fake.execute_many)
+    item = make_item(
+        title="央行逆回购维护流动性 半导体板块受益",
+        category="macro",
+        published_at=fresh_china_timestamp(),
+    )
     monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
 
     service = news.PublicNewsIngestionService(
@@ -892,6 +903,73 @@ def test_public_news_ingestion_writes_db_and_cache(
     assert result["stored"] == 1
     assert result["mentions"] == 0
     assert fake.source_rows[item.news_id]["title"] == item.title
+    assert "quality" in fake.source_rows[item.news_id]["metadata"]
+
+
+def test_public_news_refresh_persists_only_quality_gate_accepted_items(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    fresh_published_at = fresh_china_timestamp()
+    received = [
+        make_item(
+            news_id="strong-1",
+            title="央行逆回购维护流动性 半导体板块受益",
+            category="macro",
+            url="https://finance.sina.com.cn/strong-1.shtml",
+            published_at=fresh_published_at,
+        ),
+        make_item(
+            news_id="strong-2",
+            title="国家政策支持机器人产业链订单增长",
+            category="market",
+            url="https://finance.sina.com.cn/strong-2.shtml",
+            published_at=fresh_published_at,
+        ),
+        make_item(
+            news_id="strong-3",
+            title="有色金属期货大涨 供给减产预期升温",
+            category="market",
+            url="https://finance.sina.com.cn/strong-3.shtml",
+            published_at=fresh_published_at,
+        ),
+        make_item(
+            news_id="weak-1",
+            title="更多精彩内容请关注新浪财经",
+            summary="",
+            category="other",
+            url="https://finance.sina.com.cn/weak-1.shtml",
+            published_at=fresh_published_at,
+        ),
+    ]
+
+    class RecordingStore(news.NewsEventStore):
+        def __init__(self):
+            self.saved: list[PublicNewsItem] = []
+
+        def upsert_public_items(self, items):
+            self.saved = list(items)
+            return {"received": len(self.saved), "stored": len(self.saved)}
+
+    store = RecordingStore()
+    service = news.PublicNewsIngestionService(
+        fetcher=lambda: received,
+        store=store,
+        fallback_store=JsonPublicNewsStore(tmp_path / "public_news.json"),
+        mention_mapper=None,
+    )
+
+    payload = service.refresh()
+
+    assert payload["items_received"] == 4
+    assert payload["accepted"] == 3
+    assert payload["stored"] == 3
+    assert payload["rejected"] == 1
+    assert [item.news_id for item in store.saved] == ["strong-1", "strong-2", "strong-3"]
+    assert all("quality" in item.raw_payload for item in store.saved)
 
 
 def test_load_public_news_falls_back_to_json_cache(
@@ -1019,7 +1097,11 @@ def test_public_news_ingestion_keeps_successful_counts_when_later_stages_fail(
             raise RuntimeError("mention mapping failed")
 
     fake = FakeDb()
-    item = make_item()
+    item = make_item(
+        title="央行逆回购维护流动性 半导体板块受益",
+        category="macro",
+        published_at=fresh_china_timestamp(),
+    )
     monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
     monkeypatch.setattr(news, "execute_many", fake.execute_many)
     monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
@@ -1058,7 +1140,11 @@ def test_public_news_ingestion_skips_mentions_when_db_upsert_fails(
             self.called = True
             raise AssertionError("mention mapper should not run after db upsert failure")
 
-    item = make_item()
+    item = make_item(
+        title="央行逆回购维护流动性 半导体板块受益",
+        category="macro",
+        published_at=fresh_china_timestamp(),
+    )
     mapper = TrackingMentionMapper()
     monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))
 
@@ -1085,7 +1171,11 @@ def test_public_news_ingestion_handles_default_mapper_construction_failure(
     from stock_research.public_news.store import JsonPublicNewsStore
 
     fake = FakeDb()
-    item = make_item()
+    item = make_item(
+        title="央行逆回购维护流动性 半导体板块受益",
+        category="macro",
+        published_at=fresh_china_timestamp(),
+    )
     monkeypatch.setattr(news, "connect", lambda _service: FakeConn())
     monkeypatch.setattr(news, "execute_many", fake.execute_many)
     monkeypatch.setattr(news, "fetch_sina_public_news", lambda: ([item], []))

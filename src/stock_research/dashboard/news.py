@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute, execute_many, fetch_all
+from stock_research.dashboard.news_quality import evaluate_public_news_items
 from stock_research.public_news.models import PublicNewsItem
 from stock_research.public_news.sina_adapter import fetch_sina_public_news
 from stock_research.public_news.store import JsonPublicNewsStore
@@ -98,11 +99,14 @@ def _count_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _item_to_source_row(item: PublicNewsItem) -> dict[str, Any]:
+    raw_payload = item.raw_payload if isinstance(item.raw_payload, dict) else {}
     metadata = {
         "category": item.category or "other",
         "raw_id": item.raw_id,
-        "raw_payload": item.raw_payload,
+        "raw_payload": raw_payload,
     }
+    if isinstance(raw_payload.get("quality"), dict):
+        metadata["quality"] = raw_payload["quality"]
     return {
         "source_event_id": item.news_id,
         "source_name": item.source,
@@ -550,43 +554,59 @@ class PublicNewsIngestionService:
     def __init__(
         self,
         *,
+        fetcher: Callable[[], Any] | None = None,
         store: NewsEventStore | None = None,
         fallback_store: JsonPublicNewsStore | None = None,
         mention_mapper: NewsMentionMapper | None = None,
     ) -> None:
+        self.fetcher = fetcher or fetch_sina_public_news
         self.store = store or NewsEventStore()
         self.fallback_store = fallback_store or JsonPublicNewsStore(DEFAULT_PUBLIC_NEWS_CACHE)
         self.mention_mapper = mention_mapper
 
     def refresh(self) -> dict[str, Any]:
         try:
-            items, warnings = fetch_sina_public_news()
+            fetched = self.fetcher()
         except Exception as exc:
             items = []
             warnings = [f"sina_finance refresh failed: {exc}"]
+        else:
+            if isinstance(fetched, tuple) and len(fetched) == 2:
+                items, warnings = fetched
+            else:
+                items = fetched
+                warnings = []
+            items = list(items)
         warnings = list(warnings)
+        quality_result = evaluate_public_news_items(items)
+        accepted_items = quality_result.accepted_items
         db_result = {"received": 0, "stored": 0}
         cache_result = {"received": 0, "stored": 0}
         mention_result = {"mentions": 0}
-        if items:
+        if accepted_items:
             try:
-                db_result = self.store.upsert_public_items(items)
+                db_result = self.store.upsert_public_items(accepted_items)
             except Exception as exc:
                 warnings.append(f"db upsert failed: {exc}")
             try:
-                cache_result = self.fallback_store.upsert_items(items)
+                cache_result = self.fallback_store.upsert_items(accepted_items)
             except Exception as exc:
                 warnings.append(f"fallback cache write failed: {exc}")
             if db_result["stored"] > 0:
                 try:
                     mention_mapper = self.mention_mapper or NewsMentionMapper()
-                    mention_result = mention_mapper.map_items(items)
+                    mention_result = mention_mapper.map_items(accepted_items)
                 except Exception as exc:
                     warnings.append(f"mention mapping failed: {exc}")
-        counts_by_category = dict(Counter(item.category for item in items))
+        counts_by_category = dict(Counter(item.category for item in accepted_items))
         return {
             **db_result,
             "items_received": len(items),
+            "accepted": len(accepted_items),
+            "rejected": max(0, len(items) - len(accepted_items)),
+            "rejection_counts": quality_result.rejection_counts,
+            "quality_threshold": quality_result.threshold,
+            "max_accepted": quality_result.max_accepted,
             "fallback_cache_stored": cache_result["stored"],
             "mentions": mention_result["mentions"],
             "counts_by_category": counts_by_category,
