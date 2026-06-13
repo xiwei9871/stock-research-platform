@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+import threading
 from typing import Any
 
 import pytest
@@ -314,6 +315,38 @@ def test_public_news_scheduler_stop_cleans_up_during_active_refresh():
         assert status["running"] is False
         assert status["next_run_at"] == ""
         assert status["last_error"] == ""
+
+    asyncio.run(run_test())
+
+
+def test_public_news_scheduler_runs_sync_refresh_in_worker_thread():
+    from stock_research.dashboard.news_scheduler import PublicNewsScheduler
+
+    calls = 0
+    started = threading.Event()
+    release = threading.Event()
+
+    def refresh():
+        nonlocal calls
+        calls += 1
+        started.set()
+        release.wait(timeout=5)
+        return {"stored": 1}
+
+    async def run_test():
+        scheduler = PublicNewsScheduler(refresh, interval_seconds=60)
+        first = asyncio.create_task(scheduler.run_once())
+        await asyncio.to_thread(started.wait, 5)
+
+        second = asyncio.create_task(scheduler.run_once())
+        await asyncio.sleep(0)
+        assert calls == 1
+
+        release.set()
+        await first
+        await second
+        assert calls == 1
+        assert scheduler.status()["running"] is False
 
     asyncio.run(run_test())
 

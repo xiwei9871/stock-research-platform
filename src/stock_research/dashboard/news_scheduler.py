@@ -40,7 +40,10 @@ class PublicNewsScheduler:
         async with self._lock:
             completed = False
             try:
-                result = self.refresh()
+                if inspect.iscoroutinefunction(self.refresh):
+                    result = self.refresh()
+                else:
+                    result = await asyncio.to_thread(self.refresh)
                 if inspect.isawaitable(result):
                     await result
                 now = self._now()
