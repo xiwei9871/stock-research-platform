@@ -260,6 +260,32 @@ describe('NewsWorkspace', () => {
 
     expect(await screen.findByText('collector off')).toBeInTheDocument();
   });
+
+  it('renders accepted news without waiting for slow collector status', async () => {
+    apiMocks.fetchPublicNewsStatus.mockReturnValueOnce(new Promise(() => {}));
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      items: [makeNewsItem({ title: '状态接口慢但新闻先显示' })],
+      warnings: []
+    });
+
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('状态接口慢但新闻先显示')).toBeInTheDocument();
+    expect(screen.getByText('1/3 accepted')).toBeInTheDocument();
+  });
+
+  it('clears previous rows when a foreground filter load fails', async () => {
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('600000 浦发银行公告')).toBeInTheDocument();
+    apiMocks.fetchPublicNews.mockRejectedValueOnce(new Error('news filter failed'));
+
+    fireEvent.change(screen.getByLabelText('news search'), { target: { value: '茅台' } });
+
+    expect(await screen.findByText('news filter failed')).toBeInTheDocument();
+    expect(screen.queryByText('600000 浦发银行公告')).not.toBeInTheDocument();
+    expect(screen.getByText('本轮无高质量新闻')).toBeInTheDocument();
+  });
 });
 
 describe('ReportsWorkspace', () => {

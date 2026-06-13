@@ -91,51 +91,53 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
     return params;
   }, [category, query]);
 
+  const loadCollectorStatus = useCallback(
+    async (requestId: number, fallbackSummary?: PublicNewsSummary | null) => {
+      try {
+        const status = await fetchPublicNewsStatus();
+        if (isLatestRequest(requestId)) setCollectorStatus(status);
+      } catch {
+        if (isLatestRequest(requestId) && fallbackSummary?.collector_status) {
+          setCollectorStatus(fallbackSummary.collector_status);
+        }
+      }
+    },
+    [isLatestRequest]
+  );
+
   const loadAcceptedNews = useCallback(async () => {
     const requestId = nextRequestId();
     setIsLoading(true);
     try {
-      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
+      const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        if (payload.status === 'rejected') {
-          throw payload.reason;
-        }
-        setItems(payload.value.items);
-        setSummary(payload.value.summary ?? null);
-        setWarnings(payload.value.warnings ?? []);
-        if (statusResult.status === 'fulfilled') {
-          setCollectorStatus(statusResult.value);
-        } else if (payload.value.summary?.collector_status) {
-          setCollectorStatus(payload.value.summary.collector_status);
-        }
-        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        setItems(payload.items);
+        setSummary(payload.summary ?? null);
+        setWarnings(payload.warnings ?? []);
+        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        void loadCollectorStatus(requestId, payload.summary);
       }
     } catch (err: unknown) {
       if (isLatestRequest(requestId)) {
+        setItems([]);
+        setSummary(null);
         setWarnings([err instanceof Error ? err.message : String(err)]);
       }
     } finally {
       if (isLatestRequest(requestId)) setIsLoading(false);
     }
-  }, [isLatestRequest, newsParams, nextRequestId]);
+  }, [isLatestRequest, loadCollectorStatus, newsParams, nextRequestId]);
 
   const reloadAcceptedNews = useCallback(async () => {
     const requestId = nextRequestId();
     try {
-      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
+      const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        if (payload.status === 'rejected') {
-          throw payload.reason;
-        }
-        setItems(payload.value.items);
-        setSummary(payload.value.summary ?? null);
-        setWarnings(payload.value.warnings ?? []);
-        if (statusResult.status === 'fulfilled') {
-          setCollectorStatus(statusResult.value);
-        } else if (payload.value.summary?.collector_status) {
-          setCollectorStatus(payload.value.summary.collector_status);
-        }
-        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        setItems(payload.items);
+        setSummary(payload.summary ?? null);
+        setWarnings(payload.warnings ?? []);
+        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        void loadCollectorStatus(requestId, payload.summary);
         setIsLoading(false);
       }
     } catch (err: unknown) {
@@ -144,26 +146,19 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
         setIsLoading(false);
       }
     }
-  }, [isLatestRequest, newsParams, nextRequestId]);
+  }, [isLatestRequest, loadCollectorStatus, newsParams, nextRequestId]);
 
   const refreshNews = useCallback(async () => {
     const requestId = nextRequestId();
     try {
       const refreshResult = await refreshPublicNews();
-      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
+      const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        if (payload.status === 'rejected') {
-          throw payload.reason;
-        }
-        setItems(payload.value.items);
-        setSummary(payload.value.summary ?? null);
-        if (statusResult.status === 'fulfilled') {
-          setCollectorStatus(statusResult.value);
-        } else if (payload.value.summary?.collector_status) {
-          setCollectorStatus(payload.value.summary.collector_status);
-        }
-        setWarnings([...(refreshResult.warnings ?? []), ...(payload.value.warnings ?? [])]);
-        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        setItems(payload.items);
+        setSummary(payload.summary ?? null);
+        void loadCollectorStatus(requestId, payload.summary);
+        setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         setIsLoading(false);
       }
     } catch (err: unknown) {
@@ -172,7 +167,7 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
         setIsLoading(false);
       }
     }
-  }, [isLatestRequest, newsParams, nextRequestId]);
+  }, [isLatestRequest, loadCollectorStatus, newsParams, nextRequestId]);
 
   useEffect(() => {
     isMountedRef.current = true;
