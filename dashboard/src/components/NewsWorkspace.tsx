@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchPublicNews, refreshPublicNews } from '../api/client';
-import type { PublicNewsItem, PublicNewsSummary } from '../api/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchPublicNews, fetchPublicNewsStatus, refreshPublicNews } from '../api/client';
+import type { PublicNewsCollectorStatus, PublicNewsItem, PublicNewsSummary } from '../api/types';
 
 const CATEGORIES = [
   { id: 'all', label: '全部' },
@@ -15,7 +15,7 @@ const CATEGORIES = [
   { id: 'other', label: '其他' }
 ];
 
-const NEWS_REFRESH_INTERVAL_MS = 60000;
+const NEWS_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 type NewsWorkspaceProps = {
   initialQuery?: string;
@@ -55,9 +55,10 @@ export function getNewsAssetCandidate(item: PublicNewsItem) {
   return null;
 }
 
-export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId, onOpenAsset }: NewsWorkspaceProps) {
+export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }: NewsWorkspaceProps) {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
   const [summary, setSummary] = useState<PublicNewsSummary | null>(null);
+  const [collectorStatus, setCollectorStatus] = useState<PublicNewsCollectorStatus | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState(initialQuery);
@@ -78,16 +79,36 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
     []
   );
 
-  const loadInitialNews = useCallback(async () => {
+  const newsParams = useCallback(() => {
+    const params: Parameters<typeof fetchPublicNews>[0] = {
+      source: 'sina_finance',
+      limit: 3,
+      minQualityScore: 70
+    };
+    if (category !== 'all') params.category = category;
+    const trimmedQuery = query.trim();
+    if (trimmedQuery) params.q = trimmedQuery;
+    return params;
+  }, [category, query]);
+
+  const loadAcceptedNews = useCallback(async () => {
     const requestId = nextRequestId();
     setIsLoading(true);
     try {
-      const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
       if (isLatestRequest(requestId)) {
-        setItems(payload.items);
-        setSummary(payload.summary ?? null);
-        setWarnings(payload.warnings ?? []);
-        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        if (payload.status === 'rejected') {
+          throw payload.reason;
+        }
+        setItems(payload.value.items);
+        setSummary(payload.value.summary ?? null);
+        setWarnings(payload.value.warnings ?? []);
+        if (statusResult.status === 'fulfilled') {
+          setCollectorStatus(statusResult.value);
+        } else if (payload.value.summary?.collector_status) {
+          setCollectorStatus(payload.value.summary.collector_status);
+        }
+        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
       }
     } catch (err: unknown) {
       if (isLatestRequest(requestId)) {
@@ -96,18 +117,25 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
     } finally {
       if (isLatestRequest(requestId)) setIsLoading(false);
     }
-  }, [isLatestRequest, nextRequestId]);
+  }, [isLatestRequest, newsParams, nextRequestId]);
 
-  const refreshNews = useCallback(async () => {
+  const reloadAcceptedNews = useCallback(async () => {
     const requestId = nextRequestId();
     try {
-      const refreshResult = await refreshPublicNews();
-      const payload = await fetchPublicNews({ source: 'sina_finance', limit: 200 });
+      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
       if (isLatestRequest(requestId)) {
-        setItems(payload.items);
-        setSummary(payload.summary ?? null);
-        setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
-        setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        if (payload.status === 'rejected') {
+          throw payload.reason;
+        }
+        setItems(payload.value.items);
+        setSummary(payload.value.summary ?? null);
+        setWarnings(payload.value.warnings ?? []);
+        if (statusResult.status === 'fulfilled') {
+          setCollectorStatus(statusResult.value);
+        } else if (payload.value.summary?.collector_status) {
+          setCollectorStatus(payload.value.summary.collector_status);
+        }
+        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         setIsLoading(false);
       }
     } catch (err: unknown) {
@@ -116,14 +144,42 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
         setIsLoading(false);
       }
     }
-  }, [isLatestRequest, nextRequestId]);
+  }, [isLatestRequest, newsParams, nextRequestId]);
+
+  const refreshNews = useCallback(async () => {
+    const requestId = nextRequestId();
+    try {
+      const refreshResult = await refreshPublicNews();
+      const [payload, statusResult] = await Promise.allSettled([fetchPublicNews(newsParams()), fetchPublicNewsStatus()]);
+      if (isLatestRequest(requestId)) {
+        if (payload.status === 'rejected') {
+          throw payload.reason;
+        }
+        setItems(payload.value.items);
+        setSummary(payload.value.summary ?? null);
+        if (statusResult.status === 'fulfilled') {
+          setCollectorStatus(statusResult.value);
+        } else if (payload.value.summary?.collector_status) {
+          setCollectorStatus(payload.value.summary.collector_status);
+        }
+        setWarnings([...(refreshResult.warnings ?? []), ...(payload.value.warnings ?? [])]);
+        setLastUpdatedAt(payload.value.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
+        setIsLoading(false);
+      }
+    } catch (err: unknown) {
+      if (isLatestRequest(requestId)) {
+        setWarnings([err instanceof Error ? err.message : String(err)]);
+        setIsLoading(false);
+      }
+    }
+  }, [isLatestRequest, newsParams, nextRequestId]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    void loadInitialNews();
+    void loadAcceptedNews();
 
     const timer = window.setInterval(() => {
-      void refreshNews();
+      void reloadAcceptedNews();
     }, NEWS_REFRESH_INTERVAL_MS);
 
     return () => {
@@ -131,23 +187,11 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
       isMountedRef.current = false;
       requestIdRef.current += 1;
     };
-  }, [loadInitialNews, refreshNews]);
+  }, [loadAcceptedNews, reloadAcceptedNews]);
 
   useEffect(() => {
     setQuery(initialQuery);
   }, [initialQuery]);
-
-  const visibleItems = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return items.filter((item) => {
-      const categoryMatch = category === 'all' || item.category === category;
-      const queryMatch =
-        !needle ||
-        item.title.toLowerCase().includes(needle) ||
-        item.summary.toLowerCase().includes(needle);
-      return categoryMatch && queryMatch;
-    });
-  }, [category, items, query]);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -173,7 +217,9 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
           ) : lastUpdatedAt ? (
             <span className="muted">Last updated {lastUpdatedAt}</span>
           ) : null}
-          {summary?.total_news !== undefined ? <span className="metric-chip">{summary.total_news} rows</span> : null}
+          <span className="metric-chip">{items.length}/3 accepted</span>
+          {collectorStatus?.next_run_at ? <span className="muted">next run {collectorStatus.next_run_at}</span> : null}
+          {collectorStatus && !collectorStatus.enabled ? <span className="metric-chip">collector off</span> : null}
           <button type="button" onClick={handleRefresh} disabled={isRefreshing}>
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -207,42 +253,63 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId: _initialNewsId
         ) : null}
         {isLoading ? (
           <p className="muted">Loading news...</p>
-        ) : visibleItems.length === 0 ? (
-          <p className="muted">No news for current filters.</p>
+        ) : items.length === 0 ? (
+          <p className="muted">本轮无高质量新闻</p>
         ) : (
           <div className="news-feed">
-            {visibleItems.map((item) => (
-              <article key={item.news_id} className="news-feed-row">
-                <div className="news-feed-meta">
-                  <span>{item.published_at.slice(5, 16)}</span>
-                  <span>{labelForCategory(item.category)}</span>
-                  <span>{item.source_channel}</span>
-                </div>
-                {item.url ? (
-                  <a href={item.url} target="_blank" rel="noreferrer">
-                    {item.title}
-                  </a>
-                ) : (
-                  <strong>{item.title}</strong>
-                )}
-                {item.summary ? <p>{item.summary}</p> : null}
-                {(item.stocks ?? []).length > 0 ? (
-                  <div className="news-stock-row">
-                    {(item.stocks ?? []).map((stock) => (
-                      <button
-                        key={stock.asset_id || stock.ts_code}
-                        type="button"
-                        className="link-chip"
-                        aria-label={`Open ${stock.stock_name || stock.ts_code} in Stock Workspace`}
-                        onClick={() => onOpenAsset?.(stock.asset_id || stock.ts_code)}
-                      >
-                        {stock.stock_name || stock.ts_code}
-                      </button>
-                    ))}
+            {items.map((item) => {
+              const isSelected = initialNewsId ? item.news_id === initialNewsId : false;
+
+              return (
+                <article
+                  key={item.news_id}
+                  className={`news-feed-row${isSelected ? ' news-feed-row--selected' : ''}`}
+                  aria-label={isSelected ? 'Selected news result' : undefined}
+                  aria-current={isSelected ? 'true' : undefined}
+                >
+                  <div className="news-feed-meta">
+                    <span>{item.published_at.slice(5, 16)}</span>
+                    <span>{labelForCategory(item.category)}</span>
+                    <span>{item.source_channel}</span>
+                    {item.quality_score !== undefined && item.quality_score !== null ? (
+                      <span>quality {item.quality_score}</span>
+                    ) : null}
                   </div>
-                ) : null}
-              </article>
-            ))}
+                  {item.url ? (
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      {item.title}
+                    </a>
+                  ) : (
+                    <strong>{item.title}</strong>
+                  )}
+                  {item.summary ? <p>{item.summary}</p> : null}
+                  {(item.quality_reasons ?? []).length > 0 ? (
+                    <div className="news-stock-row">
+                      {(item.quality_reasons ?? []).map((reason) => (
+                        <span key={reason} className="metric-chip">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {(item.stocks ?? []).length > 0 ? (
+                    <div className="news-stock-row">
+                      {(item.stocks ?? []).map((stock) => (
+                        <button
+                          key={stock.asset_id || stock.ts_code}
+                          type="button"
+                          className="link-chip"
+                          aria-label={`Open ${stock.stock_name || stock.ts_code} in Stock Workspace`}
+                          onClick={() => onOpenAsset?.(stock.asset_id || stock.ts_code)}
+                        >
+                          {stock.stock_name || stock.ts_code}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

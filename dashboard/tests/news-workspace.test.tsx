@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GeneratedReportsWorkspace } from '../src/components/GeneratedReportsWorkspace';
 import { getNewsAssetCandidate, NewsWorkspace } from '../src/components/NewsWorkspace';
@@ -9,6 +9,7 @@ import type { PublicNewsItem, PublicNewsResponse } from '../src/api/types';
 const apiMocks = vi.hoisted(() => ({
   fetchOverview: vi.fn(),
   fetchPublicNews: vi.fn(),
+  fetchPublicNewsStatus: vi.fn(),
   refreshPublicNews: vi.fn()
 }));
 
@@ -44,6 +45,12 @@ const newsPayload: PublicNewsResponse = {
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchPublicNews.mockResolvedValue(newsPayload);
+  apiMocks.fetchPublicNewsStatus.mockResolvedValue({
+    enabled: true,
+    running: false,
+    interval_seconds: 1800,
+    next_run_at: '2026-06-12T02:00:00+00:00'
+  });
   apiMocks.refreshPublicNews.mockResolvedValue({ stored: 1, items_received: 1, counts_by_category: {}, warnings: [] });
   apiMocks.fetchOverview.mockResolvedValue({
     reports: [
@@ -74,12 +81,71 @@ describe('getNewsAssetCandidate', () => {
 });
 
 describe('NewsWorkspace', () => {
+  it('loads accepted Sina top three news by default', async () => {
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('600000 浦发银行公告')).toBeInTheDocument();
+    expect(apiMocks.fetchPublicNews).toHaveBeenCalledWith({
+      source: 'sina_finance',
+      limit: 3,
+      minQualityScore: 70
+    });
+    expect(screen.getByText('1/3 accepted')).toBeInTheDocument();
+    expect(screen.getByText(/next run 2026-06-12T02:00:00\+00:00/)).toBeInTheDocument();
+  });
+
+  it('marks the initial news result when it is loaded', async () => {
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      source: 'sina_finance',
+      items: [
+        {
+          news_id: 'sina_finance:n1',
+          source: 'sina_finance',
+          category: '公司',
+          title: '贵州茅台公告',
+          summary: '经营更新',
+          published_at: '2026-06-12T09:30:00+08:00',
+          url: 'https://example.com/n1',
+          stocks: []
+        }
+      ],
+      categories: ['公司'],
+      refreshed_at: '2026-06-12T09:31:00+08:00',
+      count: 1,
+      stored: true,
+      warnings: []
+    });
+
+    render(<NewsWorkspace initialQuery="600519" initialNewsId="sina_finance:n1" />);
+
+    expect(await screen.findByLabelText('Selected news result')).toHaveTextContent('贵州茅台公告');
+  });
+
   it('uses the initial query as the news search input value', () => {
     const { rerender } = render(<NewsWorkspace initialQuery="茅台" />);
 
     expect(screen.getByDisplayValue('茅台')).toBeInTheDocument();
     rerender(<NewsWorkspace initialQuery="平安" />);
     expect(screen.getByDisplayValue('平安')).toBeInTheDocument();
+  });
+
+  it('sends category and query filters to the server', async () => {
+    render(<NewsWorkspace />);
+    expect(await screen.findByText('600000 浦发银行公告')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('news search'), { target: { value: ' 茅台 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '公司' }));
+
+    expect(screen.getByLabelText('news search')).toHaveValue(' 茅台 ');
+    await waitFor(() =>
+      expect(apiMocks.fetchPublicNews).toHaveBeenLastCalledWith({
+        source: 'sina_finance',
+        limit: 3,
+        minQualityScore: 70,
+        category: 'company',
+        q: '茅台'
+      })
+    );
   });
 
   it('opens a stock when a news item has an API stock mention', async () => {
@@ -102,7 +168,7 @@ describe('NewsWorkspace', () => {
         })
       ],
       total: 1,
-      limit: 200,
+      limit: 3,
       offset: 0,
       summary: {
         total_news: 1,
@@ -133,6 +199,53 @@ describe('NewsWorkspace', () => {
 
     expect(await screen.findByText('缓存新闻')).toBeInTheDocument();
     expect(screen.getByText('fallback json cache used: db offline')).toBeInTheDocument();
+  });
+
+  it('renders quality score and reason chips', async () => {
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      items: [
+        makeNewsItem({
+          title: '高质量新闻',
+          quality_score: 86,
+          quality_reasons: ['权威来源', '信息完整']
+        })
+      ],
+      warnings: []
+    });
+
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('高质量新闻')).toBeInTheDocument();
+    expect(screen.getByText('quality 86')).toBeInTheDocument();
+    expect(screen.getByText('权威来源')).toBeInTheDocument();
+    expect(screen.getByText('信息完整')).toBeInTheDocument();
+  });
+
+  it('shows the exact accepted-news empty state', async () => {
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({ items: [], warnings: [] });
+
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('本轮无高质量新闻')).toBeInTheDocument();
+  });
+
+  it('falls back to collector status from the news summary', async () => {
+    apiMocks.fetchPublicNewsStatus.mockRejectedValueOnce(new Error('status offline'));
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({
+      items: [],
+      summary: {
+        collector_status: {
+          enabled: false,
+          running: false,
+          interval_seconds: 1800
+        }
+      },
+      warnings: []
+    });
+
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('collector off')).toBeInTheDocument();
   });
 });
 

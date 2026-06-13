@@ -46,6 +46,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
   fetchPublicNews: vi.fn(),
+  fetchPublicNewsStatus: vi.fn(),
   refreshPublicNews: vi.fn(),
   fetchGlobalSearch: vi.fn(),
   searchAssets: vi.fn(),
@@ -760,6 +761,12 @@ describe('dashboard app shell', () => {
         }
       ],
       warnings: []
+    });
+    apiMocks.fetchPublicNewsStatus.mockResolvedValue({
+      enabled: true,
+      running: false,
+      interval_seconds: 1800,
+      next_run_at: '2026-06-11T09:30:00+00:00'
     });
     apiMocks.refreshPublicNews.mockResolvedValue({
       received: 1,
@@ -1510,8 +1517,6 @@ describe('dashboard app shell', () => {
           ],
           warnings: []
         });
-      apiMocks.refreshPublicNews.mockRejectedValueOnce(new Error('source timeout'));
-
       render(<App />);
       fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
       await act(async () => {
@@ -1519,11 +1524,17 @@ describe('dashboard app shell', () => {
       });
 
       expect(screen.getByText('首条快讯')).toBeInTheDocument();
+      apiMocks.fetchPublicNews.mockRejectedValueOnce(new Error('source timeout'));
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(60000);
+        await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
       });
 
-      expect(apiMocks.refreshPublicNews).toHaveBeenCalled();
+      expect(apiMocks.fetchPublicNews).toHaveBeenLastCalledWith({
+        source: 'sina_finance',
+        limit: 3,
+        minQualityScore: 70
+      });
+      expect(apiMocks.refreshPublicNews).not.toHaveBeenCalled();
       expect(screen.getByText('source timeout')).toBeInTheDocument();
       expect(screen.getByText('首条快讯')).toBeInTheDocument();
     } finally {
@@ -1675,7 +1686,7 @@ describe('dashboard app shell', () => {
       expect(screen.getByText('初始快讯')).toBeInTheDocument();
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(60000);
+        await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
       });
       expect(apiMocks.fetchPublicNews).toHaveBeenCalledTimes(3);
 
