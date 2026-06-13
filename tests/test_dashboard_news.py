@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -214,6 +215,82 @@ class FixedDate:
     @classmethod
     def fromisoformat(cls, value: str) -> date:
         return date.fromisoformat(value)
+
+
+def test_public_news_scheduler_runs_once_and_records_status():
+    from stock_research.dashboard.news_scheduler import PublicNewsScheduler
+
+    calls = 0
+
+    async def refresh():
+        nonlocal calls
+        calls += 1
+        return {"stored": 1}
+
+    async def run_test():
+        scheduler = PublicNewsScheduler(refresh, interval_seconds=60)
+        await scheduler.run_once()
+
+        status = scheduler.status()
+        assert calls == 1
+        assert status["enabled"] is True
+        assert status["running"] is False
+        assert status["interval_seconds"] == 60
+        assert status["last_success_at"]
+        assert status["last_error"] == ""
+        assert status["next_run_at"]
+        assert datetime.fromisoformat(status["next_run_at"]) > datetime.fromisoformat(
+            status["last_success_at"]
+        )
+
+    asyncio.run(run_test())
+
+
+def test_public_news_scheduler_lock_prevents_overlap():
+    from stock_research.dashboard.news_scheduler import PublicNewsScheduler
+
+    calls = 0
+    release = asyncio.Event()
+    started = asyncio.Event()
+
+    async def refresh():
+        nonlocal calls
+        calls += 1
+        started.set()
+        await release.wait()
+        return {"stored": 1}
+
+    async def run_test():
+        scheduler = PublicNewsScheduler(refresh, interval_seconds=60)
+        first = asyncio.create_task(scheduler.run_once())
+        await started.wait()
+        await scheduler.run_once()
+        release.set()
+        await first
+
+        assert calls == 1
+        assert scheduler.status()["running"] is False
+
+    asyncio.run(run_test())
+
+
+def test_public_news_scheduler_failure_records_error_without_raising():
+    from stock_research.dashboard.news_scheduler import PublicNewsScheduler
+
+    async def refresh():
+        raise RuntimeError("quality refresh failed")
+
+    async def run_test():
+        scheduler = PublicNewsScheduler(refresh, interval_seconds=60)
+        await scheduler.run_once()
+
+        status = scheduler.status()
+        assert status["last_success_at"] == ""
+        assert status["last_error"] == "quality refresh failed"
+        assert status["next_run_at"]
+        assert status["running"] is False
+
+    asyncio.run(run_test())
 
 
 def test_news_event_store_upserts_public_news_items(monkeypatch: pytest.MonkeyPatch):

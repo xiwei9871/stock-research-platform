@@ -82,6 +82,22 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
     assert response.json()["counts_by_category"] == {"live": 2}
 
 
+def test_public_news_status_endpoint(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_PUBLIC_NEWS_SCHEDULER", "0")
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/public-news/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled"] is False
+    assert payload["running"] is False
+    assert payload["interval_seconds"] == 1800
+    assert payload["last_success_at"] == ""
+    assert payload["last_error"] == ""
+    assert payload["next_run_at"] == ""
+
+
 def test_global_search_route_forwards_query(monkeypatch):
     captured = {}
 

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 
 from stock_research.dashboard.asset_profile import build_asset_profile
@@ -21,6 +23,11 @@ from stock_research.dashboard.news import (
     load_asset_news,
     load_public_news_for_dashboard,
     refresh_public_news_for_dashboard,
+)
+from stock_research.dashboard.news_scheduler import (
+    NEWS_SCHEDULER_INTERVAL_SECONDS,
+    PublicNewsScheduler,
+    scheduler_enabled_from_env,
 )
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
@@ -63,7 +70,22 @@ from stock_research.dashboard.watchlist import (
 )
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Stock Research Dashboard API")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        scheduler = app.state.public_news_scheduler
+        if scheduler.enabled:
+            scheduler.start()
+        try:
+            yield
+        finally:
+            await scheduler.stop()
+
+    app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
+    app.state.public_news_scheduler = PublicNewsScheduler(
+        refresh_public_news_for_dashboard,
+        interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
+        enabled=scheduler_enabled_from_env(),
+    )
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
@@ -119,6 +141,20 @@ def create_app() -> FastAPI:
     @app.post("/api/public-news/refresh")
     def public_news_refresh():
         return refresh_public_news_for_dashboard()
+
+    @app.get("/api/public-news/status")
+    def public_news_status():
+        scheduler = getattr(app.state, "public_news_scheduler", None)
+        if scheduler is None:
+            return {
+                "enabled": False,
+                "running": False,
+                "interval_seconds": NEWS_SCHEDULER_INTERVAL_SECONDS,
+                "last_success_at": "",
+                "last_error": "",
+                "next_run_at": "",
+            }
+        return scheduler.status()
 
     @app.get("/api/search")
     def global_search(q: str, limit: int = 5):
