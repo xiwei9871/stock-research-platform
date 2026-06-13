@@ -263,6 +263,85 @@ describe('ResearchReportsWorkspace', () => {
     expect(screen.queryByRole('heading', { name: '贵州茅台旧报告' })).not.toBeInTheDocument();
   });
 
+  it('falls back to the initial report id when the event key is missing', async () => {
+    apiMocks.fetchResearchReports.mockResolvedValueOnce({
+      items: [
+        makeReport({
+          event_key: 'r-old:CN:SH:600519',
+          report_id: 'r-old',
+          report_title: '贵州茅台旧报告',
+          company_view: '旧报告视角'
+        }),
+        makeReport({
+          event_key: 'r-new:CN:SH:600519',
+          report_id: 'r-new',
+          report_title: '贵州茅台深度跟踪',
+          company_view: '新报告视角'
+        })
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+      warnings: []
+    });
+
+    render(
+      <ResearchReportsWorkspace
+        initialQuery="茅台"
+        initialEventKey="missing:CN:SH:600519"
+        initialReportId="r-new"
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
+    expect(screen.getByText('新报告视角')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '贵州茅台旧报告' })).not.toBeInTheDocument();
+  });
+
+  it('preserves a manual selection across reloads after initial deep-link selection', async () => {
+    const oldReport = makeReport({
+      event_key: 'r-old:CN:SH:600519',
+      report_id: 'r-old',
+      report_title: '贵州茅台旧报告',
+      company_view: '旧报告视角'
+    });
+    const newReport = makeReport({
+      event_key: 'r-new:CN:SH:600519',
+      report_id: 'r-new',
+      report_title: '贵州茅台深度跟踪',
+      company_view: '新报告视角'
+    });
+
+    apiMocks.fetchResearchReports
+      .mockResolvedValueOnce({
+        items: [oldReport, newReport],
+        total: 2,
+        limit: 50,
+        offset: 0,
+        warnings: []
+      })
+      .mockResolvedValueOnce({
+        items: [oldReport, newReport],
+        total: 2,
+        limit: 50,
+        offset: 0,
+        warnings: []
+      });
+
+    render(<ResearchReportsWorkspace initialQuery="茅台" initialEventKey="r-new:CN:SH:600519" />);
+
+    expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open report 贵州茅台旧报告' }));
+    expect(screen.getByRole('heading', { name: '贵州茅台旧报告' })).toBeInTheDocument();
+    expect(screen.getByText('旧报告视角')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
+
+    expect(await screen.findByRole('heading', { name: '贵州茅台旧报告' })).toBeInTheDocument();
+    expect(screen.getByText('旧报告视角')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '贵州茅台深度跟踪' })).not.toBeInTheDocument();
+  });
+
   it('shows an empty state', async () => {
     apiMocks.fetchResearchReports.mockResolvedValueOnce({ items: [], total: 0, limit: 50, offset: 0, warnings: [] });
 

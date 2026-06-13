@@ -93,6 +93,7 @@ export function ResearchReportsWorkspace({
   const [reportsError, setReportsError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const reportsRequestIdRef = useRef(0);
+  const consumedDeepLinkRef = useRef('');
   const filtersRef = useRef<ReportFilters>({
     q: initialQuery,
     broker: '',
@@ -187,20 +188,30 @@ export function ResearchReportsWorkspace({
   const reports = reportsPayload?.items ?? [];
 
   useEffect(() => {
+    const deepLinkToken = `${initialEventKey ?? ''}|${initialReportId ?? ''}`;
+    const shouldConsumeDeepLink = deepLinkToken !== '|' && consumedDeepLinkRef.current !== deepLinkToken;
+
     if (!reports.length) {
       setSelectedReport(null);
       return;
     }
 
-    const deepLinkedReport = reports.find(
-      (report) =>
-        (initialEventKey && report.event_key === initialEventKey) ||
-        (!initialEventKey && initialReportId && report.report_id === initialReportId)
-    );
+    if (shouldConsumeDeepLink) {
+      const eventMatch = initialEventKey
+        ? reports.find((report) => report.event_key === initialEventKey)
+        : undefined;
+      const reportIdMatch = initialReportId
+        ? reports.find((report) => report.report_id === initialReportId)
+        : undefined;
+      const deepLinkedReport = eventMatch ?? reportIdMatch;
 
-    if (deepLinkedReport) {
-      setSelectedReport(deepLinkedReport);
-      return;
+      if (deepLinkedReport) {
+        consumedDeepLinkRef.current = deepLinkToken;
+        setSelectedReport(deepLinkedReport);
+        return;
+      }
+
+      consumedDeepLinkRef.current = deepLinkToken;
     }
 
     setSelectedReport((current) => {
