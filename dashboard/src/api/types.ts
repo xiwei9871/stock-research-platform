@@ -661,6 +661,16 @@ export type PublicNewsSummary = {
   source_count?: number;
   source_counts?: CountRow[];
   category_counts?: CountRow[];
+  collector_status?: PublicNewsCollectorStatus;
+};
+
+export type PublicNewsCollectorStatus = {
+  enabled: boolean;
+  running: boolean;
+  interval_seconds: number;
+  last_success_at?: string;
+  last_error?: string;
+  next_run_at?: string;
 };
 
 export type PublicNewsItem = {
@@ -677,6 +687,9 @@ export type PublicNewsItem = {
   raw_id: string;
   raw_payload: Record<string, unknown>;
   status: string;
+  quality_score?: number | null;
+  quality_reasons?: string[];
+  quality_run_id?: string;
   stocks?: PublicNewsStockMention[];
   metadata?: Record<string, unknown>;
 };
@@ -710,6 +723,11 @@ export type PublicNewsRefreshResponse = {
   received?: number;
   stored: number;
   items_received: number;
+  accepted?: number;
+  rejected?: number;
+  rejection_counts?: Record<string, number>;
+  quality_threshold?: number;
+  max_accepted?: number;
   counts_by_category: Record<string, number>;
   warnings: string[];
 };

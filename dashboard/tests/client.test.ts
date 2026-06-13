@@ -11,6 +11,7 @@ import {
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
+  fetchPublicNewsStatus,
   fetchResearchReportSummary,
   fetchResearchReports,
   refreshPublicNews,
@@ -92,13 +93,34 @@ describe('dashboard API client', () => {
       startTime: '2026-06-12T00:00:00',
       endTime: '2026-06-12T23:59:59',
       assetId: 'CN:SH:600519',
+      minQualityScore: 70,
       limit: 10,
       offset: 2
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&start_time=2026-06-12T00%3A00%3A00&end_time=2026-06-12T23%3A59%3A59&asset_id=CN%3ASH%3A600519&limit=10&offset=2'
+      '/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&start_time=2026-06-12T00%3A00%3A00&end_time=2026-06-12T23%3A59%3A59&asset_id=CN%3ASH%3A600519&min_quality_score=70&limit=10&offset=2'
     );
+  });
+
+  it('fetches public news collector status', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          enabled: true,
+          running: false,
+          interval_seconds: 1800,
+          next_run_at: '2026-06-13T10:30:00'
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicNewsStatus();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/public-news/status');
+    expect(result.interval_seconds).toBe(1800);
   });
 
   it('fetches asset news', async () => {

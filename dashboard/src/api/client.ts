@@ -18,6 +18,7 @@ import type {
   MarketMonitorPayload,
   OutcomeAnalyticsRow,
   PlatformSummary,
+  PublicNewsCollectorStatus,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
   ResearchReportResponse,
@@ -63,6 +64,7 @@ type PublicNewsParams = {
   endTime?: string;
   assetId?: string;
   tsCode?: string;
+  minQualityScore?: number;
   limit?: number;
   offset?: number;
 };
@@ -114,9 +116,14 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
   if (params.endTime) searchParams.set('end_time', params.endTime);
   if (params.assetId) searchParams.set('asset_id', params.assetId);
   if (params.tsCode) searchParams.set('ts_code', params.tsCode);
+  if (params.minQualityScore !== undefined) searchParams.set('min_quality_score', String(params.minQualityScore));
   searchParams.set('limit', String(params.limit ?? 100));
   searchParams.set('offset', String(params.offset ?? 0));
   return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function fetchPublicNewsStatus(): Promise<PublicNewsCollectorStatus> {
+  return getJson('/api/public-news/status');
 }
 
 export async function fetchAssetNews(
