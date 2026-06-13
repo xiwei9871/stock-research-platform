@@ -42,10 +42,24 @@ function candidateSource(value: unknown) {
   return null;
 }
 
+function normalizeNewsItems(value: unknown): PublicNewsItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({
+    ...item,
+    raw_payload: item.raw_payload ?? {},
+    quality_reasons: Array.isArray(item.quality_reasons) ? item.quality_reasons : [],
+    stocks: Array.isArray(item.stocks) ? item.stocks : []
+  })) as PublicNewsItem[];
+}
+
+function normalizeWarnings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
 export function getNewsAssetCandidate(item: PublicNewsItem) {
   const rawPayloadKeys = ['asset_id', 'stock_code', 'symbol', 'code'];
   for (const key of rawPayloadKeys) {
-    const candidate = candidateSource(item.raw_payload[key]);
+    const candidate = candidateSource(item.raw_payload?.[key]);
     if (candidate) return candidate;
   }
   for (const value of [item.title, item.summary, item.url]) {
@@ -111,9 +125,9 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
     try {
       const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        setItems(payload.items);
+        setItems(normalizeNewsItems(payload.items));
         setSummary(payload.summary ?? null);
-        setWarnings(payload.warnings ?? []);
+        setWarnings(normalizeWarnings(payload.warnings));
         setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         void loadCollectorStatus(requestId, payload.summary);
       }
@@ -133,9 +147,9 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
     try {
       const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        setItems(payload.items);
+        setItems(normalizeNewsItems(payload.items));
         setSummary(payload.summary ?? null);
-        setWarnings(payload.warnings ?? []);
+        setWarnings(normalizeWarnings(payload.warnings));
         setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         void loadCollectorStatus(requestId, payload.summary);
         setIsLoading(false);
@@ -154,10 +168,10 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
       const refreshResult = await refreshPublicNews();
       const payload = await fetchPublicNews(newsParams());
       if (isLatestRequest(requestId)) {
-        setItems(payload.items);
+        setItems(normalizeNewsItems(payload.items));
         setSummary(payload.summary ?? null);
         void loadCollectorStatus(requestId, payload.summary);
-        setWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+        setWarnings([...normalizeWarnings(refreshResult.warnings), ...normalizeWarnings(payload.warnings)]);
         setLastUpdatedAt(payload.summary?.latest_collected_at ?? new Date().toLocaleTimeString());
         setIsLoading(false);
       }

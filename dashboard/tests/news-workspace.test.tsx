@@ -242,6 +242,15 @@ describe('NewsWorkspace', () => {
     expect(await screen.findByText('本轮无高质量新闻')).toBeInTheDocument();
   });
 
+  it('handles malformed public news payload arrays defensively', async () => {
+    apiMocks.fetchPublicNews.mockResolvedValueOnce({ summary: {} } as PublicNewsResponse);
+
+    render(<NewsWorkspace />);
+
+    expect(await screen.findByText('本轮无高质量新闻')).toBeInTheDocument();
+    expect(screen.getByText('0/3 accepted')).toBeInTheDocument();
+  });
+
   it('falls back to collector status from the news summary', async () => {
     apiMocks.fetchPublicNewsStatus.mockRejectedValueOnce(new Error('status offline'));
     apiMocks.fetchPublicNews.mockResolvedValueOnce({
