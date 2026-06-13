@@ -20,6 +20,7 @@ MAX_LIMIT = 300
 DEFAULT_LIMIT = 100
 VALID_SOURCE_STATUSES = {"available", "permission_denied", "disabled"}
 DEFAULT_PUBLIC_NEWS_CACHE = Path("outputs/dashboard/public_news_cache.json")
+FetchPublicNewsResult = tuple[Iterable[PublicNewsItem], Iterable[str]] | Iterable[PublicNewsItem]
 
 
 def _bounded_limit(value: int | None) -> int:
@@ -554,7 +555,7 @@ class PublicNewsIngestionService:
     def __init__(
         self,
         *,
-        fetcher: Callable[[], Any] | None = None,
+        fetcher: Callable[[], FetchPublicNewsResult] | None = None,
         store: NewsEventStore | None = None,
         fallback_store: JsonPublicNewsStore | None = None,
         mention_mapper: NewsMentionMapper | None = None,
@@ -601,6 +602,7 @@ class PublicNewsIngestionService:
         counts_by_category = dict(Counter(item.category for item in accepted_items))
         return {
             **db_result,
+            "received": len(items),
             "items_received": len(items),
             "accepted": len(accepted_items),
             "rejected": max(0, len(items) - len(accepted_items)),

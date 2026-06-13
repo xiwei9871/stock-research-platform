@@ -968,8 +968,96 @@ def test_public_news_refresh_persists_only_quality_gate_accepted_items(
     assert payload["accepted"] == 3
     assert payload["stored"] == 3
     assert payload["rejected"] == 1
+    assert payload["received"] == 4
     assert [item.news_id for item in store.saved] == ["strong-1", "strong-2", "strong-3"]
     assert all("quality" in item.raw_payload for item in store.saved)
+
+
+def test_public_news_refresh_handles_empty_fetch_without_writes(tmp_path: Path):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    class RecordingStore(news.NewsEventStore):
+        def __init__(self):
+            self.called = False
+
+        def upsert_public_items(self, _items):
+            self.called = True
+            raise AssertionError("empty refresh should not write db rows")
+
+    store = RecordingStore()
+    service = news.PublicNewsIngestionService(
+        fetcher=lambda: ([], ["source empty"]),
+        store=store,
+        fallback_store=JsonPublicNewsStore(tmp_path / "public_news.json"),
+        mention_mapper=None,
+    )
+
+    payload = service.refresh()
+
+    assert payload["received"] == 0
+    assert payload["items_received"] == 0
+    assert payload["accepted"] == 0
+    assert payload["stored"] == 0
+    assert payload["fallback_cache_stored"] == 0
+    assert payload["rejected"] == 0
+    assert payload["rejection_counts"] == {}
+    assert payload["warnings"] == ["source empty"]
+    assert store.called is False
+
+
+def test_public_news_refresh_rejects_all_without_persisting(tmp_path: Path):
+    from stock_research.dashboard import news
+    from stock_research.public_news.store import JsonPublicNewsStore
+
+    rejected = [
+        make_item(
+            news_id="weak-1",
+            title="更多精彩内容请关注新浪财经",
+            summary="",
+            category="other",
+            url="https://finance.sina.com.cn/weak-1.shtml",
+            published_at=fresh_china_timestamp(),
+        ),
+        make_item(
+            news_id="weak-2",
+            title="",
+            summary="",
+            category="other",
+            url="https://finance.sina.com.cn/weak-2.shtml",
+            published_at=fresh_china_timestamp(),
+        ),
+    ]
+
+    class RecordingStore(news.NewsEventStore):
+        def __init__(self):
+            self.saved: list[PublicNewsItem] = []
+
+        def upsert_public_items(self, items):
+            self.saved = list(items)
+            return {"received": len(self.saved), "stored": len(self.saved)}
+
+    store = RecordingStore()
+    fallback = JsonPublicNewsStore(tmp_path / "public_news.json")
+    service = news.PublicNewsIngestionService(
+        fetcher=lambda: rejected,
+        store=store,
+        fallback_store=fallback,
+        mention_mapper=None,
+    )
+
+    payload = service.refresh()
+
+    assert payload["received"] == 2
+    assert payload["items_received"] == 2
+    assert payload["accepted"] == 0
+    assert payload["stored"] == 0
+    assert payload["fallback_cache_stored"] == 0
+    assert payload["rejected"] == 2
+    assert payload["rejection_counts"]["low_signal"] == 1
+    assert payload["rejection_counts"]["missing_title"] == 1
+    assert store.saved == []
+    assert fallback.load_all() == []
 
 
 def test_load_public_news_falls_back_to_json_cache(
@@ -1113,7 +1201,9 @@ def test_public_news_ingestion_keeps_successful_counts_when_later_stages_fail(
     )
     result = service.refresh()
 
+    assert result["received"] == 1
     assert result["items_received"] == 1
+    assert result["accepted"] == 1
     assert result["stored"] == 1
     assert result["fallback_cache_stored"] == 0
     assert result["mentions"] == 0
