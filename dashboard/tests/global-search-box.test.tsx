@@ -16,6 +16,8 @@ function makeResult(overrides: Partial<GlobalSearchResult> = {}): GlobalSearchRe
     id: 'CN:SH:600519',
     title: '贵州茅台',
     subtitle: '600519.SH',
+    match_reason: 'Exact code match',
+    match_fields: ['title'],
     metadata: {},
     target: { workspace: 'stock', asset_id: 'CN:SH:600519' },
     ...overrides
@@ -83,6 +85,33 @@ describe('GlobalSearchBox', () => {
     expect(onOpenResult).toHaveBeenCalledWith(selected);
     expect(screen.getByLabelText('Global search')).toHaveValue('');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('renders match reasons for search results', async () => {
+    apiMocks.fetchGlobalSearch.mockResolvedValueOnce(
+      makePayload({
+        groups: [
+          {
+            key: 'assets',
+            label: 'Assets',
+            items: [
+              makeResult({
+                id: 'CN:SH:600519',
+                title: '贵州茅台',
+                subtitle: '600519.SH',
+                match_reason: 'Exact code match',
+                match_fields: ['symbol']
+              })
+            ]
+          }
+        ]
+      })
+    );
+
+    render(<GlobalSearchBox onOpenResult={vi.fn()} />);
+    await searchFor('600519');
+
+    expect(await screen.findByText('Exact code match')).toBeInTheDocument();
   });
 
   it('does not call the API for a one-character query', async () => {

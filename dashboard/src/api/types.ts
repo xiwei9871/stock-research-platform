@@ -14,10 +14,11 @@ export type AssetSearchResponse = {
 export type GlobalSearchResultType = 'asset' | 'news' | 'research_report' | 'generated_report' | string;
 
 export type GlobalSearchTarget = {
-  workspace: 'stock' | 'news' | 'researchReports' | 'generatedReports' | string;
+  workspace: string;
   asset_id?: string;
   news_id?: string;
   report_id?: string;
+  event_key?: string;
   path?: string;
   q?: string;
   trade_date?: string;
@@ -27,11 +28,13 @@ export type GlobalSearchResult = {
   type: GlobalSearchResultType;
   id: string;
   title: string;
-  subtitle: string;
-  metadata: Record<string, unknown>;
+  subtitle?: string;
+  metadata?: Record<string, unknown>;
   meta?: Record<string, unknown>;
   target: GlobalSearchTarget;
   score?: number;
+  match_reason?: string;
+  match_fields?: string[];
   asset_id?: string;
   source?: string;
   timestamp?: string;

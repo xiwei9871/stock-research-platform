@@ -177,10 +177,15 @@ export function GlobalSearchBox({ onOpenResult }: GlobalSearchBoxProps) {
                           role="option"
                           tabIndex={-1}
                         >
-                          <span className="global-search-result-title">{result.title}</span>
-                          {result.subtitle ? (
-                            <span className="global-search-result-subtitle"> {result.subtitle}</span>
-                          ) : null}
+                          <span className="global-search-result-text">
+                            <span className="global-search-result-title">{result.title}</span>
+                            {result.subtitle ? (
+                              <span className="global-search-result-subtitle"> {result.subtitle}</span>
+                            ) : null}
+                            {result.match_reason ? (
+                              <span className="global-search-option-reason">{result.match_reason}</span>
+                            ) : null}
+                          </span>
                         </div>
                       );
                     })}
