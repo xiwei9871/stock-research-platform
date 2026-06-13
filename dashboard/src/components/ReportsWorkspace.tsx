@@ -23,7 +23,7 @@ export function ReportsWorkspace({
   ariaLabel,
   initialQuery = '',
   initialTradeDate = DEFAULT_TRADE_DATE,
-  initialPath: _initialPath
+  initialPath
 }: ReportsWorkspaceProps = {}) {
   const [tradeDate, setTradeDate] = useState(initialTradeDate);
   const [query, setQuery] = useState(initialQuery);
@@ -121,7 +121,7 @@ export function ReportsWorkspace({
       </form>
 
       {error ? <p className="error-text">{error}</p> : null}
-      <ReportPanel reports={visibleReports} isLoading={isLoading} />
+      <ReportPanel reports={visibleReports} isLoading={isLoading} selectedPath={initialPath} />
     </section>
   );
 }

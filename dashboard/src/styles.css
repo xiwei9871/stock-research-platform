@@ -734,6 +734,18 @@ body {
   gap: 8px;
 }
 
+.report-card {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 8px 10px;
+}
+
+.report-card--selected {
+  border-color: #2563eb;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
 .report-list.compact {
   gap: 6px;
 }

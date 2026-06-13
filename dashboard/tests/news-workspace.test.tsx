@@ -310,6 +310,36 @@ describe('ReportsWorkspace', () => {
     expect(await screen.findByText('平安银行 risk report')).toBeInTheDocument();
     expect(screen.queryByText('茅台 validation report')).not.toBeInTheDocument();
   });
+
+  it('marks the initial generated report path after reports load', async () => {
+    apiMocks.fetchOverview.mockResolvedValueOnce({
+      trade_date: '2026-06-10',
+      generated_at: '2026-06-10T18:00:00+08:00',
+      summary: {},
+      reports: [
+        {
+          title: 'TopN strategy validation',
+          path: 'reports/topn-validation.md',
+          report_type: 'validation',
+          format: 'markdown',
+          size_bytes: 1024,
+          modified_at: '2026-06-10T18:00:00+08:00'
+        }
+      ]
+    });
+
+    render(
+      <ReportsWorkspace
+        initialQuery="validation"
+        initialTradeDate="2026-06-10"
+        initialPath="reports/topn-validation.md"
+      />
+    );
+
+    expect(await screen.findByLabelText('Selected generated report')).toHaveTextContent(
+      'TopN strategy validation'
+    );
+  });
 });
 
 describe('GeneratedReportsWorkspace', () => {
