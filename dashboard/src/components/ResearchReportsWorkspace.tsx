@@ -17,6 +17,8 @@ type ReportFilters = {
 
 type ResearchReportsWorkspaceProps = {
   initialQuery?: string;
+  initialEventKey?: string;
+  initialReportId?: string;
 };
 
 function formatCount(value: number | null | undefined) {
@@ -70,7 +72,11 @@ function buildReportParams(filters: ReportFilters) {
   return params;
 }
 
-export function ResearchReportsWorkspace({ initialQuery = '' }: ResearchReportsWorkspaceProps = {}) {
+export function ResearchReportsWorkspace({
+  initialQuery = '',
+  initialEventKey: _initialEventKey,
+  initialReportId: _initialReportId
+}: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
   const [selectedReport, setSelectedReport] = useState<ResearchReportItem | null>(null);

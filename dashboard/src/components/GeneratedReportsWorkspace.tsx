@@ -3,9 +3,14 @@ import { ReportsWorkspace } from './ReportsWorkspace';
 type GeneratedReportsWorkspaceProps = {
   initialQuery?: string;
   initialTradeDate?: string;
+  initialPath?: string;
 };
 
-export function GeneratedReportsWorkspace({ initialQuery, initialTradeDate }: GeneratedReportsWorkspaceProps = {}) {
+export function GeneratedReportsWorkspace({
+  initialQuery,
+  initialTradeDate,
+  initialPath
+}: GeneratedReportsWorkspaceProps = {}) {
   return (
     <ReportsWorkspace
       title="Generated Reports"
@@ -13,6 +18,7 @@ export function GeneratedReportsWorkspace({ initialQuery, initialTradeDate }: Ge
       ariaLabel="Generated Reports workspace"
       initialQuery={initialQuery}
       initialTradeDate={initialTradeDate}
+      initialPath={initialPath}
     />
   );
 }

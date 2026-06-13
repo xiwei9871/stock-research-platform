@@ -14,6 +14,7 @@ type ReportsWorkspaceProps = {
   ariaLabel?: string;
   initialQuery?: string;
   initialTradeDate?: string;
+  initialPath?: string;
 };
 
 export function ReportsWorkspace({
@@ -21,7 +22,8 @@ export function ReportsWorkspace({
   description = 'Local research artifacts and generated reports.',
   ariaLabel,
   initialQuery = '',
-  initialTradeDate = DEFAULT_TRADE_DATE
+  initialTradeDate = DEFAULT_TRADE_DATE,
+  initialPath: _initialPath
 }: ReportsWorkspaceProps = {}) {
   const [tradeDate, setTradeDate] = useState(initialTradeDate);
   const [query, setQuery] = useState(initialQuery);

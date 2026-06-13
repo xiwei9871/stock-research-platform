@@ -957,6 +957,197 @@ describe('dashboard app shell', () => {
     }
   });
 
+  type MockWorkspaceRender = {
+    initialQuery?: string;
+    initialTradeDate?: string;
+    initialNewsId?: string;
+    initialEventKey?: string;
+    initialReportId?: string;
+    initialPath?: string;
+    mountId?: number;
+  };
+
+  async function renderMockedAppShellForHandoff() {
+    vi.resetModules();
+
+    const newsResult = makeGlobalSearchResult({
+      type: 'news',
+      id: 'news-1',
+      title: '贵州茅台新闻',
+      subtitle: '7x24',
+      target: {
+        workspace: 'news',
+        q: '茅台',
+        news_id: 'news-1',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target']
+    });
+    const researchResult = makeGlobalSearchResult({
+      type: 'research_report',
+      id: 'report-1',
+      title: '茅台深度',
+      subtitle: 'example broker',
+      target: {
+        workspace: 'researchReports',
+        q: '茅台',
+        event_key: 'evt-1',
+        report_id: 'report-1',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target']
+    });
+    const generatedResult = makeGlobalSearchResult({
+      type: 'generated_report',
+      id: 'generated:/reports/daily-topn.html',
+      title: 'Daily TopN',
+      subtitle: 'daily_topn_report',
+      trade_date: '2026-06-10',
+      target: {
+        workspace: 'generatedReports',
+        q: 'Daily',
+        trade_date: '2026-06-10',
+        path: '/reports/daily-topn.html'
+      } as GlobalSearchResult['target']
+    });
+
+    const newsRenders: MockWorkspaceRender[] = [];
+    const researchRenders: MockWorkspaceRender[] = [];
+    const generatedRenders: MockWorkspaceRender[] = [];
+    let newsMountId = 0;
+
+    vi.doMock('../src/components/GlobalSearchBox', () => ({
+      GlobalSearchBox: ({ onOpenResult }: { onOpenResult: (result: GlobalSearchResult) => void }) => (
+        <div>
+          <button type="button" onClick={() => onOpenResult(newsResult)}>
+            Mock open news
+          </button>
+          <button type="button" onClick={() => onOpenResult(researchResult)}>
+            Mock open research
+          </button>
+          <button type="button" onClick={() => onOpenResult(generatedResult)}>
+            Mock open generated
+          </button>
+        </div>
+      )
+    }));
+    vi.doMock('../src/components/DataExplorerWorkspace', () => ({ DataExplorerWorkspace: () => <div>data workspace</div> }));
+    vi.doMock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>factor workspace</div> }));
+    vi.doMock('../src/components/HomeCockpit', () => ({ HomeCockpit: () => <div>home workspace</div> }));
+    vi.doMock('../src/components/MarketMonitorWorkspace', () => ({ MarketMonitorWorkspace: () => <div>market workspace</div> }));
+    vi.doMock('../src/components/StockWorkspace', () => ({ StockWorkspace: () => <div>stock workspace</div> }));
+    vi.doMock('../src/components/StrategyLabWorkspace', () => ({ StrategyLabWorkspace: () => <div>strategy workspace</div> }));
+    vi.doMock('../src/components/WatchlistWorkspace', () => ({ WatchlistWorkspace: () => <div>watchlist workspace</div> }));
+    vi.doMock('../src/components/NewsWorkspace', async () => {
+      const React = await import('react');
+      return {
+        NewsWorkspace: ({
+          initialQuery,
+          initialNewsId
+        }: {
+          initialQuery?: string;
+          initialNewsId?: string;
+        }) => {
+          const [mountId] = React.useState(() => {
+            newsMountId += 1;
+            return newsMountId;
+          });
+          newsRenders.push({ initialQuery, initialNewsId, mountId });
+          return (
+            <div data-testid="mock-news-workspace">
+              {initialQuery}:{initialNewsId ?? 'none'}:{mountId}
+            </div>
+          );
+        }
+      };
+    });
+    vi.doMock('../src/components/ResearchReportsWorkspace', () => ({
+      ResearchReportsWorkspace: ({
+        initialQuery,
+        initialEventKey,
+        initialReportId
+      }: {
+        initialQuery?: string;
+        initialEventKey?: string;
+        initialReportId?: string;
+      }) => {
+        researchRenders.push({ initialQuery, initialEventKey, initialReportId });
+        return (
+          <div data-testid="mock-research-workspace">
+            {initialQuery}:{initialEventKey ?? 'none'}:{initialReportId ?? 'none'}
+          </div>
+        );
+      }
+    }));
+    vi.doMock('../src/components/GeneratedReportsWorkspace', () => ({
+      GeneratedReportsWorkspace: ({
+        initialQuery,
+        initialTradeDate,
+        initialPath
+      }: {
+        initialQuery?: string;
+        initialTradeDate?: string;
+        initialPath?: string;
+      }) => {
+        generatedRenders.push({ initialQuery, initialTradeDate, initialPath });
+        return (
+          <div data-testid="mock-generated-workspace">
+            {initialQuery}:{initialTradeDate ?? 'none'}:{initialPath ?? 'none'}
+          </div>
+        );
+      }
+    }));
+
+    const { AppShell } = await import('../src/components/AppShell');
+    render(<AppShell />);
+
+    return { generatedRenders, newsRenders, researchRenders };
+  }
+
+  it('preserves news handoff context and remounts on the same result', async () => {
+    const { newsRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('茅台:news-1:1');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialNewsId: 'news-1',
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('茅台:news-1:2');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialNewsId: 'news-1',
+      mountId: 2
+    });
+  });
+
+  it('preserves research report handoff context', async () => {
+    const { researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent('茅台:evt-1:report-1');
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '茅台',
+      initialEventKey: 'evt-1',
+      initialReportId: 'report-1'
+    });
+  });
+
+  it('preserves generated report handoff context', async () => {
+    const { generatedRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open generated' }));
+    expect(await screen.findByTestId('mock-generated-workspace')).toHaveTextContent(
+      'Daily:2026-06-10:/reports/daily-topn.html'
+    );
+    expect(generatedRenders.at(-1)).toMatchObject({
+      initialQuery: 'Daily',
+      initialTradeDate: '2026-06-10',
+      initialPath: '/reports/daily-topn.html'
+    });
+  });
+
   it('opens the News workspace with the global search result query', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
