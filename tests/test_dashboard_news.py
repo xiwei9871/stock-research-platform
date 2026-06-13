@@ -656,6 +656,7 @@ def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.Monkey
             published_at="2026-06-08 09:30:00",
             raw_id="seven-day",
             url="https://finance.sina.com.cn/doc/seven-day.shtml",
+            raw_payload={"quality": {"score": 95}},
         ),
     ]
     store.upsert_public_items(items)
@@ -680,6 +681,7 @@ def test_load_asset_news_returns_mention_linked_items(monkeypatch: pytest.Monkey
     assert payload["summary"]["news_count_1d"] == 1
     assert payload["summary"]["news_count_3d"] == 2
     assert payload["summary"]["news_count_7d"] == 3
+    assert payload["summary"]["latest_published_at"].startswith("2026-06-12")
     assert payload["summary"]["source_count"] == 1
 
 

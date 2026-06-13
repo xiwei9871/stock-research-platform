@@ -941,7 +941,7 @@ def load_asset_news(
             "news_count_1d": _news_count_since(summary_items, today, 1),
             "news_count_3d": _news_count_since(summary_items, today, 3),
             "news_count_7d": _news_count_since(summary_items, today, 7),
-            "latest_published_at": summary_items[0]["published_at"] if summary_items else "",
+            "latest_published_at": max((item["published_at"] for item in summary_items), default=""),
             "source_count": len({item["source"] for item in summary_items}),
             "category_counts": _category_counts_from_items(summary_items),
         },
