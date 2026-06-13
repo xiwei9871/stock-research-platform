@@ -734,7 +734,7 @@ body {
   gap: 8px;
 }
 
-.report-card {
+.report-list a.report-card {
   border: 1px solid transparent;
   border-radius: 6px;
   background: #ffffff;

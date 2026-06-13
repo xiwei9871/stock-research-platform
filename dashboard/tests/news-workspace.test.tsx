@@ -324,21 +324,33 @@ describe('ReportsWorkspace', () => {
           format: 'markdown',
           size_bytes: 1024,
           modified_at: '2026-06-10T18:00:00+08:00'
+        },
+        {
+          title: 'TopN strategy risk review',
+          path: 'reports/topn-risk.md',
+          report_type: 'risk',
+          format: 'markdown',
+          size_bytes: 2048,
+          modified_at: '2026-06-10T18:05:00+08:00'
         }
       ]
     });
 
     render(
       <ReportsWorkspace
-        initialQuery="validation"
+        initialQuery=""
         initialTradeDate="2026-06-10"
         initialPath="reports/topn-validation.md"
       />
     );
 
-    expect(await screen.findByLabelText('Selected generated report')).toHaveTextContent(
-      'TopN strategy validation'
-    );
+    const selectedReport = await screen.findByRole('link', { name: /TopN strategy validation/i });
+    const unselectedReport = screen.getByRole('link', { name: /TopN strategy risk review/i });
+
+    expect(selectedReport).toHaveClass('report-card--selected');
+    expect(selectedReport).not.toHaveAttribute('aria-label');
+    expect(selectedReport).not.toHaveAttribute('aria-current');
+    expect(unselectedReport).not.toHaveClass('report-card--selected');
   });
 });
 

@@ -18,17 +18,14 @@ export function ReportPanel({ reports, isLoading = false, selectedPath }: Report
             const isSelected = selectedPath ? report.path === selectedPath : false;
 
             return (
-              <article
+              <a
                 key={report.path}
                 className={`report-card${isSelected ? ' report-card--selected' : ''}`}
-                aria-label={isSelected ? 'Selected generated report' : undefined}
-                aria-current={isSelected ? 'true' : undefined}
+                href={report.path}
               >
-                <a href={report.path}>
-                  <span>{report.report_type}</span>
-                  <strong>{report.title}</strong>
-                </a>
-              </article>
+                <span>{report.report_type}</span>
+                <strong>{report.title}</strong>
+              </a>
             );
           })}
         </div>
