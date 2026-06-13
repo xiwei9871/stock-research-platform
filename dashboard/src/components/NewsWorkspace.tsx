@@ -274,6 +274,7 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
                   key={item.news_id}
                   className={`news-feed-row${isSelected ? ' news-feed-row--selected' : ''}`}
                 >
+                  {isSelected ? <span className="sr-only">Matched search result</span> : null}
                   <div className="news-feed-meta">
                     <span>{item.published_at.slice(5, 16)}</span>
                     <span>{labelForCategory(item.category)}</span>

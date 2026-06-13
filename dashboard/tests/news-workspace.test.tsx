@@ -123,6 +123,7 @@ describe('NewsWorkspace', () => {
 
     expect(title).toBeInTheDocument();
     expect(row).toHaveClass('news-feed-row--selected');
+    expect(row).toHaveTextContent('Matched search result');
     expect(row).not.toHaveAttribute('aria-label', 'Selected news result');
     expect(row).not.toHaveAttribute('aria-current');
   });
