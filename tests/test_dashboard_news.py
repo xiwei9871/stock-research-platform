@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
+from dataclasses import replace
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -165,7 +166,11 @@ def make_item(**overrides: Any) -> PublicNewsItem:
         "raw_payload": {"href": "/doc/example.shtml"},
     }
     values.update(overrides)
-    return PublicNewsItem.from_raw(**values)
+    news_id = values.pop("news_id", None)
+    item = PublicNewsItem.from_raw(**values)
+    if news_id is not None:
+        return replace(item, news_id=str(news_id))
+    return item
 
 
 class FixedDate:
@@ -646,6 +651,73 @@ def test_load_asset_news_skips_malformed_published_at_for_bucket_counts(
     assert payload["summary"]["news_count_1d"] == 0
     assert payload["summary"]["news_count_3d"] == 0
     assert payload["summary"]["news_count_7d"] == 0
+
+
+def test_news_quality_gate_accepts_only_top_three_market_relevant_items():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    items = [
+        make_item(
+            news_id=f"policy-{idx}",
+            title=f"国家发改委出台半导体产业链支持政策 第{idx}批",
+            summary="政策支持、产业链、订单、涨价预期均明确",
+            category="market",
+            published_at=f"2026-06-13T0{idx}:00:00+00:00",
+            url=f"https://finance.sina.com.cn/policy-{idx}.shtml",
+        )
+        for idx in range(1, 6)
+    ]
+
+    result = evaluate_public_news_items(
+        items,
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert len(result.accepted_items) == 3
+    assert result.rejection_counts["overflow"] == 2
+    assert all(item.raw_payload["quality"]["score"] >= 70 for item in result.accepted_items)
+    assert result.accepted_items[0].news_id == "policy-5"
+    assert "policy" in result.accepted_items[0].raw_payload["quality"]["reasons"]
+
+
+def test_news_quality_gate_rejects_low_signal_and_does_not_fill_three_slots():
+    from stock_research.dashboard.news_quality import evaluate_public_news_items
+
+    items = [
+        make_item(
+            news_id="good-1",
+            title="央行开展逆回购操作 资金面流动性维持合理充裕",
+            summary="市场流动性、利率、资金价格具备交易参考价值",
+            category="macro",
+            published_at="2026-06-13T05:00:00+00:00",
+            url="https://finance.sina.com.cn/good-1.shtml",
+        ),
+        make_item(
+            news_id="bad-1",
+            title="更多精彩内容请关注新浪财经",
+            summary="",
+            category="other",
+            published_at="2026-06-13T05:01:00+00:00",
+            url="https://finance.sina.com.cn/bad-1.shtml",
+        ),
+        make_item(
+            news_id="bad-2",
+            title="今日财经早餐来了",
+            summary="",
+            category="other",
+            published_at="2026-06-13T05:02:00+00:00",
+            url="https://finance.sina.com.cn/bad-2.shtml",
+        ),
+    ]
+
+    result = evaluate_public_news_items(
+        items,
+        now=datetime(2026, 6, 13, 6, 0, tzinfo=UTC),
+    )
+
+    assert [item.news_id for item in result.accepted_items] == ["good-1"]
+    assert result.rejection_counts["low_signal"] >= 1
+    assert result.rejection_counts["below_threshold"] >= 1
 
 
 def test_public_news_ingestion_writes_db_and_cache(
