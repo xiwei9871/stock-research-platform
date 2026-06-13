@@ -1497,6 +1497,11 @@ table.data-table td {
   padding-bottom: 10px;
 }
 
+.news-feed-row--selected {
+  border-color: #357abd;
+  box-shadow: inset 3px 0 0 #357abd;
+}
+
 .news-feed-row a {
   color: #205493;
   text-decoration: none;
