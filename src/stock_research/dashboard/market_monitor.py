@@ -21,6 +21,18 @@ from stock_research.market_emotion_state_v1 import (
 _MISSING_TABLE_SQLSTATES = {"3F000", "42P01"}
 
 
+def _sqlstate(exc: Exception) -> str | None:
+    return getattr(exc, "sqlstate", None) or getattr(
+        getattr(exc, "diag", None),
+        "sqlstate",
+        None,
+    )
+
+
+def _is_missing_optional_source(exc: Exception) -> bool:
+    return _sqlstate(exc) in _MISSING_TABLE_SQLSTATES
+
+
 def _number(value: Any) -> Any:
     if value is None:
         return None
@@ -50,12 +62,7 @@ def load_market_emotion_row(
         with connect(service) as conn:
             rows = fetch_all(conn, sql, [trade_date])
     except Exception as exc:
-        sqlstate = getattr(exc, "sqlstate", None) or getattr(
-            getattr(exc, "diag", None),
-            "sqlstate",
-            None,
-        )
-        if sqlstate in _MISSING_TABLE_SQLSTATES:
+        if _is_missing_optional_source(exc):
             return compute_market_emotion_row(trade_date, service=service)
         raise
     return dict(rows[0]) if rows else compute_market_emotion_row(trade_date, service=service)
@@ -339,7 +346,11 @@ def build_market_monitor_eod(
     emotion_row = load_market_emotion_row(selected_trade_date) if selected_trade_date else None
     emotion_payload = build_market_emotion_payload(emotion_row)
     emotion_stock_lists = _empty_emotion_stock_lists()
-    emotion_stock_lists.update(load_emotion_stock_lists(selected_trade_date))
+    try:
+        emotion_stock_lists.update(load_emotion_stock_lists(selected_trade_date))
+    except Exception as exc:
+        if not _is_missing_optional_source(exc):
+            raise
     for key in ("auction", "limit_up", "broken_limit_up", "limit_down"):
         emotion_stock_lists.setdefault(key, [])
     emotion_stock_lists["auction_status"] = "pending_source"
