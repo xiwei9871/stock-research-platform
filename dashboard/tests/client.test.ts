@@ -282,7 +282,7 @@ describe('dashboard API client', () => {
           score: 62,
           bucket: 'mixed',
           facts: [{ kind: 'strategy', key: 'score_rank', label: 'Strategy score rank', value: 3 }],
-          risk_flags: [],
+          risk_flags: [{ key: 'strategy_risk_tags', label: 'Strategy risk tags present', severity: 'warning', value: ['gap_risk'] }],
           source_refs: { strategy_asset_id: '000001.SZ' },
           next_actions: [],
           warnings: []
@@ -303,6 +303,7 @@ describe('dashboard API client', () => {
     );
     expect(digest.bucket).toBe('mixed');
     expect(digest.facts[0].value).toBe(3);
+    expect(digest.risk_flags[0].value).toEqual(['gap_risk']);
     expect(digest.source_refs.strategy_asset_id).toBe('000001.SZ');
   });
 

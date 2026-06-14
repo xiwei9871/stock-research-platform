@@ -969,6 +969,7 @@ export type EvidenceDigestRiskFlag = {
   key: string;
   label: string;
   severity: EvidenceDigestSeverity;
+  value?: string | number | string[] | number[] | null;
 };
 
 export type EvidenceDigestAction = {
