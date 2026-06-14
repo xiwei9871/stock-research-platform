@@ -80,6 +80,14 @@ export function AppShell() {
     setWorkspaceMode('stock');
   }
 
+  function openWorkspaceMode(mode: WorkspaceMode) {
+    if (mode === 'stock') {
+      openStockWorkspace(selectedAssetId);
+      return;
+    }
+    setWorkspaceMode(mode);
+  }
+
   function openNewsWorkspaceFromStock(context: StockEntryContext) {
     setNewsHandoff((current) => ({
       query: context.query ?? context.assetId ?? selectedAssetId,
@@ -164,7 +172,7 @@ export function AppShell() {
             aria-current={workspaceMode === item.mode ? 'page' : undefined}
             aria-label={`Open ${item.label} workspace`}
             className={workspaceMode === item.mode ? 'active' : ''}
-            onClick={() => setWorkspaceMode(item.mode)}
+            onClick={() => openWorkspaceMode(item.mode)}
           >
             {item.label}
           </button>
@@ -175,7 +183,7 @@ export function AppShell() {
           <GlobalSearchBox onOpenResult={openGlobalSearchResult} />
         </header>
         <section className="platform-workspace">
-          {workspaceMode === 'home' ? <HomeCockpit onNavigate={(mode) => setWorkspaceMode(mode)} /> : null}
+          {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
           {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
           {workspaceMode === 'researchReports' ? (
             <ResearchReportsWorkspace
@@ -216,13 +224,7 @@ export function AppShell() {
               key={`news:${newsHandoff.version}`}
               initialQuery={newsHandoff.query}
               initialNewsId={newsHandoff.newsId}
-              onOpenAsset={(assetId) =>
-                openStockWorkspace(assetId, {
-                  sourceWorkspace: 'news',
-                  query: newsHandoff.query,
-                  newsId: newsHandoff.newsId
-                })
-              }
+              onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'news' })}
             />
           ) : null}
         </section>
