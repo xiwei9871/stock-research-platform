@@ -361,7 +361,7 @@ export function StockWorkspace({
           </p>
         ) : null}
         {sourceObjectIds.length > 0 ? (
-          <div className="tag-stack" aria-label="Source object IDs">
+          <div className="tag-stack" aria-label="Source context">
             {sourceObjectIds.map((sourceObjectId) => (
               <span key={sourceObjectId} className="status-chip neutral">
                 {sourceObjectId}
