@@ -281,9 +281,9 @@ describe('dashboard API client', () => {
           title: 'Mixed evidence',
           score: 62,
           bucket: 'mixed',
-          facts: [],
+          facts: [{ kind: 'strategy', key: 'score_rank', label: 'Strategy score rank', value: 3 }],
           risk_flags: [],
-          source_refs: {},
+          source_refs: { strategy_asset_id: '000001.SZ' },
           next_actions: [],
           warnings: []
         }),
@@ -302,6 +302,8 @@ describe('dashboard API client', () => {
       '/api/evidence-digest?asset_id=000001.SZ&trade_date=2026-06-12&lookback_days=30&score_version=manual_v2'
     );
     expect(digest.bucket).toBe('mixed');
+    expect(digest.facts[0].value).toBe(3);
+    expect(digest.source_refs.strategy_asset_id).toBe('000001.SZ');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

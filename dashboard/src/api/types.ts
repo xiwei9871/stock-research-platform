@@ -949,12 +949,19 @@ export type EvidenceDigestSourceRef = {
   report_id?: string;
   event_key?: string;
   monitor_tab?: string;
+  strategy_asset_id?: string;
 };
 
 export type EvidenceDigestFact = {
   kind: 'news' | 'research' | 'market' | 'strategy' | string;
+  key?: string;
   label: string;
-  severity: EvidenceDigestSeverity;
+  severity?: EvidenceDigestSeverity;
+  value?: string | number | string[] | number[] | null;
+  published_at?: string | null;
+  rating?: string | null;
+  target_price?: number | null;
+  amount?: number | null;
   source_ref?: EvidenceDigestSourceRef;
 };
 
