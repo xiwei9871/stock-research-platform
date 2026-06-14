@@ -52,18 +52,20 @@ def _digest(asset_id, *, bucket="strong", score=80, facts=None, risks=None, warn
 
 
 def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
+    score_rows = [
+        _score("000003.SZ", 3, 70),
+        _score("000001.SZ", 1, 90),
+        _score("000002.SZ", 2, 60),
+    ]
     monkeypatch.setattr(
         review_queue,
         "load_platform_summary",
         lambda **kwargs: {
             "latest_market_date": "2026-06-08",
-            "topn_preview": [
-                _score("000003.SZ", 3, 70),
-                _score("000001.SZ", 1, 90),
-                _score("000002.SZ", 2, 60),
-            ],
+            "topn_preview": score_rows,
         },
     )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args: score_rows)
     digests = {
         "000001.SZ": _digest("000001.SZ", bucket="mixed", score=62),
         "000002.SZ": _digest("000002.SZ", bucket="strong", score=81),
@@ -83,6 +85,46 @@ def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
     assert strong_item["digest_title"] == "strong evidence"
     assert strong_item["source_kinds"] == ["strategy", "news"]
     assert strong_item["next_action_count"] == 2
+
+
+def test_build_review_queue_loads_scores_for_explicit_trade_date(monkeypatch):
+    captured = {"top_scores": None, "digest": []}
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {
+            "latest_market_date": "2026-06-08",
+            "latest_score_date": "2026-06-08",
+            "topn_preview": [_score("LATEST.SZ", 1, 99)],
+        },
+    )
+
+    def fake_top_scores(trade_date, score_version, top_n):
+        captured["top_scores"] = (trade_date, score_version, top_n)
+        return [
+            {
+                "trade_date": trade_date,
+                "asset_id": "HISTORICAL.SZ",
+                "rank": 1,
+                "score_total": 88.0,
+                "score_version": score_version,
+                "score_components": {},
+            }
+        ]
+
+    def fake_digest(asset_id, **kwargs):
+        captured["digest"].append((asset_id, kwargs["trade_date"]))
+        return _digest(asset_id, bucket="strong", score=88)
+
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", fake_top_scores, raising=False)
+    monkeypatch.setattr(review_queue, "build_evidence_digest", fake_digest)
+
+    payload = review_queue.build_review_queue(trade_date="2026-06-01", score_version="manual_v1", limit=20)
+
+    assert captured["top_scores"] == ("2026-06-01", "manual_v1", 20)
+    assert payload["groups"][0]["items"][0]["asset_id"] == "HISTORICAL.SZ"
+    assert captured["digest"] == [("HISTORICAL.SZ", "2026-06-01")]
 
 
 def test_build_review_queue_is_deterministic_for_same_eod_inputs(monkeypatch):
@@ -105,11 +147,13 @@ def test_build_review_queue_is_deterministic_for_same_eod_inputs(monkeypatch):
 
 
 def test_build_review_queue_degrades_digest_failure_to_thin_item(monkeypatch):
+    score_rows = [_score("000001.SZ", 1, 90)]
     monkeypatch.setattr(
         review_queue,
         "load_platform_summary",
-        lambda **kwargs: {"latest_market_date": "2026-06-08", "topn_preview": [_score("000001.SZ", 1, 90)]},
+        lambda **kwargs: {"latest_market_date": "2026-06-08", "topn_preview": score_rows},
     )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args: score_rows)
 
     def fail_digest(asset_id, **kwargs):
         raise RuntimeError("digest unavailable")

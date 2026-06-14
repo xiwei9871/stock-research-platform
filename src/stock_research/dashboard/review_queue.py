@@ -4,6 +4,7 @@ from typing import Any
 
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
+from stock_research.dashboard.scores import load_top_scores_for_dashboard
 
 BUCKET_ORDER = ["strong", "mixed", "risk_heavy", "thin"]
 BUCKET_LABELS = {
@@ -24,16 +25,19 @@ def build_review_queue(
     bounded_limit = _bounded_int(limit, default=20, minimum=1, maximum=50)
     bounded_lookback_days = _bounded_int(lookback_days, default=90, minimum=1, maximum=365)
     summary = load_platform_summary(score_version=score_version, top_n=bounded_limit)
-    selected_trade_date = str(
-        trade_date
-        or summary.get("latest_market_date")
-        or summary.get("latest_score_date")
-        or ""
+    explicit_trade_date = bool(trade_date)
+    selected_trade_date = str(trade_date) if explicit_trade_date else str(
+        summary.get("latest_market_date") or summary.get("latest_score_date") or ""
+    )
+    score_rows = (
+        load_top_scores_for_dashboard(selected_trade_date, score_version, bounded_limit)
+        if explicit_trade_date
+        else summary.get("topn_preview") or []
     )
     warnings: list[str] = []
     groups: dict[str, list[dict[str, Any]]] = {bucket: [] for bucket in BUCKET_ORDER}
 
-    for row in summary.get("topn_preview") or []:
+    for row in score_rows:
         asset_id = str(row.get("asset_id") or "")
         if not asset_id:
             continue
