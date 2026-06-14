@@ -1,0 +1,208 @@
+from fastapi.testclient import TestClient
+
+from stock_research.dashboard import app as dashboard_app
+from stock_research.dashboard import evidence_digest
+
+
+def _profile(asset_id="000001.SZ", *, rank=3, risk_tags=None):
+    return {
+        "asset_id": asset_id,
+        "canonical_asset_id": asset_id,
+        "asset": {"asset_id": asset_id, "symbol": asset_id[:6], "name": "平安银行"},
+        "score": {
+            "trade_date": "2026-06-12",
+            "asset_id": asset_id,
+            "rank": rank,
+            "score_total": 88.5,
+            "score_version": "manual_v1",
+            "score_components": {},
+        },
+        "signals": [
+            {
+                "asset_id": asset_id,
+                "primary_signal": "candidate",
+                "risk_tags": risk_tags or [],
+                "signal_tags": ["momentum"],
+            }
+        ],
+        "bars": [],
+        "decisions": [],
+        "outcomes": [],
+        "factor_values": [],
+        "coverage": {},
+    }
+
+
+def _news(asset_id="000001.SZ", *, items=2):
+    return {
+        "asset_id": asset_id,
+        "summary": {
+            "news_count_1d": min(items, 1),
+            "news_count_3d": min(items, 2),
+            "news_count_7d": items,
+            "latest_published_at": "2026-06-12T09:30:00+08:00",
+        },
+        "items": [
+            {
+                "news_id": "news-1",
+                "title": "平安银行经营更新",
+                "quality_score": 82,
+                "published_at": "2026-06-12T09:30:00+08:00",
+            }
+        ][:items],
+        "warnings": [],
+    }
+
+
+def _reports(asset_id="000001.SZ", *, count=1):
+    return {
+        "asset_id": asset_id,
+        "summary": {
+            "report_count_30d": count,
+            "report_count_90d": count,
+            "broker_coverage_count_90d": 1 if count else 0,
+            "latest_report_date": "2026-06-10" if count else None,
+            "latest_rating": "买入" if count else "",
+            "latest_target_price": 19.5 if count else None,
+        },
+        "items": [
+            {
+                "report_id": "r1",
+                "event_key": "r1:000001.SZ",
+                "asset_id": asset_id,
+                "ts_code": asset_id,
+                "stock_name": "平安银行",
+                "report_title": "平安银行深度报告",
+                "rating": "买入",
+                "target_price": 19.5,
+                "broker": "华泰证券",
+            }
+        ][:count],
+        "warnings": [],
+    }
+
+
+def _market(asset_id="000001.SZ", *, tab="limit_up"):
+    empty = {"auction": [], "limit_up": [], "broken_limit_up": [], "limit_down": [], "auction_status": "available"}
+    if tab:
+        empty[tab] = [
+            {
+                "asset_id": asset_id,
+                "name": "平安银行",
+                "symbol": asset_id[:6],
+                "tab": tab,
+                "amount": 1000000000,
+                "pct_chg": 10.0,
+                "board": "main",
+            }
+        ]
+    return {
+        "trade_date": "2026-06-12",
+        "emotion_stock_lists": empty,
+        "strategy_signal_summary": {"topn_preview": []},
+        "warnings": [],
+    }
+
+
+def test_build_evidence_digest_strong_source_backed(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id))
+    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up"))
+    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["canonical_asset_id"] == "000001.SZ"
+    assert digest["bucket"] == "strong"
+    assert digest["score"] >= 75
+    assert any(fact["kind"] == "news" for fact in digest["facts"])
+    assert any(fact["kind"] == "research" for fact in digest["facts"])
+    assert digest["source_refs"]["news_id"] == "news-1"
+    assert digest["source_refs"]["report_id"] == "r1"
+    assert digest["source_refs"]["monitor_tab"] == "limit_up"
+    assert {action["key"] for action in digest["next_actions"]} >= {"open_news", "open_research", "open_market"}
+
+
+def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"], rank=80))
+    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id, items=0))
+    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id, count=0))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
+    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["bucket"] == "thin"
+    assert any(flag["key"] == "thin_research" for flag in digest["risk_flags"])
+    assert any(flag["key"] == "low_news_coverage" for flag in digest["risk_flags"])
+
+
+def test_build_evidence_digest_risk_heavy_for_market_pressure(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"], risk_tags=["gap_risk"]))
+    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id))
+    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_down"))
+    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["bucket"] == "risk_heavy"
+    assert any(flag["key"] == "market_limit_down" for flag in digest["risk_flags"])
+    assert any(flag["key"] == "strategy_risk_tags" for flag in digest["risk_flags"])
+
+
+def test_build_evidence_digest_returns_warning_for_partial_source_failure(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: (_ for _ in ()).throw(RuntimeError("news offline")))
+    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
+    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert any("news offline" in warning for warning in digest["warnings"])
+    assert any(fact["kind"] == "research" for fact in digest["facts"])
+
+
+def test_evidence_digest_endpoint_forwards_query(monkeypatch):
+    captured = {}
+
+    def fake_digest(asset_id, *, trade_date=None, lookback_days=90, score_version="manual_v1"):
+        captured.update(
+            {
+                "asset_id": asset_id,
+                "trade_date": trade_date,
+                "lookback_days": lookback_days,
+                "score_version": score_version,
+            }
+        )
+        return {
+            "asset_id": asset_id,
+            "canonical_asset_id": asset_id,
+            "trade_date": trade_date,
+            "title": "Thin evidence",
+            "score": 20,
+            "bucket": "thin",
+            "facts": [],
+            "risk_flags": [],
+            "source_refs": {},
+            "next_actions": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "build_evidence_digest", fake_digest, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/evidence-digest?asset_id=000001.SZ&trade_date=2026-06-12&lookback_days=30&score_version=manual_v2"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "000001.SZ",
+        "trade_date": "2026-06-12",
+        "lookback_days": 30,
+        "score_version": "manual_v2",
+    }
+    assert response.json()["bucket"] == "thin"

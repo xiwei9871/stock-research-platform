@@ -11,6 +11,7 @@ from stock_research.dashboard.backtests import (
 )
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
 from stock_research.dashboard.decisions import load_asset_decision_history
+from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
 from stock_research.dashboard.factors import (
@@ -110,6 +111,20 @@ def create_app() -> FastAPI:
             trade_date=trade_date,
             score_version=score_version,
             top_n=top_n,
+        )
+
+    @app.get("/api/evidence-digest")
+    def evidence_digest_route(
+        asset_id: str,
+        trade_date: str | None = None,
+        lookback_days: int = 90,
+        score_version: str = "manual_v1",
+    ):
+        return build_evidence_digest(
+            asset_id,
+            trade_date=trade_date,
+            lookback_days=lookback_days,
+            score_version=score_version,
         )
 
     @app.get("/api/public-news")
