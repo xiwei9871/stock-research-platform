@@ -224,7 +224,13 @@ export function AppShell() {
               key={`news:${newsHandoff.version}`}
               initialQuery={newsHandoff.query}
               initialNewsId={newsHandoff.newsId}
-              onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'news' })}
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'news',
+                  query: context.query,
+                  newsId: context.newsId
+                })
+              }
             />
           ) : null}
         </section>

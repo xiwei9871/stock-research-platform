@@ -1233,7 +1233,10 @@ describe('dashboard app shell', () => {
         }: {
           initialQuery?: string;
           initialNewsId?: string;
-          onOpenAsset?: (assetId: string) => void;
+          onOpenAsset?: (
+            assetId: string,
+            context: { sourceWorkspace: 'news'; assetId: string; newsId: string; query: string }
+          ) => void;
         }) => {
           const [mountId] = React.useState(() => {
             newsMountId += 1;
@@ -1243,7 +1246,17 @@ describe('dashboard app shell', () => {
           return (
             <div data-testid="mock-news-workspace">
               {initialQuery}:{initialNewsId ?? 'none'}:{mountId}
-              <button type="button" onClick={() => onOpenAsset?.('CN:SH:600519')}>
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenAsset?.('CN:SH:600519', {
+                    sourceWorkspace: 'news',
+                    assetId: 'CN:SH:600519',
+                    newsId: 'news-row-1',
+                    query: '贵州茅台经营快讯'
+                  })
+                }
+              >
                 Mock open news asset
               </button>
             </div>
@@ -1353,11 +1366,15 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
-    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent('CN:SH:600519:news:none:none:none:1');
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
     expect(stockRenders.at(-1)).toMatchObject({
       initialAssetId: 'CN:SH:600519',
       entryContext: {
-        sourceWorkspace: 'news'
+        sourceWorkspace: 'news',
+        query: '贵州茅台经营快讯',
+        newsId: 'news-row-1'
       },
       mountId: 1
     });
@@ -1374,7 +1391,7 @@ describe('dashboard app shell', () => {
     });
   });
 
-  it('does not reuse stale news handoff details when news opens a stock asset', async () => {
+  it('uses news row context when news opens a stock asset', async () => {
     const { stockRenders } = await renderMockedAppShellForHandoff();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
@@ -1382,17 +1399,17 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock open news asset' }));
     expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
-      'CN:SH:600519:news:none:none:none:1'
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
     );
     expect(stockRenders.at(-1)).toMatchObject({
       initialAssetId: 'CN:SH:600519',
       entryContext: {
-        sourceWorkspace: 'news'
+        sourceWorkspace: 'news',
+        query: '贵州茅台经营快讯',
+        newsId: 'news-row-1'
       },
       mountId: 1
     });
-    expect(stockRenders.at(-1)?.entryContext?.query).toBeUndefined();
-    expect(stockRenders.at(-1)?.entryContext?.newsId).toBeUndefined();
   });
 
   it('opens destination workspaces from stock detail context actions', async () => {

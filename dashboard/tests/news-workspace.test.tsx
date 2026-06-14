@@ -168,7 +168,12 @@ describe('NewsWorkspace', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open 浦发银行 in Stock Workspace' }));
 
-    expect(onOpenAsset).toHaveBeenCalledWith('CN:SH:600000');
+    expect(onOpenAsset).toHaveBeenCalledWith('CN:SH:600000', {
+      sourceWorkspace: 'news',
+      assetId: 'CN:SH:600000',
+      newsId: 'n1',
+      query: '600000 浦发银行公告'
+    });
   });
 
   it('renders db freshness and stock mention chips', async () => {
@@ -199,7 +204,12 @@ describe('NewsWorkspace', () => {
     expect(await screen.findByText('贵州茅台经营快讯')).toBeInTheDocument();
     expect(screen.getByText(/DB collected/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open 贵州茅台 in Stock Workspace' }));
-    expect(openAsset).toHaveBeenCalledWith('CN:SH:600519');
+    expect(openAsset).toHaveBeenCalledWith('CN:SH:600519', {
+      sourceWorkspace: 'news',
+      assetId: 'CN:SH:600519',
+      newsId: 'n1',
+      query: '贵州茅台经营快讯'
+    });
   });
 
   it('shows fallback warnings without clearing rows', async () => {

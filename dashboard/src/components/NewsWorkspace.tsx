@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchPublicNews, fetchPublicNewsStatus, refreshPublicNews } from '../api/client';
 import type { PublicNewsCollectorStatus, PublicNewsItem, PublicNewsSummary } from '../api/types';
+import type { StockEntryContext } from './StockWorkspace';
 
 const CATEGORIES = [
   { id: 'all', label: '全部' },
@@ -20,7 +21,7 @@ const NEWS_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 type NewsWorkspaceProps = {
   initialQuery?: string;
   initialNewsId?: string;
-  onOpenAsset?: (assetId: string) => void;
+  onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
 
 function normalizeCandidate(value: string) {
@@ -302,17 +303,28 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
                   ) : null}
                   {(item.stocks ?? []).length > 0 ? (
                     <div className="news-stock-row">
-                      {(item.stocks ?? []).map((stock) => (
-                        <button
-                          key={stock.asset_id || stock.ts_code}
-                          type="button"
-                          className="link-chip"
-                          aria-label={`Open ${stock.stock_name || stock.ts_code} in Stock Workspace`}
-                          onClick={() => onOpenAsset?.(stock.asset_id || stock.ts_code)}
-                        >
-                          {stock.stock_name || stock.ts_code}
-                        </button>
-                      ))}
+                      {(item.stocks ?? []).map((stock) => {
+                        const assetId = stock.asset_id || stock.ts_code;
+
+                        return (
+                          <button
+                            key={assetId}
+                            type="button"
+                            className="link-chip"
+                            aria-label={`Open ${stock.stock_name || stock.ts_code} in Stock Workspace`}
+                            onClick={() =>
+                              onOpenAsset?.(assetId, {
+                                sourceWorkspace: 'news',
+                                assetId,
+                                newsId: item.news_id,
+                                query: item.title || query || assetId
+                              })
+                            }
+                          >
+                            {stock.stock_name || stock.ts_code}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </article>
