@@ -35,6 +35,17 @@ type WorkspaceHandoff = {
   version: number;
 };
 
+type StockSourceWorkspace = 'search' | 'news' | 'watchlist';
+
+type StockHandoff = {
+  assetId?: string;
+  sourceWorkspace?: StockSourceWorkspace;
+  query?: string;
+  matchReason?: string;
+  newsId?: string;
+  version: number;
+};
+
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
   { mode: 'market', label: 'Market Monitor' },
@@ -54,16 +65,26 @@ export function AppShell() {
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [stockHandoff, setStockHandoff] = useState<StockHandoff>({ version: 0 });
 
-  function openStockWorkspace(assetId: string) {
+  function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
     setSelectedAssetId(assetId);
+    setStockHandoff((current) => ({
+      ...context,
+      assetId,
+      version: current.version + 1
+    }));
     setWorkspaceMode('stock');
   }
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
     const { target } = result;
     if (target.workspace === 'stock' && target.asset_id) {
-      openStockWorkspace(target.asset_id);
+      openStockWorkspace(target.asset_id, {
+        sourceWorkspace: 'search',
+        query: target.q ?? result.title,
+        matchReason: result.match_reason
+      });
       return;
     }
 
@@ -136,8 +157,18 @@ export function AppShell() {
               initialReportId={researchReportsHandoff.reportId}
             />
           ) : null}
-          {workspaceMode === 'stock' ? <StockWorkspace initialAssetId={selectedAssetId} /> : null}
-          {workspaceMode === 'watchlist' ? <WatchlistWorkspace onOpenAsset={openStockWorkspace} /> : null}
+          {workspaceMode === 'stock' ? (
+            <StockWorkspace
+              key={`stock:${stockHandoff.version}`}
+              initialAssetId={stockHandoff.assetId ?? selectedAssetId}
+              entryContext={stockHandoff}
+            />
+          ) : null}
+          {workspaceMode === 'watchlist' ? (
+            <WatchlistWorkspace
+              onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
+            />
+          ) : null}
           {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace /> : null}
           {workspaceMode === 'generatedReports' ? (
             <GeneratedReportsWorkspace
@@ -154,7 +185,13 @@ export function AppShell() {
               key={`news:${newsHandoff.version}`}
               initialQuery={newsHandoff.query}
               initialNewsId={newsHandoff.newsId}
-              onOpenAsset={openStockWorkspace}
+              onOpenAsset={(assetId) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'news',
+                  query: newsHandoff.query,
+                  newsId: newsHandoff.newsId
+                })
+              }
             />
           ) : null}
         </section>

@@ -12,6 +12,7 @@ const ADJUST_TYPE = 'qfq';
 
 type StockWorkspaceProps = {
   initialAssetId?: string;
+  entryContext?: StockEntryContext;
 };
 
 type FactorDisplayRow = {
@@ -19,6 +20,19 @@ type FactorDisplayRow = {
   name: string;
   value: unknown;
 };
+
+export type StockEntryContext = {
+  sourceWorkspace?: 'search' | 'news' | 'watchlist';
+  query?: string;
+  matchReason?: string;
+  newsId?: string;
+};
+
+function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['sourceWorkspace']>) {
+  if (sourceWorkspace === 'search') return 'Search';
+  if (sourceWorkspace === 'news') return 'News';
+  return 'Watchlist';
+}
 
 function normalizeAssetId(value: string) {
   const trimmed = value.trim().toUpperCase();
@@ -75,7 +89,7 @@ function latestClose(profile: AssetProfile | null) {
   return lastBar?.close ?? null;
 }
 
-export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorkspaceProps) {
+export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext }: StockWorkspaceProps) {
   const [assetId, setAssetId] = useState(initialAssetId);
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
@@ -288,6 +302,17 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID }: StockWorks
       <header className="workspace-header">
         <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : 'Stock Workspace'}</h1>
         <p className="muted">Single-stock evidence hub for price, factors, news, research reports, and strategy history.</p>
+        {entryContext?.sourceWorkspace ? (
+          <p className="muted">
+            Opened from {formatSourceWorkspace(entryContext.sourceWorkspace)}
+            {entryContext.matchReason ? (
+              <>
+                {' '}
+                <span>{entryContext.matchReason}</span>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </header>
 
       <form className="compact-toolbar" onSubmit={handleSubmit}>

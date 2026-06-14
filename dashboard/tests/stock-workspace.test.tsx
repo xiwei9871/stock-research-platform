@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { StockWorkspace } from '../src/components/StockWorkspace';
+import { StockWorkspace, type StockEntryContext } from '../src/components/StockWorkspace';
 import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
@@ -181,6 +181,20 @@ afterEach(() => {
 });
 
 describe('StockWorkspace', () => {
+  it('renders the source workspace and match reason for stock handoffs', async () => {
+    const entryContext: StockEntryContext = { sourceWorkspace: 'search', matchReason: 'Exact code match' };
+
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        entryContext={entryContext}
+      />
+    );
+
+    expect(await screen.findByText('Opened from Search')).toBeInTheDocument();
+    expect(screen.getByText('Exact code match')).toBeInTheDocument();
+  });
+
   it('loads a stock dossier with factors, news, watchlist, and evidence', async () => {
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 

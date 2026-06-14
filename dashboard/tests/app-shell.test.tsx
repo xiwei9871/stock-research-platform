@@ -1050,6 +1050,12 @@ describe('dashboard app shell', () => {
   });
 
   type MockWorkspaceRender = {
+    initialAssetId?: string;
+    entryContext?: {
+      sourceWorkspace?: string;
+      query?: string;
+      matchReason?: string;
+    };
     initialQuery?: string;
     initialTradeDate?: string;
     initialNewsId?: string;
@@ -1100,15 +1106,32 @@ describe('dashboard app shell', () => {
         path: '/reports/daily-topn.html'
       } as GlobalSearchResult['target']
     });
+    const stockResult = makeGlobalSearchResult({
+      type: 'asset',
+      id: 'CN:SH:600519',
+      title: '贵州茅台',
+      subtitle: '600519.SH',
+      target: {
+        workspace: 'stock',
+        q: '600519',
+        asset_id: 'CN:SH:600519'
+      } as GlobalSearchResult['target'],
+      match_reason: 'Exact code match'
+    });
 
     const newsRenders: MockWorkspaceRender[] = [];
     const researchRenders: MockWorkspaceRender[] = [];
     const generatedRenders: MockWorkspaceRender[] = [];
+    const stockRenders: MockWorkspaceRender[] = [];
     let newsMountId = 0;
+    let stockMountId = 0;
 
     vi.doMock('../src/components/GlobalSearchBox', () => ({
       GlobalSearchBox: ({ onOpenResult }: { onOpenResult: (result: GlobalSearchResult) => void }) => (
         <div>
+          <button type="button" onClick={() => onOpenResult(stockResult)}>
+            Mock open stock search
+          </button>
           <button type="button" onClick={() => onOpenResult(newsResult)}>
             Mock open news
           </button>
@@ -1125,18 +1148,53 @@ describe('dashboard app shell', () => {
     vi.doMock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>factor workspace</div> }));
     vi.doMock('../src/components/HomeCockpit', () => ({ HomeCockpit: () => <div>home workspace</div> }));
     vi.doMock('../src/components/MarketMonitorWorkspace', () => ({ MarketMonitorWorkspace: () => <div>market workspace</div> }));
-    vi.doMock('../src/components/StockWorkspace', () => ({ StockWorkspace: () => <div>stock workspace</div> }));
+    vi.doMock('../src/components/StockWorkspace', async () => {
+      const React = await import('react');
+      return {
+        StockWorkspace: ({
+          initialAssetId,
+          entryContext
+        }: {
+          initialAssetId?: string;
+          entryContext?: {
+            sourceWorkspace?: string;
+            query?: string;
+            matchReason?: string;
+          };
+        }) => {
+          const [mountId] = React.useState(() => {
+            stockMountId += 1;
+            return stockMountId;
+          });
+          stockRenders.push({ initialAssetId, entryContext, mountId });
+          return (
+            <div data-testid="mock-stock-workspace">
+              {initialAssetId}:{entryContext?.sourceWorkspace ?? 'none'}:{entryContext?.query ?? 'none'}:
+              {entryContext?.matchReason ?? 'none'}:{mountId}
+            </div>
+          );
+        }
+      };
+    });
     vi.doMock('../src/components/StrategyLabWorkspace', () => ({ StrategyLabWorkspace: () => <div>strategy workspace</div> }));
-    vi.doMock('../src/components/WatchlistWorkspace', () => ({ WatchlistWorkspace: () => <div>watchlist workspace</div> }));
+    vi.doMock('../src/components/WatchlistWorkspace', () => ({
+      WatchlistWorkspace: ({ onOpenAsset }: { onOpenAsset?: (assetId: string) => void }) => (
+        <button type="button" onClick={() => onOpenAsset?.('000002.SZ')}>
+          Mock open watchlist asset
+        </button>
+      )
+    }));
     vi.doMock('../src/components/NewsWorkspace', async () => {
       const React = await import('react');
       return {
         NewsWorkspace: ({
           initialQuery,
-          initialNewsId
+          initialNewsId,
+          onOpenAsset
         }: {
           initialQuery?: string;
           initialNewsId?: string;
+          onOpenAsset?: (assetId: string) => void;
         }) => {
           const [mountId] = React.useState(() => {
             newsMountId += 1;
@@ -1146,6 +1204,9 @@ describe('dashboard app shell', () => {
           return (
             <div data-testid="mock-news-workspace">
               {initialQuery}:{initialNewsId ?? 'none'}:{mountId}
+              <button type="button" onClick={() => onOpenAsset?.('CN:SH:600519')}>
+                Mock open news asset
+              </button>
             </div>
           );
         }
@@ -1191,8 +1252,67 @@ describe('dashboard app shell', () => {
     const { AppShell } = await import('../src/components/AppShell');
     render(<AppShell />);
 
-    return { generatedRenders, newsRenders, researchRenders };
+    return { generatedRenders, newsRenders, researchRenders, stockRenders };
   }
+
+  it('preserves stock handoff context from global search and remounts on the same stock', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      },
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:2'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'search',
+        query: '600519',
+        matchReason: 'Exact code match'
+      },
+      mountId: 2
+    });
+  });
+
+  it('opens stock handoffs from news and watchlist with source context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent('CN:SH:600519:news:茅台:none:1');
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'news',
+        query: '茅台'
+      },
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open watchlist asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent('000002.SZ:watchlist:none:none:2');
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: '000002.SZ',
+      entryContext: {
+        sourceWorkspace: 'watchlist'
+      },
+      mountId: 2
+    });
+  });
 
   it('preserves news handoff context and remounts on the same result', async () => {
     const { newsRenders } = await renderMockedAppShellForHandoff();
