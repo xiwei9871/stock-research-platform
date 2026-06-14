@@ -8,6 +8,7 @@ import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueueP
 import { ShadowFollowUpResolutionPanel } from '../src/components/ShadowFollowUpResolutionPanel';
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import { ShadowOutcomesPanel } from '../src/components/ShadowOutcomesPanel';
+import type { StockEntryContext } from '../src/components/StockWorkspace';
 import type {
   BarPoint,
   AssetProfile,
@@ -1268,16 +1269,32 @@ describe('dashboard app shell', () => {
       ResearchReportsWorkspace: ({
         initialQuery,
         initialEventKey,
-        initialReportId
+        initialReportId,
+        onOpenAsset
       }: {
         initialQuery?: string;
         initialEventKey?: string;
         initialReportId?: string;
+        onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
       }) => {
         researchRenders.push({ initialQuery, initialEventKey, initialReportId });
         return (
           <div data-testid="mock-research-workspace">
             {initialQuery}:{initialEventKey ?? 'none'}:{initialReportId ?? 'none'}
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAsset?.('CN:SH:600519', {
+                  sourceWorkspace: 'researchReports',
+                  assetId: 'CN:SH:600519',
+                  eventKey: 'r1:600519.SH',
+                  reportId: 'r1',
+                  query: '贵州茅台深度报告'
+                })
+              }
+            >
+              mocked report stock
+            </button>
           </div>
         );
       }
@@ -1473,6 +1490,27 @@ describe('dashboard app shell', () => {
       initialQuery: '茅台',
       initialEventKey: 'evt-1',
       initialReportId: 'report-1'
+    });
+  });
+
+  it('opens stock handoff from research reports with report context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'mocked report stock' }));
+
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:researchReports:贵州茅台深度报告:none:none:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'researchReports',
+        query: '贵州茅台深度报告',
+        eventKey: 'r1:600519.SH',
+        reportId: 'r1'
+      },
+      mountId: 1
     });
   });
 

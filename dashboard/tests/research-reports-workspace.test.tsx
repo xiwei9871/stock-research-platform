@@ -180,6 +180,46 @@ describe('ResearchReportsWorkspace', () => {
     expect(screen.getByRole('link', { name: 'Open Source' })).toHaveAttribute('href', 'https://example.com/r1');
   });
 
+  it('opens stock detail from a report row with report context', async () => {
+    const onOpenAsset = vi.fn();
+    render(<ResearchReportsWorkspace onOpenAsset={onOpenAsset} />);
+
+    await screen.findByText('贵州茅台深度报告');
+    fireEvent.click(
+      within(screen.getByLabelText('Research report results')).getByRole('button', {
+        name: 'Open Stock Detail for 贵州茅台'
+      })
+    );
+
+    expect(onOpenAsset).toHaveBeenCalledWith('CN:SH:600519', {
+      sourceWorkspace: 'researchReports',
+      assetId: 'CN:SH:600519',
+      eventKey: 'r1:600519.SH',
+      reportId: 'r1',
+      query: '贵州茅台深度报告'
+    });
+  });
+
+  it('opens stock detail from selected report detail with report context', async () => {
+    const onOpenAsset = vi.fn();
+    render(<ResearchReportsWorkspace onOpenAsset={onOpenAsset} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open report 贵州茅台深度报告' }));
+    fireEvent.click(
+      within(screen.getByLabelText('Research report detail')).getByRole('button', {
+        name: 'Open Stock Detail for 贵州茅台'
+      })
+    );
+
+    expect(onOpenAsset).toHaveBeenLastCalledWith('CN:SH:600519', {
+      sourceWorkspace: 'researchReports',
+      assetId: 'CN:SH:600519',
+      eventKey: 'r1:600519.SH',
+      reportId: 'r1',
+      query: '贵州茅台深度报告'
+    });
+  });
+
   it('opens the selected event when rows share a report id', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     apiMocks.fetchResearchReports.mockResolvedValueOnce({

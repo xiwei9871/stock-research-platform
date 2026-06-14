@@ -191,6 +191,14 @@ export function AppShell() {
               initialQuery={researchReportsHandoff.query}
               initialEventKey={researchReportsHandoff.eventKey}
               initialReportId={researchReportsHandoff.reportId}
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'researchReports',
+                  query: context.query,
+                  eventKey: context.eventKey,
+                  reportId: context.reportId
+                })
+              }
             />
           ) : null}
           {workspaceMode === 'stock' ? (

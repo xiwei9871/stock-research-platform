@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { fetchResearchReportSummary, fetchResearchReports } from '../api/client';
 import type { ResearchReportItem, ResearchReportResponse, ResearchReportSummary } from '../api/types';
+import type { StockEntryContext } from './StockWorkspace';
 
 const DEFAULT_START_DATE = '2026-03-01';
 const PAGE_LIMIT = 50;
@@ -19,6 +20,7 @@ type ResearchReportsWorkspaceProps = {
   initialQuery?: string;
   initialEventKey?: string;
   initialReportId?: string;
+  onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
 
 function formatCount(value: number | null | undefined) {
@@ -72,10 +74,26 @@ function buildReportParams(filters: ReportFilters) {
   return params;
 }
 
+function getReportAssetId(report: ResearchReportItem) {
+  return report.asset_id || report.ts_code;
+}
+
+function buildReportStockContext(report: ResearchReportItem): StockEntryContext {
+  const assetId = getReportAssetId(report);
+  return {
+    sourceWorkspace: 'researchReports',
+    assetId,
+    eventKey: report.event_key,
+    reportId: report.report_id,
+    query: report.report_title || report.stock_name || report.ts_code || assetId
+  };
+}
+
 export function ResearchReportsWorkspace({
   initialQuery = '',
   initialEventKey,
-  initialReportId
+  initialReportId,
+  onOpenAsset
 }: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
@@ -346,6 +364,20 @@ export function ResearchReportsWorkspace({
                         <span>
                           {formatText(item.ts_code)} / {formatText(item.stock_name)}
                         </span>
+                        {getReportAssetId(item) ? (
+                          <button
+                            type="button"
+                            className="link-chip"
+                            aria-label={`Open Stock Detail for ${item.stock_name || item.ts_code}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const assetId = getReportAssetId(item);
+                              onOpenAsset?.(assetId, buildReportStockContext(item));
+                            }}
+                          >
+                            Stock Detail
+                          </button>
+                        ) : null}
                       </td>
                       <td>{formatText(item.broker)}</td>
                       <td>
@@ -421,6 +453,19 @@ export function ResearchReportsWorkspace({
                 <p>{formatText(selectedReport.risk_summary)}</p>
               </section>
               <div className="research-report-button-row">
+                {selectedReport && getReportAssetId(selectedReport) ? (
+                  <button
+                    type="button"
+                    className="link-chip"
+                    aria-label={`Open Stock Detail for ${selectedReport.stock_name || selectedReport.ts_code}`}
+                    onClick={() => {
+                      const assetId = getReportAssetId(selectedReport);
+                      onOpenAsset?.(assetId, buildReportStockContext(selectedReport));
+                    }}
+                  >
+                    Stock Detail
+                  </button>
+                ) : null}
                 {selectedReport.source_url ? (
                   <a href={selectedReport.source_url} target="_blank" rel="noreferrer">
                     Open Source
