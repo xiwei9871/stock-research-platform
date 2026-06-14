@@ -88,24 +88,31 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       if (summaryResult.status === 'fulfilled') {
         setSummary(summaryResult.value);
         const focusRows = summaryResult.value.topn_preview.slice(0, 5);
-        void Promise.allSettled(
-          focusRows.map((row) =>
-            fetchEvidenceDigest(row.asset_id, {
-              tradeDate: summaryResult.value.latest_market_date,
-              lookbackDays: 90
-            }).then((digest) => ({ assetId: row.asset_id, digest }))
-          )
-        ).then((results) => {
-          if (ignore) return;
-          const nextDigests: Record<string, EvidenceDigestResponse> = {};
-          const nextErrors: Record<string, string> = {};
-          results.forEach((result, index) => {
-            const assetId = focusRows[index].asset_id;
-            if (result.status === 'fulfilled') nextDigests[assetId] = result.value.digest;
-            else nextErrors[assetId] = 'Digest unavailable';
-          });
-          setDigestByAsset(nextDigests);
-          setDigestErrors(nextErrors);
+        focusRows.forEach((row) => {
+          const assetId = row.asset_id;
+          void fetchEvidenceDigest(assetId, {
+            tradeDate: summaryResult.value.latest_market_date,
+            lookbackDays: 90
+          }).then(
+            (digest) => {
+              if (ignore) return;
+              setDigestByAsset((current) => ({ ...current, [assetId]: digest }));
+              setDigestErrors((current) => {
+                if (!(assetId in current)) return current;
+                const { [assetId]: _removed, ...next } = current;
+                return next;
+              });
+            },
+            () => {
+              if (ignore) return;
+              setDigestErrors((current) => ({ ...current, [assetId]: 'Digest unavailable' }));
+              setDigestByAsset((current) => {
+                if (!(assetId in current)) return current;
+                const { [assetId]: _removed, ...next } = current;
+                return next;
+              });
+            }
+          );
         });
       } else {
         setSummary(null);

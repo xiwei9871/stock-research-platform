@@ -4,6 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from '../src/components/AppShell';
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 vi.mock('../src/api/client', () => ({
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
@@ -336,6 +346,84 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByText('CN:SZ:300951')).toBeVisible();
     expect(await screen.findByText('Digest unavailable')).toBeVisible();
+  });
+
+  it('updates each top-five evidence digest row independently', async () => {
+    const pendingDigest = deferred<Awaited<ReturnType<typeof api.fetchEvidenceDigest>>>();
+    const focusRows = Array.from({ length: 6 }, (_, index) => ({
+      trade_date: '2026-06-08',
+      asset_id: `CN:SZ:00000${index + 1}`,
+      rank: index + 1,
+      score_total: 90 - index,
+      score_version: 'manual_v1',
+      score_components: {}
+    }));
+    vi.mocked(api.fetchPlatformSummary).mockResolvedValueOnce({
+      latest_market_date: '2026-06-08',
+      latest_score_date: '2026-06-08',
+      latest_factor_date: '2026-06-07',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: focusRows
+    });
+    vi.mocked(api.fetchEvidenceDigest).mockImplementation((assetId) => {
+      if (assetId === 'CN:SZ:000001') {
+        return Promise.resolve({
+          asset_id: assetId,
+          canonical_asset_id: assetId,
+          trade_date: '2026-06-08',
+          title: 'First evidence',
+          score: 81,
+          bucket: 'strong',
+          facts: [],
+          risk_flags: [],
+          source_refs: {},
+          next_actions: [],
+          warnings: []
+        });
+      }
+      if (assetId === 'CN:SZ:000002') return Promise.reject(new Error('digest unavailable'));
+      if (assetId === 'CN:SZ:000003') return pendingDigest.promise;
+      return Promise.resolve({
+        asset_id: assetId,
+        canonical_asset_id: assetId,
+        trade_date: '2026-06-08',
+        title: `Evidence ${assetId}`,
+        score: 70,
+        bucket: 'neutral',
+        facts: [],
+        risk_flags: [],
+        source_refs: {},
+        next_actions: [],
+        warnings: []
+      });
+    });
+
+    render(<AppShell />);
+
+    expect(await screen.findByText('CN:SZ:000001')).toBeVisible();
+    await waitFor(() => expect(api.fetchEvidenceDigest).toHaveBeenCalledTimes(5));
+    expect(api.fetchEvidenceDigest).toHaveBeenCalledWith('CN:SZ:000005', {
+      tradeDate: '2026-06-08',
+      lookbackDays: 90
+    });
+    expect(api.fetchEvidenceDigest).not.toHaveBeenCalledWith('CN:SZ:000006', expect.anything());
+    expect(await screen.findByText('First evidence')).toBeVisible();
+    expect(await screen.findByText('Digest unavailable')).toBeVisible();
+    const pendingRow = screen.getByText('CN:SZ:000003').closest('.data-table-row');
+    expect(pendingRow).not.toBeNull();
+    expect(within(pendingRow as HTMLElement).getByText('Digest pending')).toBeVisible();
+  });
+
+  it('does not request evidence digests when platform summary fails', async () => {
+    vi.mocked(api.fetchPlatformSummary).mockRejectedValueOnce(new Error('summary unavailable'));
+
+    render(<AppShell />);
+
+    expect(await screen.findByText('Platform summary unavailable: summary unavailable')).toBeVisible();
+    expect(api.fetchEvidenceDigest).not.toHaveBeenCalled();
   });
 
   it('renders core cockpit content while optional home widgets are still pending', async () => {
