@@ -2084,7 +2084,7 @@ table.data-table td {
   gap: 10px;
   min-width: 0;
   position: sticky;
-  top: 12px;
+  top: 72px;
 }
 
 .stock-context-rail .compact-toolbar {
