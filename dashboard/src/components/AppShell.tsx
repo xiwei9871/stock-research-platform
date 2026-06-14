@@ -128,6 +128,13 @@ export function AppShell() {
     setWorkspaceMode('market');
   }
 
+  function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
+    openStockWorkspace(assetId, {
+      ...context,
+      monitorTab: context?.monitorTab as MarketMonitorTab | undefined
+    });
+  }
+
   function openGlobalSearchResult(result: GlobalSearchResult) {
     const { target } = result;
     if (target.workspace === 'stock' && target.asset_id) {
@@ -201,7 +208,7 @@ export function AppShell() {
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
           {workspaceMode === 'reviewQueue' ? (
             <ReviewQueueWorkspace
-              onOpenStock={openStockWorkspace}
+              onOpenStock={openStockWorkspaceFromReviewQueue}
               onOpenNews={openNewsWorkspaceFromStock}
               onOpenResearchReports={openResearchReportsWorkspaceFromStock}
               onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
