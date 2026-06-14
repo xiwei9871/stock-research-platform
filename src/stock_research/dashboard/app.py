@@ -40,6 +40,7 @@ from stock_research.dashboard.research_reports import (
     load_asset_research_reports,
     load_research_report_summary,
 )
+from stock_research.dashboard.review_queue import build_review_queue
 from stock_research.dashboard.scores import (
     load_asset_detail,
     load_asset_score_for_dashboard,
@@ -125,6 +126,20 @@ def create_app() -> FastAPI:
             trade_date=trade_date,
             lookback_days=lookback_days,
             score_version=score_version,
+        )
+
+    @app.get("/api/review-queue")
+    def review_queue_route(
+        trade_date: str | None = None,
+        score_version: str = "manual_v1",
+        limit: int = 20,
+        lookback_days: int = 90,
+    ):
+        return build_review_queue(
+            trade_date=trade_date,
+            score_version=score_version,
+            limit=limit,
+            lookback_days=lookback_days,
         )
 
     @app.get("/api/public-news")
