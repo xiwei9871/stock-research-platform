@@ -24,6 +24,14 @@ type FactorDisplayRow = {
   value: unknown;
 };
 
+type StockWorkspaceAssetProfile = AssetProfile & {
+  coverage: AssetProfile['coverage'] & {
+    bars?: {
+      end?: string | number;
+    };
+  };
+};
+
 export type StockEntryContext = {
   sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market';
   assetId?: string;
@@ -98,15 +106,6 @@ function latestClose(profile: AssetProfile | null) {
   return lastBar?.close ?? null;
 }
 
-function coverageBarsEnd(profile: AssetProfile, fallback: string) {
-  const barsCoverage = profile.coverage.bars;
-  if (barsCoverage && typeof barsCoverage === 'object' && 'end' in barsCoverage) {
-    const end = barsCoverage.end;
-    return typeof end === 'string' || typeof end === 'number' ? formatValue(end) : fallback;
-  }
-  return fallback;
-}
-
 export function StockWorkspace({
   initialAssetId = DEFAULT_ASSET_ID,
   entryContext,
@@ -118,7 +117,7 @@ export function StockWorkspace({
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
-  const [profile, setProfile] = useState<AssetProfile | null>(null);
+  const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
   const [assetMatches, setAssetMatches] = useState<AssetSummary[]>([]);
@@ -198,7 +197,7 @@ export function StockWorkspace({
         if (!isLatestProfileRequest(requestId)) {
           return;
         }
-        setProfile(nextProfile);
+        setProfile(nextProfile as StockWorkspaceAssetProfile);
         void loadAssetMatches(normalizedAssetId, requestId);
       } catch (err: unknown) {
         if (!isLatestProfileRequest(requestId)) {
@@ -700,7 +699,7 @@ export function StockWorkspace({
                 <div className="evidence-row stock-timeline-row">
                   <div>
                     <strong>Price coverage</strong>
-                    <span>{coverageBarsEnd(profile, endDate)}</span>
+                    <span>{profile.coverage?.bars?.end ?? endDate}</span>
                   </div>
                   <p>{profile.bars.length} loaded bars</p>
                 </div>
