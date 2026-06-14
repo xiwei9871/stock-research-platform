@@ -79,8 +79,29 @@ def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
     strong_item = payload["groups"][0]["items"][0]
     assert strong_item["queue_id"] == "2026-06-08:manual_v1:000002.SZ"
     assert strong_item["rank"] == 2
+    assert strong_item["score"] == 60.0
+    assert strong_item["digest_title"] == "strong evidence"
     assert strong_item["source_kinds"] == ["strategy", "news"]
     assert strong_item["next_action_count"] == 2
+
+
+def test_build_review_queue_is_deterministic_for_same_eod_inputs(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-08", "topn_preview": [_score("000001.SZ", 1, 90)]},
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "build_evidence_digest",
+        lambda asset_id, **kwargs: _digest(asset_id, bucket="strong", score=88),
+    )
+
+    first = review_queue.build_review_queue(trade_date=None, score_version="manual_v1", limit=20)
+    second = review_queue.build_review_queue(trade_date=None, score_version="manual_v1", limit=20)
+
+    assert first == second
+    assert first["generated_at"] == "2026-06-08T00:00:00+00:00"
 
 
 def test_build_review_queue_degrades_digest_failure_to_thin_item(monkeypatch):
@@ -120,6 +141,69 @@ def test_build_review_queue_bounds_limit_and_uses_latest_market_date(monkeypatch
     assert captured["top_n"] == 50
     assert payload["trade_date"] == "2026-06-08"
     assert payload["warnings"] == []
+
+
+def test_build_review_queue_bounds_lower_limit_and_upper_lookback_for_digest(monkeypatch):
+    captured = {"summary": None, "digest": None}
+
+    def fake_summary(**kwargs):
+        captured["summary"] = kwargs
+        return {"latest_market_date": "2026-06-08", "topn_preview": [_score("000001.SZ", 1, 90)]}
+
+    def fake_digest(asset_id, **kwargs):
+        captured["digest"] = kwargs
+        return _digest(asset_id)
+
+    monkeypatch.setattr(review_queue, "load_platform_summary", fake_summary)
+    monkeypatch.setattr(review_queue, "build_evidence_digest", fake_digest)
+
+    review_queue.build_review_queue(trade_date=None, score_version="manual_v1", limit=0, lookback_days=999)
+
+    assert captured["summary"]["top_n"] == 1
+    assert captured["digest"]["lookback_days"] == 365
+
+
+def test_build_review_queue_uses_latest_score_date_when_market_date_missing(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_score_date": "2026-06-07", "topn_preview": [_score("000001.SZ", 1, 90)]},
+    )
+
+    def fake_digest(asset_id, **kwargs):
+        captured.update(kwargs)
+        return _digest(asset_id)
+
+    monkeypatch.setattr(review_queue, "build_evidence_digest", fake_digest)
+
+    payload = review_queue.build_review_queue(trade_date=None, score_version="manual_v1")
+
+    assert payload["trade_date"] == "2026-06-07"
+    assert captured["trade_date"] == "2026-06-07"
+
+
+def test_build_review_queue_uses_empty_trade_date_when_summary_has_no_dates(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"topn_preview": [_score("000001.SZ", 1, 90)]},
+    )
+
+    def fake_digest(asset_id, **kwargs):
+        captured.update(kwargs)
+        return _digest(asset_id)
+
+    monkeypatch.setattr(review_queue, "build_evidence_digest", fake_digest)
+
+    payload = review_queue.build_review_queue(trade_date=None, score_version="manual_v1")
+
+    assert payload["trade_date"] == ""
+    assert payload["generated_at"] == ""
+    assert captured["trade_date"] == ""
 
 
 def test_review_queue_endpoint_forwards_query(monkeypatch):

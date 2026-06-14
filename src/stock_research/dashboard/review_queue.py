@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 from stock_research.dashboard.evidence_digest import build_evidence_digest
@@ -62,7 +61,7 @@ def build_review_queue(
     return {
         "trade_date": selected_trade_date,
         "score_version": score_version,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": _generated_at(selected_trade_date),
         "groups": [
             {
                 "bucket": bucket,
@@ -91,6 +90,9 @@ def _queue_item(
     next_actions = list(digest.get("next_actions") or [])
     bucket = _bucket(digest)
     digest_score = _optional_int(digest.get("score"))
+    score = _optional_float(row.get("score_total"))
+    if score is None:
+        score = _optional_float(digest.get("score"))
     return {
         "queue_id": f"{trade_date}:{score_version}:{canonical_asset_id}",
         "asset_id": str(row.get("asset_id") or digest.get("asset_id") or canonical_asset_id),
@@ -99,6 +101,8 @@ def _queue_item(
         "trade_date": trade_date,
         "score_version": score_version,
         "rank": rank,
+        "score": score,
+        "digest_title": str(digest.get("title") or BUCKET_LABELS[bucket]),
         "score_total": _optional_float(row.get("score_total")),
         "digest_score": digest_score,
         "bucket": bucket,
@@ -108,6 +112,12 @@ def _queue_item(
         "next_action_count": len(next_actions),
         "digest": digest,
     }
+
+
+def _generated_at(selected_trade_date: str) -> str:
+    if not selected_trade_date:
+        return ""
+    return f"{selected_trade_date}T00:00:00+00:00"
 
 
 def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
