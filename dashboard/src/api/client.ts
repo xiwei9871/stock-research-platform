@@ -9,6 +9,7 @@ import type {
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
+  EvidenceDigestResponse,
   ExperimentProposalRow,
   ExperimentReplayRow,
   FactorLibraryRow,
@@ -90,6 +91,12 @@ type ResearchReportParams = {
   offset?: number;
 };
 
+type EvidenceDigestParams = {
+  tradeDate?: string;
+  lookbackDays?: number;
+  scoreVersion?: string;
+};
+
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
   return getJson(
     `/api/dashboard/overview?trade_date=${encodeURIComponent(params.tradeDate)}` +
@@ -168,6 +175,18 @@ export async function fetchAssetResearchReports(
   searchParams.set('limit', String(options.limit ?? 10));
   searchParams.set('lookback_days', String(options.lookbackDays ?? 90));
   return getJson(`/api/assets/${encodeURIComponent(assetId)}/research-reports?${searchParams.toString()}`);
+}
+
+export async function fetchEvidenceDigest(
+  assetId: string,
+  params: EvidenceDigestParams = {}
+): Promise<EvidenceDigestResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('asset_id', assetId);
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
+  if (params.scoreVersion) searchParams.set('score_version', params.scoreVersion);
+  return getJson(`/api/evidence-digest?${searchParams.toString()}`);
 }
 
 export async function searchAssets(q: string, limit = 10) {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   fetchAssetDecisions,
+  fetchEvidenceDigest,
   fetchAssetNews,
   fetchAssetOutcomes,
   fetchAssetResearchReports,
@@ -268,6 +269,39 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/assets/600519.SH/research-reports?limit=5&lookback_days=90');
     expect(result.summary.report_count_90d).toBe(4);
+  });
+
+  it('fetches evidence digest with optional date and lookback', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          asset_id: '000001.SZ',
+          canonical_asset_id: '000001.SZ',
+          trade_date: '2026-06-12',
+          title: 'Mixed evidence',
+          score: 62,
+          bucket: 'mixed',
+          facts: [],
+          risk_flags: [],
+          source_refs: {},
+          next_actions: [],
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const digest = await fetchEvidenceDigest('000001.SZ', {
+      tradeDate: '2026-06-12',
+      lookbackDays: 30,
+      scoreVersion: 'manual_v2'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/evidence-digest?asset_id=000001.SZ&trade_date=2026-06-12&lookback_days=30&score_version=manual_v2'
+    );
+    expect(digest.bucket).toBe('mixed');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

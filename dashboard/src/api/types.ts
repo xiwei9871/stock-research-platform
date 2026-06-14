@@ -938,3 +938,54 @@ export type AssetResearchReportResponse = {
   items: ResearchReportItem[];
   warnings: string[];
 };
+
+export type EvidenceDigestBucket = 'strong' | 'mixed' | 'thin' | 'risk_heavy';
+export type EvidenceDigestSeverity = 'positive' | 'neutral' | 'warning' | 'negative' | 'severe' | string;
+
+export type EvidenceDigestSourceRef = {
+  workspace?: 'news' | 'researchReports' | 'market' | 'stock' | string;
+  asset_id?: string;
+  news_id?: string;
+  report_id?: string;
+  event_key?: string;
+  monitor_tab?: string;
+};
+
+export type EvidenceDigestFact = {
+  kind: 'news' | 'research' | 'market' | 'strategy' | string;
+  label: string;
+  severity: EvidenceDigestSeverity;
+  source_ref?: EvidenceDigestSourceRef;
+};
+
+export type EvidenceDigestRiskFlag = {
+  key: string;
+  label: string;
+  severity: EvidenceDigestSeverity;
+};
+
+export type EvidenceDigestAction = {
+  key: 'open_news' | 'open_research' | 'open_market' | 'review_stock' | string;
+  label: string;
+  workspace: 'news' | 'researchReports' | 'market' | 'stock' | string;
+  asset_id?: string;
+  news_id?: string;
+  report_id?: string;
+  event_key?: string;
+  monitor_tab?: string;
+  query?: string;
+};
+
+export type EvidenceDigestResponse = {
+  asset_id: string;
+  canonical_asset_id: string;
+  trade_date: string;
+  title: string;
+  score: number;
+  bucket: EvidenceDigestBucket;
+  facts: EvidenceDigestFact[];
+  risk_flags: EvidenceDigestRiskFlag[];
+  source_refs: EvidenceDigestSourceRef;
+  next_actions: EvidenceDigestAction[];
+  warnings: string[];
+};
