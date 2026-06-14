@@ -20,6 +20,7 @@ CHECK_LABELS = {
 
 UNAVAILABLE_WARNINGS = {
     "platform_summary": "Platform summary unavailable",
+    "topn_preview": "TopN preview unavailable",
     "review_queue": "Review Queue unavailable",
     "news": "News unavailable",
     "research_reports": "Research Reports unavailable",
@@ -58,6 +59,11 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
             _check("platform_summary", "missing_data", UNAVAILABLE_WARNINGS["platform_summary"])
         )
         warnings.append(UNAVAILABLE_WARNINGS["platform_summary"])
+    elif not topn_preview:
+        checks.append(
+            _check("platform_summary", "missing_data", UNAVAILABLE_WARNINGS["topn_preview"], 0)
+        )
+        warnings.append(UNAVAILABLE_WARNINGS["topn_preview"])
     else:
         checks.append(_check("platform_summary", "ready", "Platform summary available", len(topn_preview)))
 

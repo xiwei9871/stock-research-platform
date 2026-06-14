@@ -168,7 +168,7 @@ def test_build_platform_readiness_missing_latest_market_date_is_missing_data(
     assert payload["warnings"] == ["Platform summary unavailable"]
 
 
-def test_build_platform_readiness_missing_topn_makes_review_queue_partial(
+def test_build_platform_readiness_missing_topn_is_missing_data(
     monkeypatch,
 ):
     monkeypatch.setattr(
@@ -190,10 +190,11 @@ def test_build_platform_readiness_missing_topn_makes_review_queue_partial(
     payload = readiness.build_platform_readiness()
 
     checks = {check["key"]: check for check in payload["checks"]}
-    assert payload["status"] == "partial"
-    assert checks["platform_summary"]["status"] == "ready"
+    assert payload["status"] == "missing_data"
+    assert checks["platform_summary"]["status"] == "missing_data"
+    assert checks["platform_summary"]["detail"] == "TopN preview unavailable"
     assert checks["review_queue"]["status"] == "partial"
-    assert payload["warnings"] == ["Review Queue unavailable"]
+    assert payload["warnings"] == ["TopN preview unavailable", "Review Queue unavailable"]
 
 
 def test_build_platform_readiness_dedupes_warnings_preserving_order(monkeypatch):
