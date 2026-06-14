@@ -340,7 +340,8 @@ export function StockWorkspace({
     currentEntryContext.newsId ? `newsId: ${currentEntryContext.newsId}` : null,
     currentEntryContext.eventKey ? `eventKey: ${currentEntryContext.eventKey}` : null,
     currentEntryContext.reportId ? `reportId: ${currentEntryContext.reportId}` : null,
-    currentEntryContext.monitorTab ? `monitorTab: ${currentEntryContext.monitorTab}` : null
+    currentEntryContext.tradeDate ? `Trade Date ${currentEntryContext.tradeDate}` : null,
+    currentEntryContext.monitorTab ? `Monitor Tab ${currentEntryContext.monitorTab}` : null
   ].filter((value): value is string => Boolean(value));
 
   return (

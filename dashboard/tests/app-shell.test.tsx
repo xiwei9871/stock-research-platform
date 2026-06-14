@@ -1258,6 +1258,15 @@ describe('dashboard app shell', () => {
               >
                 Mock stock open market
               </button>
+              <button type="button" onClick={() => onOpenNews?.({ ...entryContext })}>
+                Mock stock return current news
+              </button>
+              <button type="button" onClick={() => onOpenResearchReports?.({ ...entryContext })}>
+                Mock stock return current research
+              </button>
+              <button type="button" onClick={() => onOpenMarketMonitor?.({ ...entryContext })}>
+                Mock stock return current market
+              </button>
             </div>
           );
         }
@@ -1403,12 +1412,13 @@ describe('dashboard app shell', () => {
     });
   });
 
-  it('resets stale stock search context when opening stock from plain navigation', async () => {
+  it('resets stale stock source context when opening stock from plain navigation', async () => {
     const { stockRenders } = await renderMockedAppShellForHandoff();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
     expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
-      'CN:SH:600519:search:600519:Exact code match:none:1'
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
@@ -1423,6 +1433,7 @@ describe('dashboard app shell', () => {
       mountId: 2
     });
     expect(stockRenders.at(-1)?.entryContext?.sourceWorkspace).toBeUndefined();
+    expect(stockRenders.at(-1)?.entryContext?.newsId).toBeUndefined();
   });
 
   it('opens stock handoffs from news and watchlist with source context', async () => {
@@ -1511,6 +1522,55 @@ describe('dashboard app shell', () => {
     expect(marketRenders.at(-1)).toMatchObject({
       initialTradeDate: '2026-06-12',
       initialMonitorTab: 'broken_limit_up',
+      initialAssetId: 'CN:SH:600519'
+    });
+  });
+
+  it('returns from stock detail actions with the current source context', async () => {
+    const { marketRenders, newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open news' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock open news asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:news:贵州茅台经营快讯:none:news-row-1:1'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('贵州茅台经营快讯:news-row-1:2');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '贵州茅台经营快讯',
+      initialNewsId: 'news-row-1'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'mocked report stock' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:researchReports:贵州茅台深度报告:none:none:2'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent(
+      '贵州茅台深度报告:r1:600519.SH:r1'
+    );
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '贵州茅台深度报告',
+      initialEventKey: 'r1:600519.SH',
+      initialReportId: 'r1'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:market:贵州茅台:none:none:3'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current market' }));
+    expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
+      'market workspace:2026-06-12:limit_up:CN:SH:600519'
+    );
+    expect(marketRenders.at(-1)).toMatchObject({
+      initialTradeDate: '2026-06-12',
+      initialMonitorTab: 'limit_up',
       initialAssetId: 'CN:SH:600519'
     });
   });

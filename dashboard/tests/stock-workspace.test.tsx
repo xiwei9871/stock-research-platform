@@ -230,7 +230,26 @@ describe('StockWorkspace', () => {
     expect(screen.getByText('newsId: news-1')).toBeInTheDocument();
     expect(screen.getByText('eventKey: r1:000001.SZ')).toBeInTheDocument();
     expect(screen.getByText('reportId: r1')).toBeInTheDocument();
-    expect(screen.getByText('monitorTab: limit_up')).toBeInTheDocument();
+    expect(screen.getByText('Monitor Tab limit_up')).toBeInTheDocument();
+  });
+
+  it('renders market monitor entry context with trade date and monitor tab', async () => {
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        entryContext={{
+          sourceWorkspace: 'market',
+          assetId: '000001.SZ',
+          tradeDate: '2026-06-12',
+          monitorTab: 'limit_up',
+          query: '平安银行'
+        }}
+      />
+    );
+
+    expect(await screen.findByText(/Opened from Market Monitor/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-06-12/)).toBeInTheDocument();
+    expect(screen.getByText(/limit_up/)).toBeInTheDocument();
   });
 
   it('renders context rail actions and recent evidence timeline entries', async () => {
