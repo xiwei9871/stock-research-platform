@@ -198,6 +198,26 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/evidence-digest') {
+      const assetId = url.searchParams.get('asset_id') ?? 'CN:SZ:300951';
+      await route.fulfill({
+        json: {
+          asset_id: assetId,
+          canonical_asset_id: assetId,
+          trade_date: url.searchParams.get('trade_date') ?? '2026-06-08',
+          title: 'Strong evidence',
+          score: 81,
+          bucket: 'strong',
+          facts: [],
+          risk_flags: [],
+          source_refs: {},
+          next_actions: [],
+          warnings: []
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/assets/000001.SZ/profile') {
       await route.fulfill({ json: makeAssetProfile() });
       return;
