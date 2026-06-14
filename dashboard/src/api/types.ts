@@ -757,6 +757,93 @@ export type MarketBreadth = {
   status: string;
 };
 
+export type MarketEmotionStatus = 'available' | 'pending_source' | string;
+
+export type MarketEmotionSummary = {
+  score: number | null;
+  state: string;
+  risk_state: string;
+  style_signal_hint: string;
+  position_budget_hint: string;
+  status: MarketEmotionStatus;
+};
+
+export type MarketEmotionComponent = {
+  key: string;
+  label: string;
+  score: number | null;
+};
+
+export type MarketEmotionPayload = {
+  summary: MarketEmotionSummary;
+  components: MarketEmotionComponent[];
+  breadth: {
+    traded_count?: number | null;
+    up_count?: number | null;
+    down_count?: number | null;
+    strong_up_count?: number | null;
+    strong_down_count?: number | null;
+    status: MarketEmotionStatus;
+  };
+  liquidity: {
+    total_amount?: number | null;
+    amount_ratio_5_20?: number | null;
+    status: MarketEmotionStatus;
+  };
+  limit_performance: {
+    limit_up_count?: number | null;
+    limit_down_count?: number | null;
+    broken_limit_up_count?: number | null;
+    broken_limit_up_rate?: number | null;
+    first_board_count?: number | null;
+    second_board_count?: number | null;
+    third_board_plus_count?: number | null;
+    high_board_height?: number | null;
+    status: MarketEmotionStatus;
+  };
+  profit_effect: {
+    limit_up_success_rate?: number | null;
+    limit_up_profit_rate?: number | null;
+    limit_up_limit_down_rate?: number | null;
+    relay_profit_rate?: number | null;
+    relay_success_rate?: number | null;
+    relay_continue_rate?: number | null;
+    broken_profit_rate?: number | null;
+    broken_success_rate?: number | null;
+    broken_limit_down_rate?: number | null;
+    status: MarketEmotionStatus;
+  };
+  drawdown_pressure: {
+    strong_down_count?: number | null;
+    limit_down_count?: number | null;
+    broken_limit_up_rate?: number | null;
+    yesterday_limit_up_limit_down_rate?: number | null;
+    status: MarketEmotionStatus;
+  };
+  weight_performance: {
+    status: MarketEmotionStatus;
+  };
+};
+
+export type EmotionStockListRow = {
+  name: string;
+  asset_id: string;
+  symbol: string;
+  amount: number | null;
+  pct_chg: number | null;
+  board: string | null;
+  tab: string;
+  limit_up_streak?: number | null;
+};
+
+export type EmotionStockLists = {
+  auction_status: MarketEmotionStatus;
+  auction: EmotionStockListRow[];
+  limit_up: EmotionStockListRow[];
+  broken_limit_up: EmotionStockListRow[];
+  limit_down: EmotionStockListRow[];
+};
+
 export type MarketMonitorPayload = {
   trade_date: string;
   freshness: MarketMonitorFreshness;
@@ -776,6 +863,8 @@ export type MarketMonitorPayload = {
     risk_filter_counts: Record<string, number>;
   };
   generated_reports: ReportLink[];
+  market_emotion: MarketEmotionPayload;
+  emotion_stock_lists: EmotionStockLists;
   warnings: string[];
 };
 
