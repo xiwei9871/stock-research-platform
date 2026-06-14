@@ -1066,7 +1066,6 @@ describe('dashboard app shell', () => {
     initialQuery?: string;
     initialTradeDate?: string;
     initialMonitorTab?: string;
-    initialAssetId?: string;
     initialNewsId?: string;
     initialEventKey?: string;
     initialReportId?: string;
