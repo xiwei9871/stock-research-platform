@@ -1,6 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMarketMonitorEod } from '../api/client';
 import type { EmotionStockListRow, MarketMonitorPayload } from '../api/types';
+import type { StockEntryContext } from './StockWorkspace';
 
 function formatCount(value: number | null | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '-';
@@ -28,6 +29,13 @@ function formatRatio(value: number | null | undefined) {
 
 type StockTabKey = 'auction' | 'limit_up' | 'broken_limit_up' | 'limit_down';
 
+type MarketMonitorWorkspaceProps = {
+  initialTradeDate?: string;
+  initialMonitorTab?: StockTabKey;
+  initialAssetId?: string;
+  onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
+};
+
 const STOCK_TABS: Array<{ key: StockTabKey; label: string }> = [
   { key: 'auction', label: '竞价' },
   { key: 'limit_up', label: '涨停' },
@@ -35,13 +43,18 @@ const STOCK_TABS: Array<{ key: StockTabKey; label: string }> = [
   { key: 'limit_down', label: '跌停' }
 ];
 
-export function MarketMonitorWorkspace() {
+export function MarketMonitorWorkspace({
+  initialTradeDate,
+  initialMonitorTab = 'limit_up',
+  initialAssetId,
+  onOpenAsset
+}: MarketMonitorWorkspaceProps = {}) {
   const [payload, setPayload] = useState<MarketMonitorPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tradeDateInput, setTradeDateInput] = useState('');
+  const [tradeDateInput, setTradeDateInput] = useState(initialTradeDate ?? '');
   const [loadingTradeDate, setLoadingTradeDate] = useState<string | null>(null);
-  const [activeStockTab, setActiveStockTab] = useState<StockTabKey>('limit_up');
+  const [activeStockTab, setActiveStockTab] = useState<StockTabKey>(initialMonitorTab);
   const isMountedRef = useRef(false);
   const requestIdRef = useRef(0);
   const stockTabRefs = useRef<Record<StockTabKey, HTMLButtonElement | null>>({
@@ -84,13 +97,13 @@ export function MarketMonitorWorkspace() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    void loadLatest();
+    void loadMarketMonitor(initialTradeDate);
 
     return () => {
       isMountedRef.current = false;
       requestIdRef.current += 1;
     };
-  }, [loadLatest]);
+  }, [loadMarketMonitor, initialTradeDate]);
 
   const emotion = payload?.market_emotion;
   const summary = emotion?.summary;
@@ -322,7 +335,26 @@ export function MarketMonitorWorkspace() {
                       {tabRows.map((row) => (
                         <tr key={`${row.tab}-${row.asset_id}`}>
                           <td>
-                            <strong>{row.name || row.symbol}</strong>
+                            {row.asset_id ? (
+                              <button
+                                type="button"
+                                className={row.asset_id === initialAssetId ? 'link-chip active' : 'link-chip'}
+                                aria-label={`Open Stock Detail for ${row.name || row.symbol} from ${tab.label}`}
+                                onClick={() =>
+                                  onOpenAsset?.(row.asset_id, {
+                                    sourceWorkspace: 'market',
+                                    assetId: row.asset_id,
+                                    tradeDate: payload?.trade_date,
+                                    monitorTab: tab.key,
+                                    query: row.name || row.symbol || row.asset_id
+                                  })
+                                }
+                              >
+                                {row.name || row.symbol}
+                              </button>
+                            ) : (
+                              <strong>{row.name || row.symbol}</strong>
+                            )}
                             <span>{row.symbol}</span>
                           </td>
                           <td>{formatAmountYi(row.amount)}</td>

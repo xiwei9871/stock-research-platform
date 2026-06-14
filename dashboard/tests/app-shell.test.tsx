@@ -1053,16 +1053,20 @@ describe('dashboard app shell', () => {
   type MockWorkspaceRender = {
     initialAssetId?: string;
     entryContext?: {
+      assetId?: string;
       sourceWorkspace?: string;
       query?: string;
       matchReason?: string;
       newsId?: string;
       eventKey?: string;
       reportId?: string;
+      tradeDate?: string;
       monitorTab?: string;
     };
     initialQuery?: string;
     initialTradeDate?: string;
+    initialMonitorTab?: string;
+    initialAssetId?: string;
     initialNewsId?: string;
     initialEventKey?: string;
     initialReportId?: string;
@@ -1127,6 +1131,7 @@ describe('dashboard app shell', () => {
     const newsRenders: MockWorkspaceRender[] = [];
     const researchRenders: MockWorkspaceRender[] = [];
     const generatedRenders: MockWorkspaceRender[] = [];
+    const marketRenders: MockWorkspaceRender[] = [];
     const stockRenders: MockWorkspaceRender[] = [];
     let newsMountId = 0;
     let stockMountId = 0;
@@ -1152,7 +1157,40 @@ describe('dashboard app shell', () => {
     vi.doMock('../src/components/DataExplorerWorkspace', () => ({ DataExplorerWorkspace: () => <div>data workspace</div> }));
     vi.doMock('../src/components/FactorLabWorkspace', () => ({ FactorLabWorkspace: () => <div>factor workspace</div> }));
     vi.doMock('../src/components/HomeCockpit', () => ({ HomeCockpit: () => <div>home workspace</div> }));
-    vi.doMock('../src/components/MarketMonitorWorkspace', () => ({ MarketMonitorWorkspace: () => <div>market workspace</div> }));
+    vi.doMock('../src/components/MarketMonitorWorkspace', () => ({
+      MarketMonitorWorkspace: ({
+        initialTradeDate,
+        initialMonitorTab,
+        initialAssetId,
+        onOpenAsset
+      }: {
+        initialTradeDate?: string;
+        initialMonitorTab?: string;
+        initialAssetId?: string;
+        onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
+      }) => {
+        marketRenders.push({ initialTradeDate, initialMonitorTab, initialAssetId });
+        return (
+          <div data-testid="mock-market-workspace">
+            market workspace:{initialTradeDate ?? 'none'}:{initialMonitorTab ?? 'none'}:{initialAssetId ?? 'none'}
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAsset?.('CN:SH:600519', {
+                  sourceWorkspace: 'market',
+                  assetId: 'CN:SH:600519',
+                  tradeDate: '2026-06-12',
+                  monitorTab: 'limit_up',
+                  query: '贵州茅台'
+                })
+              }
+            >
+              Mock market open asset
+            </button>
+          </div>
+        );
+      }
+    }));
     vi.doMock('../src/components/StockWorkspace', async () => {
       const React = await import('react');
       return {
@@ -1165,12 +1203,14 @@ describe('dashboard app shell', () => {
         }: {
           initialAssetId?: string;
           entryContext?: {
+            assetId?: string;
             sourceWorkspace?: string;
             query?: string;
             matchReason?: string;
             newsId?: string;
             eventKey?: string;
             reportId?: string;
+            tradeDate?: string;
             monitorTab?: string;
           };
           onOpenNews?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
@@ -1207,7 +1247,15 @@ describe('dashboard app shell', () => {
               </button>
               <button
                 type="button"
-                onClick={() => onOpenMarketMonitor?.({ ...entryContext, monitorTab: 'limit_up' })}
+                onClick={() =>
+                  onOpenMarketMonitor?.({
+                    ...entryContext,
+                    assetId: initialAssetId,
+                    query: '600519',
+                    tradeDate: '2026-06-12',
+                    monitorTab: 'broken_limit_up'
+                  })
+                }
               >
                 Mock stock open market
               </button>
@@ -1321,7 +1369,7 @@ describe('dashboard app shell', () => {
     const { AppShell } = await import('../src/components/AppShell');
     render(<AppShell />);
 
-    return { generatedRenders, newsRenders, researchRenders, stockRenders };
+    return { generatedRenders, marketRenders, newsRenders, researchRenders, stockRenders };
   }
 
   it('preserves stock handoff context from global search and remounts on the same stock', async () => {
@@ -1430,7 +1478,7 @@ describe('dashboard app shell', () => {
   });
 
   it('opens destination workspaces from stock detail context actions', async () => {
-    const { newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
+    const { marketRenders, newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
     expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
@@ -1458,7 +1506,35 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open market' }));
-    expect(await screen.findByText('market workspace')).toBeInTheDocument();
+    expect(await screen.findByTestId('mock-market-workspace')).toHaveTextContent(
+      'market workspace:2026-06-12:broken_limit_up:CN:SH:600519'
+    );
+    expect(marketRenders.at(-1)).toMatchObject({
+      initialTradeDate: '2026-06-12',
+      initialMonitorTab: 'broken_limit_up',
+      initialAssetId: 'CN:SH:600519'
+    });
+  });
+
+  it('opens stock handoff from market monitor with market context', async () => {
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
+
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:market:贵州茅台:none:none:1'
+    );
+    expect(stockRenders.at(-1)).toMatchObject({
+      initialAssetId: 'CN:SH:600519',
+      entryContext: {
+        sourceWorkspace: 'market',
+        query: '贵州茅台',
+        tradeDate: '2026-06-12',
+        monitorTab: 'limit_up'
+      },
+      mountId: 1
+    });
   });
 
   it('preserves news handoff context and remounts on the same result', async () => {

@@ -40,6 +40,7 @@ export type StockEntryContext = {
   newsId?: string;
   eventKey?: string;
   reportId?: string;
+  tradeDate?: string;
   monitorTab?: string;
 };
 

@@ -24,6 +24,8 @@ type WorkspaceMode =
   | 'data'
   | 'generatedReports';
 
+type MarketMonitorTab = 'auction' | 'limit_up' | 'broken_limit_up' | 'limit_down';
+
 type WorkspaceHandoff = {
   query: string;
   tradeDate?: string;
@@ -32,6 +34,7 @@ type WorkspaceHandoff = {
   eventKey?: string;
   reportId?: string;
   path?: string;
+  monitorTab?: MarketMonitorTab;
   version: number;
 };
 
@@ -45,7 +48,8 @@ type StockHandoff = {
   newsId?: string;
   eventKey?: string;
   reportId?: string;
-  monitorTab?: string;
+  tradeDate?: string;
+  monitorTab?: MarketMonitorTab;
   version: number;
 };
 
@@ -68,6 +72,7 @@ export function AppShell() {
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
+  const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [stockHandoff, setStockHandoff] = useState<StockHandoff>({ version: 0 });
 
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
@@ -109,7 +114,14 @@ export function AppShell() {
     setWorkspaceMode('researchReports');
   }
 
-  function openMarketMonitorWorkspaceFromStock() {
+  function openMarketMonitorWorkspaceFromStock(context: StockEntryContext) {
+    setMarketHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
+      monitorTab: context.monitorTab as MarketMonitorTab | undefined,
+      version: current.version + 1
+    }));
     setWorkspaceMode('market');
   }
 
@@ -184,7 +196,22 @@ export function AppShell() {
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
-          {workspaceMode === 'market' ? <MarketMonitorWorkspace /> : null}
+          {workspaceMode === 'market' ? (
+            <MarketMonitorWorkspace
+              key={`market:${marketHandoff.version}`}
+              initialTradeDate={marketHandoff.tradeDate}
+              initialMonitorTab={marketHandoff.monitorTab}
+              initialAssetId={marketHandoff.assetId}
+              onOpenAsset={(assetId, context) =>
+                openStockWorkspace(assetId, {
+                  sourceWorkspace: 'market',
+                  query: context.query,
+                  tradeDate: context.tradeDate,
+                  monitorTab: context.monitorTab as MarketMonitorTab | undefined
+                })
+              }
+            />
+          ) : null}
           {workspaceMode === 'researchReports' ? (
             <ResearchReportsWorkspace
               key={`researchReports:${researchReportsHandoff.version}`}
