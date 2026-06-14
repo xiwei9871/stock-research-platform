@@ -353,6 +353,8 @@ describe('dashboard API client', () => {
                   queue_id: '2026-06-08:manual_v1:000001.SZ',
                   asset_id: '000001.SZ',
                   canonical_asset_id: '000001.SZ',
+                  trade_date: '2026-06-08',
+                  score_version: 'manual_v1',
                   display_name: '平安银行',
                   rank: 1,
                   score: 88.5,
@@ -396,6 +398,7 @@ describe('dashboard API client', () => {
     const payload = await fetchReviewQueue();
 
     expect(payload.groups[0].items[0].digest.facts[0].kind).toBe('news');
+    expect(payload.groups[0].items[0].trade_date).toBe('2026-06-08');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

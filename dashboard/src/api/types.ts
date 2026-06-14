@@ -1002,6 +1002,8 @@ export type ReviewQueueItem = {
   queue_id: string;
   asset_id: string;
   canonical_asset_id: string;
+  trade_date: string;
+  score_version: string;
   display_name: string;
   rank: number | null;
   score: number | null;

@@ -44,7 +44,12 @@ function formatCount(count: number, singular: string) {
   return `${count} ${singular}${count === 1 ? '' : 's'}`;
 }
 
-function actionContext(action: EvidenceDigestAction, fallbackAssetId?: string, fallbackQuery?: string): StockEntryContext {
+function actionContext(
+  action: EvidenceDigestAction,
+  fallbackAssetId?: string,
+  fallbackQuery?: string,
+  fallbackTradeDate?: string
+): StockEntryContext {
   return {
     sourceWorkspace: action.workspace === 'stock' ? 'search' : (action.workspace as StockEntryContext['sourceWorkspace']),
     assetId: action.asset_id ?? fallbackAssetId,
@@ -52,7 +57,8 @@ function actionContext(action: EvidenceDigestAction, fallbackAssetId?: string, f
     newsId: action.news_id,
     reportId: action.report_id,
     eventKey: action.event_key,
-    monitorTab: action.monitor_tab as string | undefined
+    monitorTab: action.monitor_tab as string | undefined,
+    tradeDate: fallbackTradeDate
   };
 }
 
@@ -112,7 +118,7 @@ export function ReviewQueueWorkspace({
   };
 
   const openAction = (action: EvidenceDigestAction) => {
-    const context = actionContext(action, selectedItem?.asset_id, selectedItem?.display_name);
+    const context = actionContext(action, selectedItem?.asset_id, selectedItem?.display_name, selectedItem?.trade_date);
     const assetId = context.assetId ?? selectedItem?.asset_id ?? '';
 
     if (action.workspace === 'stock') {

@@ -26,6 +26,8 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             queue_id: '2026-06-08:manual_v1:000001.SZ',
             asset_id: '000001.SZ',
             canonical_asset_id: '000001.SZ',
+            trade_date: '2026-06-08',
+            score_version: 'manual_v1',
             display_name: '平安银行',
             rank: 1,
             score: 88.2,
@@ -172,10 +174,21 @@ describe('ReviewQueueWorkspace', () => {
 
     expect(onOpenStock).toHaveBeenCalledWith(
       '000001.SZ',
-      expect.objectContaining({ sourceWorkspace: 'search', assetId: '000001.SZ', query: '平安银行' })
+      expect.objectContaining({
+        sourceWorkspace: 'search',
+        assetId: '000001.SZ',
+        query: '平安银行',
+        tradeDate: '2026-06-08'
+      })
     );
     expect(onOpenNews).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceWorkspace: 'news', assetId: '000001.SZ', query: '平安银行', newsId: 'news-1' })
+      expect.objectContaining({
+        sourceWorkspace: 'news',
+        assetId: '000001.SZ',
+        query: '平安银行',
+        newsId: 'news-1',
+        tradeDate: '2026-06-08'
+      })
     );
     expect(onOpenResearchReports).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -183,7 +196,8 @@ describe('ReviewQueueWorkspace', () => {
         assetId: '000001.SZ',
         query: '平安银行',
         reportId: 'report-1',
-        eventKey: 'report-1:000001.SZ'
+        eventKey: 'report-1:000001.SZ',
+        tradeDate: '2026-06-08'
       })
     );
     expect(onOpenMarketMonitor).toHaveBeenCalledWith(
@@ -192,7 +206,8 @@ describe('ReviewQueueWorkspace', () => {
         assetId: '000001.SZ',
         query: '平安银行',
         eventKey: 'limit-up:000001.SZ',
-        monitorTab: 'limit_up'
+        monitorTab: 'limit_up',
+        tradeDate: '2026-06-08'
       })
     );
   });
