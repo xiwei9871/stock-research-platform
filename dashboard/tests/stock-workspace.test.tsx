@@ -232,11 +232,11 @@ describe('StockWorkspace', () => {
 
     expect(screen.getByText(/Score 82.4/)).toBeInTheDocument();
     expect(screen.getAllByText('momentum').length).toBeGreaterThan(0);
-    expect(screen.getByText('平安银行相关新闻')).toBeInTheDocument();
+    expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
     expect(screen.getByText('candidate')).toBeInTheDocument();
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
-    expect(screen.getByText('平安银行深度报告')).toBeInTheDocument();
-    expect(screen.getByText('90d reports 4')).toBeInTheDocument();
+    expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
+    expect(await screen.findByText('90d reports 4')).toBeInTheDocument();
   });
 
   it('loads db-linked asset news for the selected stock', async () => {
@@ -283,7 +283,7 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     const newsSection = screen.getByRole('heading', { name: 'Related News' }).closest('article');
     expect(newsSection).not.toBeNull();
-    expect(within(newsSection as HTMLElement).getByText('Loading...')).toBeInTheDocument();
+    expect(await within(newsSection as HTMLElement).findByText('Loading...')).toBeInTheDocument();
 
     await act(async () => {
       pendingNews.resolve(newsPayload);
