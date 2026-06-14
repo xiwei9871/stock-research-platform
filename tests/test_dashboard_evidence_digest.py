@@ -294,6 +294,7 @@ def test_build_evidence_digest_passes_explicit_date_windows(monkeypatch):
 
 def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
     captured_profile = {}
+    market_calls = []
     monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": ""})
     monkeypatch.setattr(
         evidence_digest,
@@ -311,7 +312,9 @@ def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
         lambda **kwargs: _reports(kwargs["asset_id"], count=0),
     )
     monkeypatch.setattr(
-        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None)
+        evidence_digest,
+        "build_market_monitor_eod",
+        lambda **kwargs: market_calls.append(kwargs) or _market(tab=None),
     )
 
     digest = evidence_digest.build_evidence_digest("000001.SZ")
@@ -320,6 +323,45 @@ def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
     assert captured_profile["trade_date"] == ""
     assert captured_profile["start_date"] == ""
     assert any(warning == "market date unavailable" for warning in digest["warnings"])
+    assert market_calls == []
+
+
+def test_build_evidence_digest_handles_platform_date_failure(monkeypatch):
+    captured_profile = {}
+    market_calls = []
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("platform offline")),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_asset_profile",
+        lambda **kwargs: captured_profile.update(kwargs) or _profile(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_market_monitor_eod",
+        lambda **kwargs: market_calls.append(kwargs) or _market(tab=None),
+    )
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ")
+
+    assert digest["trade_date"] == ""
+    assert captured_profile["trade_date"] == ""
+    assert any("platform offline" in warning for warning in digest["warnings"])
+    assert any(warning == "market date unavailable" for warning in digest["warnings"])
+    assert market_calls == []
 
 
 def test_build_evidence_digest_high_rank_without_source_facts_is_not_strong(monkeypatch):

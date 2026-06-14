@@ -17,11 +17,11 @@ def build_evidence_digest(
     lookback_days: int = 90,
     score_version: str = "manual_v1",
 ) -> dict[str, Any]:
-    selected_trade_date = _selected_trade_date(trade_date, score_version)
+    warnings: list[str] = []
+    selected_trade_date = _selected_trade_date(trade_date, score_version, warnings)
     bounded_lookback_days = _bounded_lookback_days(lookback_days)
     start_date = _start_date(selected_trade_date, bounded_lookback_days)
     news_start_date = _start_date(selected_trade_date, min(bounded_lookback_days, 7))
-    warnings: list[str] = []
     if not selected_trade_date:
         warnings.append("market date unavailable")
     profile = build_asset_profile(
@@ -54,13 +54,17 @@ def build_evidence_digest(
         end_date=selected_trade_date,
         limit=5,
     )
-    market = _load_optional(
-        warnings,
-        "market",
-        build_market_monitor_eod,
-        trade_date=selected_trade_date,
-        score_version=score_version,
-        top_n=5,
+    market = (
+        _load_optional(
+            warnings,
+            "market",
+            build_market_monitor_eod,
+            trade_date=selected_trade_date,
+            score_version=score_version,
+            top_n=5,
+        )
+        if selected_trade_date
+        else {"emotion_stock_lists": {"auction": [], "limit_up": [], "broken_limit_up": [], "limit_down": []}, "warnings": []}
     )
 
     facts: list[dict[str, Any]] = []
@@ -96,10 +100,14 @@ def build_evidence_digest(
     }
 
 
-def _selected_trade_date(trade_date: str | None, score_version: str) -> str:
+def _selected_trade_date(trade_date: str | None, score_version: str, warnings: list[str]) -> str:
     if trade_date:
         return trade_date
-    summary = load_platform_summary(score_version=score_version, top_n=5)
+    try:
+        summary = load_platform_summary(score_version=score_version, top_n=5)
+    except Exception as exc:
+        warnings.append(f"platform summary unavailable: {exc}")
+        return ""
     latest_market_date = str(summary.get("latest_market_date") or "")
     return latest_market_date
 
