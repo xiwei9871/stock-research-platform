@@ -822,6 +822,27 @@ def test_market_monitor_eod_route_returns_payload(monkeypatch):
             "freshness": {"mode": "eod", "is_realtime": False},
             "coverage": {"market_assets": 5300, "score_assets": 3100, "factor_count": 42},
             "market_breadth": {"status": "pending_source"},
+            "market_emotion": {
+                "summary": {
+                    "score": 73.6,
+                    "state": "hot",
+                    "risk_state": "medium",
+                    "status": "available",
+                },
+                "components": [],
+                "breadth": {"status": "available"},
+                "liquidity": {"status": "available"},
+                "limit_performance": {"status": "available"},
+                "profit_effect": {"status": "available"},
+                "drawdown_pressure": {"status": "available"},
+                "weight_performance": {"status": "pending_source"},
+            },
+            "emotion_stock_lists": {
+                "auction": [],
+                "limit_up": [],
+                "broken_limit_up": [],
+                "limit_down": [],
+            },
             "index_snapshot": [],
             "sector_strength": {"strongest": [], "weakest": [], "status": "pending_source"},
             "unusual_moves": [],
@@ -857,3 +878,24 @@ def test_market_monitor_eod_route_returns_payload(monkeypatch):
     }
     assert response.json()["trade_date"] == "2026-06-10"
     assert response.json()["freshness"]["is_realtime"] is False
+    assert response.json()["market_emotion"] == {
+        "summary": {
+            "score": 73.6,
+            "state": "hot",
+            "risk_state": "medium",
+            "status": "available",
+        },
+        "components": [],
+        "breadth": {"status": "available"},
+        "liquidity": {"status": "available"},
+        "limit_performance": {"status": "available"},
+        "profit_effect": {"status": "available"},
+        "drawdown_pressure": {"status": "available"},
+        "weight_performance": {"status": "pending_source"},
+    }
+    assert response.json()["emotion_stock_lists"] == {
+        "auction": [],
+        "limit_up": [],
+        "broken_limit_up": [],
+        "limit_down": [],
+    }
