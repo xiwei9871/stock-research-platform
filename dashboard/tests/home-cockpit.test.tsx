@@ -39,7 +39,8 @@ vi.mock('../src/api/client', () => ({
   fetchStrategyValidationReplay: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
   fetchPublicNews: vi.fn(),
-  fetchEvidenceDigest: vi.fn()
+  fetchEvidenceDigest: vi.fn(),
+  fetchReviewQueue: vi.fn()
 }));
 
 import * as api from '../src/api/client';
@@ -301,6 +302,7 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('Tech Bottleneck Combo')).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
     const quickActions = within(screen.getByRole('navigation', { name: 'Quick actions' }));
+    expect(quickActions.getByRole('button', { name: 'Review Queue' })).toBeVisible();
     expect(quickActions.getByRole('button', { name: 'Market Monitor' })).toBeVisible();
     expect(quickActions.getByRole('button', { name: 'Research Reports' })).toBeVisible();
     expect(quickActions.getByRole('button', { name: 'Stock Workspace' })).toBeVisible();

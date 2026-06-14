@@ -65,6 +65,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchResearchReports: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
+  fetchReviewQueue: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -504,6 +505,62 @@ function makeResearchReport() {
   };
 }
 
+function makeReviewQueue() {
+  return {
+    trade_date: '2026-06-08',
+    score_version: 'manual_v1',
+    generated_at: '2026-06-08T00:00:00+00:00',
+    groups: [
+      {
+        bucket: 'strong',
+        label: 'High Conviction',
+        count: 1,
+        items: [
+          {
+            queue_id: '2026-06-08:manual_v1:000001.SZ',
+            asset_id: '000001.SZ',
+            canonical_asset_id: '000001.SZ',
+            display_name: '平安银行',
+            rank: 1,
+            score: 89.9,
+            digest_title: 'Strong evidence',
+            bucket: 'strong',
+            source_kinds: ['strategy'],
+            risk_count: 0,
+            warning_count: 0,
+            next_action_count: 1,
+            digest: {
+              asset_id: '000001.SZ',
+              canonical_asset_id: '000001.SZ',
+              trade_date: '2026-06-08',
+              title: 'Strong evidence',
+              score: 81,
+              bucket: 'strong',
+              facts: [{ kind: 'strategy', label: 'TopN candidate' }],
+              risk_flags: [],
+              source_refs: {},
+              next_actions: [
+                {
+                  key: 'review_stock',
+                  label: 'Review Stock',
+                  workspace: 'stock',
+                  asset_id: '000001.SZ',
+                  query: '平安银行'
+                }
+              ],
+              warnings: []
+            }
+          }
+        ]
+      },
+      { bucket: 'mixed', label: 'Mixed Evidence', count: 0, items: [] },
+      { bucket: 'risk_heavy', label: 'Risk Flags', count: 0, items: [] },
+      { bucket: 'thin', label: 'Thin / Missing Sources', count: 0, items: [] }
+    ],
+    warnings: []
+  };
+}
+
 function makeShadowWatchlist(): ShadowWatchlistRow[] {
   return [
     {
@@ -922,6 +979,7 @@ describe('dashboard app shell', () => {
       next_actions: [],
       warnings: []
     });
+    apiMocks.fetchReviewQueue.mockResolvedValue(makeReviewQueue());
   });
 
   afterEach(() => {
@@ -1032,6 +1090,29 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
     expect(await screen.findByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
+  });
+
+  it('opens Review Queue from navigation and follows review stock action', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce({
+      ...makeAssetProfile('000001.SZ'),
+      asset: {
+        asset_id: '000001.SZ',
+        symbol: '000001',
+        name: '平安银行',
+        exchange: 'SZ',
+        board: 'main',
+        is_active: true
+      }
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Review Queue workspace' }));
+    expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(screen.getByText('Opened from Search')).toBeInTheDocument();
   });
 
   it('opens the Stock workspace from a global search stock result', async () => {

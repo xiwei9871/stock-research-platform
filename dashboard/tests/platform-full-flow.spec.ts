@@ -104,6 +104,52 @@ const validationRun = {
   warnings: ['fixture-backed LHB replay']
 };
 
+function makeReviewQueueFixture() {
+  return {
+    trade_date: '2026-06-08',
+    score_version: 'manual_v1',
+    generated_at: '2026-06-08T00:00:00+00:00',
+    groups: [
+      {
+        bucket: 'strong',
+        label: 'High Conviction',
+        count: 1,
+        items: [{
+          queue_id: '2026-06-08:manual_v1:CN:SZ:300951',
+          asset_id: 'CN:SZ:300951',
+          canonical_asset_id: 'CN:SZ:300951',
+          display_name: 'Fixture Stock',
+          rank: 1,
+          score: 89.9,
+          digest_title: 'Strong evidence',
+          bucket: 'strong',
+          source_kinds: ['strategy', 'news'],
+          risk_count: 0,
+          warning_count: 0,
+          next_action_count: 1,
+          digest: {
+            asset_id: 'CN:SZ:300951',
+            canonical_asset_id: 'CN:SZ:300951',
+            trade_date: '2026-06-08',
+            title: 'Strong evidence',
+            score: 81,
+            bucket: 'strong',
+            facts: [{ kind: 'news', label: 'Fixture news evidence' }],
+            risk_flags: [],
+            source_refs: {},
+            next_actions: [{ key: 'review_stock', label: 'Review Stock', workspace: 'stock', asset_id: 'CN:SZ:300951', query: 'Fixture Stock' }],
+            warnings: []
+          }
+        }]
+      },
+      { bucket: 'mixed', label: 'Mixed Evidence', count: 0, items: [] },
+      { bucket: 'risk_heavy', label: 'Risk Flags', count: 0, items: [] },
+      { bucket: 'thin', label: 'Thin / Missing Sources', count: 0, items: [] }
+    ],
+    warnings: []
+  };
+}
+
 async function mockPlatformApi(page: Page) {
   const unhandledRoutes: string[] = [];
   const backtestRunStrategyIds: string[] = [];
@@ -215,6 +261,11 @@ async function mockPlatformApi(page: Page) {
           warnings: []
         }
       });
+      return;
+    }
+
+    if (url.pathname === '/api/review-queue') {
+      await route.fulfill({ json: makeReviewQueueFixture() });
       return;
     }
 
@@ -548,6 +599,12 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByText('Tech Bottleneck Combo')).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
   await expect(page.getByText('candidate pool')).toBeVisible();
+  await assertNoUnsafeExecutionControls(page);
+  await assertNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Open Review Queue workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Review Queue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Strong evidence' })).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 

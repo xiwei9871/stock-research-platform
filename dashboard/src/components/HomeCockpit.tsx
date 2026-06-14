@@ -16,6 +16,7 @@ import type {
 } from '../api/types';
 
 type WorkspaceMode =
+  | 'reviewQueue'
   | 'market'
   | 'news'
   | 'researchReports'
@@ -31,6 +32,7 @@ type HomeCockpitProps = {
 };
 
 const QUICK_ACTIONS: Array<{ mode: WorkspaceMode; label: string }> = [
+  { mode: 'reviewQueue', label: 'Review Queue' },
   { mode: 'market', label: 'Market Monitor' },
   { mode: 'news', label: 'News' },
   { mode: 'researchReports', label: 'Research Reports' },

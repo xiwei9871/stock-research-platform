@@ -7,6 +7,7 @@ import { HomeCockpit } from './HomeCockpit';
 import { MarketMonitorWorkspace } from './MarketMonitorWorkspace';
 import { NewsWorkspace } from './NewsWorkspace';
 import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
+import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
@@ -14,6 +15,7 @@ import type { GlobalSearchResult } from '../api/types';
 
 type WorkspaceMode =
   | 'home'
+  | 'reviewQueue'
   | 'market'
   | 'news'
   | 'researchReports'
@@ -55,6 +57,7 @@ type StockHandoff = {
 
 const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
   { mode: 'home', label: 'Home' },
+  { mode: 'reviewQueue', label: 'Review Queue' },
   { mode: 'market', label: 'Market Monitor' },
   { mode: 'news', label: 'News' },
   { mode: 'researchReports', label: 'Research Reports' },
@@ -196,6 +199,14 @@ export function AppShell() {
         </header>
         <section className="platform-workspace">
           {workspaceMode === 'home' ? <HomeCockpit onNavigate={openWorkspaceMode} /> : null}
+          {workspaceMode === 'reviewQueue' ? (
+            <ReviewQueueWorkspace
+              onOpenStock={openStockWorkspace}
+              onOpenNews={openNewsWorkspaceFromStock}
+              onOpenResearchReports={openResearchReportsWorkspaceFromStock}
+              onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
+            />
+          ) : null}
           {workspaceMode === 'market' ? (
             <MarketMonitorWorkspace
               key={`market:${marketHandoff.version}`}
