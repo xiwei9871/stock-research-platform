@@ -2,9 +2,16 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace, type StockEntryContext } from '../src/components/StockWorkspace';
-import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse, DecisionOutcomeRow } from '../src/api/types';
+import type {
+  AssetNewsResponse,
+  AssetProfile,
+  AssetResearchReportResponse,
+  DecisionOutcomeRow,
+  EvidenceDigestResponse
+} from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchEvidenceDigest: vi.fn(),
   fetchAssetNews: vi.fn(),
   fetchAssetProfile: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
@@ -168,6 +175,59 @@ function makeAssetNews(overrides: Partial<AssetNewsResponse> = {}): AssetNewsRes
 
 const newsPayload = makeAssetNews();
 
+function makeEvidenceDigest(overrides: Partial<EvidenceDigestResponse> = {}): EvidenceDigestResponse {
+  return {
+    asset_id: '000001.SZ',
+    canonical_asset_id: '000001.SZ',
+    trade_date: '2026-06-08',
+    title: '平安银行 evidence digest',
+    score: 62,
+    bucket: 'mixed',
+    facts: [
+      { kind: 'news', key: 'news-1', label: 'Recent company news is available' },
+      { kind: 'research', key: 'r1', label: 'Latest research keeps buy rating' }
+    ],
+    risk_flags: [{ key: 'turnover-risk', label: 'Turnover pressure elevated', severity: 'warning' }],
+    source_refs: {
+      workspace: 'stock',
+      asset_id: '000001.SZ',
+      news_id: 'news-1',
+      report_id: 'r1',
+      event_key: 'r1:000001.SZ',
+      monitor_tab: 'limit_up'
+    },
+    next_actions: [
+      {
+        key: 'open_news',
+        label: 'Open news evidence',
+        workspace: 'news',
+        asset_id: '000001.SZ',
+        news_id: 'news-1',
+        query: '平安银行 news'
+      },
+      {
+        key: 'open_research',
+        label: 'Open research evidence',
+        workspace: 'researchReports',
+        asset_id: '000001.SZ',
+        report_id: 'r1',
+        event_key: 'r1:000001.SZ',
+        query: '平安银行 research'
+      },
+      {
+        key: 'open_market',
+        label: 'Open market evidence',
+        workspace: 'market',
+        asset_id: '000001.SZ',
+        monitor_tab: 'limit_up',
+        query: '平安银行 market'
+      }
+    ],
+    warnings: ['Digest uses partial source coverage'],
+    ...overrides
+  };
+}
+
 function makeOutcome(overrides: Partial<DecisionOutcomeRow> = {}): DecisionOutcomeRow {
   return {
     outcome_event_id: 'outcome-1',
@@ -200,6 +260,7 @@ beforeEach(() => {
   apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
   apiMocks.fetchAssetResearchReports.mockResolvedValue(makeResearchReports());
   apiMocks.fetchAssetNews.mockResolvedValue(newsPayload);
+  apiMocks.fetchEvidenceDigest.mockResolvedValue(makeEvidenceDigest());
   apiMocks.searchAssets.mockResolvedValue([]);
 });
 
@@ -407,6 +468,145 @@ describe('StockWorkspace', () => {
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
     expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
     expect(await screen.findByText('90d reports 4')).toBeInTheDocument();
+  });
+
+  it('renders Evidence Digest and opens source-backed next actions', async () => {
+    const handleOpenNews = vi.fn();
+    const handleOpenResearchReports = vi.fn();
+    const handleOpenMarketMonitor = vi.fn();
+
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        onOpenNews={handleOpenNews}
+        onOpenResearchReports={handleOpenResearchReports}
+        onOpenMarketMonitor={handleOpenMarketMonitor}
+      />
+    );
+
+    const digestPanel = await screen.findByRole('region', { name: 'Evidence Digest' });
+    expect(within(digestPanel).getByRole('heading', { name: 'Evidence Digest' })).toBeInTheDocument();
+    expect(within(digestPanel).getByText('平安银行 evidence digest')).toBeInTheDocument();
+    expect(within(digestPanel).getByText('Score 62')).toBeInTheDocument();
+    expect(within(digestPanel).getByText('Recent company news is available')).toBeInTheDocument();
+    expect(within(digestPanel).getByText('Latest research keeps buy rating')).toBeInTheDocument();
+    expect(within(digestPanel).getByText('Turnover pressure elevated')).toBeInTheDocument();
+
+    fireEvent.click(within(digestPanel).getByRole('button', { name: 'Open digest news evidence' }));
+    fireEvent.click(within(digestPanel).getByRole('button', { name: 'Open digest research evidence' }));
+    fireEvent.click(within(digestPanel).getByRole('button', { name: 'Open digest market evidence' }));
+
+    expect(handleOpenNews).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceWorkspace: 'news',
+        assetId: '000001.SZ',
+        newsId: 'news-1',
+        query: '平安银行 news'
+      })
+    );
+    expect(handleOpenResearchReports).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceWorkspace: 'researchReports',
+        assetId: '000001.SZ',
+        reportId: 'r1',
+        eventKey: 'r1:000001.SZ',
+        query: '平安银行 research'
+      })
+    );
+    expect(handleOpenMarketMonitor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceWorkspace: 'market',
+        assetId: '000001.SZ',
+        monitorTab: 'limit_up',
+        query: '平安银行 market'
+      })
+    );
+  });
+
+  it('shows digest error locally without hiding stock profile', async () => {
+    apiMocks.fetchEvidenceDigest.mockRejectedValueOnce(new Error('digest failed'));
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    const digestPanel = await screen.findByRole('region', { name: 'Evidence Digest' });
+    expect(within(digestPanel).getByText('digest failed')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Price & Events' })).toBeInTheDocument();
+  });
+
+  it('does not let a stale digest response overwrite the newer stock digest', async () => {
+    const firstDigest = deferred<EvidenceDigestResponse>();
+    const secondDigest = deferred<EvidenceDigestResponse>();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: {
+        asset_id: '600000.SH',
+        symbol: '600000',
+        name: '浦发银行',
+        exchange: 'SH',
+        board: null,
+        is_active: true
+      },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
+    apiMocks.fetchEvidenceDigest.mockReturnValueOnce(firstDigest.promise).mockReturnValueOnce(secondDigest.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
+        tradeDate: '2026-06-08',
+        lookbackDays: 90
+      })
+    );
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchEvidenceDigest).toHaveBeenLastCalledWith('600000.SH', {
+        tradeDate: '2026-06-08',
+        lookbackDays: 90
+      })
+    );
+
+    await act(async () => {
+      secondDigest.resolve(
+        makeEvidenceDigest({
+          asset_id: '600000.SH',
+          canonical_asset_id: '600000.SH',
+          title: '浦发银行 current digest',
+          facts: [{ kind: 'market', key: 'second', label: 'Second stock market fact' }],
+          risk_flags: []
+        })
+      );
+      await secondDigest.promise;
+    });
+
+    expect(await screen.findByText('浦发银行 current digest')).toBeInTheDocument();
+
+    await act(async () => {
+      firstDigest.resolve(
+        makeEvidenceDigest({
+          title: 'stale first digest',
+          facts: [{ kind: 'news', key: 'old', label: 'Old stale fact' }]
+        })
+      );
+      await firstDigest.promise;
+    });
+
+    expect(screen.getByText('浦发银行 current digest')).toBeInTheDocument();
+    expect(screen.queryByText('stale first digest')).not.toBeInTheDocument();
+    expect(screen.queryByText('Old stale fact')).not.toBeInTheDocument();
   });
 
   it('renders outcome evidence in Review / Outcomes when no decisions are present', async () => {

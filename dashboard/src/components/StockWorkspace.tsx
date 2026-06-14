@@ -1,6 +1,13 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAssetNews, fetchAssetProfile, fetchAssetResearchReports, searchAssets } from '../api/client';
-import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse, AssetSummary } from '../api/types';
+import { fetchAssetNews, fetchAssetProfile, fetchAssetResearchReports, fetchEvidenceDigest, searchAssets } from '../api/client';
+import type {
+  AssetNewsResponse,
+  AssetProfile,
+  AssetResearchReportResponse,
+  AssetSummary,
+  EvidenceDigestAction,
+  EvidenceDigestResponse
+} from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
@@ -81,6 +88,17 @@ function formatScore(profile: AssetProfile | null) {
   return typeof score === 'number' ? score.toFixed(1) : '-';
 }
 
+function formatDigestScore(score: number) {
+  return Number.isInteger(score) ? String(score) : score.toFixed(1);
+}
+
+function getDigestActionAriaLabel(action: EvidenceDigestAction) {
+  if (action.workspace === 'news') return 'Open digest news evidence';
+  if (action.workspace === 'researchReports') return 'Open digest research evidence';
+  if (action.workspace === 'market') return 'Open digest market evidence';
+  return action.label;
+}
+
 function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
   const rawFactorRows = (profile?.factor_values ?? []).map((row) => ({
     group: formatValue(row.factor_group ?? '-'),
@@ -121,20 +139,24 @@ export function StockWorkspace({
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
+  const [evidenceDigest, setEvidenceDigest] = useState<EvidenceDigestResponse | null>(null);
   const [assetMatches, setAssetMatches] = useState<AssetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [isResearchReportsLoading, setIsResearchReportsLoading] = useState(false);
+  const [isEvidenceDigestLoading, setIsEvidenceDigestLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newsError, setNewsError] = useState<{ assetId: string; message: string } | null>(null);
   const [newsLoadingAssetId, setNewsLoadingAssetId] = useState<string | null>(null);
   const [researchReportsError, setResearchReportsError] = useState<string | null>(null);
+  const [evidenceDigestError, setEvidenceDigestError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const profileRequestIdRef = useRef(0);
   const newsRequestIdRef = useRef(0);
   const researchReportsRequestIdRef = useRef(0);
+  const evidenceDigestRequestIdRef = useRef(0);
   const searchRequestIdRef = useRef(0);
 
   const isLatestProfileRequest = useCallback((requestId: number) => {
@@ -224,6 +246,7 @@ export function StockWorkspace({
       profileRequestIdRef.current += 1;
       newsRequestIdRef.current += 1;
       researchReportsRequestIdRef.current += 1;
+      evidenceDigestRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
   }, [initialAssetId]);
@@ -298,6 +321,42 @@ export function StockWorkspace({
       .finally(() => {
         if (mountedRef.current && requestId === researchReportsRequestIdRef.current) {
           setIsResearchReportsLoading(false);
+      }
+    });
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile) {
+      evidenceDigestRequestIdRef.current += 1;
+      setEvidenceDigest(null);
+      setIsEvidenceDigestLoading(false);
+      setEvidenceDigestError(null);
+      return;
+    }
+
+    const digestAssetId = profile.canonical_asset_id;
+    const requestId = evidenceDigestRequestIdRef.current + 1;
+    evidenceDigestRequestIdRef.current = requestId;
+
+    setIsEvidenceDigestLoading(true);
+    setEvidenceDigestError(null);
+    setEvidenceDigest(null);
+
+    fetchEvidenceDigest(digestAssetId, { tradeDate, lookbackDays: 90 })
+      .then((payload) => {
+        if (mountedRef.current && requestId === evidenceDigestRequestIdRef.current) {
+          setEvidenceDigest(payload);
+        }
+      })
+      .catch((err: unknown) => {
+        if (mountedRef.current && requestId === evidenceDigestRequestIdRef.current) {
+          setEvidenceDigestError(err instanceof Error ? err.message : String(err));
+          setEvidenceDigest(null);
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current && requestId === evidenceDigestRequestIdRef.current) {
+          setIsEvidenceDigestLoading(false);
         }
       });
   }, [profile]);
@@ -341,6 +400,28 @@ export function StockWorkspace({
     currentEntryContext.tradeDate ? `Trade Date ${currentEntryContext.tradeDate}` : null,
     currentEntryContext.monitorTab ? `Monitor Tab ${currentEntryContext.monitorTab}` : null
   ].filter((value): value is string => Boolean(value));
+  const visibleEvidenceDigest =
+    evidenceDigest && profile && evidenceDigest.canonical_asset_id === profile.canonical_asset_id ? evidenceDigest : null;
+
+  const openDigestAction = (action: EvidenceDigestAction) => {
+    const nextContext: StockEntryContext = {
+      ...currentEntryContext,
+      assetId: action.asset_id ?? currentEntryContext.assetId ?? currentAssetId,
+      query: action.query ?? currentEntryContext.query,
+      newsId: action.news_id ?? currentEntryContext.newsId,
+      reportId: action.report_id ?? currentEntryContext.reportId,
+      eventKey: action.event_key ?? currentEntryContext.eventKey,
+      monitorTab: action.monitor_tab ?? currentEntryContext.monitorTab
+    };
+
+    if (action.workspace === 'news') {
+      onOpenNews?.({ ...nextContext, sourceWorkspace: 'news' });
+    } else if (action.workspace === 'researchReports') {
+      onOpenResearchReports?.({ ...nextContext, sourceWorkspace: 'researchReports' });
+    } else if (action.workspace === 'market') {
+      onOpenMarketMonitor?.({ ...nextContext, sourceWorkspace: 'market' });
+    }
+  };
 
   return (
     <section className="workspace-stack stock-detail-shell" aria-label="Stock Workspace workspace">
@@ -479,6 +560,69 @@ export function StockWorkspace({
             </aside>
 
             <div className="stock-detail-main">
+              <section className="workspace-band" role="region" aria-label="Evidence Digest">
+                <div className="section-heading">
+                  <h2>Evidence Digest</h2>
+                  {isEvidenceDigestLoading ? <span className="muted">Loading digest...</span> : null}
+                </div>
+                {evidenceDigestError ? <p className="error-text">{evidenceDigestError}</p> : null}
+                {visibleEvidenceDigest ? (
+                  <>
+                    <div className="metric-grid compact">
+                      <span>
+                        <span>Title</span>
+                        <strong>{visibleEvidenceDigest.title}</strong>
+                      </span>
+                      <span>
+                        <span>Score</span>
+                        <strong>Score {formatDigestScore(visibleEvidenceDigest.score)}</strong>
+                      </span>
+                      <span>
+                        <span>Bucket</span>
+                        <strong>{visibleEvidenceDigest.bucket}</strong>
+                      </span>
+                    </div>
+                    <div className="compact-news-list">
+                      {visibleEvidenceDigest.facts.map((fact) => (
+                        <div key={`${fact.kind}-${fact.key ?? fact.label}`} className="news-stock-row">
+                          <strong>{fact.label}</strong>
+                          {fact.severity ? <span className="status-chip neutral">{fact.severity}</span> : null}
+                        </div>
+                      ))}
+                    </div>
+                    {visibleEvidenceDigest.risk_flags.length > 0 ? (
+                      <div className="tag-stack">
+                        {visibleEvidenceDigest.risk_flags.map((flag) => (
+                          <span key={flag.key} className="status-chip warning">
+                            {flag.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {visibleEvidenceDigest.warnings.length > 0 ? (
+                      <p className="muted">{visibleEvidenceDigest.warnings.join(' | ')}</p>
+                    ) : null}
+                    {visibleEvidenceDigest.next_actions.length > 0 ? (
+                      <div className="compact-toolbar">
+                        {visibleEvidenceDigest.next_actions.map((action) => (
+                          <button
+                            key={action.key}
+                            type="button"
+                            aria-label={getDigestActionAriaLabel(action)}
+                            onClick={() => openDigestAction(action)}
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                {!isEvidenceDigestLoading && !evidenceDigestError && !visibleEvidenceDigest ? (
+                  <p className="muted">No digest available.</p>
+                ) : null}
+              </section>
+
               <section className="workspace-band" aria-label="Price & Events">
                 <div className="section-heading">
                   <h2>Price & Events</h2>
