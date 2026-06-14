@@ -1412,6 +1412,9 @@ describe('dashboard app shell', () => {
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
     expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(screen.queryByText('Realtime')).not.toBeInTheDocument();
+    expect(screen.getByText('Data Mode')).toBeInTheDocument();
+    expect(screen.getByText('EOD Snapshot')).toBeInTheDocument();
     expect(screen.getByText('2026-06-10')).toBeInTheDocument();
     expect(screen.getByText('综合强度')).toBeInTheDocument();
     expect(screen.getByText('73.6')).toBeInTheDocument();
@@ -1429,6 +1432,11 @@ describe('dashboard app shell', () => {
     expect(screen.getByRole('tab', { name: '涨停 1' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '炸板 0' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '跌停 0' })).toBeInTheDocument();
+    screen.getAllByRole('tab').forEach((tab) => {
+      const panelId = tab.getAttribute('aria-controls');
+      expect(panelId).toBeTruthy();
+      expect(document.getElementById(panelId as string)).toBeInTheDocument();
+    });
     expect(screen.getByText('金钼股份')).toBeInTheDocument();
     expect(screen.getByText('30.38亿')).toBeInTheDocument();
     expect(screen.getByText('权重表现待接入')).toBeInTheDocument();

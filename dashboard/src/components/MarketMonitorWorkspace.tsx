@@ -102,8 +102,10 @@ export function MarketMonitorWorkspace() {
   const weightPerformance = emotion?.weight_performance;
   const emotionComponents = emotion?.components ?? [];
   const stockLists = payload?.emotion_stock_lists;
-  const activeRows: EmotionStockListRow[] = stockLists?.[activeStockTab] ?? [];
   const stockCount = (tab: StockTabKey) => stockLists?.[tab]?.length ?? 0;
+  const dataModeLabel = payload?.freshness?.label?.toLowerCase().includes('historical')
+    ? 'Historical EOD Snapshot'
+    : 'EOD Snapshot';
   const topnPreview = payload?.strategy_signal_summary?.topn_preview ?? [];
   const generatedReports = payload?.generated_reports ?? [];
   const activeStockTabIndex = STOCK_TABS.findIndex((tab) => tab.key === activeStockTab);
@@ -178,8 +180,8 @@ export function MarketMonitorWorkspace() {
           <strong>{payload?.trade_date || '-'}</strong>
         </div>
         <div>
-          <span>Realtime</span>
-          <strong>{payload?.freshness?.is_realtime ? 'Yes' : 'No'}</strong>
+          <span>Data Mode</span>
+          <strong>{dataModeLabel}</strong>
         </div>
       </section>
 
@@ -291,45 +293,55 @@ export function MarketMonitorWorkspace() {
             </button>
           ))}
         </div>
-        <div
-          aria-labelledby={`stock-tab-${activeStockTab}`}
-          className="stock-table-wrap"
-          id={`stock-panel-${activeStockTab}`}
-          role="tabpanel"
-        >
-          {activeStockTab === 'auction' && activeRows.length === 0 ? (
-            <p className="pending-note">竞价数据待接入</p>
-          ) : (
-            <table className="emotion-stock-table">
-              <thead>
-                <tr>
-                  <th>股票名称</th>
-                  <th>成交额</th>
-                  <th>涨幅</th>
-                  <th>板块</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeRows.map((row) => (
-                  <tr key={`${row.tab}-${row.asset_id}`}>
-                    <td>
-                      <strong>{row.name || row.symbol}</strong>
-                      <span>{row.symbol}</span>
-                    </td>
-                    <td>{formatAmountYi(row.amount)}</td>
-                    <td>{formatPercentPoints(row.pct_chg)}</td>
-                    <td>{row.board || '-'}</td>
-                  </tr>
-                ))}
-                {activeRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4}>暂无股票</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {STOCK_TABS.map((tab) => {
+          const isActivePanel = activeStockTab === tab.key;
+          const tabRows: EmotionStockListRow[] = stockLists?.[tab.key] ?? [];
+          return (
+            <div
+              aria-labelledby={`stock-tab-${tab.key}`}
+              className="stock-table-wrap"
+              hidden={!isActivePanel}
+              id={`stock-panel-${tab.key}`}
+              key={tab.key}
+              role="tabpanel"
+            >
+              {isActivePanel ? (
+                tab.key === 'auction' && tabRows.length === 0 ? (
+                  <p className="pending-note">竞价数据待接入</p>
+                ) : (
+                  <table className="emotion-stock-table">
+                    <thead>
+                      <tr>
+                        <th>股票名称</th>
+                        <th>成交额</th>
+                        <th>涨幅</th>
+                        <th>板块</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tabRows.map((row) => (
+                        <tr key={`${row.tab}-${row.asset_id}`}>
+                          <td>
+                            <strong>{row.name || row.symbol}</strong>
+                            <span>{row.symbol}</span>
+                          </td>
+                          <td>{formatAmountYi(row.amount)}</td>
+                          <td>{formatPercentPoints(row.pct_chg)}</td>
+                          <td>{row.board || '-'}</td>
+                        </tr>
+                      ))}
+                      {tabRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={4}>暂无股票</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                )
+              ) : null}
+            </div>
+          );
+        })}
       </section>
 
       <section className="workspace-panel">
