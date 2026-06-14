@@ -62,10 +62,11 @@ def build_evidence_digest(
     source_refs: dict[str, Any] = {}
     next_actions: list[dict[str, Any]] = []
 
-    _add_strategy_evidence(profile, facts, risk_flags)
+    _add_strategy_evidence(profile, canonical_asset_id, facts, risk_flags, source_refs, next_actions)
     _add_news_evidence(news, facts, risk_flags, source_refs, next_actions)
     _add_research_evidence(reports, facts, risk_flags, source_refs, next_actions)
     _add_market_evidence(canonical_asset_id, market, facts, risk_flags, source_refs, next_actions)
+    _ensure_required_actions(canonical_asset_id, next_actions)
 
     warnings.extend(str(warning) for warning in (news.get("warnings") or []))
     warnings.extend(str(warning) for warning in (reports.get("warnings") or []))
@@ -139,9 +140,23 @@ def _evidence_score(score_row: dict[str, Any]) -> int:
 
 def _add_strategy_evidence(
     profile: dict[str, Any],
+    asset_id: str,
     facts: list[dict[str, Any]],
     risk_flags: list[dict[str, Any]],
+    source_refs: dict[str, Any],
+    next_actions: list[dict[str, Any]],
 ) -> None:
+    source_refs["strategy_asset_id"] = asset_id
+    next_actions.append(
+        {
+            "key": "review_stock",
+            "label": "Review stock",
+            "workspace": "stock",
+            "asset_id": asset_id,
+            "query": asset_id,
+        }
+    )
+
     score_row = profile.get("score") or {}
     rank = _to_int(score_row.get("rank"))
     if rank is not None:
@@ -315,6 +330,29 @@ def _find_market_item(asset_id: str, items: list[dict[str, Any]]) -> dict[str, A
         if item.get("asset_id") == asset_id or item.get("symbol") == symbol:
             return item
     return None
+
+
+def _ensure_required_actions(asset_id: str, next_actions: list[dict[str, Any]]) -> None:
+    required = {
+        "open_news": {"label": "Open news", "workspace": "news"},
+        "open_research": {"label": "Open research", "workspace": "research"},
+        "open_market": {"label": "Open market monitor", "workspace": "market"},
+        "review_stock": {"label": "Review stock", "workspace": "stock"},
+    }
+    actions_by_key = {
+        str(action.get("key")): action
+        for action in next_actions
+        if action.get("key") in required
+    }
+    for key, defaults in required.items():
+        action = actions_by_key.get(key)
+        if action is None:
+            action = {"key": key}
+            next_actions.append(action)
+        action.setdefault("label", defaults["label"])
+        action.setdefault("workspace", defaults["workspace"])
+        action.setdefault("asset_id", asset_id)
+        action.setdefault("query", asset_id)
 
 
 def _bucket(score: int, facts: list[dict[str, Any]], risk_flags: list[dict[str, Any]]) -> str:

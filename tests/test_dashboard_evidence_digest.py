@@ -104,6 +104,10 @@ def _market(asset_id="000001.SZ", *, tab="limit_up"):
     }
 
 
+def _actions_by_key(digest):
+    return {action["key"]: action for action in digest["next_actions"]}
+
+
 def test_build_evidence_digest_strong_source_backed(monkeypatch):
     monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
     monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id))
@@ -121,7 +125,18 @@ def test_build_evidence_digest_strong_source_backed(monkeypatch):
     assert digest["source_refs"]["news_id"] == "news-1"
     assert digest["source_refs"]["report_id"] == "r1"
     assert digest["source_refs"]["monitor_tab"] == "limit_up"
-    assert {action["key"] for action in digest["next_actions"]} >= {"open_news", "open_research", "open_market"}
+    assert digest["source_refs"]["strategy_asset_id"] == "000001.SZ"
+    actions = _actions_by_key(digest)
+    assert set(actions) >= {"open_news", "open_research", "open_market", "review_stock"}
+    assert actions["open_news"]["news_id"] == "news-1"
+    assert actions["open_research"]["report_id"] == "r1"
+    assert actions["open_research"]["event_key"] == "r1:000001.SZ"
+    assert actions["open_market"]["monitor_tab"] == "limit_up"
+    assert actions["review_stock"]["workspace"] == "stock"
+    for action in actions.values():
+        assert action["workspace"]
+        assert action["asset_id"] == "000001.SZ"
+        assert action["query"]
 
 
 def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
@@ -136,6 +151,13 @@ def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
     assert digest["bucket"] == "thin"
     assert any(flag["key"] == "thin_research" for flag in digest["risk_flags"])
     assert any(flag["key"] == "low_news_coverage" for flag in digest["risk_flags"])
+    assert digest["source_refs"]["strategy_asset_id"] == "000001.SZ"
+    actions = _actions_by_key(digest)
+    assert set(actions) >= {"open_news", "open_research", "open_market", "review_stock"}
+    for action in actions.values():
+        assert action["workspace"]
+        assert action["asset_id"] == "000001.SZ"
+        assert action["query"]
 
 
 def test_build_evidence_digest_risk_heavy_for_market_pressure(monkeypatch):
