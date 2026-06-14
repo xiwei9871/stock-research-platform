@@ -309,8 +309,24 @@ describe('StockWorkspace', () => {
     );
 
     expect(await screen.findByText(/Opened from Market Monitor/)).toBeInTheDocument();
-    expect(screen.getByText(/2026-06-12/)).toBeInTheDocument();
+    expect(screen.getByText('Trade Date 2026-06-12')).toBeInTheDocument();
     expect(screen.getByText(/limit_up/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-06-12',
+        '2025-12-10',
+        '2026-06-12',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
+        tradeDate: '2026-06-12',
+        lookbackDays: 90
+      })
+    );
   });
 
   it('renders context rail actions and recent evidence timeline entries', async () => {

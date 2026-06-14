@@ -101,6 +101,7 @@ export function AppShell() {
       query: context.query ?? context.assetId ?? selectedAssetId,
       newsId: context.newsId,
       assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
       version: current.version + 1
     }));
     setWorkspaceMode('news');
@@ -112,6 +113,7 @@ export function AppShell() {
       eventKey: context.eventKey,
       reportId: context.reportId,
       assetId: context.assetId ?? selectedAssetId,
+      tradeDate: context.tradeDate,
       version: current.version + 1
     }));
     setWorkspaceMode('researchReports');
@@ -236,12 +238,14 @@ export function AppShell() {
               initialQuery={researchReportsHandoff.query}
               initialEventKey={researchReportsHandoff.eventKey}
               initialReportId={researchReportsHandoff.reportId}
+              initialTradeDate={researchReportsHandoff.tradeDate}
               onOpenAsset={(assetId, context) =>
                 openStockWorkspace(assetId, {
                   sourceWorkspace: 'researchReports',
                   query: context.query,
                   eventKey: context.eventKey,
-                  reportId: context.reportId
+                  reportId: context.reportId,
+                  tradeDate: context.tradeDate
                 })
               }
             />
@@ -277,11 +281,13 @@ export function AppShell() {
               key={`news:${newsHandoff.version}`}
               initialQuery={newsHandoff.query}
               initialNewsId={newsHandoff.newsId}
+              initialTradeDate={newsHandoff.tradeDate}
               onOpenAsset={(assetId, context) =>
                 openStockWorkspace(assetId, {
                   sourceWorkspace: 'news',
                   query: context.query,
-                  newsId: context.newsId
+                  newsId: context.newsId,
+                  tradeDate: context.tradeDate
                 })
               }
             />

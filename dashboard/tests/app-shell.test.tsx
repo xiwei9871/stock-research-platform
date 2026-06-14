@@ -520,6 +520,8 @@ function makeReviewQueue() {
             queue_id: '2026-06-08:manual_v1:000001.SZ',
             asset_id: '000001.SZ',
             canonical_asset_id: '000001.SZ',
+            trade_date: '2026-06-10',
+            score_version: 'manual_v1',
             display_name: '平安银行',
             rank: 1,
             score: 89.9,
@@ -532,7 +534,7 @@ function makeReviewQueue() {
             digest: {
               asset_id: '000001.SZ',
               canonical_asset_id: '000001.SZ',
-              trade_date: '2026-06-08',
+              trade_date: '2026-06-10',
               title: 'Strong evidence',
               score: 81,
               bucket: 'strong',
@@ -1113,6 +1115,22 @@ describe('dashboard app shell', () => {
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     expect(screen.getByText('Opened from Search')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
+        '000001.SZ',
+        '2026-06-10',
+        '2025-12-10',
+        '2026-06-10',
+        'manual_v1',
+        'qfq'
+      )
+    );
+    await waitFor(() =>
+      expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
+        tradeDate: '2026-06-10',
+        lookbackDays: 90
+      })
+    );
   });
 
   it('opens the Stock workspace from a global search stock result', async () => {
@@ -1381,20 +1399,22 @@ describe('dashboard app shell', () => {
         NewsWorkspace: ({
           initialQuery,
           initialNewsId,
+          initialTradeDate,
           onOpenAsset
         }: {
           initialQuery?: string;
           initialNewsId?: string;
+          initialTradeDate?: string;
           onOpenAsset?: (
             assetId: string,
-            context: { sourceWorkspace: 'news'; assetId: string; newsId: string; query: string }
+            context: { sourceWorkspace: 'news'; assetId: string; newsId: string; query: string; tradeDate?: string }
           ) => void;
         }) => {
           const [mountId] = React.useState(() => {
             newsMountId += 1;
             return newsMountId;
           });
-          newsRenders.push({ initialQuery, initialNewsId, mountId });
+          newsRenders.push({ initialQuery, initialNewsId, initialTradeDate, mountId });
           return (
             <div data-testid="mock-news-workspace">
               {initialQuery}:{initialNewsId ?? 'none'}:{mountId}
@@ -1405,7 +1425,8 @@ describe('dashboard app shell', () => {
                     sourceWorkspace: 'news',
                     assetId: 'CN:SH:600519',
                     newsId: 'news-row-1',
-                    query: '贵州茅台经营快讯'
+                    query: '贵州茅台经营快讯',
+                    tradeDate: initialTradeDate ?? '2026-06-10'
                   })
                 }
               >
@@ -1421,14 +1442,16 @@ describe('dashboard app shell', () => {
         initialQuery,
         initialEventKey,
         initialReportId,
+        initialTradeDate,
         onOpenAsset
       }: {
         initialQuery?: string;
         initialEventKey?: string;
         initialReportId?: string;
+        initialTradeDate?: string;
         onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
       }) => {
-        researchRenders.push({ initialQuery, initialEventKey, initialReportId });
+        researchRenders.push({ initialQuery, initialEventKey, initialReportId, initialTradeDate });
         return (
           <div data-testid="mock-research-workspace">
             {initialQuery}:{initialEventKey ?? 'none'}:{initialReportId ?? 'none'}
@@ -1440,7 +1463,8 @@ describe('dashboard app shell', () => {
                   assetId: 'CN:SH:600519',
                   eventKey: 'r1:600519.SH',
                   reportId: 'r1',
-                  query: '贵州茅台深度报告'
+                  query: '贵州茅台深度报告',
+                  tradeDate: initialTradeDate ?? '2026-06-11'
                 })
               }
             >
@@ -1544,7 +1568,8 @@ describe('dashboard app shell', () => {
       entryContext: {
         sourceWorkspace: 'news',
         query: '贵州茅台经营快讯',
-        newsId: 'news-row-1'
+        newsId: 'news-row-1',
+        tradeDate: '2026-06-10'
       },
       mountId: 1
     });
@@ -1576,7 +1601,8 @@ describe('dashboard app shell', () => {
       entryContext: {
         sourceWorkspace: 'news',
         query: '贵州茅台经营快讯',
-        newsId: 'news-row-1'
+        newsId: 'news-row-1',
+        tradeDate: '2026-06-10'
       },
       mountId: 1
     });
@@ -1634,7 +1660,8 @@ describe('dashboard app shell', () => {
     expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('贵州茅台经营快讯:news-row-1:2');
     expect(newsRenders.at(-1)).toMatchObject({
       initialQuery: '贵州茅台经营快讯',
-      initialNewsId: 'news-row-1'
+      initialNewsId: 'news-row-1',
+      initialTradeDate: '2026-06-10'
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock open research' }));
@@ -1650,7 +1677,8 @@ describe('dashboard app shell', () => {
     expect(researchRenders.at(-1)).toMatchObject({
       initialQuery: '贵州茅台深度报告',
       initialEventKey: 'r1:600519.SH',
-      initialReportId: 'r1'
+      initialReportId: 'r1',
+      initialTradeDate: '2026-06-11'
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
@@ -1738,7 +1766,8 @@ describe('dashboard app shell', () => {
         sourceWorkspace: 'researchReports',
         query: '贵州茅台深度报告',
         eventKey: 'r1:600519.SH',
-        reportId: 'r1'
+        reportId: 'r1',
+        tradeDate: '2026-06-11'
       },
       mountId: 1
     });

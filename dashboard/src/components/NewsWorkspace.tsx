@@ -21,6 +21,7 @@ const NEWS_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 type NewsWorkspaceProps = {
   initialQuery?: string;
   initialNewsId?: string;
+  initialTradeDate?: string;
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
 
@@ -70,7 +71,7 @@ export function getNewsAssetCandidate(item: PublicNewsItem) {
   return null;
 }
 
-export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }: NewsWorkspaceProps) {
+export function NewsWorkspace({ initialQuery = '', initialNewsId, initialTradeDate, onOpenAsset }: NewsWorkspaceProps) {
   const [items, setItems] = useState<PublicNewsItem[]>([]);
   const [summary, setSummary] = useState<PublicNewsSummary | null>(null);
   const [collectorStatus, setCollectorStatus] = useState<PublicNewsCollectorStatus | null>(null);
@@ -317,7 +318,8 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, onOpenAsset }:
                                 sourceWorkspace: 'news',
                                 assetId,
                                 newsId: item.news_id,
-                                query: item.title || query || assetId
+                                query: item.title || query || assetId,
+                                tradeDate: initialTradeDate
                               })
                             }
                           >

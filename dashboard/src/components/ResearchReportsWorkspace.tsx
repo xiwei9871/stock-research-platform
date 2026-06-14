@@ -20,6 +20,7 @@ type ResearchReportsWorkspaceProps = {
   initialQuery?: string;
   initialEventKey?: string;
   initialReportId?: string;
+  initialTradeDate?: string;
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
 
@@ -93,6 +94,7 @@ export function ResearchReportsWorkspace({
   initialQuery = '',
   initialEventKey,
   initialReportId,
+  initialTradeDate,
   onOpenAsset
 }: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
@@ -372,7 +374,7 @@ export function ResearchReportsWorkspace({
                             onClick={(event) => {
                               event.stopPropagation();
                               const assetId = getReportAssetId(item);
-                              onOpenAsset?.(assetId, buildReportStockContext(item));
+                              onOpenAsset?.(assetId, { ...buildReportStockContext(item), tradeDate: initialTradeDate });
                             }}
                           >
                             Stock Detail
@@ -460,7 +462,7 @@ export function ResearchReportsWorkspace({
                     aria-label={`Open Stock Detail for ${selectedReport.stock_name || selectedReport.ts_code}`}
                     onClick={() => {
                       const assetId = getReportAssetId(selectedReport);
-                      onOpenAsset?.(assetId, buildReportStockContext(selectedReport));
+                      onOpenAsset?.(assetId, { ...buildReportStockContext(selectedReport), tradeDate: initialTradeDate });
                     }}
                   >
                     Stock Detail

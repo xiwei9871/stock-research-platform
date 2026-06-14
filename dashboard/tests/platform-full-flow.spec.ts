@@ -118,6 +118,8 @@ function makeReviewQueueFixture() {
           queue_id: '2026-06-08:manual_v1:CN:SZ:300951',
           asset_id: 'CN:SZ:300951',
           canonical_asset_id: 'CN:SZ:300951',
+          trade_date: '2026-06-08',
+          score_version: 'manual_v1',
           display_name: 'Fixture Stock',
           rank: 1,
           score: 89.9,

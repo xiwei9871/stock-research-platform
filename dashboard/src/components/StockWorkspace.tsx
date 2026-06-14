@@ -136,10 +136,11 @@ export function StockWorkspace({
   onOpenResearchReports,
   onOpenMarketMonitor
 }: StockWorkspaceProps) {
+  const initialTradeDate = entryContext?.tradeDate ?? DEFAULT_TRADE_DATE;
   const [assetId, setAssetId] = useState(initialAssetId);
-  const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
+  const [tradeDate, setTradeDate] = useState(initialTradeDate);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
-  const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
+  const [endDate, setEndDate] = useState(initialTradeDate);
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
@@ -245,7 +246,7 @@ export function StockWorkspace({
 
   useEffect(() => {
     mountedRef.current = true;
-    void loadProfile(initialAssetId, DEFAULT_TRADE_DATE, DEFAULT_START_DATE, DEFAULT_END_DATE);
+    void loadProfile(initialAssetId, initialTradeDate, DEFAULT_START_DATE, initialTradeDate);
     return () => {
       mountedRef.current = false;
       profileRequestIdRef.current += 1;
@@ -254,7 +255,7 @@ export function StockWorkspace({
       evidenceDigestRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
-  }, [initialAssetId]);
+  }, [initialAssetId, initialTradeDate]);
 
   useEffect(() => {
     if (!profile?.canonical_asset_id) {
