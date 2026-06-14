@@ -333,6 +333,7 @@ describe('StockWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    expect(screen.queryByText('Opened from News')).not.toBeInTheDocument();
     expect(screen.queryByText('newsId: news-old')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));

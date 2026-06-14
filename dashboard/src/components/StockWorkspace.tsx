@@ -332,8 +332,6 @@ export function StockWorkspace({
         query: entryContext?.query ?? profile?.asset?.symbol ?? profile?.canonical_asset_id ?? assetId
       }
     : {
-        sourceWorkspace: entryContext?.sourceWorkspace,
-        monitorTab: entryContext?.monitorTab,
         assetId: currentAssetId
       };
   const sourceObjectIds = [
@@ -349,9 +347,9 @@ export function StockWorkspace({
       <header className="workspace-header">
         <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : 'Stock Workspace'}</h1>
         <p className="muted">Single-stock evidence hub for price, factors, news, research reports, and strategy history.</p>
-        {entryContext?.sourceWorkspace ? (
+        {currentEntryContext.sourceWorkspace ? (
           <p className="muted">
-            Opened from {formatSourceWorkspace(entryContext.sourceWorkspace)}
+            Opened from {formatSourceWorkspace(currentEntryContext.sourceWorkspace)}
             {currentEntryContext.matchReason ? (
               <>
                 {' '}
