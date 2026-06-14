@@ -269,8 +269,9 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
-    if (url.pathname === '/api/assets/000001.SZ/profile') {
-      await route.fulfill({ json: makeAssetProfile() });
+    const assetProfileMatch = url.pathname.match(/^\/api\/assets\/(.+)\/profile$/);
+    if (assetProfileMatch) {
+      await route.fulfill({ json: makeAssetProfile(decodeURIComponent(assetProfileMatch[1])) });
       return;
     }
 
@@ -393,14 +394,18 @@ async function mockPlatformApi(page: Page) {
   return { unhandledRoutes, backtestRunStrategyIds };
 }
 
-function makeAssetProfile() {
+function makeAssetProfile(assetId = '000001.SZ') {
+  const isReviewQueueAsset = assetId === 'CN:SZ:300951';
+  const canonicalAssetId = isReviewQueueAsset ? 'CN:SZ:300951' : 'CN:SZ:000001';
+  const symbol = isReviewQueueAsset ? '300951' : '000001';
+  const name = isReviewQueueAsset ? 'Fixture Stock' : '平安银行';
   return {
-    asset_id: '000001.SZ',
-    canonical_asset_id: 'CN:SZ:000001',
+    asset_id: assetId,
+    canonical_asset_id: canonicalAssetId,
     asset: {
-      asset_id: '000001.SZ',
-      symbol: '000001',
-      name: '平安银行',
+      asset_id: assetId,
+      symbol,
+      name,
       exchange: 'SZ',
       board: 'main',
       is_active: true
@@ -411,7 +416,7 @@ function makeAssetProfile() {
     ],
     score: {
       trade_date: '2026-06-08',
-      asset_id: '000001.SZ',
+      asset_id: assetId,
       rank: 12,
       score_total: 88.5,
       score_version: 'manual_v1',
@@ -423,7 +428,7 @@ function makeAssetProfile() {
     factor_values: [
       {
         trade_date: '2026-06-08',
-        asset_id: '000001.SZ',
+        asset_id: assetId,
         factor_group: 'momentum',
         factor_name: 'ret_20',
         factor_value: 0.1234,
