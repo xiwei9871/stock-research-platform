@@ -22,6 +22,28 @@ function findInitialSelection(queue: ReviewQueueResponse) {
   };
 }
 
+function collectSourceKinds(queue: ReviewQueueResponse) {
+  const sourceKinds: string[] = [];
+  const seen = new Set<string>();
+
+  for (const group of queue.groups) {
+    for (const item of group.items) {
+      for (const sourceKind of item.source_kinds) {
+        if (!seen.has(sourceKind)) {
+          seen.add(sourceKind);
+          sourceKinds.push(sourceKind);
+        }
+      }
+    }
+  }
+
+  return sourceKinds;
+}
+
+function formatCount(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`;
+}
+
 function actionContext(action: EvidenceDigestAction, fallbackAssetId?: string, fallbackQuery?: string): StockEntryContext {
   return {
     sourceWorkspace: action.workspace === 'stock' ? 'search' : (action.workspace as StockEntryContext['sourceWorkspace']),
@@ -82,6 +104,7 @@ export function ReviewQueueWorkspace({
   const selectedItem =
     selectedGroup?.items.find((item) => item.queue_id === selectedQueueId) ?? selectedGroup?.items[0] ?? null;
   const selectedDigest = selectedItem?.digest ?? null;
+  const sourceKinds = queue ? collectSourceKinds(queue) : [];
 
   const selectGroup = (group: ReviewQueueGroup) => {
     setSelectedBucket(group.bucket);
@@ -134,17 +157,42 @@ export function ReviewQueueWorkspace({
           ) : null}
 
           <section className="workspace-band" aria-label="Review Queue Groups">
-            <div className="compact-toolbar">
-              {queue.groups.map((group) => (
-                <button
-                  key={group.bucket}
-                  type="button"
-                  aria-pressed={group.bucket === selectedGroup?.bucket}
-                  onClick={() => selectGroup(group)}
-                >
-                  {group.label} {group.count}
-                </button>
-              ))}
+            <div className="workspace-stack">
+              <div className="section-heading">
+                <div>
+                  <span className="muted">Trade Date</span>
+                  <strong>{queue.trade_date}</strong>
+                </div>
+                <div>
+                  <span className="muted">Score Version</span>
+                  <strong>{queue.score_version}</strong>
+                </div>
+              </div>
+
+              <div className="compact-toolbar">
+                {queue.groups.map((group) => (
+                  <button
+                    key={group.bucket}
+                    type="button"
+                    aria-pressed={group.bucket === selectedGroup?.bucket}
+                    onClick={() => selectGroup(group)}
+                  >
+                    {group.label} {group.count}
+                  </button>
+                ))}
+              </div>
+
+              <div className="tag-stack" aria-label="Source Filters">
+                {sourceKinds.length > 0 ? (
+                  sourceKinds.map((sourceKind) => (
+                    <span className="status-chip" key={sourceKind}>
+                      {sourceKind}
+                    </span>
+                  ))
+                ) : (
+                  <span className="muted">No source filters</span>
+                )}
+              </div>
             </div>
           </section>
 
@@ -166,16 +214,34 @@ export function ReviewQueueWorkspace({
                     type="button"
                     className="data-table-row"
                     style={{
-                      gridTemplateColumns: '48px minmax(120px, 1fr) minmax(100px, 0.8fr) 92px 96px 104px'
+                      gridTemplateColumns: '48px minmax(180px, 1.4fr) 92px 96px minmax(120px, 0.8fr) 96px 104px'
                     }}
                     aria-pressed={item.queue_id === selectedItem?.queue_id}
                     onClick={() => setSelectedQueueId(item.queue_id)}
                   >
                     <span>#{item.rank ?? '-'}</span>
-                    <strong>{item.display_name || item.asset_id}</strong>
-                    <span>{item.asset_id}</span>
+                    <span>
+                      <strong>{item.display_name || item.asset_id}</strong>
+                      <span className="muted">{item.asset_id}</span>
+                      <span>{item.digest_title || item.digest.title}</span>
+                    </span>
                     <span>Score {formatScore(item.score)}</span>
                     <span className="status-chip">{item.bucket}</span>
+                    <span className="tag-stack" aria-label={`${item.display_name || item.asset_id} source coverage`}>
+                      {item.source_kinds.length > 0 ? (
+                        item.source_kinds.map((sourceKind) => (
+                          <span className="status-chip" key={sourceKind}>
+                            {sourceKind}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="muted">No sources</span>
+                      )}
+                    </span>
+                    <span>
+                      <span>{formatCount(item.risk_count, 'risk')}</span>
+                      <span>{formatCount(item.warning_count, 'warning')}</span>
+                    </span>
                     <span>{item.next_action_count} actions</span>
                   </button>
                 ))}

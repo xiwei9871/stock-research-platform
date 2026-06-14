@@ -114,12 +114,22 @@ describe('ReviewQueueWorkspace', () => {
     expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
     expect(apiMocks.fetchReviewQueue).toHaveBeenCalledWith({ limit: 20, lookbackDays: 90 });
     expect(screen.getByRole('button', { name: 'High Conviction 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Score Version')).toBeInTheDocument();
+    expect(screen.getByText('manual_v1')).toBeInTheDocument();
+    const sourceFilters = screen.getByLabelText('Source Filters');
+    expect(within(sourceFilters).getByText('strategy')).toBeInTheDocument();
+    expect(within(sourceFilters).getByText('research')).toBeInTheDocument();
     const queueRow = screen.getByRole('button', { name: /平安银行/ });
     expect(queueRow).toHaveAttribute('aria-pressed', 'true');
     expect(queueRow).toHaveStyle({
-      gridTemplateColumns: '48px minmax(120px, 1fr) minmax(100px, 0.8fr) 92px 96px 104px'
+      gridTemplateColumns: '48px minmax(180px, 1.4fr) 92px 96px minmax(120px, 0.8fr) 96px 104px'
     });
     expect(screen.getByText('平安银行')).toBeInTheDocument();
+    expect(within(queueRow).getByText('Strong evidence')).toBeInTheDocument();
+    expect(within(queueRow).getByText('strategy')).toBeInTheDocument();
+    expect(within(queueRow).getByText('research')).toBeInTheDocument();
+    expect(within(queueRow).getByText('1 risk')).toBeInTheDocument();
+    expect(within(queueRow).getByText('1 warning')).toBeInTheDocument();
 
     const preview = screen.getByRole('region', { name: 'Selected Evidence' });
     const sourceChips = within(preview).getByLabelText('Evidence sources');
