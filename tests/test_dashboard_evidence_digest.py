@@ -392,7 +392,7 @@ def test_build_evidence_digest_high_rank_without_source_facts_is_not_strong(monk
     digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
 
     assert digest["score"] >= 75
-    assert digest["bucket"] != "strong"
+    assert digest["bucket"] == "thin"
 
 
 def test_evidence_digest_endpoint_forwards_query(monkeypatch):

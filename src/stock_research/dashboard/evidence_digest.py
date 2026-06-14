@@ -467,7 +467,7 @@ def _bucket(score: int, facts: list[dict[str, Any]], risk_flags: list[dict[str, 
     }
     if score >= 75 and len(source_categories) >= 2:
         return "strong"
-    if score >= 75 or (score >= 45 and len(source_categories) >= 2):
+    if score >= 45 and len(source_categories) >= 2:
         return "mixed"
     return "thin"
 
