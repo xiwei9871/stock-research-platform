@@ -296,6 +296,8 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
   );
   const visibleResearchReports =
     researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
+  const latestNewsDate = visibleAssetNews?.summary.latest_published_at?.slice(0, 10) ?? '-';
+  const latestReportDate = visibleResearchReports?.summary.latest_report_date ?? '-';
 
   return (
     <section className="workspace-stack" aria-label="Stock Workspace workspace">
@@ -359,7 +361,7 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
 
       {profile ? (
         <>
-          <section className="stock-summary-strip" aria-label="Stock identity">
+          <section className="stock-summary-strip" aria-label="Stock identity region">
             <div>
               <span>Symbol</span>
               <strong>{identitySymbol}</strong>
@@ -382,9 +384,32 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
             </div>
           </section>
 
-          <section className="workspace-band" aria-label="Price chart">
+          <section className="stock-summary-strip" aria-label="Stock evidence summary region">
+            <div>
+              <span>Signals</span>
+              <strong>{profile.signals.length}</strong>
+            </div>
+            <div>
+              <span>Decisions</span>
+              <strong>{profile.decisions.length}</strong>
+            </div>
+            <div>
+              <span>Outcomes</span>
+              <strong>{profile.outcomes.length}</strong>
+            </div>
+            <div>
+              <span>News 7d</span>
+              <strong>{visibleAssetNews?.summary.news_count_7d ?? '-'}</strong>
+            </div>
+            <div>
+              <span>Latest Report</span>
+              <strong>{latestReportDate}</strong>
+            </div>
+          </section>
+
+          <section className="workspace-band" aria-label="Price & Events">
             <div className="section-heading">
-              <h2>Price Chart</h2>
+              <h2>Price & Events</h2>
               <span className="muted">
                 {profile.bars.length} bars / {startDate} to {endDate}
               </span>
@@ -393,33 +418,76 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
           </section>
 
           <section className="stock-evidence-grid">
-            <article className="workspace-band">
+            <article className="workspace-band" role="region" aria-label="Market Monitor State">
               <div className="section-heading">
-                <h2>Factor Breakdown</h2>
-                <span className="muted">{SCORE_VERSION}</span>
+                <h2>Market Monitor State</h2>
+                <span className="muted">{profile.canonical_asset_id}</span>
               </div>
-              <table className="compact-table">
-                <thead>
-                  <tr>
-                    <th>Group</th>
-                    <th>Factor</th>
-                    <th>Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {factorRows.map((row) => (
-                    <tr key={`${row.group}-${row.name}`}>
-                      <td>{row.group}</td>
-                      <td>{row.name}</td>
-                      <td>{formatValue(row.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {factorRows.length === 0 ? <p className="muted">No factor values available.</p> : null}
+              <p className="muted">EOD monitor stock-list context will appear when opened from Market Monitor.</p>
             </article>
 
-            <article className="workspace-band">
+            <article className="workspace-band" role="region" aria-label="Strategy Signal">
+              <div className="section-heading">
+                <h2>Strategy Signal</h2>
+                <span className="muted">{profile.signals.length} signals</span>
+              </div>
+              {profile.signals.map((signal) => (
+                <div key={`${signal.watchlist_id}-${signal.asset_id}-${signal.primary_signal}`} className="signal-card">
+                  <div>
+                    <strong>{signal.primary_signal}</strong>
+                    <span>Priority {signal.priority}</span>
+                  </div>
+                  <p>{formatReason(signal.reason_json)}</p>
+                  <div className="tag-stack">
+                    {signal.signal_tags.map((tag) => (
+                      <span key={tag} className="status-chip neutral">
+                        {tag}
+                      </span>
+                    ))}
+                    {signal.risk_tags.map((tag) => (
+                      <span key={tag} className="risk-tag">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {profile.signals.length === 0 ? <p className="muted">No active watchlist signal.</p> : null}
+            </article>
+
+            <article className="workspace-band" role="region" aria-label="Research Coverage">
+              <div className="section-heading">
+                <h2>Research Coverage</h2>
+                {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
+              </div>
+              {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
+              {visibleResearchReports ? (
+                <section className="stock-summary-strip" aria-label="Stock research report summary">
+                  <div>
+                    <span>Coverage</span>
+                    <strong>90d reports {visibleResearchReports.summary.report_count_90d}</strong>
+                  </div>
+                  <div>
+                    <span>30d Reports</span>
+                    <strong>{visibleResearchReports.summary.report_count_30d}</strong>
+                  </div>
+                  <div>
+                    <span>Brokers</span>
+                    <strong>{visibleResearchReports.summary.broker_coverage_count_90d} brokers</strong>
+                  </div>
+                  <div>
+                    <span>Latest Rating</span>
+                    <strong>{formatValue(visibleResearchReports.summary.latest_rating)}</strong>
+                  </div>
+                  <div>
+                    <span>Target Price</span>
+                    <strong>{formatValue(visibleResearchReports.summary.latest_target_price)}</strong>
+                  </div>
+                </section>
+              ) : null}
+            </article>
+
+            <article className="workspace-band" role="region" aria-label="Related News">
               <div className="section-heading">
                 <h2>Related News</h2>
                 {isVisibleNewsLoading ? <span className="muted">Loading...</span> : null}
@@ -455,83 +523,11 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
               ) : null}
             </article>
 
-            <article className="workspace-band">
-              <div className="section-heading">
-                <h2>Watchlist State</h2>
-                <span className="muted">{profile.signals.length} signals</span>
-              </div>
-              {profile.signals.map((signal) => (
-                <div key={`${signal.watchlist_id}-${signal.asset_id}-${signal.primary_signal}`} className="signal-card">
-                  <div>
-                    <strong>{signal.primary_signal}</strong>
-                    <span>Priority {signal.priority}</span>
-                  </div>
-                  <p>{formatReason(signal.reason_json)}</p>
-                  <div className="tag-stack">
-                    {signal.signal_tags.map((tag) => (
-                      <span key={tag} className="status-chip neutral">
-                        {tag}
-                      </span>
-                    ))}
-                    {signal.risk_tags.map((tag) => (
-                      <span key={tag} className="risk-tag">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {profile.signals.length === 0 ? <p className="muted">No active watchlist signal.</p> : null}
-            </article>
-
-            <article className="workspace-band">
-              <div className="section-heading">
-                <h2>Strategy / Review History</h2>
-                <span className="muted">{profile.decisions.length} decisions</span>
-              </div>
-              {profile.decisions.map((decision) => (
-                <div key={decision.event_id} className="evidence-row">
-                  <div>
-                    <strong>{decision.decision_label}</strong>
-                    <span>{decision.review_date}</span>
-                  </div>
-                  <p>{decision.notes || decision.follow_up_note}</p>
-                  <span>{decision.evidence_path}</span>
-                </div>
-              ))}
-              {profile.decisions.length === 0 ? <p className="muted">No review decisions available.</p> : null}
-            </article>
-
-            <article className="workspace-band">
+            <article className="workspace-band" role="region" aria-label="Research Reports">
               <div className="section-heading">
                 <h2>Research Reports</h2>
                 {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
               </div>
-              {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
-              {visibleResearchReports ? (
-                <section className="stock-summary-strip" aria-label="Stock research report summary">
-                  <div>
-                    <span>Coverage</span>
-                    <strong>90d reports {visibleResearchReports.summary.report_count_90d}</strong>
-                  </div>
-                  <div>
-                    <span>30d Reports</span>
-                    <strong>{visibleResearchReports.summary.report_count_30d}</strong>
-                  </div>
-                  <div>
-                    <span>Brokers</span>
-                    <strong>{visibleResearchReports.summary.broker_coverage_count_90d} brokers</strong>
-                  </div>
-                  <div>
-                    <span>Latest Rating</span>
-                    <strong>{formatValue(visibleResearchReports.summary.latest_rating)}</strong>
-                  </div>
-                  <div>
-                    <span>Target Price</span>
-                    <strong>{formatValue(visibleResearchReports.summary.latest_target_price)}</strong>
-                  </div>
-                </section>
-              ) : null}
               <div className="compact-news-list">
                 {(visibleResearchReports?.items ?? []).map((report) =>
                   report.source_url ? (
@@ -562,9 +558,99 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
               ) : null}
             </article>
 
-            <article className="workspace-band">
+            <article className="workspace-band" role="region" aria-label="Factor / Score Breakdown">
               <div className="section-heading">
-                <h2>Asset Search Matches</h2>
+                <h2>Factor / Score Breakdown</h2>
+                <span className="muted">{SCORE_VERSION}</span>
+              </div>
+              <table className="compact-table">
+                <thead>
+                  <tr>
+                    <th>Group</th>
+                    <th>Factor</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {factorRows.map((row) => (
+                    <tr key={`${row.group}-${row.name}`}>
+                      <td>{row.group}</td>
+                      <td>{row.name}</td>
+                      <td>{formatValue(row.value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {factorRows.length === 0 ? <p className="muted">No factor values available.</p> : null}
+            </article>
+
+            <article className="workspace-band" role="region" aria-label="Review / Outcomes">
+              <div className="section-heading">
+                <h2>Review / Outcomes</h2>
+                <span className="muted">
+                  {profile.decisions.length} decisions / {profile.outcomes.length} outcomes
+                </span>
+              </div>
+              {profile.decisions.map((decision) => (
+                <div key={decision.event_id} className="evidence-row">
+                  <div>
+                    <strong>{decision.decision_label}</strong>
+                    <span>{decision.review_date}</span>
+                  </div>
+                  <p>{decision.notes || decision.follow_up_note}</p>
+                  <span>{decision.evidence_path}</span>
+                </div>
+              ))}
+              {profile.decisions.length === 0 ? <p className="muted">No review decisions available.</p> : null}
+              {profile.outcomes.length === 0 ? <p className="muted">No outcomes recorded.</p> : null}
+            </article>
+
+            <article className="workspace-band" role="region" aria-label="Evidence Timeline">
+              <div className="section-heading">
+                <h2>Evidence Timeline</h2>
+                <span className="muted">Current loaded evidence</span>
+              </div>
+              <div className="report-list compact">
+                <div className="evidence-row">
+                  <div>
+                    <strong>Price coverage</strong>
+                    <span>{profile.coverage?.bars?.end ?? endDate}</span>
+                  </div>
+                  <p>{profile.bars.length} loaded bars</p>
+                </div>
+                {profile.decisions.map((decision) => (
+                  <div key={`timeline-${decision.event_id}`} className="evidence-row">
+                    <div>
+                      <strong>Review decision</strong>
+                      <span>{decision.review_date}</span>
+                    </div>
+                    <p>{decision.decision_label}</p>
+                  </div>
+                ))}
+                <div className="evidence-row">
+                  <div>
+                    <strong>Latest news</strong>
+                    <span>{latestNewsDate}</span>
+                  </div>
+                  <p>{visibleAssetNews ? `${visibleAssetNews.summary.news_count_7d} related items in 7d` : 'No loaded related news'}</p>
+                </div>
+                <div className="evidence-row">
+                  <div>
+                    <strong>Latest research</strong>
+                    <span>{latestReportDate}</span>
+                  </div>
+                  <p>
+                    {visibleResearchReports
+                      ? `${visibleResearchReports.summary.report_count_90d} reports in 90d`
+                      : 'No loaded research coverage'}
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            <article className="workspace-band" role="region" aria-label="Search Matches">
+              <div className="section-heading">
+                <h2>Search Matches</h2>
                 {isSearchLoading ? <span className="muted">Searching...</span> : null}
               </div>
               {searchError ? <p className="error-text">{searchError}</p> : null}

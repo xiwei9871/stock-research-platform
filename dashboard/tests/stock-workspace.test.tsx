@@ -208,6 +208,37 @@ describe('StockWorkspace', () => {
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
   });
 
+  it('renders the stock detail evidence hub sections', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+
+    [
+      'Stock identity region',
+      'Stock evidence summary region',
+      'Price & Events',
+      'Market Monitor State',
+      'Strategy Signal',
+      'Research Coverage',
+      'Related News',
+      'Research Reports',
+      'Factor / Score Breakdown',
+      'Review / Outcomes',
+      'Evidence Timeline',
+      'Search Matches'
+    ].forEach((regionName) => {
+      expect(screen.getByRole('region', { name: regionName })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Score 82.4/)).toBeInTheDocument();
+    expect(screen.getAllByText('momentum').length).toBeGreaterThan(0);
+    expect(screen.getByText('平安银行相关新闻')).toBeInTheDocument();
+    expect(screen.getByText('candidate')).toBeInTheDocument();
+    expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
+    expect(screen.getByText('平安银行深度报告')).toBeInTheDocument();
+    expect(screen.getByText('90d reports 4')).toBeInTheDocument();
+  });
+
   it('loads db-linked asset news for the selected stock', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({
