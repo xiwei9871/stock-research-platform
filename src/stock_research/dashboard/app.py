@@ -34,6 +34,7 @@ from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.platform import load_platform_summary
+from stock_research.dashboard.readiness import build_platform_readiness
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.research_reports import (
     list_research_reports,
@@ -101,6 +102,10 @@ def create_app() -> FastAPI:
     @app.get("/api/platform/summary")
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
         return load_platform_summary(score_version=score_version, top_n=top_n)
+
+    @app.get("/api/platform/readiness")
+    def platform_readiness(score_version: str = "manual_v1"):
+        return build_platform_readiness(score_version=score_version)
 
     @app.get("/api/market-monitor/eod")
     def market_monitor_eod(
