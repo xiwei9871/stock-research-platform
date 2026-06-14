@@ -28,7 +28,8 @@ vi.mock('../src/api/client', () => ({
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
-  fetchPublicNews: vi.fn()
+  fetchPublicNews: vi.fn(),
+  fetchEvidenceDigest: vi.fn()
 }));
 
 import * as api from '../src/api/client';
@@ -252,6 +253,19 @@ describe('AppShell and HomeCockpit', () => {
       ],
       warnings: []
     });
+    vi.mocked(api.fetchEvidenceDigest).mockResolvedValue({
+      asset_id: 'CN:SZ:300951',
+      canonical_asset_id: 'CN:SZ:300951',
+      trade_date: '2026-06-08',
+      title: 'Strong evidence',
+      score: 81,
+      bucket: 'strong',
+      facts: [],
+      risk_flags: [],
+      source_refs: {},
+      next_actions: [],
+      warnings: []
+    });
   });
 
   afterEach(() => {
@@ -302,6 +316,26 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
     expect(screen.getByText('Market pulse unavailable: market monitor unavailable')).toBeVisible();
     expect(screen.getByText('News flow unavailable: news unavailable')).toBeVisible();
+  });
+
+  it('shows evidence digest badges for today focus rows', async () => {
+    render(<AppShell />);
+
+    expect(await screen.findByText('Research Cockpit')).toBeVisible();
+    expect(await screen.findByText('Strong evidence')).toBeVisible();
+    expect(api.fetchEvidenceDigest).toHaveBeenCalledWith('CN:SZ:300951', {
+      tradeDate: '2026-06-08',
+      lookbackDays: 90
+    });
+  });
+
+  it('keeps today focus visible when digest loading fails', async () => {
+    vi.mocked(api.fetchEvidenceDigest).mockRejectedValueOnce(new Error('digest unavailable'));
+
+    render(<AppShell />);
+
+    expect(await screen.findByText('CN:SZ:300951')).toBeVisible();
+    expect(await screen.findByText('Digest unavailable')).toBeVisible();
   });
 
   it('renders core cockpit content while optional home widgets are still pending', async () => {

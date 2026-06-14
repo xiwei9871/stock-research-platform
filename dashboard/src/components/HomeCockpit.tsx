@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
-import { fetchBacktestStrategies, fetchMarketMonitorEod, fetchPlatformSummary, fetchPublicNews } from '../api/client';
-import type { MarketMonitorPayload, PlatformSummary, PublicNewsItem, ScoreRow, StrategyCatalogItem } from '../api/types';
+import {
+  fetchBacktestStrategies,
+  fetchEvidenceDigest,
+  fetchMarketMonitorEod,
+  fetchPlatformSummary,
+  fetchPublicNews
+} from '../api/client';
+import type {
+  EvidenceDigestResponse,
+  MarketMonitorPayload,
+  PlatformSummary,
+  PublicNewsItem,
+  ScoreRow,
+  StrategyCatalogItem
+} from '../api/types';
 
 type WorkspaceMode =
   | 'market'
@@ -46,6 +59,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
+  const [digestByAsset, setDigestByAsset] = useState<Record<string, EvidenceDigestResponse>>({});
+  const [digestErrors, setDigestErrors] = useState<Record<string, string>>({});
   const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +70,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setIsLoading(true);
     setError(null);
     setWidgetWarnings([]);
+    setDigestByAsset({});
+    setDigestErrors({});
 
     const addWidgetWarning = (warning: string) => {
       setWidgetWarnings((current) => [...current, warning]);
@@ -70,6 +87,26 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
 
       if (summaryResult.status === 'fulfilled') {
         setSummary(summaryResult.value);
+        const focusRows = summaryResult.value.topn_preview.slice(0, 5);
+        void Promise.allSettled(
+          focusRows.map((row) =>
+            fetchEvidenceDigest(row.asset_id, {
+              tradeDate: summaryResult.value.latest_market_date,
+              lookbackDays: 90
+            }).then((digest) => ({ assetId: row.asset_id, digest }))
+          )
+        ).then((results) => {
+          if (ignore) return;
+          const nextDigests: Record<string, EvidenceDigestResponse> = {};
+          const nextErrors: Record<string, string> = {};
+          results.forEach((result, index) => {
+            const assetId = focusRows[index].asset_id;
+            if (result.status === 'fulfilled') nextDigests[assetId] = result.value.digest;
+            else nextErrors[assetId] = 'Digest unavailable';
+          });
+          setDigestByAsset(nextDigests);
+          setDigestErrors(nextErrors);
+        });
       } else {
         setSummary(null);
         criticalErrors.push(`Platform summary unavailable: ${errorMessage(summaryResult.reason)}`);
@@ -163,13 +200,22 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
             <span className="status-chip neutral">candidate pool</span>
           </div>
           <div className="data-table">
-            {(summary?.topn_preview ?? []).slice(0, 5).map((row) => (
-              <div className="data-table-row three-col" key={`${row.trade_date}-${row.asset_id}`}>
-                <span>{row.rank}</span>
-                <strong>{row.asset_id}</strong>
-                <span>{formatScore(row)}</span>
-              </div>
-            ))}
+            {(summary?.topn_preview ?? []).slice(0, 5).map((row) => {
+              const digest = digestByAsset[row.asset_id];
+              const digestError = digestErrors[row.asset_id];
+              return (
+                <div
+                  className="data-table-row"
+                  style={{ gridTemplateColumns: '56px minmax(0, 1fr) 80px minmax(120px, 0.8fr)' }}
+                  key={`${row.trade_date}-${row.asset_id}`}
+                >
+                  <span>{row.rank}</span>
+                  <strong>{row.asset_id}</strong>
+                  <span>{formatScore(row)}</span>
+                  <span className="status-chip neutral">{digest?.title ?? digestError ?? 'Digest pending'}</span>
+                </div>
+              );
+            })}
           </div>
         </section>
 
