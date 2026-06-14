@@ -392,7 +392,7 @@ describe('AppShell and HomeCockpit', () => {
         trade_date: '2026-06-08',
         title: `Evidence ${assetId}`,
         score: 70,
-        bucket: 'neutral',
+        bucket: 'mixed',
         facts: [],
         risk_flags: [],
         source_refs: {},
