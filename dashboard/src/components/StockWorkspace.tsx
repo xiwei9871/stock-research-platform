@@ -601,8 +601,21 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
                   <span>{decision.evidence_path}</span>
                 </div>
               ))}
-              {profile.decisions.length === 0 ? <p className="muted">No review decisions available.</p> : null}
-              {profile.outcomes.length === 0 ? <p className="muted">No outcomes recorded.</p> : null}
+              {profile.outcomes.map((outcome) => (
+                <div key={outcome.outcome_event_id} className="evidence-row">
+                  <div>
+                    <strong>{outcome.outcome_status}</strong>
+                    <span>{outcome.review_date}</span>
+                  </div>
+                  <p>
+                    {outcome.decision_label} / {outcome.available_future_bars} future bars
+                  </p>
+                  <span>{outcome.outcome_artifact_path}</span>
+                </div>
+              ))}
+              {profile.decisions.length === 0 && profile.outcomes.length === 0 ? (
+                <p className="muted">No review decisions or outcomes recorded.</p>
+              ) : null}
             </article>
 
             <article className="workspace-band" role="region" aria-label="Evidence Timeline">

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StockWorkspace, type StockEntryContext } from '../src/components/StockWorkspace';
-import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse } from '../src/api/types';
+import type { AssetNewsResponse, AssetProfile, AssetResearchReportResponse, DecisionOutcomeRow } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
   fetchAssetNews: vi.fn(),
@@ -168,6 +168,33 @@ function makeAssetNews(overrides: Partial<AssetNewsResponse> = {}): AssetNewsRes
 
 const newsPayload = makeAssetNews();
 
+function makeOutcome(overrides: Partial<DecisionOutcomeRow> = {}): DecisionOutcomeRow {
+  return {
+    outcome_event_id: 'outcome-1',
+    run_id: 'run-1',
+    decision_event_id: 'event-1',
+    review_session_id: 'session-1',
+    review_date: '2026-06-08',
+    asset_id: '000001.SZ',
+    stock_code: '000001',
+    stock_name: '平安银行',
+    decision_label: 'watch',
+    source_context: 'strategy_lab',
+    outcome_status: 'complete',
+    available_future_bars: 5,
+    base_trade_date: '2026-06-08',
+    base_close: 11,
+    forward_returns: { '1': 0.034, '5': 0.126 },
+    max_high_returns: { '1': 0.041, '5': 0.18 },
+    max_low_drawdowns: { '1': -0.01, '5': -0.025 },
+    manual_review_required: true,
+    auto_trade_enabled: false,
+    source_artifact_path: 'reports/evidence/000001.md',
+    outcome_artifact_path: 'reports/outcomes/000001-outcome.json',
+    ...overrides
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchAssetProfile.mockResolvedValue(makeProfile());
@@ -237,6 +264,23 @@ describe('StockWorkspace', () => {
     expect(screen.getByText('reports/evidence/000001.md')).toBeInTheDocument();
     expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
     expect(await screen.findByText('90d reports 4')).toBeInTheDocument();
+  });
+
+  it('renders outcome evidence in Review / Outcomes when no decisions are present', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        decisions: [],
+        outcomes: [makeOutcome({ outcome_artifact_path: 'reports/outcomes/watch-outcome.json' })]
+      })
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const reviewSection = await screen.findByRole('region', { name: 'Review / Outcomes' });
+    expect(within(reviewSection).getByText('complete')).toBeInTheDocument();
+    expect(within(reviewSection).getByText('reports/outcomes/watch-outcome.json')).toBeInTheDocument();
+    expect(within(reviewSection).queryByText('No review decisions available.')).not.toBeInTheDocument();
+    expect(within(reviewSection).queryByText('No outcomes recorded.')).not.toBeInTheDocument();
   });
 
   it('loads db-linked asset news for the selected stock', async () => {
