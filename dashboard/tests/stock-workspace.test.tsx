@@ -279,6 +279,58 @@ describe('StockWorkspace', () => {
     expect(within(timeline).getByText('reports/outcomes/000001-outcome.json')).toBeInTheDocument();
   });
 
+  it('clears stale source context when opening workspaces after loading another stock', async () => {
+    const handleOpenNews = vi.fn();
+    const secondProfile = makeProfile({
+      asset_id: '600000.SH',
+      canonical_asset_id: '600000.SH',
+      asset: {
+        asset_id: '600000.SH',
+        symbol: '600000',
+        name: '浦发银行',
+        exchange: 'SH',
+        board: null,
+        is_active: true
+      },
+      signals: [],
+      decisions: [],
+      outcomes: [],
+      factor_values: []
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeProfile()).mockResolvedValueOnce(secondProfile);
+
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        entryContext={{ sourceWorkspace: 'news', assetId: '000001.SZ', query: 'old-query', newsId: 'news-old' }}
+        onOpenNews={handleOpenNews}
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('stock workspace asset'), { target: { value: '600000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Stock' }));
+
+    expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
+    expect(screen.queryByText('newsId: news-old')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+
+    expect(handleOpenNews).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assetId: '600000.SH'
+      })
+    );
+    expect(handleOpenNews).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        newsId: 'news-old',
+        query: 'old-query'
+      })
+    );
+  });
+
   it('loads a stock dossier with factors, news, watchlist, and evidence', async () => {
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 

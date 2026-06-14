@@ -313,16 +313,25 @@ export function StockWorkspace({
     researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
   const latestNewsDate = visibleAssetNews?.summary.latest_published_at?.slice(0, 10) ?? '-';
   const latestReportDate = visibleResearchReports?.summary.latest_report_date ?? '-';
-  const currentEntryContext: StockEntryContext = {
-    ...entryContext,
-    assetId: profile?.canonical_asset_id ?? entryContext?.assetId ?? assetId,
-    query: entryContext?.query ?? profile?.asset?.symbol ?? profile?.canonical_asset_id ?? assetId
-  };
+  const currentAssetId = profile?.canonical_asset_id ?? entryContext?.assetId ?? assetId;
+  const entryContextAssetId = entryContext?.assetId ? normalizeAssetId(entryContext.assetId) : null;
+  const isEntryContextForCurrentAsset = !entryContextAssetId || entryContextAssetId === currentAssetId;
+  const currentEntryContext: StockEntryContext = isEntryContextForCurrentAsset
+    ? {
+        ...entryContext,
+        assetId: currentAssetId,
+        query: entryContext?.query ?? profile?.asset?.symbol ?? profile?.canonical_asset_id ?? assetId
+      }
+    : {
+        sourceWorkspace: entryContext?.sourceWorkspace,
+        monitorTab: entryContext?.monitorTab,
+        assetId: currentAssetId
+      };
   const sourceObjectIds = [
-    entryContext?.newsId ? `newsId: ${entryContext.newsId}` : null,
-    entryContext?.eventKey ? `eventKey: ${entryContext.eventKey}` : null,
-    entryContext?.reportId ? `reportId: ${entryContext.reportId}` : null,
-    entryContext?.monitorTab ? `monitorTab: ${entryContext.monitorTab}` : null
+    currentEntryContext.newsId ? `newsId: ${currentEntryContext.newsId}` : null,
+    currentEntryContext.eventKey ? `eventKey: ${currentEntryContext.eventKey}` : null,
+    currentEntryContext.reportId ? `reportId: ${currentEntryContext.reportId}` : null,
+    currentEntryContext.monitorTab ? `monitorTab: ${currentEntryContext.monitorTab}` : null
   ].filter((value): value is string => Boolean(value));
 
   return (
@@ -333,10 +342,10 @@ export function StockWorkspace({
         {entryContext?.sourceWorkspace ? (
           <p className="muted">
             Opened from {formatSourceWorkspace(entryContext.sourceWorkspace)}
-            {entryContext.matchReason ? (
+            {currentEntryContext.matchReason ? (
               <>
                 {' '}
-                <span>{entryContext.matchReason}</span>
+                <span>{currentEntryContext.matchReason}</span>
               </>
             ) : null}
           </p>
