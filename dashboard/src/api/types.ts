@@ -997,3 +997,34 @@ export type EvidenceDigestResponse = {
   next_actions: EvidenceDigestAction[];
   warnings: string[];
 };
+
+export type ReviewQueueItem = {
+  queue_id: string;
+  asset_id: string;
+  canonical_asset_id: string;
+  display_name: string;
+  rank: number | null;
+  score: number | null;
+  digest_title: string;
+  bucket: EvidenceDigestBucket;
+  source_kinds: string[];
+  risk_count: number;
+  warning_count: number;
+  next_action_count: number;
+  digest: EvidenceDigestResponse;
+};
+
+export type ReviewQueueGroup = {
+  bucket: EvidenceDigestBucket;
+  label: string;
+  count: number;
+  items: ReviewQueueItem[];
+};
+
+export type ReviewQueueResponse = {
+  trade_date: string;
+  score_version: string;
+  generated_at: string;
+  groups: ReviewQueueGroup[];
+  warnings: string[];
+};

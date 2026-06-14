@@ -15,6 +15,7 @@ import {
   fetchPublicNewsStatus,
   fetchResearchReportSummary,
   fetchResearchReports,
+  fetchReviewQueue,
   refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
@@ -305,6 +306,96 @@ describe('dashboard API client', () => {
     expect(digest.facts[0].value).toBe(3);
     expect(digest.risk_flags[0].value).toEqual(['gap_risk']);
     expect(digest.source_refs.strategy_asset_id).toBe('000001.SZ');
+  });
+
+  it('fetchReviewQueue serializes optional filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          trade_date: '2026-06-08',
+          score_version: 'manual_v1',
+          generated_at: '2026-06-08T00:00:00+00:00',
+          groups: [],
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await fetchReviewQueue({
+      tradeDate: '2026-06-08',
+      scoreVersion: 'manual_v2',
+      limit: 12,
+      lookbackDays: 45
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/review-queue?trade_date=2026-06-08&score_version=manual_v2&limit=12&lookback_days=45'
+    );
+    expect(payload.trade_date).toBe('2026-06-08');
+  });
+
+  it('accepts backend-like review queue payloads', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          trade_date: '2026-06-08',
+          score_version: 'manual_v1',
+          generated_at: '2026-06-08T00:00:00+00:00',
+          groups: [
+            {
+              bucket: 'strong',
+              label: 'High Conviction',
+              count: 1,
+              items: [
+                {
+                  queue_id: '2026-06-08:manual_v1:000001.SZ',
+                  asset_id: '000001.SZ',
+                  canonical_asset_id: '000001.SZ',
+                  display_name: '平安银行',
+                  rank: 1,
+                  score: 88.5,
+                  digest_title: 'Strong evidence',
+                  bucket: 'strong',
+                  source_kinds: ['strategy', 'news'],
+                  risk_count: 0,
+                  warning_count: 0,
+                  next_action_count: 2,
+                  digest: {
+                    asset_id: '000001.SZ',
+                    canonical_asset_id: '000001.SZ',
+                    trade_date: '2026-06-08',
+                    title: 'Strong evidence',
+                    score: 82,
+                    bucket: 'strong',
+                    facts: [{ kind: 'news', label: 'Recent news' }],
+                    risk_flags: [],
+                    source_refs: {},
+                    next_actions: [
+                      {
+                        key: 'review_stock',
+                        label: 'Review Stock',
+                        workspace: 'stock',
+                        asset_id: '000001.SZ'
+                      }
+                    ],
+                    warnings: []
+                  }
+                }
+              ]
+            }
+          ],
+          warnings: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await fetchReviewQueue();
+
+    expect(payload.groups[0].items[0].digest.facts[0].kind).toBe('news');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

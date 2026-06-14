@@ -24,6 +24,7 @@ import type {
   PublicNewsResponse,
   ResearchReportResponse,
   ResearchReportSummary,
+  ReviewQueueResponse,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -95,6 +96,13 @@ type EvidenceDigestParams = {
   tradeDate?: string;
   lookbackDays?: number;
   scoreVersion?: string;
+};
+
+type ReviewQueueParams = {
+  tradeDate?: string;
+  scoreVersion?: string;
+  limit?: number;
+  lookbackDays?: number;
 };
 
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
@@ -187,6 +195,16 @@ export async function fetchEvidenceDigest(
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   if (params.scoreVersion) searchParams.set('score_version', params.scoreVersion);
   return getJson(`/api/evidence-digest?${searchParams.toString()}`);
+}
+
+export async function fetchReviewQueue(params: ReviewQueueParams = {}): Promise<ReviewQueueResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.scoreVersion) searchParams.set('score_version', params.scoreVersion);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/review-queue?${query}` : '/api/review-queue');
 }
 
 export async function searchAssets(q: string, limit = 10) {
