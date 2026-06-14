@@ -109,11 +109,27 @@ def _actions_by_key(digest):
 
 
 def test_build_evidence_digest_strong_source_backed(monkeypatch):
-    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
-    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id))
-    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
-    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up"))
-    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+    monkeypatch.setattr(
+        evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"])
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up")
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
 
     digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
 
@@ -141,11 +157,29 @@ def test_build_evidence_digest_strong_source_backed(monkeypatch):
 
 
 def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
-    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"], rank=80))
-    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id, items=0))
-    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id, count=0))
-    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
-    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_asset_profile",
+        lambda **kwargs: _profile(kwargs["asset_id"], rank=80),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None)
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
 
     digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
 
@@ -163,11 +197,29 @@ def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
 
 
 def test_build_evidence_digest_risk_heavy_for_market_pressure(monkeypatch):
-    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"], risk_tags=["gap_risk"]))
-    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: _news(asset_id))
-    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
-    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_down"))
-    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_asset_profile",
+        lambda **kwargs: _profile(kwargs["asset_id"], risk_tags=["gap_risk"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_down")
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
 
     digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
 
@@ -178,15 +230,127 @@ def test_build_evidence_digest_risk_heavy_for_market_pressure(monkeypatch):
 
 def test_build_evidence_digest_returns_warning_for_partial_source_failure(monkeypatch):
     monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
-    monkeypatch.setattr(evidence_digest, "load_asset_news", lambda asset_id, **kwargs: (_ for _ in ()).throw(RuntimeError("news offline")))
-    monkeypatch.setattr(evidence_digest, "load_asset_research_reports", lambda asset_id, **kwargs: _reports(asset_id))
-    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
-    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": "2026-06-12"})
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("news offline")),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None)
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
 
     digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
 
     assert any("news offline" in warning for warning in digest["warnings"])
     assert any(fact["kind"] == "research" for fact in digest["facts"])
+
+
+def test_build_evidence_digest_passes_explicit_date_windows(monkeypatch):
+    captured = {"news": None, "research": None}
+    monkeypatch.setattr(
+        evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"])
+    )
+
+    def fake_news(**kwargs):
+        captured["news"] = kwargs
+        return _news(kwargs["asset_id"])
+
+    def fake_reports(**kwargs):
+        captured["research"] = kwargs
+        return _reports(kwargs["asset_id"])
+
+    monkeypatch.setattr(evidence_digest, "load_public_news_for_dashboard", fake_news)
+    monkeypatch.setattr(evidence_digest, "list_research_reports", fake_reports)
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up")
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
+
+    evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12", lookback_days=90)
+
+    assert captured["news"]["asset_id"] == "000001.SZ"
+    assert captured["news"]["start_time"] == "2026-06-06"
+    assert captured["news"]["end_time"] == "2026-06-12"
+    assert captured["news"]["limit"] == 5
+    assert captured["research"]["asset_id"] == "000001.SZ"
+    assert captured["research"]["start_date"] == "2026-03-15"
+    assert captured["research"]["end_date"] == "2026-06-12"
+    assert captured["research"]["limit"] == 5
+
+
+def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
+    captured_profile = {}
+    monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": ""})
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_asset_profile",
+        lambda **kwargs: captured_profile.update(kwargs) or _profile(kwargs["asset_id"]),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None)
+    )
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ")
+
+    assert digest["trade_date"] == ""
+    assert captured_profile["trade_date"] == ""
+    assert captured_profile["start_date"] == ""
+    assert any(warning == "market date unavailable" for warning in digest["warnings"])
+
+
+def test_build_evidence_digest_high_rank_without_source_facts_is_not_strong(monkeypatch):
+    monkeypatch.setattr(
+        evidence_digest,
+        "build_asset_profile",
+        lambda **kwargs: _profile(kwargs["asset_id"], rank=1),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+    )
+    monkeypatch.setattr(
+        evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None)
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12"},
+    )
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["score"] >= 75
+    assert digest["bucket"] != "strong"
 
 
 def test_evidence_digest_endpoint_forwards_query(monkeypatch):

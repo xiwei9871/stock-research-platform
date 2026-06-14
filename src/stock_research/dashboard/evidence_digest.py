@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from stock_research.dashboard.asset_profile import build_asset_profile
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
-from stock_research.dashboard.news import load_asset_news
+from stock_research.dashboard.news import load_public_news_for_dashboard
 from stock_research.dashboard.platform import load_platform_summary
-from stock_research.dashboard.research_reports import load_asset_research_reports
+from stock_research.dashboard.research_reports import list_research_reports
 
 
 def build_evidence_digest(
@@ -18,7 +18,12 @@ def build_evidence_digest(
     score_version: str = "manual_v1",
 ) -> dict[str, Any]:
     selected_trade_date = _selected_trade_date(trade_date, score_version)
-    start_date = _start_date(selected_trade_date, lookback_days)
+    bounded_lookback_days = _bounded_lookback_days(lookback_days)
+    start_date = _start_date(selected_trade_date, bounded_lookback_days)
+    news_start_date = _start_date(selected_trade_date, min(bounded_lookback_days, 7))
+    warnings: list[str] = []
+    if not selected_trade_date:
+        warnings.append("market date unavailable")
     profile = build_asset_profile(
         asset_id=asset_id,
         trade_date=selected_trade_date,
@@ -31,22 +36,23 @@ def build_evidence_digest(
     score_row = profile.get("score") or {}
     score = _evidence_score(score_row)
 
-    warnings: list[str] = []
     news = _load_optional(
         warnings,
         "news",
-        load_asset_news,
-        canonical_asset_id,
+        _load_news_for_digest,
+        asset_id=canonical_asset_id,
+        start_time=news_start_date,
+        end_time=selected_trade_date,
         limit=5,
-        lookback_days=min(max(int(lookback_days or 90), 1), 90),
     )
     reports = _load_optional(
         warnings,
         "research",
-        load_asset_research_reports,
-        canonical_asset_id,
+        _load_research_for_digest,
+        asset_id=canonical_asset_id,
+        start_date=start_date,
+        end_date=selected_trade_date,
         limit=5,
-        lookback_days=lookback_days,
     )
     market = _load_optional(
         warnings,
@@ -95,19 +101,96 @@ def _selected_trade_date(trade_date: str | None, score_version: str) -> str:
         return trade_date
     summary = load_platform_summary(score_version=score_version, top_n=5)
     latest_market_date = str(summary.get("latest_market_date") or "")
-    return latest_market_date or date.today().isoformat()
+    return latest_market_date
 
 
 def _start_date(end_date: str, lookback_days: int) -> str:
+    if not end_date:
+        return ""
     try:
         parsed = datetime.strptime(end_date, "%Y-%m-%d").date()
     except ValueError:
         return end_date
+    return (parsed - timedelta(days=_bounded_lookback_days(lookback_days) - 1)).isoformat()
+
+
+def _bounded_lookback_days(lookback_days: int) -> int:
     try:
-        bounded_lookback = max(1, int(lookback_days or 90))
+        return max(1, int(lookback_days or 90))
     except (TypeError, ValueError):
-        bounded_lookback = 90
-    return (parsed - timedelta(days=bounded_lookback - 1)).isoformat()
+        return 90
+
+
+def _load_news_for_digest(
+    *,
+    asset_id: str,
+    start_time: str,
+    end_time: str,
+    limit: int,
+) -> dict[str, Any]:
+    payload = load_public_news_for_dashboard(
+        asset_id=asset_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
+    if not isinstance(payload, dict):
+        return payload
+    return {
+        "asset_id": asset_id,
+        "summary": payload.get("summary") or {},
+        "items": list(payload.get("items") or []),
+        "warnings": list(payload.get("warnings") or []),
+    }
+
+
+def _load_research_for_digest(
+    *,
+    asset_id: str,
+    start_date: str,
+    end_date: str,
+    limit: int,
+) -> dict[str, Any]:
+    payload = list_research_reports(
+        asset_id=asset_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+    )
+    if not isinstance(payload, dict):
+        return payload
+    items = list(payload.get("items") or [])
+    summary = dict(payload.get("summary") or {})
+    if not summary:
+        latest = items[0] if items else {}
+        summary = {
+            "report_count_30d": _recent_research_count(items, end_date, 30),
+            "report_count_90d": int(payload.get("total") or len(items)),
+            "broker_coverage_count_90d": len(
+                {str(item.get("broker") or "") for item in items if item.get("broker")}
+            ),
+            "latest_report_date": latest.get("publish_date") or latest.get("report_date"),
+            "latest_rating": str(latest.get("rating") or ""),
+            "latest_target_price": latest.get("target_price"),
+        }
+    return {
+        "asset_id": asset_id,
+        "summary": summary,
+        "items": items,
+        "warnings": list(payload.get("warnings") or []),
+    }
+
+
+def _recent_research_count(items: list[dict[str, Any]], end_date: str, days: int) -> int:
+    start_date = _start_date(end_date, days)
+    if not start_date or not end_date:
+        return 0
+    count = 0
+    for item in items:
+        publish_date = str(item.get("publish_date") or item.get("report_date") or "")[:10]
+        if start_date <= publish_date <= end_date:
+            count += 1
+    return count
 
 
 def _load_optional(
@@ -200,7 +283,9 @@ def _add_news_evidence(
     news_count = int(summary.get("news_count_7d") or len(items))
     if items:
         first = items[0]
-        source_refs["news_id"] = first.get("news_id")
+        news_id = first.get("news_id")
+        if news_id:
+            source_refs["news_id"] = news_id
         facts.append(
             {
                 "kind": "news",
@@ -210,13 +295,13 @@ def _add_news_evidence(
                 "published_at": first.get("published_at") or summary.get("latest_published_at"),
             }
         )
-        next_actions.append(
-            {
-                "key": "open_news",
-                "label": "Open news",
-                "news_id": first.get("news_id"),
-            }
-        )
+        action = {
+            "key": "open_news",
+            "label": "Open news",
+        }
+        if news_id:
+            action["news_id"] = news_id
+        next_actions.append(action)
     else:
         risk_flags.append(
             {
@@ -240,9 +325,12 @@ def _add_research_evidence(
     report_count = int(summary.get("report_count_90d") or len(items))
     if items:
         first = items[0]
-        source_refs["report_id"] = first.get("report_id")
-        if first.get("event_key"):
-            source_refs["event_key"] = first.get("event_key")
+        report_id = first.get("report_id")
+        event_key = first.get("event_key")
+        if report_id:
+            source_refs["report_id"] = report_id
+        if event_key:
+            source_refs["event_key"] = event_key
         facts.append(
             {
                 "kind": "research",
@@ -253,14 +341,15 @@ def _add_research_evidence(
                 "target_price": first.get("target_price") or summary.get("latest_target_price"),
             }
         )
-        next_actions.append(
-            {
-                "key": "open_research",
-                "label": "Open research",
-                "report_id": first.get("report_id"),
-                "event_key": first.get("event_key"),
-            }
-        )
+        action = {
+            "key": "open_research",
+            "label": "Open research",
+        }
+        if report_id:
+            action["report_id"] = report_id
+        if event_key:
+            action["event_key"] = event_key
+        next_actions.append(action)
     else:
         risk_flags.append(
             {
@@ -285,7 +374,8 @@ def _add_market_evidence(
         match = _find_market_item(asset_id, stock_lists.get(tab) or [])
         if not match:
             continue
-        source_refs["monitor_tab"] = tab
+        if tab:
+            source_refs["monitor_tab"] = tab
         if tab == "limit_down":
             risk_flags.append(
                 {
@@ -314,13 +404,13 @@ def _add_market_evidence(
                     "amount": match.get("amount"),
                 }
             )
-        next_actions.append(
-            {
-                "key": "open_market",
-                "label": "Open market monitor",
-                "monitor_tab": tab,
-            }
-        )
+        action = {
+            "key": "open_market",
+            "label": "Open market monitor",
+        }
+        if tab:
+            action["monitor_tab"] = tab
+        next_actions.append(action)
         return
 
 
@@ -359,12 +449,17 @@ def _ensure_required_actions(asset_id: str, next_actions: list[dict[str, Any]]) 
 
 
 def _bucket(score: int, facts: list[dict[str, Any]], risk_flags: list[dict[str, Any]]) -> str:
-    if any(flag.get("severity") == "severe" for flag in risk_flags) or len(risk_flags) >= 3:
+    has_severe_risk = any(flag.get("severity") == "severe" for flag in risk_flags)
+    if has_severe_risk or len(risk_flags) >= 3:
         return "risk_heavy"
-    fact_categories = {fact.get("kind") for fact in facts if fact.get("kind")}
-    if score >= 75:
+    source_categories = {
+        fact.get("kind")
+        for fact in facts
+        if fact.get("kind") in {"news", "research", "market"}
+    }
+    if score >= 75 and len(source_categories) >= 2:
         return "strong"
-    if score >= 45 and len(fact_categories) >= 2:
+    if score >= 75 or (score >= 45 and len(source_categories) >= 2):
         return "mixed"
     return "thin"
 
