@@ -156,6 +156,81 @@ describe('AppShell and HomeCockpit', () => {
       watchlist_alerts: [],
       strategy_signal_summary: { topn_preview_count: 0, topn_preview: [], risk_filter_counts: {} },
       generated_reports: [],
+      market_emotion: {
+        summary: {
+          score: 73.6,
+          state: 'hot',
+          risk_state: 'medium',
+          style_signal_hint: 'growth_favorable',
+          position_budget_hint: 'reduced',
+          status: 'available'
+        },
+        components: [
+          { key: 'breadth', label: '涨跌家数', score: 68.2 },
+          { key: 'limit', label: '涨停表现', score: 75.4 },
+          { key: 'relay', label: '连板接力', score: 71.1 },
+          { key: 'feedback', label: '赚钱效应', score: 66.8 },
+          { key: 'liquidity', label: '市场量能', score: 82.0 }
+        ],
+        breadth: {
+          traded_count: 5207,
+          up_count: 3610,
+          down_count: 1492,
+          strong_up_count: 269,
+          strong_down_count: 55,
+          status: 'available'
+        },
+        liquidity: { total_amount: 1280000000000, amount_ratio_5_20: 1.18, status: 'available' },
+        limit_performance: {
+          limit_up_count: 90,
+          limit_down_count: 10,
+          broken_limit_up_count: 55,
+          broken_limit_up_rate: 0.3793,
+          first_board_count: 58,
+          second_board_count: 21,
+          third_board_plus_count: 11,
+          high_board_height: 6,
+          status: 'available'
+        },
+        profit_effect: {
+          limit_up_success_rate: 0.7361,
+          limit_up_profit_rate: 0.026,
+          limit_up_limit_down_rate: 0.026,
+          relay_profit_rate: 0.018,
+          relay_success_rate: 0.615,
+          relay_continue_rate: 0.312,
+          broken_profit_rate: 0.007,
+          broken_success_rate: 0.564,
+          broken_limit_down_rate: 0.073,
+          status: 'available'
+        },
+        drawdown_pressure: {
+          strong_down_count: 55,
+          limit_down_count: 10,
+          broken_limit_up_rate: 0.3793,
+          yesterday_limit_up_limit_down_rate: 0.026,
+          status: 'available'
+        },
+        weight_performance: { status: 'pending_source' }
+      },
+      emotion_stock_lists: {
+        auction_status: 'pending_source',
+        auction: [],
+        limit_up: [
+          {
+            name: '金钼股份',
+            asset_id: 'CN:SH:601958',
+            symbol: '601958',
+            amount: 3038000000,
+            pct_chg: 10,
+            board: '金属钼',
+            tab: 'limit_up',
+            limit_up_streak: 1
+          }
+        ],
+        broken_limit_up: [],
+        limit_down: []
+      },
       warnings: []
     });
     vi.mocked(api.fetchPublicNews).mockResolvedValue({

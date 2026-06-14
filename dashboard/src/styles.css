@@ -381,6 +381,42 @@ body {
   padding: 10px;
 }
 
+.market-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.market-date-controls label {
+  display: grid;
+  gap: 4px;
+  width: min(220px, 100%);
+  min-width: 180px;
+}
+
+.market-date-controls span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.market-date-controls input {
+  height: 34px;
+  min-width: 0;
+  border: 1px solid #c7d2e2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17202a;
+  padding: 0 10px;
+  font: inherit;
+}
+
+.market-date-controls button {
+  min-width: 112px;
+  height: 34px;
+}
+
 .status-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -420,6 +456,204 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.market-emotion-summary {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(150px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.emotion-score-panel,
+.emotion-card {
+  min-width: 0;
+  min-height: 104px;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.emotion-score-panel {
+  display: grid;
+  align-content: space-between;
+  border-left: 4px solid #c24135;
+  background: #fffafa;
+}
+
+.emotion-score-panel span,
+.emotion-card span,
+.emotion-metric-grid span,
+.emotion-component-list span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.emotion-score-panel strong {
+  color: #9f2d22;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.emotion-score-panel em {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #efc8c3;
+  border-radius: 999px;
+  background: #fff1f0;
+  color: #9f2d22;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.emotion-card {
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+}
+
+.emotion-card strong {
+  min-width: 0;
+  color: #18202a;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.emotion-card small {
+  min-width: 0;
+  color: #667085;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.emotion-card.pending {
+  background: #fbfcfe;
+}
+
+.emotion-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.emotion-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.emotion-metric-grid div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  min-height: 62px;
+  border: 1px solid #edf1f5;
+  border-radius: 5px;
+  background: #fbfcfe;
+  padding: 8px;
+}
+
+.emotion-metric-grid strong {
+  color: #18202a;
+  font-size: 16px;
+}
+
+.emotion-component-list {
+  display: grid;
+  gap: 6px;
+}
+
+.emotion-component-list div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.emotion-component-list strong {
+  text-align: right;
+}
+
+.stock-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.stock-tabs button {
+  min-height: 30px;
+  border: 1px solid #cfd8e3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #475467;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.stock-tabs button[aria-selected="true"] {
+  border-color: #c24135;
+  background: #fff1f0;
+  color: #9f2d22;
+  font-weight: 700;
+}
+
+.stock-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.emotion-stock-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.emotion-stock-table th,
+.emotion-stock-table td {
+  border-bottom: 1px solid #edf1f5;
+  padding: 8px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emotion-stock-table th {
+  background: #f6f8fb;
+  color: #667085;
+  font-size: 12px;
+}
+
+.emotion-stock-table td:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.emotion-stock-table td:first-child span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.pending-note {
+  margin: 0;
+  border: 1px dashed #cfd8e3;
+  border-radius: 5px;
+  background: #fbfcfe;
+  color: #667085;
+  padding: 10px;
+  font-size: 12px;
 }
 
 .status-chip {
@@ -1650,6 +1884,18 @@ table.data-table td {
     padding: 12px;
   }
 
+  .market-emotion-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .emotion-score-panel {
+    grid-column: 1 / -1;
+  }
+
+  .emotion-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   .strategy-replay {
     grid-template-columns: 1fr;
   }
@@ -1717,6 +1963,20 @@ table.data-table td {
 
   .workspace-header-row button {
     width: 100%;
+  }
+
+  .market-emotion-summary,
+  .emotion-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .emotion-score-panel,
+  .emotion-card {
+    min-height: 92px;
+  }
+
+  .stock-tabs button {
+    flex: 1 1 92px;
   }
 }
 
