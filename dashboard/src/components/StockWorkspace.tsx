@@ -99,6 +99,10 @@ function getDigestActionAriaLabel(action: EvidenceDigestAction) {
   return action.label;
 }
 
+function getEvidenceDigestKey(assetId: string, date: string) {
+  return `${assetId}|${date}`;
+}
+
 function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
   const rawFactorRows = (profile?.factor_values ?? []).map((row) => ({
     group: formatValue(row.factor_group ?? '-'),
@@ -151,6 +155,7 @@ export function StockWorkspace({
   const [newsLoadingAssetId, setNewsLoadingAssetId] = useState<string | null>(null);
   const [researchReportsError, setResearchReportsError] = useState<string | null>(null);
   const [evidenceDigestError, setEvidenceDigestError] = useState<string | null>(null);
+  const [evidenceDigestKey, setEvidenceDigestKey] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const profileRequestIdRef = useRef(0);
@@ -331,15 +336,18 @@ export function StockWorkspace({
       setEvidenceDigest(null);
       setIsEvidenceDigestLoading(false);
       setEvidenceDigestError(null);
+      setEvidenceDigestKey(null);
       return;
     }
 
     const digestAssetId = profile.canonical_asset_id;
+    const digestKey = getEvidenceDigestKey(digestAssetId, tradeDate);
     const requestId = evidenceDigestRequestIdRef.current + 1;
     evidenceDigestRequestIdRef.current = requestId;
 
     setIsEvidenceDigestLoading(true);
     setEvidenceDigestError(null);
+    setEvidenceDigestKey(digestKey);
     setEvidenceDigest(null);
 
     fetchEvidenceDigest(digestAssetId, { tradeDate, lookbackDays: 90 })
@@ -401,7 +409,15 @@ export function StockWorkspace({
     currentEntryContext.monitorTab ? `Monitor Tab ${currentEntryContext.monitorTab}` : null
   ].filter((value): value is string => Boolean(value));
   const visibleEvidenceDigest =
-    evidenceDigest && profile && evidenceDigest.canonical_asset_id === profile.canonical_asset_id ? evidenceDigest : null;
+    evidenceDigest &&
+    profile &&
+    evidenceDigest.canonical_asset_id === profile.canonical_asset_id &&
+    evidenceDigest.trade_date === tradeDate
+      ? evidenceDigest
+      : null;
+  const expectedEvidenceDigestKey = profile ? getEvidenceDigestKey(profile.canonical_asset_id, tradeDate) : null;
+  const isEvidenceDigestPending =
+    Boolean(expectedEvidenceDigestKey) && (isEvidenceDigestLoading || evidenceDigestKey !== expectedEvidenceDigestKey);
 
   const openDigestAction = (action: EvidenceDigestAction) => {
     const nextContext: StockEntryContext = {
@@ -563,7 +579,7 @@ export function StockWorkspace({
               <section className="workspace-band" role="region" aria-label="Evidence Digest">
                 <div className="section-heading">
                   <h2>Evidence Digest</h2>
-                  {isEvidenceDigestLoading ? <span className="muted">Loading digest...</span> : null}
+                  {isEvidenceDigestPending ? <span className="muted">Loading digest...</span> : null}
                 </div>
                 {evidenceDigestError ? <p className="error-text">{evidenceDigestError}</p> : null}
                 {visibleEvidenceDigest ? (
@@ -618,7 +634,7 @@ export function StockWorkspace({
                     ) : null}
                   </>
                 ) : null}
-                {!isEvidenceDigestLoading && !evidenceDigestError && !visibleEvidenceDigest ? (
+                {!isEvidenceDigestPending && !evidenceDigestError && !visibleEvidenceDigest ? (
                   <p className="muted">No digest available.</p>
                 ) : null}
               </section>

@@ -486,7 +486,7 @@ describe('StockWorkspace', () => {
 
     const digestPanel = await screen.findByRole('region', { name: 'Evidence Digest' });
     expect(within(digestPanel).getByRole('heading', { name: 'Evidence Digest' })).toBeInTheDocument();
-    expect(within(digestPanel).getByText('平安银行 evidence digest')).toBeInTheDocument();
+    expect(await within(digestPanel).findByText('平安银行 evidence digest')).toBeInTheDocument();
     expect(within(digestPanel).getByText('Score 62')).toBeInTheDocument();
     expect(within(digestPanel).getByText('Recent company news is available')).toBeInTheDocument();
     expect(within(digestPanel).getByText('Latest research keeps buy rating')).toBeInTheDocument();
@@ -521,6 +521,17 @@ describe('StockWorkspace', () => {
         query: '平安银行 market'
       })
     );
+  });
+
+  it('keeps Evidence Digest in loading state before the digest request settles', async () => {
+    const pendingDigest = deferred<EvidenceDigestResponse>();
+    apiMocks.fetchEvidenceDigest.mockReturnValueOnce(pendingDigest.promise);
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const digestPanel = await screen.findByRole('region', { name: 'Evidence Digest' });
+    expect(within(digestPanel).getByText('Loading digest...')).toBeInTheDocument();
+    expect(within(digestPanel).queryByText('No digest available.')).not.toBeInTheDocument();
   });
 
   it('shows digest error locally without hiding stock profile', async () => {
