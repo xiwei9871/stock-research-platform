@@ -98,6 +98,15 @@ function latestClose(profile: AssetProfile | null) {
   return lastBar?.close ?? null;
 }
 
+function coverageBarsEnd(profile: AssetProfile, fallback: string) {
+  const barsCoverage = profile.coverage.bars;
+  if (barsCoverage && typeof barsCoverage === 'object' && 'end' in barsCoverage) {
+    const end = barsCoverage.end;
+    return typeof end === 'string' || typeof end === 'number' ? formatValue(end) : fallback;
+  }
+  return fallback;
+}
+
 export function StockWorkspace({
   initialAssetId = DEFAULT_ASSET_ID,
   entryContext,
@@ -335,7 +344,7 @@ export function StockWorkspace({
   ].filter((value): value is string => Boolean(value));
 
   return (
-    <section className="workspace-stack" aria-label="Stock Workspace workspace">
+    <section className="workspace-stack stock-detail-shell" aria-label="Stock Workspace workspace">
       <header className="workspace-header">
         <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : 'Stock Workspace'}</h1>
         <p className="muted">Single-stock evidence hub for price, factors, news, research reports, and strategy history.</p>
@@ -405,7 +414,7 @@ export function StockWorkspace({
 
       {profile ? (
         <>
-          <section className="stock-summary-strip" aria-label="Stock identity region">
+          <section className="stock-summary-strip stock-identity-band" aria-label="Stock identity region">
             <div>
               <span>Symbol</span>
               <strong>{identitySymbol}</strong>
@@ -428,7 +437,7 @@ export function StockWorkspace({
             </div>
           </section>
 
-          <section className="stock-summary-strip" aria-label="Stock evidence summary region">
+          <section className="stock-summary-strip stock-evidence-summary" aria-label="Stock evidence summary region">
             <div>
               <span>Signals</span>
               <strong>{profile.signals.length}</strong>
@@ -451,35 +460,37 @@ export function StockWorkspace({
             </div>
           </section>
 
-          <section className="workspace-band" aria-label="Context Rail Actions">
-            <div className="section-heading">
-              <h2>Context Actions</h2>
-              <span className="muted">{profile.canonical_asset_id}</span>
-            </div>
-            <div className="compact-toolbar">
-              <button type="button" onClick={() => onOpenNews?.(currentEntryContext)}>
-                Open News workspace
-              </button>
-              <button type="button" onClick={() => onOpenResearchReports?.(currentEntryContext)}>
-                Open Research Reports workspace
-              </button>
-              <button type="button" onClick={() => onOpenMarketMonitor?.(currentEntryContext)}>
-                Open Market Monitor workspace
-              </button>
-            </div>
-          </section>
+          <div className="stock-detail-layout">
+            <aside className="workspace-band stock-context-rail" aria-label="Context Rail Actions">
+              <div className="section-heading">
+                <h2>Context Actions</h2>
+                <span className="muted">{profile.canonical_asset_id}</span>
+              </div>
+              <div className="compact-toolbar">
+                <button type="button" onClick={() => onOpenNews?.(currentEntryContext)}>
+                  Open News workspace
+                </button>
+                <button type="button" onClick={() => onOpenResearchReports?.(currentEntryContext)}>
+                  Open Research Reports workspace
+                </button>
+                <button type="button" onClick={() => onOpenMarketMonitor?.(currentEntryContext)}>
+                  Open Market Monitor workspace
+                </button>
+              </div>
+            </aside>
 
-          <section className="workspace-band" aria-label="Price & Events">
-            <div className="section-heading">
-              <h2>Price & Events</h2>
-              <span className="muted">
-                {profile.bars.length} bars / {startDate} to {endDate}
-              </span>
-            </div>
-            {profile.bars.length > 0 ? <AssetChart bars={profile.bars} /> : <p className="muted">No bars available.</p>}
-          </section>
+            <div className="stock-detail-main">
+              <section className="workspace-band" aria-label="Price & Events">
+                <div className="section-heading">
+                  <h2>Price & Events</h2>
+                  <span className="muted">
+                    {profile.bars.length} bars / {startDate} to {endDate}
+                  </span>
+                </div>
+                {profile.bars.length > 0 ? <AssetChart bars={profile.bars} /> : <p className="muted">No bars available.</p>}
+              </section>
 
-          <section className="stock-evidence-grid">
+              <section className="stock-evidence-grid">
             <article className="workspace-band" role="region" aria-label="Market Monitor State">
               <div className="section-heading">
                 <h2>Market Monitor State</h2>
@@ -685,16 +696,16 @@ export function StockWorkspace({
                 <h2>Evidence Timeline</h2>
                 <span className="muted">Current loaded evidence</span>
               </div>
-              <div className="report-list compact">
-                <div className="evidence-row">
+              <div className="report-list compact stock-timeline">
+                <div className="evidence-row stock-timeline-row">
                   <div>
                     <strong>Price coverage</strong>
-                    <span>{profile.coverage?.bars?.end ?? endDate}</span>
+                    <span>{coverageBarsEnd(profile, endDate)}</span>
                   </div>
                   <p>{profile.bars.length} loaded bars</p>
                 </div>
                 {profile.decisions.map((decision) => (
-                  <div key={`timeline-${decision.event_id}`} className="evidence-row">
+                  <div key={`timeline-${decision.event_id}`} className="evidence-row stock-timeline-row">
                     <div>
                       <strong>Review decision</strong>
                       <span>{decision.review_date}</span>
@@ -703,7 +714,7 @@ export function StockWorkspace({
                   </div>
                 ))}
                 {profile.outcomes.map((outcome) => (
-                  <div key={`timeline-${outcome.outcome_event_id}`} className="evidence-row">
+                  <div key={`timeline-${outcome.outcome_event_id}`} className="evidence-row stock-timeline-row">
                     <div>
                       <strong>Decision outcome</strong>
                       <span>{outcome.review_date}</span>
@@ -713,7 +724,7 @@ export function StockWorkspace({
                   </div>
                 ))}
                 {(visibleAssetNews?.items ?? []).map((item) => (
-                  <div key={`timeline-${item.news_id}`} className="evidence-row">
+                  <div key={`timeline-${item.news_id}`} className="evidence-row stock-timeline-row">
                     <div>
                       <strong>News item</strong>
                       <span>{item.published_at.slice(0, 10)}</span>
@@ -722,7 +733,7 @@ export function StockWorkspace({
                   </div>
                 ))}
                 {(visibleResearchReports?.items ?? []).map((report) => (
-                  <div key={`timeline-${report.event_key}`} className="evidence-row">
+                  <div key={`timeline-${report.event_key}`} className="evidence-row stock-timeline-row">
                     <div>
                       <strong>Research report</strong>
                       <span>{formatValue(report.publish_date ?? report.report_date)}</span>
@@ -731,7 +742,7 @@ export function StockWorkspace({
                   </div>
                 ))}
                 {(visibleAssetNews?.items.length ?? 0) === 0 ? (
-                  <div className="evidence-row">
+                  <div className="evidence-row stock-timeline-row">
                     <div>
                       <strong>Latest news</strong>
                       <span>{latestNewsDate}</span>
@@ -740,7 +751,7 @@ export function StockWorkspace({
                   </div>
                 ) : null}
                 {(visibleResearchReports?.items.length ?? 0) === 0 ? (
-                  <div className="evidence-row">
+                  <div className="evidence-row stock-timeline-row">
                     <div>
                       <strong>Latest research</strong>
                       <span>{latestReportDate}</span>
@@ -773,7 +784,9 @@ export function StockWorkspace({
               </div>
               {!isSearchLoading && assetMatches.length === 0 ? <p className="muted">No asset matches.</p> : null}
             </article>
-          </section>
+              </section>
+            </div>
+          </div>
         </>
       ) : null}
     </section>

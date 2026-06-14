@@ -345,9 +345,23 @@ describe('StockWorkspace', () => {
   });
 
   it('renders the stock detail evidence hub sections', async () => {
-    render(<StockWorkspace initialAssetId="000001.SZ" />);
+    const { container } = render(<StockWorkspace initialAssetId="000001.SZ" />);
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+
+    [
+      'stock-detail-shell',
+      'stock-identity-band',
+      'stock-detail-layout',
+      'stock-detail-main',
+      'stock-context-rail',
+      'stock-evidence-summary',
+      'stock-evidence-grid',
+      'stock-timeline'
+    ].forEach((className) => {
+      expect(container.querySelector(`.${className}`)).toBeInTheDocument();
+    });
+    expect(container.querySelectorAll('.stock-timeline-row').length).toBeGreaterThan(1);
 
     [
       'Stock identity region',
