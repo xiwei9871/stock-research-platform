@@ -267,6 +267,24 @@ def test_build_market_emotion_payload_converts_decimal_values_for_json():
     json.dumps(payload)
 
 
+def test_build_market_emotion_payload_converts_non_finite_decimal_values_for_strict_json():
+    payload = market_monitor.build_market_emotion_payload(
+        {
+            "emotion_score": Decimal("NaN"),
+            "emotion_state": "hot",
+            "risk_state": "medium",
+            "breadth_score": Decimal("Infinity"),
+            "broken_limit_up_rate": Decimal("-Infinity"),
+        }
+    )
+
+    assert payload["summary"]["score"] is None
+    assert payload["components"][0]["score"] is None
+    assert payload["limit_performance"]["broken_limit_up_rate"] is None
+    assert payload["drawdown_pressure"]["broken_limit_up_rate"] is None
+    json.dumps(payload, allow_nan=False)
+
+
 class _SqlStateError(Exception):
     def __init__(self, sqlstate):
         super().__init__(sqlstate or "db error")

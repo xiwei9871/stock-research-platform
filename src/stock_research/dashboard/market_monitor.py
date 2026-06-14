@@ -25,6 +25,8 @@ def _number(value: Any) -> Any:
     if value is None:
         return None
     if isinstance(value, Decimal):
+        if not value.is_finite():
+            return None
         return int(value) if value == value.to_integral_value() else float(value)
     if isinstance(value, float) and math.isnan(value):
         return None
