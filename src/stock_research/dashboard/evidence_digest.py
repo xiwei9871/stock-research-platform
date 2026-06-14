@@ -335,7 +335,7 @@ def _find_market_item(asset_id: str, items: list[dict[str, Any]]) -> dict[str, A
 def _ensure_required_actions(asset_id: str, next_actions: list[dict[str, Any]]) -> None:
     required = {
         "open_news": {"label": "Open news", "workspace": "news"},
-        "open_research": {"label": "Open research", "workspace": "research"},
+        "open_research": {"label": "Open research", "workspace": "researchReports"},
         "open_market": {"label": "Open market monitor", "workspace": "market"},
         "review_stock": {"label": "Review stock", "workspace": "stock"},
     }
@@ -350,7 +350,10 @@ def _ensure_required_actions(asset_id: str, next_actions: list[dict[str, Any]]) 
             action = {"key": key}
             next_actions.append(action)
         action.setdefault("label", defaults["label"])
-        action.setdefault("workspace", defaults["workspace"])
+        if key == "open_research":
+            action["workspace"] = defaults["workspace"]
+        else:
+            action.setdefault("workspace", defaults["workspace"])
         action.setdefault("asset_id", asset_id)
         action.setdefault("query", asset_id)
 

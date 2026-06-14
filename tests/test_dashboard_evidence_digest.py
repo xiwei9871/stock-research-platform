@@ -131,6 +131,7 @@ def test_build_evidence_digest_strong_source_backed(monkeypatch):
     assert actions["open_news"]["news_id"] == "news-1"
     assert actions["open_research"]["report_id"] == "r1"
     assert actions["open_research"]["event_key"] == "r1:000001.SZ"
+    assert actions["open_research"]["workspace"] == "researchReports"
     assert actions["open_market"]["monitor_tab"] == "limit_up"
     assert actions["review_stock"]["workspace"] == "stock"
     for action in actions.values():
@@ -154,6 +155,7 @@ def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
     assert digest["source_refs"]["strategy_asset_id"] == "000001.SZ"
     actions = _actions_by_key(digest)
     assert set(actions) >= {"open_news", "open_research", "open_market", "review_stock"}
+    assert actions["open_research"]["workspace"] == "researchReports"
     for action in actions.values():
         assert action["workspace"]
         assert action["asset_id"] == "000001.SZ"
