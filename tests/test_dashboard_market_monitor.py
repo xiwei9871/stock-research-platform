@@ -140,6 +140,66 @@ def test_build_market_monitor_eod_maps_market_emotion_row(monkeypatch):
     assert payload["market_breadth"]["advancing_ratio"] == 3610 / 5207
 
 
+@pytest.mark.parametrize("sqlstate", ["42P01", "3F000"])
+def test_build_market_monitor_eod_falls_back_when_market_emotion_source_missing(
+    monkeypatch,
+    sqlstate,
+):
+    monkeypatch.setattr(
+        market_monitor,
+        "load_platform_summary",
+        lambda score_version="manual_v1", top_n=5: {
+            "latest_market_date": "2026-06-12",
+            "latest_factor_date": "2026-06-12",
+            "latest_score_date": "2026-06-12",
+            "market_asset_count": 5300,
+            "score_asset_count": 3100,
+            "factor_count": 42,
+            "topn_preview": [],
+        },
+    )
+    monkeypatch.setattr(market_monitor, "load_report_links", lambda trade_date: [])
+
+    def raise_missing_source(trade_date):
+        raise _SqlStateError(sqlstate)
+
+    monkeypatch.setattr(market_monitor, "load_market_emotion_row", raise_missing_source)
+    monkeypatch.setattr(market_monitor, "load_emotion_stock_lists", lambda trade_date: {})
+
+    payload = market_monitor.build_market_monitor_eod()
+
+    assert payload["market_emotion"]["summary"]["status"] == "pending_source"
+
+
+@pytest.mark.parametrize("sqlstate", ["42703", None])
+def test_build_market_monitor_eod_reraises_non_missing_market_emotion_errors(
+    monkeypatch,
+    sqlstate,
+):
+    monkeypatch.setattr(
+        market_monitor,
+        "load_platform_summary",
+        lambda score_version="manual_v1", top_n=5: {
+            "latest_market_date": "2026-06-12",
+            "latest_factor_date": "2026-06-12",
+            "latest_score_date": "2026-06-12",
+            "market_asset_count": 5300,
+            "score_asset_count": 3100,
+            "factor_count": 42,
+            "topn_preview": [],
+        },
+    )
+    monkeypatch.setattr(market_monitor, "load_report_links", lambda trade_date: [])
+
+    def raise_non_missing_source(trade_date):
+        raise _SqlStateError(sqlstate)
+
+    monkeypatch.setattr(market_monitor, "load_market_emotion_row", raise_non_missing_source)
+
+    with pytest.raises(_SqlStateError):
+        market_monitor.build_market_monitor_eod()
+
+
 def test_build_market_monitor_eod_includes_emotion_stock_lists(monkeypatch):
     monkeypatch.setattr(
         market_monitor,

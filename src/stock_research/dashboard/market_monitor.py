@@ -343,7 +343,13 @@ def build_market_monitor_eod(
         else list(summary.get("topn_preview") or [])
     )
     reports = load_report_links(selected_trade_date) if selected_trade_date else []
-    emotion_row = load_market_emotion_row(selected_trade_date) if selected_trade_date else None
+    emotion_row = None
+    if selected_trade_date:
+        try:
+            emotion_row = load_market_emotion_row(selected_trade_date)
+        except Exception as exc:
+            if not _is_missing_optional_source(exc):
+                raise
     emotion_payload = build_market_emotion_payload(emotion_row)
     emotion_stock_lists = _empty_emotion_stock_lists()
     try:
