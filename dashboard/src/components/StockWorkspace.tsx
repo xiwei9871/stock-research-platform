@@ -13,6 +13,9 @@ const ADJUST_TYPE = 'qfq';
 type StockWorkspaceProps = {
   initialAssetId?: string;
   entryContext?: StockEntryContext;
+  onOpenNews?: (context: StockEntryContext) => void;
+  onOpenResearchReports?: (context: StockEntryContext) => void;
+  onOpenMarketMonitor?: (context: StockEntryContext) => void;
 };
 
 type FactorDisplayRow = {
@@ -22,16 +25,22 @@ type FactorDisplayRow = {
 };
 
 export type StockEntryContext = {
-  sourceWorkspace?: 'search' | 'news' | 'watchlist';
+  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market';
+  assetId?: string;
   query?: string;
   matchReason?: string;
   newsId?: string;
+  eventKey?: string;
+  reportId?: string;
+  monitorTab?: string;
 };
 
 function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['sourceWorkspace']>) {
   if (sourceWorkspace === 'search') return 'Search';
   if (sourceWorkspace === 'news') return 'News';
-  return 'Watchlist';
+  if (sourceWorkspace === 'watchlist') return 'Watchlist';
+  if (sourceWorkspace === 'researchReports') return 'Research Reports';
+  return 'Market Monitor';
 }
 
 function normalizeAssetId(value: string) {
@@ -89,7 +98,13 @@ function latestClose(profile: AssetProfile | null) {
   return lastBar?.close ?? null;
 }
 
-export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext }: StockWorkspaceProps) {
+export function StockWorkspace({
+  initialAssetId = DEFAULT_ASSET_ID,
+  entryContext,
+  onOpenNews,
+  onOpenResearchReports,
+  onOpenMarketMonitor
+}: StockWorkspaceProps) {
   const [assetId, setAssetId] = useState(initialAssetId);
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
@@ -298,6 +313,17 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
     researchReports && profile && researchReports.asset_id === profile.canonical_asset_id ? researchReports : null;
   const latestNewsDate = visibleAssetNews?.summary.latest_published_at?.slice(0, 10) ?? '-';
   const latestReportDate = visibleResearchReports?.summary.latest_report_date ?? '-';
+  const currentEntryContext: StockEntryContext = {
+    ...entryContext,
+    assetId: profile?.canonical_asset_id ?? entryContext?.assetId ?? assetId,
+    query: entryContext?.query ?? profile?.asset?.symbol ?? profile?.canonical_asset_id ?? assetId
+  };
+  const sourceObjectIds = [
+    entryContext?.newsId ? `newsId: ${entryContext.newsId}` : null,
+    entryContext?.eventKey ? `eventKey: ${entryContext.eventKey}` : null,
+    entryContext?.reportId ? `reportId: ${entryContext.reportId}` : null,
+    entryContext?.monitorTab ? `monitorTab: ${entryContext.monitorTab}` : null
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <section className="workspace-stack" aria-label="Stock Workspace workspace">
@@ -314,6 +340,15 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
               </>
             ) : null}
           </p>
+        ) : null}
+        {sourceObjectIds.length > 0 ? (
+          <div className="tag-stack" aria-label="Source object IDs">
+            {sourceObjectIds.map((sourceObjectId) => (
+              <span key={sourceObjectId} className="status-chip neutral">
+                {sourceObjectId}
+              </span>
+            ))}
+          </div>
         ) : null}
       </header>
 
@@ -404,6 +439,24 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
             <div>
               <span>Latest Report</span>
               <strong>{latestReportDate}</strong>
+            </div>
+          </section>
+
+          <section className="workspace-band" aria-label="Context Rail Actions">
+            <div className="section-heading">
+              <h2>Context Actions</h2>
+              <span className="muted">{profile.canonical_asset_id}</span>
+            </div>
+            <div className="compact-toolbar">
+              <button type="button" onClick={() => onOpenNews?.(currentEntryContext)}>
+                Open News workspace
+              </button>
+              <button type="button" onClick={() => onOpenResearchReports?.(currentEntryContext)}>
+                Open Research Reports workspace
+              </button>
+              <button type="button" onClick={() => onOpenMarketMonitor?.(currentEntryContext)}>
+                Open Market Monitor workspace
+              </button>
             </div>
           </section>
 
@@ -640,24 +693,52 @@ export function StockWorkspace({ initialAssetId = DEFAULT_ASSET_ID, entryContext
                     <p>{decision.decision_label}</p>
                   </div>
                 ))}
-                <div className="evidence-row">
-                  <div>
-                    <strong>Latest news</strong>
-                    <span>{latestNewsDate}</span>
+                {profile.outcomes.map((outcome) => (
+                  <div key={`timeline-${outcome.outcome_event_id}`} className="evidence-row">
+                    <div>
+                      <strong>Decision outcome</strong>
+                      <span>{outcome.review_date}</span>
+                    </div>
+                    <p>{outcome.outcome_status}</p>
+                    <span>{outcome.outcome_artifact_path}</span>
                   </div>
-                  <p>{visibleAssetNews ? `${visibleAssetNews.summary.news_count_7d} related items in 7d` : 'No loaded related news'}</p>
-                </div>
-                <div className="evidence-row">
-                  <div>
-                    <strong>Latest research</strong>
-                    <span>{latestReportDate}</span>
+                ))}
+                {(visibleAssetNews?.items ?? []).map((item) => (
+                  <div key={`timeline-${item.news_id}`} className="evidence-row">
+                    <div>
+                      <strong>News item</strong>
+                      <span>{item.published_at.slice(0, 10)}</span>
+                    </div>
+                    <p>News: {item.title}</p>
                   </div>
-                  <p>
-                    {visibleResearchReports
-                      ? `${visibleResearchReports.summary.report_count_90d} reports in 90d`
-                      : 'No loaded research coverage'}
-                  </p>
-                </div>
+                ))}
+                {(visibleResearchReports?.items ?? []).map((report) => (
+                  <div key={`timeline-${report.event_key}`} className="evidence-row">
+                    <div>
+                      <strong>Research report</strong>
+                      <span>{formatValue(report.publish_date ?? report.report_date)}</span>
+                    </div>
+                    <p>Research: {report.report_title}</p>
+                  </div>
+                ))}
+                {(visibleAssetNews?.items.length ?? 0) === 0 ? (
+                  <div className="evidence-row">
+                    <div>
+                      <strong>Latest news</strong>
+                      <span>{latestNewsDate}</span>
+                    </div>
+                    <p>No loaded related news</p>
+                  </div>
+                ) : null}
+                {(visibleResearchReports?.items.length ?? 0) === 0 ? (
+                  <div className="evidence-row">
+                    <div>
+                      <strong>Latest research</strong>
+                      <span>{latestReportDate}</span>
+                    </div>
+                    <p>No loaded research coverage</p>
+                  </div>
+                ) : null}
               </div>
             </article>
 

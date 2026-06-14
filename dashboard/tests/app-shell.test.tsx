@@ -1055,6 +1055,10 @@ describe('dashboard app shell', () => {
       sourceWorkspace?: string;
       query?: string;
       matchReason?: string;
+      newsId?: string;
+      eventKey?: string;
+      reportId?: string;
+      monitorTab?: string;
     };
     initialQuery?: string;
     initialTradeDate?: string;
@@ -1153,14 +1157,24 @@ describe('dashboard app shell', () => {
       return {
         StockWorkspace: ({
           initialAssetId,
-          entryContext
+          entryContext,
+          onOpenNews,
+          onOpenResearchReports,
+          onOpenMarketMonitor
         }: {
           initialAssetId?: string;
           entryContext?: {
             sourceWorkspace?: string;
             query?: string;
             matchReason?: string;
+            newsId?: string;
+            eventKey?: string;
+            reportId?: string;
+            monitorTab?: string;
           };
+          onOpenNews?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
+          onOpenResearchReports?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
+          onOpenMarketMonitor?: (context: NonNullable<MockWorkspaceRender['entryContext']>) => void;
         }) => {
           const [mountId] = React.useState(() => {
             stockMountId += 1;
@@ -1171,6 +1185,31 @@ describe('dashboard app shell', () => {
             <div data-testid="mock-stock-workspace">
               {initialAssetId}:{entryContext?.sourceWorkspace ?? 'none'}:{entryContext?.query ?? 'none'}:
               {entryContext?.matchReason ?? 'none'}:{mountId}
+              <button
+                type="button"
+                onClick={() => onOpenNews?.({ ...entryContext, query: '600519', newsId: 'stock-news-1' })}
+              >
+                Mock stock open news
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenResearchReports?.({
+                    ...entryContext,
+                    query: '600519',
+                    eventKey: 'stock-event-1',
+                    reportId: 'stock-report-1'
+                  })
+                }
+              >
+                Mock stock open research
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenMarketMonitor?.({ ...entryContext, monitorTab: 'limit_up' })}
+              >
+                Mock stock open market
+              </button>
             </div>
           );
         }
@@ -1312,6 +1351,38 @@ describe('dashboard app shell', () => {
       },
       mountId: 2
     });
+  });
+
+  it('opens destination workspaces from stock detail context actions', async () => {
+    const { newsRenders, researchRenders } = await renderMockedAppShellForHandoff();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock open stock search' }));
+    expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
+      'CN:SH:600519:search:600519:Exact code match:1'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock stock open news' }));
+    expect(await screen.findByTestId('mock-news-workspace')).toHaveTextContent('600519:stock-news-1:1');
+    expect(newsRenders.at(-1)).toMatchObject({
+      initialQuery: '600519',
+      initialNewsId: 'stock-news-1',
+      mountId: 1
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open research' }));
+    expect(await screen.findByTestId('mock-research-workspace')).toHaveTextContent(
+      '600519:stock-event-1:stock-report-1'
+    );
+    expect(researchRenders.at(-1)).toMatchObject({
+      initialQuery: '600519',
+      initialEventKey: 'stock-event-1',
+      initialReportId: 'stock-report-1'
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mock stock open market' }));
+    expect(await screen.findByText('market workspace')).toBeInTheDocument();
   });
 
   it('preserves news handoff context and remounts on the same result', async () => {

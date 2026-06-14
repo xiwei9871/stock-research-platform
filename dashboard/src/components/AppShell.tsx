@@ -7,7 +7,7 @@ import { HomeCockpit } from './HomeCockpit';
 import { MarketMonitorWorkspace } from './MarketMonitorWorkspace';
 import { NewsWorkspace } from './NewsWorkspace';
 import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
-import { StockWorkspace } from './StockWorkspace';
+import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { GlobalSearchResult } from '../api/types';
@@ -35,7 +35,7 @@ type WorkspaceHandoff = {
   version: number;
 };
 
-type StockSourceWorkspace = 'search' | 'news' | 'watchlist';
+type StockSourceWorkspace = NonNullable<StockEntryContext['sourceWorkspace']>;
 
 type StockHandoff = {
   assetId?: string;
@@ -43,6 +43,9 @@ type StockHandoff = {
   query?: string;
   matchReason?: string;
   newsId?: string;
+  eventKey?: string;
+  reportId?: string;
+  monitorTab?: string;
   version: number;
 };
 
@@ -75,6 +78,31 @@ export function AppShell() {
       version: current.version + 1
     }));
     setWorkspaceMode('stock');
+  }
+
+  function openNewsWorkspaceFromStock(context: StockEntryContext) {
+    setNewsHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      newsId: context.newsId,
+      assetId: context.assetId ?? selectedAssetId,
+      version: current.version + 1
+    }));
+    setWorkspaceMode('news');
+  }
+
+  function openResearchReportsWorkspaceFromStock(context: StockEntryContext) {
+    setResearchReportsHandoff((current) => ({
+      query: context.query ?? context.assetId ?? selectedAssetId,
+      eventKey: context.eventKey,
+      reportId: context.reportId,
+      assetId: context.assetId ?? selectedAssetId,
+      version: current.version + 1
+    }));
+    setWorkspaceMode('researchReports');
+  }
+
+  function openMarketMonitorWorkspaceFromStock() {
+    setWorkspaceMode('market');
   }
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
@@ -162,6 +190,9 @@ export function AppShell() {
               key={`stock:${stockHandoff.version}`}
               initialAssetId={stockHandoff.assetId ?? selectedAssetId}
               entryContext={stockHandoff}
+              onOpenNews={openNewsWorkspaceFromStock}
+              onOpenResearchReports={openResearchReportsWorkspaceFromStock}
+              onOpenMarketMonitor={openMarketMonitorWorkspaceFromStock}
             />
           ) : null}
           {workspaceMode === 'watchlist' ? (

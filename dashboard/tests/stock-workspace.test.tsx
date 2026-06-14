@@ -209,7 +209,14 @@ afterEach(() => {
 
 describe('StockWorkspace', () => {
   it('renders the source workspace and match reason for stock handoffs', async () => {
-    const entryContext: StockEntryContext = { sourceWorkspace: 'search', matchReason: 'Exact code match' };
+    const entryContext: StockEntryContext = {
+      sourceWorkspace: 'search',
+      matchReason: 'Exact code match',
+      newsId: 'news-1',
+      eventKey: 'r1:000001.SZ',
+      reportId: 'r1',
+      monitorTab: 'limit_up'
+    };
 
     render(
       <StockWorkspace
@@ -220,6 +227,56 @@ describe('StockWorkspace', () => {
 
     expect(await screen.findByText('Opened from Search')).toBeInTheDocument();
     expect(screen.getByText('Exact code match')).toBeInTheDocument();
+    expect(screen.getByText('newsId: news-1')).toBeInTheDocument();
+    expect(screen.getByText('eventKey: r1:000001.SZ')).toBeInTheDocument();
+    expect(screen.getByText('reportId: r1')).toBeInTheDocument();
+    expect(screen.getByText('monitorTab: limit_up')).toBeInTheDocument();
+  });
+
+  it('renders context rail actions and recent evidence timeline entries', async () => {
+    const handleOpenNews = vi.fn();
+    const handleOpenResearchReports = vi.fn();
+    const handleOpenMarketMonitor = vi.fn();
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        outcomes: [makeOutcome({ outcome_artifact_path: 'reports/outcomes/000001-outcome.json' })]
+      })
+    );
+
+    render(
+      <StockWorkspace
+        initialAssetId="000001.SZ"
+        entryContext={{ sourceWorkspace: 'news', query: '平安银行', newsId: 'news-1' }}
+        onOpenNews={handleOpenNews}
+        onOpenResearchReports={handleOpenResearchReports}
+        onOpenMarketMonitor={handleOpenMarketMonitor}
+      />
+    );
+
+    expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
+    expect(await screen.findByText('平安银行相关新闻')).toBeInTheDocument();
+    expect(await screen.findByText('平安银行深度报告')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(handleOpenNews).toHaveBeenCalledWith(
+      expect.objectContaining({ query: '平安银行', newsId: 'news-1' })
+    );
+    expect(handleOpenResearchReports).toHaveBeenCalledWith(
+      expect.objectContaining({ query: '平安银行', newsId: 'news-1' })
+    );
+    expect(handleOpenMarketMonitor).toHaveBeenCalledWith(
+      expect.objectContaining({ query: '平安银行', newsId: 'news-1' })
+    );
+
+    const timeline = screen.getByRole('region', { name: 'Evidence Timeline' });
+    expect(within(timeline).getByText('News: 平安银行相关新闻')).toBeInTheDocument();
+    expect(within(timeline).getByText('Research: 平安银行深度报告')).toBeInTheDocument();
+    expect(within(timeline).getByText('watch')).toBeInTheDocument();
+    expect(within(timeline).getByText('complete')).toBeInTheDocument();
+    expect(within(timeline).getByText('reports/outcomes/000001-outcome.json')).toBeInTheDocument();
   });
 
   it('loads a stock dossier with factors, news, watchlist, and evidence', async () => {
