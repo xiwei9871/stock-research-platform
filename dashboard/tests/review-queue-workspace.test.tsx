@@ -81,7 +81,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
                   asset_id: '000001.SZ',
                   query: '平安银行',
                   event_key: 'limit-up:000001.SZ',
-                  monitor_tab: 'limit-up'
+                  monitor_tab: 'limit_up'
                 }
               ]
             }
@@ -114,6 +114,11 @@ describe('ReviewQueueWorkspace', () => {
     expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
     expect(apiMocks.fetchReviewQueue).toHaveBeenCalledWith({ limit: 20, lookbackDays: 90 });
     expect(screen.getByRole('button', { name: 'High Conviction 1' })).toHaveAttribute('aria-pressed', 'true');
+    const queueRow = screen.getByRole('button', { name: /平安银行/ });
+    expect(queueRow).toHaveAttribute('aria-pressed', 'true');
+    expect(queueRow).toHaveStyle({
+      gridTemplateColumns: '48px minmax(120px, 1fr) minmax(100px, 0.8fr) 92px 96px 104px'
+    });
     expect(screen.getByText('平安银行')).toBeInTheDocument();
 
     const preview = screen.getByRole('region', { name: 'Selected Evidence' });
@@ -177,9 +182,17 @@ describe('ReviewQueueWorkspace', () => {
         assetId: '000001.SZ',
         query: '平安银行',
         eventKey: 'limit-up:000001.SZ',
-        monitorTab: 'limit-up'
+        monitorTab: 'limit_up'
       })
     );
+  });
+
+  it('renders queue-level warnings', async () => {
+    apiMocks.fetchReviewQueue.mockResolvedValueOnce(makeQueue({ warnings: ['partial digest failure'] }));
+
+    render(<ReviewQueueWorkspace />);
+
+    expect(await screen.findByText('partial digest failure')).toBeInTheDocument();
   });
 
   it('shows local error with retry', async () => {

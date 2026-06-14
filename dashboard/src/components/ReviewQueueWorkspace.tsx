@@ -123,6 +123,16 @@ export function ReviewQueueWorkspace({
 
       {queue && !error ? (
         <>
+          {queue.warnings.length > 0 ? (
+            <section className="workspace-band" aria-label="Review Queue Warnings">
+              {queue.warnings.map((warning) => (
+                <p className="error-text" key={warning}>
+                  {warning}
+                </p>
+              ))}
+            </section>
+          ) : null}
+
           <section className="workspace-band" aria-label="Review Queue Groups">
             <div className="compact-toolbar">
               {queue.groups.map((group) => (
@@ -149,13 +159,15 @@ export function ReviewQueueWorkspace({
             ) : null}
 
             {selectedGroup && selectedGroup.items.length > 0 ? (
-              <div className="data-table" role="list" aria-label={`${selectedGroup.label} queue items`}>
+              <div className="data-table" aria-label={`${selectedGroup.label} queue items`}>
                 {selectedGroup.items.map((item) => (
                   <button
                     key={item.queue_id}
                     type="button"
                     className="data-table-row"
-                    role="listitem"
+                    style={{
+                      gridTemplateColumns: '48px minmax(120px, 1fr) minmax(100px, 0.8fr) 92px 96px 104px'
+                    }}
                     aria-pressed={item.queue_id === selectedItem?.queue_id}
                     onClick={() => setSelectedQueueId(item.queue_id)}
                   >
