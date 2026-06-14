@@ -591,6 +591,7 @@ body {
 }
 
 .stock-tabs button {
+  flex: 0 0 92px;
   min-height: 30px;
   border: 1px solid #cfd8e3;
   border-radius: 5px;
