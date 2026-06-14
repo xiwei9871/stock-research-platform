@@ -64,6 +64,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchResearchReportSummary: vi.fn(),
   fetchResearchReports: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
+  fetchEvidenceDigest: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
   fetchStrategyValidationReplay: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -906,6 +907,19 @@ describe('dashboard app shell', () => {
         latest_target_price: null
       },
       items: [],
+      warnings: []
+    });
+    apiMocks.fetchEvidenceDigest.mockResolvedValue({
+      asset_id: 'CN:SZ:300951',
+      canonical_asset_id: 'CN:SZ:300951',
+      trade_date: '2026-06-08',
+      title: 'Strong evidence',
+      score: 81,
+      bucket: 'strong',
+      facts: [],
+      risk_flags: [],
+      source_refs: {},
+      next_actions: [],
       warnings: []
     });
   });
