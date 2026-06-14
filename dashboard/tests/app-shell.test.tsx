@@ -205,6 +205,87 @@ function makeGlobalSearchPayload(result: GlobalSearchResult, query = '茅台'): 
   };
 }
 
+const marketEmotionFixture = {
+  summary: {
+    score: 73.6,
+    state: 'hot',
+    risk_state: 'medium',
+    style_signal_hint: 'growth_favorable',
+    position_budget_hint: 'reduced',
+    status: 'available'
+  },
+  components: [
+    { key: 'breadth', label: '涨跌家数', score: 68.2 },
+    { key: 'limit', label: '涨停表现', score: 75.4 },
+    { key: 'relay', label: '连板接力', score: 71.1 },
+    { key: 'feedback', label: '赚钱效应', score: 66.8 },
+    { key: 'liquidity', label: '市场量能', score: 82.0 }
+  ],
+  breadth: {
+    traded_count: 5207,
+    up_count: 3610,
+    down_count: 1492,
+    strong_up_count: 269,
+    strong_down_count: 55,
+    status: 'available'
+  },
+  liquidity: {
+    total_amount: 1280000000000,
+    amount_ratio_5_20: 1.18,
+    status: 'available'
+  },
+  limit_performance: {
+    limit_up_count: 90,
+    limit_down_count: 10,
+    broken_limit_up_count: 55,
+    broken_limit_up_rate: 0.3793,
+    first_board_count: 58,
+    second_board_count: 21,
+    third_board_plus_count: 11,
+    high_board_height: 6,
+    status: 'available'
+  },
+  profit_effect: {
+    limit_up_success_rate: 0.7361,
+    limit_up_profit_rate: 0.026,
+    limit_up_limit_down_rate: 0.026,
+    relay_profit_rate: 0.018,
+    relay_success_rate: 0.615,
+    relay_continue_rate: 0.312,
+    broken_profit_rate: 0.007,
+    broken_success_rate: 0.564,
+    broken_limit_down_rate: 0.073,
+    status: 'available'
+  },
+  drawdown_pressure: {
+    strong_down_count: 55,
+    limit_down_count: 10,
+    broken_limit_up_rate: 0.3793,
+    yesterday_limit_up_limit_down_rate: 0.026,
+    status: 'available'
+  },
+  weight_performance: { status: 'pending_source' }
+};
+
+const emotionStockListsFixture = {
+  auction_status: 'pending_source',
+  auction: [],
+  limit_up: [
+    {
+      name: '金钼股份',
+      asset_id: 'CN:SH:601958',
+      symbol: '601958',
+      amount: 3038000000,
+      pct_chg: 10,
+      board: '金属钼',
+      tab: 'limit_up',
+      limit_up_streak: 1
+    }
+  ],
+  broken_limit_up: [],
+  limit_down: []
+};
+
 function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {}): MarketMonitorPayload {
   return {
     trade_date: '2026-06-10',
@@ -253,6 +334,8 @@ function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {})
         trade_date: '2026-06-10'
       }
     ],
+    market_emotion: marketEmotionFixture,
+    emotion_stock_lists: emotionStockListsFixture,
     warnings: ['market breadth source pending'],
     ...overrides
   };
@@ -1330,9 +1413,158 @@ describe('dashboard app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
     expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
     expect(screen.getByText('2026-06-10')).toBeInTheDocument();
-    expect(screen.getByText('5,300')).toBeInTheDocument();
-    expect(screen.getByText('000001.SZ')).toBeInTheDocument();
-    expect(screen.getByText('market breadth source pending')).toBeInTheDocument();
+    expect(screen.getByText('综合强度')).toBeInTheDocument();
+    expect(screen.getByText('73.6')).toBeInTheDocument();
+    expect(screen.getByText('hot')).toBeInTheDocument();
+    expect(screen.getAllByText('涨跌家数').length).toBeGreaterThan(0);
+    expect(screen.getByText('3,610')).toBeInTheDocument();
+    expect(screen.getAllByText('市场量能').length).toBeGreaterThan(0);
+    expect(screen.getByText('1.18x')).toBeInTheDocument();
+    expect(screen.getAllByText('涨停表现').length).toBeGreaterThan(0);
+    expect(screen.getByText('最高 6 板')).toBeInTheDocument();
+    expect(screen.getAllByText('赚钱效应').length).toBeGreaterThan(0);
+    expect(screen.getByText('73.61%')).toBeInTheDocument();
+    expect(screen.getByText('2.60%')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '竞价 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '涨停 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '炸板 0' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '跌停 0' })).toBeInTheDocument();
+    expect(screen.getByText('金钼股份')).toBeInTheDocument();
+    expect(screen.getByText('30.38亿')).toBeInTheDocument();
+    expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
+  });
+
+  it('loads market monitor history for a selected trade date', async () => {
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-09',
+          freshness: {
+            mode: 'eod',
+            label: 'Historical EOD',
+            is_realtime: false,
+            latest_market_date: '2026-06-10',
+            latest_factor_date: '2026-06-10',
+            latest_score_date: '2026-06-10'
+          },
+          market_emotion: {
+            ...marketEmotionFixture,
+            summary: { ...marketEmotionFixture.summary, score: 61.2, state: 'warm' }
+          }
+        })
+      );
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    const tradeDateInput = screen.getByLabelText('Market monitor trade date');
+    await waitFor(() => expect(tradeDateInput).toHaveValue('2026-06-10'));
+
+    fireEvent.change(tradeDateInput, { target: { value: '2026-06-09' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Date' }));
+
+    await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenLastCalledWith({ topN: 5, tradeDate: '2026-06-09' }));
+    expect(await screen.findByText('Historical EOD')).toBeInTheDocument();
+    expect(screen.getByText('61.2')).toBeInTheDocument();
+    expect(tradeDateInput).toHaveValue('2026-06-09');
+  });
+
+  it('shows the selected market monitor date while historical data is loading', async () => {
+    let resolveHistoricalRequest: (payload: MarketMonitorPayload) => void = () => undefined;
+    const historicalRequest = new Promise<MarketMonitorPayload>((resolve) => {
+      resolveHistoricalRequest = resolve;
+    });
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockReturnValueOnce(historicalRequest);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    const tradeDateInput = screen.getByLabelText('Market monitor trade date');
+    await waitFor(() => expect(tradeDateInput).toHaveValue('2026-06-10'));
+
+    fireEvent.change(tradeDateInput, { target: { value: '2026-06-04' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Load Date' }));
+
+    expect(await screen.findByText('Loading 2026-06-04...')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-10')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveHistoricalRequest(
+        makeMarketMonitorPayload({
+          trade_date: '2026-06-04',
+          freshness: {
+            mode: 'eod',
+            label: 'Historical EOD',
+            is_realtime: false,
+            latest_market_date: '2026-06-10',
+            latest_factor_date: '2026-06-10',
+            latest_score_date: '2026-06-10'
+          }
+        })
+      );
+      await historicalRequest;
+    });
+
+    expect(screen.queryByText('Loading 2026-06-04...')).not.toBeInTheDocument();
+    expect(tradeDateInput).toHaveValue('2026-06-04');
+  });
+
+  it('renders partial EOD market monitor payloads without crashing', async () => {
+    apiMocks.fetchMarketMonitorEod
+      .mockResolvedValueOnce(makeMarketMonitorPayload())
+      .mockResolvedValueOnce({
+        trade_date: '2026-06-10'
+      } as unknown as MarketMonitorPayload);
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
+    expect(screen.getByText('Last Completed Trading Day')).toBeInTheDocument();
+    expect(await screen.findByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
+    expect(screen.getByText('情绪拆解待接入')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '涨停 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('暂无股票')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation across market monitor stock tabs', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
+
+    await screen.findByRole('heading', { name: 'Market Monitor' });
+    const auctionTab = screen.getByRole('tab', { name: '竞价 0' });
+    const limitUpTab = screen.getByRole('tab', { name: '涨停 1' });
+    const brokenTab = screen.getByRole('tab', { name: '炸板 0' });
+    const limitDownTab = screen.getByRole('tab', { name: '跌停 0' });
+
+    expect(limitUpTab).toHaveAttribute('aria-selected', 'true');
+    limitUpTab.focus();
+
+    fireEvent.keyDown(limitUpTab, { key: 'ArrowRight' });
+    expect(brokenTab).toHaveAttribute('aria-selected', 'true');
+    expect(brokenTab).toHaveFocus();
+
+    fireEvent.keyDown(brokenTab, { key: 'Home' });
+    expect(auctionTab).toHaveAttribute('aria-selected', 'true');
+    expect(auctionTab).toHaveFocus();
+
+    fireEvent.keyDown(auctionTab, { key: 'End' });
+    expect(limitDownTab).toHaveAttribute('aria-selected', 'true');
+    expect(limitDownTab).toHaveFocus();
+
+    fireEvent.keyDown(limitDownTab, { key: 'ArrowLeft' });
+    expect(brokenTab).toHaveAttribute('aria-selected', 'true');
+    expect(brokenTab).toHaveFocus();
   });
 
   it('ignores deferred market monitor responses after navigating away', async () => {
