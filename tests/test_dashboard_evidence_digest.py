@@ -284,7 +284,7 @@ def test_build_evidence_digest_passes_explicit_date_windows(monkeypatch):
 
     assert captured["news"]["asset_id"] == "000001.SZ"
     assert captured["news"]["start_time"] == "2026-06-06"
-    assert captured["news"]["end_time"] == "2026-06-12"
+    assert captured["news"]["end_time"] == "2026-06-12T23:59:59+08:00"
     assert captured["news"]["limit"] == 5
     assert captured["research"]["asset_id"] == "000001.SZ"
     assert captured["research"]["start_date"] == "2026-03-15"
@@ -294,6 +294,8 @@ def test_build_evidence_digest_passes_explicit_date_windows(monkeypatch):
 
 def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
     captured_profile = {}
+    news_calls = []
+    research_calls = []
     market_calls = []
     monkeypatch.setattr(evidence_digest, "load_platform_summary", lambda **kwargs: {"latest_market_date": ""})
     monkeypatch.setattr(
@@ -304,12 +306,12 @@ def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
     monkeypatch.setattr(
         evidence_digest,
         "load_public_news_for_dashboard",
-        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+        lambda **kwargs: news_calls.append(kwargs) or _news(kwargs["asset_id"], items=0),
     )
     monkeypatch.setattr(
         evidence_digest,
         "list_research_reports",
-        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+        lambda **kwargs: research_calls.append(kwargs) or _reports(kwargs["asset_id"], count=0),
     )
     monkeypatch.setattr(
         evidence_digest,
@@ -323,11 +325,15 @@ def test_build_evidence_digest_warns_when_market_date_unavailable(monkeypatch):
     assert captured_profile["trade_date"] == ""
     assert captured_profile["start_date"] == ""
     assert any(warning == "market date unavailable" for warning in digest["warnings"])
+    assert news_calls == []
+    assert research_calls == []
     assert market_calls == []
 
 
 def test_build_evidence_digest_handles_platform_date_failure(monkeypatch):
     captured_profile = {}
+    news_calls = []
+    research_calls = []
     market_calls = []
     monkeypatch.setattr(
         evidence_digest,
@@ -342,12 +348,12 @@ def test_build_evidence_digest_handles_platform_date_failure(monkeypatch):
     monkeypatch.setattr(
         evidence_digest,
         "load_public_news_for_dashboard",
-        lambda **kwargs: _news(kwargs["asset_id"], items=0),
+        lambda **kwargs: news_calls.append(kwargs) or _news(kwargs["asset_id"], items=0),
     )
     monkeypatch.setattr(
         evidence_digest,
         "list_research_reports",
-        lambda **kwargs: _reports(kwargs["asset_id"], count=0),
+        lambda **kwargs: research_calls.append(kwargs) or _reports(kwargs["asset_id"], count=0),
     )
     monkeypatch.setattr(
         evidence_digest,
@@ -361,6 +367,8 @@ def test_build_evidence_digest_handles_platform_date_failure(monkeypatch):
     assert captured_profile["trade_date"] == ""
     assert any("platform offline" in warning for warning in digest["warnings"])
     assert any(warning == "market date unavailable" for warning in digest["warnings"])
+    assert news_calls == []
+    assert research_calls == []
     assert market_calls == []
 
 

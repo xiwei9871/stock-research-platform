@@ -36,23 +36,31 @@ def build_evidence_digest(
     score_row = profile.get("score") or {}
     score = _evidence_score(score_row)
 
-    news = _load_optional(
-        warnings,
-        "news",
-        _load_news_for_digest,
-        asset_id=canonical_asset_id,
-        start_time=news_start_date,
-        end_time=selected_trade_date,
-        limit=5,
+    news = (
+        _load_optional(
+            warnings,
+            "news",
+            _load_news_for_digest,
+            asset_id=canonical_asset_id,
+            start_time=news_start_date,
+            end_time=_end_of_day_time(selected_trade_date),
+            limit=5,
+        )
+        if selected_trade_date
+        else _empty_optional_source()
     )
-    reports = _load_optional(
-        warnings,
-        "research",
-        _load_research_for_digest,
-        asset_id=canonical_asset_id,
-        start_date=start_date,
-        end_date=selected_trade_date,
-        limit=5,
+    reports = (
+        _load_optional(
+            warnings,
+            "research",
+            _load_research_for_digest,
+            asset_id=canonical_asset_id,
+            start_date=start_date,
+            end_date=selected_trade_date,
+            limit=5,
+        )
+        if selected_trade_date
+        else _empty_optional_source()
     )
     market = (
         _load_optional(
@@ -64,7 +72,7 @@ def build_evidence_digest(
             top_n=5,
         )
         if selected_trade_date
-        else {"emotion_stock_lists": {"auction": [], "limit_up": [], "broken_limit_up": [], "limit_down": []}, "warnings": []}
+        else _empty_market_source()
     )
 
     facts: list[dict[str, Any]] = []
@@ -122,11 +130,32 @@ def _start_date(end_date: str, lookback_days: int) -> str:
     return (parsed - timedelta(days=_bounded_lookback_days(lookback_days) - 1)).isoformat()
 
 
+def _end_of_day_time(trade_date: str) -> str:
+    if not trade_date:
+        return ""
+    try:
+        datetime.strptime(trade_date, "%Y-%m-%d")
+    except ValueError:
+        return trade_date
+    return f"{trade_date}T23:59:59+08:00"
+
+
 def _bounded_lookback_days(lookback_days: int) -> int:
     try:
         return max(1, int(lookback_days or 90))
     except (TypeError, ValueError):
         return 90
+
+
+def _empty_optional_source() -> dict[str, Any]:
+    return {"summary": {}, "items": [], "warnings": []}
+
+
+def _empty_market_source() -> dict[str, Any]:
+    return {
+        "emotion_stock_lists": {"auction": [], "limit_up": [], "broken_limit_up": [], "limit_down": []},
+        "warnings": [],
+    }
 
 
 def _load_news_for_digest(
