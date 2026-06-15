@@ -156,6 +156,123 @@ def test_build_evidence_digest_strong_source_backed(monkeypatch):
         assert action["query"]
 
 
+def test_build_evidence_digest_includes_lineage_and_available_sections(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "load_public_news_for_dashboard", lambda **kwargs: _news(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "list_research_reports", lambda **kwargs: _reports(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up"))
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_latest_data_run_manifest",
+        lambda trade_date=None: [
+            {
+                "run_id": "eod-2026-06-12-local",
+                "trade_date": "2026-06-12",
+                "latest_trade_date": "2026-06-12",
+                "module": "news",
+                "tier": "tier2",
+                "status": "success",
+                "warnings": [],
+            }
+        ],
+        raising=False,
+    )
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["stock_code"] == "000001.SZ"
+    assert digest["stock_name"] == "平安银行"
+    assert digest["latest_trade_date"] == "2026-06-12"
+    assert digest["run_id"] == "eod-2026-06-12-local"
+    assert digest["digest_key"] == "2026-06-12:manual_v1:000001.SZ"
+    assert digest["generated_at"] == "2026-06-12T00:00:00+00:00"
+    assert digest["overall_status"] == "OK"
+    assert set(digest["sections"]) >= {
+        "asset_profile",
+        "score_snapshot",
+        "factor_contributions",
+        "strategy_context",
+        "market_monitor",
+        "news",
+        "research_reports",
+        "lhb",
+        "industry",
+        "financial",
+        "technical_features",
+        "generated_reports",
+        "operator_history",
+        "follow_up_history",
+        "risk_flags",
+    }
+    assert digest["sections"]["asset_profile"]["status"] == "available"
+    assert digest["sections"]["score_snapshot"]["status"] == "available"
+    assert digest["sections"]["news"]["status"] == "available"
+    assert digest["sections"]["research_reports"]["status"] == "available"
+    assert digest["sections"]["financial"]["status"] == "skipped"
+    assert digest["missing_evidence"] == []
+    assert digest["partial_evidence"] == []
+    assert digest["lineage"]["score_version"] == "manual_v1"
+    assert digest["lineage"]["topn_rank"] == 3
+
+
+def test_build_evidence_digest_marks_optional_source_failures_partial(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
+    monkeypatch.setattr(
+        evidence_digest,
+        "load_public_news_for_dashboard",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("news offline")),
+    )
+    monkeypatch.setattr(
+        evidence_digest,
+        "list_research_reports",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("reports offline")),
+    )
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
+    monkeypatch.setattr(evidence_digest, "load_latest_data_run_manifest", lambda trade_date=None: [], raising=False)
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["overall_status"] == "PARTIAL"
+    assert digest["sections"]["news"]["status"] == "partial"
+    assert digest["sections"]["research_reports"]["status"] == "partial"
+    assert "news" in digest["partial_evidence"]
+    assert "research_reports" in digest["partial_evidence"]
+    assert any("news offline" in warning for warning in digest["sections"]["news"]["warnings"])
+    assert any("reports offline" in warning for warning in digest["sections"]["research_reports"]["warnings"])
+
+
+def test_build_evidence_digest_marks_empty_optional_sources_missing(monkeypatch):
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: _profile(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "load_public_news_for_dashboard", lambda **kwargs: _news(kwargs["asset_id"], items=0))
+    monkeypatch.setattr(evidence_digest, "list_research_reports", lambda **kwargs: _reports(kwargs["asset_id"], count=0))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab=None))
+    monkeypatch.setattr(evidence_digest, "load_latest_data_run_manifest", lambda trade_date=None: [], raising=False)
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["overall_status"] == "PARTIAL"
+    assert digest["sections"]["news"]["status"] == "missing"
+    assert digest["sections"]["research_reports"]["status"] == "missing"
+    assert "news" in digest["missing_evidence"]
+    assert "research_reports" in digest["missing_evidence"]
+
+
+def test_build_evidence_digest_blocks_when_core_score_missing(monkeypatch):
+    profile = _profile("000001.SZ")
+    profile["score"] = {}
+    monkeypatch.setattr(evidence_digest, "build_asset_profile", lambda **kwargs: profile)
+    monkeypatch.setattr(evidence_digest, "load_public_news_for_dashboard", lambda **kwargs: _news(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "list_research_reports", lambda **kwargs: _reports(kwargs["asset_id"]))
+    monkeypatch.setattr(evidence_digest, "build_market_monitor_eod", lambda **kwargs: _market(tab="limit_up"))
+    monkeypatch.setattr(evidence_digest, "load_latest_data_run_manifest", lambda trade_date=None: [], raising=False)
+
+    digest = evidence_digest.build_evidence_digest("000001.SZ", trade_date="2026-06-12")
+
+    assert digest["overall_status"] == "BLOCKED"
+    assert digest["sections"]["score_snapshot"]["status"] == "missing"
+    assert "score_snapshot" in digest["missing_evidence"]
+
+
 def test_build_evidence_digest_thin_when_sources_missing(monkeypatch):
     monkeypatch.setattr(
         evidence_digest,
