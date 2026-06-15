@@ -8,11 +8,14 @@ surface.
 
 ## Local Startup
 
-Start the API from the repository root:
+Start the API from the repository root with the project virtualenv:
 
 ```bash
-stock-research dashboard-api --host 127.0.0.1 --port 8765
+/Users/xiwei/stock_research/.venv/bin/stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
+
+If the virtualenv is already activated or the package is installed on PATH,
+`stock-research dashboard-api --host 127.0.0.1 --port 8765` is equivalent.
 
 Start the frontend in another shell:
 
@@ -76,8 +79,9 @@ or real-time source ingestion.
 
 ## Troubleshooting
 
-- API does not respond: confirm `stock-research dashboard-api --host 127.0.0.1
-  --port 8765` is still running and that no other process owns port `8765`.
+- API does not respond: confirm `/Users/xiwei/stock_research/.venv/bin/stock-research
+  dashboard-api --host 127.0.0.1 --port 8765` is still running and that no
+  other process owns port `8765`.
 - Frontend does not load: run `cd dashboard && pnpm dev` and open
   `http://127.0.0.1:5174`.
 - Readiness is `missing_data`: check whether the daily pipeline completed and
