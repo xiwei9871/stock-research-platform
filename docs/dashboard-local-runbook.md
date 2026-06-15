@@ -159,3 +159,41 @@ Decision rows should include `snapshot_linkage_status`. `linked` means the row
 has Review Queue or Evidence Digest snapshot IDs. `missing` is allowed for
 manual or historical decisions, but `snapshot_linkage_warnings` should explain
 which snapshot lookup failed.
+
+## Operator Decision Write API Smoke
+
+Use the explicit write API for local manual research decisions. This records a
+review item only; it does not create orders or execution instructions.
+
+```bash
+curl -s -X POST "http://127.0.0.1:8765/api/operator-decisions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_id": "000001.SZ",
+    "stock_code": "000001.SZ",
+    "decision_date": "YYYY-MM-DD",
+    "operator_action": "watch",
+    "decision_status": "open",
+    "operator_note": "manual review note",
+    "run_id": "eod-YYYY-MM-DD-local",
+    "digest_key": "YYYY-MM-DD:manual_v1:000001.SZ",
+    "source_context": {
+      "entry": "review_queue",
+      "note_source": "dashboard"
+    }
+  }' | jq .
+```
+
+Then read it back:
+
+```bash
+curl -s "http://127.0.0.1:8765/api/assets/000001.SZ/decisions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&limit=5" | jq .
+```
+
+Expected fields:
+
+- `operator_action` is stored in `source_context`.
+- `decision_label` remains one of the existing read-model labels.
+- `snapshot_linkage_status` is `linked` when matching snapshots exist.
+- `snapshot_linkage_status` is `missing` with warnings when the decision is
+  manual, historical, or written before snapshot generation.

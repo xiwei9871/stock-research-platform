@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createOperatorDecision,
   fetchAssetDecisions,
   fetchEvidenceDigest,
   fetchAssetNews,
@@ -590,6 +591,50 @@ describe('dashboard API client', () => {
     expect(result[0].decision_label).toBe('candidate');
     expect(result[0].digest_key).toBe('2026-06-12:manual_v1:000001.SZ');
     expect(result[0].snapshot_linkage_status).toBe('linked');
+  });
+
+  it('creates operator decisions through the write endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        event_id: 'operator_decision:operator-decision-api-2026-06-12:0:abc',
+        asset_id: '000001.SZ',
+        stock_code: '000001.SZ',
+        decision_date: '2026-06-12',
+        operator_action: 'watch',
+        decision_status: 'open',
+        decision_label: 'observe',
+        run_id: 'eod-2026-06-12-local',
+        digest_key: '2026-06-12:manual_v1:000001.SZ',
+        snapshot_linkage_status: 'linked',
+        snapshot_linkage_warnings: [],
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createOperatorDecision({
+      asset_id: '000001.SZ',
+      stock_code: '000001.SZ',
+      decision_date: '2026-06-12',
+      operator_action: 'watch',
+      run_id: 'eod-2026-06-12-local',
+      digest_key: '2026-06-12:manual_v1:000001.SZ',
+      source_context: { entry: 'review_queue' }
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/operator-decisions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      asset_id: '000001.SZ',
+      operator_action: 'watch'
+    });
+    expect(result.snapshot_linkage_status).toBe('linked');
   });
 
   it('fetches asset outcomes with optional review session and limit', async () => {

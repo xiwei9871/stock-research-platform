@@ -76,6 +76,7 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.operator_decision.write_service import create_operator_decision
 
 def create_app() -> FastAPI:
     @asynccontextmanager
@@ -390,6 +391,13 @@ def create_app() -> FastAPI:
             "asset_id": asset_id,
             "items": load_asset_decision_history(asset_id, start_date, end_date, limit),
         }
+
+    @app.post("/api/operator-decisions")
+    def operator_decisions(payload: dict):
+        try:
+            return create_operator_decision(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/assets/{asset_id}/outcomes")
     def asset_outcomes(

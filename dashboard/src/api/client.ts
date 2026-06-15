@@ -6,6 +6,8 @@ import type {
   BarPoint,
   BacktestRunRequest,
   BacktestRunResult,
+  CreateOperatorDecisionRequest,
+  CreateOperatorDecisionResponse,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -321,6 +323,12 @@ export async function fetchAssetDecisions(
   return payload.items;
 }
 
+export async function createOperatorDecision(
+  request: CreateOperatorDecisionRequest
+): Promise<CreateOperatorDecisionResponse> {
+  return postJson('/api/operator-decisions', request);
+}
+
 export async function fetchAssetOutcomes(
   assetId: string,
   startDate: string,
@@ -613,6 +621,10 @@ export async function runFreshBacktest(request: BacktestRunRequest): Promise<Bac
 }
 
 async function postBacktest(url: string, request: BacktestRunRequest): Promise<BacktestRunResult> {
+  return postJson(url, request);
+}
+
+async function postJson<T>(url: string, request: unknown): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -621,7 +633,7 @@ async function postBacktest(url: string, request: BacktestRunRequest): Promise<B
   if (!response.ok) {
     throw new Error(`POST ${url} failed with ${response.status}`);
   }
-  return response.json() as Promise<BacktestRunResult>;
+  return response.json() as Promise<T>;
 }
 
 async function getJson<T>(url: string): Promise<T> {

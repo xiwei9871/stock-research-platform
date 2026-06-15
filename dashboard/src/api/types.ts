@@ -130,6 +130,48 @@ export type DecisionEventRow = {
   auto_trade_enabled: boolean;
 };
 
+export type CreateOperatorDecisionRequest = {
+  asset_id?: string;
+  stock_code?: string;
+  stock_name?: string;
+  decision_date?: string;
+  operator_action: 'watch' | 'skip' | 'follow_up' | 'add_to_shadow' | 'remove_from_shadow' | 'note' | 'pause' | 'close' | string;
+  decision_status?: string;
+  operator_note?: string;
+  run_id?: string;
+  digest_key?: string;
+  review_item_snapshot_id?: string;
+  evidence_digest_snapshot_id?: string;
+  source_type?: string;
+  source_name?: string;
+  follow_up_date?: string;
+  tags?: string[];
+  source_context?: Record<string, unknown> | string;
+};
+
+export type CreateOperatorDecisionResponse = {
+  event_id: string;
+  asset_id: string;
+  stock_code: string;
+  stock_name: string;
+  decision_date: string;
+  operator_action: string;
+  decision_status: string;
+  decision_label: string;
+  run_id: string;
+  digest_key: string;
+  review_item_snapshot_id: string;
+  evidence_digest_snapshot_id: string;
+  review_item_payload_hash?: string;
+  evidence_digest_payload_hash?: string;
+  evidence_as_of?: string;
+  review_item_as_of?: string;
+  snapshot_linkage_status: 'linked' | 'missing' | string;
+  snapshot_linkage_warnings: string[];
+  warnings: string[];
+  source_context?: string;
+};
+
 export type ReviewItemSnapshot = {
   snapshot_id: string;
   run_id: string;

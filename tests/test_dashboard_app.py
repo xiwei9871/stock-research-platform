@@ -445,6 +445,68 @@ def test_asset_decisions_route_returns_read_only_history(monkeypatch):
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 
+def test_operator_decisions_route_creates_decision(monkeypatch):
+    captured = {}
+
+    def fake_create_operator_decision(payload, service="stock_research"):
+        captured["payload"] = payload
+        captured["service"] = service
+        return {
+            "event_id": "operator_decision:operator-decision-api-2026-06-12:0:abc",
+            "asset_id": "000001.SZ",
+            "stock_code": "000001.SZ",
+            "stock_name": "Ping An Bank",
+            "decision_date": "2026-06-12",
+            "operator_action": "watch",
+            "decision_status": "open",
+            "decision_label": "observe",
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+            "review_item_snapshot_id": "review_item_snapshot:abc",
+            "evidence_digest_snapshot_id": "evidence_digest_snapshot:def",
+            "snapshot_linkage_status": "linked",
+            "snapshot_linkage_warnings": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "create_operator_decision", fake_create_operator_decision)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post(
+        "/api/operator-decisions",
+        json={
+            "asset_id": "000001.SZ",
+            "stock_code": "000001.SZ",
+            "decision_date": "2026-06-12",
+            "operator_action": "watch",
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+            "source_context": {"entry": "review_queue"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["payload"]["operator_action"] == "watch"
+    assert response.json()["decision_label"] == "observe"
+    assert response.json()["snapshot_linkage_status"] == "linked"
+
+
+def test_operator_decisions_route_returns_400_for_validation_error(monkeypatch):
+    def fake_create_operator_decision(payload, service="stock_research"):
+        raise ValueError("invalid_operator_action")
+
+    monkeypatch.setattr(dashboard_app, "create_operator_decision", fake_create_operator_decision)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post(
+        "/api/operator-decisions",
+        json={"asset_id": "000001.SZ", "operator_action": "buy"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid_operator_action"
+
+
 def test_asset_outcomes_route_returns_read_only_history(monkeypatch):
     captured = {}
 
