@@ -147,3 +147,15 @@ PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_research.cl
   --output-dir outputs/research/stock_daily_data_pipeline/YYYY-MM-DD \
   --limit 30
 ```
+
+After importing an operator decision journal, check snapshot linkage through the
+asset decision API:
+
+```bash
+curl -s "http://127.0.0.1:8765/api/assets/ASSET_ID/decisions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&limit=5"
+```
+
+Decision rows should include `snapshot_linkage_status`. `linked` means the row
+has Review Queue or Evidence Digest snapshot IDs. `missing` is allowed for
+manual or historical decisions, but `snapshot_linkage_warnings` should explain
+which snapshot lookup failed.

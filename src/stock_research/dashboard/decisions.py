@@ -80,14 +80,21 @@ def _snapshot_linkage(source_context: Any) -> dict[str, Any]:
         "digest_key": str(context.get("digest_key") or ""),
         "review_item_snapshot_id": str(context.get("review_item_snapshot_id") or ""),
         "evidence_digest_snapshot_id": str(context.get("evidence_digest_snapshot_id") or ""),
+        "review_item_payload_hash": str(context.get("review_item_payload_hash") or ""),
+        "evidence_digest_payload_hash": str(context.get("evidence_digest_payload_hash") or ""),
         "evidence_as_of": str(context.get("evidence_as_of") or ""),
         "review_item_as_of": str(context.get("review_item_as_of") or ""),
     }
     linked = bool(fields["review_item_snapshot_id"] or fields["evidence_digest_snapshot_id"])
+    warnings = context.get("snapshot_linkage_warnings")
+    if not isinstance(warnings, list):
+        warnings = [] if linked else ["snapshot linkage unavailable"]
     return {
         **fields,
-        "snapshot_linkage_status": "linked" if linked else "missing",
-        "snapshot_linkage_warnings": [] if linked else ["snapshot linkage unavailable"],
+        "snapshot_linkage_status": str(
+            context.get("snapshot_linkage_status") or ("linked" if linked else "missing")
+        ),
+        "snapshot_linkage_warnings": [str(warning) for warning in warnings],
     }
 
 
@@ -97,6 +104,8 @@ def _missing_linkage() -> dict[str, Any]:
         "digest_key": "",
         "review_item_snapshot_id": "",
         "evidence_digest_snapshot_id": "",
+        "review_item_payload_hash": "",
+        "evidence_digest_payload_hash": "",
         "evidence_as_of": "",
         "review_item_as_of": "",
         "snapshot_linkage_status": "missing",

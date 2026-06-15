@@ -410,6 +410,14 @@ def test_asset_decisions_route_returns_read_only_history(monkeypatch):
                 "evidence_artifact_id": "dashboard:topn:2026-05-30",
                 "evidence_path": "outputs/p6/topn.json",
                 "source_context": "dashboard_topn",
+                "run_id": "eod-2026-06-12-local",
+                "digest_key": "2026-06-12:manual_v1:000001.SZ",
+                "review_item_snapshot_id": "review_item_snapshot:abc",
+                "evidence_digest_snapshot_id": "evidence_digest_snapshot:def",
+                "review_item_payload_hash": "review-hash",
+                "evidence_digest_payload_hash": "digest-hash",
+                "snapshot_linkage_status": "linked",
+                "snapshot_linkage_warnings": [],
                 "requires_follow_up": True,
                 "follow_up_note": "check next close strength",
                 "notes": "strong score",
@@ -431,6 +439,9 @@ def test_asset_decisions_route_returns_read_only_history(monkeypatch):
     assert response.status_code == 200
     assert captured["args"] == ["000001.SZ", "2026-05-01", "2026-05-30", 10]
     assert response.json()["items"][0]["decision_label"] == "candidate"
+    assert response.json()["items"][0]["review_item_snapshot_id"] == "review_item_snapshot:abc"
+    assert response.json()["items"][0]["evidence_digest_payload_hash"] == "digest-hash"
+    assert response.json()["items"][0]["snapshot_linkage_status"] == "linked"
     assert response.json()["items"][0]["auto_trade_enabled"] is False
 
 

@@ -117,6 +117,8 @@ export type DecisionEventRow = {
   digest_key?: string;
   review_item_snapshot_id?: string;
   evidence_digest_snapshot_id?: string;
+  review_item_payload_hash?: string;
+  evidence_digest_payload_hash?: string;
   evidence_as_of?: string;
   review_item_as_of?: string;
   snapshot_linkage_status?: 'linked' | 'missing' | string;
