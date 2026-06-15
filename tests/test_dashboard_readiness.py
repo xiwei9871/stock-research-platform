@@ -124,9 +124,7 @@ def test_build_platform_readiness_check_schema_uses_contract_fields(monkeypatch)
     payload = readiness.build_platform_readiness()
 
     for check in payload["checks"]:
-        assert {"key", "label", "status", "detail"} <= set(check)
-        assert "name" not in check
-        assert "message" not in check
+        assert set(check) == {"key", "label", "status", "detail"}
 
 
 def test_build_platform_readiness_platform_summary_exception_is_stable_missing_data(

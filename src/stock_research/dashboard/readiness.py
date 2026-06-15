@@ -61,11 +61,11 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         warnings.append(UNAVAILABLE_WARNINGS["platform_summary"])
     elif not topn_preview:
         checks.append(
-            _check("platform_summary", "missing_data", UNAVAILABLE_WARNINGS["topn_preview"], 0)
+            _check("platform_summary", "missing_data", UNAVAILABLE_WARNINGS["topn_preview"])
         )
         warnings.append(UNAVAILABLE_WARNINGS["topn_preview"])
     else:
-        checks.append(_check("platform_summary", "ready", "Platform summary available", len(topn_preview)))
+        checks.append(_check("platform_summary", "ready", "Platform summary available"))
 
     if latest_market_date:
         checks.append(_review_queue_check(topn_preview, warnings))
@@ -95,8 +95,8 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
 def _review_queue_check(topn_preview: list[dict[str, Any]], warnings: list[str]) -> dict[str, Any]:
     if not topn_preview:
         warnings.append(UNAVAILABLE_WARNINGS["review_queue"])
-        return _check("review_queue", "partial", UNAVAILABLE_WARNINGS["review_queue"], 0)
-    return _check("review_queue", "ready", "Review Queue available", len(topn_preview))
+        return _check("review_queue", "partial", UNAVAILABLE_WARNINGS["review_queue"])
+    return _check("review_queue", "ready", "Review Queue available")
 
 
 def _news_check(warnings: list[str]) -> dict[str, Any]:
@@ -110,8 +110,8 @@ def _news_check(warnings: list[str]) -> dict[str, Any]:
     items = list(payload.get("items") or [])
     if not items or source_warnings:
         warnings.append(UNAVAILABLE_WARNINGS["news"])
-        return _check("news", "partial", UNAVAILABLE_WARNINGS["news"], len(items))
-    return _check("news", "ready", "News available", len(items))
+        return _check("news", "partial", UNAVAILABLE_WARNINGS["news"])
+    return _check("news", "ready", "News available")
 
 
 def _research_reports_check(warnings: list[str]) -> dict[str, Any]:
@@ -128,9 +128,8 @@ def _research_reports_check(warnings: list[str]) -> dict[str, Any]:
             "research_reports",
             "partial",
             UNAVAILABLE_WARNINGS["research_reports"],
-            total_reports,
         )
-    return _check("research_reports", "ready", "Research Reports available", total_reports)
+    return _check("research_reports", "ready", "Research Reports available")
 
 
 def _generated_reports_check(latest_market_date: str, warnings: list[str]) -> dict[str, Any]:
@@ -142,20 +141,17 @@ def _generated_reports_check(latest_market_date: str, warnings: list[str]) -> di
 
     if not links:
         warnings.append(UNAVAILABLE_WARNINGS["generated_reports"])
-        return _check("generated_reports", "partial", UNAVAILABLE_WARNINGS["generated_reports"], 0)
-    return _check("generated_reports", "ready", "Generated Reports available", len(links))
+        return _check("generated_reports", "partial", UNAVAILABLE_WARNINGS["generated_reports"])
+    return _check("generated_reports", "ready", "Generated Reports available")
 
 
-def _check(key: str, status: str, detail: str, count: int | None = None) -> dict[str, Any]:
-    check = {
+def _check(key: str, status: str, detail: str) -> dict[str, Any]:
+    return {
         "key": key,
         "label": CHECK_LABELS[key],
         "status": status,
         "detail": detail,
     }
-    if count is not None:
-        check["count"] = count
-    return check
 
 
 def _dedupe(warnings: list[str]) -> list[str]:
