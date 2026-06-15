@@ -972,6 +972,8 @@ export type AssetResearchReportResponse = {
 
 export type EvidenceDigestBucket = 'strong' | 'mixed' | 'thin' | 'risk_heavy';
 export type EvidenceDigestSeverity = 'positive' | 'neutral' | 'warning' | 'negative' | 'severe' | string;
+export type EvidenceDigestOverallStatus = 'OK' | 'PARTIAL' | 'BLOCKED' | string;
+export type EvidenceSectionStatus = 'available' | 'partial' | 'missing' | 'unavailable' | 'skipped' | 'error' | string;
 
 export type EvidenceDigestSourceRef = {
   workspace?: 'news' | 'researchReports' | 'market' | 'stock' | string;
@@ -1015,10 +1017,33 @@ export type EvidenceDigestAction = {
   query?: string;
 };
 
+export type EvidenceDigestSection = {
+  status: EvidenceSectionStatus;
+  as_of: string;
+  source: string;
+  item_count: number;
+  warnings: string[];
+  error_message: string;
+  data: Record<string, unknown>;
+  artifact_path: string;
+};
+
 export type EvidenceDigestResponse = {
   asset_id: string;
   canonical_asset_id: string;
+  stock_code?: string;
+  stock_name?: string;
   trade_date: string;
+  latest_trade_date?: string;
+  run_id?: string;
+  digest_key?: string;
+  generated_at?: string;
+  overall_status?: EvidenceDigestOverallStatus;
+  sections?: Record<string, EvidenceDigestSection>;
+  missing_evidence?: string[];
+  partial_evidence?: string[];
+  lineage?: Record<string, unknown>;
+  errors?: string[];
   title: string;
   score: number;
   bucket: EvidenceDigestBucket;
@@ -1034,10 +1059,34 @@ export type ReviewQueueItem = {
   asset_id: string;
   canonical_asset_id: string;
   trade_date: string;
+  latest_trade_date?: string;
+  run_id?: string;
+  generated_at?: string;
   score_version: string;
   display_name: string;
   rank: number | null;
   score: number | null;
+  source_type?: string;
+  source_name?: string;
+  source_rank?: number | null;
+  score_components?: Record<string, unknown>;
+  topn_rank?: number | null;
+  strategy_name?: string | null;
+  strategy_run_id?: string | null;
+  factor_as_of?: string;
+  factor_snapshot_id?: string | null;
+  digest_key?: string;
+  evidence_digest_id?: string;
+  digest_url_path?: string;
+  stock_workspace_url_path?: string;
+  evidence_status?: EvidenceDigestOverallStatus;
+  missing_evidence?: string[];
+  partial_evidence?: string[];
+  missing_evidence_count?: number;
+  partial_evidence_count?: number;
+  warnings_count?: number;
+  warnings?: string[];
+  manifest_modules?: Array<Record<string, unknown>>;
   digest_title: string;
   bucket: EvidenceDigestBucket;
   source_kinds: string[];

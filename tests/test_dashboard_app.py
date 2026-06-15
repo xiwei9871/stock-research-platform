@@ -98,6 +98,141 @@ def test_public_news_status_endpoint(monkeypatch):
     assert payload["next_run_at"] == ""
 
 
+def test_evidence_digest_route_returns_lineage_shape(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_evidence_digest",
+        lambda asset_id, *, trade_date=None, lookback_days=90, score_version="manual_v1": {
+            "asset_id": asset_id,
+            "canonical_asset_id": asset_id,
+            "stock_code": asset_id,
+            "stock_name": "平安银行",
+            "trade_date": trade_date,
+            "latest_trade_date": trade_date,
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": f"{trade_date}:{score_version}:{asset_id}",
+            "generated_at": f"{trade_date}T00:00:00+00:00",
+            "overall_status": "PARTIAL",
+            "title": "Mixed evidence",
+            "score": 62,
+            "bucket": "mixed",
+            "sections": {
+                "news": {
+                    "status": "missing",
+                    "as_of": trade_date,
+                    "source": "public_news",
+                    "item_count": 0,
+                    "warnings": [],
+                    "error_message": "",
+                    "data": {},
+                    "artifact_path": "",
+                }
+            },
+            "missing_evidence": ["news"],
+            "partial_evidence": [],
+            "lineage": {"run_id": "eod-2026-06-12-local", "score_version": score_version},
+            "errors": [],
+            "facts": [],
+            "risk_flags": [],
+            "source_refs": {},
+            "next_actions": [],
+            "warnings": [],
+        },
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/evidence-digest?asset_id=000001.SZ&trade_date=2026-06-12&lookback_days=30&score_version=manual_v1"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["digest_key"] == "2026-06-12:manual_v1:000001.SZ"
+    assert payload["overall_status"] == "PARTIAL"
+    assert payload["sections"]["news"]["status"] == "missing"
+
+
+def test_review_queue_route_returns_lineage_shape(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_review_queue",
+        lambda *, trade_date=None, score_version="manual_v1", limit=20, lookback_days=90: {
+            "trade_date": trade_date,
+            "score_version": score_version,
+            "generated_at": f"{trade_date}T00:00:00+00:00",
+            "groups": [
+                {
+                    "bucket": "mixed",
+                    "label": "Mixed Evidence",
+                    "count": 1,
+                    "items": [
+                        {
+                            "queue_id": f"{trade_date}:{score_version}:000001.SZ",
+                            "asset_id": "000001.SZ",
+                            "canonical_asset_id": "000001.SZ",
+                            "trade_date": trade_date,
+                            "latest_trade_date": trade_date,
+                            "run_id": "eod-2026-06-12-local",
+                            "generated_at": f"{trade_date}T00:00:00+00:00",
+                            "score_version": score_version,
+                            "display_name": "平安银行",
+                            "rank": 3,
+                            "topn_rank": 3,
+                            "score": 88.5,
+                            "source_type": "score_topn",
+                            "source_name": "manual_v1_topn",
+                            "source_rank": 3,
+                            "score_components": {},
+                            "digest_key": f"{trade_date}:{score_version}:000001.SZ",
+                            "digest_url_path": "/api/evidence-digest?asset_id=000001.SZ",
+                            "stock_workspace_url_path": "/stock/000001.SZ?trade_date=2026-06-12",
+                            "evidence_status": "PARTIAL",
+                            "missing_evidence": ["news"],
+                            "partial_evidence": [],
+                            "missing_evidence_count": 1,
+                            "partial_evidence_count": 0,
+                            "warnings_count": 1,
+                            "warnings": ["strategy_run_id unavailable for score_topn candidate"],
+                            "manifest_modules": [],
+                            "digest_title": "Mixed evidence",
+                            "bucket": "mixed",
+                            "source_kinds": [],
+                            "risk_count": 0,
+                            "warning_count": 0,
+                            "next_action_count": 0,
+                            "digest": {
+                                "asset_id": "000001.SZ",
+                                "canonical_asset_id": "000001.SZ",
+                                "trade_date": trade_date,
+                                "title": "Mixed evidence",
+                                "score": 62,
+                                "bucket": "mixed",
+                                "facts": [],
+                                "risk_flags": [],
+                                "source_refs": {},
+                                "next_actions": [],
+                                "warnings": [],
+                            },
+                        }
+                    ],
+                }
+            ],
+            "warnings": [],
+        },
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/review-queue?trade_date=2026-06-12&score_version=manual_v1")
+
+    assert response.status_code == 200
+    item = response.json()["groups"][0]["items"][0]
+    assert item["digest_key"] == "2026-06-12:manual_v1:000001.SZ"
+    assert item["source_type"] == "score_topn"
+    assert item["missing_evidence_count"] == 1
+
+
 def test_global_search_route_forwards_query(monkeypatch):
     captured = {}
 

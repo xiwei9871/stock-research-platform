@@ -314,10 +314,33 @@ describe('dashboard API client', () => {
         JSON.stringify({
           asset_id: '000001.SZ',
           canonical_asset_id: '000001.SZ',
+          stock_code: '000001.SZ',
+          stock_name: '平安银行',
           trade_date: '2026-06-12',
+          latest_trade_date: '2026-06-12',
+          run_id: 'eod-2026-06-12-local',
+          digest_key: '2026-06-12:manual_v2:000001.SZ',
+          generated_at: '2026-06-12T00:00:00+00:00',
+          overall_status: 'PARTIAL',
           title: 'Mixed evidence',
           score: 62,
           bucket: 'mixed',
+          sections: {
+            news: {
+              status: 'missing',
+              as_of: '2026-06-12',
+              source: 'public_news',
+              item_count: 0,
+              warnings: [],
+              error_message: '',
+              data: {},
+              artifact_path: ''
+            }
+          },
+          missing_evidence: ['news'],
+          partial_evidence: [],
+          lineage: { run_id: 'eod-2026-06-12-local', score_version: 'manual_v2', topn_rank: 3 },
+          errors: [],
           facts: [{ kind: 'strategy', key: 'score_rank', label: 'Strategy score rank', value: 3 }],
           risk_flags: [{ key: 'strategy_risk_tags', label: 'Strategy risk tags present', severity: 'warning', value: ['gap_risk'] }],
           source_refs: { strategy_asset_id: '000001.SZ' },
@@ -342,6 +365,10 @@ describe('dashboard API client', () => {
     expect(digest.facts[0].value).toBe(3);
     expect(digest.risk_flags[0].value).toEqual(['gap_risk']);
     expect(digest.source_refs.strategy_asset_id).toBe('000001.SZ');
+    expect(digest.digest_key).toBe('2026-06-12:manual_v2:000001.SZ');
+    expect(digest.overall_status).toBe('PARTIAL');
+    expect(digest.sections?.news?.status).toBe('missing');
+    expect(digest.missing_evidence).toEqual(['news']);
   });
 
   it('fetchReviewQueue serializes optional filters', async () => {
@@ -390,10 +417,32 @@ describe('dashboard API client', () => {
                   asset_id: '000001.SZ',
                   canonical_asset_id: '000001.SZ',
                   trade_date: '2026-06-08',
+                  latest_trade_date: '2026-06-08',
+                  run_id: 'eod-2026-06-08-local',
+                  generated_at: '2026-06-08T00:00:00+00:00',
                   score_version: 'manual_v1',
                   display_name: '平安银行',
                   rank: 1,
+                  topn_rank: 1,
                   score: 88.5,
+                  source_type: 'score_topn',
+                  source_name: 'manual_v1_topn',
+                  source_rank: 1,
+                  score_components: { momentum: 0.8 },
+                  strategy_name: null,
+                  strategy_run_id: null,
+                  factor_as_of: '2026-06-08',
+                  digest_key: '2026-06-08:manual_v1:000001.SZ',
+                  digest_url_path: '/api/evidence-digest?asset_id=000001.SZ&trade_date=2026-06-08&score_version=manual_v1',
+                  stock_workspace_url_path: '/stock/000001.SZ?trade_date=2026-06-08',
+                  evidence_status: 'OK',
+                  missing_evidence: [],
+                  partial_evidence: [],
+                  missing_evidence_count: 0,
+                  partial_evidence_count: 0,
+                  warnings_count: 0,
+                  warnings: [],
+                  manifest_modules: [],
                   digest_title: 'Strong evidence',
                   bucket: 'strong',
                   source_kinds: ['strategy', 'news'],
@@ -403,10 +452,22 @@ describe('dashboard API client', () => {
                   digest: {
                     asset_id: '000001.SZ',
                     canonical_asset_id: '000001.SZ',
+                    stock_code: '000001.SZ',
+                    stock_name: '平安银行',
                     trade_date: '2026-06-08',
+                    latest_trade_date: '2026-06-08',
+                    run_id: 'eod-2026-06-08-local',
+                    digest_key: '2026-06-08:manual_v1:000001.SZ',
+                    generated_at: '2026-06-08T00:00:00+00:00',
+                    overall_status: 'OK',
                     title: 'Strong evidence',
                     score: 82,
                     bucket: 'strong',
+                    sections: {},
+                    missing_evidence: [],
+                    partial_evidence: [],
+                    lineage: {},
+                    errors: [],
                     facts: [{ kind: 'news', label: 'Recent news' }],
                     risk_flags: [],
                     source_refs: {},
@@ -435,6 +496,9 @@ describe('dashboard API client', () => {
 
     expect(payload.groups[0].items[0].digest.facts[0].kind).toBe('news');
     expect(payload.groups[0].items[0].trade_date).toBe('2026-06-08');
+    expect(payload.groups[0].items[0].source_type).toBe('score_topn');
+    expect(payload.groups[0].items[0].digest_key).toBe('2026-06-08:manual_v1:000001.SZ');
+    expect(payload.groups[0].items[0].missing_evidence_count).toBe(0);
   });
 
   it('fetches asset decisions with date range and limit', async () => {
