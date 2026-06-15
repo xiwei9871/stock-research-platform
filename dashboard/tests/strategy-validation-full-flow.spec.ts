@@ -316,6 +316,33 @@ async function mockFullFlowApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/platform/readiness') {
+      await route.fulfill({
+        json: {
+          mode: 'eod_local',
+          status: 'ready',
+          as_of: '2026-06-08T20:00:00+08:00',
+          latest_market_date: '2026-06-08',
+          checks: [
+            {
+              key: 'platform_summary',
+              label: 'Platform Summary',
+              status: 'ready',
+              detail: 'Latest market date 2026-06-08'
+            },
+            {
+              key: 'strategy_validation',
+              label: 'Strategy Validation',
+              status: 'ready',
+              detail: 'Fixture validation runs loaded'
+            }
+          ],
+          warnings: []
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/backtests/strategies') {
       await route.fulfill({
         json: {
