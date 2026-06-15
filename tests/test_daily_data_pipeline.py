@@ -39,6 +39,7 @@ def test_build_daily_pipeline_steps_lists_required_initial_steps() -> None:
         "daily_event_refresh",
         "daily_feature_build",
         "label_incremental_refresh",
+        "review_evidence_snapshots",
         "daily_report_delivery",
     ]
     assert all(isinstance(step, DailyPipelineStep) for step in steps)
@@ -119,7 +120,7 @@ def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Pat
     )
 
     assert result["status"] == "partial_failed"
-    assert len(result["steps"]) == 14
+    assert len(result["steps"]) == 15
     assert any(
         step["step"] == "daily_event_refresh" and step["status"] == "failed"
         for step in result["steps"]
@@ -248,6 +249,17 @@ def test_run_stock_daily_data_pipeline_writes_v2_summary_and_manifest(tmp_path: 
             "stdout": "rows|12",
             "stderr": "",
         },
+        snapshot_runner=lambda **kwargs: {
+            "status": "success",
+            "review_item_snapshot_count": 12,
+            "evidence_digest_snapshot_count": 12,
+            "row_count": 24,
+            "asset_count": 12,
+            "warning_count": 0,
+            "warnings": [],
+            "errors": [],
+            "artifact_path": str(tmp_path / "review_evidence_snapshots_summary.json"),
+        },
         send_feishu=False,
     )
 
@@ -266,6 +278,14 @@ def test_run_stock_daily_data_pipeline_writes_v2_summary_and_manifest(tmp_path: 
     assert summary["topn_generated"] is True
     assert summary["topn_count"] == 12
     assert summary["review_queue_count"] == 12
+    assert summary["review_item_snapshot_count"] == 12
+    assert summary["evidence_digest_snapshot_count"] == 12
+    assert summary["snapshot_status"] == "success"
+    assert summary["snapshot_module_status"] == "success"
+    assert summary["snapshot_warning_count"] == 0
+    assert summary["snapshot_warnings"] == []
+    assert summary["snapshot_errors"] == []
+    assert summary["snapshot_summary_path"].endswith("review_evidence_snapshots_summary.json")
     assert summary["readiness_status"] == summary["status"]
     assert summary["dashboard_readiness_url"].endswith("/api/platform/readiness")
     assert manifest_payload["run_id"] == summary["run_id"]
@@ -278,7 +298,91 @@ def test_run_stock_daily_data_pipeline_writes_v2_summary_and_manifest(tmp_path: 
         "news",
         "research_reports",
         "minute_bars",
+        "review_evidence_snapshots",
     }
+    snapshot_module = next(
+        item for item in manifest_payload["modules"] if item["module"] == "review_evidence_snapshots"
+    )
+    assert snapshot_module["tier"] == "tier2"
+    assert snapshot_module["status"] == "success"
+    assert snapshot_module["row_count"] == 24
+    assert snapshot_module["asset_count"] == 12
+
+
+def test_run_stock_daily_data_pipeline_records_partial_snapshot_step(tmp_path: Path) -> None:
+    run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "rows|10",
+            "stderr": "",
+        },
+        snapshot_runner=lambda **kwargs: {
+            "status": "partial",
+            "review_item_snapshot_count": 9,
+            "evidence_digest_snapshot_count": 8,
+            "row_count": 17,
+            "asset_count": 10,
+            "warning_count": 1,
+            "warnings": ["one digest failed"],
+            "errors": ["digest failed"],
+            "artifact_path": "",
+        },
+        send_feishu=False,
+    )
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    snapshot_step = next(step for step in summary["steps"] if step["step"] == "review_evidence_snapshots")
+    assert summary["status"] == "PARTIAL"
+    assert summary["tier1_status"] == "OK"
+    assert summary["tier2_status"] == "PARTIAL"
+    assert summary["snapshot_status"] == "partial"
+    assert summary["review_item_snapshot_count"] == 9
+    assert summary["evidence_digest_snapshot_count"] == 8
+    assert "review_evidence_snapshots" in summary["partial_data"]
+    assert snapshot_step["status"] == "partial"
+    assert snapshot_step["error"] == "digest failed"
+    assert snapshot_step["warnings"] == ["one digest failed"]
+
+
+def test_run_stock_daily_data_pipeline_upserts_snapshot_manifest_entry(monkeypatch, tmp_path: Path) -> None:
+    entries = []
+    monkeypatch.setattr(
+        "stock_research.daily_data_pipeline.upsert_data_run_manifest",
+        lambda entry: entries.append(entry) or entry["manifest_id"],
+    )
+
+    run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "rows|10",
+            "stderr": "",
+        },
+        snapshot_runner=lambda **kwargs: {
+            "status": "success",
+            "review_item_snapshot_count": 2,
+            "evidence_digest_snapshot_count": 2,
+            "row_count": 4,
+            "asset_count": 2,
+            "warning_count": 0,
+            "warnings": [],
+            "errors": [],
+            "artifact_path": str(tmp_path / "review_evidence_snapshots_summary.json"),
+        },
+        persist_data_run_manifest=True,
+        send_feishu=False,
+    )
+
+    snapshot_entry = next(item for item in entries if item["module"] == "review_evidence_snapshots")
+    assert snapshot_entry["run_id"] == "eod-2026-06-05-local"
+    assert snapshot_entry["source"] == "review_queue/evidence_digest"
+    assert snapshot_entry["tier"] == "tier2"
+    assert snapshot_entry["status"] == "success"
+    assert snapshot_entry["row_count"] == 4
+    assert snapshot_entry["asset_count"] == 2
 
 
 def test_run_stock_daily_data_pipeline_tier1_failure_blocks_summary(tmp_path: Path) -> None:

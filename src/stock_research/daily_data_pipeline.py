@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from stock_research.data_run_manifest import build_manifest_entry, summarize_manifest_modules
+from stock_research.data_run_manifest import (
+    build_manifest_entry,
+    summarize_manifest_modules,
+    upsert_data_run_manifest,
+)
+from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,11 @@ STEP_MODULES = {
     "daily_event_refresh": ("lhb", "free_enrichment_lhb", "tier2"),
     "daily_feature_build": ("factor_pipeline", "factor_pipeline", "tier1"),
     "label_incremental_refresh": ("experimental_enrichment", "labels", "tier3"),
+    "review_evidence_snapshots": (
+        "review_evidence_snapshots",
+        "review_queue/evidence_digest",
+        "tier2",
+    ),
     "daily_report_delivery": ("generated_reports", "reports", "tier2"),
 }
 
@@ -205,6 +215,12 @@ def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[Dai
                 timeout_seconds=900,
             ),
             DailyPipelineStep(
+                name="review_evidence_snapshots",
+                command=[],
+                required=False,
+                timeout_seconds=300,
+            ),
+            DailyPipelineStep(
                 name="daily_report_delivery",
                 command=[],
                 required=False,
@@ -354,7 +370,21 @@ def _write_summary(
         "topn_generated": _module_status(modules, "score_topn") == "success",
         "topn_count": _module_rows(modules, "score_topn"),
         "review_queue_count": _module_rows(modules, "review_queue"),
-        "evidence_digest_count": 0,
+        "evidence_digest_count": _snapshot_metric(step_results, "evidence_digest_snapshot_count"),
+        "review_item_snapshot_count": _snapshot_metric(
+            step_results,
+            "review_item_snapshot_count",
+        ),
+        "evidence_digest_snapshot_count": _snapshot_metric(
+            step_results,
+            "evidence_digest_snapshot_count",
+        ),
+        "snapshot_status": _snapshot_step_value(step_results, "status", "skipped"),
+        "snapshot_warning_count": _snapshot_metric(step_results, "warning_count"),
+        "snapshot_warnings": _snapshot_step_value(step_results, "warnings", []),
+        "snapshot_errors": _snapshot_step_value(step_results, "errors", []),
+        "snapshot_module_status": _module_status(modules, "review_evidence_snapshots"),
+        "snapshot_summary_path": _snapshot_step_value(step_results, "artifact_path", ""),
         "news_count": _module_rows(modules, "news"),
         "report_count": _module_rows(modules, "research_reports"),
         "lhb_count": _module_rows(modules, "lhb"),
@@ -437,7 +467,9 @@ def _manifest_for_step(
     )
     status = _manifest_status(step)
     error = str(step.get("error") or "")
-    warnings = [error] if status in {"partial", "failed", "unavailable"} and error else []
+    warnings = [str(warning) for warning in step.get("warnings") or []]
+    if status in {"partial", "failed", "unavailable"} and error:
+        warnings.append(error)
     return build_manifest_entry(
         run_id=run_id,
         run_date=_today_shanghai(),
@@ -449,11 +481,16 @@ def _manifest_for_step(
         started_at=step.get("started_at"),
         ended_at=step.get("ended_at"),
         row_count=int(step.get("rows") or 0),
+        asset_count=step.get("asset_count"),
         latest_trade_date=trade_date if status == "success" else None,
         warnings=warnings,
         error_message=error,
-        artifact_path=step.get("log_path") or "",
-        metadata={"step": step.get("step"), "returncode": step.get("returncode")},
+        artifact_path=step.get("artifact_path") or step.get("log_path") or "",
+        metadata={
+            "step": step.get("step"),
+            "returncode": step.get("returncode"),
+            **(step.get("metadata") if isinstance(step.get("metadata"), dict) else {}),
+        },
     )
 
 
@@ -523,6 +560,8 @@ def _manifest_status(step: dict[str, Any]) -> str:
         return "failed"
     if status == "running":
         return "partial"
+    if status == "partial":
+        return "partial"
     return "unavailable"
 
 
@@ -548,7 +587,28 @@ def _artifact_index(step_results: list[dict[str, Any]]) -> dict[str, str]:
     for step in step_results:
         if step.get("log_path"):
             artifacts[str(step.get("step"))] = str(step["log_path"])
+        if step.get("artifact_path"):
+            artifacts[str(step.get("step"))] = str(step["artifact_path"])
     return artifacts
+
+
+def _snapshot_step_value(
+    step_results: list[dict[str, Any]],
+    key: str,
+    default: Any,
+) -> Any:
+    for step in reversed(step_results):
+        if step.get("step") == "review_evidence_snapshots":
+            return step.get(key, default)
+    return default
+
+
+def _snapshot_metric(step_results: list[dict[str, Any]], key: str) -> int:
+    value = _snapshot_step_value(step_results, key, 0)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _first_started_at(modules: list[dict[str, Any]]) -> str:
@@ -573,6 +633,8 @@ def run_stock_daily_data_pipeline(
     trade_date: str,
     output_dir: str | Path,
     command_runner: Any = None,
+    snapshot_runner: Any = None,
+    persist_data_run_manifest: bool | None = None,
     feishu_sender: Any = None,
     send_feishu: bool = True,
 ) -> dict[str, Any]:
@@ -580,12 +642,46 @@ def run_stock_daily_data_pipeline(
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
     (resolved_output_dir / "logs").mkdir(parents=True, exist_ok=True)
     runner = command_runner or _default_command_runner
+    resolved_snapshot_runner = snapshot_runner or (
+        _test_skipped_snapshot_runner if command_runner is not None else run_eod_review_evidence_snapshots
+    )
+    should_persist_data_run_manifest = (
+        command_runner is None if persist_data_run_manifest is None else persist_data_run_manifest
+    )
     steps = build_daily_pipeline_steps(trade_date=trade_date, output_dir=resolved_output_dir)
     step_results: list[dict[str, Any]] = []
     required_failed = False
 
     for step in steps:
         if step.name == "daily_report_delivery":
+            continue
+        if step.name == "review_evidence_snapshots":
+            if required_failed:
+                step_results.append(
+                    {
+                        "step": step.name,
+                        "status": "skipped_dependency_failed",
+                        "rows": 0,
+                        "asset_count": 0,
+                        "error": "upstream required step failed",
+                    }
+                )
+            else:
+                step_results.append(
+                    _run_snapshot_pipeline_step(
+                        runner=resolved_snapshot_runner,
+                        run_id=_run_id(trade_date),
+                        trade_date=trade_date,
+                        output_dir=resolved_output_dir,
+                        persist_data_run_manifest=should_persist_data_run_manifest,
+                    )
+                )
+            _write_summary(
+                output_dir=resolved_output_dir,
+                trade_date=trade_date,
+                status=_current_status(required_failed),
+                step_results=step_results,
+            )
             continue
         if not step.command:
             step_results.append(
@@ -722,3 +818,87 @@ def run_stock_daily_data_pipeline(
     )
     (resolved_output_dir / "feishu_message.txt").write_text(message + "\n", encoding="utf-8")
     return summary
+
+
+def _run_snapshot_pipeline_step(
+    *,
+    runner: Any,
+    run_id: str,
+    trade_date: str,
+    output_dir: Path,
+    persist_data_run_manifest: bool,
+) -> dict[str, Any]:
+    try:
+        result = runner(run_id=run_id, trade_date=trade_date, output_dir=output_dir)
+        errors = [str(error) for error in result.get("errors") or []]
+        step = {
+            "step": "review_evidence_snapshots",
+            "status": str(result.get("status") or "unavailable"),
+            "rows": int(result.get("row_count") or 0),
+            "asset_count": int(result.get("asset_count") or 0),
+            "error": "; ".join(errors),
+            "warnings": [str(warning) for warning in result.get("warnings") or []],
+            "warning_count": int(result.get("warning_count") or 0),
+            "errors": errors,
+            "artifact_path": str(result.get("artifact_path") or ""),
+            "review_item_snapshot_count": int(result.get("review_item_snapshot_count") or 0),
+            "evidence_digest_snapshot_count": int(
+                result.get("evidence_digest_snapshot_count") or 0
+            ),
+            "metadata": {
+                "snapshot_status": str(result.get("snapshot_status") or result.get("status") or ""),
+                "skipped_count": int(result.get("skipped_count") or 0),
+                "failed_count": int(result.get("failed_count") or 0),
+            },
+        }
+    except Exception as exc:
+        step = {
+            "step": "review_evidence_snapshots",
+            "status": "failed",
+            "rows": 0,
+            "asset_count": 0,
+            "error": str(exc),
+            "warnings": [f"snapshot step failed: {exc}"],
+            "warning_count": 1,
+            "errors": [str(exc)],
+            "artifact_path": "",
+            "review_item_snapshot_count": 0,
+            "evidence_digest_snapshot_count": 0,
+            "metadata": {"snapshot_status": "failed", "skipped_count": 0, "failed_count": 1},
+        }
+    if persist_data_run_manifest:
+        _upsert_snapshot_manifest_entry(run_id=run_id, trade_date=trade_date, step=step)
+    return step
+
+
+def _test_skipped_snapshot_runner(**kwargs: Any) -> dict[str, Any]:
+    return {
+        "status": "skipped",
+        "review_item_snapshot_count": 0,
+        "evidence_digest_snapshot_count": 0,
+        "row_count": 0,
+        "asset_count": 0,
+        "warning_count": 1,
+        "warnings": ["snapshot runner skipped for injected command_runner"],
+        "errors": [],
+        "artifact_path": "",
+        "skipped_count": 1,
+        "failed_count": 0,
+    }
+
+
+def _upsert_snapshot_manifest_entry(
+    *,
+    run_id: str,
+    trade_date: str,
+    step: dict[str, Any],
+) -> None:
+    try:
+        upsert_data_run_manifest(
+            _manifest_for_step(run_id=run_id, trade_date=trade_date, step=step)
+        )
+    except Exception as exc:
+        step.setdefault("warnings", []).append(f"data_run_manifest upsert failed: {exc}")
+        step["warning_count"] = len(step.get("warnings") or [])
+        if step.get("status") == "success":
+            step["status"] = "partial"
