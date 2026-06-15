@@ -3,12 +3,14 @@ import {
   fetchBacktestStrategies,
   fetchEvidenceDigest,
   fetchMarketMonitorEod,
+  fetchPlatformReadiness,
   fetchPlatformSummary,
   fetchPublicNews
 } from '../api/client';
 import type {
   EvidenceDigestResponse,
   MarketMonitorPayload,
+  PlatformReadiness,
   PlatformSummary,
   PublicNewsItem,
   ScoreRow,
@@ -52,6 +54,22 @@ function formatScore(row: ScoreRow) {
   return typeof row.score_total === 'number' ? row.score_total.toFixed(1) : '-';
 }
 
+function formatReadinessValue(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatMode(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((part, index) => (index === 0 ? part.toUpperCase() : part))
+    .join(' ');
+}
+
 function errorMessage(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
@@ -61,6 +79,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
+  const [readiness, setReadiness] = useState<PlatformReadiness | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [digestByAsset, setDigestByAsset] = useState<Record<string, EvidenceDigestResponse>>({});
   const [digestErrors, setDigestErrors] = useState<Record<string, string>>({});
   const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
@@ -74,6 +94,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setWidgetWarnings([]);
     setDigestByAsset({});
     setDigestErrors({});
+    setReadiness(null);
+    setReadinessError(null);
 
     const addWidgetWarning = (warning: string) => {
       setWidgetWarnings((current) => [...current, warning]);
@@ -144,6 +166,21 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       }
     );
 
+    void fetchPlatformReadiness().then(
+      (payload) => {
+        if (!ignore) {
+          setReadiness(payload);
+          setReadinessError(null);
+        }
+      },
+      (err: unknown) => {
+        if (!ignore) {
+          setReadiness(null);
+          setReadinessError(`Platform readiness unavailable: ${errorMessage(err)}`);
+        }
+      }
+    );
+
     void fetchPublicNews({ source: 'sina_finance', limit: 5 }).then(
       (newsPayload) => {
         if (!ignore) setNewsItems(newsPayload.items);
@@ -182,6 +219,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           {warning}
         </p>
       ))}
+      {readinessError ? <p className="error-text">{readinessError}</p> : null}
 
       <section className="status-strip" aria-label="Dashboard status">
         <div>
@@ -200,6 +238,38 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           <span>Strategies</span>
           <strong>{formatCount(strategies.length)}</strong>
         </div>
+      </section>
+
+      <section className="status-strip readiness-strip" aria-label="Platform Readiness">
+        <div>
+          <span>Platform Readiness</span>
+          <strong>{readiness ? formatMode(readiness.mode) : '-'}</strong>
+        </div>
+        <div>
+          <span>Status</span>
+          <strong>{readiness ? formatReadinessValue(readiness.status) : '-'}</strong>
+        </div>
+        <div>
+          <span>Latest EOD</span>
+          <strong>{readiness?.latest_market_date ?? '-'}</strong>
+        </div>
+        <div>
+          <span>Warnings</span>
+          <strong>{formatCount(readiness?.warnings.length)}</strong>
+        </div>
+        {(readiness?.checks ?? []).slice(0, 4).map((check) => (
+          <div key={check.key}>
+            <span>{check.label}</span>
+            <strong>{formatReadinessValue(check.status)}</strong>
+            <small>{check.detail}</small>
+          </div>
+        ))}
+        {(readiness?.warnings ?? []).map((warning) => (
+          <div key={warning}>
+            <span>Warning</span>
+            <strong className="warning-text">{warning}</strong>
+          </div>
+        ))}
       </section>
 
       <section className="cockpit-layout">

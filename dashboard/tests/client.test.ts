@@ -11,6 +11,7 @@ import {
   fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchPlatformReadiness,
   fetchPublicNews,
   fetchPublicNewsStatus,
   fetchResearchReportSummary,
@@ -45,6 +46,41 @@ describe('dashboard API client', () => {
       '/api/dashboard/overview?trade_date=2026-05-29&score_version=manual_v1&watchlist_id=default&top_n=20'
     );
     expect(result.trade_date).toBe('2026-05-29');
+  });
+
+  it('fetches platform readiness with mode and checks', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mode: 'eod_local',
+        status: 'partial',
+        as_of: '2026-06-15T08:30:00+08:00',
+        latest_market_date: '2026-06-12',
+        checks: [
+          {
+            key: 'market_data',
+            label: 'Market data',
+            status: 'ready',
+            detail: 'Latest EOD data loaded'
+          }
+        ],
+        warnings: ['News collector lagging']
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPlatformReadiness();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/platform/readiness');
+    expect(result.mode).toBe('eod_local');
+    expect(result.checks).toEqual([
+      {
+        key: 'market_data',
+        label: 'Market data',
+        status: 'ready',
+        detail: 'Latest EOD data loaded'
+      }
+    ]);
   });
 
   it('fetches EOD market monitor with optional trade date', async () => {

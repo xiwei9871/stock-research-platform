@@ -437,6 +437,26 @@ export type PlatformSummary = {
   topn_preview: ScoreRow[];
 };
 
+export type PlatformReadinessStatus = 'ready' | 'partial' | 'missing_data';
+
+export type PlatformReadinessCheckStatus = PlatformReadinessStatus | 'unknown';
+
+export type PlatformReadinessCheck = {
+  key: string;
+  label: string;
+  status: PlatformReadinessCheckStatus;
+  detail: string;
+};
+
+export type PlatformReadiness = {
+  mode: string;
+  status: PlatformReadinessStatus;
+  as_of: string;
+  latest_market_date: string;
+  checks: PlatformReadinessCheck[];
+  warnings: string[];
+};
+
 export type StrategyCatalogItem = {
   strategy_id: string;
   strategy_name: string;

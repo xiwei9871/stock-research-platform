@@ -458,6 +458,11 @@ body {
   white-space: nowrap;
 }
 
+.readiness-strip small {
+  display: block;
+  margin-top: 4px;
+}
+
 .market-emotion-summary {
   display: grid;
   grid-template-columns: minmax(190px, 1.2fr) repeat(5, minmax(150px, 1fr));

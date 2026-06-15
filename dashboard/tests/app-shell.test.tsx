@@ -33,6 +33,7 @@ import type {
 } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchOverview: vi.fn(),
@@ -819,6 +820,14 @@ function makeShadowFollowUpResolution(): ShadowFollowUpResolutionRow[] {
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.fetchPlatformReadiness.mockResolvedValue({
+      mode: 'eod_local',
+      status: 'ready',
+      as_of: '2026-06-15T08:30:00+08:00',
+      latest_market_date: '2026-06-12',
+      checks: [],
+      warnings: []
+    });
     apiMocks.fetchPlatformSummary.mockResolvedValue({
       latest_market_date: '2026-06-08',
       latest_score_date: '2026-06-08',

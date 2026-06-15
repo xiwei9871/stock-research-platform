@@ -18,6 +18,7 @@ import type {
   GlobalSearchResponse,
   MarketMonitorPayload,
   OutcomeAnalyticsRow,
+  PlatformReadiness,
   PlatformSummary,
   PublicNewsCollectorStatus,
   PublicNewsRefreshResponse,
@@ -511,6 +512,10 @@ export async function fetchStrategyValidationReplay(
 
 export async function fetchPlatformSummary(): Promise<PlatformSummary> {
   return getJson<PlatformSummary>('/api/platform/summary');
+}
+
+export async function fetchPlatformReadiness(): Promise<PlatformReadiness> {
+  return getJson<PlatformReadiness>('/api/platform/readiness');
 }
 
 export async function fetchStrategyCatalog(): Promise<StrategyCatalogItem[]> {

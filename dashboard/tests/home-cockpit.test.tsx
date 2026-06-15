@@ -15,6 +15,7 @@ function deferred<T>() {
 }
 
 vi.mock('../src/api/client', () => ({
+  fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -47,6 +48,27 @@ import * as api from '../src/api/client';
 
 describe('AppShell and HomeCockpit', () => {
   beforeEach(() => {
+    vi.mocked(api.fetchPlatformReadiness).mockResolvedValue({
+      mode: 'eod_local',
+      status: 'partial',
+      as_of: '2026-06-15T08:30:00+08:00',
+      latest_market_date: '2026-06-12',
+      checks: [
+        {
+          key: 'market_data',
+          label: 'Market data',
+          status: 'ready',
+          detail: 'Latest EOD data loaded'
+        },
+        {
+          key: 'news_flow',
+          label: 'News flow',
+          status: 'partial',
+          detail: 'Collector is lagging'
+        }
+      ],
+      warnings: ['News collector lagging']
+    });
     vi.mocked(api.fetchPlatformSummary).mockResolvedValue({
       latest_market_date: '2026-06-08',
       latest_score_date: '2026-06-08',
@@ -288,6 +310,18 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
 
     expect(await screen.findByText('Research Cockpit')).toBeVisible();
+    const readiness = within(screen.getByRole('region', { name: 'Platform Readiness' }));
+    expect(readiness.getByText('Platform Readiness')).toBeVisible();
+    expect(readiness.getByText('EOD local')).toBeVisible();
+    expect(readiness.getAllByText('Partial')).toHaveLength(2);
+    expect(readiness.getByText('Latest EOD')).toBeVisible();
+    expect(readiness.getByText('2026-06-12')).toBeVisible();
+    expect(readiness.getByText('Warnings')).toBeVisible();
+    expect(readiness.getByText('1')).toBeVisible();
+    expect(readiness.getByText('Market data')).toBeVisible();
+    expect(readiness.getByText('Ready')).toBeVisible();
+    expect(readiness.getByText('Latest EOD data loaded')).toBeVisible();
+    expect(readiness.getByText('News collector lagging')).toBeVisible();
     expect(screen.getByText('Market Date')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
     expect(screen.getByText('Factor Date')).toBeVisible();
@@ -312,6 +346,17 @@ describe('AppShell and HomeCockpit', () => {
     expect(quickActions.queryByRole('button', { name: 'Backtest Lab' })).not.toBeInTheDocument();
     expect(quickActions.queryByRole('button', { name: 'Strategy Validation' })).not.toBeInTheDocument();
     expect(quickActions.queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument();
+  });
+
+  it('keeps core cockpit content when platform readiness fails', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockRejectedValueOnce(new Error('readiness unavailable'));
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
+    expect(screen.getByText('Platform readiness unavailable: readiness unavailable')).toBeVisible();
+    expect(screen.getByText('Today Focus')).toBeVisible();
+    expect(screen.getByText('Market Pulse')).toBeVisible();
   });
 
   it('keeps core cockpit content when optional home widgets fail', async () => {
