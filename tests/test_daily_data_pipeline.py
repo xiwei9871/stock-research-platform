@@ -127,7 +127,8 @@ def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Pat
     assert calls
     summary = json.loads((tmp_path / "run_summary.json").read_text())
     assert summary["trade_date"] == "2026-06-05"
-    assert summary["status"] == "partial_failed"
+    assert summary["status"] == "PARTIAL"
+    assert summary["legacy_status"] == "partial_failed"
 
 
 def test_run_stock_daily_data_pipeline_can_skip_feishu(tmp_path: Path) -> None:
@@ -238,6 +239,88 @@ def test_run_stock_daily_data_pipeline_writes_step_logs(tmp_path: Path) -> None:
     assert "stderr detail" in log_text
 
 
+def test_run_stock_daily_data_pipeline_writes_v2_summary_and_manifest(tmp_path: Path) -> None:
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=lambda command, timeout_seconds: {
+            "returncode": 0,
+            "stdout": "rows|12",
+            "stderr": "",
+        },
+        send_feishu=False,
+    )
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    manifest_payload = json.loads((tmp_path / "run_manifest.json").read_text())
+
+    assert result["run_id"] == "eod-2026-06-05-local"
+    assert summary["run_id"] == "eod-2026-06-05-local"
+    assert summary["run_date"]
+    assert summary["latest_market_date"] == "2026-06-05"
+    assert summary["status"] == "OK"
+    assert summary["tier1_status"] == "OK"
+    assert summary["tier2_status"] == "OK"
+    assert "modules" in summary
+    assert "steps" in summary
+    assert summary["topn_generated"] is True
+    assert summary["topn_count"] == 12
+    assert summary["review_queue_count"] == 12
+    assert summary["readiness_status"] == summary["status"]
+    assert summary["dashboard_readiness_url"].endswith("/api/platform/readiness")
+    assert manifest_payload["run_id"] == summary["run_id"]
+    assert {item["module"] for item in manifest_payload["modules"]} >= {
+        "assets_universe",
+        "daily_bars",
+        "factor_pipeline",
+        "score_topn",
+        "review_queue",
+        "news",
+        "research_reports",
+        "minute_bars",
+    }
+
+
+def test_run_stock_daily_data_pipeline_tier1_failure_blocks_summary(tmp_path: Path) -> None:
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        if "load_market_bars" in command:
+            return {"returncode": 1, "stdout": "", "stderr": "market failed"}
+        return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
+
+    run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    assert summary["status"] == "BLOCKED"
+    assert summary["tier1_status"] == "BLOCKED"
+    assert "daily_bars" in summary["missing_data"]
+    assert any("market failed" in error for error in summary["errors"])
+
+
+def test_run_stock_daily_data_pipeline_tier2_failure_is_partial(tmp_path: Path) -> None:
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        if "free-enrichment-backfill" in command:
+            return {"returncode": 1, "stdout": "", "stderr": "lhb failed"}
+        return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
+
+    run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    summary = json.loads((tmp_path / "run_summary.json").read_text())
+    assert summary["status"] == "PARTIAL"
+    assert summary["tier1_status"] == "OK"
+    assert summary["tier2_status"] == "PARTIAL"
+    assert "lhb" in summary["partial_data"]
+
+
 def test_run_stock_daily_data_pipeline_records_successful_feishu_delivery(
     tmp_path: Path,
 ) -> None:
@@ -295,7 +378,8 @@ def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
     summary_delivery = next(
         step for step in summary["steps"] if step["step"] == "daily_report_delivery"
     )
-    assert summary["status"] == "partial_failed"
+    assert summary["status"] == "PARTIAL"
+    assert summary["legacy_status"] == "partial_failed"
     assert summary_delivery["status"] == "failed"
     assert summary_delivery["error"] == "feishu unavailable"
     assert "daily_report_delivery: failed" in (tmp_path / "feishu_message.txt").read_text()

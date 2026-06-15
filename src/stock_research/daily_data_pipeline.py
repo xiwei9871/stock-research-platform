@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
+
+from stock_research.data_run_manifest import build_manifest_entry, summarize_manifest_modules
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,34 @@ MARKET_REFRESH_STEPS = [
     "sync_index_constituents",
     "sync_industry_memberships",
     "build_industry_bars",
+]
+
+STEP_MODULES = {
+    "start_report": ("generated_reports", "reports", "tier2"),
+    "sync_core_assets": ("assets_universe", "core_assets", "tier1"),
+    "load_market_bars": ("daily_bars", "market_daily_bar", "tier1"),
+    "check_market_data_freshness": ("trading_calendar", "market_calendar", "tier1"),
+    "build_asset_status": ("assets_universe", "core_asset_status", "tier1"),
+    "sync_index_bars": ("daily_bars", "market_index_daily_bar", "tier1"),
+    "sync_index_constituents": ("assets_universe", "index_constituents", "tier1"),
+    "sync_industry_memberships": ("industry", "industry_membership", "tier2"),
+    "build_industry_bars": ("industry", "industry_bars", "tier2"),
+    "minute_incremental_refresh": ("minute_bars", "minute_backfill", "tier3"),
+    "daily_event_refresh": ("lhb", "free_enrichment_lhb", "tier2"),
+    "daily_feature_build": ("factor_pipeline", "factor_pipeline", "tier1"),
+    "label_incremental_refresh": ("experimental_enrichment", "labels", "tier3"),
+    "daily_report_delivery": ("generated_reports", "reports", "tier2"),
+}
+
+SYNTHETIC_MODULES = [
+    ("score_topn", "factor.stock_score_daily", "tier1"),
+    ("review_queue", "dashboard.review_queue", "tier1"),
+    ("news", "research.news_event_source", "tier2"),
+    ("research_reports", "research.stock_report_source", "tier2"),
+    ("financial", "finance", "tier2"),
+    ("technical_features", "factor.stock_technical_features_daily", "tier2"),
+    ("intraday", "market.stock_minute_bar", "tier3"),
+    ("auction", "auction", "tier3"),
 ]
 
 
@@ -145,6 +176,7 @@ def build_daily_pipeline_steps(*, trade_date: str, output_dir: Path) -> list[Dai
                     "--sleep-seconds",
                     "0",
                 ],
+                required=False,
                 timeout_seconds=1800,
             ),
             DailyPipelineStep(
@@ -296,12 +328,57 @@ def _write_summary(
     status: str,
     step_results: list[dict[str, Any]],
 ) -> None:
+    run_id = _run_id(trade_date)
+    modules = _build_manifest_modules(run_id=run_id, trade_date=trade_date, step_results=step_results)
+    manifest_summary = summarize_manifest_modules(modules)
+    artifacts = _artifact_index(step_results)
     summary = {
+        "run_id": run_id,
+        "run_date": _today_shanghai(),
+        "latest_market_date": trade_date,
+        "started_at": _first_started_at(modules),
+        "ended_at": _now_shanghai(),
         "trade_date": trade_date,
-        "status": status,
+        "status": manifest_summary["status"],
+        "legacy_status": status,
+        "tier1_status": manifest_summary["tier1_status"],
+        "tier2_status": manifest_summary["tier2_status"],
+        "tier3_status": manifest_summary["tier3_status"],
         "output_dir": str(output_dir),
+        "modules": modules,
         "steps": step_results,
+        "assets_count": _module_rows(modules, "assets_universe"),
+        "daily_bar_rows": _module_rows(modules, "daily_bars"),
+        "factor_rows": _module_rows(modules, "factor_pipeline"),
+        "score_version": "manual_v1",
+        "topn_generated": _module_status(modules, "score_topn") == "success",
+        "topn_count": _module_rows(modules, "score_topn"),
+        "review_queue_count": _module_rows(modules, "review_queue"),
+        "evidence_digest_count": 0,
+        "news_count": _module_rows(modules, "news"),
+        "report_count": _module_rows(modules, "research_reports"),
+        "lhb_count": _module_rows(modules, "lhb"),
+        "warning_count": len(manifest_summary["warnings"]),
+        "warnings": manifest_summary["warnings"],
+        "errors": manifest_summary["errors"],
+        "missing_data": manifest_summary["missing_data"],
+        "partial_data": manifest_summary["partial_data"],
+        "artifacts": artifacts,
+        "readiness_status": manifest_summary["status"],
+        "dashboard_readiness_url": "http://127.0.0.1:8765/api/platform/readiness",
     }
+    manifest_payload = {
+        "run_id": run_id,
+        "run_date": summary["run_date"],
+        "trade_date": trade_date,
+        "latest_market_date": trade_date,
+        "status": manifest_summary["status"],
+        "modules": modules,
+    }
+    (output_dir / "run_manifest.json").write_text(
+        json.dumps(manifest_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     (output_dir / "run_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -310,6 +387,173 @@ def _write_summary(
 
 def _current_status(required_failed: bool) -> str:
     return "partial_failed" if required_failed else "success"
+
+
+def _legacy_status(step_results: list[dict[str, Any]]) -> str:
+    for step in step_results:
+        if step.get("status") != "failed":
+            continue
+        if step.get("step") in {"label_incremental_refresh"}:
+            continue
+        return "partial_failed"
+    return "success"
+
+
+def _run_id(trade_date: str) -> str:
+    return f"eod-{trade_date}-local"
+
+
+def _today_shanghai() -> str:
+    return _now_shanghai()[:10]
+
+
+def _now_shanghai() -> str:
+    return datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")
+
+
+def _build_manifest_modules(
+    *,
+    run_id: str,
+    trade_date: str,
+    step_results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    modules = [
+        _manifest_for_step(run_id=run_id, trade_date=trade_date, step=step)
+        for step in step_results
+    ]
+    modules.extend(_synthetic_modules(run_id=run_id, trade_date=trade_date, modules=modules))
+    return modules
+
+
+def _manifest_for_step(
+    *,
+    run_id: str,
+    trade_date: str,
+    step: dict[str, Any],
+) -> dict[str, Any]:
+    module, source, tier = STEP_MODULES.get(
+        str(step.get("step") or ""),
+        (str(step.get("step") or "unknown"), str(step.get("step") or "unknown"), "tier3"),
+    )
+    status = _manifest_status(step)
+    error = str(step.get("error") or "")
+    warnings = [error] if status in {"partial", "failed", "unavailable"} and error else []
+    return build_manifest_entry(
+        run_id=run_id,
+        run_date=_today_shanghai(),
+        trade_date=trade_date,
+        module=module,
+        source=source,
+        tier=tier,
+        status=status,
+        started_at=step.get("started_at"),
+        ended_at=step.get("ended_at"),
+        row_count=int(step.get("rows") or 0),
+        latest_trade_date=trade_date if status == "success" else None,
+        warnings=warnings,
+        error_message=error,
+        artifact_path=step.get("log_path") or "",
+        metadata={"step": step.get("step"), "returncode": step.get("returncode")},
+    )
+
+
+def _synthetic_modules(
+    *,
+    run_id: str,
+    trade_date: str,
+    modules: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    factor_rows = _module_rows(modules, "factor_pipeline")
+    lhb_rows = _module_rows(modules, "lhb")
+    minute_rows = _module_rows(modules, "minute_bars")
+    score_status = "success" if factor_rows > 0 else "unavailable"
+    score_rows = factor_rows if factor_rows > 0 else 0
+    synthetic: list[dict[str, Any]] = []
+    for module, source, tier in SYNTHETIC_MODULES:
+        status = "skipped"
+        row_count = 0
+        warnings: list[str] = []
+        if module in {"score_topn", "review_queue"}:
+            status = score_status
+            row_count = min(score_rows, 30) if score_rows else 0
+            if status != "success":
+                warnings = [f"{module} unavailable because factor pipeline did not produce rows"]
+        elif module == "news":
+            status = "skipped"
+        elif module == "research_reports":
+            status = "skipped"
+        elif module == "financial":
+            status = "skipped"
+        elif module == "technical_features":
+            status = "skipped"
+        elif module == "intraday":
+            status = "success" if minute_rows > 0 else "skipped"
+            row_count = minute_rows
+        elif module == "auction":
+            status = "skipped"
+        elif module == "lhb":
+            status = "success" if lhb_rows > 0 else "skipped"
+            row_count = lhb_rows
+        synthetic.append(
+            build_manifest_entry(
+                run_id=run_id,
+                run_date=_today_shanghai(),
+                trade_date=trade_date,
+                module=module,
+                source=source,
+                tier=tier,
+                status=status,
+                row_count=row_count,
+                latest_trade_date=trade_date if status == "success" else None,
+                warnings=warnings,
+            )
+        )
+    return synthetic
+
+
+def _manifest_status(step: dict[str, Any]) -> str:
+    status = str(step.get("status") or "")
+    if status == "success":
+        return "success"
+    if status == "skipped":
+        return "skipped"
+    if status == "skipped_dependency_failed":
+        return "unavailable"
+    if status in {"failed", "partial_failed"}:
+        return "failed"
+    if status == "running":
+        return "partial"
+    return "unavailable"
+
+
+def _module_rows(modules: list[dict[str, Any]], module: str) -> int:
+    return sum(int(item.get("row_count") or 0) for item in modules if item.get("module") == module)
+
+
+def _module_status(modules: list[dict[str, Any]], module: str) -> str:
+    statuses = [str(item.get("status") or "") for item in modules if item.get("module") == module]
+    if "failed" in statuses or "unavailable" in statuses:
+        return "failed"
+    if "partial" in statuses:
+        return "partial"
+    if "success" in statuses:
+        return "success"
+    if "skipped" in statuses:
+        return "skipped"
+    return "unavailable"
+
+
+def _artifact_index(step_results: list[dict[str, Any]]) -> dict[str, str]:
+    artifacts: dict[str, str] = {}
+    for step in step_results:
+        if step.get("log_path"):
+            artifacts[str(step.get("step"))] = str(step["log_path"])
+    return artifacts
+
+
+def _first_started_at(modules: list[dict[str, Any]]) -> str:
+    values = [str(item.get("started_at")) for item in modules if item.get("started_at")]
+    return min(values) if values else ""
 
 
 def _step_log_path(output_dir: Path, step_name: str) -> Path:
@@ -432,7 +676,7 @@ def run_stock_daily_data_pipeline(
                 step_results=step_results,
             )
 
-    status = "partial_failed" if required_failed else "success"
+    status = _legacy_status(step_results) if not required_failed else "partial_failed"
     delivery_result = {
         "step": "daily_report_delivery",
         "status": "skipped",
@@ -458,6 +702,7 @@ def run_stock_daily_data_pipeline(
         step_results.append(delivery_result)
 
     summary = {
+        "run_id": _run_id(trade_date),
         "trade_date": trade_date,
         "status": status,
         "output_dir": str(resolved_output_dir),
