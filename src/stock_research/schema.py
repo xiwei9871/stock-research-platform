@@ -1084,6 +1084,34 @@ CREATE TABLE IF NOT EXISTS ops.p2_review_section (
     PRIMARY KEY (run_id, section_group, section_name)
 );
 
+CREATE TABLE IF NOT EXISTS ops.data_run_manifest (
+    manifest_id text PRIMARY KEY,
+    run_id text NOT NULL,
+    run_date date NOT NULL,
+    trade_date date,
+    module text NOT NULL,
+    source text NOT NULL,
+    tier text NOT NULL CHECK (tier IN ('tier1', 'tier2', 'tier3')),
+    status text NOT NULL CHECK (status IN ('success', 'partial', 'skipped', 'failed', 'unavailable')),
+    started_at timestamptz,
+    ended_at timestamptz,
+    duration_seconds numeric,
+    row_count bigint,
+    asset_count bigint,
+    coverage_ratio numeric,
+    latest_trade_date date,
+    freshness_lag integer,
+    warning_count integer NOT NULL DEFAULT 0,
+    warnings jsonb NOT NULL DEFAULT '[]'::jsonb,
+    error_message text,
+    artifact_path text,
+    code_version text,
+    config_version text,
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS ops.operator_review_session (
     review_session_id text NOT NULL,
     review_date date NOT NULL,
@@ -2043,6 +2071,12 @@ CREATE INDEX IF NOT EXISTS idx_ops_p2_review_run_status_date
 
 CREATE INDEX IF NOT EXISTS idx_ops_p2_review_section_group_status
     ON ops.p2_review_section (section_group, status);
+
+CREATE INDEX IF NOT EXISTS idx_data_run_manifest_run
+    ON ops.data_run_manifest (run_id, tier, module);
+
+CREATE INDEX IF NOT EXISTS idx_data_run_manifest_trade_date
+    ON ops.data_run_manifest (trade_date DESC, tier, status);
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_review_session_date
     ON ops.operator_review_session (review_date DESC, updated_at DESC);

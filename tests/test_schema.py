@@ -76,6 +76,15 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
 
 
+def test_research_extension_declares_data_run_manifest_table():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS ops.data_run_manifest" in sql
+    assert "tier text NOT NULL" in sql
+    assert "status text NOT NULL" in sql
+    assert "idx_data_run_manifest_run" in sql
+
+
 def test_research_extension_creates_watchlist_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
 
