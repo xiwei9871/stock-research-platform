@@ -174,6 +174,33 @@ async function mockPlatformApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/platform/readiness') {
+      await route.fulfill({
+        json: {
+          mode: 'eod_local',
+          status: 'partial',
+          as_of: '2026-06-08T20:00:00+08:00',
+          latest_market_date: '2026-06-08',
+          checks: [
+            {
+              key: 'market_data',
+              label: 'Market data',
+              status: 'ready',
+              detail: 'Latest EOD data loaded'
+            },
+            {
+              key: 'strategy_validation',
+              label: 'Strategy validation',
+              status: 'partial',
+              detail: 'Replay artifacts current for Task 4'
+            }
+          ],
+          warnings: ['News collector lagging']
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/api/strategies/catalog') {
       await route.fulfill({ json: { items: strategyCatalog } });
       return;
@@ -606,6 +633,21 @@ test('platform full flow covers all research workspaces with mocked API response
   await expect(page.getByText('Tech Bottleneck Combo')).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
   await expect(page.getByText('candidate pool')).toBeVisible();
+  const readiness = page.getByRole('region', { name: 'Platform Readiness' });
+  await expect(readiness.getByText('Platform Readiness')).toBeVisible();
+  await expect(readiness.getByText('EOD local')).toBeVisible();
+  await expect(readiness.getByText('Status')).toBeVisible();
+  await expect(readiness.getByText('Partial')).toHaveCount(2);
+  await expect(readiness.getByText('Latest EOD', { exact: true })).toBeVisible();
+  await expect(readiness.getByText('2026-06-08')).toBeVisible();
+  await expect(readiness.getByText('Warnings')).toBeVisible();
+  await expect(readiness.getByText('1')).toBeVisible();
+  await expect(readiness.getByText('Market data')).toBeVisible();
+  await expect(readiness.getByText('Ready')).toBeVisible();
+  await expect(readiness.getByText('Latest EOD data loaded')).toBeVisible();
+  await expect(readiness.getByText('Strategy validation')).toBeVisible();
+  await expect(readiness.getByText('Replay artifacts current for Task 4')).toBeVisible();
+  await expect(readiness.getByText('News collector lagging')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
