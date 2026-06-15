@@ -4,6 +4,17 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import readiness
 
 
+class _FakeConnectionContext:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __enter__(self):
+        return self.conn
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 def test_aggregate_readiness_status_prioritizes_missing_data():
     checks = [
         {"key": "news", "status": "ready"},
@@ -35,19 +46,11 @@ def test_build_platform_readiness_returns_ready_when_all_sources_available(monke
     )
     monkeypatch.setattr(
         readiness,
-        "load_public_news_for_dashboard",
-        lambda **kwargs: {"items": [{"news_id": "news-1"}], "warnings": []},
+        "_has_public_news",
+        lambda: True,
     )
-    monkeypatch.setattr(
-        readiness,
-        "load_research_report_summary",
-        lambda: {"total_reports": 3, "latest_publish_date": "2026-06-12"},
-    )
-    monkeypatch.setattr(
-        readiness,
-        "load_report_links",
-        lambda trade_date: [{"path": "reports/2026-06-12.html"}],
-    )
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
 
     payload = readiness.build_platform_readiness(score_version="manual_v1")
 
@@ -77,16 +80,12 @@ def test_build_platform_readiness_converts_optional_failures_and_empty_sources_t
         },
     )
 
-    def failing_news(**kwargs):
+    def failing_news():
         raise RuntimeError("news db offline")
 
-    monkeypatch.setattr(readiness, "load_public_news_for_dashboard", failing_news)
-    monkeypatch.setattr(
-        readiness,
-        "load_research_report_summary",
-        lambda: {"total_reports": 0, "latest_publish_date": ""},
-    )
-    monkeypatch.setattr(readiness, "load_report_links", lambda trade_date: [])
+    monkeypatch.setattr(readiness, "_has_public_news", failing_news)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: False)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: False)
 
     payload = readiness.build_platform_readiness(score_version="manual_v1")
 
@@ -115,11 +114,11 @@ def test_build_platform_readiness_check_schema_uses_contract_fields(monkeypatch)
     )
     monkeypatch.setattr(
         readiness,
-        "load_public_news_for_dashboard",
-        lambda **kwargs: {"items": [{"news_id": "news-1"}], "warnings": []},
+        "_has_public_news",
+        lambda: True,
     )
-    monkeypatch.setattr(readiness, "load_research_report_summary", lambda: {"total_reports": 1})
-    monkeypatch.setattr(readiness, "load_report_links", lambda trade_date: [{"path": "x"}])
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
 
     payload = readiness.build_platform_readiness()
 
@@ -179,11 +178,11 @@ def test_build_platform_readiness_missing_topn_is_missing_data(
     )
     monkeypatch.setattr(
         readiness,
-        "load_public_news_for_dashboard",
-        lambda **kwargs: {"items": [{"news_id": "news-1"}], "warnings": []},
+        "_has_public_news",
+        lambda: True,
     )
-    monkeypatch.setattr(readiness, "load_research_report_summary", lambda: {"total_reports": 1})
-    monkeypatch.setattr(readiness, "load_report_links", lambda trade_date: [{"path": "x"}])
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
 
     payload = readiness.build_platform_readiness()
 
@@ -206,11 +205,11 @@ def test_build_platform_readiness_dedupes_warnings_preserving_order(monkeypatch)
     )
     monkeypatch.setattr(
         readiness,
-        "load_public_news_for_dashboard",
-        lambda **kwargs: {"items": [], "warnings": ["News unavailable"]},
+        "_has_public_news",
+        lambda: False,
     )
-    monkeypatch.setattr(readiness, "load_research_report_summary", lambda: {"total_reports": 0})
-    monkeypatch.setattr(readiness, "load_report_links", lambda trade_date: [])
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: False)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: False)
 
     payload = readiness.build_platform_readiness()
 
@@ -240,16 +239,78 @@ def test_build_platform_readiness_does_not_call_build_review_queue(monkeypatch):
 
     monkeypatch.setattr(
         readiness,
-        "load_public_news_for_dashboard",
-        lambda **kwargs: {"items": [{"news_id": "news-1"}], "warnings": []},
+        "_has_public_news",
+        lambda: True,
     )
-    monkeypatch.setattr(readiness, "load_research_report_summary", lambda: {"total_reports": 1})
-    monkeypatch.setattr(readiness, "load_report_links", lambda trade_date: [{"path": "x"}])
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
 
     payload = readiness.build_platform_readiness()
 
     checks = {check["key"]: check for check in payload["checks"]}
     assert checks["review_queue"]["status"] == "ready"
+
+
+def test_readiness_module_does_not_expose_full_dashboard_loaders():
+    assert not hasattr(readiness, "load_public_news_for_dashboard")
+    assert not hasattr(readiness, "load_research_report_summary")
+    assert not hasattr(readiness, "load_report_links")
+
+
+def test_public_news_probe_uses_bounded_select_one(monkeypatch):
+    calls = []
+    conn = object()
+
+    monkeypatch.setattr(readiness, "connect", lambda service: _FakeConnectionContext(conn))
+
+    def fake_fetch_all(active_conn, sql, params=None):
+        calls.append({"conn": active_conn, "sql": sql, "params": params})
+        return [{"exists": 1}]
+
+    monkeypatch.setattr(readiness, "fetch_all", fake_fetch_all)
+
+    assert readiness._has_public_news(service="svc") is True
+    assert calls == [
+        {
+            "conn": conn,
+            "sql": "SELECT 1 FROM research.news_event_source LIMIT 1",
+            "params": None,
+        }
+    ]
+
+
+def test_research_reports_probe_uses_bounded_select_one(monkeypatch):
+    calls = []
+    conn = object()
+
+    monkeypatch.setattr(readiness, "connect", lambda service: _FakeConnectionContext(conn))
+
+    def fake_fetch_all(active_conn, sql, params=None):
+        calls.append({"conn": active_conn, "sql": sql, "params": params})
+        return []
+
+    monkeypatch.setattr(readiness, "fetch_all", fake_fetch_all)
+
+    assert readiness._has_research_reports(service="svc") is False
+    assert calls == [
+        {
+            "conn": conn,
+            "sql": "SELECT 1 FROM research.stock_report_source LIMIT 1",
+            "params": None,
+        }
+    ]
+
+
+def test_generated_reports_probe_checks_only_direct_children(tmp_path):
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    (nested / "report-2026-06-12.html").write_text("nested", encoding="utf-8")
+
+    assert readiness._has_generated_reports("2026-06-12", reports_dir=tmp_path) is False
+
+    (tmp_path / "report-2026-06-12.md").write_text("direct", encoding="utf-8")
+
+    assert readiness._has_generated_reports("2026-06-12", reports_dir=tmp_path) is True
 
 
 def test_platform_readiness_route_returns_payload(monkeypatch):

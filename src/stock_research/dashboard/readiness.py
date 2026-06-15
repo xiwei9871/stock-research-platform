@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from stock_research.dashboard.news import load_public_news_for_dashboard
+from stock_research.config import SETTINGS
 from stock_research.dashboard.platform import load_platform_summary
-from stock_research.dashboard.reports import load_report_links
-from stock_research.dashboard.research_reports import load_research_report_summary
+from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
+from stock_research.db import connect, fetch_all
+
+
+REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
 
 
 CHECK_LABELS = {
@@ -101,14 +105,12 @@ def _review_queue_check(topn_preview: list[dict[str, Any]], warnings: list[str])
 
 def _news_check(warnings: list[str]) -> dict[str, Any]:
     try:
-        payload = load_public_news_for_dashboard(limit=1, offset=0)
+        has_news = _has_public_news()
     except Exception:
         warnings.append(UNAVAILABLE_WARNINGS["news"])
         return _check("news", "partial", UNAVAILABLE_WARNINGS["news"])
 
-    source_warnings = [warning for warning in payload.get("warnings") or [] if warning]
-    items = list(payload.get("items") or [])
-    if not items or source_warnings:
+    if not has_news:
         warnings.append(UNAVAILABLE_WARNINGS["news"])
         return _check("news", "partial", UNAVAILABLE_WARNINGS["news"])
     return _check("news", "ready", "News available")
@@ -116,13 +118,12 @@ def _news_check(warnings: list[str]) -> dict[str, Any]:
 
 def _research_reports_check(warnings: list[str]) -> dict[str, Any]:
     try:
-        payload = load_research_report_summary()
-        total_reports = int(payload.get("total_reports") or 0)
+        has_reports = _has_research_reports()
     except Exception:
         warnings.append(UNAVAILABLE_WARNINGS["research_reports"])
         return _check("research_reports", "partial", UNAVAILABLE_WARNINGS["research_reports"])
 
-    if total_reports == 0:
+    if not has_reports:
         warnings.append(UNAVAILABLE_WARNINGS["research_reports"])
         return _check(
             "research_reports",
@@ -134,15 +135,42 @@ def _research_reports_check(warnings: list[str]) -> dict[str, Any]:
 
 def _generated_reports_check(latest_market_date: str, warnings: list[str]) -> dict[str, Any]:
     try:
-        links = load_report_links(latest_market_date)
+        has_reports = _has_generated_reports(latest_market_date)
     except Exception:
         warnings.append(UNAVAILABLE_WARNINGS["generated_reports"])
         return _check("generated_reports", "partial", UNAVAILABLE_WARNINGS["generated_reports"])
 
-    if not links:
+    if not has_reports:
         warnings.append(UNAVAILABLE_WARNINGS["generated_reports"])
         return _check("generated_reports", "partial", UNAVAILABLE_WARNINGS["generated_reports"])
     return _check("generated_reports", "ready", "Generated Reports available")
+
+
+def _has_public_news(service: str = SETTINGS.research_service) -> bool:
+    with connect(service) as conn:
+        return bool(fetch_all(conn, "SELECT 1 FROM research.news_event_source LIMIT 1"))
+
+
+def _has_research_reports(service: str = SETTINGS.research_service) -> bool:
+    with connect(service) as conn:
+        return bool(fetch_all(conn, "SELECT 1 FROM research.stock_report_source LIMIT 1"))
+
+
+def _has_generated_reports(
+    latest_market_date: str,
+    reports_dir: Path = DEFAULT_REPORTS_DIR,
+) -> bool:
+    directory = Path(reports_dir)
+    if not directory.exists() or not directory.is_dir():
+        return False
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in REPORT_SUFFIXES:
+            continue
+        if latest_market_date in path.name:
+            return True
+    return False
 
 
 def _check(key: str, status: str, detail: str) -> dict[str, Any]:
