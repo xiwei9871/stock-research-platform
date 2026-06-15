@@ -437,7 +437,7 @@ export type PlatformSummary = {
   topn_preview: ScoreRow[];
 };
 
-export type PlatformReadinessStatus = 'ready' | 'partial' | 'missing_data';
+export type PlatformReadinessStatus = 'OK' | 'PARTIAL' | 'BLOCKED' | 'ready' | 'partial' | 'missing_data';
 
 export type PlatformReadinessCheckStatus = PlatformReadinessStatus | 'unknown';
 
@@ -452,9 +452,20 @@ export type PlatformReadiness = {
   mode: string;
   status: PlatformReadinessStatus;
   as_of: string;
+  run_id?: string;
+  latest_trade_date?: string;
   latest_market_date: string;
+  source?: string;
+  summary_path?: string;
+  tiers?: Array<{ tier: string; status: string }>;
+  modules?: Array<Record<string, unknown>>;
   checks: PlatformReadinessCheck[];
   warnings: string[];
+  errors?: string[];
+  missing_data?: string[];
+  partial_data?: string[];
+  next_actions?: string[];
+  dashboard_url?: string;
 };
 
 export type StrategyCatalogItem = {

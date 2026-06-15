@@ -113,3 +113,20 @@ Before handing the local dashboard to an operator:
 - News, Reports, Review Queue, and EOD Monitor are reachable from navigation.
 - Stock detail preserves date and asset context when moving to News or Reports.
 - The operator understands the dashboard is EOD-local rather than real-time.
+
+## EOD Manifest Smoke
+
+Run the local EOD pipeline with an explicit output directory:
+
+```bash
+/Users/xiwei/stock_research/.venv/bin/python -m stock_research.cli run-stock-daily-data-pipeline \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/stock_daily_data_pipeline/YYYY-MM-DD \
+  --no-feishu
+```
+
+Inspect:
+
+- `run_summary.json`
+- `run_manifest.json`
+- `http://127.0.0.1:8765/api/platform/readiness`
