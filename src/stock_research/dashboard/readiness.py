@@ -6,6 +6,10 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
+from stock_research.data_run_manifest import (
+    load_latest_data_run_manifest,
+    summarize_manifest_modules,
+)
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.db import connect, fetch_all
@@ -34,17 +38,15 @@ UNAVAILABLE_WARNINGS = {
 
 def aggregate_readiness_status(checks: list[dict[str, Any]]) -> str:
     statuses = [str(check.get("status") or "unknown") for check in checks]
-    if "missing_data" in statuses:
-        return "missing_data"
-    if any(status in {"partial", "unknown"} for status in statuses):
-        return "partial"
-    return "ready"
+    if any(status in {"BLOCKED", "missing_data"} for status in statuses):
+        return "BLOCKED"
+    if any(status in {"PARTIAL", "partial", "unknown"} for status in statuses):
+        return "PARTIAL"
+    return "OK"
 
 
 def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]:
     warnings: list[str] = []
-    checks: list[dict[str, Any]] = []
-    latest_market_date = ""
 
     try:
         platform_summary = load_platform_summary(score_version=score_version, top_n=5)
@@ -54,6 +56,17 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
 
     latest_market_date = str(platform_summary.get("latest_market_date") or "")
     topn_preview = list(platform_summary.get("topn_preview") or [])
+
+    manifest_modules = _load_manifest_modules()
+    if manifest_modules:
+        return _build_manifest_readiness(
+            manifest_modules=manifest_modules,
+            latest_market_date=latest_market_date,
+            topn_preview=topn_preview,
+            warnings=warnings,
+        )
+
+    checks: list[dict[str, Any]] = []
     if not platform_summary:
         checks.append(
             _check("platform_summary", "missing_data", UNAVAILABLE_WARNINGS["platform_summary"])
@@ -90,10 +103,158 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         "mode": "eod_local",
         "status": aggregate_readiness_status(checks),
         "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+        "run_id": "",
+        "latest_trade_date": latest_market_date,
         "latest_market_date": latest_market_date,
+        "source": "lightweight_probe",
+        "summary_path": "",
+        "tiers": _tiers_from_status(aggregate_readiness_status(checks)),
+        "modules": [],
         "checks": checks,
         "warnings": _dedupe(warnings),
+        "errors": [],
+        "missing_data": _missing_from_checks(checks),
+        "partial_data": _partial_from_checks(checks),
+        "next_actions": _next_actions(
+            aggregate_readiness_status(checks),
+            _missing_from_checks(checks),
+            _partial_from_checks(checks),
+        ),
+        "dashboard_url": "http://127.0.0.1:5174",
     }
+
+
+def _load_manifest_modules() -> list[dict[str, Any]]:
+    try:
+        return load_latest_data_run_manifest()
+    except Exception:
+        return []
+
+
+def _build_manifest_readiness(
+    *,
+    manifest_modules: list[dict[str, Any]],
+    latest_market_date: str,
+    topn_preview: list[dict[str, Any]],
+    warnings: list[str],
+) -> dict[str, Any]:
+    summary = summarize_manifest_modules(manifest_modules)
+    missing_data = list(summary["missing_data"])
+    partial_data = list(summary["partial_data"])
+    errors = list(summary["errors"])
+    checks = _manifest_checks(manifest_modules, latest_market_date, topn_preview)
+
+    if not latest_market_date:
+        missing_data.append("platform_summary")
+        warnings.append(UNAVAILABLE_WARNINGS["platform_summary"])
+    if not topn_preview:
+        missing_data.extend(["score_topn", "review_queue"])
+        warnings.extend([UNAVAILABLE_WARNINGS["topn_preview"], UNAVAILABLE_WARNINGS["review_queue"]])
+
+    status = "BLOCKED" if missing_data else summary["status"]
+    run_id = str(manifest_modules[0].get("run_id") or "") if manifest_modules else ""
+    latest_trade_date = latest_market_date or _latest_trade_date_from_manifest(manifest_modules)
+    return {
+        "mode": "eod_local",
+        "status": status,
+        "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+        "run_id": run_id,
+        "latest_trade_date": latest_trade_date,
+        "latest_market_date": latest_trade_date,
+        "source": "data_run_manifest",
+        "summary_path": _summary_path_from_manifest(manifest_modules),
+        "tiers": [
+            {"tier": "tier1", "status": "BLOCKED" if missing_data else summary["tier1_status"]},
+            {"tier": "tier2", "status": summary["tier2_status"]},
+            {"tier": "tier3", "status": summary["tier3_status"]},
+        ],
+        "modules": manifest_modules,
+        "checks": checks,
+        "warnings": _dedupe([*summary["warnings"], *warnings]),
+        "errors": _dedupe(errors),
+        "missing_data": _dedupe(missing_data),
+        "partial_data": _dedupe(partial_data),
+        "next_actions": _next_actions(status, missing_data, partial_data),
+        "dashboard_url": "http://127.0.0.1:5174",
+    }
+
+
+def _manifest_checks(
+    modules: list[dict[str, Any]],
+    latest_market_date: str,
+    topn_preview: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_module = {str(item.get("module") or ""): item for item in modules}
+    checks = [
+        _check(
+            "platform_summary",
+            "ready" if latest_market_date and topn_preview else "missing_data",
+            "Platform summary available" if latest_market_date and topn_preview else UNAVAILABLE_WARNINGS["platform_summary"],
+        )
+    ]
+    review = by_module.get("review_queue")
+    checks.append(
+        _check(
+            "review_queue",
+            "ready" if review and review.get("status") == "success" and topn_preview else "partial",
+            "Review Queue available" if review and review.get("status") == "success" and topn_preview else UNAVAILABLE_WARNINGS["review_queue"],
+        )
+    )
+    for key, module in [
+        ("news", "news"),
+        ("research_reports", "research_reports"),
+        ("generated_reports", "generated_reports"),
+    ]:
+        item = by_module.get(module)
+        status = str(item.get("status") if item else "skipped")
+        checks.append(
+            _check(
+                key,
+                "ready" if status == "success" else "partial",
+                f"{CHECK_LABELS[key]} available" if status == "success" else UNAVAILABLE_WARNINGS[key],
+            )
+        )
+    return checks
+
+
+def _tiers_from_status(status: str) -> list[dict[str, str]]:
+    tier1 = "BLOCKED" if status == "BLOCKED" else "OK"
+    optional = "PARTIAL" if status == "PARTIAL" else "OK"
+    return [
+        {"tier": "tier1", "status": tier1},
+        {"tier": "tier2", "status": optional},
+        {"tier": "tier3", "status": optional},
+    ]
+
+
+def _missing_from_checks(checks: list[dict[str, Any]]) -> list[str]:
+    return [str(check["key"]) for check in checks if check.get("status") == "missing_data"]
+
+
+def _partial_from_checks(checks: list[dict[str, Any]]) -> list[str]:
+    return [str(check["key"]) for check in checks if check.get("status") in {"partial", "unknown"}]
+
+
+def _next_actions(status: str, missing_data: list[str], partial_data: list[str]) -> list[str]:
+    if status == "BLOCKED":
+        return [f"Resolve Tier 1 missing data: {', '.join(_dedupe(missing_data))}"]
+    if status == "PARTIAL":
+        return [f"Review partial auxiliary data: {', '.join(_dedupe(partial_data))}"]
+    return []
+
+
+def _latest_trade_date_from_manifest(modules: list[dict[str, Any]]) -> str:
+    dates = [str(item.get("latest_trade_date") or item.get("trade_date") or "") for item in modules]
+    return max([value for value in dates if value], default="")
+
+
+def _summary_path_from_manifest(modules: list[dict[str, Any]]) -> str:
+    for item in modules:
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        value = metadata.get("summary_path")
+        if value:
+            return str(value)
+    return ""
 
 
 def _review_queue_check(topn_preview: list[dict[str, Any]], warnings: list[str]) -> dict[str, Any]:
