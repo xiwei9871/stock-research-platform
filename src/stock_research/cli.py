@@ -102,6 +102,7 @@ from stock_research.daily_incremental import (
     run_daily_incremental_pipeline,
 )
 from stock_research.daily_data_pipeline import run_stock_daily_data_pipeline
+from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.daily_job_run_store import (
     apply_daily_job_run_schema,
     record_daily_job_run,
@@ -1957,6 +1958,14 @@ def build_parser() -> argparse.ArgumentParser:
     stock_daily_data_pipeline.add_argument("--feishu-account", default="jarvis")
     stock_daily_data_pipeline.add_argument("--openclaw-bin", default="openclaw")
     stock_daily_data_pipeline.add_argument("--no-feishu", action="store_true")
+
+    snapshot_review_evidence = subparsers.add_parser("snapshot-review-evidence")
+    snapshot_review_evidence.add_argument("--run-id", required=True)
+    snapshot_review_evidence.add_argument("--trade-date", required=True)
+    snapshot_review_evidence.add_argument("--output-dir")
+    snapshot_review_evidence.add_argument("--limit", type=int, default=30)
+    snapshot_review_evidence.add_argument("--asset-id")
+    snapshot_review_evidence.add_argument("--dry-run", action="store_true")
 
     technical_features_daily = subparsers.add_parser("build-technical-features-daily")
     technical_features_daily.add_argument("--trade-date", required=True)
@@ -4452,6 +4461,28 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"stock_daily_data_pipeline|status|{result['status']}")
         print(f"stock_daily_data_pipeline|summary|{args.output_dir}/run_summary.json")
         if result["status"] != "success":
+            raise SystemExit(1)
+    elif args.command == "snapshot-review-evidence":
+        result = run_eod_review_evidence_snapshots(
+            run_id=args.run_id,
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+            limit=args.limit,
+            asset_id=args.asset_id,
+            dry_run=args.dry_run,
+        )
+        print(f"snapshot_review_evidence|status|{result['status']}")
+        print(
+            "snapshot_review_evidence|review_item_snapshot_count|"
+            f"{result['review_item_snapshot_count']}"
+        )
+        print(
+            "snapshot_review_evidence|evidence_digest_snapshot_count|"
+            f"{result['evidence_digest_snapshot_count']}"
+        )
+        print(f"snapshot_review_evidence|warning_count|{result['warning_count']}")
+        print(f"snapshot_review_evidence|summary|{result.get('artifact_path') or ''}")
+        if result["status"] == "failed":
             raise SystemExit(1)
     elif args.command == "build-technical-features-daily":
         count = build_and_store_stock_technical_features_daily(

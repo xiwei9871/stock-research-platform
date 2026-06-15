@@ -24,6 +24,7 @@ CHECK_LABELS = {
     "news": "News",
     "research_reports": "Research Reports",
     "generated_reports": "Generated Reports",
+    "review_evidence_snapshots": "Review/Evidence Snapshots",
 }
 
 UNAVAILABLE_WARNINGS = {
@@ -33,6 +34,7 @@ UNAVAILABLE_WARNINGS = {
     "news": "News unavailable",
     "research_reports": "Research Reports unavailable",
     "generated_reports": "Generated Reports unavailable",
+    "review_evidence_snapshots": "Review/Evidence Snapshots unavailable",
 }
 
 
@@ -204,6 +206,7 @@ def _manifest_checks(
         ("news", "news"),
         ("research_reports", "research_reports"),
         ("generated_reports", "generated_reports"),
+        ("review_evidence_snapshots", "review_evidence_snapshots"),
     ]:
         item = by_module.get(module)
         status = str(item.get("status") if item else "skipped")

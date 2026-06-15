@@ -401,6 +401,42 @@ def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
     assert "news down" in payload["warnings"]
 
 
+def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
+    modules = [
+        {"module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {
+            "module": "review_evidence_snapshots",
+            "tier": "tier2",
+            "status": "failed",
+            "warnings": ["snapshot db offline"],
+            "error_message": "snapshot db offline",
+        },
+    ]
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-06-12",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+
+    payload = readiness.build_platform_readiness()
+
+    checks = {check["key"]: check for check in payload["checks"]}
+    assert payload["status"] == "PARTIAL"
+    assert payload["tiers"][0]["status"] == "OK"
+    assert "review_evidence_snapshots" in payload["partial_data"]
+    assert checks["review_evidence_snapshots"]["status"] == "partial"
+    assert checks["review_evidence_snapshots"]["detail"] == "Review/Evidence Snapshots unavailable"
+    assert payload["next_actions"] == [
+        "Review partial auxiliary data: review_evidence_snapshots"
+    ]
+
+
 def test_build_platform_readiness_v2_tier1_failure_is_blocked(monkeypatch):
     modules = [
         {

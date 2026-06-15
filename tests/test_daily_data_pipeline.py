@@ -84,6 +84,79 @@ def test_build_daily_pipeline_steps_commands_parse_through_cli() -> None:
             parser.parse_args(step.command[3:])
 
 
+def test_snapshot_review_evidence_cli_parser_accepts_rerun_args() -> None:
+    from stock_research.cli import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "snapshot-review-evidence",
+            "--run-id",
+            "eod-2026-06-05-local",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/daily/2026-06-05",
+            "--limit",
+            "5",
+            "--asset-id",
+            "000001.SZ",
+            "--dry-run",
+        ]
+    )
+
+    assert args.command == "snapshot-review-evidence"
+    assert args.run_id == "eod-2026-06-05-local"
+    assert args.trade_date == "2026-06-05"
+    assert args.limit == 5
+    assert args.asset_id == "000001.SZ"
+    assert args.dry_run is True
+
+
+def test_snapshot_review_evidence_cli_dispatches_runner(monkeypatch, capsys, tmp_path: Path) -> None:
+    from stock_research import cli
+
+    calls = []
+
+    def fake_runner(**kwargs):
+        calls.append(kwargs)
+        return {
+            "status": "success",
+            "review_item_snapshot_count": 2,
+            "evidence_digest_snapshot_count": 2,
+            "warning_count": 0,
+            "warnings": [],
+            "artifact_path": str(tmp_path / "review_evidence_snapshots_summary.json"),
+        }
+
+    monkeypatch.setattr(cli, "run_eod_review_evidence_snapshots", fake_runner)
+
+    cli.main(
+        [
+            "snapshot-review-evidence",
+            "--run-id",
+            "eod-2026-06-05-local",
+            "--trade-date",
+            "2026-06-05",
+            "--output-dir",
+            str(tmp_path),
+            "--limit",
+            "5",
+        ]
+    )
+
+    assert calls[0]["run_id"] == "eod-2026-06-05-local"
+    assert calls[0]["trade_date"] == "2026-06-05"
+    assert calls[0]["output_dir"] == str(tmp_path)
+    assert calls[0]["limit"] == 5
+    assert capsys.readouterr().out.splitlines() == [
+        "snapshot_review_evidence|status|success",
+        "snapshot_review_evidence|review_item_snapshot_count|2",
+        "snapshot_review_evidence|evidence_digest_snapshot_count|2",
+        "snapshot_review_evidence|warning_count|0",
+        f"snapshot_review_evidence|summary|{tmp_path / 'review_evidence_snapshots_summary.json'}",
+    ]
+
+
 def test_render_daily_pipeline_feishu_message_is_mobile_sized() -> None:
     message = render_daily_pipeline_feishu_message(
         trade_date="2026-06-05",

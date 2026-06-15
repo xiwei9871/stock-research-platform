@@ -129,4 +129,21 @@ Inspect:
 
 - `run_summary.json`
 - `run_manifest.json`
+- `review_evidence_snapshots_summary.json`, when Review Queue candidates were
+  available
 - `http://127.0.0.1:8765/api/platform/readiness`
+
+The EOD pipeline includes the Tier 2 `review_evidence_snapshots` post-step.
+Snapshot failures should make readiness `PARTIAL`, not `BLOCKED`, when Tier 1
+data and Review Queue are available.
+
+To rerun only the snapshot post-step from existing Review Queue / Evidence
+Digest read models:
+
+```bash
+PYTHONPATH=src /Users/xiwei/stock_research/.venv/bin/python -m stock_research.cli snapshot-review-evidence \
+  --run-id eod-YYYY-MM-DD-local \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/stock_daily_data_pipeline/YYYY-MM-DD \
+  --limit 30
+```
