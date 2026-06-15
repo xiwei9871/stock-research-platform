@@ -16,7 +16,10 @@ import {
   fetchPublicNewsStatus,
   fetchResearchReportSummary,
   fetchResearchReports,
+  fetchEvidenceDigestSnapshot,
+  fetchEvidenceDigestSnapshots,
   fetchReviewQueue,
+  fetchReviewQueueSnapshots,
   refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
@@ -501,10 +504,81 @@ describe('dashboard API client', () => {
     expect(payload.groups[0].items[0].missing_evidence_count).toBe(0);
   });
 
+  it('fetches review queue snapshots with filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [{ snapshot_id: 'review_item_snapshot:abc', run_id: 'eod-2026-06-12-local' }],
+          warnings: [],
+          as_of: '',
+          source: 'ops.review_item_snapshot'
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const payload = await fetchReviewQueueSnapshots({
+      runId: 'eod-2026-06-12-local',
+      digestKey: '2026-06-12:manual_v1:000001.SZ'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/review-queue/snapshots?run_id=eod-2026-06-12-local&digest_key=2026-06-12%3Amanual_v1%3A000001.SZ'
+    );
+    expect(payload.items[0].snapshot_id).toBe('review_item_snapshot:abc');
+  });
+
+  it('fetches evidence digest snapshots and detail', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [{ snapshot_id: 'evidence_digest_snapshot:def', digest_key: 'digest-1' }],
+            warnings: [],
+            as_of: '',
+            source: 'ops.evidence_digest_snapshot'
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            item: { snapshot_id: 'evidence_digest_snapshot:def', digest_payload: { digest_key: 'digest-1' } },
+            warnings: [],
+            source: 'ops.evidence_digest_snapshot'
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const listPayload = await fetchEvidenceDigestSnapshots({ digestKey: 'digest-1' });
+    const detailPayload = await fetchEvidenceDigestSnapshot('evidence_digest_snapshot:def');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/evidence-digest/snapshots?digest_key=digest-1');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/evidence-digest/snapshots/evidence_digest_snapshot%3Adef');
+    expect(listPayload.items[0].digest_key).toBe('digest-1');
+    expect(detailPayload.item.snapshot_id).toBe('evidence_digest_snapshot:def');
+  });
+
   it('fetches asset decisions with date range and limit', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ items: [{ asset_id: '000001.SZ', decision_label: 'candidate' }] })
+      json: async () => ({
+        items: [
+          {
+            asset_id: '000001.SZ',
+            decision_label: 'candidate',
+            digest_key: '2026-06-12:manual_v1:000001.SZ',
+            review_item_snapshot_id: 'review_item_snapshot:abc',
+            evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
+            snapshot_linkage_status: 'linked'
+          }
+        ]
+      })
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -514,6 +588,8 @@ describe('dashboard API client', () => {
       '/api/assets/000001.SZ/decisions?start_date=2026-05-01&end_date=2026-05-30&limit=20'
     );
     expect(result[0].decision_label).toBe('candidate');
+    expect(result[0].digest_key).toBe('2026-06-12:manual_v1:000001.SZ');
+    expect(result[0].snapshot_linkage_status).toBe('linked');
   });
 
   it('fetches asset outcomes with optional review session and limit', async () => {

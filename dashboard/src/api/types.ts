@@ -113,11 +113,78 @@ export type DecisionEventRow = {
   evidence_artifact_id: string;
   evidence_path: string;
   source_context: string;
+  run_id?: string;
+  digest_key?: string;
+  review_item_snapshot_id?: string;
+  evidence_digest_snapshot_id?: string;
+  evidence_as_of?: string;
+  review_item_as_of?: string;
+  snapshot_linkage_status?: 'linked' | 'missing' | string;
+  snapshot_linkage_warnings?: string[];
   requires_follow_up: boolean;
   follow_up_note: string;
   notes: string;
   manual_review_required: boolean;
   auto_trade_enabled: boolean;
+};
+
+export type ReviewItemSnapshot = {
+  snapshot_id: string;
+  run_id: string;
+  trade_date: string;
+  latest_trade_date?: string | null;
+  asset_id: string;
+  stock_code?: string | null;
+  stock_name?: string | null;
+  digest_key: string;
+  source_type: string;
+  source_name: string;
+  source_rank?: number | null;
+  topn_rank?: number | null;
+  score_version: string;
+  score?: number | null;
+  evidence_status: string;
+  missing_evidence_count: number;
+  partial_evidence_count: number;
+  warnings_count: number;
+  review_item_payload?: Record<string, unknown>;
+  payload_hash: string;
+  schema_version: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type EvidenceDigestSnapshot = {
+  snapshot_id: string;
+  run_id: string;
+  trade_date: string;
+  latest_trade_date?: string | null;
+  asset_id: string;
+  stock_code?: string | null;
+  stock_name?: string | null;
+  digest_key: string;
+  overall_status: string;
+  missing_evidence: string[];
+  partial_evidence: string[];
+  sections_status: Record<string, string>;
+  digest_payload?: Record<string, unknown>;
+  payload_hash: string;
+  schema_version: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SnapshotListResponse<T> = {
+  items: T[];
+  warnings: string[];
+  as_of: string;
+  source: string;
+};
+
+export type EvidenceDigestSnapshotDetailResponse = {
+  item: EvidenceDigestSnapshot;
+  warnings: string[];
+  source: string;
 };
 
 export type DecisionOutcomeRow = {

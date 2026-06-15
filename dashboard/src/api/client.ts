@@ -10,6 +10,8 @@ import type {
   DecisionEventRow,
   DecisionOutcomeRow,
   EvidenceDigestResponse,
+  EvidenceDigestSnapshot,
+  EvidenceDigestSnapshotDetailResponse,
   ExperimentProposalRow,
   ExperimentReplayRow,
   FactorLibraryRow,
@@ -25,8 +27,10 @@ import type {
   PublicNewsResponse,
   ResearchReportResponse,
   ResearchReportSummary,
+  ReviewItemSnapshot,
   ReviewQueueResponse,
   ScoreRow,
+  SnapshotListResponse,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
   ShadowFollowUpResolutionRow,
@@ -105,6 +109,24 @@ type ReviewQueueParams = {
   limit?: number;
   lookbackDays?: number;
 };
+
+type SnapshotFilters = {
+  runId?: string;
+  tradeDate?: string;
+  assetId?: string;
+  digestKey?: string;
+  limit?: number;
+};
+
+function snapshotQuery(params: SnapshotFilters = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.runId) searchParams.set('run_id', params.runId);
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.assetId) searchParams.set('asset_id', params.assetId);
+  if (params.digestKey) searchParams.set('digest_key', params.digestKey);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  return searchParams.toString();
+}
 
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
   return getJson(
@@ -206,6 +228,26 @@ export async function fetchReviewQueue(params: ReviewQueueParams = {}): Promise<
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   const query = searchParams.toString();
   return getJson(query ? `/api/review-queue?${query}` : '/api/review-queue');
+}
+
+export async function fetchReviewQueueSnapshots(
+  params: SnapshotFilters = {}
+): Promise<SnapshotListResponse<ReviewItemSnapshot>> {
+  const query = snapshotQuery(params);
+  return getJson(query ? `/api/review-queue/snapshots?${query}` : '/api/review-queue/snapshots');
+}
+
+export async function fetchEvidenceDigestSnapshots(
+  params: SnapshotFilters = {}
+): Promise<SnapshotListResponse<EvidenceDigestSnapshot>> {
+  const query = snapshotQuery(params);
+  return getJson(query ? `/api/evidence-digest/snapshots?${query}` : '/api/evidence-digest/snapshots');
+}
+
+export async function fetchEvidenceDigestSnapshot(
+  snapshotId: string
+): Promise<EvidenceDigestSnapshotDetailResponse> {
+  return getJson(`/api/evidence-digest/snapshots/${encodeURIComponent(snapshotId)}`);
 }
 
 export async function searchAssets(q: string, limit = 10) {
