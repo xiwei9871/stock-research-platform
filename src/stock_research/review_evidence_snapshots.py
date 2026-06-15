@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.review_queue import build_review_queue
 from stock_research.db import connect, fetch_all
 
 SNAPSHOT_SCHEMA_VERSION = "v1"
@@ -276,6 +278,95 @@ def snapshot_review_queue_payload(
     }
 
 
+def run_eod_review_evidence_snapshots(
+    *,
+    run_id: str,
+    trade_date: str,
+    output_dir: str | Path | None = None,
+    score_version: str = "manual_v1",
+    limit: int = 30,
+    asset_id: str | None = None,
+    dry_run: bool = False,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    errors: list[str] = []
+    artifact_path = ""
+    queue_payload = build_review_queue(
+        trade_date=trade_date,
+        score_version=score_version,
+        limit=limit,
+    )
+    warnings.extend(str(warning) for warning in queue_payload.get("warnings") or [])
+    queue_payload = _queue_payload_with_run_context(
+        queue_payload,
+        run_id=run_id,
+        trade_date=trade_date,
+    )
+    if asset_id:
+        queue_payload = _filter_queue_payload(queue_payload, asset_id=asset_id)
+
+    item_count = _queue_item_count(queue_payload)
+    result_counts = {
+        "review_item_snapshot_count": item_count if dry_run else 0,
+        "evidence_digest_snapshot_count": 0,
+        "review_item_snapshot_ids": [],
+        "evidence_digest_snapshot_ids": [],
+    }
+    failed_count = 0
+    skipped_count = 0
+    if item_count == 0:
+        skipped_count = 1
+        warnings.append("review queue empty; snapshot step skipped")
+        status = "skipped"
+    elif dry_run:
+        warnings.append("dry_run enabled; snapshots were not persisted")
+        status = "partial" if warnings else "success"
+    else:
+        try:
+            result_counts = snapshot_review_queue_payload(queue_payload, service=service)
+            status = "partial" if warnings else "success"
+        except Exception as exc:
+            failed_count = 1
+            errors.append(str(exc))
+            warnings.append(f"snapshot generation failed: {exc}")
+            status = "partial"
+
+    review_count = int(result_counts.get("review_item_snapshot_count") or 0)
+    digest_count = int(result_counts.get("evidence_digest_snapshot_count") or 0)
+    result = {
+        "run_id": run_id,
+        "trade_date": trade_date,
+        "latest_trade_date": trade_date,
+        "score_version": score_version,
+        "status": status,
+        "snapshot_status": status,
+        "review_item_snapshot_count": review_count,
+        "evidence_digest_snapshot_count": digest_count,
+        "row_count": review_count + digest_count,
+        "asset_count": item_count,
+        "skipped_count": skipped_count,
+        "failed_count": failed_count,
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "errors": errors,
+        "review_item_snapshot_ids": list(result_counts.get("review_item_snapshot_ids") or []),
+        "evidence_digest_snapshot_ids": list(result_counts.get("evidence_digest_snapshot_ids") or []),
+        "artifact_path": artifact_path,
+        "dry_run": dry_run,
+    }
+    if output_dir:
+        resolved_output_dir = Path(output_dir)
+        resolved_output_dir.mkdir(parents=True, exist_ok=True)
+        artifact = resolved_output_dir / "review_evidence_snapshots_summary.json"
+        result["artifact_path"] = str(artifact)
+        artifact.write_text(
+            json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    return result
+
+
 def list_review_item_snapshots(
     *,
     run_id: str | None = None,
@@ -342,24 +433,58 @@ def load_evidence_digest_snapshot(
     with connect(service) as conn:
         rows = list(fetch_all(conn, sql, {"snapshot_id": snapshot_id}))
     return dict(rows[0]) if rows else None
-    asset_id = str(digest.get("canonical_asset_id") or digest.get("asset_id") or "")
-    return {
-        "snapshot_id": _snapshot_id("evidence_digest_snapshot", run_id, digest_key),
-        "run_id": run_id,
-        "trade_date": str(digest.get("trade_date") or "")[:10],
-        "latest_trade_date": _optional_date_text(digest.get("latest_trade_date")),
-        "asset_id": asset_id,
-        "stock_code": str(digest.get("stock_code") or asset_id),
-        "stock_name": str(digest.get("stock_name") or ""),
-        "digest_key": digest_key,
-        "overall_status": str(digest.get("overall_status") or ""),
-        "missing_evidence": [str(item) for item in digest.get("missing_evidence") or []],
-        "partial_evidence": [str(item) for item in digest.get("partial_evidence") or []],
-        "sections_status": sections_status,
-        "digest_payload": _jsonable(digest),
-        "payload_hash": canonical_payload_hash(digest),
-        "schema_version": schema_version,
-    }
+
+
+def _queue_payload_with_run_context(
+    queue_payload: dict[str, Any],
+    *,
+    run_id: str,
+    trade_date: str,
+) -> dict[str, Any]:
+    updated = dict(queue_payload)
+    updated_groups: list[dict[str, Any]] = []
+    for group in queue_payload.get("groups") or []:
+        updated_group = dict(group)
+        items: list[dict[str, Any]] = []
+        for item in group.get("items") or []:
+            updated_item = dict(item)
+            updated_item["run_id"] = str(updated_item.get("run_id") or run_id)
+            updated_item["trade_date"] = str(updated_item.get("trade_date") or trade_date)
+            updated_item["latest_trade_date"] = str(
+                updated_item.get("latest_trade_date") or trade_date
+            )
+            digest = updated_item.get("digest")
+            if isinstance(digest, dict):
+                updated_digest = dict(digest)
+                updated_digest["run_id"] = str(updated_digest.get("run_id") or run_id)
+                updated_digest["trade_date"] = str(updated_digest.get("trade_date") or trade_date)
+                updated_digest["latest_trade_date"] = str(
+                    updated_digest.get("latest_trade_date") or trade_date
+                )
+                updated_item["digest"] = updated_digest
+            items.append(updated_item)
+        updated_group["items"] = items
+        updated_groups.append(updated_group)
+    updated["groups"] = updated_groups
+    return updated
+
+
+def _filter_queue_payload(queue_payload: dict[str, Any], *, asset_id: str) -> dict[str, Any]:
+    filtered = dict(queue_payload)
+    groups: list[dict[str, Any]] = []
+    for group in queue_payload.get("groups") or []:
+        updated_group = dict(group)
+        updated_group["items"] = [
+            item for item in group.get("items") or []
+            if str(item.get("canonical_asset_id") or item.get("asset_id") or "") == asset_id
+        ]
+        groups.append(updated_group)
+    filtered["groups"] = groups
+    return filtered
+
+
+def _queue_item_count(queue_payload: dict[str, Any]) -> int:
+    return sum(len(group.get("items") or []) for group in queue_payload.get("groups") or [])
 
 
 def _snapshot_id(prefix: str, run_id: str, digest_key: str) -> str:

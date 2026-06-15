@@ -252,3 +252,142 @@ def test_load_evidence_digest_snapshot_returns_single_row(monkeypatch):
     assert "FROM ops.evidence_digest_snapshot" in captured["sql"]
     assert captured["params"] == {"snapshot_id": "evidence_digest_snapshot:abc"}
     assert row["digest_payload"]["digest_key"] == "digest-1"
+
+
+def test_run_eod_review_evidence_snapshots_writes_summary_artifact(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        snapshots,
+        "build_review_queue",
+        lambda trade_date, score_version, limit: {
+            "groups": [
+                {
+                    "items": [
+                        {
+                            "run_id": "eod-2026-06-12-local",
+                            "trade_date": "2026-06-12",
+                            "latest_trade_date": "2026-06-12",
+                            "asset_id": "000001.SZ",
+                            "canonical_asset_id": "000001.SZ",
+                            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+                            "source_type": "score_topn",
+                            "source_name": "manual_v1_topn",
+                            "score_version": "manual_v1",
+                            "evidence_status": "OK",
+                            "digest": {
+                                "run_id": "eod-2026-06-12-local",
+                                "trade_date": "2026-06-12",
+                                "latest_trade_date": "2026-06-12",
+                                "asset_id": "000001.SZ",
+                                "digest_key": "2026-06-12:manual_v1:000001.SZ",
+                                "overall_status": "OK",
+                                "sections": {"news": {"status": "available"}},
+                            },
+                        }
+                    ]
+                }
+            ],
+            "warnings": [],
+        },
+    )
+    monkeypatch.setattr(
+        snapshots,
+        "snapshot_review_queue_payload",
+        lambda queue, service="stock_research": {
+            "review_item_snapshot_count": 1,
+            "evidence_digest_snapshot_count": 1,
+            "review_item_snapshot_ids": ["review_item_snapshot:abc"],
+            "evidence_digest_snapshot_ids": ["evidence_digest_snapshot:def"],
+        },
+    )
+
+    result = snapshots.run_eod_review_evidence_snapshots(
+        run_id="eod-2026-06-12-local",
+        trade_date="2026-06-12",
+        output_dir=tmp_path,
+        limit=30,
+    )
+
+    assert result["status"] == "success"
+    assert result["review_item_snapshot_count"] == 1
+    assert result["evidence_digest_snapshot_count"] == 1
+    assert result["asset_count"] == 1
+    assert result["row_count"] == 2
+    assert result["warning_count"] == 0
+    artifact_path = tmp_path / "review_evidence_snapshots_summary.json"
+    assert result["artifact_path"] == str(artifact_path)
+    payload = __import__("json").loads(artifact_path.read_text())
+    assert payload["run_id"] == "eod-2026-06-12-local"
+    assert payload["snapshot_status"] == "success"
+
+
+def test_run_eod_review_evidence_snapshots_skips_empty_queue(monkeypatch):
+    monkeypatch.setattr(
+        snapshots,
+        "build_review_queue",
+        lambda trade_date, score_version, limit: {"groups": [{"items": []}], "warnings": []},
+    )
+
+    result = snapshots.run_eod_review_evidence_snapshots(
+        run_id="eod-2026-06-12-local",
+        trade_date="2026-06-12",
+    )
+
+    assert result["status"] == "skipped"
+    assert result["review_item_snapshot_count"] == 0
+    assert result["evidence_digest_snapshot_count"] == 0
+    assert result["warnings"] == ["review queue empty; snapshot step skipped"]
+
+
+def test_run_eod_review_evidence_snapshots_partial_when_persist_fails(monkeypatch):
+    monkeypatch.setattr(
+        snapshots,
+        "build_review_queue",
+        lambda trade_date, score_version, limit: {
+            "groups": [{"items": [{"asset_id": "000001.SZ", "digest_key": "digest-1"}]}],
+            "warnings": [],
+        },
+    )
+
+    def failing_snapshot(queue, service="stock_research"):
+        raise RuntimeError("snapshot db offline")
+
+    monkeypatch.setattr(snapshots, "snapshot_review_queue_payload", failing_snapshot)
+
+    result = snapshots.run_eod_review_evidence_snapshots(
+        run_id="eod-2026-06-12-local",
+        trade_date="2026-06-12",
+    )
+
+    assert result["status"] == "partial"
+    assert result["failed_count"] == 1
+    assert result["errors"] == ["snapshot db offline"]
+    assert "snapshot generation failed: snapshot db offline" in result["warnings"]
+
+
+def test_run_eod_review_evidence_snapshots_dry_run_does_not_persist(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        snapshots,
+        "build_review_queue",
+        lambda trade_date, score_version, limit: {
+            "groups": [{"items": [{"asset_id": "000001.SZ", "digest_key": "digest-1"}]}],
+            "warnings": ["news partial"],
+        },
+    )
+    monkeypatch.setattr(
+        snapshots,
+        "snapshot_review_queue_payload",
+        lambda queue, service="stock_research": calls.append(queue),
+    )
+
+    result = snapshots.run_eod_review_evidence_snapshots(
+        run_id="eod-2026-06-12-local",
+        trade_date="2026-06-12",
+        dry_run=True,
+    )
+
+    assert result["status"] == "partial"
+    assert result["review_item_snapshot_count"] == 1
+    assert result["evidence_digest_snapshot_count"] == 0
+    assert result["warnings"] == ["news partial", "dry_run enabled; snapshots were not persisted"]
+    assert calls == []
