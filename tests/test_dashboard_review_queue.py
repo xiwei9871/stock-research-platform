@@ -87,6 +87,88 @@ def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
     assert strong_item["next_action_count"] == 2
 
 
+def test_build_review_queue_item_includes_lineage_and_evidence_status(monkeypatch):
+    score_rows = [
+        {
+            "trade_date": "2026-06-12",
+            "asset_id": "000001.SZ",
+            "rank": 3,
+            "score_total": 88.5,
+            "score_version": "manual_v1",
+            "score_components": {"momentum": 0.62, "quality": 0.26},
+        }
+    ]
+    digest = _digest("000001.SZ", bucket="mixed", score=88, warnings=["research report source partial"])
+    digest.update(
+        {
+            "latest_trade_date": "2026-06-12",
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+            "overall_status": "PARTIAL",
+            "missing_evidence": ["research_reports"],
+            "partial_evidence": ["news"],
+            "lineage": {
+                "run_id": "eod-2026-06-12-local",
+                "latest_trade_date": "2026-06-12",
+                "score_version": "manual_v1",
+                "topn_rank": 3,
+                "factor_as_of": "2026-06-12",
+                "manifest_modules": [{"module": "news", "tier": "tier2", "status": "partial"}],
+            },
+        }
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-12", "topn_preview": score_rows},
+    )
+    monkeypatch.setattr(review_queue, "load_top_scores_for_dashboard", lambda *args: score_rows)
+    monkeypatch.setattr(review_queue, "build_evidence_digest", lambda asset_id, **kwargs: digest)
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda trade_date=None: [
+            {
+                "run_id": "eod-2026-06-12-local",
+                "trade_date": "2026-06-12",
+                "latest_trade_date": "2026-06-12",
+                "module": "score_topn",
+                "tier": "tier1",
+                "status": "success",
+                "warnings": [],
+            }
+        ],
+        raising=False,
+    )
+
+    payload = review_queue.build_review_queue(trade_date="2026-06-12", score_version="manual_v1", limit=20)
+
+    item = payload["groups"][1]["items"][0]
+    assert item["run_id"] == "eod-2026-06-12-local"
+    assert item["latest_trade_date"] == "2026-06-12"
+    assert item["generated_at"] == "2026-06-12T00:00:00+00:00"
+    assert item["source_type"] == "score_topn"
+    assert item["source_name"] == "manual_v1_topn"
+    assert item["source_rank"] == 3
+    assert item["topn_rank"] == 3
+    assert item["score_components"] == {"momentum": 0.62, "quality": 0.26}
+    assert item["strategy_name"] is None
+    assert item["strategy_run_id"] is None
+    assert item["factor_as_of"] == "2026-06-12"
+    assert item["digest_key"] == "2026-06-12:manual_v1:000001.SZ"
+    assert item["digest_url_path"].startswith("/api/evidence-digest?")
+    assert "asset_id=000001.SZ" in item["digest_url_path"]
+    assert item["stock_workspace_url_path"] == "/stock/000001.SZ?trade_date=2026-06-12"
+    assert item["evidence_status"] == "PARTIAL"
+    assert item["missing_evidence"] == ["research_reports"]
+    assert item["partial_evidence"] == ["news"]
+    assert item["missing_evidence_count"] == 1
+    assert item["partial_evidence_count"] == 1
+    assert item["warnings_count"] >= 2
+    assert item["manifest_modules"] == [{"module": "news", "tier": "tier2", "status": "partial"}]
+    assert any("strategy_run_id unavailable" in warning for warning in item["warnings"])
+
+
 def test_build_review_queue_loads_scores_for_explicit_trade_date(monkeypatch):
     captured = {"top_scores": None, "digest": []}
 

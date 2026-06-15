@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
 from typing import Any
 
+from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
@@ -35,6 +37,11 @@ def build_review_queue(
         else summary.get("topn_preview") or []
     )
     warnings: list[str] = []
+    manifest = (
+        _manifest_context(selected_trade_date, warnings)
+        if score_rows
+        else {"run_id": "", "latest_trade_date": selected_trade_date, "modules": []}
+    )
     groups: dict[str, list[dict[str, Any]]] = {bucket: [] for bucket in BUCKET_ORDER}
 
     for row in score_rows:
@@ -59,6 +66,10 @@ def build_review_queue(
             trade_date=selected_trade_date,
             score_version=score_version,
             rank=rank,
+            generated_at=_generated_at(selected_trade_date),
+            manifest_modules=manifest["modules"],
+            manifest_run_id=manifest["run_id"],
+            manifest_latest_trade_date=manifest["latest_trade_date"],
         )
         groups[_bucket(digest)].append(item)
 
@@ -86,33 +97,77 @@ def _queue_item(
     trade_date: str,
     score_version: str,
     rank: int | None,
+    generated_at: str,
+    manifest_modules: list[dict[str, Any]],
+    manifest_run_id: str,
+    manifest_latest_trade_date: str,
 ) -> dict[str, Any]:
     canonical_asset_id = str(digest.get("canonical_asset_id") or digest.get("asset_id") or row.get("asset_id") or "")
     facts = list(digest.get("facts") or [])
     risk_flags = list(digest.get("risk_flags") or [])
-    warnings = list(digest.get("warnings") or [])
+    digest_warnings = list(digest.get("warnings") or [])
+    warnings = [str(warning) for warning in digest_warnings]
     next_actions = list(digest.get("next_actions") or [])
     bucket = _bucket(digest)
     digest_score = _optional_int(digest.get("score"))
     score = _optional_float(row.get("score_total"))
     if score is None:
         score = _optional_float(digest.get("score"))
+    lineage = digest.get("lineage") if isinstance(digest.get("lineage"), dict) else {}
+    strategy_run_id = _optional_text(row.get("strategy_run_id") or lineage.get("strategy_run_id"))
+    if strategy_run_id is None:
+        warnings.append("strategy_run_id unavailable for score_topn candidate")
+    run_id = str(digest.get("run_id") or lineage.get("run_id") or manifest_run_id or "")
+    latest_trade_date = str(
+        digest.get("latest_trade_date") or lineage.get("latest_trade_date") or manifest_latest_trade_date or trade_date
+    )
+    digest_key = str(digest.get("digest_key") or f"{trade_date}:{score_version}:{canonical_asset_id}")
+    missing_evidence = [str(item) for item in (digest.get("missing_evidence") or [])]
+    partial_evidence = [str(item) for item in (digest.get("partial_evidence") or [])]
+    evidence_status = str(digest.get("overall_status") or _evidence_status_from_bucket(bucket))
+    digest_manifest_modules = lineage.get("manifest_modules")
+    if not isinstance(digest_manifest_modules, list):
+        digest_manifest_modules = manifest_modules
     return {
         "queue_id": f"{trade_date}:{score_version}:{canonical_asset_id}",
         "asset_id": str(row.get("asset_id") or digest.get("asset_id") or canonical_asset_id),
         "canonical_asset_id": canonical_asset_id,
         "display_name": _display_name(digest, canonical_asset_id),
         "trade_date": trade_date,
+        "latest_trade_date": latest_trade_date,
+        "run_id": run_id,
+        "generated_at": generated_at,
         "score_version": score_version,
         "rank": rank,
         "score": score,
+        "source_type": "score_topn",
+        "source_name": f"{score_version}_topn",
+        "source_rank": rank,
+        "score_components": dict(row.get("score_components") or {}),
+        "topn_rank": rank,
+        "strategy_name": _optional_text(row.get("strategy_name") or lineage.get("strategy_name")),
+        "strategy_run_id": strategy_run_id,
+        "factor_as_of": str(lineage.get("factor_as_of") or trade_date),
+        "factor_snapshot_id": _optional_text(lineage.get("factor_snapshot_id") or row.get("factor_snapshot_id")),
+        "digest_key": digest_key,
+        "evidence_digest_id": digest_key,
+        "digest_url_path": _digest_url_path(canonical_asset_id, trade_date, score_version),
+        "stock_workspace_url_path": f"/stock/{canonical_asset_id}?trade_date={trade_date}",
+        "evidence_status": evidence_status,
+        "missing_evidence": missing_evidence,
+        "partial_evidence": partial_evidence,
+        "missing_evidence_count": len(missing_evidence),
+        "partial_evidence_count": len(partial_evidence),
+        "warnings_count": len(warnings),
+        "warnings": warnings,
+        "manifest_modules": digest_manifest_modules,
         "digest_title": str(digest.get("title") or BUCKET_LABELS[bucket]),
         "score_total": _optional_float(row.get("score_total")),
         "digest_score": digest_score,
         "bucket": bucket,
         "source_kinds": _source_kinds(facts),
         "risk_count": len(risk_flags),
-        "warning_count": len(warnings),
+        "warning_count": len(digest_warnings),
         "next_action_count": len(next_actions),
         "digest": digest,
     }
@@ -147,6 +202,60 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _optional_text(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _manifest_context(selected_trade_date: str, warnings: list[str]) -> dict[str, Any]:
+    if not selected_trade_date:
+        return {"run_id": "", "latest_trade_date": "", "modules": []}
+    try:
+        modules = list(load_latest_data_run_manifest(trade_date=selected_trade_date))
+    except Exception as exc:
+        warnings.append(f"data run manifest unavailable: {exc}")
+        return {"run_id": "", "latest_trade_date": selected_trade_date, "modules": []}
+    run_id = ""
+    latest_trade_date = selected_trade_date
+    normalized: list[dict[str, Any]] = []
+    for module in modules:
+        item = dict(module)
+        if not run_id and item.get("run_id"):
+            run_id = str(item.get("run_id"))
+        if item.get("latest_trade_date"):
+            latest_trade_date = str(item.get("latest_trade_date"))[:10]
+        elif item.get("trade_date"):
+            latest_trade_date = str(item.get("trade_date"))[:10]
+        normalized.append(
+            {
+                "module": str(item.get("module") or ""),
+                "tier": str(item.get("tier") or ""),
+                "status": str(item.get("status") or ""),
+                "warnings": list(item.get("warnings") or []),
+                "error_message": str(item.get("error_message") or ""),
+                "artifact_path": str(item.get("artifact_path") or ""),
+            }
+        )
+    return {"run_id": run_id, "latest_trade_date": latest_trade_date, "modules": normalized}
+
+
+def _digest_url_path(asset_id: str, trade_date: str, score_version: str) -> str:
+    return "/api/evidence-digest?" + urlencode(
+        {
+            "asset_id": asset_id,
+            "trade_date": trade_date,
+            "score_version": score_version,
+        }
+    )
+
+
+def _evidence_status_from_bucket(bucket: str) -> str:
+    if bucket == "thin":
+        return "PARTIAL"
+    return "OK"
 
 
 def _bucket(digest: dict[str, Any]) -> str:
