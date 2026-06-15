@@ -11,6 +11,7 @@ import type {
 } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  createOperatorDecision: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
   fetchAssetNews: vi.fn(),
   fetchAssetProfile: vi.fn(),
@@ -262,6 +263,23 @@ beforeEach(() => {
   apiMocks.fetchAssetNews.mockResolvedValue(newsPayload);
   apiMocks.fetchEvidenceDigest.mockResolvedValue(makeEvidenceDigest());
   apiMocks.searchAssets.mockResolvedValue([]);
+  apiMocks.createOperatorDecision.mockResolvedValue({
+    event_id: 'operator_decision:operator-decision-api-2026-06-08:0:abc',
+    asset_id: '000001.SZ',
+    stock_code: '000001.SZ',
+    stock_name: '平安银行',
+    decision_date: '2026-06-08',
+    operator_action: 'watch',
+    decision_status: 'open',
+    decision_label: 'observe',
+    run_id: 'eod-2026-06-08-local',
+    digest_key: '2026-06-08:manual_v1:000001.SZ',
+    review_item_snapshot_id: 'review_item_snapshot:abc',
+    evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
+    snapshot_linkage_status: 'linked',
+    snapshot_linkage_warnings: [],
+    warnings: []
+  });
 });
 
 afterEach(() => {
@@ -269,6 +287,67 @@ afterEach(() => {
 });
 
 describe('StockWorkspace', () => {
+  it('creates operator decisions from Evidence Digest lineage and refreshes history', async () => {
+    apiMocks.fetchEvidenceDigest.mockResolvedValueOnce(
+      makeEvidenceDigest({
+        run_id: 'eod-2026-06-08-local',
+        digest_key: '2026-06-08:manual_v1:000001.SZ',
+        latest_trade_date: '2026-06-08',
+        lineage: {
+          source_type: 'score_topn',
+          source_name: 'manual_v1_topn',
+          review_item_snapshot_id: 'review_item_snapshot:abc',
+          evidence_digest_snapshot_id: 'evidence_digest_snapshot:def'
+        }
+      })
+    );
+    apiMocks.fetchAssetProfile
+      .mockResolvedValueOnce(makeProfile({ decisions: [] }))
+      .mockResolvedValueOnce(
+        makeProfile({
+          decisions: [
+            {
+              ...makeProfile().decisions[0],
+              event_id: 'operator_decision:operator-decision-api-2026-06-08:0:abc',
+              decision_label: 'observe',
+              notes: '观察回踩确认'
+            }
+          ]
+        })
+      );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const panel = await screen.findByRole('region', { name: 'Operator Decision Panel' });
+    fireEvent.change(within(panel).getByLabelText('operator note'), {
+      target: { value: '观察回踩确认' }
+    });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save decision' }));
+
+    await waitFor(() => expect(apiMocks.createOperatorDecision).toHaveBeenCalledTimes(1));
+    expect(apiMocks.createOperatorDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset_id: '000001.SZ',
+        stock_code: '000001.SZ',
+        stock_name: '平安银行',
+        decision_date: '2026-06-08',
+        operator_action: 'watch',
+        operator_note: '观察回踩确认',
+        run_id: 'eod-2026-06-08-local',
+        digest_key: '2026-06-08:manual_v1:000001.SZ',
+        review_item_snapshot_id: 'review_item_snapshot:abc',
+        evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
+        source_type: 'score_topn',
+        source_name: 'manual_v1_topn',
+        source_context: { entry: 'evidence_digest' }
+      })
+    );
+    expect(await within(panel).findByText('Snapshot linked')).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.fetchAssetProfile).toHaveBeenCalledTimes(2));
+    const reviewOutcomes = screen.getByRole('region', { name: 'Review / Outcomes' });
+    expect(within(reviewOutcomes).getByText('观察回踩确认')).toBeInTheDocument();
+  });
+
   it('renders the source workspace and match reason for stock handoffs', async () => {
     const entryContext: StockEntryContext = {
       sourceWorkspace: 'search',

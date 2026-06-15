@@ -118,7 +118,19 @@ export function ReviewQueueWorkspace({
   };
 
   const openAction = (action: EvidenceDigestAction) => {
-    const context = actionContext(action, selectedItem?.asset_id, selectedItem?.display_name, selectedItem?.trade_date);
+    const baseContext = actionContext(action, selectedItem?.asset_id, selectedItem?.display_name, selectedItem?.trade_date);
+    const context: StockEntryContext = selectedItem
+      ? {
+          ...baseContext,
+          sourceWorkspace: action.workspace === 'stock' ? 'reviewQueue' : baseContext.sourceWorkspace,
+          runId: selectedItem.run_id,
+          digestKey: selectedItem.digest_key,
+          sourceType: selectedItem.source_type,
+          sourceName: selectedItem.source_name,
+          scoreVersion: selectedItem.score_version,
+          topnRank: selectedItem.topn_rank ?? selectedItem.rank
+        }
+      : baseContext;
     const assetId = context.assetId ?? selectedItem?.asset_id ?? '';
 
     if (action.workspace === 'stock') {

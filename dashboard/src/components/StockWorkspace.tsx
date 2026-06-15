@@ -9,6 +9,7 @@ import type {
   EvidenceDigestResponse
 } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
+import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
 const DEFAULT_TRADE_DATE = '2026-06-08';
@@ -40,7 +41,7 @@ type StockWorkspaceAssetProfile = AssetProfile & {
 };
 
 export type StockEntryContext = {
-  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market';
+  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market' | 'reviewQueue';
   assetId?: string;
   query?: string;
   matchReason?: string;
@@ -49,6 +50,14 @@ export type StockEntryContext = {
   reportId?: string;
   tradeDate?: string;
   monitorTab?: string;
+  runId?: string;
+  digestKey?: string;
+  sourceType?: string;
+  sourceName?: string;
+  reviewItemSnapshotId?: string;
+  evidenceDigestSnapshotId?: string;
+  scoreVersion?: string;
+  topnRank?: number | null;
 };
 
 function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['sourceWorkspace']>) {
@@ -56,6 +65,7 @@ function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['s
   if (sourceWorkspace === 'news') return 'News';
   if (sourceWorkspace === 'watchlist') return 'Watchlist';
   if (sourceWorkspace === 'researchReports') return 'Research Reports';
+  if (sourceWorkspace === 'reviewQueue') return 'Review Queue';
   return 'Market Monitor';
 }
 
@@ -127,6 +137,11 @@ function latestClose(profile: AssetProfile | null) {
   const bars = profile?.bars ?? [];
   const lastBar = bars.length > 0 ? bars[bars.length - 1] : null;
   return lastBar?.close ?? null;
+}
+
+function lineageText(lineage: Record<string, unknown> | undefined, key: string) {
+  const value = lineage?.[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function StockWorkspace({
@@ -419,6 +434,15 @@ export function StockWorkspace({
   const expectedEvidenceDigestKey = profile ? getEvidenceDigestKey(profile.canonical_asset_id, tradeDate) : null;
   const isEvidenceDigestPending =
     Boolean(expectedEvidenceDigestKey) && (isEvidenceDigestLoading || evidenceDigestKey !== expectedEvidenceDigestKey);
+  const digestLineage = visibleEvidenceDigest?.lineage;
+  const decisionRunId = visibleEvidenceDigest?.run_id ?? currentEntryContext.runId;
+  const decisionDigestKey = visibleEvidenceDigest?.digest_key ?? currentEntryContext.digestKey;
+  const decisionSourceType = lineageText(digestLineage, 'source_type') ?? currentEntryContext.sourceType;
+  const decisionSourceName = lineageText(digestLineage, 'source_name') ?? currentEntryContext.sourceName;
+  const decisionReviewItemSnapshotId =
+    lineageText(digestLineage, 'review_item_snapshot_id') ?? currentEntryContext.reviewItemSnapshotId;
+  const decisionEvidenceDigestSnapshotId =
+    lineageText(digestLineage, 'evidence_digest_snapshot_id') ?? currentEntryContext.evidenceDigestSnapshotId;
 
   const openDigestAction = (action: EvidenceDigestAction) => {
     const nextContext: StockEntryContext = {
@@ -633,6 +657,22 @@ export function StockWorkspace({
                         ))}
                       </div>
                     ) : null}
+                    <OperatorDecisionPanel
+                      assetId={profile.canonical_asset_id}
+                      stockCode={visibleEvidenceDigest.stock_code ?? profile.canonical_asset_id}
+                      stockName={visibleEvidenceDigest.stock_name ?? profile.asset?.name}
+                      decisionDate={visibleEvidenceDigest.latest_trade_date ?? visibleEvidenceDigest.trade_date}
+                      runId={decisionRunId}
+                      digestKey={decisionDigestKey}
+                      reviewItemSnapshotId={decisionReviewItemSnapshotId}
+                      evidenceDigestSnapshotId={decisionEvidenceDigestSnapshotId}
+                      sourceType={decisionSourceType}
+                      sourceName={decisionSourceName}
+                      sourceContextEntry="evidence_digest"
+                      onDecisionCreated={() => {
+                        void loadProfile(currentAssetId, tradeDate, startDate, endDate);
+                      }}
+                    />
                   </>
                 ) : null}
                 {!isEvidenceDigestPending && !evidenceDigestError && !visibleEvidenceDigest ? (

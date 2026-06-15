@@ -197,3 +197,20 @@ Expected fields:
 - `snapshot_linkage_status` is `linked` when matching snapshots exist.
 - `snapshot_linkage_status` is `missing` with warnings when the decision is
   manual, historical, or written before snapshot generation.
+
+## Operator Decision UI Smoke
+
+Use the dashboard UI for the same local manual decision workflow:
+
+1. Open `http://127.0.0.1:5174`.
+2. Go to Review Queue and open a candidate with `Review Stock`, or go directly
+   to Stock Workspace.
+3. Wait for Evidence Digest to load.
+4. In `Operator Decision`, choose `watch`, `note`, `follow_up`, or another
+   non-execution research action.
+5. Enter a short note and save.
+6. Confirm the panel shows `Decision saved`, the event id, and either
+   `Snapshot linked` or `Snapshot missing`.
+7. If the snapshot is missing, read the warning. This is allowed for manual or
+   historical decisions.
+8. Confirm Review / Outcomes refreshes with the newly persisted decision.

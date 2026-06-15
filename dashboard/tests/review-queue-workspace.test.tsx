@@ -27,10 +27,16 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
             asset_id: '000001.SZ',
             canonical_asset_id: '000001.SZ',
             trade_date: '2026-06-08',
+            latest_trade_date: '2026-06-08',
+            run_id: 'eod-2026-06-08-local',
             score_version: 'manual_v1',
             display_name: '平安银行',
             rank: 1,
             score: 88.2,
+            source_type: 'strategy_topn',
+            source_name: 'Mid Trend Combo',
+            topn_rank: 1,
+            digest_key: '2026-06-08:manual_v1:000001.SZ',
             digest_title: 'Strong evidence',
             bucket: 'strong',
             source_kinds: ['strategy', 'research'],
@@ -175,10 +181,16 @@ describe('ReviewQueueWorkspace', () => {
     expect(onOpenStock).toHaveBeenCalledWith(
       '000001.SZ',
       expect.objectContaining({
-        sourceWorkspace: 'search',
+        sourceWorkspace: 'reviewQueue',
         assetId: '000001.SZ',
         query: '平安银行',
-        tradeDate: '2026-06-08'
+        tradeDate: '2026-06-08',
+        runId: 'eod-2026-06-08-local',
+        digestKey: '2026-06-08:manual_v1:000001.SZ',
+        sourceType: 'strategy_topn',
+        sourceName: 'Mid Trend Combo',
+        scoreVersion: 'manual_v1',
+        topnRank: 1
       })
     );
     expect(onOpenNews).toHaveBeenCalledWith(
