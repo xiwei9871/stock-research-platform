@@ -8,6 +8,7 @@ import type { BacktestRunResult, PlatformSummary, StrategyCatalogItem } from '..
 
 const apiMocks = vi.hoisted(() => ({
   fetchBacktestStrategies: vi.fn(),
+  fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
@@ -115,6 +116,14 @@ function deferredRunResult() {
 describe('BacktestLabWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchBacktestStrategies.mockResolvedValue(makeStrategies());
+    apiMocks.fetchPlatformReadiness.mockResolvedValue({
+      mode: 'eod_local',
+      status: 'ready',
+      as_of: '2026-06-15T08:30:00+08:00',
+      latest_market_date: '2026-06-08',
+      checks: [],
+      warnings: []
+    });
     apiMocks.fetchPlatformSummary.mockResolvedValue(makeSummary());
     apiMocks.fetchStrategyCatalog.mockResolvedValue(makeStrategies());
     apiMocks.runBacktest.mockResolvedValue(makeRunResult());

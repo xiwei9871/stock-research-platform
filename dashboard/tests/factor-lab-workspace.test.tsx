@@ -8,6 +8,7 @@ import type { FactorLibraryRow, FactorScorePreview } from '../src/api/types';
 const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
+  fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
@@ -86,6 +87,14 @@ describe('FactorLabWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchFactorLibrary.mockResolvedValue(makeLibrary());
     apiMocks.fetchFactorScorePreview.mockResolvedValue(makePreview());
+    apiMocks.fetchPlatformReadiness.mockResolvedValue({
+      mode: 'eod_local',
+      status: 'ready',
+      as_of: '2026-06-15T08:30:00+08:00',
+      latest_market_date: '2026-06-08',
+      checks: [],
+      warnings: []
+    });
     apiMocks.fetchPlatformSummary.mockResolvedValue({
       latest_market_date: '2026-06-08',
       latest_factor_date: '2026-06-08',
