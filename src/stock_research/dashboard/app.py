@@ -42,6 +42,11 @@ from stock_research.dashboard.research_reports import (
     load_research_report_summary,
 )
 from stock_research.dashboard.review_queue import build_review_queue
+from stock_research.review_evidence_snapshots import (
+    list_evidence_digest_snapshots,
+    list_review_item_snapshots,
+    load_evidence_digest_snapshot,
+)
 from stock_research.dashboard.scores import (
     load_asset_detail,
     load_asset_score_for_dashboard,
@@ -146,6 +151,55 @@ def create_app() -> FastAPI:
             limit=limit,
             lookback_days=lookback_days,
         )
+
+    @app.get("/api/review-queue/snapshots")
+    def review_queue_snapshots(
+        run_id: str | None = None,
+        trade_date: str | None = None,
+        asset_id: str | None = None,
+        digest_key: str | None = None,
+        limit: int = 100,
+    ):
+        return {
+            "items": list_review_item_snapshots(
+                run_id=run_id,
+                trade_date=trade_date,
+                asset_id=asset_id,
+                digest_key=digest_key,
+                limit=limit,
+            ),
+            "warnings": [],
+            "as_of": "",
+            "source": "ops.review_item_snapshot",
+        }
+
+    @app.get("/api/evidence-digest/snapshots")
+    def evidence_digest_snapshots(
+        run_id: str | None = None,
+        trade_date: str | None = None,
+        asset_id: str | None = None,
+        digest_key: str | None = None,
+        limit: int = 100,
+    ):
+        return {
+            "items": list_evidence_digest_snapshots(
+                run_id=run_id,
+                trade_date=trade_date,
+                asset_id=asset_id,
+                digest_key=digest_key,
+                limit=limit,
+            ),
+            "warnings": [],
+            "as_of": "",
+            "source": "ops.evidence_digest_snapshot",
+        }
+
+    @app.get("/api/evidence-digest/snapshots/{snapshot_id}")
+    def evidence_digest_snapshot_detail(snapshot_id: str):
+        item = load_evidence_digest_snapshot(snapshot_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="snapshot not found")
+        return {"item": item, "warnings": [], "source": "ops.evidence_digest_snapshot"}
 
     @app.get("/api/public-news")
     def public_news(

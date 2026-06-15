@@ -233,6 +233,60 @@ def test_review_queue_route_returns_lineage_shape(monkeypatch):
     assert item["missing_evidence_count"] == 1
 
 
+def test_review_queue_snapshots_route_returns_filtered_items(monkeypatch):
+    captured = {}
+
+    def fake_list(**kwargs):
+        captured.update(kwargs)
+        return [{"snapshot_id": "review_item_snapshot:abc", "run_id": kwargs["run_id"]}]
+
+    monkeypatch.setattr(dashboard_app, "list_review_item_snapshots", fake_list, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/review-queue/snapshots?run_id=eod-2026-06-12-local&digest_key=2026-06-12%3Amanual_v1%3A000001.SZ"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "ops.review_item_snapshot"
+    assert payload["items"][0]["snapshot_id"] == "review_item_snapshot:abc"
+    assert captured["run_id"] == "eod-2026-06-12-local"
+    assert captured["digest_key"] == "2026-06-12:manual_v1:000001.SZ"
+
+
+def test_evidence_digest_snapshots_route_returns_filtered_items(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_evidence_digest_snapshots",
+        lambda **kwargs: [{"snapshot_id": "evidence_digest_snapshot:def", "digest_key": kwargs["digest_key"]}],
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/evidence-digest/snapshots?digest_key=digest-1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "ops.evidence_digest_snapshot"
+    assert payload["items"][0]["digest_key"] == "digest-1"
+
+
+def test_evidence_digest_snapshot_detail_route_returns_item(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_evidence_digest_snapshot",
+        lambda snapshot_id: {"snapshot_id": snapshot_id, "digest_payload": {"digest_key": "digest-1"}},
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/evidence-digest/snapshots/evidence_digest_snapshot:def")
+
+    assert response.status_code == 200
+    assert response.json()["item"]["snapshot_id"] == "evidence_digest_snapshot:def"
+
+
 def test_global_search_route_forwards_query(monkeypatch):
     captured = {}
 

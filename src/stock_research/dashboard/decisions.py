@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from stock_research.config import SETTINGS
@@ -42,6 +43,7 @@ def load_asset_decision_history(
 
 
 def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
+    linkage = _snapshot_linkage(row.get("source_context"))
     return {
         "review_date": str(row["review_date"]),
         "review_session_id": str(row["review_session_id"]),
@@ -53,9 +55,50 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         "evidence_artifact_id": str(row.get("evidence_artifact_id") or ""),
         "evidence_path": str(row.get("evidence_path") or ""),
         "source_context": str(row.get("source_context") or ""),
+        **linkage,
         "requires_follow_up": bool(row.get("requires_follow_up")),
         "follow_up_note": str(row.get("follow_up_note") or ""),
         "notes": str(row.get("notes") or ""),
         "manual_review_required": bool(row.get("manual_review_required", True)),
         "auto_trade_enabled": bool(row.get("auto_trade_enabled", False)),
+    }
+
+
+def _snapshot_linkage(source_context: Any) -> dict[str, Any]:
+    if not source_context:
+        return _missing_linkage()
+    if isinstance(source_context, dict):
+        context = source_context
+    else:
+        try:
+            parsed = json.loads(str(source_context))
+        except json.JSONDecodeError:
+            return _missing_linkage()
+        context = parsed if isinstance(parsed, dict) else {}
+    fields = {
+        "run_id": str(context.get("run_id") or ""),
+        "digest_key": str(context.get("digest_key") or ""),
+        "review_item_snapshot_id": str(context.get("review_item_snapshot_id") or ""),
+        "evidence_digest_snapshot_id": str(context.get("evidence_digest_snapshot_id") or ""),
+        "evidence_as_of": str(context.get("evidence_as_of") or ""),
+        "review_item_as_of": str(context.get("review_item_as_of") or ""),
+    }
+    linked = bool(fields["review_item_snapshot_id"] or fields["evidence_digest_snapshot_id"])
+    return {
+        **fields,
+        "snapshot_linkage_status": "linked" if linked else "missing",
+        "snapshot_linkage_warnings": [] if linked else ["snapshot linkage unavailable"],
+    }
+
+
+def _missing_linkage() -> dict[str, Any]:
+    return {
+        "run_id": "",
+        "digest_key": "",
+        "review_item_snapshot_id": "",
+        "evidence_digest_snapshot_id": "",
+        "evidence_as_of": "",
+        "review_item_as_of": "",
+        "snapshot_linkage_status": "missing",
+        "snapshot_linkage_warnings": ["snapshot linkage unavailable"],
     }
