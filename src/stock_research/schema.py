@@ -1112,6 +1112,54 @@ CREATE TABLE IF NOT EXISTS ops.data_run_manifest (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS ops.review_item_snapshot (
+    snapshot_id text PRIMARY KEY,
+    run_id text NOT NULL,
+    trade_date date NOT NULL,
+    latest_trade_date date,
+    asset_id text NOT NULL,
+    stock_code text,
+    stock_name text,
+    digest_key text NOT NULL,
+    source_type text NOT NULL,
+    source_name text NOT NULL,
+    source_rank integer,
+    topn_rank integer,
+    score_version text NOT NULL,
+    score numeric,
+    evidence_status text NOT NULL,
+    missing_evidence_count integer NOT NULL DEFAULT 0,
+    partial_evidence_count integer NOT NULL DEFAULT 0,
+    warnings_count integer NOT NULL DEFAULT 0,
+    review_item_payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    schema_version text NOT NULL DEFAULT 'v1',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (run_id, digest_key)
+);
+
+CREATE TABLE IF NOT EXISTS ops.evidence_digest_snapshot (
+    snapshot_id text PRIMARY KEY,
+    run_id text NOT NULL,
+    trade_date date NOT NULL,
+    latest_trade_date date,
+    asset_id text NOT NULL,
+    stock_code text,
+    stock_name text,
+    digest_key text NOT NULL,
+    overall_status text NOT NULL,
+    missing_evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
+    partial_evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
+    sections_status jsonb NOT NULL DEFAULT '{}'::jsonb,
+    digest_payload jsonb NOT NULL,
+    payload_hash text NOT NULL,
+    schema_version text NOT NULL DEFAULT 'v1',
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (run_id, digest_key)
+);
+
 CREATE TABLE IF NOT EXISTS ops.operator_review_session (
     review_session_id text NOT NULL,
     review_date date NOT NULL,
@@ -2077,6 +2125,24 @@ CREATE INDEX IF NOT EXISTS idx_data_run_manifest_run
 
 CREATE INDEX IF NOT EXISTS idx_data_run_manifest_trade_date
     ON ops.data_run_manifest (trade_date DESC, tier, status);
+
+CREATE INDEX IF NOT EXISTS idx_review_item_snapshot_run
+    ON ops.review_item_snapshot (run_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_review_item_snapshot_digest
+    ON ops.review_item_snapshot (digest_key);
+
+CREATE INDEX IF NOT EXISTS idx_review_item_snapshot_asset
+    ON ops.review_item_snapshot (asset_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_digest_snapshot_run
+    ON ops.evidence_digest_snapshot (run_id, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_digest_snapshot_digest
+    ON ops.evidence_digest_snapshot (digest_key);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_digest_snapshot_asset
+    ON ops.evidence_digest_snapshot (asset_id, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ops_operator_review_session_date
     ON ops.operator_review_session (review_date DESC, updated_at DESC);

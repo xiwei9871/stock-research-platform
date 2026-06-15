@@ -85,6 +85,15 @@ def test_research_extension_declares_data_run_manifest_table():
     assert "idx_data_run_manifest_run" in sql
 
 
+def test_research_extension_declares_review_evidence_snapshot_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS ops.review_item_snapshot" in sql
+    assert "CREATE TABLE IF NOT EXISTS ops.evidence_digest_snapshot" in sql
+    assert "idx_review_item_snapshot_run" in sql
+    assert "idx_evidence_digest_snapshot_run" in sql
+
+
 def test_research_extension_creates_watchlist_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
 
