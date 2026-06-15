@@ -10,9 +10,17 @@ import pandas as pd
 from stock_research.config import SETTINGS
 from stock_research.db import connect
 from stock_research.operator_decision.journal import validate_decision_events
+from stock_research.operator_decision.snapshot_linkage import (
+    merge_source_context,
+    resolve_decision_snapshot_linkage,
+)
 
 
-def load_decision_journal_read_model_rows(path: str | Path) -> dict[str, Any]:
+def load_decision_journal_read_model_rows(
+    path: str | Path,
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
     json_path = Path(path)
     journal = json.loads(json_path.read_text(encoding="utf-8"))
     if not isinstance(journal, dict):
@@ -60,6 +68,7 @@ def load_decision_journal_read_model_rows(path: str | Path) -> dict[str, Any]:
                 review_session_id=review_session_id,
                 review_date=review_date,
                 source_artifact_path=json_path,
+                service=service,
             )
             for index, item in enumerate(items)
         ],
@@ -78,7 +87,7 @@ def import_decision_journal(
     with connect(service) as conn:
         with conn.cursor() as cur:
             for journal_path in paths:
-                rows = load_decision_journal_read_model_rows(journal_path)
+                rows = load_decision_journal_read_model_rows(journal_path, service=service)
                 _upsert_session(cur, rows["session"])
                 for event in rows["events"]:
                     _upsert_event(cur, event)
@@ -177,11 +186,22 @@ def _event_row(
     review_session_id: str,
     review_date: str,
     source_artifact_path: Path,
+    service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
     asset_id = str(item.get("asset_id") or "")
     decision_label = str(item.get("decision_label") or "")
     evidence_artifact_id = str(item.get("evidence_artifact_id") or "")
     evidence_path = str(item.get("evidence_path") or "")
+    source_context = str(item.get("source_context") or "")
+    linkage = resolve_decision_snapshot_linkage(
+        {
+            **item,
+            "asset_id": asset_id,
+            "stock_code": str(item.get("stock_code") or ""),
+            "source_context": source_context,
+        },
+        service=service,
+    )
     return {
         "event_id": _event_id(
             review_session_id=review_session_id,
@@ -200,7 +220,7 @@ def _event_row(
         "decision_label": decision_label,
         "evidence_artifact_id": evidence_artifact_id,
         "evidence_path": evidence_path,
-        "source_context": str(item.get("source_context") or ""),
+        "source_context": merge_source_context(source_context, linkage),
         "requires_follow_up": bool(item.get("requires_follow_up")),
         "follow_up_note": str(item.get("follow_up_note") or ""),
         "notes": str(item.get("notes") or ""),

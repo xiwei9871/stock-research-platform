@@ -153,6 +153,105 @@ def test_import_decision_journal_upserts_session_and_events(monkeypatch, tmp_pat
     assert event_params["decision_label"] == "candidate"
 
 
+def test_import_decision_journal_enriches_source_context_with_snapshot_linkage(monkeypatch, tmp_path):
+    from stock_research.operator_decision import read_model
+
+    payload = _journal_payload()
+    payload["items"][0]["source_context"] = json.dumps(
+        {
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+            "custom": "keep",
+        }
+    )
+    json_path = tmp_path / "operator_decision_journal_2026-05-30_morning-review.json"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+    conn = _Connection()
+    monkeypatch.setattr(read_model, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(
+        read_model,
+        "resolve_decision_snapshot_linkage",
+        lambda context, service="stock_research": {
+            "run_id": "eod-2026-06-12-local",
+            "digest_key": "2026-06-12:manual_v1:000001.SZ",
+            "review_item_snapshot_id": "review_item_snapshot:abc",
+            "evidence_digest_snapshot_id": "evidence_digest_snapshot:def",
+            "review_item_payload_hash": "review-hash",
+            "evidence_digest_payload_hash": "digest-hash",
+            "snapshot_linkage_status": "linked",
+            "snapshot_linkage_warnings": [],
+            "review_item_as_of": "2026-06-12T18:00:00+08:00",
+            "evidence_as_of": "2026-06-12T18:01:00+08:00",
+        },
+    )
+
+    import_decision_journal(json_path, service="stock_research_test")
+
+    _, event_params = conn.cursor_obj.calls[1]
+    context = json.loads(event_params["source_context"])
+    assert context["custom"] == "keep"
+    assert context["snapshot_linkage_status"] == "linked"
+    assert context["review_item_snapshot_id"] == "review_item_snapshot:abc"
+    assert context["evidence_digest_payload_hash"] == "digest-hash"
+
+
+def test_import_decision_journal_keeps_missing_snapshot_linkage_nonblocking(monkeypatch, tmp_path):
+    from stock_research.operator_decision import read_model
+
+    payload = _journal_payload()
+    payload["items"][0]["source_context"] = "manual_watchlist"
+    json_path = tmp_path / "operator_decision_journal_2026-05-30_morning-review.json"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+    conn = _Connection()
+    monkeypatch.setattr(read_model, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(
+        read_model,
+        "resolve_decision_snapshot_linkage",
+        lambda context, service="stock_research": {
+            "source_context_label": "manual_watchlist",
+            "run_id": "",
+            "digest_key": "",
+            "review_item_snapshot_id": "",
+            "evidence_digest_snapshot_id": "",
+            "review_item_payload_hash": "",
+            "evidence_digest_payload_hash": "",
+            "snapshot_linkage_status": "missing",
+            "snapshot_linkage_warnings": ["No review_item_snapshot lookup keys available"],
+            "review_item_as_of": "",
+            "evidence_as_of": "",
+        },
+    )
+
+    result = import_decision_journal(json_path, service="stock_research_test")
+
+    _, event_params = conn.cursor_obj.calls[1]
+    context = json.loads(event_params["source_context"])
+    assert result["event_count"] == 2
+    assert context["source_context_label"] == "manual_watchlist"
+    assert context["snapshot_linkage_status"] == "missing"
+    assert context["snapshot_linkage_warnings"] == ["No review_item_snapshot lookup keys available"]
+
+
+def test_import_decision_journal_resolves_linkage_against_import_service(monkeypatch, tmp_path):
+    from stock_research.operator_decision import read_model
+
+    json_path = tmp_path / "operator_decision_journal_2026-05-30_morning-review.json"
+    json_path.write_text(json.dumps(_journal_payload()), encoding="utf-8")
+    conn = _Connection()
+    services = []
+    monkeypatch.setattr(read_model, "connect", lambda service: _Context(conn))
+
+    def fake_resolver(context, service="stock_research"):
+        services.append(service)
+        return {"snapshot_linkage_status": "missing", "snapshot_linkage_warnings": []}
+
+    monkeypatch.setattr(read_model, "resolve_decision_snapshot_linkage", fake_resolver)
+
+    import_decision_journal(json_path, service="stock_research_test")
+
+    assert services == ["stock_research_test", "stock_research_test"]
+
+
 def test_import_decision_journal_accepts_directory(monkeypatch, tmp_path):
     from stock_research.operator_decision import read_model
 
