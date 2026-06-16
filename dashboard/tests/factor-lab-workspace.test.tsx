@@ -184,12 +184,14 @@ describe('FactorLabWorkspace', () => {
 
     const previewButton = screen.getByRole('button', { name: 'Preview Scores' });
     expect(previewButton).toBeDisabled();
+    expect(screen.getByText('请先选择至少 1 个因子，再预览评分。')).toBeInTheDocument();
 
     await screen.findByRole('cell', { name: 'ret_20' });
     expect(previewButton).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText('select ret_20'));
     expect(previewButton).toBeEnabled();
+    expect(screen.queryByText('请先选择至少 1 个因子，再预览评分。')).not.toBeInTheDocument();
   });
 
   it('disables preview for non-positive selected weights', async () => {

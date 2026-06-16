@@ -87,6 +87,24 @@ function formatDecisionLabel(label: string) {
   return label;
 }
 
+function formatEvidenceBucket(bucket: string) {
+  if (bucket === 'strong') return '证据较强';
+  if (bucket === 'mixed') return '证据混合';
+  if (bucket === 'risk_heavy') return '风险较多';
+  if (bucket === 'thin') return '证据较薄';
+  return bucket;
+}
+
+function formatSnapshotWarning(warning: string) {
+  if (warning.includes('No review_item_snapshot lookup keys available')) {
+    return '未找到复盘快照关联，本次决策仍会保存，但无法追溯到原始复盘队列快照。';
+  }
+  if (warning.includes('No evidence_digest_snapshot lookup keys available')) {
+    return '未找到证据摘要快照关联，本次决策仍会保存，但证据摘要无法做完整追溯。';
+  }
+  return warning;
+}
+
 function normalizeAssetId(value: string) {
   const trimmed = value.trim().toUpperCase();
   if (/^\d{6}$/.test(trimmed)) {
@@ -611,7 +629,7 @@ export function StockWorkspace({
     <section className="workspace-stack stock-detail-shell" aria-label="Stock Workspace workspace">
       <header className="workspace-header">
         <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : 'Stock Workspace'}</h1>
-        <p className="muted">Single-stock evidence hub for price, factors, news, research reports, and strategy history.</p>
+        <p className="muted">个股复盘工作台：集中查看走势、策略证据、新闻研报和人工复盘记录。</p>
         {currentEntryContext.sourceWorkspace ? (
           <p className="muted">
             Opened from {formatSourceWorkspace(currentEntryContext.sourceWorkspace)}
@@ -877,7 +895,7 @@ export function StockWorkspace({
                       </span>
                       <span>
                         <span>Bucket</span>
-                        <strong>{visibleEvidenceDigest.bucket}</strong>
+                        <strong>{formatEvidenceBucket(visibleEvidenceDigest.bucket)}</strong>
                       </span>
                     </div>
                     <div className="compact-news-list">
@@ -898,7 +916,13 @@ export function StockWorkspace({
                       </div>
                     ) : null}
                     {visibleEvidenceDigest.warnings.length > 0 ? (
-                      <p className="muted">{visibleEvidenceDigest.warnings.join(' | ')}</p>
+                      <div className="tag-stack">
+                        {visibleEvidenceDigest.warnings.map((warning) => (
+                          <span className="status-chip neutral" key={warning}>
+                            {formatSnapshotWarning(warning)}
+                          </span>
+                        ))}
+                      </div>
                     ) : null}
                     {visibleEvidenceDigest.next_actions.some(isVisibleDigestAction) ? (
                       <div className="compact-toolbar">

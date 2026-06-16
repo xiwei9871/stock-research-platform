@@ -5,7 +5,8 @@ import { ReviewQueueWorkspace } from '../src/components/ReviewQueueWorkspace';
 import type { ReviewQueueResponse } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
-  fetchReviewQueue: vi.fn()
+  fetchReviewQueue: vi.fn(),
+  fetchPlatformSummary: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -111,6 +112,16 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
 beforeEach(() => {
   vi.clearAllMocks();
   apiMocks.fetchReviewQueue.mockResolvedValue(makeQueue());
+  apiMocks.fetchPlatformSummary.mockResolvedValue({
+    latest_market_date: '2026-06-08',
+    latest_factor_date: '2026-06-08',
+    latest_score_date: '2026-06-08',
+    market_asset_count: 1,
+    score_asset_count: 1,
+    factor_count: 1,
+    score_versions: ['strategy_topn'],
+    topn_preview: []
+  });
 });
 
 afterEach(() => {
@@ -128,6 +139,9 @@ describe('ReviewQueueWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Mid Trend Combo 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('复盘范围')).toBeInTheDocument();
     expect(screen.getByText('启用策略 Top10')).toBeInTheDocument();
+    expect(screen.getByText('平台市场日期')).toBeInTheDocument();
+    expect(screen.getByText('复盘队列与平台市场日期一致。')).toBeInTheDocument();
+    expect(screen.getByText('Mid Trend Combo：最新 2026-06-08，1 只')).toBeInTheDocument();
     const sourceFilters = within(screen.getByLabelText('策略复盘分组')).getByLabelText('证据来源');
     expect(within(sourceFilters).getByText('策略')).toBeInTheDocument();
     expect(within(sourceFilters).getByText('研报')).toBeInTheDocument();
@@ -149,6 +163,51 @@ describe('ReviewQueueWorkspace', () => {
     expect(within(preview).getByText('Recent accepted news')).toBeInTheDocument();
     expect(within(sourceChips).getByText('策略')).toBeInTheDocument();
     expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
+  });
+
+  it('shows platform and per-strategy freshness when review queue is stale', async () => {
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-06-15',
+      latest_factor_date: '2026-06-15',
+      latest_score_date: '2026-06-15',
+      market_asset_count: 1,
+      score_asset_count: 1,
+      factor_count: 1,
+      score_versions: ['strategy_topn'],
+      topn_preview: []
+    });
+    apiMocks.fetchReviewQueue.mockResolvedValueOnce(
+      makeQueue({
+        trade_date: '2026-06-05',
+        groups: [
+          makeQueue().groups[0],
+          {
+            bucket: 'strategy:tech_bottleneck',
+            label: 'Tech Bottleneck Combo',
+            count: 1,
+            items: [
+              {
+                ...makeQueue().groups[0].items[0],
+                queue_id: '2026-06-01:strategy_topn:000002.SZ',
+                asset_id: '000002.SZ',
+                display_name: '万科A',
+                trade_date: '2026-06-01',
+                latest_trade_date: '2026-06-01',
+                strategy_id: 'tech_bottleneck',
+                strategy_name: 'Tech Bottleneck Combo',
+                source_name: 'Tech Bottleneck Combo'
+              }
+            ]
+          }
+        ]
+      })
+    );
+
+    render(<ReviewQueueWorkspace />);
+
+    expect(await screen.findByText('复盘队列落后平台市场日期 10 个自然日，请检查复盘生成任务。')).toBeInTheDocument();
+    expect(screen.getByText('Mid Trend Combo：最新 2026-06-08，1 只')).toBeInTheDocument();
+    expect(screen.getByText('Tech Bottleneck Combo：最新 2026-06-01，1 只')).toBeInTheDocument();
   });
 
   it('switches groups and shows an empty group state', async () => {

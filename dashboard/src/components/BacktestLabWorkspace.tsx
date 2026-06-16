@@ -424,6 +424,17 @@ export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceP
           {isComparing ? 'Comparing...' : 'Run Comparison'}
         </button>
         {runDisabledReason ? <p className="backtest-run-note">{runDisabledReason}</p> : null}
+        <p className="backtest-run-note">
+          回测会提交为后台任务，页面自动等待结果；耗时较长时可先查看本页保留的最近一次结果。
+        </p>
+        {isRunning ? (
+          <p className="backtest-run-note">
+            后台回测任务已提交，正在等待结果返回。请不要重复点击或直接调用同步 run-fresh 接口。
+          </p>
+        ) : null}
+        {result ? (
+          <p className="backtest-run-note">最近一次回测结果已保留在本页，修改参数后会清空并重新运行。</p>
+        ) : null}
       </section>
 
       {catalogError ? <p className="error-text">{catalogError}</p> : null}

@@ -677,6 +677,37 @@ describe('StockWorkspace', () => {
     expect(await screen.findByText('90d reports 4')).toBeInTheDocument();
   });
 
+  it('renders user-facing Chinese evidence copy instead of technical diagnostics', async () => {
+    apiMocks.fetchEvidenceDigest.mockResolvedValueOnce(
+      makeEvidenceDigest({
+        bucket: 'thin',
+        warnings: [
+          'No review_item_snapshot lookup keys available',
+          'No evidence_digest_snapshot lookup keys available'
+        ]
+      })
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(
+      await screen.findByText('个股复盘工作台：集中查看走势、策略证据、新闻研报和人工复盘记录。')
+    ).toBeInTheDocument();
+    expect(await screen.findByText('证据较薄')).toBeInTheDocument();
+    const digestPanel = screen.getByRole('region', { name: 'Evidence Digest' });
+    expect(
+      within(digestPanel).getByText('未找到复盘快照关联，本次决策仍会保存，但无法追溯到原始复盘队列快照。')
+    ).toBeInTheDocument();
+    expect(
+      within(digestPanel).getByText('未找到证据摘要快照关联，本次决策仍会保存，但证据摘要无法做完整追溯。')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Single-stock evidence hub for price, factors, news, research reports, and strategy history.')
+    ).not.toBeInTheDocument();
+    expect(within(digestPanel).queryByText('thin')).not.toBeInTheDocument();
+    expect(within(digestPanel).queryByText('No review_item_snapshot lookup keys available')).not.toBeInTheDocument();
+  });
+
   it('renders Evidence Digest and opens source-backed next actions', async () => {
     const handleOpenNews = vi.fn();
     const handleOpenResearchReports = vi.fn();

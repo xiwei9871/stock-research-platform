@@ -141,6 +141,10 @@ export function FactorLabWorkspace() {
         <button type="button" disabled={!canPreview} onClick={previewScores}>
           Preview Scores
         </button>
+        {selectedFactors.length === 0 ? <span className="muted">请先选择至少 1 个因子，再预览评分。</span> : null}
+        {selectedFactors.length > 0 && hasInvalidSelection ? (
+          <span className="muted">已选因子的权重必须大于 0。</span>
+        ) : null}
         {isPreviewLoading ? <span className="muted">Loading score preview...</span> : null}
       </section>
 
@@ -246,7 +250,7 @@ export function FactorLabWorkspace() {
               ))}
             </div>
           ) : (
-            <p className="muted">Select factors from the library to preview rankings.</p>
+            <p className="muted">从左侧因子库勾选因子后，可预览该组合的 TopN 评分排名。</p>
           )}
         </article>
       </section>

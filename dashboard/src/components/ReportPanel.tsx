@@ -30,7 +30,11 @@ export function ReportPanel({ reports, isLoading = false, selectedPath }: Report
           })}
         </div>
       ) : (
-        <p className="muted">No reports for selected date.</p>
+        <div className="empty-state">
+          <strong>当前日期没有生成报告。</strong>
+          <p className="muted">可能是报告生成任务尚未运行，或报告目录没有命中该日期。</p>
+          <p className="muted">可以切换交易日期查看历史报告，或重新运行生成报告任务。</p>
+        </div>
       )}
     </section>
   );

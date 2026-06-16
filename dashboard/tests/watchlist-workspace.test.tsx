@@ -81,4 +81,14 @@ describe('WatchlistWorkspace', () => {
       expect(screen.queryByText('浦发银行')).not.toBeInTheDocument();
     });
   });
+
+  it('explains an empty manual observation queue', async () => {
+    apiMocks.fetchWatchlistSignals.mockResolvedValueOnce([]);
+
+    render(<WatchlistWorkspace />);
+
+    expect(await screen.findByText('当前观察池暂无记录。')).toBeInTheDocument();
+    expect(screen.getByText('在个股工作台点击“观察”后，人工观察标的会进入这里。')).toBeInTheDocument();
+    expect(screen.getByText('当前查询：default / 2026-06-08')).toBeInTheDocument();
+  });
 });

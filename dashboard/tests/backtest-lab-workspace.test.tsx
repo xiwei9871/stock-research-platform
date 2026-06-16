@@ -230,6 +230,28 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.getAllByText('Strategy').length).toBeGreaterThan(0);
     expect(screen.getAllByText('lhb_shortline').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('cell', { name: 'CN:SZ:300951' }).length).toBeGreaterThan(0);
+    expect(screen.getByText('最近一次回测结果已保留在本页，修改参数后会清空并重新运行。')).toBeInTheDocument();
+  });
+
+  it('shows background job guidance while a backtest is pending', async () => {
+    const pendingRun = deferredRunResult();
+    apiMocks.runBacktest.mockReturnValueOnce(pendingRun.promise);
+
+    render(<BacktestLabWorkspace />);
+
+    await screen.findAllByText('LHB Shortline Combo');
+    expect(screen.getByText('回测会提交为后台任务，页面自动等待结果；耗时较长时可先查看本页保留的最近一次结果。')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
+
+    expect(screen.getByRole('button', { name: 'Running...' })).toBeDisabled();
+    expect(screen.getByText('后台回测任务已提交，正在等待结果返回。请不要重复点击或直接调用同步 run-fresh 接口。')).toBeInTheDocument();
+
+    await act(async () => {
+      pendingRun.resolve(makeRunResult());
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Validated backtest' })).toBeInTheDocument();
   });
 
   it('rejects accidental vectorized results for selected LHB Shortline runs', async () => {

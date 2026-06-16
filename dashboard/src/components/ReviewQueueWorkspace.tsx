@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchReviewQueue } from '../api/client';
-import type { EvidenceDigestAction, ReviewQueueGroup, ReviewQueueResponse } from '../api/types';
+import { fetchPlatformSummary, fetchReviewQueue } from '../api/client';
+import type { EvidenceDigestAction, PlatformSummary, ReviewQueueGroup, ReviewQueueResponse } from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
 
 type ReviewQueueWorkspaceProps = {
@@ -44,6 +44,13 @@ function formatRiskWarningCounts(riskCount: number, warningCount: number) {
   return `${riskCount} 风险 / ${warningCount} 提醒`;
 }
 
+function dateDiffDays(earlier: string, later: string) {
+  const earlierTime = Date.parse(`${earlier}T00:00:00Z`);
+  const laterTime = Date.parse(`${later}T00:00:00Z`);
+  if (!Number.isFinite(earlierTime) || !Number.isFinite(laterTime)) return null;
+  return Math.round((laterTime - earlierTime) / 86_400_000);
+}
+
 function reviewTierLabel(tier?: string | null) {
   if (tier === 'top5_focus') return 'Top5 重点复盘';
   if (tier === 'top10_watch') return 'Top6-10 观察';
@@ -59,6 +66,21 @@ function sourceKindLabel(sourceKind: string) {
     factor: '因子'
   };
   return labels[sourceKind] ?? sourceKind;
+}
+
+function collectGroupFreshness(groups: ReviewQueueGroup[]) {
+  return groups.map((group) => {
+    const latestDates = group.items
+      .map((item) => item.latest_trade_date ?? item.trade_date)
+      .filter((date): date is string => Boolean(date));
+    const latestDate = latestDates.length > 0 ? latestDates.sort().at(-1) ?? null : null;
+    return {
+      bucket: group.bucket,
+      label: group.label,
+      count: group.items.length,
+      latestDate
+    };
+  });
 }
 
 function actionContext(
@@ -86,6 +108,7 @@ export function ReviewQueueWorkspace({
   onOpenMarketMonitor
 }: ReviewQueueWorkspaceProps) {
   const [queue, setQueue] = useState<ReviewQueueResponse | null>(null);
+  const [platformSummary, setPlatformSummary] = useState<PlatformSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<string>('strong');
@@ -105,6 +128,17 @@ export function ReviewQueueWorkspace({
       setQueue(nextQueue);
       setSelectedBucket(selection.selectedBucket);
       setSelectedQueueId(selection.selectedQueueId);
+      fetchPlatformSummary()
+        .then((summary) => {
+          if (requestIdRef.current === requestId) {
+            setPlatformSummary(summary);
+          }
+        })
+        .catch(() => {
+          if (requestIdRef.current === requestId) {
+            setPlatformSummary(null);
+          }
+        });
     } catch (caught) {
       if (requestIdRef.current !== requestId) return;
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -128,6 +162,10 @@ export function ReviewQueueWorkspace({
     selectedGroup?.items.find((item) => item.queue_id === selectedQueueId) ?? selectedGroup?.items[0] ?? null;
   const selectedDigest = selectedItem?.digest ?? null;
   const sourceKinds = queue ? collectSourceKinds(queue) : [];
+  const groupFreshness = queue ? collectGroupFreshness(queue.groups) : [];
+  const latestMarketDate = platformSummary?.latest_market_date ?? null;
+  const freshnessLag =
+    queue && latestMarketDate ? dateDiffDays(queue.trade_date, latestMarketDate) : null;
 
   const selectGroup = (group: ReviewQueueGroup) => {
     setSelectedBucket(group.bucket);
@@ -199,8 +237,39 @@ export function ReviewQueueWorkspace({
                   <strong>{queue.trade_date}</strong>
                 </div>
                 <div>
+                  <span className="muted">平台市场日期</span>
+                  <strong>{latestMarketDate ?? '读取中'}</strong>
+                </div>
+                <div>
                   <span className="muted">复盘范围</span>
                   <strong>{queue.review_mode === 'strategy_topn' ? '启用策略 Top10' : queue.score_version}</strong>
+                </div>
+              </div>
+
+              <div className="workspace-panel" aria-label="复盘队列新鲜度">
+                <div className="section-heading">
+                  <h2>数据新鲜度</h2>
+                  {freshnessLag == null ? (
+                    <span className="status-chip neutral">等待平台日期</span>
+                  ) : freshnessLag > 0 ? (
+                    <span className="status-chip warning">落后 {freshnessLag} 天</span>
+                  ) : (
+                    <span className="status-chip success">已同步</span>
+                  )}
+                </div>
+                <p className={freshnessLag != null && freshnessLag > 0 ? 'error-text' : 'muted'}>
+                  {freshnessLag == null
+                    ? '正在读取平台最新市场日期，用于判断复盘队列是否过旧。'
+                    : freshnessLag > 0
+                      ? `复盘队列落后平台市场日期 ${freshnessLag} 个自然日，请检查复盘生成任务。`
+                      : '复盘队列与平台市场日期一致。'}
+                </p>
+                <div className="tag-stack" aria-label="分策略新鲜度">
+                  {groupFreshness.map((group) => (
+                    <span className="status-chip neutral" key={group.bucket}>
+                      {`${group.label}：最新 ${group.latestDate ?? '暂无'}，${group.count} 只`}
+                    </span>
+                  ))}
                 </div>
               </div>
 

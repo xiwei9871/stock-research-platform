@@ -59,6 +59,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchShadowOutcomeAnalytics: vi.fn(),
   fetchShadowOutcomes: vi.fn(),
   fetchShadowWatchlist: vi.fn(),
+  fetchWatchlistSignals: vi.fn(),
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
@@ -944,6 +945,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
+    apiMocks.fetchWatchlistSignals.mockResolvedValue(makeOverview().watchlist_signals);
     apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
     apiMocks.fetchShadowAnalyticsReview.mockResolvedValue(makeShadowAnalyticsReview());
@@ -1106,7 +1108,7 @@ describe('dashboard app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Watchlist' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
   });
 
   it('opens Review Queue from navigation and follows review stock action', async () => {
@@ -1964,6 +1966,19 @@ describe('dashboard app shell', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('explains why Generated Reports can be empty', async () => {
+    apiMocks.fetchOverview.mockResolvedValueOnce({ ...makeOverview(), reports: [] });
+
+    render(<App />);
+    const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
+
+    fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
+
+    expect(await screen.findByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible();
+    expect(await screen.findByText('当前日期没有生成报告。')).toBeVisible();
+    expect(screen.getByText('可能是报告生成任务尚未运行，或报告目录没有命中该日期。')).toBeVisible();
   });
 
   it('renders EOD market monitor data without implying realtime data', async () => {

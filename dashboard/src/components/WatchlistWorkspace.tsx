@@ -88,17 +88,17 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
   return (
     <section className="workspace-stack" aria-label="Watchlist workspace">
       <header className="workspace-header">
-        <h1>Watchlist</h1>
-        <p className="muted">Read-only EOD research queue for status, priority, signal, risk, and next action.</p>
+        <h1>观察池</h1>
+        <p className="muted">人工复盘后需要继续跟踪的标的，会按日期、状态、优先级和下一步动作集中展示。</p>
       </header>
       <section className="workspace-panel">
         <div className="section-heading">
-          <h2>EOD Queue</h2>
-          <span className="status-chip neutral">{visibleRows.length} rows</span>
+          <h2>EOD 观察队列</h2>
+          <span className="status-chip neutral">{visibleRows.length} 条</span>
         </div>
         <div className="queue-filters">
           <label>
-            Watchlist
+            观察池
             <input
               aria-label="watchlist id"
               value={watchlistId}
@@ -106,7 +106,7 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
             />
           </label>
           <label>
-            Trade date
+            交易日期
             <input
               aria-label="trade date"
               type="date"
@@ -115,13 +115,13 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
             />
           </label>
           <label>
-            Status
+            状态
             <select
               aria-label="watchlist status"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
             >
-              <option value="all">All</option>
+              <option value="all">全部</option>
               <option value="candidate">candidate</option>
               <option value="observe">observe</option>
               <option value="holding">holding</option>
@@ -129,7 +129,7 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
             </select>
           </label>
           <label>
-            Min priority
+            最低优先级
             <input
               aria-label="minimum priority"
               type="number"
@@ -139,36 +139,40 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
             />
           </label>
           <label>
-            Signal/risk query
+            信号/风险搜索
             <input
               aria-label="signal risk query"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="asset, signal, risk"
+              placeholder="股票、信号、风险"
             />
           </label>
           <button type="button" onClick={() => void loadQueue()} disabled={isLoading}>
-            Load EOD Queue
+            刷新队列
           </button>
         </div>
         {error ? <p className="muted">{error}</p> : null}
         {isLoading ? (
-          <p className="muted">Loading EOD queue...</p>
+          <p className="muted">正在加载 EOD 观察队列...</p>
         ) : visibleRows.length === 0 ? (
-          <p className="muted">No queue rows match current filters.</p>
+          <div className="empty-state">
+            <strong>当前观察池暂无记录。</strong>
+            <p className="muted">在个股工作台点击“观察”后，人工观察标的会进入这里。</p>
+            <p className="muted">{`当前查询：${watchlistId} / ${tradeDate}`}</p>
+          </div>
         ) : (
           <div className="queue-table-wrap">
             <table className="queue-table">
               <thead>
                 <tr>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Signal</th>
-                  <th>Risk</th>
-                  <th>Reason</th>
-                  <th>Next Action</th>
-                  <th>Action</th>
+                  <th>股票</th>
+                  <th>状态</th>
+                  <th>优先级</th>
+                  <th>信号</th>
+                  <th>风险</th>
+                  <th>原因</th>
+                  <th>下一步</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,7 +195,7 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
                         aria-label={`Open ${row.asset_id}`}
                         onClick={() => onOpenAsset?.(row.asset_id)}
                       >
-                        Open
+                        打开
                       </button>
                     </td>
                   </tr>
