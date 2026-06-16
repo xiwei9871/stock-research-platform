@@ -13,30 +13,36 @@ vi.mock('../src/api/client', () => apiMocks);
 function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueResponse {
   return {
     trade_date: '2026-06-08',
-    score_version: 'manual_v1',
+    score_version: 'strategy_topn',
+    review_mode: 'strategy_topn',
     generated_at: '2026-06-08T16:00:00Z',
     warnings: [],
     groups: [
       {
-        bucket: 'strong',
-        label: 'High Conviction',
+        bucket: 'strategy:mid_trend',
+        label: 'Mid Trend Combo',
         count: 1,
         items: [
           {
-            queue_id: '2026-06-08:manual_v1:000001.SZ',
+            queue_id: '2026-06-08:strategy_topn:000001.SZ',
             asset_id: '000001.SZ',
             canonical_asset_id: '000001.SZ',
             trade_date: '2026-06-08',
             latest_trade_date: '2026-06-08',
             run_id: 'eod-2026-06-08-local',
-            score_version: 'manual_v1',
+            score_version: 'strategy_topn',
             display_name: '平安银行',
             rank: 1,
             score: 88.2,
             source_type: 'strategy_topn',
             source_name: 'Mid Trend Combo',
+            source_rank: 1,
             topn_rank: 1,
-            digest_key: '2026-06-08:manual_v1:000001.SZ',
+            strategy_id: 'mid_trend',
+            strategy_name: 'Mid Trend Combo',
+            strategy_run_id: 'mid_trend:run',
+            review_tier: 'top5_focus',
+            digest_key: '2026-06-08:strategy_topn:000001.SZ',
             digest_title: 'Strong evidence',
             bucket: 'strong',
             source_kinds: ['strategy', 'research'],
@@ -96,9 +102,7 @@ function makeQueue(overrides: Partial<ReviewQueueResponse> = {}): ReviewQueueRes
           }
         ]
       },
-      { bucket: 'mixed', label: 'Mixed Evidence', count: 0, items: [] },
-      { bucket: 'risk_heavy', label: 'Risk Flags', count: 0, items: [] },
-      { bucket: 'thin', label: 'Thin / Missing Sources', count: 0, items: [] }
+      { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
     ],
     ...overrides
   };
@@ -119,14 +123,14 @@ describe('ReviewQueueWorkspace', () => {
 
     render(<ReviewQueueWorkspace />);
 
-    expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
-    expect(apiMocks.fetchReviewQueue).toHaveBeenCalledWith({ limit: 20, lookbackDays: 90 });
-    expect(screen.getByRole('button', { name: 'High Conviction 1' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('Score Version')).toBeInTheDocument();
-    expect(screen.getByText('manual_v1')).toBeInTheDocument();
-    const sourceFilters = screen.getByLabelText('Source Filters');
-    expect(within(sourceFilters).getByText('strategy')).toBeInTheDocument();
-    expect(within(sourceFilters).getByText('research')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '策略复盘队列' })).toBeInTheDocument();
+    expect(apiMocks.fetchReviewQueue).toHaveBeenCalledWith({ limit: 10, lookbackDays: 90 });
+    expect(screen.getByRole('button', { name: 'Mid Trend Combo 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('复盘范围')).toBeInTheDocument();
+    expect(screen.getByText('启用策略 Top10')).toBeInTheDocument();
+    const sourceFilters = within(screen.getByLabelText('策略复盘分组')).getByLabelText('证据来源');
+    expect(within(sourceFilters).getByText('策略')).toBeInTheDocument();
+    expect(within(sourceFilters).getByText('研报')).toBeInTheDocument();
     const queueRow = screen.getByRole('button', { name: /平安银行/ });
     expect(queueRow).toHaveAttribute('aria-pressed', 'true');
     expect(queueRow).toHaveStyle({
@@ -134,26 +138,26 @@ describe('ReviewQueueWorkspace', () => {
     });
     expect(screen.getByText('平安银行')).toBeInTheDocument();
     expect(within(queueRow).getByText('Strong evidence')).toBeInTheDocument();
-    expect(within(queueRow).getByText('strategy')).toBeInTheDocument();
-    expect(within(queueRow).getByText('research')).toBeInTheDocument();
-    expect(within(queueRow).getByText('1 risk')).toBeInTheDocument();
-    expect(within(queueRow).getByText('1 warning')).toBeInTheDocument();
+    expect(within(queueRow).getByText('策略')).toBeInTheDocument();
+    expect(within(queueRow).getByText('研报')).toBeInTheDocument();
+    expect(within(queueRow).getByText('Top5 重点复盘')).toBeInTheDocument();
+    expect(within(queueRow).getByText('1 风险 / 1 提醒')).toBeInTheDocument();
 
-    const preview = screen.getByRole('region', { name: 'Selected Evidence' });
-    const sourceChips = within(preview).getByLabelText('Evidence sources');
+    const preview = screen.getByRole('region', { name: '选中标的证据' });
+    const sourceChips = within(preview).getByLabelText('证据来源');
     expect(within(preview).getByText('Strong evidence')).toBeInTheDocument();
     expect(within(preview).getByText('Recent accepted news')).toBeInTheDocument();
-    expect(within(sourceChips).getByText('strategy')).toBeInTheDocument();
-    expect(within(sourceChips).getByText('research')).toBeInTheDocument();
+    expect(within(sourceChips).getByText('策略')).toBeInTheDocument();
+    expect(within(sourceChips).getByText('研报')).toBeInTheDocument();
   });
 
   it('switches groups and shows an empty group state', async () => {
     render(<ReviewQueueWorkspace />);
 
     expect(await screen.findByText('Recent accepted news')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mixed Evidence 0' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tech Bottleneck Combo 0' }));
 
-    expect(screen.getByText('No mixed evidence items for 2026-06-08.')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-08 暂无 Tech Bottleneck Combo 复盘标的。')).toBeInTheDocument();
     expect(screen.queryByText('Recent accepted news')).not.toBeInTheDocument();
   });
 
@@ -172,7 +176,7 @@ describe('ReviewQueueWorkspace', () => {
       />
     );
 
-    const preview = await screen.findByRole('region', { name: 'Selected Evidence' });
+    const preview = await screen.findByRole('region', { name: '选中标的证据' });
     fireEvent.click(within(preview).getByRole('button', { name: 'Review Stock' }));
     fireEvent.click(within(preview).getByRole('button', { name: 'Open News' }));
     fireEvent.click(within(preview).getByRole('button', { name: 'Open Research' }));
@@ -186,10 +190,10 @@ describe('ReviewQueueWorkspace', () => {
         query: '平安银行',
         tradeDate: '2026-06-08',
         runId: 'eod-2026-06-08-local',
-        digestKey: '2026-06-08:manual_v1:000001.SZ',
+        digestKey: '2026-06-08:strategy_topn:000001.SZ',
         sourceType: 'strategy_topn',
         sourceName: 'Mid Trend Combo',
-        scoreVersion: 'manual_v1',
+        scoreVersion: 'strategy_topn',
         topnRank: 1
       })
     );
@@ -240,7 +244,7 @@ describe('ReviewQueueWorkspace', () => {
     render(<ReviewQueueWorkspace />);
 
     expect(await screen.findByText('queue offline')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Review Queue' }));
+    fireEvent.click(screen.getByRole('button', { name: '重新加载复盘队列' }));
 
     await waitFor(() => expect(apiMocks.fetchReviewQueue).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('平安银行')).toBeInTheDocument();

@@ -962,7 +962,7 @@ def test_news_quality_gate_accepts_only_top_three_market_relevant_items():
 
     assert len(result.accepted_items) == 3
     assert result.rejection_counts["overflow"] == 2
-    assert all(item.raw_payload["quality"]["score"] >= 70 for item in result.accepted_items)
+    assert all(item.raw_payload["quality"]["score"] >= 65 for item in result.accepted_items)
     assert result.accepted_items[0].news_id == "policy-5"
     assert "policy" in result.accepted_items[0].raw_payload["quality"]["reasons"]
 
@@ -1115,7 +1115,7 @@ def test_news_quality_gate_adds_metadata_without_mutating_original_payload():
     quality = accepted_item.raw_payload["quality"]
     assert quality["run_id"] == "public-news-20260613T060000Z"
     assert quality["accepted_at"] == "2026-06-13T06:00:00+00:00"
-    assert quality["score"] >= 70
+    assert quality["score"] >= 65
     assert "policy" in quality["reasons"]
     assert "quality" not in original_payload
 
@@ -1152,6 +1152,15 @@ def test_news_quality_gate_clamps_custom_threshold_and_max_accepted():
     assert zero_slots.rejection_counts["overflow"] == 1
     assert high_threshold.threshold == 100
     assert high_threshold.rejection_counts["below_threshold"] == 1
+
+
+def test_news_quality_gate_default_threshold_is_65():
+    from stock_research.dashboard.news_quality import NEWS_QUALITY_THRESHOLD, evaluate_public_news_items
+
+    result = evaluate_public_news_items([])
+
+    assert NEWS_QUALITY_THRESHOLD == 65
+    assert result.threshold == 65
 
 
 def test_public_news_ingestion_writes_db_and_cache(

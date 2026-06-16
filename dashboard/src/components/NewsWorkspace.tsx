@@ -17,6 +17,7 @@ const CATEGORIES = [
 ];
 
 const NEWS_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+const NEWS_DAILY_LIMIT = 100;
 
 type NewsWorkspaceProps = {
   initialQuery?: string;
@@ -56,6 +57,20 @@ function normalizeNewsItems(value: unknown): PublicNewsItem[] {
 
 function normalizeWarnings(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
+}
+
+function localTodayStartIso() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const offsetMinutes = -start.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetHours = String(Math.floor(absoluteOffset / 60)).padStart(2, '0');
+  const offsetRemainder = String(absoluteOffset % 60).padStart(2, '0');
+  const year = start.getFullYear();
+  const month = String(start.getMonth() + 1).padStart(2, '0');
+  const day = String(start.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}T00:00:00${sign}${offsetHours}:${offsetRemainder}`;
 }
 
 export function getNewsAssetCandidate(item: PublicNewsItem) {
@@ -98,8 +113,9 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, initialTradeDa
   const newsParams = useCallback(() => {
     const params: Parameters<typeof fetchPublicNews>[0] = {
       source: 'sina_finance',
-      limit: 3,
-      minQualityScore: 70
+      limit: NEWS_DAILY_LIMIT,
+      minQualityScore: 65,
+      startTime: localTodayStartIso()
     };
     if (category !== 'all') params.category = category;
     const trimmedQuery = query.trim();
@@ -228,7 +244,7 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, initialTradeDa
           ) : lastUpdatedAt ? (
             <span className="muted">Last updated {lastUpdatedAt}</span>
           ) : null}
-          <span className="metric-chip">{items.length}/3 accepted</span>
+          <span className="metric-chip">今日通过 {items.length} 条</span>
           {collectorStatus?.next_run_at ? <span className="muted">next run {collectorStatus.next_run_at}</span> : null}
           {collectorStatus && !collectorStatus.enabled ? <span className="metric-chip">collector off</span> : null}
           <button type="button" onClick={handleRefresh} disabled={isRefreshing}>
@@ -265,7 +281,7 @@ export function NewsWorkspace({ initialQuery = '', initialNewsId, initialTradeDa
         {isLoading ? (
           <p className="muted">Loading news...</p>
         ) : items.length === 0 ? (
-          <p className="muted">本轮无高质量新闻</p>
+          <p className="muted">今日暂无高质量新闻</p>
         ) : (
           <div className="news-feed">
             {items.map((item) => {

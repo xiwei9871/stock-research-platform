@@ -810,16 +810,19 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
 
   await page.goto('/');
 
-  await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('Market Date')).toBeVisible();
-  await expect(page.getByText('EOD Monitor')).toBeVisible();
-  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'LHB Shortline Combo' })).toBeVisible();
-  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Mid Trend Combo' })).toBeVisible();
-  await expect(page.locator('.strategy-summary-card strong').filter({ hasText: 'Tech Bottleneck Combo' })).toBeVisible();
+  await expect(page.getByText('A股策略研究')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  await expect(page.getByText('市场日期')).toBeVisible();
+  await expect(page.getByText('市场情绪日期')).toBeVisible();
+  const activeStrategies = page.getByRole('region', { name: '启用策略表现' });
+  await expect(activeStrategies.getByText('LHB Shortline Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Mid Trend Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Tech Bottleneck Combo', { exact: true })).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
-  await expect(page.getByText('candidate pool')).toBeVisible();
-  await expect(page.getByText('CN:SZ:300951')).toBeVisible();
+  const strategySignals = page.getByRole('region', { name: '策略持仓状态' });
+  await expect(strategySignals).toBeVisible();
+  await expect(strategySignals.getByText(/最新持仓|持仓明细暂无/)).toHaveCount(3);
+  await expect(page.getByText('CN:SZ:300951')).toHaveCount(0);
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
@@ -843,9 +846,10 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await page.goto('/');
 
-  await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('candidate pool')).toBeVisible();
+  await expect(page.getByText('A股策略研究')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  await expect(page.getByText('启用策略表现')).toBeVisible();
+  await expect(page.getByText('策略持仓状态')).toBeVisible();
   await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
   await page.getByRole('tab', { name: 'Validation Replay' }).click();
   await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');

@@ -154,6 +154,41 @@ def test_run_vectorized_topn_backtest_daily_rebalances_topn_with_costs():
     assert list(positions["weight"]) == pytest.approx([0.5, 0.5, 0.5, 0.5])
 
 
+def test_run_vectorized_topn_backtest_caps_each_position_weight_and_keeps_cash():
+    scores = _scores(
+        [
+            ("2026-01-01", "A", 1, 90.0),
+            ("2026-01-01", "B", 2, 80.0),
+            ("2026-01-01", "C", 3, 70.0),
+        ]
+    )
+    prices = _prices(
+        [
+            ("2026-01-01", "A", 10.0),
+            ("2026-01-01", "B", 20.0),
+            ("2026-01-01", "C", 30.0),
+            ("2026-01-02", "A", 11.0),
+            ("2026-01-02", "B", 22.0),
+            ("2026-01-02", "C", 33.0),
+            ("2026-01-03", "A", 12.1),
+            ("2026-01-03", "B", 24.2),
+            ("2026-01-03", "C", 36.3),
+        ]
+    )
+    config = VectorizedTopNConfig(
+        start_date="2026-01-01",
+        end_date="2026-01-03",
+        top_n=3,
+        max_position_weight=0.2,
+    )
+
+    result = run_vectorized_topn_backtest(scores, prices, config)
+
+    assert list(result.positions.sort_values("asset_id")["weight"]) == pytest.approx([0.2, 0.2, 0.2])
+    assert result.trades["target_weight"].sum() == pytest.approx(0.6)
+    assert result.equity_curve.iloc[0]["gross_return"] == pytest.approx(0.06)
+
+
 def test_run_vectorized_topn_backtest_skips_limit_up_buy_and_keeps_cash():
     scores = _scores(
         [

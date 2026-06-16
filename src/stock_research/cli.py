@@ -379,6 +379,7 @@ from stock_research.stock_report_web_collection import (
     run_stock_report_search_plan,
     run_stock_report_web_source_collection,
 )
+from stock_research.research_report_inbox import sync_research_report_inbox
 from stock_research.hibor_reports import (
     build_hibor_a_tier_backfill_plan,
     build_hibor_download_queue,
@@ -2915,6 +2916,13 @@ def build_parser() -> argparse.ArgumentParser:
     hibor_watch.add_argument("--poll-seconds", type=float, default=5.0)
     hibor_watch.add_argument("--max-cycles", type=int)
     hibor_watch.add_argument("--write-db", action="store_true")
+
+    research_inbox_sync = subparsers.add_parser("sync-research-report-inbox")
+    research_inbox_sync.add_argument("--input-dir", default="data/manual/research_report_inbox")
+    research_inbox_sync.add_argument("--output-dir", default="outputs/research/research_report_inbox")
+    research_inbox_sync.add_argument("--write-db", action="store_true")
+    research_inbox_sync.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
+    research_inbox_sync.set_defaults(run_pdf_backfill=True)
 
     hibor_a_tier_plan = subparsers.add_parser("build-hibor-a-tier-backfill-plan")
     hibor_a_tier_plan.add_argument("--start-date", default="2024-10-01")
@@ -5764,6 +5772,19 @@ def main_for_args(argv: list[str] | None = None) -> None:
         print(f"hibor_download_watch|report|{result['paths']['report']}")
         print(f"hibor_download_watch|pdf_count|{result['summary']['pdf_count']}")
         print(f"hibor_download_watch|cycles|{result['summary']['watch_cycles']}")
+    elif args.command == "sync-research-report-inbox":
+        result = sync_research_report_inbox(
+            input_dir=args.input_dir,
+            output_dir=args.output_dir,
+            write_db=args.write_db,
+            run_pdf_backfill=args.run_pdf_backfill,
+        )
+        print(f"research_report_inbox|status|{result['paths']['status']}")
+        print(f"research_report_inbox|manifest|{result['paths']['manifest']}")
+        print(f"research_report_inbox|scanned|{result['summary']['scanned_pdf_count']}")
+        print(f"research_report_inbox|new|{result['summary']['new_pdf_count']}")
+        print(f"research_report_inbox|imported|{result['summary']['imported_pdf_count']}")
+        print(f"research_report_inbox|unsupported|{result['summary']['unsupported_pdf_count']}")
     elif args.command == "build-hibor-a-tier-backfill-plan":
         assets = load_stock_report_asset_universe(service=args.service)
         if args.sample_size is not None:

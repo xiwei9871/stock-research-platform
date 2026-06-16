@@ -197,6 +197,69 @@ def test_create_operator_decision_source_context_merge_preserves_old_fields(monk
     assert event_params["requires_follow_up"] is True
 
 
+def test_watch_decision_upserts_manual_review_watchlist_item(monkeypatch):
+    conn = _Connection()
+    monkeypatch.setattr(write_service, "connect", lambda service: conn)
+    monkeypatch.setattr(write_service, "resolve_decision_snapshot_linkage", lambda context, service="stock_research": _linked_context())
+
+    result = write_service.create_operator_decision(
+        {
+            "asset_id": "000001.SZ",
+            "stock_code": "000001",
+            "stock_name": "平安银行",
+            "decision_date": "2026-06-12",
+            "operator_action": "watch",
+            "operator_note": "回踩十日线继续观察",
+        },
+        service="stock_research_test",
+    )
+
+    watchlist_sql, watchlist_params = conn.cursor_obj.calls[2]
+    assert "INSERT INTO watchlist.watchlist_item" in watchlist_sql
+    assert watchlist_params["watchlist_id"] == "manual_review"
+    assert watchlist_params["asset_id"] == "000001.SZ"
+    assert watchlist_params["stock_code"] == "000001"
+    assert watchlist_params["stock_name"] == "平安银行"
+    assert watchlist_params["active"] is True
+    assert watchlist_params["note"] == "回踩十日线继续观察"
+    assert watchlist_params["source"] == "operator_decision:watch"
+    assert result["workflow_effects"] == [
+        {
+            "type": "watchlist_item",
+            "status": "upserted",
+            "watchlist_id": "manual_review",
+            "asset_id": "000001.SZ",
+        }
+    ]
+
+
+def test_close_decision_deactivates_manual_review_watchlist_item(monkeypatch):
+    conn = _Connection()
+    monkeypatch.setattr(write_service, "connect", lambda service: conn)
+    monkeypatch.setattr(write_service, "resolve_decision_snapshot_linkage", lambda context, service="stock_research": _linked_context())
+
+    result = write_service.create_operator_decision(
+        {
+            "asset_id": "000001.SZ",
+            "stock_code": "000001",
+            "stock_name": "平安银行",
+            "decision_date": "2026-06-12",
+            "operator_action": "close",
+            "operator_note": "复盘链条结束",
+        },
+        service="stock_research_test",
+    )
+
+    watchlist_sql, watchlist_params = conn.cursor_obj.calls[2]
+    assert "INSERT INTO watchlist.watchlist_item" in watchlist_sql
+    assert watchlist_params["watchlist_id"] == "manual_review"
+    assert watchlist_params["asset_id"] == "000001.SZ"
+    assert watchlist_params["active"] is False
+    assert watchlist_params["note"] == "复盘链条结束"
+    assert watchlist_params["source"] == "operator_decision:close"
+    assert result["workflow_effects"][0]["status"] == "deactivated"
+
+
 def test_create_operator_decision_rejects_invalid_action():
     with pytest.raises(ValueError, match="invalid_operator_action"):
         write_service.create_operator_decision(

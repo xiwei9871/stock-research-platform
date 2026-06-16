@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../src/components/AppShell';
+import { buildBacktestChartPoints, formatBacktestChartTooltip } from '../src/components/BacktestCharts';
 import { BacktestLabWorkspace } from '../src/components/BacktestLabWorkspace';
 import { BacktestResultDetail } from '../src/components/BacktestResultDetail';
 import type { BacktestRunResult, PlatformSummary, StrategyCatalogItem } from '../src/api/types';
@@ -28,8 +29,8 @@ function makeStrategies(): StrategyCatalogItem[] {
       description: 'Phase15 cash account plus Phase16C delayed exit.',
       factor_groups: ['lhb', 'auction', 'position_control'],
       signal_inputs: ['Phase14C lifecycle entry/exit', 'Phase15 cash account', 'Phase16C limit-break-failed delayed exit'],
-      default_parameters: { top_n: 20 },
-      latest_evidence: 'Phase16C account_final_equity=3.1279',
+      default_parameters: { top_n: 5 },
+      latest_evidence: 'lhb_shortline_v1 DB recompute benchmark final_equity=2.7640',
       primary_action: 'Run backtest'
     },
     {
@@ -168,28 +169,48 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.getByText('Phase15 cash account plus Phase16C delayed exit.')).toBeInTheDocument();
     expect(screen.queryByText('runnable')).not.toBeInTheDocument();
     expect(screen.queryByText('Run backtest')).not.toBeInTheDocument();
-    expect(screen.queryByText('Phase16C account_final_equity=3.1279')).not.toBeInTheDocument();
+    expect(screen.queryByText('lhb_shortline_v1 DB recompute benchmark final_equity=2.7640')).not.toBeInTheDocument();
     expect(screen.queryByText('replay_only')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('rebalance frequency')).not.toBeInTheDocument();
   });
 
   it('runs the default LHB combo backtest with default dates and parameters', async () => {
     render(<BacktestLabWorkspace />);
 
     await screen.findAllByText('LHB Shortline Combo');
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Backtest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
 
     await waitFor(() =>
-      expect(apiMocks.runFreshBacktest).toHaveBeenCalledWith({
+      expect(apiMocks.runBacktest).toHaveBeenCalledWith({
         strategy_id: 'lhb_shortline',
         start_date: '2026-01-01',
         end_date: '2026-06-08',
         score_version: 'manual_v1',
-        top_n: 20,
-        rebalance_frequency: 'weekly',
+        top_n: 5,
         transaction_cost_bps: 10,
-        max_positions: 20,
+        max_positions: null,
+        max_position_weight: 0.2,
+        risk_profile: 'balanced',
         adjust_type: 'hfq'
       })
+    );
+  });
+
+  it('lets LHB users choose a risk profile for the run request', async () => {
+    render(<BacktestLabWorkspace />);
+
+    await screen.findAllByText('LHB Shortline Combo');
+    expect(screen.getByLabelText('risk profile')).toHaveValue('balanced');
+    fireEvent.change(screen.getByLabelText('risk profile'), { target: { value: 'drawdown_control' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
+
+    await waitFor(() =>
+      expect(apiMocks.runBacktest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          strategy_id: 'lhb_shortline',
+          risk_profile: 'drawdown_control'
+        })
+      )
     );
   });
 
@@ -197,7 +218,7 @@ describe('BacktestLabWorkspace', () => {
     render(<BacktestLabWorkspace />);
 
     await screen.findAllByText('LHB Shortline Combo');
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Backtest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
 
     expect(await screen.findByRole('heading', { name: 'Validated backtest' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Result Summary' })).toBeInTheDocument();
@@ -206,7 +227,24 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.getByText('1.12x')).toBeInTheDocument();
     expect(screen.getByText('Total Return')).toBeInTheDocument();
     expect(screen.getByText('+12.00%')).toBeInTheDocument();
+    expect(screen.getAllByText('Strategy').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('lhb_shortline').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('cell', { name: 'CN:SZ:300951' }).length).toBeGreaterThan(0);
+  });
+
+  it('rejects accidental vectorized results for selected LHB Shortline runs', async () => {
+    apiMocks.runBacktest.mockResolvedValue({
+      ...makeRunResult('mid_trend', 'Mid Trend Combo'),
+      result_source: 'live_vectorized_backtest'
+    });
+
+    render(<BacktestLabWorkspace />);
+
+    await screen.findAllByText('LHB Shortline Combo');
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
+
+    expect(await screen.findByText(/LHB Shortline must run lhb_shortline_v1/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Fresh backtest' })).not.toBeInTheDocument();
   });
 
   it('uses the latest equity curve value when final equity is absent from summary', () => {
@@ -238,6 +276,208 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.getByText(/not daily marked to market/i)).toBeInTheDocument();
   });
 
+  it('hides empty Sharpe and replaces raw result tables with a trade ledger', () => {
+    const result = makeRunResult('lhb_shortline', 'LHB Shortline Combo');
+    render(
+      <BacktestResultDetail
+        result={{
+          ...result,
+          summary: {
+            ...result.summary,
+            sharpe_ratio: null
+          },
+          trades: [
+            {
+              date: '2026-06-08',
+              asset_id: 'CN:SZ:300951',
+              side: 'buy',
+              weight: 0.2,
+              price: 12.34
+            }
+          ],
+          positions: [{ date: '2026-06-08', asset_id: 'CN:SZ:300951', weight: 0.2 }]
+        }}
+      />
+    );
+
+    expect(screen.queryByText('Sharpe')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Equity / Drawdown Chart' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Completed Trades' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Positions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Trades' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Equity / Drawdown Rows' })).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Position' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '20.00%' })).toBeInTheDocument();
+  });
+
+  it('renders LHB shortline completed trade lifecycle fields from backend trade column names', () => {
+    render(
+      <BacktestResultDetail
+        result={{
+          ...makeRunResult(),
+          trades: [
+            {
+              trade_date: '2026-01-05',
+              ts_code: '000001.SZ',
+              entry_trade_date: '2026-01-06',
+              entry_time: '10:30:00',
+              entry_price: 14.38,
+              exit_trade_date: '2026-01-08',
+              exit_time: '14:55:00',
+              exit_price: 16.1,
+              position_notional: 0.2,
+              realized_return: 0.1191
+            }
+          ],
+          positions: [
+            {
+              trade_date: '2026-01-05',
+              ts_code: '000001.SZ',
+              position_weight: 0.2
+            }
+          ]
+        }}
+      />
+    );
+
+    const ledger = screen.getByRole('heading', { name: 'Completed Trades' }).closest('section')!;
+    expect(within(ledger).getByRole('cell', { name: '000001.SZ' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '2026-01-06' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '10:30:00' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '14.38' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '2026-01-08' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '14:55:00' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '20.00%' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '16.1' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '+11.91%' })).toBeInTheDocument();
+    expect(within(ledger).queryByRole('columnheader', { name: 'Side' })).not.toBeInTheDocument();
+    expect(within(ledger).queryByRole('columnheader', { name: 'Current Holding' })).not.toBeInTheDocument();
+  });
+
+  it('renders user-readable Chinese exit reasons in the completed trade ledger', () => {
+    render(
+      <BacktestResultDetail
+        result={{
+          ...makeRunResult(),
+          trades: [
+            {
+              trade_date: '2026-01-05',
+              ts_code: '000001.SZ',
+              entry_trade_date: '2026-01-06',
+              entry_price: 14.38,
+              exit_trade_date: '2026-01-08',
+              exit_price: 16.1,
+              position_notional: 0.2,
+              realized_return: 0.1191,
+              exit_reason: 'intraday_high_near_limit_but_failed_close_below_vwap'
+            },
+            {
+              trade_date: '2026-01-06',
+              ts_code: '000002.SZ',
+              entry_trade_date: '2026-01-07',
+              entry_price: 10,
+              exit_trade_date: '2026-01-09',
+              exit_price: 9.8,
+              position_notional: 0.2,
+              realized_return: -0.02,
+              exit_reason: 'new_internal_reason'
+            }
+          ],
+          positions: []
+        }}
+      />
+    );
+
+    const ledger = screen.getByRole('heading', { name: 'Completed Trades' }).closest('section')!;
+    expect(within(ledger).getByRole('cell', { name: '冲高接近涨停后回落，收盘跌破均价' })).toBeInTheDocument();
+    expect(within(ledger).queryByText('intraday_high_near_limit_but_failed_close_below_vwap')).not.toBeInTheDocument();
+    const unknownReason = within(ledger).getByRole('cell', { name: '其他卖出原因' });
+    expect(unknownReason).toHaveAttribute('title', 'new_internal_reason');
+    expect(within(ledger).queryByText('new_internal_reason')).not.toBeInTheDocument();
+  });
+
+  it('renders concise LHB shortline v1 strategy setup and keeps engine details folded', () => {
+    const result = makeRunResult('lhb_shortline', 'LHB Shortline Combo');
+    render(
+      <BacktestResultDetail
+        result={{
+          ...result,
+          result_source: 'lhb_shortline_v1',
+          elapsed_ms: 72900,
+          config: {
+            top_n: 5,
+            max_position_weight: 0.2,
+            transaction_cost_bps: 10
+          },
+          summary: {
+            ...result.summary,
+            engine_version: 'lhb_shortline_v1',
+            strategy: 'auction_enhanced_rerank',
+            risk_profile_label: '最佳平衡',
+            phase18c_max_positions: 5,
+            data_coverage: {
+              source: 'db_base_tables',
+              lhb_feature_rows: 7358,
+              daily_bar_rows: 531871
+            },
+            legacy_benchmark: {
+              benchmark_name: 'legacy_best_lhb_research',
+              legacy_final_equity: 2.764,
+              final_equity_delta: -1.644
+            }
+          }
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Performance' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Strategy Setup' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Benchmark Comparison' })).not.toBeInTheDocument();
+    expect(screen.getByText('Strategy')).toBeInTheDocument();
+    expect(screen.getByText('Top N')).toBeInTheDocument();
+    expect(screen.getByText('Max Weight Per Stock')).toBeInTheDocument();
+    expect(screen.getByText('Max Holdings')).toBeInTheDocument();
+    expect(screen.getByText('Cost')).toBeInTheDocument();
+    expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Risk Profile')).toBeInTheDocument();
+    expect(screen.getAllByText('最佳平衡').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('lhb_shortline').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('20.00%')).toBeInTheDocument();
+    expect(screen.getByText('10 bps')).toBeInTheDocument();
+    expect(screen.getByText('72.9s')).toBeInTheDocument();
+    expect(screen.queryByText('Selector')).not.toBeInTheDocument();
+    expect(screen.queryByText('Source')).not.toBeInTheDocument();
+    expect(screen.queryByText('Engine')).not.toBeInTheDocument();
+    expect(screen.queryByText('DB Coverage')).not.toBeInTheDocument();
+    expect(screen.queryByText('7358 LHB / 531871 daily bars')).not.toBeInTheDocument();
+    expect(screen.getByText(/legacy_best_lhb_research/)).toBeInTheDocument();
+    expect(screen.getByText('Technical Details')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Raw Summary' })).not.toBeInTheDocument();
+  });
+
+  it('formats chart tooltip with equity plus drawdown or daily return', () => {
+    const points = buildBacktestChartPoints({
+      ...makeRunResult(),
+      equity_curve: [
+        { date: '2026-01-05', equity: 1, drawdown: 0 },
+        { date: '2026-01-06', equity: 1.03, drawdown: 0, net_return: 0.03 },
+        { date: '2026-01-07', equity: 1.01, drawdown: -0.019417 }
+      ]
+    });
+
+    expect(formatBacktestChartTooltip(points[1])).toEqual([
+      '2026-01-06',
+      'Equity 1.0300x',
+      'Daily Return +3.00%'
+    ]);
+    expect(formatBacktestChartTooltip(points[2])).toEqual([
+      '2026-01-07',
+      'Equity 1.0100x',
+      'Drawdown -1.94%'
+    ]);
+  });
+
   it('does not expose cached replay actions', async () => {
     render(<BacktestLabWorkspace />);
 
@@ -252,25 +492,26 @@ describe('BacktestLabWorkspace', () => {
 
     const strategySelect = await screen.findByLabelText('strategy');
     fireEvent.change(strategySelect, { target: { value: 'lhb_shortline' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Backtest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
 
     await waitFor(() =>
-      expect(apiMocks.runFreshBacktest).toHaveBeenCalledWith({
+      expect(apiMocks.runBacktest).toHaveBeenCalledWith({
         strategy_id: 'lhb_shortline',
         start_date: '2026-01-01',
         end_date: '2026-06-08',
         score_version: 'manual_v1',
-        top_n: 20,
-        rebalance_frequency: 'weekly',
+        top_n: 5,
         transaction_cost_bps: 10,
-        max_positions: 20,
+        max_positions: null,
+        max_position_weight: 0.2,
+        risk_profile: 'balanced',
         adjust_type: 'hfq'
       })
     );
   });
 
   it('runs comparison across validated combo strategies with identical parameters', async () => {
-    apiMocks.runFreshBacktest.mockImplementation((request: { strategy_id: string }) => {
+    apiMocks.runBacktest.mockImplementation((request: { strategy_id: string }) => {
       const strategy = makeStrategies().find((row) => row.strategy_id === request.strategy_id);
       return Promise.resolve(makeRunResult(request.strategy_id, strategy?.strategy_name ?? request.strategy_id));
     });
@@ -278,9 +519,9 @@ describe('BacktestLabWorkspace', () => {
     render(<BacktestLabWorkspace />);
 
     await screen.findAllByText('LHB Shortline Combo');
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Comparison' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Comparison' }));
 
-    await waitFor(() => expect(apiMocks.runFreshBacktest).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(apiMocks.runBacktest).toHaveBeenCalledTimes(3));
 
     const expectedStrategyIds = [
       'lhb_shortline',
@@ -288,15 +529,17 @@ describe('BacktestLabWorkspace', () => {
       'tech_bottleneck'
     ];
     expectedStrategyIds.forEach((strategyId, index) => {
-      expect(apiMocks.runFreshBacktest).toHaveBeenNthCalledWith(index + 1, {
+      const lhbPayload = strategyId === 'lhb_shortline' ? { risk_profile: 'balanced' } : {};
+      expect(apiMocks.runBacktest).toHaveBeenNthCalledWith(index + 1, {
         strategy_id: strategyId,
         start_date: '2026-01-01',
         end_date: '2026-06-08',
         score_version: 'manual_v1',
-        top_n: 20,
-        rebalance_frequency: 'weekly',
+        top_n: 5,
         transaction_cost_bps: 10,
-        max_positions: 20,
+        max_positions: null,
+        max_position_weight: 0.2,
+        ...lhbPayload,
         adjust_type: 'hfq'
       });
     });
@@ -311,7 +554,7 @@ describe('BacktestLabWorkspace', () => {
     const lhbRun = deferredRunResult();
     const midRun = deferredRunResult();
     const techRun = deferredRunResult();
-    apiMocks.runFreshBacktest
+    apiMocks.runBacktest
       .mockReturnValueOnce(lhbRun.promise)
       .mockReturnValueOnce(midRun.promise)
       .mockReturnValueOnce(techRun.promise);
@@ -319,7 +562,7 @@ describe('BacktestLabWorkspace', () => {
     render(<BacktestLabWorkspace />);
 
     await screen.findAllByText('LHB Shortline Combo');
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Comparison' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Comparison' }));
 
     expect(screen.getByRole('heading', { name: 'Strategy Comparison' })).toBeInTheDocument();
     expect(screen.getByText('0 / 3 completed')).toBeInTheDocument();
@@ -346,7 +589,7 @@ describe('BacktestLabWorkspace', () => {
       techRun.resolve(makeRunResult('tech_bottleneck', 'Tech Bottleneck Combo'));
     });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Run Fresh Comparison' })).not.toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Run Comparison' })).not.toBeDisabled());
     expect(screen.getByText('3 / 3 completed')).toBeInTheDocument();
     expect(screen.getAllByRole('cell', { name: 'passed' })).toHaveLength(2);
     expect(screen.queryByRole('cell', { name: 'running' })).not.toBeInTheDocument();
@@ -356,7 +599,7 @@ describe('BacktestLabWorkspace', () => {
     const lhbRun = deferredRunResult();
     const midRun = deferredRunResult();
     const techRun = deferredRunResult();
-    apiMocks.runFreshBacktest
+    apiMocks.runBacktest
       .mockReturnValueOnce(lhbRun.promise)
       .mockReturnValueOnce(midRun.promise)
       .mockReturnValueOnce(techRun.promise);
@@ -364,7 +607,7 @@ describe('BacktestLabWorkspace', () => {
     render(<BacktestLabWorkspace />);
 
     await screen.findAllByText('LHB Shortline Combo');
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Comparison' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Comparison' }));
 
     await act(async () => {
       techRun.resolve(makeRunResult('tech_bottleneck', 'Tech Bottleneck Combo'));
@@ -378,30 +621,30 @@ describe('BacktestLabWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Viewing' })).toBeInTheDocument();
   });
 
-  it('disables Run Fresh Backtest for backend-invalid inputs', async () => {
+  it('disables Run Backtest for backend-invalid inputs', async () => {
     render(<BacktestLabWorkspace />);
     await screen.findAllByText('LHB Shortline Combo');
 
     fireEvent.change(screen.getByLabelText('top n'), { target: { value: '0' } });
-    expect(screen.getByRole('button', { name: 'Run Fresh Backtest' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('top n'), { target: { value: '20' } });
-    fireEvent.change(screen.getByLabelText('max positions'), { target: { value: '-1' } });
-    expect(screen.getByRole('button', { name: 'Run Fresh Backtest' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('max position percent'), { target: { value: '-1' } });
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText('max positions'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('max position percent'), { target: { value: '20' } });
     fireEvent.change(screen.getByLabelText('transaction cost bps'), { target: { value: '-1' } });
-    expect(screen.getByRole('button', { name: 'Run Fresh Backtest' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Run Backtest' })).toBeDisabled();
   });
 
   it('ignores pending run responses after inputs change', async () => {
     const pendingRun = deferredRunResult();
-    apiMocks.runFreshBacktest.mockReturnValueOnce(pendingRun.promise);
+    apiMocks.runBacktest.mockReturnValueOnce(pendingRun.promise);
 
     render(<BacktestLabWorkspace />);
     await screen.findAllByText('LHB Shortline Combo');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run Fresh Backtest' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run Backtest' }));
     fireEvent.change(screen.getByLabelText('top n'), { target: { value: '10' } });
 
     await act(async () => {

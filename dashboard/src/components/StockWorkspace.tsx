@@ -103,10 +103,19 @@ function formatDigestScore(score: number) {
 }
 
 function getDigestActionAriaLabel(action: EvidenceDigestAction) {
-  if (action.workspace === 'news') return 'Open digest news evidence';
-  if (action.workspace === 'researchReports') return 'Open digest research evidence';
-  if (action.workspace === 'market') return 'Open digest market evidence';
+  if (action.workspace === 'news') return '查看相关新闻';
+  if (action.workspace === 'researchReports') return '查看相关研报';
   return action.label;
+}
+
+function getDigestActionLabel(action: EvidenceDigestAction) {
+  if (action.workspace === 'news') return '查看相关新闻';
+  if (action.workspace === 'researchReports') return '查看相关研报';
+  return action.label;
+}
+
+function isVisibleDigestAction(action: EvidenceDigestAction) {
+  return action.workspace === 'news' || action.workspace === 'researchReports';
 }
 
 function getEvidenceDigestKey(assetId: string, date: string) {
@@ -137,6 +146,60 @@ function latestClose(profile: AssetProfile | null) {
   const bars = profile?.bars ?? [];
   const lastBar = bars.length > 0 ? bars[bars.length - 1] : null;
   return lastBar?.close ?? null;
+}
+
+function formatPercent(value: number | null) {
+  if (value == null || Number.isNaN(value)) return '-';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${(value * 100).toFixed(2)}%`;
+}
+
+function formatRatio(value: number | null) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return `${value.toFixed(2)}x`;
+}
+
+function pctChange(from: number | null | undefined, to: number | null | undefined) {
+  if (!from || !to) return null;
+  return to / from - 1;
+}
+
+function reviewPriceState(dayReturn: number | null, fiveDayReturn: number | null, highDrawdown: number | null) {
+  if (highDrawdown != null && highDrawdown <= -0.08) return '回撤';
+  if (dayReturn != null && dayReturn > 0.015 && fiveDayReturn != null && fiveDayReturn > 0.05) return '加速';
+  if (fiveDayReturn != null && fiveDayReturn > 0.02) return '启动';
+  if (fiveDayReturn != null && fiveDayReturn < -0.03) return '弱势';
+  return '震荡';
+}
+
+function buildReviewMetrics(profile: AssetProfile | null) {
+  const bars = profile?.bars ?? [];
+  const last = bars.at(-1);
+  const previous = bars.at(-2);
+  const firstFive = bars.length >= 5 ? bars.at(-5) : bars[0];
+  const firstTwenty = bars.length >= 20 ? bars.at(-20) : bars[0];
+  const validAmounts = bars.map((bar) => bar.amount).filter((value): value is number => typeof value === 'number' && value > 0);
+  const averageAmount =
+    validAmounts.length > 0 ? validAmounts.reduce((sum, value) => sum + value, 0) / validAmounts.length : null;
+  const latestAmount = typeof last?.amount === 'number' ? last.amount : null;
+  const high = bars.reduce<number | null>((currentHigh, bar) => {
+    if (typeof bar.high !== 'number') return currentHigh;
+    return currentHigh == null ? bar.high : Math.max(currentHigh, bar.high);
+  }, null);
+  const highDrawdown = high && last?.close ? last.close / high - 1 : null;
+  const dayReturn = pctChange(previous?.close, last?.close);
+  const fiveDayReturn = pctChange(firstFive?.close, last?.close);
+  const twentyDayReturn = pctChange(firstTwenty?.close, last?.close);
+  const amountRatio = averageAmount && latestAmount ? latestAmount / averageAmount : null;
+
+  return {
+    dayReturn,
+    fiveDayReturn,
+    twentyDayReturn,
+    amountRatio,
+    highDrawdown,
+    state: reviewPriceState(dayReturn, fiveDayReturn, highDrawdown)
+  };
 }
 
 function lineageText(lineage: Record<string, unknown> | undefined, key: string) {
@@ -394,6 +457,7 @@ export function StockWorkspace({
   const identitySymbol = profile?.asset?.symbol ?? profile?.asset_id ?? assetId;
   const factorRows = getFactorRows(profile);
   const close = latestClose(profile);
+  const reviewMetrics = buildReviewMetrics(profile);
   const visibleAssetNews =
     assetNews && profile && assetNews.asset_id === profile.canonical_asset_id ? assetNews : null;
   const visibleNewsError =
@@ -443,6 +507,15 @@ export function StockWorkspace({
     lineageText(digestLineage, 'review_item_snapshot_id') ?? currentEntryContext.reviewItemSnapshotId;
   const decisionEvidenceDigestSnapshotId =
     lineageText(digestLineage, 'evidence_digest_snapshot_id') ?? currentEntryContext.evidenceDigestSnapshotId;
+  const reviewSourceName = currentEntryContext.sourceName ?? decisionSourceName ?? currentEntryContext.sourceWorkspace;
+  const reviewRank = currentEntryContext.topnRank ?? profile?.score?.rank ?? null;
+  const marketMonitorSection = visibleEvidenceDigest?.sections?.market_monitor;
+  const marketMonitorStatus = marketMonitorSection?.status ?? 'missing';
+  const marketMonitorTab =
+    visibleEvidenceDigest?.source_refs.monitor_tab ?? currentEntryContext.monitorTab ?? '';
+  const marketFacts = visibleEvidenceDigest?.facts.filter((fact) => fact.kind === 'market') ?? [];
+  const marketRiskFlags =
+    visibleEvidenceDigest?.risk_flags.filter((flag) => flag.key.startsWith('market_')) ?? [];
 
   const openDigestAction = (action: EvidenceDigestAction) => {
     const nextContext: StockEntryContext = {
@@ -459,8 +532,6 @@ export function StockWorkspace({
       onOpenNews?.({ ...nextContext, sourceWorkspace: 'news' });
     } else if (action.workspace === 'researchReports') {
       onOpenResearchReports?.({ ...nextContext, sourceWorkspace: 'researchReports' });
-    } else if (action.workspace === 'market') {
-      onOpenMarketMonitor?.({ ...nextContext, sourceWorkspace: 'market' });
     }
   };
 
@@ -535,67 +606,113 @@ export function StockWorkspace({
 
       {profile ? (
         <>
-          <section className="stock-summary-strip stock-identity-band" aria-label="Stock identity region">
-            <div>
-              <span>Symbol</span>
-              <strong>{identitySymbol}</strong>
+          <section className="workspace-band stock-review-summary" role="region" aria-label="复盘摘要">
+            <div className="section-heading">
+              <div>
+                <strong className="stock-review-name">{identityName}</strong>
+                <p className="muted">
+                  {profile.canonical_asset_id} · {identitySymbol}
+                </p>
+              </div>
+              <span className="status-chip">{reviewMetrics.state}</span>
             </div>
-            <div>
-              <span>Name</span>
-              <strong>{identityName}</strong>
-            </div>
-            <div>
-              <span>Score</span>
-              <strong>Score {formatScore(profile)}</strong>
-            </div>
-            <div>
-              <span>Rank</span>
-              <strong>{profile.score?.rank ?? '-'}</strong>
-            </div>
-            <div>
-              <span>Latest Close</span>
-              <strong>{formatValue(close)}</strong>
-            </div>
-          </section>
-
-          <section className="stock-summary-strip stock-evidence-summary" aria-label="Stock evidence summary region">
-            <div>
-              <span>Signals</span>
-              <strong>{profile.signals.length}</strong>
-            </div>
-            <div>
-              <span>Decisions</span>
-              <strong>{profile.decisions.length}</strong>
-            </div>
-            <div>
-              <span>Outcomes</span>
-              <strong>{profile.outcomes.length}</strong>
-            </div>
-            <div>
-              <span>News 7d</span>
-              <strong>{visibleAssetNews?.summary.news_count_7d ?? '-'}</strong>
-            </div>
-            <div>
-              <span>Latest Report</span>
-              <strong>{latestReportDate}</strong>
+            <div className="stock-summary-strip stock-review-metrics">
+              <div>
+                <span>来源策略</span>
+                <strong>{reviewSourceName ?? '-'}</strong>
+              </div>
+              <div>
+                <span>复盘日期</span>
+                <strong>{tradeDate}</strong>
+              </div>
+              <div>
+                <span>策略排名</span>
+                <strong>{reviewRank != null ? `第 ${reviewRank} 名` : '-'}</strong>
+              </div>
+              <div>
+                <span>策略分数</span>
+                <strong>{formatScore(profile)}</strong>
+              </div>
+              <div>
+                <span>最新收盘</span>
+                <strong>{formatValue(close)}</strong>
+              </div>
+              <div>
+                <span>当日涨跌幅</span>
+                <strong className={reviewMetrics.dayReturn != null && reviewMetrics.dayReturn < 0 ? 'market-down' : 'market-up'}>
+                  {formatPercent(reviewMetrics.dayReturn)}
+                </strong>
+              </div>
+              <div>
+                <span>近5日表现</span>
+                <strong className={reviewMetrics.fiveDayReturn != null && reviewMetrics.fiveDayReturn < 0 ? 'market-down' : 'market-up'}>
+                  {formatPercent(reviewMetrics.fiveDayReturn)}
+                </strong>
+              </div>
+              <div>
+                <span>近20日表现</span>
+                <strong className={reviewMetrics.twentyDayReturn != null && reviewMetrics.twentyDayReturn < 0 ? 'market-down' : 'market-up'}>
+                  {formatPercent(reviewMetrics.twentyDayReturn)}
+                </strong>
+              </div>
+              <div>
+                <span>量能/20日均额</span>
+                <strong>{formatRatio(reviewMetrics.amountRatio)}</strong>
+              </div>
+              <div>
+                <span>高位回撤</span>
+                <strong className={reviewMetrics.highDrawdown != null && reviewMetrics.highDrawdown < 0 ? 'market-down' : 'market-up'}>
+                  {formatPercent(reviewMetrics.highDrawdown)}
+                </strong>
+              </div>
+              <div>
+                <span>价格状态</span>
+                <strong>{reviewMetrics.state}</strong>
+              </div>
+              <div>
+                <span>新闻/研报</span>
+                <strong>
+                  {visibleAssetNews?.summary.news_count_7d ?? '-'} / {latestReportDate}
+                </strong>
+              </div>
             </div>
           </section>
 
           <div className="stock-detail-layout">
-            <aside className="workspace-band stock-context-rail" aria-label="Context Rail Actions">
+            <aside className="workspace-band stock-context-rail" role="region" aria-label="复盘决策栏">
               <div className="section-heading">
-                <h2>Context Actions</h2>
+                <h2>复盘操作</h2>
                 <span className="muted">{profile.canonical_asset_id}</span>
               </div>
+              <OperatorDecisionPanel
+                assetId={profile.canonical_asset_id}
+                stockCode={visibleEvidenceDigest?.stock_code ?? profile.canonical_asset_id}
+                stockName={visibleEvidenceDigest?.stock_name ?? profile.asset?.name}
+                decisionDate={visibleEvidenceDigest?.latest_trade_date ?? visibleEvidenceDigest?.trade_date ?? tradeDate}
+                runId={decisionRunId}
+                digestKey={decisionDigestKey}
+                reviewItemSnapshotId={decisionReviewItemSnapshotId}
+                evidenceDigestSnapshotId={decisionEvidenceDigestSnapshotId}
+                sourceType={decisionSourceType}
+                sourceName={decisionSourceName}
+                sourceContextEntry="evidence_digest"
+                onDecisionCreated={() => {
+                  void loadProfile(currentAssetId, tradeDate, startDate, endDate);
+                }}
+              />
+              <div className="section-heading compact-heading">
+                <h3>外部证据入口</h3>
+              </div>
               <div className="compact-toolbar">
-                <button type="button" onClick={() => onOpenNews?.(currentEntryContext)}>
-                  Open News workspace
+                <button type="button" aria-label="Open News workspace" onClick={() => onOpenNews?.(currentEntryContext)}>
+                  打开新闻
                 </button>
-                <button type="button" onClick={() => onOpenResearchReports?.(currentEntryContext)}>
-                  Open Research Reports workspace
-                </button>
-                <button type="button" onClick={() => onOpenMarketMonitor?.(currentEntryContext)}>
-                  Open Market Monitor workspace
+                <button
+                  type="button"
+                  aria-label="Open Research Reports workspace"
+                  onClick={() => onOpenResearchReports?.(currentEntryContext)}
+                >
+                  打开研报
                 </button>
               </div>
             </aside>
@@ -643,36 +760,20 @@ export function StockWorkspace({
                     {visibleEvidenceDigest.warnings.length > 0 ? (
                       <p className="muted">{visibleEvidenceDigest.warnings.join(' | ')}</p>
                     ) : null}
-                    {visibleEvidenceDigest.next_actions.length > 0 ? (
+                    {visibleEvidenceDigest.next_actions.some(isVisibleDigestAction) ? (
                       <div className="compact-toolbar">
-                        {visibleEvidenceDigest.next_actions.map((action) => (
+                        {visibleEvidenceDigest.next_actions.filter(isVisibleDigestAction).map((action) => (
                           <button
                             key={action.key}
                             type="button"
                             aria-label={getDigestActionAriaLabel(action)}
                             onClick={() => openDigestAction(action)}
                           >
-                            {action.label}
+                            {getDigestActionLabel(action)}
                           </button>
                         ))}
                       </div>
                     ) : null}
-                    <OperatorDecisionPanel
-                      assetId={profile.canonical_asset_id}
-                      stockCode={visibleEvidenceDigest.stock_code ?? profile.canonical_asset_id}
-                      stockName={visibleEvidenceDigest.stock_name ?? profile.asset?.name}
-                      decisionDate={visibleEvidenceDigest.latest_trade_date ?? visibleEvidenceDigest.trade_date}
-                      runId={decisionRunId}
-                      digestKey={decisionDigestKey}
-                      reviewItemSnapshotId={decisionReviewItemSnapshotId}
-                      evidenceDigestSnapshotId={decisionEvidenceDigestSnapshotId}
-                      sourceType={decisionSourceType}
-                      sourceName={decisionSourceName}
-                      sourceContextEntry="evidence_digest"
-                      onDecisionCreated={() => {
-                        void loadProfile(currentAssetId, tradeDate, startDate, endDate);
-                      }}
-                    />
                   </>
                 ) : null}
                 {!isEvidenceDigestPending && !evidenceDigestError && !visibleEvidenceDigest ? (
@@ -682,7 +783,7 @@ export function StockWorkspace({
 
               <section className="workspace-band" aria-label="Price & Events">
                 <div className="section-heading">
-                  <h2>Price & Events</h2>
+                  <h2>价格走势</h2>
                   <span className="muted">
                     {profile.bars.length} bars / {startDate} to {endDate}
                   </span>
@@ -693,15 +794,40 @@ export function StockWorkspace({
               <section className="stock-evidence-grid">
             <article className="workspace-band" role="region" aria-label="Market Monitor State">
               <div className="section-heading">
-                <h2>Market Monitor State</h2>
-                <span className="muted">{profile.canonical_asset_id}</span>
+                <h2>个股市场环境</h2>
+                <span className="muted">{marketMonitorStatus}</span>
               </div>
-              <p className="muted">EOD monitor stock-list context will appear when opened from Market Monitor.</p>
+              <div className="stock-summary-strip stock-review-metrics">
+                <div>
+                  <span>市场证据</span>
+                  <strong>{marketMonitorStatus === 'available' ? '已接入' : '未命中'}</strong>
+                </div>
+                <div>
+                  <span>关联榜单</span>
+                  <strong>{marketMonitorTab || '-'}</strong>
+                </div>
+                <div>
+                  <span>市场提示</span>
+                  <strong>{marketRiskFlags.length > 0 ? `${marketRiskFlags.length} 条风险` : '无直接风险'}</strong>
+                </div>
+              </div>
+              {marketFacts.length > 0 || marketRiskFlags.length > 0 ? (
+                <div className="compact-news-list">
+                  {[...marketFacts, ...marketRiskFlags].map((item) => (
+                    <div key={item.key} className="news-stock-row">
+                      <strong>{item.label}</strong>
+                      {'severity' in item && item.severity ? <span className="status-chip warning">{item.severity}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">该股未出现在涨停、炸板、跌停或竞价监控名单；当前页不再跳转市场监控。</p>
+              )}
             </article>
 
             <article className="workspace-band" role="region" aria-label="Strategy Signal">
               <div className="section-heading">
-                <h2>Strategy Signal</h2>
+                <h2>策略信号</h2>
                 <span className="muted">{profile.signals.length} signals</span>
               </div>
               {profile.signals.map((signal) => (
@@ -730,7 +856,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Research Coverage">
               <div className="section-heading">
-                <h2>Research Coverage</h2>
+                <h2>研报覆盖</h2>
                 {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
               </div>
               {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
@@ -762,7 +888,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Related News">
               <div className="section-heading">
-                <h2>Related News</h2>
+                <h2>相关新闻</h2>
                 {isVisibleNewsLoading ? <span className="muted">Loading...</span> : null}
               </div>
               {visibleAssetNews ? (
@@ -798,7 +924,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Research Reports">
               <div className="section-heading">
-                <h2>Research Reports</h2>
+                <h2>研报列表</h2>
                 {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
               </div>
               <div className="compact-news-list">
@@ -831,9 +957,14 @@ export function StockWorkspace({
               ) : null}
             </article>
 
+              </section>
+
+              <details className="workspace-band stock-secondary-details" role="group" aria-label="二级信息">
+                <summary>二级信息</summary>
+                <section className="stock-evidence-grid stock-secondary-grid">
             <article className="workspace-band" role="region" aria-label="Factor / Score Breakdown">
               <div className="section-heading">
-                <h2>Factor / Score Breakdown</h2>
+                <h2>因子/评分明细</h2>
                 <span className="muted">{SCORE_VERSION}</span>
               </div>
               <table className="compact-table">
@@ -859,7 +990,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Review / Outcomes">
               <div className="section-heading">
-                <h2>Review / Outcomes</h2>
+                <h2>历史决策/结果</h2>
                 <span className="muted">
                   {profile.decisions.length} decisions / {profile.outcomes.length} outcomes
                 </span>
@@ -893,7 +1024,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Evidence Timeline">
               <div className="section-heading">
-                <h2>Evidence Timeline</h2>
+                <h2>证据时间线</h2>
                 <span className="muted">Current loaded evidence</span>
               </div>
               <div className="report-list compact stock-timeline">
@@ -964,7 +1095,7 @@ export function StockWorkspace({
 
             <article className="workspace-band" role="region" aria-label="Search Matches">
               <div className="section-heading">
-                <h2>Search Matches</h2>
+                <h2>搜索匹配</h2>
                 {isSearchLoading ? <span className="muted">Searching...</span> : null}
               </div>
               {searchError ? <p className="error-text">{searchError}</p> : null}
@@ -984,7 +1115,8 @@ export function StockWorkspace({
               </div>
               {!isSearchLoading && assetMatches.length === 0 ? <p className="muted">No asset matches.</p> : null}
             </article>
-              </section>
+                </section>
+              </details>
             </div>
           </div>
         </>

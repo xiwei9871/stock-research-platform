@@ -26,6 +26,9 @@ beforeEach(() => {
     evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
     snapshot_linkage_status: 'linked',
     snapshot_linkage_warnings: [],
+    workflow_effects: [
+      { type: 'watchlist_item', status: 'upserted', watchlist_id: 'manual_review', asset_id: '000001.SZ' }
+    ],
     warnings: []
   });
 });
@@ -55,11 +58,17 @@ describe('OperatorDecisionPanel', () => {
   it('renders allowed manual research actions without trading words', () => {
     const { container } = renderPanel();
 
-    expect(screen.getByRole('heading', { name: 'Operator Decision' })).toBeInTheDocument();
-    const actionSelect = screen.getByLabelText('operator action');
-    const optionLabels = within(actionSelect).getAllByRole('option').map((option) => option.textContent);
+    expect(screen.getByRole('heading', { name: '复盘决策' })).toBeInTheDocument();
+    const actionGroup = screen.getByRole('group', { name: '复盘动作' });
 
-    expect(optionLabels).toEqual(['watch', 'skip', 'follow_up', 'add_to_shadow', 'note', 'close']);
+    expect(within(actionGroup).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '观察',
+      '跳过',
+      '跟踪',
+      '加入影子池',
+      '备注',
+      '关闭'
+    ]);
     expect(container).not.toHaveTextContent(/\bbuy\b/i);
     expect(container).not.toHaveTextContent(/\bsell\b/i);
     expect(container).not.toHaveTextContent(/\btrade\b/i);
@@ -92,8 +101,9 @@ describe('OperatorDecisionPanel', () => {
         source_context: { entry: 'evidence_digest' }
       })
     );
-    expect(await screen.findByText('Decision saved')).toBeInTheDocument();
-    expect(screen.getByText('Snapshot linked')).toBeInTheDocument();
+    expect(await screen.findByText('复盘已保存')).toBeInTheDocument();
+    expect(screen.getByText('已加入人工观察池')).toBeInTheDocument();
+    expect(screen.getByText('证据快照已关联')).toBeInTheDocument();
     expect(screen.getByText(/operator_decision:operator-decision-api/)).toBeInTheDocument();
     expect(onDecisionCreated).toHaveBeenCalledWith(expect.objectContaining({ snapshot_linkage_status: 'linked' }));
   });
@@ -114,15 +124,16 @@ describe('OperatorDecisionPanel', () => {
       evidence_digest_snapshot_id: '',
       snapshot_linkage_status: 'missing',
       snapshot_linkage_warnings: ['No evidence_digest_snapshot found for run_id + digest_key'],
+      workflow_effects: [],
       warnings: ['No evidence_digest_snapshot found for run_id + digest_key']
     });
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('operator action'), { target: { value: 'note' } });
+    fireEvent.click(screen.getByRole('button', { name: '备注' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save decision' }));
 
-    expect(await screen.findByText('Decision saved')).toBeInTheDocument();
-    expect(screen.getByText('Snapshot missing')).toBeInTheDocument();
+    expect(await screen.findByText('复盘已保存')).toBeInTheDocument();
+    expect(screen.getByText('证据快照缺失')).toBeInTheDocument();
     expect(screen.getByText('No evidence_digest_snapshot found for run_id + digest_key')).toBeInTheDocument();
     expect(screen.queryByText('Decision save failed')).not.toBeInTheDocument();
   });

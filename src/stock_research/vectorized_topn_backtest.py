@@ -62,6 +62,7 @@ class VectorizedTopNConfig:
     rebalance_frequency: str = "daily"
     transaction_cost_bps: float = 0.0
     max_positions: int | None = None
+    max_position_weight: float | None = None
     execution_constraints: BacktestExecutionConstraints = field(
         default_factory=BacktestExecutionConstraints
     )
@@ -127,6 +128,8 @@ def run_vectorized_topn_backtest(
         raise ValueError("top_n must be positive")
     if config.max_positions is not None and config.max_positions <= 0:
         raise ValueError("max_positions must be positive")
+    if config.max_position_weight is not None and not (0 < config.max_position_weight <= 1):
+        raise ValueError("max_position_weight must be greater than 0 and at most 1")
     if config.rebalance_frequency not in {"daily", "weekly"}:
         raise ValueError("rebalance_frequency must be daily or weekly")
 
@@ -319,6 +322,7 @@ def write_vectorized_topn_run_card(
             "rebalance_frequency": config.rebalance_frequency,
             "transaction_cost_bps": config.transaction_cost_bps,
             "max_positions": config.max_positions,
+            "max_position_weight": config.max_position_weight,
         },
         metrics=result.summary,
         artifact_paths={
@@ -487,6 +491,8 @@ def _target_weights_for_date(
         return {}, []
 
     weight = 1.0 / len(selected)
+    if config.max_position_weight is not None:
+        weight = min(weight, float(config.max_position_weight))
     weights = {str(row["asset_id"]): weight for row in selected.to_dict("records")}
     rows = [
         {

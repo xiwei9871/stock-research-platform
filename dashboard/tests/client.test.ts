@@ -28,10 +28,62 @@ import {
   fetchShadowReviewDecisions,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
-  fetchShadowWatchlist
+  fetchShadowWatchlist,
+  runBacktest,
+  runFreshBacktest
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
+  it('runs default backtests through the fresh calculation endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ strategy_id: 'lhb_shortline', summary: { total_return: 0.63 } })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runBacktest({
+      strategy_id: 'lhb_shortline',
+      start_date: '2026-01-01',
+      end_date: '2026-06-08',
+      score_version: 'manual_v1',
+      top_n: 5,
+      rebalance_frequency: 'daily',
+      transaction_cost_bps: 10,
+      max_positions: 20,
+      adjust_type: 'hfq'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/backtests/run-fresh',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('keeps explicit fresh backtests on the fresh endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ strategy_id: 'lhb_shortline', summary: { total_return: -0.13 } })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runFreshBacktest({
+      strategy_id: 'lhb_shortline',
+      start_date: '2026-01-01',
+      end_date: '2026-06-08',
+      score_version: 'manual_v1',
+      top_n: 5,
+      rebalance_frequency: 'daily',
+      transaction_cost_bps: 10,
+      max_positions: 20,
+      adjust_type: 'hfq'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/backtests/run-fresh',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
   it('fetches overview with query params', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

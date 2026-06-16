@@ -509,23 +509,31 @@ function makeResearchReport() {
 function makeReviewQueue() {
   return {
     trade_date: '2026-06-08',
-    score_version: 'manual_v1',
+    score_version: 'strategy_topn',
+    review_mode: 'strategy_topn',
     generated_at: '2026-06-08T00:00:00+00:00',
     groups: [
       {
-        bucket: 'strong',
-        label: 'High Conviction',
+        bucket: 'strategy:mid_trend',
+        label: 'Mid Trend Combo',
         count: 1,
         items: [
           {
-            queue_id: '2026-06-08:manual_v1:000001.SZ',
+            queue_id: '2026-06-08:strategy_topn:000001.SZ',
             asset_id: '000001.SZ',
             canonical_asset_id: '000001.SZ',
             trade_date: '2026-06-10',
-            score_version: 'manual_v1',
+            score_version: 'strategy_topn',
             display_name: '平安银行',
             rank: 1,
             score: 89.9,
+            source_type: 'strategy_topn',
+            source_name: 'Mid Trend Combo',
+            source_rank: 1,
+            strategy_id: 'mid_trend',
+            strategy_name: 'Mid Trend Combo',
+            strategy_run_id: 'mid_trend:run',
+            review_tier: 'top5_focus',
             digest_title: 'Strong evidence',
             bucket: 'strong',
             source_kinds: ['strategy'],
@@ -556,9 +564,7 @@ function makeReviewQueue() {
           }
         ]
       },
-      { bucket: 'mixed', label: 'Mixed Evidence', count: 0, items: [] },
-      { bucket: 'risk_heavy', label: 'Risk Flags', count: 0, items: [] },
-      { bucket: 'thin', label: 'Thin / Missing Sources', count: 0, items: [] }
+      { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
     ],
     warnings: []
   };
@@ -1000,14 +1006,14 @@ describe('dashboard app shell', () => {
   it('renders the stock research cockpit shell title', async () => {
     render(<App />);
 
-    expect(screen.getByText('Stock Research')).toBeVisible();
-    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-    expect(screen.getByText('Market Date')).toBeVisible();
-    expect(screen.getByText('Today Focus')).toBeVisible();
-    expect(screen.getByText('Market Pulse')).toBeVisible();
-    expect(screen.getByText('News Flow')).toBeVisible();
-    expect(screen.getByText('Strategy Health')).toBeVisible();
-    expect(screen.getByText('LHB Shortline Combo')).toBeVisible();
+    expect(screen.getByText('A股策略研究')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('市场日期')).toBeVisible();
+    expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getByText('策略持仓状态')).toBeVisible();
+    expect(screen.getByText('市场环境')).toBeVisible();
+    expect(screen.getByText('高质量新闻')).toBeVisible();
+    expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
   });
 
@@ -1068,11 +1074,11 @@ describe('dashboard app shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeInTheDocument();
-    expect(screen.getByText('Today Focus')).toBeInTheDocument();
-    expect(screen.getByText('Market Pulse')).toBeInTheDocument();
-    expect(screen.getByText('News Flow')).toBeInTheDocument();
-    expect(screen.getByText('Strategy Health')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
+    expect(screen.getByText('启用策略表现')).toBeInTheDocument();
+    expect(screen.getByText('策略持仓状态')).toBeInTheDocument();
+    expect(screen.getByText('市场环境')).toBeInTheDocument();
+    expect(screen.getByText('高质量新闻')).toBeInTheDocument();
     expect(screen.getByText('首页新闻')).toBeInTheDocument();
   });
 
@@ -1119,11 +1125,11 @@ describe('dashboard app shell', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open Review Queue workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Review Queue' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '策略复盘队列' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review Stock' }));
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
-    expect(screen.getByText('Opened from Search')).toBeInTheDocument();
+    expect(screen.getByText('Opened from Review Queue')).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
@@ -2145,7 +2151,7 @@ describe('dashboard app shell', () => {
       expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'Open Home workspace' }));
-      expect(await screen.findByRole('heading', { name: 'Research Cockpit' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
 
       await act(async () => {
         resolveMarketMonitor(
@@ -2248,7 +2254,7 @@ describe('dashboard app shell', () => {
 
   it('navigates between planned platform workspaces', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: 'Research Cockpit' });
+    await screen.findByRole('heading', { name: '策略指挥中心' });
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Factor Lab workspace' }));
@@ -2329,8 +2335,9 @@ describe('dashboard app shell', () => {
 
       expect(apiMocks.fetchPublicNews).toHaveBeenLastCalledWith({
         source: 'sina_finance',
-        limit: 3,
-        minQualityScore: 70
+        limit: 100,
+        minQualityScore: 65,
+        startTime: expect.stringContaining('T00:00:00')
       });
       expect(apiMocks.refreshPublicNews).not.toHaveBeenCalled();
       expect(screen.getByText('source timeout')).toBeInTheDocument();

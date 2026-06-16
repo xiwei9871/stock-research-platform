@@ -42,13 +42,27 @@ def list_strategy_catalog() -> list[dict[str, Any]]:
             ],
             "default_parameters": {
                 "score_version": "manual_v1",
-                "top_n": 20,
-                "rebalance_frequency": "weekly",
-                "max_positions": 20,
+                "top_n": 5,
+                "rebalance_frequency": "daily",
+                "max_positions": None,
+                "max_position_weight": 0.2,
                 "transaction_cost_bps": 10,
                 "adjust_type": "hfq",
             },
-            "latest_evidence": "2026区间净值 1.6341，最大回撤 -1.96%（实际明细 2026-01-05 至 2026-06-05）",
+            "latest_evidence": (
+                "lhb_shortline_v1.1 实时从 DB 基础表重算；默认启用 "
+                "first_risk80_gradient_2d90_3d80_4d70 市场仓位控制。"
+                "Top5/20%/10bps 净值约 2.6069，最大回撤约 -5.32%。"
+            ),
+            "latest_metrics": {
+                "as_of_date": "2026-06-08",
+                "total_return_pct": 160.7,
+                "max_drawdown_pct": -5.32,
+                "latest_day_return_pct": None,
+                "latest_day_drawdown_pct": None,
+                "signal_status": "no_position_rows",
+                "signal_count": None,
+            },
             "primary_action": "Run backtest",
         },
         {
@@ -79,6 +93,15 @@ def list_strategy_catalog() -> list[dict[str, Any]]:
                 "adjust_type": "hfq",
             },
             "latest_evidence": "2026区间净值 1.5599，最大回撤 -17.52%（实际明细 2026-01-05 至 2026-06-02）",
+            "latest_metrics": {
+                "as_of_date": "2026-06-02",
+                "total_return_pct": 55.99,
+                "max_drawdown_pct": -17.52,
+                "latest_day_return_pct": None,
+                "latest_day_drawdown_pct": None,
+                "signal_status": "no_position_rows",
+                "signal_count": None,
+            },
             "primary_action": "Run backtest",
         },
         {
@@ -108,7 +131,19 @@ def list_strategy_catalog() -> list[dict[str, Any]]:
                 "transaction_cost_bps": 20,
                 "adjust_type": "hfq",
             },
-            "latest_evidence": "2026区间净值 1.2351，最大回撤 -12.58%（实际明细 2026-01-05 至 2026-06-05）",
+            "latest_evidence": (
+                "严格科技瓶颈池 + ST剔除 + 每周Top5 + 市场环境仓位控制。"
+                "2026-01-01 至 2026-06-08 净值约 1.6007，最大回撤约 -8.30%。"
+            ),
+            "latest_metrics": {
+                "as_of_date": "2026-06-08",
+                "total_return_pct": 60.07,
+                "max_drawdown_pct": -8.30,
+                "latest_day_return_pct": None,
+                "latest_day_drawdown_pct": None,
+                "signal_status": "no_position_rows",
+                "signal_count": None,
+            },
             "primary_action": "Run backtest",
         },
         {

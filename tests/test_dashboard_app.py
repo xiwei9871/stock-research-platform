@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
+import pytest
 
 from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
@@ -25,6 +26,55 @@ def test_overview_route_returns_payload(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["trade_date"] == "2026-05-29"
+
+
+@pytest.mark.parametrize(
+    ("route", "builder_name"),
+    [
+        ("/api/platform/summary?score_version=manual_v1&top_n=5", "load_platform_summary"),
+        ("/api/market-monitor/eod?trade_date=2026-06-12&score_version=manual_v1&top_n=5", "build_market_monitor_eod"),
+        ("/api/review-queue?trade_date=2026-06-12&score_version=manual_v1&limit=10&lookback_days=90", "build_review_queue"),
+    ],
+)
+def test_dashboard_eod_routes_cache_repeated_identical_requests(monkeypatch, route, builder_name):
+    calls = []
+
+    def fake_builder(**kwargs):
+        calls.append(dict(kwargs))
+        return {"builder": builder_name, "calls": len(calls), "kwargs": kwargs}
+
+    monkeypatch.setattr(dashboard_app, builder_name, fake_builder, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get(route)
+    second = client.get(route)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(calls) == 1
+    assert first.json() == second.json()
+
+
+def test_dashboard_eod_route_cache_keys_include_query_parameters(monkeypatch):
+    calls = []
+
+    def fake_summary(**kwargs):
+        calls.append(dict(kwargs))
+        return {"calls": len(calls), "kwargs": kwargs}
+
+    monkeypatch.setattr(dashboard_app, "load_platform_summary", fake_summary, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get("/api/platform/summary?score_version=manual_v1&top_n=5")
+    second = client.get("/api/platform/summary?score_version=manual_v1&top_n=10")
+    third = client.get("/api/platform/summary?score_version=manual_v1&top_n=5")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+    assert len(calls) == 2
+    assert first.json() == third.json()
+    assert first.json() != second.json()
 
 
 def test_public_news_route_returns_filtered_items(monkeypatch):

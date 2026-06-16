@@ -35,6 +35,7 @@ from stock_research.dashboard.outcome_analytics import load_outcome_analytics_su
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.readiness import build_platform_readiness
+from stock_research.dashboard.response_cache import DashboardResponseCache, dashboard_eod_cache_ttl_seconds
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.research_reports import (
     list_research_reports,
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
             await scheduler.stop()
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
+    app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
     app.state.public_news_scheduler = PublicNewsScheduler(
         refresh_public_news_for_dashboard,
         interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
@@ -107,11 +109,17 @@ def create_app() -> FastAPI:
 
     @app.get("/api/platform/summary")
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
-        return load_platform_summary(score_version=score_version, top_n=top_n)
+        return app.state.eod_response_cache.get_or_set(
+            ("platform_summary", score_version, top_n),
+            lambda: load_platform_summary(score_version=score_version, top_n=top_n),
+        )
 
     @app.get("/api/platform/readiness")
     def platform_readiness(score_version: str = "manual_v1"):
-        return build_platform_readiness(score_version=score_version)
+        return app.state.eod_response_cache.get_or_set(
+            ("platform_readiness", score_version),
+            lambda: build_platform_readiness(score_version=score_version),
+        )
 
     @app.get("/api/market-monitor/eod")
     def market_monitor_eod(
@@ -119,10 +127,13 @@ def create_app() -> FastAPI:
         score_version: str = "manual_v1",
         top_n: int = 5,
     ):
-        return build_market_monitor_eod(
-            trade_date=trade_date,
-            score_version=score_version,
-            top_n=top_n,
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_eod", trade_date or "", score_version, top_n),
+            lambda: build_market_monitor_eod(
+                trade_date=trade_date,
+                score_version=score_version,
+                top_n=top_n,
+            ),
         )
 
     @app.get("/api/evidence-digest")
@@ -146,11 +157,14 @@ def create_app() -> FastAPI:
         limit: int = 20,
         lookback_days: int = 90,
     ):
-        return build_review_queue(
-            trade_date=trade_date,
-            score_version=score_version,
-            limit=limit,
-            lookback_days=lookback_days,
+        return app.state.eod_response_cache.get_or_set(
+            ("review_queue", trade_date or "", score_version, limit, lookback_days),
+            lambda: build_review_queue(
+                trade_date=trade_date,
+                score_version=score_version,
+                limit=limit,
+                lookback_days=lookback_days,
+            ),
         )
 
     @app.get("/api/review-queue/snapshots")
@@ -230,6 +244,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/public-news/refresh")
     def public_news_refresh():
+        app.state.eod_response_cache.clear()
         return refresh_public_news_for_dashboard()
 
     @app.get("/api/public-news/status")

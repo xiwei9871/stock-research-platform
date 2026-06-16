@@ -170,6 +170,12 @@ export type CreateOperatorDecisionResponse = {
   snapshot_linkage_warnings: string[];
   warnings: string[];
   source_context?: string;
+  workflow_effects?: Array<{
+    type: string;
+    status: string;
+    watchlist_id?: string;
+    asset_id?: string;
+  }>;
 };
 
 export type ReviewItemSnapshot = {
@@ -588,6 +594,15 @@ export type StrategyCatalogItem = {
   signal_inputs: string[];
   default_parameters: Record<string, unknown>;
   latest_evidence: string;
+  latest_metrics?: {
+    as_of_date: string | null;
+    total_return_pct: number | null;
+    max_drawdown_pct: number | null;
+    latest_day_return_pct: number | null;
+    latest_day_drawdown_pct: number | null;
+    signal_status: 'connected' | 'no_position_rows' | string;
+    signal_count: number | null;
+  };
   primary_action: string;
 };
 
@@ -644,13 +659,16 @@ export type BacktestRunRequest = {
   end_date: string;
   score_version: string;
   top_n: number;
-  rebalance_frequency: 'daily' | 'weekly';
+  rebalance_frequency?: 'daily' | 'weekly';
   transaction_cost_bps: number;
   max_positions: number | null;
+  max_position_weight?: number | null;
+  risk_profile?: 'return_max' | 'balanced' | 'drawdown_control';
   adjust_type: string;
 };
 
 export type BacktestScalar = number | string | boolean | null;
+export type BacktestValue = BacktestScalar | BacktestValue[] | { [key: string]: BacktestValue };
 
 export type BacktestRunResult = {
   strategy_id: string;
@@ -662,7 +680,7 @@ export type BacktestRunResult = {
   run_finished_at?: string;
   elapsed_ms?: number;
   config: Record<string, unknown>;
-  summary: Record<string, BacktestScalar>;
+  summary: Record<string, BacktestValue>;
   equity_curve: Array<Record<string, BacktestScalar>>;
   positions: Array<Record<string, BacktestScalar>>;
   trades: Array<Record<string, BacktestScalar>>;
@@ -1182,8 +1200,11 @@ export type ReviewQueueItem = {
   source_rank?: number | null;
   score_components?: Record<string, unknown>;
   topn_rank?: number | null;
+  strategy_id?: string | null;
   strategy_name?: string | null;
   strategy_run_id?: string | null;
+  review_tier?: 'top5_focus' | 'top10_watch' | string | null;
+  weight?: number | null;
   factor_as_of?: string;
   factor_snapshot_id?: string | null;
   digest_key?: string;
@@ -1208,7 +1229,7 @@ export type ReviewQueueItem = {
 };
 
 export type ReviewQueueGroup = {
-  bucket: EvidenceDigestBucket;
+  bucket: string;
   label: string;
   count: number;
   items: ReviewQueueItem[];
@@ -1217,6 +1238,7 @@ export type ReviewQueueGroup = {
 export type ReviewQueueResponse = {
   trade_date: string;
   score_version: string;
+  review_mode?: 'strategy_topn' | 'score_topn' | string;
   generated_at: string;
   groups: ReviewQueueGroup[];
   warnings: string[];

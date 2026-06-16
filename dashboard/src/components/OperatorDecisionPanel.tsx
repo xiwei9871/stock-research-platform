@@ -5,6 +5,22 @@ import type { CreateOperatorDecisionResponse } from '../api/types';
 const ACTIONS = ['watch', 'skip', 'follow_up', 'add_to_shadow', 'note', 'close'] as const;
 
 type OperatorAction = (typeof ACTIONS)[number];
+type WorkflowEffect = NonNullable<CreateOperatorDecisionResponse['workflow_effects']>[number];
+
+const ACTION_LABELS: Record<OperatorAction, string> = {
+  watch: '观察',
+  skip: '跳过',
+  follow_up: '跟踪',
+  add_to_shadow: '加入影子池',
+  note: '备注',
+  close: '关闭'
+};
+
+function workflowEffectLabel(effect: WorkflowEffect) {
+  if (effect.type === 'watchlist_item' && effect.status === 'upserted') return '已加入人工观察池';
+  if (effect.type === 'watchlist_item' && effect.status === 'deactivated') return '已关闭人工观察';
+  return `${effect.type}:${effect.status}`;
+}
 
 type OperatorDecisionPanelProps = {
   assetId: string;
@@ -79,28 +95,28 @@ export function OperatorDecisionPanel({
 
   const warnings = result?.warnings?.length ? result.warnings : result?.snapshot_linkage_warnings ?? [];
   const snapshotStatus = result?.snapshot_linkage_status;
+  const workflowEffects = result?.workflow_effects ?? [];
 
   return (
     <section className="operator-decision-panel" aria-label="Operator Decision Panel">
-      <h2>Operator Decision</h2>
+      <h2>复盘决策</h2>
       <form className="workspace-stack" onSubmit={submitDecision}>
+        <div className="decision-action-grid" role="group" aria-label="复盘动作">
+          {ACTIONS.map((action) => (
+            <button
+              key={action}
+              type="button"
+              className={operatorAction === action ? 'active' : ''}
+              aria-pressed={operatorAction === action}
+              onClick={() => setOperatorAction(action)}
+            >
+              {ACTION_LABELS[action]}
+            </button>
+          ))}
+        </div>
         <div className="compact-toolbar">
           <label>
-            Action
-            <select
-              aria-label="operator action"
-              value={operatorAction}
-              onChange={(event) => setOperatorAction(event.target.value as OperatorAction)}
-            >
-              {ACTIONS.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Follow-up date
+            跟踪日期
             <input
               aria-label="follow up date"
               type="date"
@@ -110,7 +126,7 @@ export function OperatorDecisionPanel({
           </label>
         </div>
         <label>
-          Note
+          复盘备注
           <textarea
             aria-label="operator note"
             rows={3}
@@ -118,18 +134,30 @@ export function OperatorDecisionPanel({
             onChange={(event) => setOperatorNote(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Saving decision...' : 'Save decision'}
+        <button type="submit" aria-label="Save decision" disabled={submitting}>
+          {submitting ? '正在保存...' : '保存决策'}
         </button>
       </form>
 
       {result ? (
         <div className="evidence-row">
           <div>
-            <strong>Decision saved</strong>
+            <strong>复盘已保存</strong>
             <span>{result.event_id}</span>
           </div>
-          <p>{snapshotStatus === 'linked' ? 'Snapshot linked' : 'Snapshot missing'}</p>
+          <p>{snapshotStatus === 'linked' ? '证据快照已关联' : '证据快照缺失'}</p>
+          {workflowEffects.length > 0 ? (
+            <div className="tag-stack">
+              {workflowEffects.map((effect) => (
+                <span
+                  className={effect.status === 'upserted' ? 'status-chip positive' : 'status-chip neutral'}
+                  key={`${effect.type}-${effect.status}-${effect.asset_id ?? ''}`}
+                >
+                  {workflowEffectLabel(effect)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           {warnings.length > 0 ? (
             <div className="tag-stack">
               {warnings.map((warning) => (

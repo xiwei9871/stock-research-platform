@@ -13,6 +13,9 @@ from stock_research.dashboard.strategy_backtest_adapters import (
     StrategyBacktestParams,
 )
 from stock_research.db import connect, fetch_all
+from stock_research.lhb_shortline_v1 import run_lhb_shortline_v1_backtest_for_dashboard
+from stock_research.mid_trend_v1 import run_mid_trend_v1_backtest_for_dashboard
+from stock_research.tech_bottleneck_v1 import run_tech_bottleneck_v1_backtest_for_dashboard
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     run_vectorized_topn_backtest,
@@ -24,13 +27,120 @@ BACKTEST_LAB_STRATEGY_IDS = {
     "tech_bottleneck",
 }
 
-
 def list_backtest_strategies() -> list[dict[str, Any]]:
-    return [
+    strategies = [
         strategy
         for strategy in list_strategy_catalog()
         if strategy["strategy_id"] in BACKTEST_LAB_STRATEGY_IDS and strategy["status"] == "runnable"
     ]
+    return _enrich_strategies_with_latest_db_metrics(strategies)
+
+
+def _enrich_strategies_with_latest_db_metrics(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    try:
+        with connect(SETTINGS.research_service) as conn:
+            return [_with_latest_db_metrics(conn, strategy) for strategy in strategies]
+    except Exception:
+        return strategies
+
+
+def _with_latest_db_metrics(conn: Any, strategy: dict[str, Any]) -> dict[str, Any]:
+    run_rows = fetch_all(
+        conn,
+        """
+        SELECT run_id, summary_json
+        FROM backtest.strategy_backtest_run
+        WHERE strategy_id = %s
+        ORDER BY end_date DESC, created_at DESC
+        LIMIT 1
+        """,
+        [strategy["strategy_id"]],
+    )
+    if not run_rows:
+        return strategy
+
+    run = run_rows[0]
+    equity_rows = fetch_all(
+        conn,
+        """
+        SELECT trade_date::text AS trade_date, equity, drawdown, daily_return
+        FROM (
+            SELECT DISTINCT ON (trade_date)
+                   trade_date, equity, drawdown, daily_return
+            FROM backtest.strategy_backtest_equity
+            WHERE run_id = %s
+            ORDER BY trade_date DESC, row_index DESC
+        ) latest_days
+        ORDER BY trade_date DESC
+        LIMIT 2
+        """,
+        [run["run_id"]],
+    )
+    if not equity_rows:
+        return strategy
+
+    latest = equity_rows[0]
+    previous = equity_rows[1] if len(equity_rows) > 1 else None
+    signal_status, signal_count = _latest_position_signal_metrics(conn, str(run["run_id"]))
+    summary = run.get("summary_json") if isinstance(run.get("summary_json"), dict) else {}
+    metrics = dict(strategy.get("latest_metrics") or {})
+    latest_equity = _finite_or_none(latest.get("equity"))
+    previous_equity = _finite_or_none(previous.get("equity")) if previous else None
+    latest_daily_return = _finite_or_none(latest.get("daily_return"))
+    if latest_daily_return is None and latest_equity is not None and previous_equity not in (None, 0.0):
+        latest_daily_return = latest_equity / previous_equity - 1.0
+
+    next_strategy = dict(strategy)
+    next_strategy["latest_metrics"] = {
+        **metrics,
+        "as_of_date": str(latest.get("trade_date") or metrics.get("as_of_date") or ""),
+        "total_return_pct": _percent_metric(
+            summary.get("total_return"),
+            fallback=(latest_equity - 1.0 if latest_equity is not None else None),
+        ),
+        "max_drawdown_pct": _percent_metric(summary.get("max_drawdown"), fallback=_finite_or_none(latest.get("drawdown"))),
+        "latest_day_return_pct": _percent_metric(latest_daily_return),
+        "latest_day_drawdown_pct": _percent_metric(_finite_or_none(latest.get("drawdown"))),
+        "signal_status": signal_status,
+        "signal_count": signal_count,
+    }
+    return next_strategy
+
+
+def _latest_position_signal_metrics(conn: Any, run_id: str) -> tuple[str, int | None]:
+    rows = fetch_all(
+        conn,
+        """
+        WITH latest_position_date AS (
+            SELECT MAX(trade_date) AS trade_date
+            FROM backtest.strategy_backtest_position
+            WHERE run_id = %s
+        )
+        SELECT COUNT(p.asset_id) AS signal_count
+        FROM latest_position_date latest
+        LEFT JOIN backtest.strategy_backtest_position p
+          ON p.run_id = %s
+         AND p.trade_date = latest.trade_date
+        """,
+        [run_id, run_id],
+    )
+    count = int(rows[0]["signal_count"] or 0) if rows else 0
+    return ("connected", count) if count > 0 else ("no_position_rows", None)
+
+
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _percent_metric(value: Any, *, fallback: float | None = None) -> float | None:
+    number = _finite_or_none(value)
+    if number is None:
+        number = fallback
+    return round(number * 100.0, 2) if number is not None else None
 
 
 def load_vectorized_topn_prices(start_date: str, end_date: str, adjust_type: str) -> pd.DataFrame:
@@ -59,7 +169,9 @@ def _parse_backtest_request(
     adjust_type = _optional_text(payload.get("adjust_type"), "hfq")
     top_n = _positive_int(payload.get("top_n"), "top_n", 20)
     max_positions = _optional_positive_int(payload.get("max_positions"), "max_positions")
-    rebalance_frequency = _rebalance_frequency(payload.get("rebalance_frequency"))
+    max_position_weight = _optional_position_weight(payload.get("max_position_weight"))
+    risk_profile = _optional_text(payload.get("risk_profile"), "balanced")
+    rebalance_frequency = _default_rebalance_frequency(strategy_id)
     transaction_cost_bps = _finite_float(
         payload.get("transaction_cost_bps"),
         "transaction_cost_bps",
@@ -78,6 +190,8 @@ def _parse_backtest_request(
         "rebalance_frequency": rebalance_frequency,
         "transaction_cost_bps": transaction_cost_bps,
         "max_positions": max_positions,
+        "max_position_weight": max_position_weight,
+        "risk_profile": risk_profile,
         "adjust_type": adjust_type,
     }
     vector_config = VectorizedTopNConfig(
@@ -87,6 +201,7 @@ def _parse_backtest_request(
         rebalance_frequency=rebalance_frequency,
         transaction_cost_bps=transaction_cost_bps,
         max_positions=max_positions,
+        max_position_weight=max_position_weight,
     )
     return strategy_id, params, run_config, vector_config
 
@@ -137,6 +252,52 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     started_at = datetime.now(timezone.utc).isoformat()
     strategy_id, params, run_config, config = _parse_backtest_request(payload)
+    if strategy_id == "lhb_shortline":
+        result = run_lhb_shortline_v1_backtest_for_dashboard(
+            {
+                "start_date": params.start_date,
+                "end_date": params.end_date,
+                **run_config,
+            }
+        )
+        return _with_execution_metadata(
+            to_json_safe(result),
+            mode="fresh",
+            source=str(result.get("source_kind") or "lhb_shortline_v1"),
+            started_at=started_at,
+            elapsed_ms=(time.perf_counter() - started) * 1000.0,
+        )
+    if strategy_id == "mid_trend":
+        result = run_mid_trend_v1_backtest_for_dashboard(
+            {
+                "start_date": params.start_date,
+                "end_date": params.end_date,
+                **run_config,
+            }
+        )
+        return _with_execution_metadata(
+            to_json_safe(result),
+            mode="fresh",
+            source=str(result.get("source_kind") or "mid_trend_v1"),
+            started_at=started_at,
+            elapsed_ms=(time.perf_counter() - started) * 1000.0,
+        )
+    if strategy_id == "tech_bottleneck":
+        result = run_tech_bottleneck_v1_backtest_for_dashboard(
+            {
+                "start_date": params.start_date,
+                "end_date": params.end_date,
+                **run_config,
+            }
+        )
+        return _with_execution_metadata(
+            to_json_safe(result),
+            mode="fresh",
+            source=str(result.get("source_kind") or "tech_bottleneck_v1"),
+            started_at=started_at,
+            elapsed_ms=(time.perf_counter() - started) * 1000.0,
+        )
+
     adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
     if adapter is None:
         raise ValueError(f"unsupported strategy: {strategy_id}")
@@ -161,6 +322,7 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             "rebalance_frequency": config.rebalance_frequency,
             "transaction_cost_bps": config.transaction_cost_bps,
             "max_positions": config.max_positions,
+            "max_position_weight": config.max_position_weight,
             "adjust_type": params.adjust_type,
         },
         "summary": {
@@ -254,11 +416,28 @@ def _finite_float(value: Any, field: str, default: float) -> float:
     return parsed
 
 
+def _optional_position_weight(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    parsed = _finite_float(value, "max_position_weight", 0.0)
+    if parsed > 1:
+        parsed = parsed / 100.0
+    if not (0 < parsed <= 1):
+        raise ValueError("max_position_weight must be greater than 0 and at most 100%")
+    return parsed
+
+
 def _rebalance_frequency(value: Any) -> str:
     frequency = _optional_text(value, "weekly")
     if frequency not in {"daily", "weekly"}:
         raise ValueError("rebalance_frequency must be daily or weekly")
     return frequency
+
+
+def _default_rebalance_frequency(strategy_id: str) -> str:
+    if strategy_id == "lhb_shortline":
+        return "daily"
+    return "weekly"
 
 
 def _frame_records(frame: pd.DataFrame | None) -> list[dict[str, Any]]:

@@ -107,22 +107,30 @@ const validationRun = {
 function makeReviewQueueFixture() {
   return {
     trade_date: '2026-06-08',
-    score_version: 'manual_v1',
+    score_version: 'strategy_topn',
+    review_mode: 'strategy_topn',
     generated_at: '2026-06-08T00:00:00+00:00',
     groups: [
       {
-        bucket: 'strong',
-        label: 'High Conviction',
+        bucket: 'strategy:mid_trend',
+        label: 'Mid Trend Combo',
         count: 1,
         items: [{
-          queue_id: '2026-06-08:manual_v1:CN:SZ:300951',
+          queue_id: '2026-06-08:strategy_topn:CN:SZ:300951',
           asset_id: 'CN:SZ:300951',
           canonical_asset_id: 'CN:SZ:300951',
           trade_date: '2026-06-08',
-          score_version: 'manual_v1',
+          score_version: 'strategy_topn',
           display_name: 'Fixture Stock',
           rank: 1,
           score: 89.9,
+          source_type: 'strategy_topn',
+          source_name: 'Mid Trend Combo',
+          source_rank: 1,
+          strategy_id: 'mid_trend',
+          strategy_name: 'Mid Trend Combo',
+          strategy_run_id: 'mid_trend:run',
+          review_tier: 'top5_focus',
           digest_title: 'Strong evidence',
           bucket: 'strong',
           source_kinds: ['strategy', 'news'],
@@ -144,9 +152,7 @@ function makeReviewQueueFixture() {
           }
         }]
       },
-      { bucket: 'mixed', label: 'Mixed Evidence', count: 0, items: [] },
-      { bucket: 'risk_heavy', label: 'Risk Flags', count: 0, items: [] },
-      { bucket: 'thin', label: 'Thin / Missing Sources', count: 0, items: [] }
+      { bucket: 'strategy:tech_bottleneck', label: 'Tech Bottleneck Combo', count: 0, items: [] }
     ],
     warnings: []
   };
@@ -627,32 +633,26 @@ test('platform full flow covers all research workspaces with mocked API response
 
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Research Cockpit' })).toBeVisible();
-  await expect(page.getByText('LHB Shortline Combo')).toBeVisible();
-  await expect(page.getByText('Mid Trend Combo')).toBeVisible();
-  await expect(page.getByText('Tech Bottleneck Combo')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  const activeStrategies = page.getByRole('region', { name: '启用策略表现' });
+  await expect(activeStrategies.getByText('LHB Shortline Combo')).toBeVisible();
+  await expect(activeStrategies.getByText('Mid Trend Combo')).toBeVisible();
+  await expect(activeStrategies.getByText('Tech Bottleneck Combo')).toBeVisible();
   await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
-  await expect(page.getByText('candidate pool')).toBeVisible();
-  const readiness = page.getByRole('region', { name: 'Platform Readiness' });
-  await expect(readiness.getByText('Platform Readiness')).toBeVisible();
-  await expect(readiness.getByText('EOD local')).toBeVisible();
-  await expect(readiness.getByText('Status')).toBeVisible();
-  await expect(readiness.getByText('Partial')).toHaveCount(2);
-  await expect(readiness.getByText('Latest EOD', { exact: true })).toBeVisible();
-  await expect(readiness.getByText('2026-06-08')).toBeVisible();
-  await expect(readiness.getByText('Warnings')).toBeVisible();
+  await expect(page.getByText('策略持仓状态')).toBeVisible();
+  const readiness = page.getByRole('region', { name: '平台就绪状态' });
+  await expect(readiness.getByText('就绪状态')).toBeVisible();
+  await expect(readiness.getByText('本地日线')).toBeVisible();
+  await expect(readiness.getByText('模式')).toBeVisible();
+  await expect(readiness.getByText('部分可用')).toBeVisible();
+  await expect(readiness.getByText('警告数')).toBeVisible();
   await expect(readiness.getByText('1')).toBeVisible();
-  await expect(readiness.getByText('Market data')).toBeVisible();
-  await expect(readiness.getByText('Ready')).toBeVisible();
-  await expect(readiness.getByText('Latest EOD data loaded')).toBeVisible();
-  await expect(readiness.getByText('Strategy validation')).toBeVisible();
-  await expect(readiness.getByText('Replay artifacts current for Task 4')).toBeVisible();
   await expect(readiness.getByText('News collector lagging')).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Open Review Queue workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Review Queue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略复盘队列' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Strong evidence' })).toBeVisible();
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);

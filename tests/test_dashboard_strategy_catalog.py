@@ -23,6 +23,27 @@ def test_strategy_catalog_marks_validated_combos_as_backtest_runnable():
     assert by_id["position_control"]["primary_action"] == "Internal overlay"
 
 
+def test_strategy_catalog_exposes_structured_latest_metrics_for_active_combos():
+    rows = list_strategy_catalog()
+    by_id = {row["strategy_id"]: row for row in rows}
+
+    for strategy_id in ["lhb_shortline", "mid_trend", "tech_bottleneck"]:
+        metrics = by_id[strategy_id]["latest_metrics"]
+        assert set(metrics) == {
+            "as_of_date",
+            "total_return_pct",
+            "max_drawdown_pct",
+            "latest_day_return_pct",
+            "latest_day_drawdown_pct",
+            "signal_status",
+            "signal_count",
+        }
+        assert metrics["as_of_date"]
+        assert metrics["total_return_pct"] is not None
+        assert metrics["max_drawdown_pct"] is not None
+        assert metrics["signal_status"] == "no_position_rows"
+
+
 def test_strategy_catalog_describes_default_combos_in_user_language():
     rows = list_strategy_catalog()
     by_id = {row["strategy_id"]: row for row in rows}
@@ -31,7 +52,7 @@ def test_strategy_catalog_describes_default_combos_in_user_language():
     assert "龙虎榜资金行为" in by_id["lhb_shortline"]["description"]
     assert "龙虎榜净买占比" in by_id["lhb_shortline"]["signal_inputs"]
     assert "涨停失败风险" in by_id["lhb_shortline"]["signal_inputs"]
-    assert "2026区间净值 1.6341" in by_id["lhb_shortline"]["latest_evidence"]
+    assert "净值约 2.6069" in by_id["lhb_shortline"]["latest_evidence"]
 
     assert by_id["mid_trend"]["strategy_name"] == "Mid Trend Combo"
     assert "中期趋势股票池" in by_id["mid_trend"]["description"]
@@ -43,7 +64,7 @@ def test_strategy_catalog_describes_default_combos_in_user_language():
     assert "技术形态" in by_id["tech_bottleneck"]["description"]
     assert "技术瓶颈形态" in by_id["tech_bottleneck"]["signal_inputs"]
     assert "假突破过滤" in by_id["tech_bottleneck"]["signal_inputs"]
-    assert "2026区间净值 1.2351" in by_id["tech_bottleneck"]["latest_evidence"]
+    assert "净值约 1.6007" in by_id["tech_bottleneck"]["latest_evidence"]
 
     public_text = " ".join(
         str(value)
@@ -57,6 +78,7 @@ def test_strategy_catalog_describes_default_combos_in_user_language():
         "report_mild_bonus",
         "C2",
         "tech_hard_filter",
+        "rank_exit_top10_1d",
         "top5_adaptive_daily_check_max2_v1",
     ]:
         assert internal_token not in public_text

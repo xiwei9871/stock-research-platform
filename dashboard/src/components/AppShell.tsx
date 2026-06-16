@@ -55,18 +55,18 @@ type StockHandoff = {
   version: number;
 };
 
-const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string }> = [
-  { mode: 'home', label: 'Home' },
-  { mode: 'reviewQueue', label: 'Review Queue' },
-  { mode: 'market', label: 'Market Monitor' },
-  { mode: 'news', label: 'News' },
-  { mode: 'researchReports', label: 'Research Reports' },
-  { mode: 'stock', label: 'Stock Workspace' },
-  { mode: 'watchlist', label: 'Watchlist' },
-  { mode: 'factors', label: 'Factor Lab' },
-  { mode: 'strategyLab', label: 'Strategy Lab' },
-  { mode: 'data', label: 'Data Explorer' },
-  { mode: 'generatedReports', label: 'Generated Reports' }
+const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
+  { mode: 'home', label: '首页', ariaLabel: 'Open Home workspace' },
+  { mode: 'reviewQueue', label: '复盘队列', ariaLabel: 'Open Review Queue workspace' },
+  { mode: 'market', label: '市场监控', ariaLabel: 'Open Market Monitor workspace' },
+  { mode: 'news', label: '新闻', ariaLabel: 'Open News workspace' },
+  { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
+  { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
+  { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
+  { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
+  { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
+  { mode: 'data', label: '数据探索', ariaLabel: 'Open Data Explorer workspace' },
+  { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
 ];
 
 export function AppShell() {
@@ -188,13 +188,13 @@ export function AppShell() {
   return (
     <main className="platform-shell">
       <aside className="platform-nav" aria-label="Workspace navigation">
-        <div className="panel-title">Stock Research</div>
+        <div className="panel-title">A股策略研究</div>
         {NAV_ITEMS.map((item) => (
           <button
             type="button"
             key={item.mode}
             aria-current={workspaceMode === item.mode ? 'page' : undefined}
-            aria-label={`Open ${item.label} workspace`}
+            aria-label={item.ariaLabel}
             className={workspaceMode === item.mode ? 'active' : ''}
             onClick={() => openWorkspaceMode(item.mode)}
           >

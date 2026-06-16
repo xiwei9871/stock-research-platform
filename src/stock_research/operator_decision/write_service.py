@@ -25,6 +25,7 @@ ACTION_TO_DECISION_LABEL = {
     "close": "remove",
 }
 
+MANUAL_REVIEW_WATCHLIST_ID = "manual_review"
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -54,11 +55,13 @@ def create_operator_decision(
     source_context_text = merge_source_context(source_context, merged_context)
     session = _session_row(request)
     event = _event_row(request, source_context_text=source_context_text)
+    workflow_effects = _workflow_effects(request)
 
     with connect(service) as conn:
         with conn.cursor() as cur:
             _upsert_session(cur, session)
             _upsert_event(cur, event)
+            _apply_workflow_effects(cur, request, workflow_effects)
 
     warnings = _snapshot_warnings(merged_context)
     return {
@@ -82,6 +85,7 @@ def create_operator_decision(
         "snapshot_linkage_warnings": warnings,
         "warnings": warnings,
         "source_context": source_context_text,
+        "workflow_effects": workflow_effects,
     }
 
 
@@ -203,6 +207,73 @@ def _event_row(request: dict[str, Any], *, source_context_text: str) -> dict[str
         "auto_trade_enabled": False,
         "source_artifact_path": "dashboard-api",
     }
+
+
+def _workflow_effects(request: dict[str, Any]) -> list[dict[str, Any]]:
+    operator_action = request["operator_action"]
+    if operator_action in {"watch", "follow_up"}:
+        return [
+            {
+                "type": "watchlist_item",
+                "status": "upserted",
+                "watchlist_id": MANUAL_REVIEW_WATCHLIST_ID,
+                "asset_id": request["asset_id"],
+            }
+        ]
+    if operator_action == "close":
+        return [
+            {
+                "type": "watchlist_item",
+                "status": "deactivated",
+                "watchlist_id": MANUAL_REVIEW_WATCHLIST_ID,
+                "asset_id": request["asset_id"],
+            }
+        ]
+    return []
+
+
+def _apply_workflow_effects(cur: Any, request: dict[str, Any], workflow_effects: list[dict[str, Any]]) -> None:
+    for effect in workflow_effects:
+        if effect["type"] == "watchlist_item":
+            _upsert_manual_review_watchlist_item(
+                cur,
+                request,
+                active=effect["status"] == "upserted",
+            )
+
+
+def _upsert_manual_review_watchlist_item(cur: Any, request: dict[str, Any], *, active: bool) -> None:
+    sql = """
+    INSERT INTO watchlist.watchlist_item (
+        watchlist_id, asset_id, stock_code, stock_name, priority, active, note, source
+    )
+    VALUES (
+        %(watchlist_id)s, %(asset_id)s, %(stock_code)s, %(stock_name)s,
+        %(priority)s, %(active)s, %(note)s, %(source)s
+    )
+    ON CONFLICT (watchlist_id, asset_id)
+    DO UPDATE SET
+        stock_code = EXCLUDED.stock_code,
+        stock_name = EXCLUDED.stock_name,
+        priority = EXCLUDED.priority,
+        active = EXCLUDED.active,
+        note = EXCLUDED.note,
+        source = EXCLUDED.source,
+        updated_at = now()
+    """
+    cur.execute(
+        sql,
+        {
+            "watchlist_id": MANUAL_REVIEW_WATCHLIST_ID,
+            "asset_id": request["asset_id"],
+            "stock_code": request["stock_code"],
+            "stock_name": request["stock_name"],
+            "priority": 50 if active else 100,
+            "active": active,
+            "note": request["operator_note"],
+            "source": f"operator_decision:{request['operator_action']}",
+        },
+    )
 
 
 def _parse_context(source_context: Any) -> dict[str, Any]:

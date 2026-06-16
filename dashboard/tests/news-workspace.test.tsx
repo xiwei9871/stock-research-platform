@@ -81,16 +81,17 @@ describe('getNewsAssetCandidate', () => {
 });
 
 describe('NewsWorkspace', () => {
-  it('loads accepted Sina top three news by default', async () => {
+  it('loads accepted Sina news from today by default', async () => {
     render(<NewsWorkspace />);
 
     expect(await screen.findByText('600000 浦发银行公告')).toBeInTheDocument();
-    expect(apiMocks.fetchPublicNews).toHaveBeenCalledWith({
+    expect(apiMocks.fetchPublicNews).toHaveBeenCalledWith(expect.objectContaining({
       source: 'sina_finance',
-      limit: 3,
-      minQualityScore: 70
-    });
-    expect(screen.getByText('1/3 accepted')).toBeInTheDocument();
+      limit: 100,
+      minQualityScore: 65,
+      startTime: expect.stringContaining('T00:00:00')
+    }));
+    expect(screen.getByText('今日通过 1 条')).toBeInTheDocument();
     expect(screen.getByText(/next run 2026-06-12T02:00:00\+00:00/)).toBeInTheDocument();
   });
 
@@ -154,8 +155,9 @@ describe('NewsWorkspace', () => {
     await waitFor(() =>
       expect(apiMocks.fetchPublicNews).toHaveBeenLastCalledWith({
         source: 'sina_finance',
-        limit: 3,
-        minQualityScore: 70,
+        limit: 100,
+        minQualityScore: 65,
+        startTime: expect.stringContaining('T00:00:00'),
         category: 'company',
         q: '茅台'
       })
@@ -187,7 +189,7 @@ describe('NewsWorkspace', () => {
         })
       ],
       total: 1,
-      limit: 3,
+      limit: 100,
       offset: 0,
       summary: {
         total_news: 1,
@@ -245,12 +247,12 @@ describe('NewsWorkspace', () => {
     expect(screen.getByText('信息完整')).toBeInTheDocument();
   });
 
-  it('shows the exact accepted-news empty state', async () => {
+  it('shows the exact daily accepted-news empty state', async () => {
     apiMocks.fetchPublicNews.mockResolvedValueOnce({ items: [], warnings: [] });
 
     render(<NewsWorkspace />);
 
-    expect(await screen.findByText('本轮无高质量新闻')).toBeInTheDocument();
+    expect(await screen.findByText('今日暂无高质量新闻')).toBeInTheDocument();
   });
 
   it('handles malformed public news payload arrays defensively', async () => {
@@ -258,8 +260,8 @@ describe('NewsWorkspace', () => {
 
     render(<NewsWorkspace />);
 
-    expect(await screen.findByText('本轮无高质量新闻')).toBeInTheDocument();
-    expect(screen.getByText('0/3 accepted')).toBeInTheDocument();
+    expect(await screen.findByText('今日暂无高质量新闻')).toBeInTheDocument();
+    expect(screen.getByText('今日通过 0 条')).toBeInTheDocument();
   });
 
   it('falls back to collector status from the news summary', async () => {
@@ -291,7 +293,7 @@ describe('NewsWorkspace', () => {
     render(<NewsWorkspace />);
 
     expect(await screen.findByText('状态接口慢但新闻先显示')).toBeInTheDocument();
-    expect(screen.getByText('1/3 accepted')).toBeInTheDocument();
+    expect(screen.getByText('今日通过 1 条')).toBeInTheDocument();
   });
 
   it('clears previous rows when a foreground filter load fails', async () => {
@@ -304,7 +306,7 @@ describe('NewsWorkspace', () => {
 
     expect(await screen.findByText('news filter failed')).toBeInTheDocument();
     expect(screen.queryByText('600000 浦发银行公告')).not.toBeInTheDocument();
-    expect(screen.getByText('本轮无高质量新闻')).toBeInTheDocument();
+    expect(screen.getByText('今日暂无高质量新闻')).toBeInTheDocument();
   });
 });
 
