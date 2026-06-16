@@ -4,6 +4,7 @@ import type {
   AssetProfile,
   AssetResearchReportResponse,
   BarPoint,
+  BacktestJobResponse,
   BacktestRunRequest,
   BacktestRunResult,
   CreateOperatorDecisionRequest,
@@ -48,6 +49,7 @@ import type {
   StrategySignal,
   StrategyTrade,
   StrategyValidationRun,
+  UpdateOperatorDecisionRequest,
   WatchlistResponse,
   WatchlistSignalRow
 } from './types';
@@ -327,6 +329,17 @@ export async function createOperatorDecision(
   request: CreateOperatorDecisionRequest
 ): Promise<CreateOperatorDecisionResponse> {
   return postJson('/api/operator-decisions', request);
+}
+
+export async function updateOperatorDecision(
+  eventId: string,
+  request: UpdateOperatorDecisionRequest
+): Promise<DecisionEventRow> {
+  const payload = await patchJson<{ item: DecisionEventRow }>(
+    `/api/operator-decisions/${encodeURIComponent(eventId)}`,
+    request
+  );
+  return payload.item;
 }
 
 export async function fetchAssetOutcomes(
@@ -613,11 +626,34 @@ export async function fetchBacktestStrategies(): Promise<StrategyCatalogItem[]> 
 }
 
 export async function runBacktest(request: BacktestRunRequest): Promise<BacktestRunResult> {
-  return runFreshBacktest(request);
+  const job = await submitBacktestJob(request);
+  return waitForBacktestJob(job.job_id);
 }
 
 export async function runFreshBacktest(request: BacktestRunRequest): Promise<BacktestRunResult> {
   return postBacktest('/api/backtests/run-fresh', request);
+}
+
+export async function submitBacktestJob(request: BacktestRunRequest): Promise<BacktestJobResponse> {
+  return postJson('/api/backtests/jobs', request);
+}
+
+export async function fetchBacktestJob(jobId: string): Promise<BacktestJobResponse> {
+  return getJson(`/api/backtests/jobs/${encodeURIComponent(jobId)}`);
+}
+
+async function waitForBacktestJob(jobId: string): Promise<BacktestRunResult> {
+  for (let attempt = 0; attempt < 360; attempt += 1) {
+    const job = await fetchBacktestJob(jobId);
+    if (job.status === 'succeeded' && job.result) {
+      return job.result;
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error || `Backtest job ${jobId} failed`);
+    }
+    await delay(1000);
+  }
+  throw new Error(`Backtest job ${jobId} timed out`);
 }
 
 async function postBacktest(url: string, request: BacktestRunRequest): Promise<BacktestRunResult> {
@@ -636,10 +672,26 @@ async function postJson<T>(url: string, request: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function patchJson<T>(url: string, request: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+  if (!response.ok) {
+    throw new Error(`PATCH ${url} failed with ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`GET ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

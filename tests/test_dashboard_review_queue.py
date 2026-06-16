@@ -184,6 +184,89 @@ def test_build_review_queue_strategy_mode_keeps_lhb_and_meaningful_review_metric
     assert tech["digest"]["facts"][1]["label"] == "技术瓶颈排名 #1"
 
 
+def test_load_active_strategy_topn_rows_prefers_newer_db_rows_over_stale_artifacts(monkeypatch):
+    artifact_rows = [
+        {
+            **_strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-06-05",
+            "source_type": "strategy_artifact",
+        },
+        {
+            **_strategy_position(
+                "CN:SH:600198",
+                1,
+                strategy_id="lhb_shortline",
+                strategy_name="LHB Shortline Combo",
+            ),
+            "trade_date": "2026-06-15",
+            "source_type": "strategy_artifact",
+        },
+    ]
+    db_rows = [
+        {
+            **_strategy_position("CN:SZ:300951", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-06-15",
+            "source_type": "strategy_topn",
+        },
+        {
+            **_strategy_position(
+                "CN:SH:600519",
+                1,
+                strategy_id="tech_bottleneck",
+                strategy_name="Tech Bottleneck Combo",
+            ),
+            "trade_date": "2026-06-14",
+            "source_type": "strategy_topn",
+        },
+    ]
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: artifact_rows)
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: db_rows)
+    monkeypatch.setattr(review_queue, "_load_live_strategy_score_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-15", limit=10)
+
+    assert [(row["strategy_id"], row["asset_id"], row["trade_date"], row["source_type"]) for row in rows] == [
+        ("mid_trend", "CN:SZ:300951", "2026-06-15", "strategy_topn"),
+        ("lhb_shortline", "CN:SH:600198", "2026-06-15", "strategy_artifact"),
+        ("tech_bottleneck", "CN:SH:600519", "2026-06-14", "strategy_topn"),
+    ]
+
+
+def test_load_active_strategy_topn_rows_uses_live_scores_when_persisted_sources_are_stale(monkeypatch):
+    artifact_rows = [
+        {
+            **_strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-06-02",
+            "source_type": "strategy_artifact",
+        }
+    ]
+    db_rows = [
+        {
+            **_strategy_position("CN:SZ:000002", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-05-18",
+            "source_type": "strategy_topn",
+        }
+    ]
+    live_rows = [
+        {
+            **_strategy_position("CN:SZ:300951", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-06-15",
+            "source_type": "strategy_live_score",
+        }
+    ]
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: artifact_rows)
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: db_rows)
+    monkeypatch.setattr(review_queue, "_load_live_strategy_score_rows", lambda *, trade_date, limit: live_rows)
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-15", limit=10)
+
+    assert [(row["strategy_id"], row["asset_id"], row["trade_date"], row["source_type"]) for row in rows] == [
+        ("mid_trend", "CN:SZ:300951", "2026-06-15", "strategy_live_score"),
+    ]
+
+
 def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
     score_rows = [
         _score("000003.SZ", 3, 70),

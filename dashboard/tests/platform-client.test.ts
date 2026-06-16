@@ -60,7 +60,16 @@ describe('platform API clients', () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ strategy_id: 'manual_v1_topn_rotation', read_only: false, execution_mode: 'fresh' })
+        json: async () => ({ job_id: 'backtest-job:1', status: 'queued' })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          job_id: 'backtest-job:1',
+          status: 'succeeded',
+          result: { strategy_id: 'manual_v1_topn_rotation', read_only: false, execution_mode: 'fresh' },
+          error: ''
+        })
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
@@ -94,7 +103,7 @@ describe('platform API clients', () => {
     expect(strategies[0].strategy_id).toBe('manual_v1_topn_rotation');
     expect(result.execution_mode).toBe('fresh');
     expect(freshResult.execution_mode).toBe('fresh');
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/factors/library');
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -105,12 +114,13 @@ describe('platform API clients', () => {
       '/api/assets/000001.SZ/profile?trade_date=2026-06-08&start_date=2026-06-01&end_date=2026-06-08&score_version=manual_v1&adjust_type=qfq'
     );
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/backtests/strategies');
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/backtests/run-fresh', {
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/backtests/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backtestRequest)
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/backtests/run-fresh', {
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/backtests/jobs/backtest-job%3A1');
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/backtests/run-fresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backtestRequest)

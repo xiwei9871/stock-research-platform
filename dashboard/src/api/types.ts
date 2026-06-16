@@ -178,6 +178,25 @@ export type CreateOperatorDecisionResponse = {
   }>;
 };
 
+export type UpdateOperatorDecisionRequest = {
+  notes?: string;
+  follow_up_note?: string;
+  requires_follow_up?: boolean;
+};
+
+export type BacktestJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | string;
+
+export type BacktestJobResponse = {
+  job_id: string;
+  status: BacktestJobStatus;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  payload?: Record<string, unknown>;
+  result?: BacktestRunResult | null;
+  error?: string;
+};
+
 export type ReviewItemSnapshot = {
   snapshot_id: string;
   run_id: string;

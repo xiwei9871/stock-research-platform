@@ -1,10 +1,18 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAssetNews, fetchAssetProfile, fetchAssetResearchReports, fetchEvidenceDigest, searchAssets } from '../api/client';
+import {
+  fetchAssetNews,
+  fetchAssetProfile,
+  fetchAssetResearchReports,
+  fetchEvidenceDigest,
+  searchAssets,
+  updateOperatorDecision
+} from '../api/client';
 import type {
   AssetNewsResponse,
   AssetProfile,
   AssetResearchReportResponse,
   AssetSummary,
+  DecisionEventRow,
   EvidenceDigestAction,
   EvidenceDigestResponse
 } from '../api/types';
@@ -67,6 +75,16 @@ function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['s
   if (sourceWorkspace === 'researchReports') return 'Research Reports';
   if (sourceWorkspace === 'reviewQueue') return 'Review Queue';
   return 'Market Monitor';
+}
+
+function formatDecisionLabel(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized === 'observe') return '观察';
+  if (normalized === 'candidate') return '加入影子观察';
+  if (normalized === 'no_action') return '跳过';
+  if (normalized === 'caution') return '谨慎';
+  if (normalized === 'remove') return '移除';
+  return label;
 }
 
 function normalizeAssetId(value: string) {
@@ -236,6 +254,12 @@ export function StockWorkspace({
   const [evidenceDigestError, setEvidenceDigestError] = useState<string | null>(null);
   const [evidenceDigestKey, setEvidenceDigestKey] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [editingDecisionId, setEditingDecisionId] = useState<string | null>(null);
+  const [decisionEditNotes, setDecisionEditNotes] = useState('');
+  const [decisionEditFollowUpNote, setDecisionEditFollowUpNote] = useState('');
+  const [decisionEditRequiresFollowUp, setDecisionEditRequiresFollowUp] = useState(false);
+  const [decisionEditSavingId, setDecisionEditSavingId] = useState<string | null>(null);
+  const [decisionEditError, setDecisionEditError] = useState<string | null>(null);
   const mountedRef = useRef(false);
   const profileRequestIdRef = useRef(0);
   const newsRequestIdRef = useRef(0);
@@ -321,6 +345,54 @@ export function StockWorkspace({
     },
     [assetId, endDate, isLatestProfileRequest, loadAssetMatches, startDate, tradeDate]
   );
+
+  const startDecisionEdit = (decision: DecisionEventRow) => {
+    setEditingDecisionId(decision.event_id);
+    setDecisionEditNotes(decision.notes || '');
+    setDecisionEditFollowUpNote(decision.follow_up_note || '');
+    setDecisionEditRequiresFollowUp(decision.requires_follow_up);
+    setDecisionEditError(null);
+  };
+
+  const cancelDecisionEdit = () => {
+    setEditingDecisionId(null);
+    setDecisionEditError(null);
+  };
+
+  const saveDecisionEdit = async (event: FormEvent<HTMLFormElement>, eventId: string) => {
+    event.preventDefault();
+    setDecisionEditSavingId(eventId);
+    setDecisionEditError(null);
+    try {
+      const updated = await updateOperatorDecision(eventId, {
+        notes: decisionEditNotes,
+        requires_follow_up: decisionEditRequiresFollowUp,
+        follow_up_note: decisionEditFollowUpNote
+      });
+      if (!mountedRef.current) {
+        return;
+      }
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              decisions: current.decisions.map((decision) =>
+                decision.event_id === updated.event_id ? updated : decision
+              )
+            }
+          : current
+      );
+      setEditingDecisionId(null);
+    } catch (err: unknown) {
+      if (mountedRef.current) {
+        setDecisionEditError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (mountedRef.current) {
+        setDecisionEditSavingId(null);
+      }
+    }
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -700,6 +772,74 @@ export function StockWorkspace({
                   void loadProfile(currentAssetId, tradeDate, startDate, endDate);
                 }}
               />
+              <section className="stock-review-log" role="region" aria-label="复盘日志">
+                <div className="section-heading compact-heading">
+                  <h3>复盘日志</h3>
+                  <span className="muted">{profile.decisions.length} 条</span>
+                </div>
+                {decisionEditError ? <p className="error-text">{decisionEditError}</p> : null}
+                <div className="decision-list">
+                  {profile.decisions.map((decision) => {
+                    const isEditing = editingDecisionId === decision.event_id;
+                    return (
+                      <article className="decision-row" key={decision.event_id}>
+                        <div>
+                          <strong>{formatDecisionLabel(decision.decision_label)}</strong>
+                          <span>{decision.review_date}</span>
+                        </div>
+                        {isEditing ? (
+                          <form className="workspace-stack" onSubmit={(event) => saveDecisionEdit(event, decision.event_id)}>
+                            <label>
+                              复盘备注
+                              <textarea
+                                aria-label="复盘日志备注"
+                                rows={3}
+                                value={decisionEditNotes}
+                                onChange={(event) => setDecisionEditNotes(event.target.value)}
+                              />
+                            </label>
+                            <label className="inline-check">
+                              <input
+                                aria-label="需要跟进"
+                                type="checkbox"
+                                checked={decisionEditRequiresFollowUp}
+                                onChange={(event) => setDecisionEditRequiresFollowUp(event.target.checked)}
+                              />
+                              需要跟进
+                            </label>
+                            <label>
+                              跟进说明
+                              <input
+                                aria-label="跟进说明"
+                                value={decisionEditFollowUpNote}
+                                onChange={(event) => setDecisionEditFollowUpNote(event.target.value)}
+                              />
+                            </label>
+                            <div className="compact-toolbar">
+                              <button type="submit" disabled={decisionEditSavingId === decision.event_id}>
+                                {decisionEditSavingId === decision.event_id ? '保存中...' : '保存复盘日志'}
+                              </button>
+                              <button type="button" onClick={cancelDecisionEdit}>
+                                取消
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <p>{decision.notes || '暂无备注'}</p>
+                            {decision.follow_up_note ? <span>{decision.follow_up_note}</span> : null}
+                            {decision.requires_follow_up ? <span className="risk-tag">需要跟进</span> : null}
+                            <button type="button" className="inline-button" onClick={() => startDecisionEdit(decision)}>
+                              编辑复盘日志
+                            </button>
+                          </>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+                {profile.decisions.length === 0 ? <p className="muted">暂无复盘日志，保存一次复盘决策后会出现在这里。</p> : null}
+              </section>
               <div className="section-heading compact-heading">
                 <h3>外部证据入口</h3>
               </div>

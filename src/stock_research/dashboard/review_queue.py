@@ -9,6 +9,7 @@ from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
+from stock_research.dashboard.strategy_backtest_adapters import STRATEGY_BACKTEST_REGISTRY, StrategyBacktestParams
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.db import connect, fetch_all
 
@@ -111,13 +112,64 @@ def build_review_queue(
 
 def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
     artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
-    covered_strategy_ids = {str(row.get("strategy_id") or "") for row in artifact_rows}
-    db_rows = [
-        row
-        for row in _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
-        if str(row.get("strategy_id") or "") not in covered_strategy_ids
-    ]
-    return _attach_asset_names([*artifact_rows, *db_rows])
+    db_rows = _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
+    live_rows = _load_live_strategy_score_rows(trade_date=trade_date, limit=limit)
+    return _attach_asset_names(
+        _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows, live_rows=live_rows)
+    )
+
+
+def _select_latest_strategy_sources(
+    *,
+    artifact_rows: list[dict[str, Any]],
+    db_rows: list[dict[str, Any]],
+    live_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    source_order: list[tuple[str, str]] = []
+    for source_name, rows in (("artifact", artifact_rows), ("db", db_rows), ("live", live_rows or [])):
+        by_strategy: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            strategy_id = str(row.get("strategy_id") or "")
+            if not strategy_id:
+                continue
+            by_strategy.setdefault(strategy_id, []).append(row)
+        for strategy_id, strategy_rows in by_strategy.items():
+            grouped[f"{source_name}:{strategy_id}"] = strategy_rows
+            source_order.append((source_name, strategy_id))
+
+    selected_by_strategy: dict[str, tuple[str, list[dict[str, Any]]]] = {}
+    strategy_order: list[str] = []
+    for source_name, strategy_id in source_order:
+        key = f"{source_name}:{strategy_id}"
+        rows = grouped[key]
+        latest_date = max(str(row.get("trade_date") or "")[:10] for row in rows)
+        previous = selected_by_strategy.get(strategy_id)
+        if previous is None:
+            selected_by_strategy[strategy_id] = (latest_date, rows)
+            strategy_order.append(strategy_id)
+            continue
+        previous_date, previous_rows = previous
+        previous_priority = max(_strategy_source_priority(row) for row in previous_rows)
+        current_priority = max(_strategy_source_priority(row) for row in rows)
+        if latest_date > previous_date or (latest_date == previous_date and current_priority > previous_priority):
+            selected_by_strategy[strategy_id] = (latest_date, rows)
+
+    selected: list[dict[str, Any]] = []
+    for strategy_id in strategy_order:
+        selected.extend(selected_by_strategy[strategy_id][1])
+    return selected
+
+
+def _strategy_source_priority(row: dict[str, Any]) -> int:
+    source_type = str(row.get("source_type") or "")
+    if source_type == "strategy_topn":
+        return 3
+    if source_type == "strategy_live_score":
+        return 2
+    if source_type == "strategy_artifact":
+        return 1
+    return 0
 
 
 def _load_db_strategy_position_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
@@ -197,6 +249,60 @@ def _load_db_strategy_position_rows(*, trade_date: str, limit: int) -> list[dict
                 "weight": _optional_float(row.get("weight") or row_json.get("weight") or row_json.get("target_weight")),
             }
         )
+    return normalized
+
+
+def _load_live_strategy_score_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    if not trade_date:
+        return []
+    strategy_names = _active_strategy_names()
+    params = StrategyBacktestParams(start_date=trade_date, end_date=trade_date, score_version="manual_v1", adjust_type="hfq")
+    normalized: list[dict[str, Any]] = []
+    for strategy_id, strategy_name in strategy_names.items():
+        adapter = STRATEGY_BACKTEST_REGISTRY.get(strategy_id)
+        if adapter is None or not hasattr(adapter, "load_scores"):
+            continue
+        try:
+            frame = adapter.load_scores(params)
+        except Exception:
+            continue
+        if frame is None or frame.empty:
+            continue
+        rows = frame.to_dict("records")
+        strategy_rows = [
+            row
+            for row in rows
+            if str(row.get("trade_date") or "")[:10] == trade_date and str(row.get("asset_id") or "")
+        ]
+        strategy_rows = sorted(
+            strategy_rows,
+            key=lambda row: (
+                _optional_int(row.get("rank")) or 10**9,
+                -(_optional_float(row.get("score_total")) or 0.0),
+                str(row.get("asset_id") or ""),
+            ),
+        )
+        for index, row in enumerate(strategy_rows[:limit], start=1):
+            rank = _optional_int(row.get("rank")) or index
+            normalized.append(
+                {
+                    "trade_date": str(row.get("trade_date") or "")[:10],
+                    "asset_id": str(row.get("asset_id") or ""),
+                    "rank": rank,
+                    "score_total": _optional_float(row.get("score_total")),
+                    "score_version": "strategy_topn",
+                    "score_components": dict(row.get("score_components") or {}),
+                    "strategy_id": strategy_id,
+                    "strategy_name": strategy_name,
+                    "strategy_run_id": f"live-score:{strategy_id}:{trade_date}",
+                    "source_type": "strategy_live_score",
+                    "source_name": strategy_name,
+                    "source_rank": rank,
+                    "review_tier": "top5_focus" if rank <= 5 else "top10_watch",
+                    "review_notes": ["实时策略候选分数：尚未写入回测持仓表"],
+                    "warnings": ["该条来自实时候选分数，用于复盘候选，不代表已执行持仓"],
+                }
+            )
     return normalized
 
 

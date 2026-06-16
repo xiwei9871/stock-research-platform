@@ -9,8 +9,9 @@ from stock_research.dashboard.backtests import (
     run_fresh_backtest,
     run_replay_backtest,
 )
+from stock_research.dashboard.backtest_jobs import BacktestJobStore
 from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
-from stock_research.dashboard.decisions import load_asset_decision_history
+from stock_research.dashboard.decisions import load_asset_decision_history, update_operator_decision_event
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
     app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
+    app.state.backtest_jobs = BacktestJobStore(run_fresh_backtest)
     app.state.public_news_scheduler = PublicNewsScheduler(
         refresh_public_news_for_dashboard,
         interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
@@ -414,6 +416,14 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.patch("/api/operator-decisions/{event_id}")
+    def operator_decision_update(event_id: str, payload: dict):
+        try:
+            return {"item": update_operator_decision_event(event_id, payload)}
+        except ValueError as exc:
+            status_code = 404 if str(exc) == "decision_event_not_found" else 400
+            raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
     @app.get("/api/assets/{asset_id}/outcomes")
     def asset_outcomes(
         asset_id: str,
@@ -620,6 +630,20 @@ def create_app() -> FastAPI:
     @app.get("/api/backtests/strategies")
     def backtest_strategies():
         return {"items": list_backtest_strategies()}
+
+    @app.post("/api/backtests/jobs")
+    def backtest_job_submit(payload: dict):
+        try:
+            return app.state.backtest_jobs.submit(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/backtests/jobs/{job_id}")
+    def backtest_job_status(job_id: str):
+        try:
+            return app.state.backtest_jobs.get(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="backtest job not found") from exc
 
     @app.post("/api/backtests/run")
     def backtest_run(payload: dict):

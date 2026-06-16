@@ -16,7 +16,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetNews: vi.fn(),
   fetchAssetProfile: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
-  searchAssets: vi.fn()
+  searchAssets: vi.fn(),
+  updateOperatorDecision: vi.fn()
 }));
 
 vi.mock('../src/api/client', () => apiMocks);
@@ -403,6 +404,50 @@ describe('StockWorkspace', () => {
     await waitFor(() => expect(apiMocks.fetchAssetProfile).toHaveBeenCalledTimes(2));
     const reviewOutcomes = screen.getByRole('region', { name: 'Review / Outcomes' });
     expect(within(reviewOutcomes).getByText('观察回踩确认')).toBeInTheDocument();
+  });
+
+  it('edits review log notes in place', async () => {
+    const profile = makeProfile({
+      decisions: [
+        {
+          ...makeProfile().decisions[0],
+          event_id: 'operator_decision:1',
+          decision_label: 'observe',
+          notes: '原备注',
+          follow_up_note: '',
+          requires_follow_up: false
+        }
+      ]
+    });
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(profile);
+    apiMocks.updateOperatorDecision.mockResolvedValueOnce({
+      ...profile.decisions[0],
+      notes: '更新后的复盘备注',
+      follow_up_note: '明天看量能',
+      requires_follow_up: true
+    });
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const reviewLog = await screen.findByRole('region', { name: '复盘日志' });
+    fireEvent.click(within(reviewLog).getByRole('button', { name: '编辑复盘日志' }));
+    fireEvent.change(within(reviewLog).getByLabelText('复盘日志备注'), {
+      target: { value: '更新后的复盘备注' }
+    });
+    fireEvent.click(within(reviewLog).getByLabelText('需要跟进'));
+    fireEvent.change(within(reviewLog).getByLabelText('跟进说明'), {
+      target: { value: '明天看量能' }
+    });
+    fireEvent.click(within(reviewLog).getByRole('button', { name: '保存复盘日志' }));
+
+    await waitFor(() => expect(apiMocks.updateOperatorDecision).toHaveBeenCalledTimes(1));
+    expect(apiMocks.updateOperatorDecision).toHaveBeenCalledWith('operator_decision:1', {
+      notes: '更新后的复盘备注',
+      requires_follow_up: true,
+      follow_up_note: '明天看量能'
+    });
+    expect(await within(reviewLog).findByText('更新后的复盘备注')).toBeInTheDocument();
+    expect(within(reviewLog).getByText('明天看量能')).toBeInTheDocument();
   });
 
   it('renders the source workspace and match reason for stock handoffs', async () => {

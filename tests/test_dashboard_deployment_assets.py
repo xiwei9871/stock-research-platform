@@ -36,6 +36,16 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
     assert "TOPN" in script
 
 
+def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
+    script = read_repo_file("deploy/sync_dashboard_fast.sh")
+
+    assert "pnpm build" in script
+    assert "dashboard/dist/" in script
+    assert "docker compose restart api dashboard" in script
+    assert "REBUILD=1" in script
+    assert "docker compose build api dashboard" in script
+
+
 def test_dashboard_deployment_runbook_documents_version_and_database_checks() -> None:
     runbook = read_repo_file("docs/deployment-dashboard.md")
 
@@ -46,4 +56,6 @@ def test_dashboard_deployment_runbook_documents_version_and_database_checks() ->
     assert "stock_qfq" in runbook
     assert "Run Fresh Backtest" in runbook
     assert "Load Cached Replay" in runbook
+    assert "Fast Docker Deploy On 192.168.3.185" in runbook
+    assert "PYTHONPATH=/app/src" in runbook
     assert "回滚" in runbook

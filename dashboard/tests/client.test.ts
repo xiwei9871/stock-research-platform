@@ -34,14 +34,25 @@ import {
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
-  it('runs default backtests through the fresh calculation endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ strategy_id: 'lhb_shortline', summary: { total_return: 0.63 } })
-    });
+  it('runs default backtests through the background job endpoint', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ job_id: 'backtest-job:1', status: 'queued' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          job_id: 'backtest-job:1',
+          status: 'succeeded',
+          result: { strategy_id: 'lhb_shortline', summary: { total_return: 0.63 } },
+          error: ''
+        })
+      });
     vi.stubGlobal('fetch', fetchMock);
 
-    await runBacktest({
+    const result = await runBacktest({
       strategy_id: 'lhb_shortline',
       start_date: '2026-01-01',
       end_date: '2026-06-08',
@@ -54,9 +65,11 @@ describe('dashboard API client', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/backtests/run-fresh',
+      '/api/backtests/jobs',
       expect.objectContaining({ method: 'POST' })
     );
+    expect(fetchMock).toHaveBeenCalledWith('/api/backtests/jobs/backtest-job%3A1');
+    expect(result.summary.total_return).toBe(0.63);
   });
 
   it('keeps explicit fresh backtests on the fresh endpoint', async () => {

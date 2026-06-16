@@ -78,6 +78,32 @@ sudo ln -sfn "$release" /var/www/stock-dashboard/current
 
 The deployed dashboard must show the new workspace, including `Research Cockpit`, `Data Explorer`, `Factor Lab`, and `Backtest Lab`. It should not show the old standalone `TOPN`, `WATCHLIST`, `ASSET REVIEW` homepage.
 
+## Fast Docker Deploy On 192.168.3.185
+
+The current 192.168.3.185 deployment keeps Docker Compose as the process
+manager, but the containers mount the mutable app files from the host:
+
+- `./src` is mounted into the API container at `/app/src`.
+- `PYTHONPATH=/app/src` makes restarted API workers load the mounted source.
+- `./dashboard/dist` is mounted into the dashboard nginx container at
+  `/usr/share/nginx/html`.
+
+For ordinary frontend and backend source changes, run:
+
+```bash
+./deploy/sync_dashboard_fast.sh
+```
+
+The script builds `dashboard/dist`, rsyncs `src/`, `dashboard/src/`, frontend
+build inputs, and `dashboard/dist/` to 192.168.3.185, then restarts the API and
+dashboard containers. No image rebuild is needed for normal source changes.
+
+Use a rebuild only when dependencies, Dockerfiles, or system packages change:
+
+```bash
+REBUILD=1 ./deploy/sync_dashboard_fast.sh
+```
+
 ## Nginx Deploy
 
 Install `deploy/nginx/stock-dashboard.conf` into the server's nginx site configuration. Keep Basic Auth if the site is private.

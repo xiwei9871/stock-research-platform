@@ -557,6 +557,84 @@ def test_operator_decisions_route_returns_400_for_validation_error(monkeypatch):
     assert response.json()["detail"] == "invalid_operator_action"
 
 
+def test_operator_decision_update_route_edits_review_log(monkeypatch):
+    captured = {}
+
+    def fake_update_operator_decision(event_id, payload):
+        captured["event_id"] = event_id
+        captured["payload"] = payload
+        return {
+            "review_date": "2026-06-12",
+            "review_session_id": "operator-decision-api-2026-06-12",
+            "event_id": event_id,
+            "asset_id": "000001.SZ",
+            "stock_code": "000001.SZ",
+            "stock_name": "平安银行",
+            "decision_label": "observe",
+            "evidence_artifact_id": "operator_decision_api:2026-06-12:000001.SZ",
+            "evidence_path": "",
+            "source_context": "{}",
+            "snapshot_linkage_status": "missing",
+            "snapshot_linkage_warnings": [],
+            "requires_follow_up": True,
+            "follow_up_note": "next close",
+            "notes": "updated review note",
+            "manual_review_required": True,
+            "auto_trade_enabled": False,
+        }
+
+    monkeypatch.setattr(dashboard_app, "update_operator_decision_event", fake_update_operator_decision)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.patch(
+        "/api/operator-decisions/event-1",
+        json={"notes": "updated review note", "requires_follow_up": True, "follow_up_note": "next close"},
+    )
+
+    assert response.status_code == 200
+    assert captured["event_id"] == "event-1"
+    assert captured["payload"]["notes"] == "updated review note"
+    assert response.json()["item"]["notes"] == "updated review note"
+
+
+def test_backtest_job_routes_submit_and_fetch_status(monkeypatch):
+    captured = {}
+
+    class FakeJobs:
+        def submit(self, payload):
+            captured["payload"] = payload
+            return {"job_id": "job-1", "status": "queued"}
+
+        def get(self, job_id):
+            captured["job_id"] = job_id
+            return {
+                "job_id": job_id,
+                "status": "succeeded",
+                "result": {
+                    "strategy_id": "lhb_shortline",
+                    "strategy_name": "LHB Shortline Combo",
+                    "summary": {"total_return": 0.12},
+                    "positions": [],
+                    "trades": [],
+                    "equity_curve": [],
+                },
+                "error": "",
+            }
+
+    client = TestClient(dashboard_app.create_app())
+    client.app.state.backtest_jobs = FakeJobs()
+
+    submit_response = client.post("/api/backtests/jobs", json={"strategy_id": "lhb_shortline"})
+    status_response = client.get("/api/backtests/jobs/job-1")
+
+    assert submit_response.status_code == 200
+    assert submit_response.json()["job_id"] == "job-1"
+    assert captured["payload"]["strategy_id"] == "lhb_shortline"
+    assert status_response.status_code == 200
+    assert captured["job_id"] == "job-1"
+    assert status_response.json()["status"] == "succeeded"
+
+
 def test_asset_outcomes_route_returns_read_only_history(monkeypatch):
     captured = {}
 
