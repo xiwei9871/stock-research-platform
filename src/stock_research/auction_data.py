@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import os
 import shlex
 import time
@@ -17,6 +18,9 @@ AUCTION_PHASE_ENDPOINTS = {
     "open_call": "stk_auction_o",
     "close_call": "stk_auction_c",
 }
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+LOCAL_SECRETS_PATH = PROJECT_ROOT / "config" / "local_secrets.json"
 
 OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS = [
     ("09:15", 15),
@@ -344,11 +348,25 @@ def open_auction_spot_snapshot_staging_row(
     }
 
 
-def query_eastmoney_spot_snapshot_rows() -> list[dict[str, Any]]:
+def query_eastmoney_spot_snapshot_rows(
+    retries: int = 3,
+    retry_sleep_seconds: float = 2.0,
+) -> list[dict[str, Any]]:
     import akshare as ak
 
-    frame = ak.stock_zh_a_spot_em()
-    return list(frame.to_dict("records"))
+    last_error: Exception | None = None
+    attempts = max(1, retries)
+    for attempt in range(1, attempts + 1):
+        try:
+            frame = ak.stock_zh_a_spot_em()
+            return list(frame.to_dict("records"))
+        except Exception as exc:
+            last_error = exc
+            if attempt < attempts and retry_sleep_seconds:
+                time.sleep(retry_sleep_seconds)
+    if last_error is None:
+        raise RuntimeError(f"AKShare spot snapshot failed after {attempts} attempts")
+    raise RuntimeError(f"AKShare spot snapshot failed after {attempts} attempts: {last_error}") from last_error
 
 
 def upsert_stock_open_auction_spot_snapshots(
@@ -962,10 +980,22 @@ def write_open_auction_minute_collect_report(
     }
 
 
+def local_tushare_token(secrets_path: str | Path | None = None) -> str | None:
+    path = Path(secrets_path or LOCAL_SECRETS_PATH)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    token = payload.get("tushare", {}).get("token")
+    return str(token).strip() if token else None
+
+
 def tushare_client(token: str | None = None) -> Any:
-    selected_token = token or os.environ.get("TUSHARE_TOKEN")
+    selected_token = token or os.environ.get("TUSHARE_TOKEN") or local_tushare_token()
     if not selected_token:
-        raise RuntimeError("TUSHARE_TOKEN is required for Tushare auction sync")
+        raise RuntimeError("TUSHARE_TOKEN or config/local_secrets.json:tushare.token is required for Tushare auction sync")
     return ts.pro_api(selected_token)
 
 

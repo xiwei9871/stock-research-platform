@@ -7898,9 +7898,17 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"open_auction_minute_collect_v1|detail|{report['paths']['detail']}")
         print(f"open_auction_minute_collect_v1|latest|{report['paths']['latest']}")
         print(f"open_auction_minute_collect_v1|report|{report['paths']['markdown_report']}")
-        print(f"open_auction_minute_collect_v1|symbols_requested|{report['summary']['symbols_requested']}")
-        print(f"open_auction_minute_collect_v1|symbols_failed|{report['summary']['symbols_failed']}")
-        print(f"open_auction_minute_collect_v1|upserted_rows|{report['summary']['upserted_rows']}")
+        for key in [
+            "symbols_requested",
+            "symbols_failed",
+            "total_symbols",
+            "covered_symbols",
+            "remaining_symbols",
+            "rounds_executed",
+            "upserted_rows",
+        ]:
+            if key in report["summary"]:
+                print(f"open_auction_minute_collect_v1|{key}|{report['summary'][key]}")
         return 0
     elif args.command == "open-auction-minute-cron-entry":
         for entry in build_open_auction_minute_cron_entries(

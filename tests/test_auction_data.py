@@ -1,4 +1,6 @@
 import datetime as dt
+import sys
+import types
 from decimal import Decimal
 from pathlib import Path
 
@@ -76,6 +78,19 @@ def raw_open_auction_minute_row() -> dict:
         "成交额": 1234567.89,
         "最新价": 10.24,
     }
+
+
+def test_tushare_client_falls_back_to_local_secrets(monkeypatch, tmp_path):
+    secrets_path = tmp_path / "local_secrets.json"
+    secrets_path.write_text('{"tushare": {"token": "local-token"}}\n', encoding="utf-8")
+    calls = []
+
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+    monkeypatch.setattr(auction_data, "LOCAL_SECRETS_PATH", secrets_path)
+    monkeypatch.setattr(auction_data.ts, "pro_api", lambda token: calls.append(token) or "client")
+
+    assert auction_data.tushare_client() == "client"
+    assert calls == ["local-token"]
 
 
 def raw_spot_snapshot_row() -> dict:
@@ -559,6 +574,40 @@ def test_upsert_stock_open_auction_spot_snapshots_writes_staging_and_market(monk
     assert calls[0][2][0]["payload"] == canonical_json({**raw_spot_snapshot_row(), "最新价": None})
     assert "NaN" not in calls[0][2][0]["payload"]
     assert calls[1][2][0]["target_time"] == dt.time(9, 17)
+
+
+def test_query_eastmoney_spot_snapshot_rows_retries_temporary_failures(monkeypatch):
+    calls = []
+
+    def fake_spot():
+        calls.append("called")
+        if len(calls) < 3:
+            raise RuntimeError("temporary ssl eof")
+        return pd.DataFrame([raw_spot_snapshot_row()])
+
+    monkeypatch.setitem(sys.modules, "akshare", types.SimpleNamespace(stock_zh_a_spot_em=fake_spot))
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    rows = query_eastmoney_spot_snapshot_rows(retries=3, retry_sleep_seconds=0)
+
+    assert rows == [raw_spot_snapshot_row()]
+    assert calls == ["called", "called", "called"]
+
+
+def test_query_eastmoney_spot_snapshot_rows_reports_attempts_after_retries(monkeypatch):
+    calls = []
+
+    def fake_spot():
+        calls.append("called")
+        raise RuntimeError("temporary ssl eof")
+
+    monkeypatch.setitem(sys.modules, "akshare", types.SimpleNamespace(stock_zh_a_spot_em=fake_spot))
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+        query_eastmoney_spot_snapshot_rows(retries=3, retry_sleep_seconds=0)
+
+    assert calls == ["called", "called", "called"]
 
 
 def test_collect_open_auction_spot_snapshot_queries_once_and_reports(monkeypatch):
@@ -1122,6 +1171,59 @@ def test_write_open_auction_minute_collect_report_accepts_retry_summary(tmp_path
     assert "- total_symbols: 2" in text
     assert "- covered_symbols: 1" in text
     assert "- remaining_symbols: 1" in text
+
+
+def test_collect_open_auction_minute_cli_accepts_retry_summary_without_symbol_counts(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    universe_path = tmp_path / "universe.csv"
+    pd.DataFrame([{"ts_code": "600023.SH"}]).to_csv(universe_path, index=False)
+
+    def fake_collect(**kwargs):
+        return {
+            "detail": pd.DataFrame(
+                [
+                    {
+                        "round": 1,
+                        "trade_date": kwargs["trade_date"],
+                        "ts_code": "600023.SH",
+                        "upserted_rows": 11,
+                        "error": "",
+                    }
+                ]
+            ),
+            "summary": {
+                "trade_date": kwargs["trade_date"],
+                "total_symbols": 1,
+                "covered_symbols": 1,
+                "remaining_symbols": 0,
+                "rounds_executed": 1,
+                "upserted_rows": 11,
+            },
+        }
+
+    monkeypatch.setattr(cli, "collect_open_auction_minute_bars_until_covered", fake_collect)
+
+    status = cli.main(
+        [
+            "collect-open-auction-minute-v1",
+            "--trade-date",
+            "2026-06-11",
+            "--universe-path",
+            str(universe_path),
+            "--retry-until-covered",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "open_auction_minute_collect_v1|total_symbols|1" in captured.out
+    assert "open_auction_minute_collect_v1|covered_symbols|1" in captured.out
+    assert "symbols_requested" not in captured.out
 
 
 def test_load_lhb_auction_backfill_universe_reads_unique_ts_codes(tmp_path):

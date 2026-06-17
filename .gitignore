@@ -20,6 +20,7 @@ env/
 /build/
 /dist/
 /cache/
+/data/manual/
 /logs/
 /reports/
 /output/
@@ -35,6 +36,7 @@ env/
 .env
 .env.*
 *.local
+config/local_secrets.json
 
 # Editor state
 .idea/
