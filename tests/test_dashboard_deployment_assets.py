@@ -1,4 +1,5 @@
 from pathlib import Path
+import stat
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -29,10 +30,15 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
 
     assert "set -euo pipefail" in script
     assert "API_BASE" in script
+    assert "FETCH_RETRIES" in script
+    assert "FETCH_RETRY_SLEEP_SECONDS" in script
     assert "/api/platform/summary" in script
     assert "/api/backtests/strategies" in script
+    assert "/api/backtests/jobs" in script
     assert "/api/assets/000001.SZ/profile" in script
-    assert "Research Cockpit" in script
+    assert "Backtest Lab" in script
+    assert "Market Monitor" in script
+    assert "Data Explorer" in script
     assert "TOPN" in script
 
 
@@ -44,9 +50,45 @@ def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
     assert "STRATEGY_OUTPUT_ROOT" in script
     assert "outputs/research" in script
     assert "strategy_daily_eod" in script
+    assert "rsync -az -e \"ssh ${SSH_OPTS}\"" in script
     assert "docker compose restart api dashboard" in script
     assert "REBUILD=1" in script
     assert "docker compose build api dashboard" in script
+
+
+def test_daily_dashboard_sync_wrapper_guards_and_verifies_release() -> None:
+    script_path = REPO_ROOT / "deploy/sync_dashboard_daily.sh"
+    script = read_repo_file("deploy/sync_dashboard_daily.sh")
+    mode = script_path.stat().st_mode
+
+    assert mode & stat.S_IXUSR
+    assert "set -euo pipefail" in script
+    assert "git diff-index --quiet HEAD --" in script
+    assert "tmp/" in script
+    assert "deploy/sync_dashboard_fast.sh" in script
+    assert "deploy/check_dashboard_release.sh" in script
+    assert "logs/dashboard_daily_sync.log" in script
+    assert "mkdir \"$lock_dir\"" in script
+    assert "trap 'rmdir \"$lock_dir\"' EXIT" in script
+    assert "DASHBOARD_AUTH" in script
+    assert "REMOTE_HOST" in script
+    assert "192.168.3.185" in script
+    assert "export REMOTE_USER REMOTE_HOST REMOTE_DIR SSH_OPTS REBUILD STRATEGY_OUTPUT_ROOT" in script
+    assert "timestamp()" in script
+    assert "date '+%Y-%m-%dT%H:%M:%S%z'" in script
+
+
+def test_launchd_daily_dashboard_sync_runs_after_close() -> None:
+    plist = read_repo_file("deploy/launchd/com.stockresearch.dashboard-daily-sync.plist")
+
+    assert "com.stockresearch.dashboard-daily-sync" in plist
+    assert "/Users/xiwei/stock_research/.worktrees/v0.1-local-eod-web/deploy/sync_dashboard_daily.sh" in plist
+    assert "<key>Hour</key>" in plist
+    assert "<integer>18</integer>" in plist
+    assert "<key>Minute</key>" in plist
+    assert "<integer>30</integer>" in plist
+    assert "dashboard_daily_sync.launchd.out.log" in plist
+    assert "dashboard_daily_sync.launchd.err.log" in plist
 
 
 def test_dashboard_deployment_runbook_documents_version_and_database_checks() -> None:

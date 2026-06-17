@@ -7,6 +7,8 @@ TRADE_DATE="${TRADE_DATE:-2026-06-08}"
 START_DATE="${START_DATE:-2026-01-01}"
 END_DATE="${END_DATE:-2026-06-08}"
 DASHBOARD_AUTH="${DASHBOARD_AUTH:-}"
+FETCH_RETRIES="${FETCH_RETRIES:-10}"
+FETCH_RETRY_SLEEP_SECONDS="${FETCH_RETRY_SLEEP_SECONDS:-3}"
 
 curl_auth=()
 if [[ -n "$DASHBOARD_AUTH" ]]; then
@@ -14,7 +16,16 @@ if [[ -n "$DASHBOARD_AUTH" ]]; then
 fi
 
 fetch() {
-  curl -fsS "${curl_auth[@]}" "$@"
+  local attempt
+  for attempt in $(seq 1 "$FETCH_RETRIES"); do
+    if curl -fsS "${curl_auth[@]}" "$@"; then
+      return 0
+    fi
+    if [[ "$attempt" == "$FETCH_RETRIES" ]]; then
+      return 1
+    fi
+    sleep "$FETCH_RETRY_SLEEP_SECONDS"
+  done
 }
 
 require_body_contains() {
@@ -31,7 +42,7 @@ require_body_contains() {
 require_body_not_old_dashboard() {
   local body="$1"
 
-  if grep -Fq "TOPN" <<<"$body" && ! grep -Fq "Research Cockpit" <<<"$body"; then
+  if grep -Fq "TOPN" <<<"$body" && ! grep -Fq "Backtest Lab" <<<"$body"; then
     echo "FAIL: old TOPN dashboard detected; deploy the dashboard branch frontend build." >&2
     exit 1
   fi
@@ -45,7 +56,9 @@ if [[ -z "$js_asset" ]]; then
   exit 1
 fi
 bundle_body="$(fetch "${BASE_URL%/}${js_asset}")"
-require_body_contains "$bundle_body" "Research Cockpit" "frontend bundle"
+require_body_contains "$bundle_body" "Backtest Lab" "frontend bundle"
+require_body_contains "$bundle_body" "Market Monitor" "frontend bundle"
+require_body_contains "$bundle_body" "Data Explorer" "frontend bundle"
 require_body_not_old_dashboard "$bundle_body"
 
 echo "Checking /api/platform/summary endpoint"
@@ -53,18 +66,20 @@ fetch "${API_BASE%/}/platform/summary" >/dev/null
 
 echo "Checking /api/backtests/strategies endpoint"
 strategies_body="$(fetch "${API_BASE%/}/backtests/strategies")"
-require_body_contains "$strategies_body" "lhb_shortline_combo_v1" "strategy catalog"
-require_body_contains "$strategies_body" "mid_trend_combo_v1" "strategy catalog"
-require_body_contains "$strategies_body" "tech_bottleneck_combo_v1" "strategy catalog"
+require_body_contains "$strategies_body" "lhb_shortline" "strategy catalog"
+require_body_contains "$strategies_body" "mid_trend" "strategy catalog"
+require_body_contains "$strategies_body" "tech_bottleneck" "strategy catalog"
 
 echo "Checking /api/assets/000001.SZ/profile endpoint"
 fetch "${API_BASE%/}/assets/000001.SZ/profile?trade_date=${TRADE_DATE}&start_date=${START_DATE}&end_date=${END_DATE}&score_version=manual_v1&adjust_type=qfq" >/dev/null
 
-echo "Checking /api/backtests/run-fresh endpoint wiring"
-fetch \
+echo "Checking /api/backtests/jobs endpoint wiring"
+job_body="$(fetch \
   -H "Content-Type: application/json" \
   -X POST \
-  --data "{\"strategy_id\":\"lhb_shortline_combo_v1\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":20,\"rebalance\":\"daily\",\"cost_bps\":10,\"max_positions\":2}" \
-  "${API_BASE%/}/backtests/run-fresh" >/dev/null
+  --data "{\"strategy_id\":\"lhb_shortline\",\"start_date\":\"${START_DATE}\",\"end_date\":\"${END_DATE}\",\"top_n\":5,\"transaction_cost_bps\":10,\"max_positions\":2}" \
+  "${API_BASE%/}/backtests/jobs")"
+require_body_contains "$job_body" "job_id" "backtest job submission"
+require_body_contains "$job_body" "status" "backtest job submission"
 
 echo "Dashboard release check passed."

@@ -44,7 +44,7 @@ ssh ${SSH_OPTS} "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}/outputs
 for output_dir in "${strategy_output_dirs[@]}"; do
   if [[ -d "${STRATEGY_OUTPUT_ROOT}/${output_dir}" ]]; then
     ssh ${SSH_OPTS} "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}/outputs/research/${output_dir}'"
-    rsync -az --delete -e "ssh ${SSH_OPTS}" \
+    rsync -az -e "ssh ${SSH_OPTS}" \
       "${STRATEGY_OUTPUT_ROOT}/${output_dir}/" \
       "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/outputs/research/${output_dir}/"
   else

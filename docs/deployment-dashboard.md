@@ -87,9 +87,10 @@ manager, but the containers mount the mutable app files from the host:
 - `PYTHONPATH=/app/src` makes restarted API workers load the mounted source.
 - `./dashboard/dist` is mounted into the dashboard nginx container at
   `/usr/share/nginx/html`.
-- `./outputs/research` is mounted into the API container at
+- `./outputs/research` is mounted read/write into the API container at
   `/Users/xiwei/stock_research/outputs/research` so the strategy review queue
-  sees the same lightweight strategy artifacts as the local dashboard.
+  sees the same lightweight strategy artifacts as the local dashboard and fresh
+  backtests can write run artifacts.
 
 For ordinary frontend and backend source changes, run:
 
@@ -108,6 +109,48 @@ Use a rebuild only when dependencies, Dockerfiles, or system packages change:
 ```bash
 REBUILD=1 ./deploy/sync_dashboard_fast.sh
 ```
+
+## Daily Local-To-185 Sync
+
+Use `deploy/sync_dashboard_daily.sh` to keep the public Docker deployment in
+sync with the local `v0.1-local-eod-web` worktree after the local dashboard has
+been committed.
+
+The daily wrapper:
+
+- refuses to run when tracked files are dirty or untracked files exist outside
+  `tmp/`;
+- runs `deploy/sync_dashboard_fast.sh`;
+- runs `deploy/check_dashboard_release.sh` against
+  `https://stock.manqiaotechnology.com`;
+- writes logs to `logs/dashboard_daily_sync.log`;
+- uses a local lock directory to avoid overlapping runs.
+
+Create a local-only environment file for credentials and host overrides:
+
+```bash
+cat > /Users/xiwei/.stock_research_dashboard_sync.env <<'EOF'
+DASHBOARD_AUTH='user:password'
+REMOTE_USER='jqz'
+REMOTE_HOST='192.168.3.185'
+SSH_OPTS='-o PreferredAuthentications=password -o PubkeyAuthentication=no'
+EOF
+chmod 600 /Users/xiwei/.stock_research_dashboard_sync.env
+```
+
+The env file must not be committed. For unattended launchd runs, configure SSH
+so the sync script can connect to `192.168.3.185` without interactive input.
+If password-only SSH remains required, run the daily wrapper manually.
+
+Install the local launchd schedule:
+
+```bash
+cp deploy/launchd/com.stockresearch.dashboard-daily-sync.plist ~/Library/LaunchAgents/
+launchctl unload ~/Library/LaunchAgents/com.stockresearch.dashboard-daily-sync.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.stockresearch.dashboard-daily-sync.plist
+```
+
+The default schedule is every day at 18:30 local time.
 
 ## Nginx Deploy
 
