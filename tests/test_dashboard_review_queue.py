@@ -166,10 +166,14 @@ def test_build_review_queue_strategy_mode_keeps_lhb_and_meaningful_review_metric
 
     assert payload["trade_date"] == "2026-06-05"
     assert any("策略复盘数据最新日期 2026-06-05" in warning for warning in payload["warnings"])
+    assert any("Mid Trend Combo 复盘数据最新日期 2026-06-02" in warning for warning in payload["warnings"])
+    assert any("Tech Bottleneck Combo 复盘数据最新日期 2026-06-04" in warning for warning in payload["warnings"])
     labels = [group["label"] for group in payload["groups"]]
     assert labels == ["LHB Shortline Combo", "Mid Trend Combo", "Tech Bottleneck Combo"]
     lhb = payload["groups"][0]["items"][0]
     assert lhb["display_name"] == "金钼股份"
+    assert lhb["stock_code"] == "CN:SH:600198"
+    assert lhb["stock_name"] == "金钼股份"
     assert lhb["score"] == 10.0
     assert lhb["risk_count"] == 1
     assert lhb["warning_count"] >= 1
@@ -233,7 +237,7 @@ def test_load_active_strategy_topn_rows_prefers_newer_db_rows_over_stale_artifac
     ]
 
 
-def test_load_active_strategy_topn_rows_uses_live_scores_when_persisted_sources_are_stale(monkeypatch):
+def test_load_active_strategy_topn_rows_rejects_live_score_fallback_for_strategy_review(monkeypatch):
     artifact_rows = [
         {
             **_strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
@@ -263,8 +267,46 @@ def test_load_active_strategy_topn_rows_uses_live_scores_when_persisted_sources_
     rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-15", limit=10)
 
     assert [(row["strategy_id"], row["asset_id"], row["trade_date"], row["source_type"]) for row in rows] == [
-        ("mid_trend", "CN:SZ:300951", "2026-06-15", "strategy_live_score"),
+        ("mid_trend", "CN:SZ:000001", "2026-06-02", "strategy_artifact"),
     ]
+
+
+def test_load_active_strategy_topn_rows_reads_manifest_strategy_artifacts(monkeypatch, tmp_path):
+    artifact = tmp_path / "mid_trend_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,score_total,strategy_id,strategy_name,source_type,stock_name,review_notes,warnings",
+                '2026-06-16,CN:SZ:300951,1,88.5,mid_trend,Mid Trend Combo,strategy_manifest,博硕科技,"[""真实执行""]","[]"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda *, trade_date: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "artifact_path": str(artifact),
+                "latest_trade_date": trade_date,
+                "run_id": "strategy-eod-2026-06-16-local",
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-16", limit=10)
+
+    assert [(row["strategy_id"], row["asset_id"], row["trade_date"], row["source_type"]) for row in rows] == [
+        ("mid_trend", "CN:SZ:300951", "2026-06-16", "strategy_manifest")
+    ]
+    assert rows[0]["stock_name"] == "博硕科技"
+    assert rows[0]["review_notes"] == ["真实执行"]
 
 
 def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):

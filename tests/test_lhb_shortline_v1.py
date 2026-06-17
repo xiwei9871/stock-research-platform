@@ -352,6 +352,43 @@ def test_run_lhb_shortline_v1_from_frames_applies_topn_weight_cost_and_exit():
     assert result.summary["final_equity"] == pytest.approx(1.0196)
 
 
+def test_run_lhb_shortline_v1_from_frames_treats_end_date_as_hard_asof_cutoff():
+    config = LHBShortlineV1Config(
+        start_date="2026-01-05",
+        end_date="2026-01-06",
+        top_n=1,
+        transaction_cost_bps=10,
+        max_position_weight=0.2,
+    )
+    candidates = pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-01-05",
+                "ts_code": "000001.SZ",
+                "final_score": 100.0,
+                "confirmation_action": "confirm_follow",
+            },
+        ]
+    )
+    daily = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-06", "ts_code": "000001.SZ", "open": 10.0, "close": 10.5},
+            {"trade_date": "2026-01-07", "ts_code": "000001.SZ", "open": 10.6, "close": 11.0},
+            {"trade_date": "2026-01-08", "ts_code": "000001.SZ", "open": 11.0, "close": 11.0},
+        ]
+    )
+
+    result = run_lhb_shortline_v1_from_frames(
+        config=config,
+        scored_candidates=candidates,
+        daily_bars=daily,
+    )
+
+    assert result.trades.empty
+    assert result.equity_curve.empty
+    assert result.summary["filled_trade_count"] == 0
+
+
 def test_run_lhb_shortline_v1_from_frames_canonicalizes_daily_asset_ids_and_skips_missing():
     config = LHBShortlineV1Config(
         start_date="2026-01-05",
@@ -624,6 +661,91 @@ def test_lhb_shortline_v1_lifecycle_applies_default_market_regime_profile(monkey
     assert result.summary["final_equity"] == pytest.approx(1.016)
     assert result.trades.iloc[0]["position_notional"] == pytest.approx(0.16)
     assert result.trades.iloc[0]["market_regime"] == "risk_off"
+
+
+def test_lhb_shortline_v1_lifecycle_treats_end_date_as_hard_asof_cutoff(
+    monkeypatch,
+    tmp_path: Path,
+):
+    frames = LHBShortlineV1Frames(
+        lhb_features=pd.DataFrame(),
+        technical_features=pd.DataFrame(),
+        auction_open=pd.DataFrame(),
+        intraday_confirmation=pd.DataFrame(),
+        daily_bars=pd.DataFrame(
+            [
+                {"trade_date": "2026-01-13", "ts_code": "000001.SZ", "preclose": 10.0, "open": 10.0, "close": 10.2},
+                {"trade_date": "2026-01-14", "ts_code": "000001.SZ", "preclose": 10.2, "open": 10.2, "close": 10.3},
+                {"trade_date": "2026-01-15", "ts_code": "000001.SZ", "preclose": 10.3, "open": 10.3, "close": 10.6},
+                {"trade_date": "2026-01-16", "ts_code": "000001.SZ", "preclose": 10.6, "open": 10.6, "close": 10.8},
+            ]
+        ),
+        minute_bars=pd.DataFrame(),
+        coverage={},
+    )
+    selected = pd.DataFrame([{"trade_date": "2026-01-14", "ts_code": "000001.SZ", "top_n": 5}])
+    future_trade = pd.DataFrame(
+        [
+            {
+                "account_trade_status": "filled",
+                "fill_status": "filled",
+                "strategy": "auction_enhanced_rerank",
+                "trade_date": "2026-01-14",
+                "ts_code": "000001.SZ",
+                "top_n": 5,
+                "entry_trade_date": "2026-01-15",
+                "exit_trade_date": "2026-01-16",
+                "realized_return": 0.10,
+            }
+        ]
+    )
+
+    monkeypatch.setattr(lhb_data, "build_lhb_full_market_pool_backtest_v1", lambda **kwargs: {"selected_trades": selected, "paths": {}})
+    monkeypatch.setattr(lhb_data, "build_lhb_shortline_intraday_confirmation_v1", lambda **kwargs: {"detail": pd.DataFrame(), "paths": {}})
+    monkeypatch.setattr(lhb_data, "build_lhb_phase12a_multi_context_decision_v1", lambda **kwargs: {"decision": pd.DataFrame(), "paths": {}})
+    monkeypatch.setattr(lhb_data, "build_lhb_phase12a_rule_decision_v1", lambda **kwargs: {"rule_decision": pd.DataFrame(), "paths": {}})
+    monkeypatch.setattr(lhb_data, "build_lhb_phase12a_real_entry_backtest_v1", lambda **kwargs: {"trades": pd.DataFrame(), "paths": {}})
+    monkeypatch.setattr(lhb_data, "build_lhb_phase14c_lifecycle_portfolio_v1", lambda **kwargs: {"lifecycle_trades": future_trade, "paths": {}})
+    monkeypatch.setattr(
+        lhb_data,
+        "build_lhb_phase18c_auction_enhanced_cash_account_backtest_v1",
+        lambda **kwargs: {
+            "account_trades": future_trade,
+            "account_curve": pd.DataFrame(
+                [{"trade_date": "2026-01-16", "equity": 1.02, "strategy": "auction_enhanced_rerank", "top_n": 5}]
+            ),
+            "summary": pd.DataFrame(
+                [
+                    {
+                        "strategy": "auction_enhanced_rerank",
+                        "top_n": 5,
+                        "final_equity": 1.02,
+                        "total_return": 0.02,
+                        "max_drawdown": 0.0,
+                        "filled_trade_count": 1,
+                    }
+                ]
+            ),
+            "selected_trades": future_trade,
+            "paths": {},
+        },
+    )
+
+    result, scored, _ = lhb_shortline_v1.run_lhb_shortline_v1_lifecycle_from_frames(
+        config=LHBShortlineV1Config(
+            start_date="2026-01-13",
+            end_date="2026-01-14",
+            top_n=5,
+            max_position_weight=0.2,
+        ),
+        frames=frames,
+        output_dir=tmp_path,
+    )
+
+    assert result.trades.empty
+    assert result.equity_curve.empty
+    assert result.summary["filled_trade_count"] == 0
+    assert scored.empty
 
 
 def test_phase15_cash_account_preserves_lifecycle_trade_timing_and_position():

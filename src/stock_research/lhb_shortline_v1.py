@@ -748,6 +748,33 @@ def _empty_backtest_result(config: LHBShortlineV1Config) -> LHBShortlineV1Result
     )
 
 
+def _filter_rows_to_lhb_shortline_asof_cutoff(
+    frame: pd.DataFrame,
+    *,
+    end_date: str,
+    date_columns: tuple[str, ...],
+    require_known_dates: bool = False,
+) -> pd.DataFrame:
+    if frame.empty or not end_date:
+        return frame.copy()
+    cutoff = pd.to_datetime(end_date, errors="coerce")
+    if pd.isna(cutoff):
+        return frame.copy()
+    filtered = frame.copy()
+    mask = pd.Series(True, index=filtered.index)
+    for column in date_columns:
+        if column not in filtered.columns:
+            continue
+        dates = pd.to_datetime(filtered[column], errors="coerce")
+        column_mask = dates.le(cutoff)
+        if require_known_dates:
+            column_mask = column_mask & dates.notna()
+        else:
+            column_mask = column_mask | dates.isna()
+        mask = mask & column_mask
+    return filtered[mask].copy()
+
+
 def run_lhb_shortline_v1_from_frames(
     *,
     config: LHBShortlineV1Config,
@@ -780,9 +807,10 @@ def run_lhb_shortline_v1_from_frames(
         asset_bars = by_code.get(code)
         if asset_bars is None:
             continue
-        future = asset_bars[asset_bars["trade_date"].gt(signal_date)].head(3).reset_index(
-            drop=True
-        )
+        future = asset_bars[asset_bars["trade_date"].gt(signal_date)].copy()
+        if config.end_date:
+            future = future[future["trade_date"].le(config.end_date)]
+        future = future.head(3).reset_index(drop=True)
         if len(future) < 2:
             continue
         entry = float(future.iloc[0]["open"])
@@ -1366,6 +1394,12 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         threshold_profile="sensitive_entry_buffer",
     )
     lifecycle_trades = lifecycle["lifecycle_trades"].copy()
+    lifecycle_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
+        lifecycle_trades,
+        end_date=config.end_date,
+        date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
+        require_known_dates=True,
+    )
     lifecycle_trades["gross_realized_return"] = pd.to_numeric(
         lifecycle_trades.get("realized_return", pd.Series(dtype="float64")), errors="coerce"
     )
@@ -1389,6 +1423,24 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
     account_curve = phase18c["account_curve"]
     summary_frame = phase18c["summary"]
     selected_trades = phase18c["selected_trades"]
+    account_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
+        account_trades,
+        end_date=config.end_date,
+        date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
+        require_known_dates=True,
+    )
+    account_curve = _filter_rows_to_lhb_shortline_asof_cutoff(
+        account_curve,
+        end_date=config.end_date,
+        date_columns=("trade_date",),
+        require_known_dates=True,
+    )
+    selected_trades = _filter_rows_to_lhb_shortline_asof_cutoff(
+        selected_trades,
+        end_date=config.end_date,
+        date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
+        require_known_dates=True,
+    )
     if "strategy" in account_trades.columns:
         account_trades = account_trades[
             account_trades["strategy"].eq(strategy)

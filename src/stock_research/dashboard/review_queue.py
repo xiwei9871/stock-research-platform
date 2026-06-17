@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from urllib.parse import urlencode
 from typing import Any
@@ -111,12 +112,78 @@ def build_review_queue(
 
 
 def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    manifest_rows = _load_manifest_strategy_rows(trade_date=trade_date, limit=limit)
+    if manifest_rows:
+        return _attach_asset_names(manifest_rows)
     artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
     db_rows = _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
-    live_rows = _load_live_strategy_score_rows(trade_date=trade_date, limit=limit)
     return _attach_asset_names(
-        _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows, live_rows=live_rows)
+        _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows)
     )
+
+
+def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
+    if not trade_date:
+        return []
+    try:
+        modules = list(load_latest_data_run_manifest(trade_date=trade_date))
+    except Exception:
+        return []
+    rows: list[dict[str, Any]] = []
+    for module in modules:
+        module_name = str(module.get("module") or "")
+        if not module_name.startswith("strategy_") or str(module.get("status") or "") != "success":
+            continue
+        artifact_path = Path(str(module.get("artifact_path") or ""))
+        rows.extend(_read_manifest_strategy_artifact(artifact_path, trade_date=trade_date, limit=limit, manifest=module))
+    return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+
+
+def _read_manifest_strategy_artifact(
+    artifact_path: Path,
+    *,
+    trade_date: str,
+    limit: int,
+    manifest: dict[str, Any],
+) -> list[dict[str, Any]]:
+    frame = _read_artifact_frame(artifact_path)
+    if frame is None or "trade_date" not in frame.columns:
+        return []
+    rows = _rows_for_latest_date(frame, trade_date=trade_date, date_col="trade_date")
+    if rows is None:
+        return []
+    normalized: list[dict[str, Any]] = []
+    for index, row in enumerate(_sort_records(rows, ["rank", "source_rank"])[:limit], start=1):
+        asset_id = _asset_id_from_ts_code(row.get("asset_id") or row.get("ts_code") or row.get("stock_code"))
+        strategy_id = _optional_text(row.get("strategy_id"))
+        if not asset_id or not strategy_id:
+            continue
+        rank = _optional_int(row.get("rank") or row.get("source_rank")) or index
+        normalized.append(
+            {
+                "trade_date": str(row.get("trade_date") or "")[:10],
+                "asset_id": asset_id,
+                "rank": rank,
+                "score_total": _optional_float(row.get("score_total") or row.get("score")),
+                "score_version": "strategy_topn",
+                "score_components": _optional_json_object(row.get("score_components")),
+                "strategy_id": strategy_id,
+                "strategy_name": str(row.get("strategy_name") or strategy_id),
+                "strategy_run_id": str(row.get("strategy_run_id") or manifest.get("run_id") or ""),
+                "source_type": str(row.get("source_type") or "strategy_manifest"),
+                "source_name": str(row.get("source_name") or row.get("strategy_name") or strategy_id),
+                "source_rank": rank,
+                "review_tier": str(row.get("review_tier") or ("top5_focus" if rank <= 5 else "top10_watch")),
+                "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
+                "score_source": _optional_text(row.get("score_source")),
+                "score_explanation": _optional_text(row.get("score_explanation")),
+                "review_notes": _optional_json_list(row.get("review_notes")),
+                "warnings": _optional_json_list(row.get("warnings")),
+                "risk_flags": _optional_json_list(row.get("risk_flags")),
+                "manifest_module": str(manifest.get("module") or ""),
+            }
+        )
+    return normalized
 
 
 def _select_latest_strategy_sources(
@@ -512,6 +579,18 @@ def _strategy_review_queue(
         warnings.append(
             f"策略复盘数据最新日期 {latest_item_date}，早于平台日期 {selected_trade_date}；请检查策略候选/回测是否已更新。"
         )
+    if selected_trade_date:
+        for strategy_id, strategy_rows in by_strategy.items():
+            strategy_latest_date = max(
+                (str(item.get("latest_trade_date") or item.get("trade_date") or "") for item in strategy_rows),
+                default="",
+            )
+            if strategy_latest_date and strategy_latest_date < selected_trade_date:
+                strategy_label = labels.get(strategy_id, strategy_id)
+                warnings.append(
+                    f"{strategy_label} 复盘数据最新日期 {strategy_latest_date}，早于平台日期 {selected_trade_date}；"
+                    "该策略未完成当日真实执行产物。"
+                )
     strategy_order = list(_active_strategy_names())
     ordered_strategy_ids = [strategy_id for strategy_id in strategy_order if strategy_id in by_strategy]
     ordered_strategy_ids.extend(strategy_id for strategy_id in by_strategy if strategy_id not in ordered_strategy_ids)
@@ -660,11 +739,15 @@ def _queue_item(
     digest_manifest_modules = lineage.get("manifest_modules")
     if not isinstance(digest_manifest_modules, list):
         digest_manifest_modules = manifest_modules
+    display_name = _row_display_name(row, canonical_asset_id) or _display_name(digest, canonical_asset_id)
+    stock_code = _optional_text(row.get("stock_code") or row.get("ts_code")) or canonical_asset_id
     return {
         "queue_id": f"{trade_date}:{score_version}:{canonical_asset_id}",
         "asset_id": str(row.get("asset_id") or digest.get("asset_id") or canonical_asset_id),
         "canonical_asset_id": canonical_asset_id,
-        "display_name": _row_display_name(row, canonical_asset_id) or _display_name(digest, canonical_asset_id),
+        "stock_code": stock_code,
+        "stock_name": display_name,
+        "display_name": display_name,
         "trade_date": trade_date,
         "latest_trade_date": latest_trade_date,
         "run_id": run_id,
@@ -903,6 +986,30 @@ def _optional_text(value: Any) -> str | None:
     if value in (None, ""):
         return None
     return str(value)
+
+
+def _optional_json_list(value: Any) -> list[Any]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        parsed = json.loads(str(value))
+    except Exception:
+        return [str(value)]
+    return parsed if isinstance(parsed, list) else [parsed]
+
+
+def _optional_json_object(value: Any) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(str(value))
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _manifest_context(selected_trade_date: str, warnings: list[str]) -> dict[str, Any]:
