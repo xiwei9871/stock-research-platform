@@ -146,6 +146,32 @@ def test_compute_and_store_labels_accepts_start_date_and_horizons(monkeypatch):
     assert calls[1][1]["horizon"] == 60
 
 
+def test_compute_and_store_labels_skips_unchanged_conflict_updates(monkeypatch):
+    calls = []
+
+    class Cursor:
+        rowcount = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            calls.append((sql, params))
+
+    class Conn:
+        def cursor(self):
+            return Cursor()
+
+    monkeypatch.setattr(labels_module, "connect", lambda service: _context(Conn()))
+
+    compute_and_store_labels("2026-05-08", horizons=[5])
+
+    assert "IS DISTINCT FROM EXCLUDED.label_value" in calls[0][0]
+
+
 def test_derive_label_backfill_window_uses_market_bounds(monkeypatch):
     calls = []
     monkeypatch.setattr(

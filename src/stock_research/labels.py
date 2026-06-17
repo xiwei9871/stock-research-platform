@@ -91,6 +91,7 @@ def upsert_label_snapshot(labels: pd.DataFrame) -> int:
     DO UPDATE SET
         label_value = EXCLUDED.label_value,
         computed_at = now()
+    WHERE label_snapshot.label_value IS DISTINCT FROM EXCLUDED.label_value
     """
     rows = labels.to_dict("records")
     with connect(SETTINGS.research_service) as conn:
@@ -160,6 +161,7 @@ def upsert_label_snapshot_for_horizon(
     DO UPDATE SET
         label_value = EXCLUDED.label_value,
         computed_at = now()
+    WHERE label_snapshot.label_value IS DISTINCT FROM EXCLUDED.label_value
     """
     params = {
         "end_date": end_date,
