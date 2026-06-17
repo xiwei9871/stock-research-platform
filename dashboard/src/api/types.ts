@@ -584,6 +584,25 @@ export type PlatformReadinessCheck = {
   detail: string;
 };
 
+export type PlatformReadinessHealthItem = {
+  key: string;
+  label: string;
+  status: PlatformReadinessCheckStatus;
+  detail: string;
+  row_count?: number | null;
+  latest_trade_date?: string;
+  module?: string;
+};
+
+export type PlatformReadinessHealthGroup = {
+  key: string;
+  label: string;
+  status: PlatformReadinessCheckStatus;
+  ready_count: number;
+  total_count: number;
+  items: PlatformReadinessHealthItem[];
+};
+
 export type PlatformReadiness = {
   mode: string;
   status: PlatformReadinessStatus;
@@ -596,6 +615,7 @@ export type PlatformReadiness = {
   tiers?: Array<{ tier: string; status: string }>;
   modules?: Array<Record<string, unknown>>;
   checks: PlatformReadinessCheck[];
+  health_groups?: PlatformReadinessHealthGroup[];
   warnings: string[];
   errors?: string[];
   missing_data?: string[];
@@ -619,6 +639,8 @@ export type StrategyCatalogItem = {
     max_drawdown_pct: number | null;
     latest_day_return_pct: number | null;
     latest_day_drawdown_pct: number | null;
+    latest_period_return_pct?: number | null;
+    latest_period_label?: string | null;
     signal_status: 'connected' | 'no_position_rows' | string;
     signal_count: number | null;
   };

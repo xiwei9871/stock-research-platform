@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
+from stock_research import mid_trend_v1
 from stock_research.mid_trend_v1 import (
     MID_TREND_V1_BENCHMARK_VARIANT,
+    MidTrendV1Config,
     _report_mild_bonus_score,
+    load_mid_trend_v1_funnel_detail,
     build_mid_trend_v1_from_frames,
 )
 
@@ -74,6 +77,53 @@ def test_report_mild_bonus_score_caps_research_support_bonus() -> None:
     assert _report_mild_bonus_score(frame).round(4).tolist() == [90.0, 92.0, 93.0]
 
 
+def test_load_mid_trend_funnel_falls_back_to_db_when_overlay_csv_is_stale(monkeypatch, tmp_path) -> None:
+    stale_csv = tmp_path / "mid_trend_overlay.csv"
+    pd.DataFrame([_candidate("2026-05-19", "A", 1, 95)]).to_csv(stale_csv, index=False)
+    db_frame = pd.DataFrame([_candidate("2026-06-16", "B", 1, 96)])
+    calls: list[MidTrendV1Config] = []
+
+    def fake_db_loader(config: MidTrendV1Config, *, service: str):
+        calls.append(config)
+        result = db_frame.copy()
+        result.attrs["source"] = "db_base_tables"
+        return result
+
+    monkeypatch.setattr(mid_trend_v1, "MID_TREND_V1_FEATURE_FUNNEL_PATH", stale_csv)
+    monkeypatch.setattr(mid_trend_v1, "_load_mid_trend_v1_funnel_detail_from_db", fake_db_loader)
+
+    loaded = load_mid_trend_v1_funnel_detail(
+        MidTrendV1Config(start_date="2026-01-01", end_date="2026-06-16"),
+        service="test-service",
+    )
+
+    assert calls and calls[0].end_date == "2026-06-16"
+    assert loaded["asset_id"].tolist() == ["B"]
+    assert loaded.attrs["source"] == "db_base_tables"
+    assert loaded.attrs["stale_overlay_path"] == str(stale_csv)
+    assert loaded.attrs["stale_overlay_max_date"] == "2026-05-19"
+
+
+def test_load_mid_trend_funnel_uses_overlay_csv_when_fresh(monkeypatch, tmp_path) -> None:
+    fresh_csv = tmp_path / "mid_trend_overlay.csv"
+    pd.DataFrame([_candidate("2026-06-16", "A", 1, 95)]).to_csv(fresh_csv, index=False)
+
+    monkeypatch.setattr(mid_trend_v1, "MID_TREND_V1_FEATURE_FUNNEL_PATH", fresh_csv)
+    monkeypatch.setattr(
+        mid_trend_v1,
+        "_load_mid_trend_v1_funnel_detail_from_db",
+        lambda config, *, service: (_ for _ in ()).throw(AssertionError("DB fallback should not run")),
+    )
+
+    loaded = load_mid_trend_v1_funnel_detail(
+        MidTrendV1Config(start_date="2026-01-01", end_date="2026-06-16"),
+        service="test-service",
+    )
+
+    assert loaded["asset_id"].tolist() == ["A"]
+    assert loaded.attrs["source"] == "research_overlay_feature_input"
+
+
 def _candidate(trade_date: str, asset_id: str, score_rank: int, score: float) -> dict[str, object]:
     return {
         "trade_date": trade_date,
@@ -88,6 +138,7 @@ def _candidate(trade_date: str, asset_id: str, score_rank: int, score: float) ->
         "mid_trend_layer": "stable_trend_watch",
         "structure_slot": "preferred_mainline_core",
         "mid_trend_funnel_score": score,
+        "research_support_score": 0,
         "score_rank": score_rank,
         "volatility_20_score": 50,
         "trend_r2_20_score": 90,

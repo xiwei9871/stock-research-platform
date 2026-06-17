@@ -698,7 +698,176 @@ body {
 }
 
 .command-status-strip {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.readiness-value.ready {
+  color: #146c2e;
+}
+
+.readiness-value.partial {
+  color: #b45309;
+}
+
+.readiness-value.blocked {
+  color: #b42318;
+}
+
+.health-check-panel {
+  padding: 0;
+}
+
+.health-check-panel details {
+  display: grid;
+}
+
+.health-check-panel summary {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+}
+
+.health-check-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.health-check-panel summary span {
+  color: #17202a;
+  font-weight: 700;
+}
+
+.health-check-panel summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #52637a;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-check-panel summary::after {
+  justify-self: end;
+  color: #667085;
+  content: "展开";
+  font-size: 12px;
+}
+
+.health-check-panel details[open] summary::after {
+  content: "收起";
+}
+
+.health-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  border-top: 1px solid #edf1f5;
+  padding: 10px 12px 12px;
+}
+
+.health-check-group {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #fbfcfe;
+  padding: 10px;
+}
+
+.health-check-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.health-check-group-header strong {
+  color: #17202a;
+}
+
+.health-status-pill {
+  border: 1px solid #d7dee8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #52637a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.health-status-pill.ready {
+  border-color: #b8dfc2;
+  background: #eefaf2;
+  color: #146c2e;
+}
+
+.health-status-pill.partial {
+  border-color: #f4d7a1;
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.health-status-pill.blocked {
+  border-color: #f1b8b3;
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.health-check-items {
+  display: grid;
+  gap: 7px;
+}
+
+.health-check-item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.health-check-item div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.health-check-item strong {
+  color: #17202a;
+  font-size: 13px;
+}
+
+.health-check-item small {
+  overflow: hidden;
+  color: #667085;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #98a2b3;
+}
+
+.health-dot.ready {
+  background: #2e7d32;
+}
+
+.health-dot.partial {
+  background: #d97706;
+}
+
+.health-dot.blocked {
+  background: #c62828;
 }
 
 .strategy-performance-panel {
@@ -985,6 +1154,8 @@ body {
 
 .market-regime-card small,
 .emotion-score-card small,
+.emotion-score-card em,
+.market-emotion-formula,
 .market-regime-readout {
   color: #667085;
   font-size: 12px;
@@ -1030,8 +1201,8 @@ body {
   display: grid;
   grid-template-columns: none;
   align-items: initial;
-  gap: 4px;
-  min-height: 88px;
+  gap: 5px;
+  min-height: 132px;
   border: 1px solid #edf1f5;
   border-bottom: 1px solid #edf1f5;
   border-radius: 6px;
@@ -1044,6 +1215,25 @@ body {
   text-align: left;
   font-size: 17px;
   line-height: 1.1;
+}
+
+.emotion-score-card small {
+  color: #344054;
+}
+
+.emotion-score-card em {
+  display: block;
+  margin-top: 2px;
+  color: #667085;
+  font-style: normal;
+}
+
+.market-emotion-formula {
+  margin: 0;
+  border: 1px solid #edf1f5;
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 7px 9px;
 }
 
 .market-regime-readout {

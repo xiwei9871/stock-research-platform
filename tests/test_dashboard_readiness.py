@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import readiness
@@ -13,6 +14,11 @@ class _FakeConnectionContext:
 
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_manifest_probe(monkeypatch):
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: [])
 
 
 def test_aggregate_readiness_status_prioritizes_missing_data():
@@ -220,6 +226,48 @@ def test_build_platform_readiness_dedupes_warnings_preserving_order(monkeypatch)
     ]
 
 
+def test_manifest_health_marks_news_data_available_when_manifest_module_missing(monkeypatch):
+    monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+
+    groups = readiness._build_manifest_health_groups(
+        modules=[
+            {
+                "module": "daily_bars",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 100,
+            },
+            {
+                "module": "technical_features",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 100,
+            },
+            {
+                "module": "score_topn",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 100,
+            },
+            {
+                "module": "lhb_features",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 10,
+            },
+        ],
+        latest_market_date="2026-06-16",
+        topn_preview=[{"asset_id": "CN:SZ:000001"}],
+    )
+
+    content = next(group for group in groups if group["key"] == "content_chain")
+    news = next(item for item in content["items"] if item["key"] == "news")
+
+    assert news["status"] == "partial"
+    assert news["detail"] == "新闻数据可用；未写入当日日终 manifest"
+    assert news["latest_trade_date"] == "2026-06-16"
+
+
 def test_build_platform_readiness_does_not_call_build_review_queue(monkeypatch):
     monkeypatch.setattr(
         readiness,
@@ -334,6 +382,51 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "error_message": "",
         },
         {
+            "module": "technical_features",
+            "source": "factor",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 5200,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "lhb_features",
+            "source": "factor",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 85,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "strategy_lhb_shortline",
+            "source": "strategy",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 5,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "strategy_mid_trend",
+            "source": "strategy",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 5,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "strategy_tech_bottleneck",
+            "source": "strategy",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 5,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
             "module": "review_queue",
             "source": "dashboard",
             "tier": "tier1",
@@ -343,11 +436,38 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "error_message": "",
         },
         {
+            "module": "review_evidence_snapshots",
+            "source": "dashboard",
+            "tier": "tier2",
+            "status": "success",
+            "row_count": 15,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
             "module": "news",
             "source": "public_news",
             "tier": "tier2",
             "status": "success",
             "row_count": 10,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "research_reports",
+            "source": "research",
+            "tier": "tier2",
+            "status": "success",
+            "row_count": 8,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "generated_reports",
+            "source": "reports",
+            "tier": "tier2",
+            "status": "success",
+            "row_count": 2,
             "warnings": [],
             "error_message": "",
         },
@@ -372,14 +492,49 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
     assert payload["latest_trade_date"] == "2026-06-12"
     assert payload["tiers"][0]["status"] == "OK"
     assert payload["missing_data"] == []
+    health_groups = {group["key"]: group for group in payload["health_groups"]}
+    assert list(health_groups) == ["base_data", "strategy_execution", "review_chain", "content_chain"]
+    assert health_groups["base_data"]["ready_count"] == 4
+    assert [item["label"] for item in health_groups["base_data"]["items"]] == [
+        "日线",
+        "因子",
+        "评分",
+        "龙虎榜",
+    ]
+    assert health_groups["strategy_execution"]["ready_count"] == 3
+    assert [item["label"] for item in health_groups["strategy_execution"]["items"]] == [
+        "LHB",
+        "Mid Trend",
+        "Tech Bottleneck",
+    ]
+    assert health_groups["review_chain"]["ready_count"] == 3
+    assert [item["label"] for item in health_groups["review_chain"]["items"]] == [
+        "Review Queue",
+        "Evidence Digest",
+        "Stock Workspace",
+    ]
+    assert health_groups["content_chain"]["ready_count"] == 3
+    assert [item["label"] for item in health_groups["content_chain"]["items"]] == [
+        "News",
+        "Research Reports",
+        "Generated Reports",
+    ]
 
 
 def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
     modules = [
         {"module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "technical_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "lhb_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "review_evidence_snapshots", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "news", "tier": "tier2", "status": "failed", "warnings": ["news down"], "error_message": "news down"},
+        {"module": "research_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "generated_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
     ]
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
     monkeypatch.setattr(
@@ -404,7 +559,12 @@ def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
 def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
     modules = [
         {"module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "technical_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "lhb_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {
             "module": "review_evidence_snapshots",
@@ -413,6 +573,9 @@ def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
             "warnings": ["snapshot db offline"],
             "error_message": "snapshot db offline",
         },
+        {"module": "news", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "research_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "generated_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
     ]
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
     monkeypatch.setattr(

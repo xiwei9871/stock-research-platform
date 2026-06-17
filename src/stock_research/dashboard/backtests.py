@@ -2,11 +2,13 @@ import math
 import time
 from datetime import datetime, timezone
 from numbers import Integral, Real
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 from stock_research.config import SETTINGS
+from stock_research.data_run_manifest import load_latest_data_run_manifest
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.dashboard.strategy_backtest_adapters import (
     STRATEGY_BACKTEST_REGISTRY,
@@ -33,7 +35,7 @@ def list_backtest_strategies() -> list[dict[str, Any]]:
         for strategy in list_strategy_catalog()
         if strategy["strategy_id"] in BACKTEST_LAB_STRATEGY_IDS and strategy["status"] == "runnable"
     ]
-    return _enrich_strategies_with_latest_db_metrics(strategies)
+    return _enrich_strategies_with_latest_eod_metrics(_enrich_strategies_with_latest_db_metrics(strategies))
 
 
 def _enrich_strategies_with_latest_db_metrics(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -42,6 +44,204 @@ def _enrich_strategies_with_latest_db_metrics(strategies: list[dict[str, Any]]) 
             return [_with_latest_db_metrics(conn, strategy) for strategy in strategies]
     except Exception:
         return strategies
+
+
+def _enrich_strategies_with_latest_eod_metrics(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_with_latest_eod_strategy_metrics(strategy) for strategy in strategies]
+
+
+def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any]:
+    module = _latest_eod_strategy_module(str(strategy.get("strategy_id") or ""))
+    if not module:
+        return strategy
+
+    latest_trade_date = str(module.get("latest_trade_date") or module.get("trade_date") or "")
+    rows = _read_eod_strategy_rows(module, latest_trade_date=latest_trade_date, strategy_id=str(strategy["strategy_id"]))
+    signal_count = len(rows) or _optional_int(module.get("row_count"))
+    metrics = dict(strategy.get("latest_metrics") or {})
+    metrics.update(
+        {
+            "as_of_date": latest_trade_date or metrics.get("as_of_date"),
+            "signal_status": "candidate_rows" if strategy["strategy_id"] == "lhb_shortline" else "current_holdings",
+            "signal_count": signal_count,
+        }
+    )
+
+    summary = _eod_summary(module)
+    if summary:
+        metrics.update(_metrics_from_eod_summary(summary))
+    else:
+        metrics.update(_metrics_from_eod_equity_path(module, strategy))
+
+    next_strategy = dict(strategy)
+    next_strategy["latest_metrics"] = metrics
+    next_strategy["latest_evidence"] = _eod_strategy_evidence(
+        strategy=strategy,
+        module=module,
+        rows=rows,
+        latest_trade_date=latest_trade_date,
+        signal_count=signal_count,
+    )
+    return next_strategy
+
+
+def _latest_eod_strategy_module(strategy_id: str) -> dict[str, Any] | None:
+    module_name = {
+        "lhb_shortline": "strategy_lhb_shortline",
+        "mid_trend": "strategy_mid_trend",
+        "tech_bottleneck": "strategy_tech_bottleneck",
+    }.get(strategy_id)
+    if not module_name:
+        return None
+    try:
+        modules = list(load_latest_data_run_manifest())
+    except Exception:
+        return None
+    for module in modules:
+        if str(module.get("module") or "") == module_name and str(module.get("status") or "") == "success":
+            return module
+    return None
+
+
+def _read_eod_strategy_rows(
+    module: dict[str, Any],
+    *,
+    latest_trade_date: str,
+    strategy_id: str,
+) -> list[dict[str, Any]]:
+    artifact_path = Path(str(module.get("artifact_path") or ""))
+    if not artifact_path.exists() or artifact_path.is_dir():
+        return []
+    try:
+        frame = pd.read_csv(artifact_path)
+    except Exception:
+        return []
+    if frame.empty:
+        return []
+    if "trade_date" in frame.columns and latest_trade_date:
+        frame = frame.loc[frame["trade_date"].astype(str).str[:10].eq(latest_trade_date)]
+    if "strategy_id" in frame.columns:
+        frame = frame.loc[frame["strategy_id"].astype(str).eq(strategy_id)]
+    if "rank" in frame.columns:
+        frame = frame.sort_values("rank", kind="stable")
+    return frame.to_dict("records")
+
+
+def _eod_summary(module: dict[str, Any]) -> dict[str, Any]:
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    return dict(summary)
+
+
+def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    total_return = summary.get("total_return")
+    if total_return is None and _finite_or_none(summary.get("final_equity")) is not None:
+        total_return = float(summary["final_equity"]) - 1.0
+    if total_return is not None:
+        metrics["total_return_pct"] = _percent_metric(total_return)
+    if summary.get("max_drawdown") is not None:
+        metrics["max_drawdown_pct"] = _percent_metric(summary.get("max_drawdown"))
+    if summary.get("latest_day_return") is not None:
+        metrics["latest_day_return_pct"] = _percent_metric(summary.get("latest_day_return"))
+    if summary.get("latest_day_drawdown") is not None:
+        metrics["latest_day_drawdown_pct"] = _percent_metric(summary.get("latest_day_drawdown"))
+    if summary.get("latest_period_return") is not None:
+        metrics["latest_period_return_pct"] = _percent_metric(summary.get("latest_period_return"))
+    if summary.get("latest_period_label"):
+        metrics["latest_period_label"] = str(summary.get("latest_period_label"))
+    return metrics
+
+
+def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, Any]) -> dict[str, Any]:
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    equity_path = Path(str(metadata.get("equity_path") or ""))
+    if not equity_path.exists():
+        return {}
+    try:
+        frame = pd.read_csv(equity_path)
+    except Exception:
+        return {}
+    if frame.empty or "equity" not in frame.columns:
+        return {}
+    if "trade_date" in frame.columns:
+        frame = frame.sort_values("trade_date", kind="stable")
+        scoped_frame = _latest_year_equity_frame(frame)
+        latest_first_frame = frame.sort_values("trade_date", ascending=False, kind="stable")
+    else:
+        scoped_frame = frame
+        latest_first_frame = frame.iloc[::-1]
+    equity_rows = latest_first_frame.head(8).to_dict("records")
+    latest = equity_rows[0]
+    latest_equity = _finite_or_none(latest.get("equity"))
+    latest_daily_return = _finite_or_none(latest.get("daily_return") or latest.get("net_return"))
+    scoped_return, scoped_drawdown = _scoped_equity_return_and_drawdown(scoped_frame)
+    latest_period_return, latest_period_label = _latest_period_return(
+        strategy=strategy,
+        equity_rows=equity_rows,
+        latest_equity=latest_equity,
+        latest_daily_return=latest_daily_return,
+    )
+    return {
+        "total_return_pct": _percent_metric(scoped_return),
+        "max_drawdown_pct": _percent_metric(scoped_drawdown),
+        "latest_day_return_pct": _percent_metric(latest_daily_return),
+        "latest_day_drawdown_pct": _percent_metric(_finite_or_none(latest.get("drawdown"))),
+        "latest_period_return_pct": _percent_metric(latest_period_return),
+        "latest_period_label": latest_period_label,
+    }
+
+
+def _latest_year_equity_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    parsed_dates = pd.to_datetime(frame["trade_date"], errors="coerce")
+    latest_date = parsed_dates.max()
+    if pd.isna(latest_date):
+        return frame
+    scoped = frame.loc[parsed_dates.dt.year.eq(latest_date.year)]
+    return scoped if not scoped.empty else frame
+
+
+def _scoped_equity_return_and_drawdown(frame: pd.DataFrame) -> tuple[float | None, float | None]:
+    equity = [_finite_or_none(value) for value in frame.get("equity", [])]
+    equity = [value for value in equity if value is not None]
+    if not equity or equity[0] == 0.0:
+        return None, None
+    rebased = [value / equity[0] for value in equity]
+    high_water = rebased[0]
+    drawdowns: list[float] = []
+    for value in rebased:
+        high_water = max(high_water, value)
+        drawdowns.append(value / high_water - 1.0 if high_water else 0.0)
+    return rebased[-1] - 1.0, min(drawdowns) if drawdowns else None
+
+
+def _eod_strategy_evidence(
+    *,
+    strategy: dict[str, Any],
+    module: dict[str, Any],
+    rows: list[dict[str, Any]],
+    latest_trade_date: str,
+    signal_count: int | None,
+) -> str:
+    strategy_id = str(strategy.get("strategy_id") or "")
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    row_position_date = next((str(row.get("source_position_date") or "") for row in rows if row.get("source_position_date")), "")
+    source_position_date = str(metadata.get("source_position_date") or row_position_date or "")
+    names = [str(row.get("stock_name") or "") for row in rows if str(row.get("stock_name") or "")]
+    name_text = f"；名单：{'、'.join(names[:5])}" if names else ""
+    if strategy_id == "lhb_shortline":
+        return f"LHB Shortline 真策略候选产物：{latest_trade_date} 当日候选 {signal_count or 0} 只{name_text}。"
+    if strategy_id == "mid_trend":
+        return (
+            f"Mid Trend V1 真回测已估值截止 {latest_trade_date}；"
+            f"复盘标的为当前持仓，持仓来源日 {source_position_date or '未记录'}{name_text}。"
+        )
+    if strategy_id == "tech_bottleneck":
+        return (
+            f"Tech Bottleneck V1 真回测已估值截止 {latest_trade_date}；"
+            f"复盘标的为当前持仓，持仓来源日 {source_position_date or '未记录'}{name_text}。"
+        )
+    return str(strategy.get("latest_evidence") or "")
 
 
 def _with_latest_db_metrics(conn: Any, strategy: dict[str, Any]) -> dict[str, Any]:
@@ -72,7 +272,7 @@ def _with_latest_db_metrics(conn: Any, strategy: dict[str, Any]) -> dict[str, An
             ORDER BY trade_date DESC, row_index DESC
         ) latest_days
         ORDER BY trade_date DESC
-        LIMIT 2
+        LIMIT 8
         """,
         [run["run_id"]],
     )
@@ -89,6 +289,12 @@ def _with_latest_db_metrics(conn: Any, strategy: dict[str, Any]) -> dict[str, An
     latest_daily_return = _finite_or_none(latest.get("daily_return"))
     if latest_daily_return is None and latest_equity is not None and previous_equity not in (None, 0.0):
         latest_daily_return = latest_equity / previous_equity - 1.0
+    latest_period_return, latest_period_label = _latest_period_return(
+        strategy=strategy,
+        equity_rows=equity_rows,
+        latest_equity=latest_equity,
+        latest_daily_return=latest_daily_return,
+    )
 
     next_strategy = dict(strategy)
     next_strategy["latest_metrics"] = {
@@ -101,10 +307,31 @@ def _with_latest_db_metrics(conn: Any, strategy: dict[str, Any]) -> dict[str, An
         "max_drawdown_pct": _percent_metric(summary.get("max_drawdown"), fallback=_finite_or_none(latest.get("drawdown"))),
         "latest_day_return_pct": _percent_metric(latest_daily_return),
         "latest_day_drawdown_pct": _percent_metric(_finite_or_none(latest.get("drawdown"))),
+        "latest_period_return_pct": _percent_metric(latest_period_return),
+        "latest_period_label": latest_period_label,
         "signal_status": signal_status,
         "signal_count": signal_count,
     }
     return next_strategy
+
+
+def _latest_period_return(
+    *,
+    strategy: dict[str, Any],
+    equity_rows: list[dict[str, Any]],
+    latest_equity: float | None,
+    latest_daily_return: float | None,
+) -> tuple[float | None, str]:
+    frequency = str(
+        (strategy.get("default_parameters") or {}).get("rebalance_frequency") or ""
+    ).lower()
+    if frequency == "weekly":
+        anchor = equity_rows[5] if len(equity_rows) > 5 else (equity_rows[-1] if len(equity_rows) > 1 else None)
+        anchor_equity = _finite_or_none(anchor.get("equity")) if anchor else None
+        if latest_equity is not None and anchor_equity not in (None, 0.0):
+            return latest_equity / anchor_equity - 1.0, "最近调仓周期"
+        return latest_daily_return, "最近调仓周期"
+    return latest_daily_return, "最近交易日"
 
 
 def _latest_position_signal_metrics(conn: Any, run_id: str) -> tuple[str, int | None]:
@@ -134,6 +361,15 @@ def _finite_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _percent_metric(value: Any, *, fallback: float | None = None) -> float | None:

@@ -113,6 +113,10 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         "tiers": _tiers_from_status(aggregate_readiness_status(checks)),
         "modules": [],
         "checks": checks,
+        "health_groups": _build_health_groups_from_checks(
+            checks=checks,
+            latest_market_date=latest_market_date,
+        ),
         "warnings": _dedupe(warnings),
         "errors": [],
         "missing_data": _missing_from_checks(checks),
@@ -145,6 +149,12 @@ def _build_manifest_readiness(
     partial_data = list(summary["partial_data"])
     errors = list(summary["errors"])
     checks = _manifest_checks(manifest_modules, latest_market_date, topn_preview)
+    latest_trade_date = latest_market_date or _latest_trade_date_from_manifest(manifest_modules)
+    health_groups = _build_manifest_health_groups(
+        modules=manifest_modules,
+        latest_market_date=latest_trade_date,
+        topn_preview=topn_preview,
+    )
 
     if not latest_market_date:
         missing_data.append("platform_summary")
@@ -153,9 +163,21 @@ def _build_manifest_readiness(
         missing_data.extend(["score_topn", "review_queue"])
         warnings.extend([UNAVAILABLE_WARNINGS["topn_preview"], UNAVAILABLE_WARNINGS["review_queue"]])
 
-    status = "BLOCKED" if missing_data else summary["status"]
+    health_blocking_missing = _health_missing_keys(
+        health_groups,
+        blocking_group_keys={"base_data", "strategy_execution"},
+    )
+    health_partial_missing = _health_missing_keys(
+        health_groups,
+        blocking_group_keys={"review_chain", "content_chain"},
+    )
+    missing_data.extend(health_blocking_missing)
+    partial_data.extend(health_partial_missing)
+
+    status = "BLOCKED" if missing_data else (
+        "PARTIAL" if partial_data or summary["status"] == "PARTIAL" else summary["status"]
+    )
     run_id = str(manifest_modules[0].get("run_id") or "") if manifest_modules else ""
-    latest_trade_date = latest_market_date or _latest_trade_date_from_manifest(manifest_modules)
     return {
         "mode": "eod_local",
         "status": status,
@@ -172,6 +194,7 @@ def _build_manifest_readiness(
         ],
         "modules": manifest_modules,
         "checks": checks,
+        "health_groups": health_groups,
         "warnings": _dedupe([*summary["warnings"], *warnings]),
         "errors": _dedupe(errors),
         "missing_data": _dedupe(missing_data),
@@ -218,6 +241,350 @@ def _manifest_checks(
             )
         )
     return checks
+
+
+def _build_manifest_health_groups(
+    *,
+    modules: list[dict[str, Any]],
+    latest_market_date: str,
+    topn_preview: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_module = {str(item.get("module") or ""): item for item in modules}
+    base_items = [
+        _manifest_health_item(
+            by_module,
+            key="daily_bars",
+            label="日线",
+            modules=("daily_bars",),
+            fallback_ready=bool(latest_market_date),
+            fallback_detail=f"最新交易日 {latest_market_date}" if latest_market_date else "日线日期不可用",
+        ),
+        _manifest_health_item(
+            by_module,
+            key="factor_features",
+            label="因子",
+            modules=("technical_features", "factor_daily"),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="score_topn",
+            label="评分",
+            modules=("score_topn",),
+            fallback_ready=bool(topn_preview),
+            fallback_detail="TopN 评分可用" if topn_preview else "TopN 评分不可用",
+        ),
+        _manifest_health_item(
+            by_module,
+            key="lhb_features",
+            label="龙虎榜",
+            modules=("lhb_features",),
+        ),
+    ]
+    strategy_items = [
+        _manifest_health_item(
+            by_module,
+            key="strategy_lhb_shortline",
+            label="LHB",
+            modules=("strategy_lhb_shortline",),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="strategy_mid_trend",
+            label="Mid Trend",
+            modules=("strategy_mid_trend",),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="strategy_tech_bottleneck",
+            label="Tech Bottleneck",
+            modules=("strategy_tech_bottleneck",),
+        ),
+    ]
+    stock_workspace_ready = _health_ready(base_items, "daily_bars") and _health_ready(base_items, "score_topn")
+    review_items = [
+        _manifest_health_item(
+            by_module,
+            key="review_queue",
+            label="Review Queue",
+            modules=("review_queue", "review_queue_strategy_manifest"),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="review_evidence_snapshots",
+            label="Evidence Digest",
+            modules=("review_evidence_snapshots",),
+        ),
+        {
+            "key": "stock_workspace",
+            "label": "Stock Workspace",
+            "status": "ready" if stock_workspace_ready else "missing_data",
+            "detail": "日线和评分可用，个股工作台可打开"
+            if stock_workspace_ready
+            else "缺少日线或评分，个股工作台证据链不完整",
+            "row_count": None,
+            "latest_trade_date": latest_market_date,
+        },
+    ]
+    content_items = [
+        _manifest_health_item(
+            by_module,
+            key="news",
+            label="News",
+            modules=("news",),
+            fallback_ready=_public_news_available(),
+            fallback_detail="新闻数据可用；未写入当日日终 manifest",
+            fallback_status="partial",
+            fallback_latest_trade_date=latest_market_date,
+        ),
+        _manifest_health_item(
+            by_module,
+            key="research_reports",
+            label="Research Reports",
+            modules=("research_reports",),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="generated_reports",
+            label="Generated Reports",
+            modules=("generated_reports",),
+        ),
+    ]
+    return [
+        _health_group("base_data", "基础数据", base_items),
+        _health_group("strategy_execution", "策略执行", strategy_items),
+        _health_group("review_chain", "复盘链路", review_items),
+        _health_group("content_chain", "内容链路", content_items),
+    ]
+
+
+def _build_health_groups_from_checks(
+    *,
+    checks: list[dict[str, Any]],
+    latest_market_date: str,
+) -> list[dict[str, Any]]:
+    by_check = {str(check.get("key") or ""): check for check in checks}
+    platform_status = str(by_check.get("platform_summary", {}).get("status") or "missing_data")
+    review_status = str(by_check.get("review_queue", {}).get("status") or "missing_data")
+    return [
+        _health_group(
+            "base_data",
+            "基础数据",
+            [
+                {
+                    "key": "daily_bars",
+                    "label": "日线",
+                    "status": "ready" if platform_status == "ready" and latest_market_date else "missing_data",
+                    "detail": f"最新交易日 {latest_market_date}" if latest_market_date else "日线日期不可用",
+                    "row_count": None,
+                    "latest_trade_date": latest_market_date,
+                },
+                {
+                    "key": "factor_features",
+                    "label": "因子",
+                    "status": "unknown",
+                    "detail": "轻量探针未检查因子模块",
+                    "row_count": None,
+                    "latest_trade_date": "",
+                },
+                {
+                    "key": "score_topn",
+                    "label": "评分",
+                    "status": "ready" if platform_status == "ready" else "missing_data",
+                    "detail": by_check.get("platform_summary", {}).get("detail", ""),
+                    "row_count": None,
+                    "latest_trade_date": latest_market_date,
+                },
+                {
+                    "key": "lhb_features",
+                    "label": "龙虎榜",
+                    "status": "unknown",
+                    "detail": "轻量探针未检查龙虎榜模块",
+                    "row_count": None,
+                    "latest_trade_date": "",
+                },
+            ],
+        ),
+        _health_group(
+            "strategy_execution",
+            "策略执行",
+            [
+                _unknown_health_item("strategy_lhb_shortline", "LHB"),
+                _unknown_health_item("strategy_mid_trend", "Mid Trend"),
+                _unknown_health_item("strategy_tech_bottleneck", "Tech Bottleneck"),
+            ],
+        ),
+        _health_group(
+            "review_chain",
+            "复盘链路",
+            [
+                {
+                    "key": "review_queue",
+                    "label": "Review Queue",
+                    "status": review_status,
+                    "detail": by_check.get("review_queue", {}).get("detail", ""),
+                    "row_count": None,
+                    "latest_trade_date": latest_market_date,
+                },
+                _check_health_item(by_check, "review_evidence_snapshots", "Evidence Digest"),
+                {
+                    "key": "stock_workspace",
+                    "label": "Stock Workspace",
+                    "status": "ready" if platform_status == "ready" else "missing_data",
+                    "detail": "依赖平台摘要和评分预览",
+                    "row_count": None,
+                    "latest_trade_date": latest_market_date,
+                },
+            ],
+        ),
+        _health_group(
+            "content_chain",
+            "内容链路",
+            [
+                _check_health_item(by_check, "news", "News"),
+                _check_health_item(by_check, "research_reports", "Research Reports"),
+                _check_health_item(by_check, "generated_reports", "Generated Reports"),
+            ],
+        ),
+    ]
+
+
+def _manifest_health_item(
+    by_module: dict[str, dict[str, Any]],
+    *,
+    key: str,
+    label: str,
+    modules: tuple[str, ...],
+    fallback_ready: bool = False,
+    fallback_detail: str = "",
+    fallback_status: str = "ready",
+    fallback_latest_trade_date: str = "",
+) -> dict[str, Any]:
+    module = next((by_module[name] for name in modules if name in by_module), None)
+    if module is None:
+        if fallback_ready:
+            return {
+                "key": key,
+                "label": label,
+                "status": fallback_status,
+                "detail": fallback_detail,
+                "row_count": None,
+                "latest_trade_date": fallback_latest_trade_date,
+            }
+        return {
+            "key": key,
+            "label": label,
+            "status": "missing_data",
+            "detail": "未找到当日真实执行产物",
+            "row_count": None,
+            "latest_trade_date": "",
+        }
+    status = _health_status_from_manifest(module)
+    detail = _health_detail(module)
+    return {
+        "key": key,
+        "label": label,
+        "status": status,
+        "detail": detail,
+        "row_count": module.get("row_count"),
+        "latest_trade_date": str(module.get("latest_trade_date") or module.get("trade_date") or ""),
+        "module": str(module.get("module") or ""),
+    }
+
+
+def _public_news_available() -> bool:
+    try:
+        return _has_public_news()
+    except Exception:
+        return False
+
+
+def _health_status_from_manifest(module: dict[str, Any]) -> str:
+    status = str(module.get("status") or "unavailable")
+    if status == "success":
+        return "ready"
+    if status in {"partial", "skipped"}:
+        return "partial"
+    return "missing_data"
+
+
+def _health_detail(module: dict[str, Any]) -> str:
+    warning_text = "; ".join(str(item) for item in module.get("warnings") or [] if str(item))
+    error = str(module.get("error_message") or "")
+    if error:
+        return error
+    if warning_text:
+        return warning_text
+    row_count = module.get("row_count")
+    latest_trade_date = str(module.get("latest_trade_date") or module.get("trade_date") or "")
+    if row_count is not None and latest_trade_date:
+        return f"{latest_trade_date}，{int(row_count)} rows"
+    if latest_trade_date:
+        return f"最新日期 {latest_trade_date}"
+    if row_count is not None:
+        return f"{int(row_count)} rows"
+    return "状态已记录"
+
+
+def _health_group(key: str, label: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+    ready_count = sum(1 for item in items if item.get("status") == "ready")
+    missing_count = sum(1 for item in items if item.get("status") == "missing_data")
+    status = "ready" if ready_count == len(items) else ("missing_data" if missing_count else "partial")
+    return {
+        "key": key,
+        "label": label,
+        "status": status,
+        "ready_count": ready_count,
+        "total_count": len(items),
+        "items": items,
+    }
+
+
+def _health_ready(items: list[dict[str, Any]], key: str) -> bool:
+    return any(item.get("key") == key and item.get("status") == "ready" for item in items)
+
+
+def _health_missing_keys(
+    health_groups: list[dict[str, Any]],
+    *,
+    blocking_group_keys: set[str],
+) -> list[str]:
+    keys: list[str] = []
+    for group in health_groups:
+        if str(group.get("key") or "") not in blocking_group_keys:
+            continue
+        for item in group.get("items") or []:
+            if item.get("status") == "missing_data":
+                keys.append(str(item.get("key") or ""))
+    return _dedupe(keys)
+
+
+def _unknown_health_item(key: str, label: str) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "status": "unknown",
+        "detail": "轻量探针未检查该模块",
+        "row_count": None,
+        "latest_trade_date": "",
+    }
+
+
+def _check_health_item(
+    by_check: dict[str, dict[str, Any]],
+    key: str,
+    label: str,
+) -> dict[str, Any]:
+    check = by_check.get(key)
+    if not check:
+        return _unknown_health_item(key, label)
+    return {
+        "key": key,
+        "label": label,
+        "status": check.get("status", "unknown"),
+        "detail": check.get("detail", ""),
+        "row_count": None,
+        "latest_trade_date": "",
+    }
 
 
 def _tiers_from_status(status: str) -> list[dict[str, str]]:

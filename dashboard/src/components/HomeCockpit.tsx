@@ -9,6 +9,8 @@ import {
 import type {
   MarketMonitorPayload,
   PlatformReadiness,
+  PlatformReadinessHealthGroup,
+  PlatformReadinessHealthItem,
   PlatformSummary,
   PublicNewsItem,
   StrategyCatalogItem
@@ -71,6 +73,8 @@ function formatState(value: string | null | undefined) {
 
 function formatReadinessValue(value: string) {
   const labels: Record<string, string> = {
+    ok: '正常',
+    blocked: '阻塞',
     ready: '正常',
     partial: '部分可用',
     missing_data: '缺少数据',
@@ -78,6 +82,40 @@ function formatReadinessValue(value: string) {
   };
   const normalized = value.toLowerCase();
   return labels[normalized] ?? value;
+}
+
+function readinessStatusClass(value: string | null | undefined) {
+  const normalized = String(value ?? '').toLowerCase();
+  if (normalized === 'ok' || normalized === 'ready' || normalized === 'success') return 'ready';
+  if (normalized === 'partial' || normalized === 'unknown' || normalized === 'skipped') return 'partial';
+  if (normalized === 'blocked' || normalized === 'missing_data' || normalized === 'failed' || normalized === 'unavailable') {
+    return 'blocked';
+  }
+  return 'partial';
+}
+
+function platformRiskStatus(readiness: PlatformReadiness | null) {
+  if (!readiness) return '-';
+  if (readiness.status === 'BLOCKED') return '阻塞';
+  if (readiness.status === 'PARTIAL' || (readiness.warnings ?? []).length > 0) return '需关注';
+  return '正常';
+}
+
+function healthGroup(readiness: PlatformReadiness | null, key: string): PlatformReadinessHealthGroup | null {
+  return readiness?.health_groups?.find((group) => group.key === key) ?? null;
+}
+
+function readinessCount(group: PlatformReadinessHealthGroup | null, fallbackTotal = 0) {
+  if (!group) return `-/${fallbackTotal || '-'}`;
+  return `${group.ready_count}/${group.total_count}`;
+}
+
+function healthItemDetail(item: PlatformReadinessHealthItem) {
+  if (item.detail) return item.detail;
+  if (item.latest_trade_date && typeof item.row_count === 'number') return `${item.latest_trade_date}，${item.row_count.toLocaleString()} rows`;
+  if (item.latest_trade_date) return item.latest_trade_date;
+  if (typeof item.row_count === 'number') return `${item.row_count.toLocaleString()} rows`;
+  return '暂无详情';
 }
 
 function formatMode(value: string) {
@@ -93,6 +131,7 @@ function formatReadinessWarning(value: string) {
   const labels: Record<string, string> = {
     'Platform summary unavailable': '平台摘要不可用',
     'Review Queue unavailable': '复盘队列不可用',
+    'News unavailable': '新闻不可用',
     'Research Reports unavailable': '研报不可用',
     'Generated Reports unavailable': '生成报告不可用',
     'TopN preview unavailable': 'TopN 预览不可用'
@@ -123,6 +162,8 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
     totalReturnPct,
     maxDrawdownPct,
     latestDayReturnPct: strategy.latest_metrics?.latest_day_return_pct ?? null,
+    latestPeriodReturnPct: strategy.latest_metrics?.latest_period_return_pct ?? strategy.latest_metrics?.latest_day_return_pct ?? null,
+    latestPeriodLabel: strategy.latest_metrics?.latest_period_label ?? '最近交易日',
     latestDayDrawdownPct: strategy.latest_metrics?.latest_day_drawdown_pct ?? null,
     asOfDate: strategy.latest_metrics?.as_of_date ?? null,
     signalStatus: strategy.latest_metrics?.signal_status ?? 'no_position_rows',
@@ -148,8 +189,14 @@ function metricClass(value: number | null | undefined) {
 }
 
 function signalLabel(metrics: ReturnType<typeof strategyEvidenceMetrics>) {
-  if (typeof metrics.signalCount === 'number') return `最新持仓 ${metrics.signalCount}`;
+  if (typeof metrics.signalCount === 'number') {
+    if (metrics.signalStatus === 'candidate_rows') return `当日候选 ${metrics.signalCount}`;
+    if (metrics.signalStatus === 'current_holdings') return `当前持仓 ${metrics.signalCount}`;
+    return `最新持仓 ${metrics.signalCount}`;
+  }
   if (metrics.signalStatus === 'connected') return '最新持仓 0';
+  if (metrics.signalStatus === 'candidate_rows') return '当日候选 0';
+  if (metrics.signalStatus === 'current_holdings') return '当前持仓 0';
   return '持仓明细暂无';
 }
 
@@ -165,13 +212,42 @@ function statusLabel(status: string) {
 
 function emotionComponentHint(key: string) {
   const labels: Record<string, string> = {
-    breadth: '上涨覆盖面和涨跌比例的综合评分，不是家数',
-    limit: '涨停数量、封板质量和炸板压力的综合评分',
-    relay: '连板晋级与昨日涨停接力表现评分',
-    feedback: '打板成功率和次日收益表现评分',
-    liquidity: '成交额相对近期均量的活跃度评分'
+    breadth: '权重 25%：上涨/下跌比例 + 强涨/强跌比例',
+    limit: '权重 25%：涨停数量加分，跌停和炸板率扣分',
+    relay: '权重 20%：最高连板高度 + 二板以上占涨停比例',
+    feedback: '权重 20%：昨日涨停、连板、炸板今天的收益反馈',
+    liquidity: '权重 10%：5日成交额均值 / 20日成交额均值'
   };
   return labels[key] ?? '市场情绪子项评分';
+}
+
+function emotionComponentExplanation(key: string, marketMonitor: MarketMonitorPayload | null) {
+  const emotion = marketMonitor?.market_emotion;
+  if (!emotion) return '原始数据暂未接入。';
+  const breadth = emotion.breadth;
+  const limit = emotion.limit_performance;
+  const profit = emotion.profit_effect;
+  const liquidity = emotion.liquidity;
+  if (key === 'breadth') {
+    return `上涨 ${formatCount(breadth.up_count)}、下跌 ${formatCount(breadth.down_count)}，强涨 ${formatCount(breadth.strong_up_count)}、强跌 ${formatCount(breadth.strong_down_count)}。`;
+  }
+  if (key === 'limit') {
+    return `涨停 ${formatCount(limit.limit_up_count)}、跌停 ${formatCount(limit.limit_down_count)}，炸板 ${formatCount(limit.broken_limit_up_count)}，炸板率 ${formatRatio(limit.broken_limit_up_rate)}。`;
+  }
+  if (key === 'relay') {
+    return `二板 ${formatCount(limit.second_board_count)}、三板以上 ${formatCount(limit.third_board_plus_count)}，最高 ${formatCount(limit.high_board_height)} 板。`;
+  }
+  if (key === 'feedback') {
+    return `昨日涨停红盘率 ${formatRatio(profit.limit_up_success_rate)}，连板晋级 ${formatRatio(profit.relay_continue_rate)}，炸板次日红盘率 ${formatRatio(profit.broken_success_rate)}。`;
+  }
+  if (key === 'liquidity') {
+    return `5日/20日成交额比 ${formatRatio(liquidity.amount_ratio_5_20)}，总成交额 ${formatCount(liquidity.total_amount ? Math.round(liquidity.total_amount / 100000000) : null)} 亿。`;
+  }
+  return '该评分由市场情绪原始指标规则化计算。';
+}
+
+function marketEmotionFormulaReadout() {
+  return '综合强度 = 涨跌广度25% + 涨停表现25% + 连板接力20% + 赚钱效应20% + 市场量能10%。';
 }
 
 function emotionComponentLabel(component: { key: string; label: string }) {
@@ -219,6 +295,11 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const visibleStrategies = activeStrategies(strategies);
+  const baseDataHealth = healthGroup(readiness, 'base_data');
+  const strategyHealth = healthGroup(readiness, 'strategy_execution');
+  const reviewHealth = healthGroup(readiness, 'review_chain');
+  const contentHealth = healthGroup(readiness, 'content_chain');
+  const healthGroups = readiness?.health_groups ?? [];
 
   useEffect(() => {
     let ignore = false;
@@ -319,21 +400,63 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
 
       <section className="status-strip command-status-strip" aria-label="首页状态">
         <div>
-          <span>市场日期</span>
-          <strong>{summary?.latest_market_date ?? '-'}</strong>
+          <span>平台日期</span>
+          <strong>{readiness?.latest_market_date || summary?.latest_market_date || '-'}</strong>
         </div>
         <div>
-          <span>因子日期</span>
-          <strong>{summary?.latest_factor_date ?? '-'}</strong>
+          <span>数据健康</span>
+          <strong className={`readiness-value ${readinessStatusClass(baseDataHealth?.status ?? readiness?.status)}`}>
+            {baseDataHealth ? formatReadinessValue(baseDataHealth.status) : readiness ? formatReadinessValue(readiness.status) : '-'}
+          </strong>
         </div>
         <div>
-          <span>市场情绪日期</span>
-          <strong>{marketMonitor?.trade_date || '-'}</strong>
+          <span>策略就绪</span>
+          <strong>{readinessCount(strategyHealth, visibleStrategies.length || 3)}</strong>
         </div>
         <div>
-          <span>启用策略</span>
-          <strong>{formatCount(visibleStrategies.length)}</strong>
+          <span>复盘就绪</span>
+          <strong>{readinessCount(reviewHealth, 3)}</strong>
         </div>
+        <div>
+          <span>风险状态</span>
+          <strong className={`readiness-value ${readinessStatusClass(readiness?.status)}`}>{platformRiskStatus(readiness)}</strong>
+        </div>
+      </section>
+
+      <section className="workspace-panel health-check-panel" aria-label="平台健康检查">
+        <details>
+          <summary>
+            <span>健康检查</span>
+            <strong>
+              基础数据 {readinessCount(baseDataHealth, 4)} · 策略执行 {readinessCount(strategyHealth, 3)} · 复盘链路{' '}
+              {readinessCount(reviewHealth, 3)} · 内容链路 {readinessCount(contentHealth, 3)}
+            </strong>
+          </summary>
+          <div className="health-check-grid">
+            {healthGroups.map((group) => (
+              <article className="health-check-group" key={group.key}>
+                <div className="health-check-group-header">
+                  <strong>{group.label}</strong>
+                  <span className={`health-status-pill ${readinessStatusClass(group.status)}`}>
+                    {group.ready_count}/{group.total_count}
+                  </span>
+                </div>
+                <div className="health-check-items">
+                  {group.items.map((item) => (
+                    <div className="health-check-item" key={item.key}>
+                      <span className={`health-dot ${readinessStatusClass(item.status)}`} />
+                      <div>
+                        <strong>{item.label}</strong>
+                        <small>{healthItemDetail(item)}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+            {!healthGroups.length ? <p className="muted">健康检查数据加载中...</p> : null}
+          </div>
+        </details>
       </section>
 
       <section className="workspace-panel strategy-performance-panel" aria-label="启用策略表现">
@@ -368,9 +491,9 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
                     <strong className={metricClass(metrics.maxDrawdownPct)}>{formatPercent(metrics.maxDrawdownPct)}</strong>
                   </div>
                   <div>
-                    <span>最近交易日</span>
-                    <strong className={metricClass(metrics.latestDayReturnPct)}>
-                      {formatPercent(metrics.latestDayReturnPct, { signed: true })}
+                    <span>{metrics.latestPeriodLabel}</span>
+                    <strong className={metricClass(metrics.latestPeriodReturnPct)}>
+                      {formatPercent(metrics.latestPeriodReturnPct, { signed: true })}
                     </strong>
                   </div>
                 </div>
@@ -482,10 +605,12 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
               <div className="emotion-score-card" key={component.key}>
                 <span>{emotionComponentLabel(component)}</span>
                 <strong>{formatScore(component.score)}</strong>
-                <small>{emotionComponentHint(component.key)}</small>
+                <small>{emotionComponentExplanation(component.key, marketMonitor)}</small>
+                <em>{emotionComponentHint(component.key)}</em>
               </div>
             ))}
           </div>
+          <p className="market-emotion-formula">{marketEmotionFormulaReadout()}</p>
           <p className="market-regime-readout">{marketEmotionReadout(marketMonitor)}</p>
         </section>
 

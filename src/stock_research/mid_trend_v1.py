@@ -94,6 +94,10 @@ def build_mid_trend_v1_from_frames(
             transaction_cost_bps=config.transaction_cost_bps,
         )
     summary = dict(result["summary"])
+    latest_metrics = _latest_mid_trend_metrics(
+        equity_curve=result["equity_curve"],
+        positions=result["positions"],
+    )
     summary.update(
         {
             "engine_version": config.engine_version,
@@ -105,12 +109,15 @@ def build_mid_trend_v1_from_frames(
             "max_position_weight": config.max_position_weight,
             "adjust_type": config.adjust_type,
             "score_version": config.score_version,
+            **latest_metrics,
             "data_coverage": {
                 "source": str(funnel_detail.attrs.get("source", "db_base_tables")),
                 "funnel_detail_rows": int(len(funnel_detail)),
                 "price_rows": int(len(prices)),
                 "primary_signal_rows": int(len(primary)),
                 "buffer_signal_rows": int(len(buffer)),
+                "stale_overlay_path": str(funnel_detail.attrs.get("stale_overlay_path") or ""),
+                "stale_overlay_max_date": str(funnel_detail.attrs.get("stale_overlay_max_date") or ""),
             },
         }
     )
@@ -185,8 +192,14 @@ def load_mid_trend_v1_funnel_detail(config: MidTrendV1Config, *, service: str = 
     if MID_TREND_V1_FEATURE_FUNNEL_PATH.exists():
         frame = pd.read_csv(MID_TREND_V1_FEATURE_FUNNEL_PATH, low_memory=False)
         frame = _prepare_feature_funnel(frame, config=config)
-        frame.attrs["source"] = "research_overlay_feature_input"
-        return frame
+        overlay_max_date = _max_trade_date(frame)
+        if overlay_max_date and overlay_max_date >= config.end_date:
+            frame.attrs["source"] = "research_overlay_feature_input"
+            return frame
+        fallback = _load_mid_trend_v1_funnel_detail_from_db(config, service=service)
+        fallback.attrs["stale_overlay_path"] = str(MID_TREND_V1_FEATURE_FUNNEL_PATH)
+        fallback.attrs["stale_overlay_max_date"] = overlay_max_date
+        return fallback
     return _load_mid_trend_v1_funnel_detail_from_db(config, service=service)
 
 
@@ -257,6 +270,15 @@ def _prepare_feature_funnel(frame: pd.DataFrame, *, config: MidTrendV1Config) ->
     if "score_rank" not in result.columns and "rank" in result.columns:
         result["score_rank"] = result["rank"]
     return result
+
+
+def _max_trade_date(frame: pd.DataFrame) -> str:
+    if frame.empty or "trade_date" not in frame.columns:
+        return ""
+    dates = pd.to_datetime(frame["trade_date"], errors="coerce").dropna()
+    if dates.empty:
+        return ""
+    return str(dates.max().date())
 
 
 def _report_mild_bonus_score(frame: pd.DataFrame) -> pd.Series:
@@ -351,6 +373,52 @@ def _slice_lifecycle_result(
             transaction_cost_bps=transaction_cost_bps,
         ),
     }
+
+
+def _latest_mid_trend_metrics(
+    *,
+    equity_curve: pd.DataFrame,
+    positions: pd.DataFrame,
+) -> dict[str, Any]:
+    if equity_curve.empty:
+        return {
+            "latest_day_return": None,
+            "latest_day_drawdown": None,
+            "latest_period_return": None,
+            "latest_period_label": "最近调仓周期",
+        }
+    equity = equity_curve.copy()
+    date_col = "date" if "date" in equity.columns else "trade_date"
+    equity[date_col] = pd.to_datetime(equity[date_col], errors="coerce")
+    equity = equity.dropna(subset=[date_col]).sort_values(date_col, kind="stable")
+    latest = equity.iloc[-1]
+    latest_equity = _safe_float(latest.get("equity"))
+    latest_day_return = _safe_float(latest.get("net_return", latest.get("daily_return")))
+    latest_day_drawdown = _safe_float(latest.get("drawdown"))
+    latest_period_return = None
+    if not positions.empty and "rebalance_date" in positions.columns and latest_equity is not None:
+        position_dates = pd.to_datetime(positions["rebalance_date"], errors="coerce").dropna()
+        if not position_dates.empty:
+            latest_rebalance_date = position_dates.max()
+            anchor_rows = equity[equity[date_col].le(latest_rebalance_date)]
+            if not anchor_rows.empty:
+                anchor_equity = _safe_float(anchor_rows.iloc[-1].get("equity"))
+                if anchor_equity not in (None, 0.0):
+                    latest_period_return = latest_equity / anchor_equity - 1.0
+    return {
+        "latest_day_return": latest_day_return,
+        "latest_day_drawdown": latest_day_drawdown,
+        "latest_period_return": latest_period_return,
+        "latest_period_label": "最近调仓周期",
+    }
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if pd.notna(number) else None
 
 
 def _build_funnel_detail_from_score_rows(rows: pd.DataFrame) -> pd.DataFrame:

@@ -14,6 +14,150 @@ from stock_research.vectorized_topn_backtest import (
 )
 
 
+def test_strategy_metrics_prefer_eod_manifest_strategy_artifacts(monkeypatch, tmp_path):
+    artifact = tmp_path / "strategy_mid_trend_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name,source_position_date",
+                "2026-06-16,CN:SZ:001339,1,mid_trend,Mid Trend Combo,智微智能,2026-05-18",
+                "2026-06-16,CN:SZ:000811,2,mid_trend,Mid Trend Combo,冰轮环境,2026-05-18",
+                "2026-06-16,CN:SZ:003031,3,mid_trend,Mid Trend Combo,中瓷电子,2026-05-18",
+                "2026-06-16,CN:SZ:301086,4,mid_trend,Mid Trend Combo,鸿富瀚,2026-05-18",
+                "2026-06-16,CN:SZ:300831,5,mid_trend,Mid Trend Combo,派瑞股份,2026-05-18",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 5,
+                "artifact_path": str(artifact),
+                "metadata": {
+                    "summary": {
+                        "actual_end_date": "2026-06-16",
+                        "actual_start_date": "2026-01-05",
+                        "final_equity": 1.6720554083319354,
+                        "total_return": 0.6720554083319354,
+                        "max_drawdown": -0.175192059995805,
+                        "latest_day_return": 0.0589,
+                        "latest_day_drawdown": -0.0086,
+                        "latest_period_return": 0.0625,
+                        "latest_period_label": "最近调仓周期",
+                    },
+                    "source_position_date": "2026-05-18",
+                },
+            }
+        ],
+        raising=False,
+    )
+
+    strategy = {
+        "strategy_id": "mid_trend",
+        "strategy_name": "Mid Trend Combo",
+        "default_parameters": {"rebalance_frequency": "weekly"},
+        "latest_evidence": "old static evidence ending 2026-06-02",
+        "latest_metrics": {
+            "as_of_date": "2026-06-02",
+            "total_return_pct": 55.99,
+            "max_drawdown_pct": -17.52,
+            "signal_status": "connected",
+            "signal_count": 5,
+        },
+    }
+
+    enriched = backtests._with_latest_eod_strategy_metrics(strategy)
+
+    assert enriched["latest_metrics"]["as_of_date"] == "2026-06-16"
+    assert enriched["latest_metrics"]["total_return_pct"] == 67.21
+    assert enriched["latest_metrics"]["max_drawdown_pct"] == -17.52
+    assert enriched["latest_metrics"]["latest_day_return_pct"] == 5.89
+    assert enriched["latest_metrics"]["latest_day_drawdown_pct"] == -0.86
+    assert enriched["latest_metrics"]["latest_period_return_pct"] == 6.25
+    assert enriched["latest_metrics"]["latest_period_label"] == "最近调仓周期"
+    assert enriched["latest_metrics"]["signal_status"] == "current_holdings"
+    assert enriched["latest_metrics"]["signal_count"] == 5
+    assert "估值截止 2026-06-16" in enriched["latest_evidence"]
+    assert "持仓来源日 2026-05-18" in enriched["latest_evidence"]
+
+
+def test_lhb_eod_manifest_candidate_rows_override_empty_position_status(monkeypatch, tmp_path):
+    artifact = tmp_path / "strategy_lhb_shortline_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name",
+                "2026-06-16,CN:SZ:002080,1,lhb_shortline,LHB Shortline Combo,中材科技",
+                "2026-06-16,CN:SZ:002436,2,lhb_shortline,LHB Shortline Combo,兴森科技",
+                "2026-06-16,CN:SZ:300620,3,lhb_shortline,LHB Shortline Combo,光库科技",
+                "2026-06-16,CN:SZ:300843,4,lhb_shortline,LHB Shortline Combo,胜蓝股份",
+                "2026-06-16,CN:SZ:301099,5,lhb_shortline,LHB Shortline Combo,雅创电子",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_lhb_shortline",
+                "status": "success",
+                "latest_trade_date": "2026-06-16",
+                "row_count": 5,
+                "artifact_path": str(artifact),
+                "metadata": {},
+            }
+        ],
+        raising=False,
+    )
+
+    strategy = {
+        "strategy_id": "lhb_shortline",
+        "strategy_name": "LHB Shortline Combo",
+        "default_parameters": {"rebalance_frequency": "daily"},
+        "latest_metrics": {"signal_status": "no_position_rows", "signal_count": None},
+    }
+
+    enriched = backtests._with_latest_eod_strategy_metrics(strategy)
+
+    assert enriched["latest_metrics"]["as_of_date"] == "2026-06-16"
+    assert enriched["latest_metrics"]["signal_status"] == "candidate_rows"
+    assert enriched["latest_metrics"]["signal_count"] == 5
+    assert "当日候选 5 只" in enriched["latest_evidence"]
+
+
+def test_eod_equity_path_metrics_rebase_to_latest_year(tmp_path):
+    equity_path = tmp_path / "tech_equity.csv"
+    equity_path.write_text(
+        "\n".join(
+            [
+                "trade_date,equity,drawdown,net_return",
+                "2025-12-31,2.0000,0.0000,0.0000",
+                "2026-01-05,2.0000,0.0000,0.0000",
+                "2026-01-06,1.8000,-0.1000,-0.1000",
+                "2026-06-15,2.2000,0.0000,0.0500",
+                "2026-06-16,2.4000,0.0000,0.0909",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = backtests._metrics_from_eod_equity_path(
+        {"metadata": {"equity_path": str(equity_path)}},
+        {"default_parameters": {"rebalance_frequency": "weekly"}},
+    )
+
+    assert metrics["total_return_pct"] == 20.0
+    assert metrics["max_drawdown_pct"] == -10.0
+
+
 def test_list_backtest_strategies_returns_validated_combo_rows_only():
     rows = backtests.list_backtest_strategies()
 
@@ -63,9 +207,44 @@ def test_latest_strategy_metrics_use_latest_database_trade_date(monkeypatch):
         "max_drawdown_pct": -8.34,
         "latest_day_return_pct": 1.23,
         "latest_day_drawdown_pct": -2.1,
+        "latest_period_return_pct": 1.23,
+        "latest_period_label": "最近交易日",
         "signal_status": "connected",
         "signal_count": 5,
     }
+
+
+def test_latest_strategy_metrics_use_weekly_period_return_for_weekly_strategies(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        if "FROM backtest.strategy_backtest_run" in sql:
+            return [{"run_id": "run-weekly", "summary_json": {"total_return": 0.56, "max_drawdown": -0.12}}]
+        if "FROM backtest.strategy_backtest_equity" in sql:
+            return [
+                {"trade_date": "2026-06-16", "equity": 1.56, "drawdown": -0.02, "daily_return": 0.004},
+                {"trade_date": "2026-06-15", "equity": 1.5538, "drawdown": -0.025, "daily_return": 0.002},
+                {"trade_date": "2026-06-12", "equity": 1.5480, "drawdown": -0.03, "daily_return": 0.001},
+                {"trade_date": "2026-06-11", "equity": 1.5420, "drawdown": -0.04, "daily_return": -0.002},
+                {"trade_date": "2026-06-10", "equity": 1.5360, "drawdown": -0.05, "daily_return": 0.003},
+                {"trade_date": "2026-06-09", "equity": 1.50, "drawdown": -0.055, "daily_return": 0.001},
+            ]
+        if "FROM backtest.strategy_backtest_position" in sql:
+            return [{"signal_count": 5}]
+        raise AssertionError(f"unexpected SQL: {sql}")
+
+    monkeypatch.setattr(backtests, "fetch_all", fake_fetch_all, raising=False)
+
+    strategy = {
+        "strategy_id": "mid_trend",
+        "strategy_name": "Mid Trend Combo",
+        "default_parameters": {"rebalance_frequency": "weekly"},
+        "latest_metrics": {},
+    }
+
+    enriched = backtests._with_latest_db_metrics(object(), strategy)
+
+    assert enriched["latest_metrics"]["latest_day_return_pct"] == 0.4
+    assert enriched["latest_metrics"]["latest_period_return_pct"] == pytest.approx(4.0)
+    assert enriched["latest_metrics"]["latest_period_label"] == "最近调仓周期"
 
 
 def test_latest_position_signal_metrics_returns_no_position_rows_when_empty(monkeypatch):
