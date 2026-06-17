@@ -440,3 +440,41 @@ def test_cli_dispatches_run_yanbaoke_report_backfill(monkeypatch, tmp_path: Path
     assert called["max_broker_share"] == 0.25
     assert called["import_pdfs"] is False
     assert "yanbaoke_backfill|downloaded|1" in out
+
+
+def test_cli_run_yanbaoke_report_backfill_uses_budget_defaults(monkeypatch, tmp_path: Path):
+    task_path = tmp_path / "tasks.csv"
+    task_path.write_text("task_id,status\nx,pending\n", encoding="utf-8")
+    called = {}
+
+    def fake_run(**kwargs):
+        called.update(kwargs)
+        return {
+            "summary": {"processed_tasks": 0, "downloaded_count": 0, "done_tasks": 0},
+            "paths": {
+                "tasks": str(task_path),
+                "discovered": str(tmp_path / "discovered.csv"),
+                "filtered": str(tmp_path / "filtered.csv"),
+                "downloads": str(tmp_path / "downloads.csv"),
+                "report": str(tmp_path / "report.md"),
+            },
+        }
+
+    monkeypatch.setattr(cli, "run_yanbaoke_report_backfill", fake_run)
+
+    cli.main(
+        [
+            "run-yanbaoke-report-backfill",
+            "--tasks-path",
+            str(task_path),
+            "--output-dir",
+            str(tmp_path),
+            "--no-import",
+        ]
+    )
+
+    assert called["monthly_budget"] == 1000
+    assert called["base_budget"] == 600
+    assert called["top_budget"] == 300
+    assert called["reserve_budget"] == 100
+    assert called["max_broker_share"] == 0.25
