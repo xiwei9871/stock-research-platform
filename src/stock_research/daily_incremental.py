@@ -37,6 +37,8 @@ DAILY_INCREMENTAL_STEPS = [
 StepRunner = Callable[[dict[str, Any]], Any]
 FreshnessChecker = Callable[[dict[str, Any]], dict[str, Any]]
 Recorder = Callable[[dict[str, Any]], Any]
+DEFAULT_REQUIRED_DAILY_ADJUST_TYPES = ["hfq", "qfq"]
+DEFAULT_MIN_MARKET_BAR_ROWS = 4000
 
 
 def select_daily_incremental_steps(
@@ -79,21 +81,45 @@ def check_market_data_freshness(
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
     trade_date = str(context["trade_date"])
+    required_adjust_types = list(
+        context.get("required_adjust_types") or DEFAULT_REQUIRED_DAILY_ADJUST_TYPES
+    )
+    min_required_rows = int(
+        context.get("min_market_bar_rows") or DEFAULT_MIN_MARKET_BAR_ROWS
+    )
     sql = """
-    SELECT count(*)::int AS bar_count
+    SELECT adjust_type, count(*)::int AS bar_count
     FROM market_daily_bar
     WHERE trade_date = %s
+    GROUP BY adjust_type
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [trade_date])
-    bar_count = int(rows[0]["bar_count"] if rows else 0)
-    if bar_count <= 0:
+    observed_counts = {
+        str(row["adjust_type"]): int(row["bar_count"])
+        for row in rows
+    }
+    counts = {
+        adjust_type: observed_counts.get(adjust_type, 0)
+        for adjust_type in required_adjust_types
+    }
+    incomplete = [
+        f"{adjust_type}={counts[adjust_type]}<{min_required_rows}"
+        for adjust_type in required_adjust_types
+        if counts[adjust_type] < min_required_rows
+    ]
+    if incomplete:
         return {
             "status": "blocked",
-            "reason": f"market_daily_bar missing for {trade_date}",
-            "bar_count": bar_count,
+            "reason": f"market_daily_bar incomplete for {trade_date}: {', '.join(incomplete)}",
+            "counts": counts,
+            "min_required_rows": min_required_rows,
         }
-    return {"status": "ok", "bar_count": bar_count}
+    return {
+        "status": "ok",
+        "counts": counts,
+        "min_required_rows": min_required_rows,
+    }
 
 
 def _sync_core_assets_step(context: dict[str, Any]) -> dict[str, Any]:
@@ -116,7 +142,10 @@ def _check_market_data_freshness_step(context: dict[str, Any]) -> dict[str, Any]
     result = check_market_data_freshness(context)
     if result.get("status") != "ok":
         raise RuntimeError(str(result.get("reason") or "market data freshness blocked"))
-    return {"bar_count": result["bar_count"]}
+    return {
+        "counts": result["counts"],
+        "min_required_rows": result["min_required_rows"],
+    }
 
 
 def _build_asset_status_step(context: dict[str, Any]) -> dict[str, Any]:

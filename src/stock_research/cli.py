@@ -208,7 +208,10 @@ from stock_research.loaders.baostock_ingestion import (
     sync_industry_memberships,
 )
 from stock_research.loaders.baostock_finance_ingestion import sync_finance_for_period
-from stock_research.market_data import load_market_daily_bars
+from stock_research.market_data import (
+    latest_complete_source_trade_date,
+    load_market_daily_bars,
+)
 from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
 from stock_research.minute_backfill import (
@@ -5176,6 +5179,13 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"daily_factor_pipeline|score_rows|{result['score_rows']}")
         print(f"daily_factor_pipeline|top_scores|{len(result['top_scores'])}")
     elif args.command == "run-stock-daily-data-pipeline":
+        trade_date = (
+            latest_complete_source_trade_date()
+            if args.trade_date == "auto"
+            else args.trade_date
+        )
+        if not trade_date:
+            raise SystemExit("could not resolve latest complete source trade date")
         sender = None
         if args.feishu_target:
             def sender(message: str) -> None:
@@ -5188,7 +5198,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 )
 
         result = run_stock_daily_data_pipeline(
-            trade_date=args.trade_date,
+            trade_date=trade_date,
             output_dir=args.output_dir,
             feishu_sender=sender,
             send_feishu=not args.no_feishu,

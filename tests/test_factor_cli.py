@@ -5308,6 +5308,36 @@ def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
     ]
 
 
+def test_cli_run_stock_daily_data_pipeline_auto_uses_latest_complete_source_trade_date(
+    monkeypatch, capsys
+):
+    calls = []
+
+    def fake_run_stock_daily_data_pipeline(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success"}
+
+    monkeypatch.setattr(cli, "latest_complete_source_trade_date", lambda: "2026-06-15")
+    monkeypatch.setattr(cli, "run_stock_daily_data_pipeline", fake_run_stock_daily_data_pipeline)
+
+    cli.main_for_args(
+        [
+            "run-stock-daily-data-pipeline",
+            "--trade-date",
+            "auto",
+            "--output-dir",
+            "outputs/daily/auto",
+            "--no-feishu",
+        ]
+    )
+
+    assert calls[0]["trade_date"] == "2026-06-15"
+    assert capsys.readouterr().out.splitlines() == [
+        "stock_daily_data_pipeline|status|success",
+        "stock_daily_data_pipeline|summary|outputs/daily/auto/run_summary.json",
+    ]
+
+
 def test_cli_run_stock_daily_data_pipeline_exits_nonzero_on_partial_failed(
     monkeypatch, capsys
 ):

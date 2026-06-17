@@ -7,7 +7,19 @@ OPENCLAW_BIN="${STOCK_DAILY_PIPELINE_OPENCLAW_BIN:-/Users/xiwei/stock_research/s
 LOG_DIR="${STOCK_DAILY_PIPELINE_LOG_DIR:-$ROOT/logs}"
 DEFAULT_RUN_LOG_RELATIVE="logs/stock_daily_data_pipeline.host.log"
 RUN_LOG="${STOCK_DAILY_PIPELINE_RUN_LOG:-$LOG_DIR/${DEFAULT_RUN_LOG_RELATIVE#logs/}}"
-TRADE_DATE="${STOCK_DAILY_PIPELINE_TRADE_DATE:-$(date +%F)}"
+if [ -n "${STOCK_DAILY_PIPELINE_TRADE_DATE:-}" ]; then
+  TRADE_DATE="$STOCK_DAILY_PIPELINE_TRADE_DATE"
+else
+  TRADE_DATE="$("$PYTHON" - <<'PY'
+from stock_research.market_data import latest_complete_source_trade_date
+
+trade_date = latest_complete_source_trade_date()
+if not trade_date:
+    raise SystemExit("could not resolve latest complete source trade date")
+print(trade_date)
+PY
+)"
+fi
 OUTPUT_DIR="${STOCK_DAILY_PIPELINE_OUTPUT_DIR:-$ROOT/outputs/research/stock_daily_data_pipeline/$TRADE_DATE}"
 FEISHU_TARGET="${STOCK_DAILY_PIPELINE_FEISHU_TARGET:-chat:oc_82dd978138a0cde5864868c5b5b8e754}"
 FEISHU_ACCOUNT="${STOCK_DAILY_PIPELINE_FEISHU_ACCOUNT:-jarvis}"

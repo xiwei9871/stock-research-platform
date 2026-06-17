@@ -35,6 +35,7 @@ def test_build_daily_pipeline_steps_lists_required_initial_steps() -> None:
         "sync_index_constituents",
         "sync_industry_memberships",
         "build_industry_bars",
+        "minute_incremental_plan",
         "minute_incremental_refresh",
         "daily_event_refresh",
         "daily_feature_build",
@@ -56,7 +57,6 @@ def test_build_daily_pipeline_steps_splits_market_refresh_commands() -> None:
 
     assert [step.name for step in incremental_steps] == [
         "sync_core_assets",
-        "load_market_bars",
         "check_market_data_freshness",
         "build_asset_status",
         "sync_index_bars",
@@ -69,6 +69,57 @@ def test_build_daily_pipeline_steps_splits_market_refresh_commands() -> None:
         assert "--only-step" in step.command
     assert "--label-start-date" in incremental_steps[-1].command
     assert "2026-03-07" in incremental_steps[-1].command
+
+
+def test_build_daily_pipeline_steps_loads_both_daily_adjustments() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    load_step = next(step for step in steps if step.name == "load_market_bars")
+
+    assert load_step.command[3:] == [
+        "load-bars",
+        "--start-date",
+        "2026-06-05",
+        "--end-date",
+        "2026-06-05",
+        "--archive-raw",
+    ]
+
+
+def test_build_daily_pipeline_steps_plans_minute_jobs_before_watchdog() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    plan_step = next(step for step in steps if step.name == "minute_incremental_plan")
+    refresh_step = next(step for step in steps if step.name == "minute_incremental_refresh")
+
+    assert steps.index(plan_step) < steps.index(refresh_step)
+    assert plan_step.command[3:] == [
+        "plan-baostock-minute-backfill",
+        "--start-date",
+        "2026-05-31",
+        "--end-date",
+        "2026-06-05",
+        "--freq",
+        "5min",
+        "--adjust-types",
+        "raw,qfq",
+        "--batch-by",
+        "month",
+        "--output-dir",
+        "outputs/daily/minute_incremental_plan",
+    ]
+
+
+def test_build_daily_pipeline_steps_runs_minute_watchdog_to_completion_by_default() -> None:
+    steps = build_daily_pipeline_steps(trade_date="2026-06-05", output_dir=Path("outputs/daily"))
+
+    refresh_step = next(step for step in steps if step.name == "minute_incremental_refresh")
+
+    assert "--max-jobs" in refresh_step.command
+    assert refresh_step.command[refresh_step.command.index("--max-jobs") + 1] == "12000"
+    assert refresh_step.command[refresh_step.command.index("--workers") + 1] == "8"
+    assert refresh_step.command[refresh_step.command.index("--run-timeout-seconds") + 1] == "7200"
+    assert refresh_step.timeout_seconds == 7500
 
 
 def test_build_daily_pipeline_steps_commands_parse_through_cli() -> None:
@@ -119,7 +170,7 @@ def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Pat
     )
 
     assert result["status"] == "partial_failed"
-    assert len(result["steps"]) == 14
+    assert len(result["steps"]) == 15
     assert any(
         step["step"] == "daily_event_refresh" and step["status"] == "failed"
         for step in result["steps"]
@@ -156,7 +207,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
 
     def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
         calls.append(command)
-        if "load_market_bars" in command:
+        if "load-bars" in command:
             return {"returncode": 1, "stdout": "", "stderr": "market failed"}
         return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
 
@@ -169,7 +220,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
 
     assert result["status"] == "partial_failed"
     assert len(calls) == 2
-    assert "load_market_bars" in calls[-1]
+    assert "load-bars" in calls[-1]
 
     steps = {step["step"]: step for step in result["steps"]}
     for step_name in [
@@ -179,6 +230,7 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
         "sync_index_constituents",
         "sync_industry_memberships",
         "build_industry_bars",
+        "minute_incremental_plan",
         "minute_incremental_refresh",
         "daily_event_refresh",
         "daily_feature_build",
@@ -187,6 +239,42 @@ def test_run_stock_daily_data_pipeline_skips_commands_after_required_failure(
         assert steps[step_name]["status"] == "skipped_dependency_failed"
         assert steps[step_name]["rows"] == 0
         assert steps[step_name]["error"] == "upstream required step failed"
+
+
+def test_run_stock_daily_data_pipeline_treats_failed_status_marker_as_failure(
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_runner(command: list[str], timeout_seconds: int) -> dict[str, object]:
+        calls.append(command)
+        if "check_market_data_freshness" in command:
+            return {
+                "returncode": 0,
+                "stdout": "\n".join(
+                    [
+                        "daily_incremental|status|failed",
+                        "daily_incremental_step|check_market_data_freshness|failed",
+                        "daily_incremental_step_error|check_market_data_freshness|market_daily_bar incomplete",
+                    ]
+                ),
+                "stderr": "",
+            }
+        return {"returncode": 0, "stdout": "rows|10", "stderr": ""}
+
+    result = run_stock_daily_data_pipeline(
+        trade_date="2026-06-05",
+        output_dir=tmp_path,
+        command_runner=fake_runner,
+        send_feishu=False,
+    )
+
+    assert result["status"] == "partial_failed"
+    steps = {step["step"]: step for step in result["steps"]}
+    assert steps["check_market_data_freshness"]["status"] == "failed"
+    assert "market_daily_bar incomplete" in steps["check_market_data_freshness"]["error"]
+    assert steps["build_asset_status"]["status"] == "skipped_dependency_failed"
+    assert len(calls) == 3
 
 
 def test_run_stock_daily_data_pipeline_keeps_optional_label_failure_nonblocking(

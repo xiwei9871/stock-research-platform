@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import date, timedelta
 from typing import Any
 
 from stock_research.assets import (
@@ -129,6 +130,45 @@ def latest_source_trade_date(service: str, table_name: str = "sh600000") -> str 
     with connect(service) as conn:
         rows = fetch_all(conn, sql)
     return rows[0]["trade_date"]
+
+
+def source_trade_date_table_count(service: str, trade_date: str) -> int:
+    tables = [table for table in discover_source_tables(service) if is_stock_table(table)]
+    if not tables:
+        return 0
+
+    parts = [
+        f"(SELECT 1 FROM {table_name} WHERE trade_date = %s LIMIT 1)"
+        for table_name in tables
+    ]
+    sql = f"SELECT count(*) AS table_count FROM ({' UNION ALL '.join(parts)}) source_coverage"
+    params = [trade_date] * len(tables)
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, params)
+    return int(rows[0]["table_count"])
+
+
+def latest_complete_source_trade_date(
+    services: tuple[str, ...] = ("stock_hfq", "stock_qfq"),
+    min_required_tables: int = 4000,
+    lookback_days: int = 14,
+) -> str | None:
+    latest_dates = [latest_source_trade_date(service) for service in services]
+    available_dates = [date.fromisoformat(value) for value in latest_dates if value]
+    if not available_dates:
+        return None
+
+    start = min(available_dates)
+    for offset in range(lookback_days + 1):
+        candidate = start - timedelta(days=offset)
+        candidate_text = candidate.isoformat()
+        counts = {
+            service: source_trade_date_table_count(service, candidate_text)
+            for service in services
+        }
+        if all(count >= min_required_tables for count in counts.values()):
+            return candidate_text
+    return None
 
 
 def upsert_raw_daily_bar_payloads(
