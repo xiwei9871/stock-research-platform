@@ -41,6 +41,9 @@ def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
 
     assert "pnpm build" in script
     assert "dashboard/dist/" in script
+    assert "STRATEGY_OUTPUT_ROOT" in script
+    assert "outputs/research" in script
+    assert "strategy_daily_eod" in script
     assert "docker compose restart api dashboard" in script
     assert "REBUILD=1" in script
     assert "docker compose build api dashboard" in script
@@ -58,4 +61,5 @@ def test_dashboard_deployment_runbook_documents_version_and_database_checks() ->
     assert "Load Cached Replay" in runbook
     assert "Fast Docker Deploy On 192.168.3.185" in runbook
     assert "PYTHONPATH=/app/src" in runbook
+    assert "/Users/xiwei/stock_research/outputs/research" in runbook
     assert "回滚" in runbook

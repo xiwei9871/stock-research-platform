@@ -87,6 +87,9 @@ manager, but the containers mount the mutable app files from the host:
 - `PYTHONPATH=/app/src` makes restarted API workers load the mounted source.
 - `./dashboard/dist` is mounted into the dashboard nginx container at
   `/usr/share/nginx/html`.
+- `./outputs/research` is mounted into the API container at
+  `/Users/xiwei/stock_research/outputs/research` so the strategy review queue
+  sees the same lightweight strategy artifacts as the local dashboard.
 
 For ordinary frontend and backend source changes, run:
 
@@ -95,8 +98,10 @@ For ordinary frontend and backend source changes, run:
 ```
 
 The script builds `dashboard/dist`, rsyncs `src/`, `dashboard/src/`, frontend
-build inputs, and `dashboard/dist/` to 192.168.3.185, then restarts the API and
-dashboard containers. No image rebuild is needed for normal source changes.
+build inputs, `dashboard/dist/`, the current `strategy_daily_eod` review
+directory, and the small strategy review artifact directories under
+`outputs/research` to 192.168.3.185, then restarts the API and dashboard
+containers. No image rebuild is needed for normal source changes.
 
 Use a rebuild only when dependencies, Dockerfiles, or system packages change:
 
