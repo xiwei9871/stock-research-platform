@@ -4809,6 +4809,166 @@ def test_lhb_phase15_cash_account_backtest_cli(monkeypatch, capsys):
     assert "lhb_phase15_cash_account_backtest_v1|report|/tmp/phase15.md" in out
 
 
+def test_lhb_phase15_cash_account_backtest_blocks_stale_input_when_cutoff_enabled(tmp_path):
+    lifecycle_path = tmp_path / "lhb_phase14e_best_trades_v1.csv"
+    lifecycle_path.write_text(
+        "\n".join(
+            [
+                "filter_profile,trade_date,ts_code,top_n,phase12a_rule_layer,fill_status,entry_trade_date,entry_price,exit_trade_date,exit_price,realized_return",
+                "exclude_blocked_exit_history,2026-06-05,300001.SZ,10,follow_pool_core,filled,2026-06-08,10,2026-06-09,11,0.10",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        lhb_data.run_lhb_phase15_cash_account_backtest_v1(
+            lifecycle_trades_path=lifecycle_path,
+            max_positions=10,
+            position_pct=0.1,
+            output_dir=tmp_path / "out",
+            cutoff_start_date="2025-01-01",
+            cutoff_end_date="2026-06-12",
+            strict_cutoff_audit=True,
+        )
+    except ValueError as exc:
+        assert "lhb_phase15_cutoff_audit_failed" in str(exc)
+    else:
+        raise AssertionError("Expected stale LHB input to fail strict cutoff audit")
+
+    audit_path = tmp_path / "out" / "cutoff_audit" / "lhb_cutoff_audit_v1.csv"
+    assert audit_path.exists()
+    audit = pd.read_csv(audit_path)
+    assert set(audit["issue_code"]) >= {
+        "date_coverage_shortfall",
+        "phase14e_best_profile_in_sample_selection",
+    }
+
+
+def test_lhb_phase15_cash_account_backtest_cli_accepts_cutoff_audit_args(monkeypatch, capsys):
+    def fake_run_lhb_phase15_cash_account_backtest_v1(**kwargs):
+        assert kwargs == {
+            "lifecycle_trades_path": "/tmp/lifecycle.csv",
+            "max_positions": 10,
+            "position_pct": 0.1,
+            "output_dir": "/tmp/out",
+            "cutoff_start_date": "2025-01-01",
+            "cutoff_end_date": "2026-06-12",
+            "strict_cutoff_audit": True,
+            "allow_phase14e_best": False,
+        }
+        return {
+            "paths": {
+                "account_trades": "/tmp/trades.csv",
+                "account_curve": "/tmp/curve.csv",
+                "summary": "/tmp/summary.csv",
+                "markdown_report": "/tmp/phase15.md",
+            },
+            "summary": pd.DataFrame([{"final_equity": 1.2}]),
+        }
+
+    monkeypatch.setattr(cli, "run_lhb_phase15_cash_account_backtest_v1", fake_run_lhb_phase15_cash_account_backtest_v1)
+
+    cli.main(
+        [
+            "lhb-phase15-cash-account-backtest-v1",
+            "--lifecycle-trades-path",
+            "/tmp/lifecycle.csv",
+            "--max-positions",
+            "10",
+            "--position-pct",
+            "0.1",
+            "--cutoff-start-date",
+            "2025-01-01",
+            "--cutoff-end-date",
+            "2026-06-12",
+            "--strict-cutoff-audit",
+            "--output-dir",
+            "/tmp/out",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "lhb_phase15_cash_account_backtest_v1|summary|/tmp/summary.csv" in out
+
+
+def test_lhb_cutoff_audit_flags_stale_phase14e_best_profile(tmp_path):
+    trades_path = tmp_path / "lhb_phase14e_best_trades_v1.csv"
+    trades_path.write_text(
+        "\n".join(
+            [
+                "filter_profile,trade_date,ts_code,fill_status,entry_trade_date,exit_trade_date,realized_return",
+                "exclude_blocked_exit_history,2025-01-02,300001.SZ,filled,2025-01-03,2025-01-06,0.05",
+                "exclude_blocked_exit_history,2026-06-05,300002.SZ,filled,2026-06-08,2026-06-09,0.02",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = lhb_data.build_lhb_cutoff_audit_v1(
+        paths=[trades_path],
+        start_date="2025-01-01",
+        end_date="2026-06-12",
+        strict=True,
+        forbid_phase14e_best=True,
+        output_dir=tmp_path / "audit",
+    )
+
+    assert result["status"] == "fail"
+    audit = result["audit"]
+    assert set(audit["issue_code"]) >= {
+        "date_coverage_shortfall",
+        "phase14e_best_profile_in_sample_selection",
+    }
+    assert audit.loc[audit["issue_code"].eq("date_coverage_shortfall"), "actual_max_date"].iloc[0] == "2026-06-09"
+    assert result["paths"]["audit"].endswith("lhb_cutoff_audit_v1.csv")
+
+
+def test_lhb_cutoff_audit_cli(monkeypatch, capsys):
+    def fake_run_lhb_cutoff_audit_v1(**kwargs):
+        assert kwargs == {
+            "paths": ["/tmp/trades.csv"],
+            "start_date": "2025-01-01",
+            "end_date": "2026-06-12",
+            "output_dir": "/tmp/out",
+            "strict": True,
+            "forbid_phase14e_best": True,
+        }
+        return {
+            "status": "fail",
+            "audit": pd.DataFrame([{"issue_code": "date_coverage_shortfall"}]),
+            "paths": {
+                "audit": "/tmp/out/lhb_cutoff_audit_v1.csv",
+                "summary": "/tmp/out/lhb_cutoff_audit_summary_v1.csv",
+                "markdown_report": "/tmp/out/lhb_cutoff_audit_v1.md",
+            },
+        }
+
+    monkeypatch.setattr(cli, "run_lhb_cutoff_audit_v1", fake_run_lhb_cutoff_audit_v1)
+
+    cli.main(
+        [
+            "lhb-cutoff-audit-v1",
+            "--path",
+            "/tmp/trades.csv",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-12",
+            "--output-dir",
+            "/tmp/out",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "lhb_cutoff_audit_v1|status|fail" in out
+    assert "lhb_cutoff_audit_v1|audit|/tmp/out/lhb_cutoff_audit_v1.csv" in out
+    assert "lhb_cutoff_audit_v1|summary|/tmp/out/lhb_cutoff_audit_summary_v1.csv" in out
+    assert "lhb_cutoff_audit_v1|report|/tmp/out/lhb_cutoff_audit_v1.md" in out
+
+
 def test_lhb_phase16_quality_improvement_diagnostics_cli(monkeypatch, capsys):
     def fake_run_lhb_phase16_quality_improvement_diagnostics_v1(**kwargs):
         assert kwargs == {

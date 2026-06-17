@@ -184,6 +184,7 @@ from stock_research.lhb_data import (
     run_lhb_phase14c_lifecycle_portfolio_v1,
     run_lhb_phase14e_limit_lock_filter_v1,
     run_lhb_phase15_cash_account_backtest_v1,
+    run_lhb_cutoff_audit_v1,
     run_lhb_phase16_quality_improvement_diagnostics_v1,
     run_lhb_phase16b_limit_break_failed_exit_replay_v1,
     run_lhb_phase16c_limit_break_failed_rule_scan_v1,
@@ -4036,10 +4037,25 @@ def build_parser() -> argparse.ArgumentParser:
     lhb_phase15_cash_account.add_argument("--lifecycle-trades-path", required=True)
     lhb_phase15_cash_account.add_argument("--max-positions", type=int, default=10)
     lhb_phase15_cash_account.add_argument("--position-pct", type=float, default=0.10)
+    lhb_phase15_cash_account.add_argument("--cutoff-start-date")
+    lhb_phase15_cash_account.add_argument("--cutoff-end-date")
+    lhb_phase15_cash_account.add_argument("--strict-cutoff-audit", action="store_true")
+    lhb_phase15_cash_account.add_argument("--allow-phase14e-best", action="store_true")
     lhb_phase15_cash_account.add_argument(
         "--output-dir",
         default="/Users/xiwei/stock_research/outputs/research",
     )
+
+    lhb_cutoff_audit = subparsers.add_parser("lhb-cutoff-audit-v1")
+    lhb_cutoff_audit.add_argument("--path", action="append", required=True)
+    lhb_cutoff_audit.add_argument("--start-date", required=True)
+    lhb_cutoff_audit.add_argument("--end-date", required=True)
+    lhb_cutoff_audit.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research",
+    )
+    lhb_cutoff_audit.add_argument("--no-strict", action="store_true")
+    lhb_cutoff_audit.add_argument("--allow-phase14e-best", action="store_true")
 
     lhb_phase16_quality = subparsers.add_parser("lhb-phase16-quality-improvement-diagnostics-v1")
     lhb_phase16_quality.add_argument("--lifecycle-trades-path", required=True)
@@ -7411,16 +7427,39 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"lhb_phase14e_limit_lock_filter_v1|best_summary|{result['paths']['best_summary']}")
         print(f"lhb_phase14e_limit_lock_filter_v1|report|{result['paths']['markdown_report']}")
     elif args.command == "lhb-phase15-cash-account-backtest-v1":
-        result = run_lhb_phase15_cash_account_backtest_v1(
-            lifecycle_trades_path=args.lifecycle_trades_path,
-            max_positions=args.max_positions,
-            position_pct=args.position_pct,
-            output_dir=args.output_dir,
-        )
+        phase15_kwargs = {
+            "lifecycle_trades_path": args.lifecycle_trades_path,
+            "max_positions": args.max_positions,
+            "position_pct": args.position_pct,
+            "output_dir": args.output_dir,
+        }
+        if args.cutoff_start_date or args.cutoff_end_date or args.strict_cutoff_audit or args.allow_phase14e_best:
+            phase15_kwargs.update(
+                {
+                    "cutoff_start_date": args.cutoff_start_date,
+                    "cutoff_end_date": args.cutoff_end_date,
+                    "strict_cutoff_audit": args.strict_cutoff_audit,
+                    "allow_phase14e_best": args.allow_phase14e_best,
+                }
+            )
+        result = run_lhb_phase15_cash_account_backtest_v1(**phase15_kwargs)
         print(f"lhb_phase15_cash_account_backtest_v1|account_trades|{result['paths']['account_trades']}")
         print(f"lhb_phase15_cash_account_backtest_v1|account_curve|{result['paths']['account_curve']}")
         print(f"lhb_phase15_cash_account_backtest_v1|summary|{result['paths']['summary']}")
         print(f"lhb_phase15_cash_account_backtest_v1|report|{result['paths']['markdown_report']}")
+    elif args.command == "lhb-cutoff-audit-v1":
+        result = run_lhb_cutoff_audit_v1(
+            paths=args.path,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            strict=not args.no_strict,
+            forbid_phase14e_best=not args.allow_phase14e_best,
+        )
+        print(f"lhb_cutoff_audit_v1|status|{result['status']}")
+        print(f"lhb_cutoff_audit_v1|audit|{result['paths']['audit']}")
+        print(f"lhb_cutoff_audit_v1|summary|{result['paths']['summary']}")
+        print(f"lhb_cutoff_audit_v1|report|{result['paths']['markdown_report']}")
     elif args.command == "lhb-phase16-quality-improvement-diagnostics-v1":
         result = run_lhb_phase16_quality_improvement_diagnostics_v1(
             lifecycle_trades_path=args.lifecycle_trades_path,

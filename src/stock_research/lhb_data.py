@@ -675,6 +675,31 @@ LHB_PHASE15_ACCOUNT_SUMMARY_COLUMNS = [
     "avg_position_notional",
 ]
 
+LHB_CUTOFF_AUDIT_COLUMNS = [
+    "path",
+    "file_role",
+    "row_count",
+    "date_columns",
+    "actual_min_date",
+    "actual_max_date",
+    "requested_start_date",
+    "requested_end_date",
+    "issue_code",
+    "severity",
+    "message",
+]
+
+LHB_CUTOFF_AUDIT_SUMMARY_COLUMNS = [
+    "status",
+    "strict",
+    "requested_start_date",
+    "requested_end_date",
+    "input_file_count",
+    "issue_count",
+    "error_count",
+    "warning_count",
+]
+
 LHB_PHASE16_LOW_QUALITY_COLUMNS = [
     "diagnostic_group",
     "diagnostic_type",
@@ -2758,13 +2783,318 @@ def run_lhb_phase15_cash_account_backtest_v1(
     output_dir: str | Path,
     max_positions: int = 10,
     position_pct: float = 0.10,
+    cutoff_start_date: str | None = None,
+    cutoff_end_date: str | None = None,
+    strict_cutoff_audit: bool = False,
+    allow_phase14e_best: bool = False,
 ) -> dict[str, Any]:
+    if cutoff_start_date or cutoff_end_date or strict_cutoff_audit:
+        if not cutoff_start_date or not cutoff_end_date:
+            raise ValueError("cutoff_start_date and cutoff_end_date are required when cutoff audit is enabled")
+        audit = build_lhb_cutoff_audit_v1(
+            paths=[lifecycle_trades_path],
+            start_date=cutoff_start_date,
+            end_date=cutoff_end_date,
+            output_dir=Path(output_dir) / "cutoff_audit",
+            strict=strict_cutoff_audit,
+            forbid_phase14e_best=not allow_phase14e_best,
+        )
+        if strict_cutoff_audit and audit["status"] != "pass":
+            raise ValueError(f"lhb_phase15_cutoff_audit_failed: {audit['paths']['audit']}")
     lifecycle_trades = pd.read_csv(lifecycle_trades_path, low_memory=False)
     return build_lhb_phase15_cash_account_backtest_v1(
         lifecycle_trades=lifecycle_trades,
         output_dir=output_dir,
         max_positions=max_positions,
         position_pct=position_pct,
+    )
+
+
+def build_lhb_cutoff_audit_v1(
+    *,
+    paths: list[str | Path],
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+    strict: bool = True,
+    forbid_phase14e_best: bool = True,
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    requested_start = _date_string(start_date)
+    requested_end = _date_string(end_date)
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.exists():
+            rows.append(
+                _lhb_cutoff_audit_row(
+                    path=path,
+                    file_role=_lhb_cutoff_file_role(path),
+                    row_count=0,
+                    date_columns=[],
+                    actual_min_date="",
+                    actual_max_date="",
+                    requested_start_date=requested_start,
+                    requested_end_date=requested_end,
+                    issue_code="file_missing",
+                    severity="error",
+                    message="Input file does not exist.",
+                )
+            )
+            continue
+        frame = pd.read_csv(path, low_memory=False)
+        date_columns = _lhb_cutoff_date_columns(frame)
+        min_date, max_date = _lhb_cutoff_date_range(frame, date_columns)
+        role = _lhb_cutoff_file_role(path)
+        if not date_columns:
+            rows.append(
+                _lhb_cutoff_audit_row(
+                    path=path,
+                    file_role=role,
+                    row_count=len(frame),
+                    date_columns=[],
+                    actual_min_date="",
+                    actual_max_date="",
+                    requested_start_date=requested_start,
+                    requested_end_date=requested_end,
+                    issue_code="date_columns_missing",
+                    severity="error",
+                    message="No recognized date columns found.",
+                )
+            )
+        else:
+            if min_date and min_date < requested_start:
+                rows.append(
+                    _lhb_cutoff_audit_row(
+                        path=path,
+                        file_role=role,
+                        row_count=len(frame),
+                        date_columns=date_columns,
+                        actual_min_date=min_date,
+                        actual_max_date=max_date,
+                        requested_start_date=requested_start,
+                        requested_end_date=requested_end,
+                        issue_code="date_before_requested_start",
+                        severity="error",
+                        message="At least one date value is before requested start_date.",
+                    )
+                )
+            if max_date and max_date > requested_end:
+                rows.append(
+                    _lhb_cutoff_audit_row(
+                        path=path,
+                        file_role=role,
+                        row_count=len(frame),
+                        date_columns=date_columns,
+                        actual_min_date=min_date,
+                        actual_max_date=max_date,
+                        requested_start_date=requested_start,
+                        requested_end_date=requested_end,
+                        issue_code="date_after_requested_end",
+                        severity="error",
+                        message="At least one date value is after requested end_date.",
+                    )
+                )
+            if max_date and max_date < requested_end:
+                rows.append(
+                    _lhb_cutoff_audit_row(
+                        path=path,
+                        file_role=role,
+                        row_count=len(frame),
+                        date_columns=date_columns,
+                        actual_min_date=min_date,
+                        actual_max_date=max_date,
+                        requested_start_date=requested_start,
+                        requested_end_date=requested_end,
+                        issue_code="date_coverage_shortfall",
+                        severity="error",
+                        message="Input max date is earlier than requested end_date.",
+                    )
+                )
+        if forbid_phase14e_best and _lhb_cutoff_is_phase14e_best(path, frame):
+            rows.append(
+                _lhb_cutoff_audit_row(
+                    path=path,
+                    file_role=role,
+                    row_count=len(frame),
+                    date_columns=date_columns,
+                    actual_min_date=min_date,
+                    actual_max_date=max_date,
+                    requested_start_date=requested_start,
+                    requested_end_date=requested_end,
+                    issue_code="phase14e_best_profile_in_sample_selection",
+                    severity="error",
+                    message="Phase14E best-trades output is selected by full-sample ranking and is not allowed for strict official backtests.",
+                )
+            )
+    audit = pd.DataFrame(rows).reindex(columns=LHB_CUTOFF_AUDIT_COLUMNS)
+    summary = _lhb_cutoff_audit_summary(
+        audit,
+        strict=strict,
+        start_date=requested_start,
+        end_date=requested_end,
+        input_file_count=len(paths),
+    )
+    report = _lhb_cutoff_audit_markdown(audit=audit, summary=summary)
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    paths_out = {
+        "audit": str(out / "lhb_cutoff_audit_v1.csv"),
+        "summary": str(out / "lhb_cutoff_audit_summary_v1.csv"),
+        "markdown_report": str(out / "lhb_cutoff_audit_v1.md"),
+    }
+    audit.to_csv(paths_out["audit"], index=False)
+    summary.to_csv(paths_out["summary"], index=False)
+    Path(paths_out["markdown_report"]).write_text(report, encoding="utf-8")
+    return {
+        "status": str(summary.iloc[0]["status"]) if not summary.empty else "pass",
+        "audit": audit,
+        "summary": summary,
+        "paths": paths_out,
+    }
+
+
+def run_lhb_cutoff_audit_v1(
+    *,
+    paths: list[str | Path],
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+    strict: bool = True,
+    forbid_phase14e_best: bool = True,
+) -> dict[str, Any]:
+    return build_lhb_cutoff_audit_v1(
+        paths=paths,
+        start_date=start_date,
+        end_date=end_date,
+        output_dir=output_dir,
+        strict=strict,
+        forbid_phase14e_best=forbid_phase14e_best,
+    )
+
+
+def _lhb_cutoff_date_columns(frame: pd.DataFrame) -> list[str]:
+    candidates = [
+        "trade_date",
+        "entry_trade_date",
+        "exit_trade_date",
+        "exit_signal_trade_date",
+        "confirmation_trade_date",
+        "signal_trade_date",
+    ]
+    return [column for column in candidates if column in frame.columns]
+
+
+def _date_string(value: str) -> str:
+    parsed = pd.to_datetime(value, errors="raise")
+    return parsed.strftime("%Y-%m-%d")
+
+
+def _lhb_cutoff_date_range(frame: pd.DataFrame, date_columns: list[str]) -> tuple[str, str]:
+    values: list[pd.Series] = []
+    for column in date_columns:
+        values.append(pd.to_datetime(frame[column], errors="coerce", format="mixed"))
+    if not values:
+        return "", ""
+    dates = pd.concat(values, ignore_index=True).dropna()
+    if dates.empty:
+        return "", ""
+    return dates.min().strftime("%Y-%m-%d"), dates.max().strftime("%Y-%m-%d")
+
+
+def _lhb_cutoff_file_role(path: Path) -> str:
+    name = path.name
+    if "phase14e_best_trades" in name:
+        return "phase14e_best_trades"
+    if "phase15_account_trades" in name:
+        return "phase15_account_trades"
+    if "phase15_account_curve" in name:
+        return "phase15_account_curve"
+    if "phase14c_lifecycle_trades" in name:
+        return "phase14c_lifecycle_trades"
+    if "phase12a_real_entry_trades" in name:
+        return "phase12a_real_entry_trades"
+    return "lhb_input"
+
+
+def _lhb_cutoff_is_phase14e_best(path: Path, frame: pd.DataFrame) -> bool:
+    if "lhb_phase14e_best_trades" in path.name:
+        return True
+    if "filter_profile" not in frame.columns:
+        return False
+    profiles = {str(value) for value in frame["filter_profile"].dropna().unique()}
+    return any(profile and profile != "baseline" for profile in profiles)
+
+
+def _lhb_cutoff_audit_row(
+    *,
+    path: Path,
+    file_role: str,
+    row_count: int,
+    date_columns: list[str],
+    actual_min_date: str,
+    actual_max_date: str,
+    requested_start_date: str,
+    requested_end_date: str,
+    issue_code: str,
+    severity: str,
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "file_role": file_role,
+        "row_count": int(row_count),
+        "date_columns": ",".join(date_columns),
+        "actual_min_date": actual_min_date,
+        "actual_max_date": actual_max_date,
+        "requested_start_date": requested_start_date,
+        "requested_end_date": requested_end_date,
+        "issue_code": issue_code,
+        "severity": severity,
+        "message": message,
+    }
+
+
+def _lhb_cutoff_audit_summary(
+    audit: pd.DataFrame,
+    *,
+    strict: bool,
+    start_date: str,
+    end_date: str,
+    input_file_count: int,
+) -> pd.DataFrame:
+    severity = audit["severity"] if "severity" in audit.columns else pd.Series(dtype="object")
+    error_count = int(severity.eq("error").sum())
+    warning_count = int(severity.eq("warning").sum())
+    status = "fail" if strict and error_count else "pass"
+    return pd.DataFrame(
+        [
+            {
+                "status": status,
+                "strict": bool(strict),
+                "requested_start_date": start_date,
+                "requested_end_date": end_date,
+                "input_file_count": int(input_file_count),
+                "issue_count": int(len(audit)),
+                "error_count": error_count,
+                "warning_count": warning_count,
+            }
+        ],
+        columns=LHB_CUTOFF_AUDIT_SUMMARY_COLUMNS,
+    )
+
+
+def _lhb_cutoff_audit_markdown(*, audit: pd.DataFrame, summary: pd.DataFrame) -> str:
+    return "\n".join(
+        [
+            "# LHB Cutoff Audit V1",
+            "",
+            "## Summary",
+            summary.to_markdown(index=False) if not summary.empty else "No summary.",
+            "",
+            "## Issues",
+            audit.to_markdown(index=False) if not audit.empty else "No issues.",
+            "",
+        ]
     )
 
 
