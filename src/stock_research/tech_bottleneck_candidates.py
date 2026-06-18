@@ -276,7 +276,7 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
             invalid_message=f"invalid base candidate date: {candidate_date_column}",
         )
     else:
-        frame["candidate_as_of_date"] = frame["first_hit_date"]
+        raise ValueError("candidate_as_of_date missing: provide trade_date or candidate_trade_date")
 
     if "hit_count_as_of_date" in frame.columns and candidate_date_column is not None:
         frame["hit_count_as_of_date"] = _numeric_required_column(

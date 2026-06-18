@@ -23,6 +23,7 @@ def test_snapshot_excludes_future_first_hit_and_future_as_of_dates() -> None:
                     "asset_id": "A",
                     "stock_name": "Alpha",
                     "first_hit_date": "2025-01-02",
+                    "candidate_trade_date": "2025-01-02",
                     "hit_count": 5,
                     "primary_chain_id": "chain-a",
                     "primary_chain_name": "算力",
@@ -33,6 +34,7 @@ def test_snapshot_excludes_future_first_hit_and_future_as_of_dates() -> None:
                     "asset_id": "B",
                     "stock_name": "Beta",
                     "first_hit_date": "2025-01-04",
+                    "candidate_trade_date": "2025-01-04",
                     "hit_count": 9,
                     "primary_chain_id": "chain-b",
                     "primary_chain_name": "半导体",
@@ -43,6 +45,7 @@ def test_snapshot_excludes_future_first_hit_and_future_as_of_dates() -> None:
                     "asset_id": "C",
                     "stock_name": "Gamma",
                     "first_hit_date": "2025-01-02",
+                    "candidate_trade_date": "2025-01-02",
                     "hit_count": 7,
                     "primary_chain_id": "chain-c",
                     "primary_chain_name": "PCB",
@@ -69,7 +72,8 @@ def test_snapshot_ranks_are_daily_and_top5_flag_is_per_trade_date() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
             [
-                {"asset_id": f"A{i}", "stock_name": f"Name{i}", "first_hit_date": "2025-01-01", "hit_count": 10 - i}
+                {"asset_id": f"A{i}", "stock_name": f"Name{i}", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 10 - i}
                 for i in range(1, 8)
             ]
         ),
@@ -90,6 +94,7 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
         "asset_id": "A",
         "stock_name": "Alpha",
         "first_hit_date": "2025-01-01",
+        "candidate_trade_date": "2025-01-01",
         "hit_count": 2,
     }
     baseline = build_point_in_time_candidate_snapshots(
@@ -107,6 +112,7 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
                     "asset_id": "B",
                     "stock_name": "Beta",
                     "first_hit_date": "2025-01-03",
+                    "candidate_trade_date": "2025-01-03",
                     "hit_count": 1000,
                 },
             ]
@@ -130,7 +136,8 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
 def test_static_hit_count_uses_conservative_one_without_changing_historical_score_or_rank() -> None:
     low_static = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 1}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 1}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-02",
@@ -139,7 +146,8 @@ def test_static_hit_count_uses_conservative_one_without_changing_historical_scor
     )
     high_static = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 1000}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 1000}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-02",
@@ -155,7 +163,8 @@ def test_static_hit_count_uses_conservative_one_without_changing_historical_scor
 
 def test_one_day_snapshot_score_matches_full_rebuild_with_same_price_history() -> None:
     candidates = pd.DataFrame(
-        [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+        [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
     )
     prices = pd.DataFrame(
         [
@@ -195,6 +204,7 @@ def test_explicit_hit_count_as_of_date_is_used_without_static_filter_reason() ->
                     "asset_id": "A",
                     "stock_name": "Alpha",
                     "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                     "trade_date": "2025-01-01",
                     "hit_count_as_of_date": 3,
                 }
@@ -218,6 +228,7 @@ def test_explicit_hit_count_as_of_date_preserves_existing_filter_reason() -> Non
                     "asset_id": "A",
                     "stock_name": "Alpha",
                     "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                     "trade_date": "2025-01-01",
                     "hit_count_as_of_date": 3,
                     "filter_reason": "source_note",
@@ -233,10 +244,11 @@ def test_explicit_hit_count_as_of_date_preserves_existing_filter_reason() -> Non
     assert snapshots["filter_reason"].tolist() == ["source_note"]
 
 
-def test_static_hit_count_as_of_date_uses_conservative_one_without_changing_historical_score() -> None:
+def test_dated_hit_count_as_of_date_carries_forward_from_candidate_as_of_date() -> None:
     low_static = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 1}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 1}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-02",
@@ -245,7 +257,8 @@ def test_static_hit_count_as_of_date_uses_conservative_one_without_changing_hist
     )
     high_static = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 99}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 99}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-02",
@@ -253,9 +266,10 @@ def test_static_hit_count_as_of_date_uses_conservative_one_without_changing_hist
         run_id="tech-bt-20250102-high",
     )
 
-    assert high_static["hit_count_as_of_date"].tolist() == [1.0]
-    assert high_static["filter_reason"].tolist() == ["static_source_hit_count_conservative_1"]
-    assert high_static["bottleneck_score"].tolist() == pytest.approx(low_static["bottleneck_score"].tolist())
+    assert low_static["hit_count_as_of_date"].tolist() == [1.0]
+    assert high_static["hit_count_as_of_date"].tolist() == [99.0]
+    assert high_static["filter_reason"].tolist() == [""]
+    assert high_static["bottleneck_score"].iloc[0] > low_static["bottleneck_score"].iloc[0]
     assert high_static["bottleneck_rank"].tolist() == low_static["bottleneck_rank"].tolist()
 
 
@@ -302,7 +316,8 @@ def test_dated_hit_count_as_of_rows_update_score_only_from_candidate_as_of_date(
 def test_build_snapshot_normalizes_api_boundary_dates() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 2}]
         ),
         prices=_prices(["A"], "2025-01-01", 3),
         start_date="2025-1-2",
@@ -313,12 +328,27 @@ def test_build_snapshot_normalizes_api_boundary_dates() -> None:
     assert snapshots["trade_date"].unique().tolist() == ["2025-01-02"]
 
 
+def test_snapshot_requires_candidate_pit_date() -> None:
+    with pytest.raises(ValueError, match="candidate_as_of_date missing: provide trade_date or candidate_trade_date"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
 def test_snapshot_emits_candidate_only_when_asset_has_same_day_price() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
             [
-                {"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2},
-                {"asset_id": "B", "stock_name": "Beta", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2},
+                {"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 2},
+                {"asset_id": "B", "stock_name": "Beta", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 2},
             ]
         ),
         prices=pd.DataFrame(
@@ -366,6 +396,7 @@ def test_validate_candidate_snapshot_frame_rejects_future_dates() -> None:
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-04",
+                    "candidate_trade_date": "2025-01-04",
                 "hit_count_as_of_date": 1,
                 "primary_chain_id": "",
                 "primary_chain_name": "",
@@ -502,7 +533,8 @@ def test_validate_candidate_snapshot_frame_rejects_wrong_engine_version() -> Non
 def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-01",
@@ -522,7 +554,8 @@ def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
 def test_read_candidate_snapshots_normalizes_api_boundary_dates(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 3}]
         ),
         prices=_prices(["A"], "2025-01-01", 2),
         start_date="2025-01-01",
@@ -544,6 +577,7 @@ def test_validate_base_candidate_source_requires_fresh_generation_date() -> None
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "source_latest_trade_date": "2025-01-02",
             }
@@ -561,6 +595,7 @@ def test_validate_base_candidate_source_rejects_invalid_freshness_metadata() -> 
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "source_latest_trade_date": "not-a-date",
             }
@@ -578,6 +613,7 @@ def test_validate_base_candidate_source_checks_all_present_freshness_metadata() 
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "source_latest_trade_date": "2025-01-03",
                 "data_as_of_date": "not-a-date",
@@ -596,6 +632,7 @@ def test_validate_base_candidate_source_rejects_stale_row_even_when_another_row_
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "source_latest_trade_date": "2025-01-02",
             },
@@ -603,6 +640,7 @@ def test_validate_base_candidate_source_rejects_stale_row_even_when_another_row_
                 "asset_id": "B",
                 "stock_name": "Beta",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "source_latest_trade_date": "2025-01-03",
             },
@@ -620,6 +658,7 @@ def test_validate_base_candidate_source_rejects_stale_coverage_even_with_fresh_g
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "data_as_of_date": "2025-01-02",
                 "generated_trade_date": "2025-01-03",
@@ -638,6 +677,7 @@ def test_validate_base_candidate_source_rejects_stale_generated_trade_date() -> 
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "data_as_of_date": "2025-01-03",
                 "generated_trade_date": "2025-01-02",
@@ -656,6 +696,7 @@ def test_validate_base_candidate_source_rejects_generated_date_before_coverage_d
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "data_as_of_date": "2025-01-03",
                 "generated_trade_date": "2025-01-02",
@@ -674,6 +715,7 @@ def test_validate_base_candidate_source_rejects_generation_only_freshness_metada
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "generated_trade_date": "2025-01-03",
             }
@@ -691,6 +733,7 @@ def test_validate_base_candidate_source_normalizes_api_end_date() -> None:
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
                 "hit_count": 3,
                 "data_as_of_date": "2025-01-02",
             }
@@ -707,6 +750,7 @@ def test_validate_base_candidate_source_requires_formal_freshness_metadata() -> 
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-05",
+                    "candidate_trade_date": "2025-01-05",
                 "hit_count": 3,
             }
         ]
@@ -723,7 +767,8 @@ def test_snapshot_rejects_duplicate_price_rows() -> None:
     with pytest.raises(ValueError, match="duplicate price rows for trade_date and asset_id"):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
             ),
             prices=prices,
             start_date="2025-01-01",
@@ -741,7 +786,8 @@ def test_snapshot_rejects_duplicate_price_rows_before_dropping_missing_close() -
     with pytest.raises(ValueError, match="duplicate price rows for trade_date and asset_id"):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
             ),
             prices=prices,
             start_date="2025-01-01",
@@ -757,7 +803,8 @@ def test_snapshot_rejects_invalid_price_trade_date() -> None:
     with pytest.raises(ValueError, match="invalid price date: trade_date"):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 3}]
             ),
             prices=prices,
             start_date="2025-01-01",
@@ -769,7 +816,8 @@ def test_snapshot_rejects_invalid_price_trade_date() -> None:
 def test_snapshot_always_uses_formal_engine_version() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 3}]
         ),
         prices=_prices(["A"], "2025-01-01", 1),
         start_date="2025-01-01",
@@ -789,7 +837,8 @@ def test_snapshot_builder_rejects_start_date_after_end_date(start_date: str, end
     with pytest.raises(ValueError, match="start_date must be <= end_date"):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count_as_of_date": 3}]
             ),
             prices=_prices(["A"], "2025-01-01", 1),
             start_date=start_date,
@@ -801,7 +850,8 @@ def test_snapshot_builder_rejects_start_date_after_end_date(start_date: str, end
 def test_read_candidate_snapshots_rejects_start_date_after_end_date(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
-            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
         ),
         prices=_prices(["A"], "2025-01-01", 1),
         start_date="2025-01-01",
@@ -832,7 +882,8 @@ def test_snapshot_rejects_invalid_price_close_values(close, message: str) -> Non
     with pytest.raises(ValueError, match=message):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
             ),
             prices=prices,
             start_date="2025-01-01",
@@ -849,7 +900,8 @@ def test_snapshot_rejects_non_positive_price_open_values(open_price: float) -> N
     with pytest.raises(ValueError, match="open must be > 0"):
         build_point_in_time_candidate_snapshots(
             base_candidates=pd.DataFrame(
-                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01", "hit_count": 3}]
             ),
             prices=prices,
             start_date="2025-01-01",
@@ -858,12 +910,16 @@ def test_snapshot_rejects_non_positive_price_open_values(open_price: float) -> N
         )
 
 
-@pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])
+@pytest.mark.parametrize(
+    "column",
+    ["first_hit_date", "candidate_trade_date", "financial_as_of_date", "technical_as_of_date"],
+)
 def test_snapshot_rejects_invalid_base_candidate_dates(column: str) -> None:
     candidate = {
         "asset_id": "A",
         "stock_name": "Alpha",
         "first_hit_date": "2025-01-01",
+        "candidate_trade_date": "2025-01-01",
         "hit_count": 3,
         "financial_as_of_date": "2025-01-01",
         "technical_as_of_date": "2025-01-01",
@@ -888,6 +944,7 @@ def _valid_snapshot_frame() -> pd.DataFrame:
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-02",
+                    "candidate_trade_date": "2025-01-02",
                 "hit_count_as_of_date": 1,
                 "primary_chain_id": "",
                 "primary_chain_name": "",
