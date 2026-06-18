@@ -7,9 +7,8 @@ PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 TRADE_DATE="${TRADE_DATE:-}"
 STAGE="${1:-all}"
 
-date_arg=()
 if [[ -n "${TRADE_DATE}" ]]; then
-  date_arg=(--date "${TRADE_DATE}")
+  "${PYTHON_BIN}" -m scripts.daily_pipeline --date "${TRADE_DATE}" --stage "${STAGE}"
+else
+  "${PYTHON_BIN}" -m scripts.daily_pipeline --stage "${STAGE}"
 fi
-
-"${PYTHON_BIN}" -m scripts.daily_pipeline "${date_arg[@]}" --stage "${STAGE}"
