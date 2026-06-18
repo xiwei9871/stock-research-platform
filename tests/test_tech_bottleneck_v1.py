@@ -97,6 +97,52 @@ def test_tech_bottleneck_v1_rejects_invalid_snapshot_schema(column: str) -> None
         )
 
 
+def _duplicate_first_day_rank(frame: pd.DataFrame) -> None:
+    frame.loc[frame["trade_date"] == "2025-01-01", "bottleneck_rank"] = 2
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda frame: frame.__setitem__("data_as_of_date", "2025-01-01"),
+            "data_as_of_date must equal trade_date",
+        ),
+        (
+            lambda frame: frame.__setitem__("filter_decision", "hold"),
+            "filter_decision must be pass",
+        ),
+        (
+            lambda frame: frame.__setitem__("engine_version", "wrong_engine"),
+            "engine_version must equal",
+        ),
+        (
+            lambda frame: frame.__setitem__("run_id", ""),
+            "run_id must be non-empty",
+        ),
+        (
+            _duplicate_first_day_rank,
+            "duplicate bottleneck_rank",
+        ),
+    ],
+)
+def test_tech_bottleneck_v1_rejects_invalid_snapshot_values(mutate, message: str) -> None:
+    snapshots = _rank_snapshots()
+    mutate(snapshots)
+
+    with pytest.raises(ValueError, match=message):
+        build_tech_bottleneck_v1_from_rank_snapshots(
+            candidate_snapshots=snapshots,
+            prices=_prices(),
+            market_exposure=_market_exposure(),
+            start_date="2025-01-01",
+            end_date="2025-01-08",
+            top_n=2,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=20,
+        )
+
+
 def test_tech_bottleneck_v1_rejects_partial_snapshot_date_coverage() -> None:
     snapshots = _rank_snapshots()
     snapshots = snapshots[snapshots["trade_date"] == "2025-01-01"].copy()
