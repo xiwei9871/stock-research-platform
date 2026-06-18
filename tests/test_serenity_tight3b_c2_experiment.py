@@ -152,3 +152,57 @@ def test_cli_dispatches_serenity_tight3b_c2_experiment(monkeypatch, capsys, tmp_
     assert captured["rebalance_frequencies"] == ["weekly", "monthly"]
     out = capsys.readouterr().out
     assert "serenity_tight3b_c2|summary|" in out
+
+
+def test_build_experiment_from_rank_frames_uses_only_requested_snapshot_dates() -> None:
+    from stock_research.serenity_tight3b_c2_experiment import build_serenity_tight3b_c2_experiment_from_rank_frames
+
+    ranks = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-01", "asset_id": "A", "bottleneck_rank": 1, "bottleneck_score": 0.9},
+            {"trade_date": "2025-01-01", "asset_id": "B", "bottleneck_rank": 2, "bottleneck_score": 0.8},
+            {"trade_date": "2025-01-02", "asset_id": "A", "bottleneck_rank": 1, "bottleneck_score": 0.9},
+            {"trade_date": "2025-01-02", "asset_id": "B", "bottleneck_rank": 2, "bottleneck_score": 0.8},
+            {"trade_date": "2025-01-03", "asset_id": "FUTURE", "bottleneck_rank": 1, "bottleneck_score": 1.0},
+        ]
+    )
+
+    result = build_serenity_tight3b_c2_experiment_from_rank_frames(
+        ranks=ranks,
+        prices=_rank_frame_prices(),
+        market_exposure=pd.DataFrame(
+            [
+                {"trade_date": "2025-01-01", "target_exposure": 1.0},
+                {"trade_date": "2025-01-02", "target_exposure": 1.0},
+            ]
+        ),
+        start_date="2025-01-01",
+        end_date="2025-01-02",
+        universe_name="strict_153_st_only_financial_state",
+        top_n_values=[1],
+        rebalance_frequencies=["weekly"],
+        protection_configs=[{"name": "rank_exit_top10_1d", "rank_exit": 10, "confirm_days": 1}],
+        transaction_cost_bps=20.0,
+    )
+
+    traded_assets = set(result["best_trades"]["asset_id"].astype(str).tolist())
+    assert "A" in traded_assets
+    assert "FUTURE" not in traded_assets
+    assert result["summary"].iloc[0]["top_n"] == 1
+
+
+def _rank_frame_prices() -> pd.DataFrame:
+    rows = []
+    for trade_date in ["2025-01-01", "2025-01-02", "2025-01-03"]:
+        for asset_id, close in {"A": 10.0, "B": 20.0, "FUTURE": 30.0}.items():
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "asset_id": asset_id,
+                    "open": close,
+                    "high": close * 1.01,
+                    "low": close * 0.99,
+                    "close": close,
+                }
+            )
+    return pd.DataFrame(rows)
