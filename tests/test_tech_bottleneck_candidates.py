@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from stock_research.tech_bottleneck_candidates import (
+    TECH_BOTTLENECK_CANDIDATE_COLUMNS,
     TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
     build_point_in_time_candidate_snapshots,
     read_candidate_snapshots,
@@ -480,7 +481,6 @@ def test_validate_candidate_snapshot_frame_rejects_future_dates() -> None:
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-04",
-                    "candidate_trade_date": "2025-01-04",
                 "candidate_as_of_date": "2025-01-04",
                 "hit_count_as_of_date": 1,
                 "primary_chain_id": "",
@@ -660,6 +660,14 @@ def test_validate_candidate_snapshot_frame_rejects_wrong_engine_version() -> Non
         validate_candidate_snapshot_frame(frame)
 
 
+def test_validate_candidate_snapshot_frame_rejects_extra_columns() -> None:
+    frame = _valid_snapshot_frame()
+    frame["candidate_trade_date"] = "2025-01-03"
+
+    with pytest.raises(ValueError, match="candidate snapshot has unexpected columns"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -676,6 +684,9 @@ def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     write_candidate_snapshots(frame, path)
     loaded = read_candidate_snapshots(path, start_date="2025-01-02", end_date="2025-01-02")
 
+    raw = pd.read_csv(path)
+    assert raw.columns.tolist() == TECH_BOTTLENECK_CANDIDATE_COLUMNS
+    assert loaded.columns.tolist() == TECH_BOTTLENECK_CANDIDATE_COLUMNS
     assert loaded["trade_date"].unique().tolist() == ["2025-01-02"]
     assert loaded["asset_id"].tolist() == ["A"]
     assert loaded["bottleneck_rank"].tolist() == [1]
@@ -1213,7 +1224,6 @@ def _valid_snapshot_frame() -> pd.DataFrame:
                 "asset_id": "A",
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-02",
-                    "candidate_trade_date": "2025-01-02",
                 "candidate_as_of_date": "2025-01-03",
                 "hit_count_as_of_date": 1,
                 "primary_chain_id": "",

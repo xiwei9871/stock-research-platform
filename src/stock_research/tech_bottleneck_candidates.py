@@ -121,10 +121,13 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
     missing = [column for column in TECH_BOTTLENECK_CANDIDATE_COLUMNS if column not in frame.columns]
     if missing:
         raise ValueError(f"candidate snapshot missing columns: {missing}")
+    extra = [column for column in frame.columns if column not in TECH_BOTTLENECK_CANDIDATE_COLUMNS]
+    if extra:
+        raise ValueError(f"candidate snapshot has unexpected columns: {extra}")
     if frame.empty:
         return
 
-    normalized = frame.copy()
+    normalized = frame[TECH_BOTTLENECK_CANDIDATE_COLUMNS].copy()
     for column in ["asset_id", "engine_version", "run_id"]:
         normalized[column] = _normalize_identity_text(normalized[column], column=column)
     bad_engine = normalized["engine_version"] != TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION
@@ -209,7 +212,7 @@ def write_candidate_snapshots(frame: pd.DataFrame, path: str | Path) -> Path:
     validate_candidate_snapshot_frame(frame)
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output, index=False)
+    frame[TECH_BOTTLENECK_CANDIDATE_COLUMNS].to_csv(output, index=False)
     return output
 
 
