@@ -18,6 +18,7 @@ from stock_research.serenity_tight3b_c2_experiment import (
 from stock_research.tech_bottleneck_candidates import (
     TECH_BOTTLENECK_CANDIDATE_SOURCE,
     read_candidate_snapshots,
+    validate_candidate_snapshot_frame,
 )
 
 
@@ -115,6 +116,8 @@ def build_tech_bottleneck_v1_from_frames(
             "requested_start_date": report_start_date or config.start_date,
             "transaction_cost_bps": config.transaction_cost_bps,
             "adjust_type": config.adjust_type,
+            "position_rows": int(len(run["positions"])),
+            "trade_rows": int(len(run["trades"])),
             "data_coverage": {
                 "source": "accepted_baseline_feature_inputs",
                 "candidate_rows": int(len(candidates)),
@@ -164,6 +167,8 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
         max_position_weight=max_position_weight,
         adjust_type=adjust_type,
     )
+    if not candidate_snapshots.empty:
+        validate_candidate_snapshot_frame(candidate_snapshots)
     snapshot_coverage = _candidate_snapshot_coverage(
         candidate_snapshots,
         start_date=config.start_date,
@@ -320,10 +325,17 @@ def _candidate_snapshot_coverage(
     filtered = dates[in_range].dropna()
     if filtered.empty:
         raise ValueError("Tech Bottleneck candidate snapshots are missing for requested range")
+    available_start = str(filtered.min())
+    available_end = str(filtered.max())
+    if available_start > start_date or available_end < end_date:
+        raise ValueError(
+            "Tech Bottleneck candidate snapshots do not cover requested range: "
+            f"requested {start_date}..{end_date}, available {available_start}..{available_end}"
+        )
     return {
         "rows": int(in_range.sum()),
-        "start_date": str(filtered.min()),
-        "latest_date": str(filtered.max()),
+        "start_date": available_start,
+        "latest_date": available_end,
     }
 
 

@@ -10,6 +10,7 @@ from stock_research.tech_bottleneck_candidates import (
 from stock_research.tech_bottleneck_v1 import (
     TECH_BOTTLENECK_V1_ENGINE_VERSION,
     TECH_BOTTLENECK_V1_PROTECTION_NAME,
+    build_tech_bottleneck_v1_from_rank_snapshots,
     build_tech_bottleneck_v1_from_frames,
 )
 
@@ -38,12 +39,12 @@ def test_tech_bottleneck_v1_uses_accepted_c2_baseline() -> None:
     assert result["equity_curve"]
     assert result["positions"]
     assert result["trades"]
+    assert summary["position_rows"] == len(result["positions"])
+    assert summary["trade_rows"] == len(result["trades"])
     assert {"trade_date", "equity", "drawdown"}.issubset(result["equity_curve"][0])
 
 
 def test_tech_bottleneck_v1_from_rank_snapshots_labels_point_in_time_source() -> None:
-    from stock_research.tech_bottleneck_v1 import build_tech_bottleneck_v1_from_rank_snapshots
-
     result = build_tech_bottleneck_v1_from_rank_snapshots(
         candidate_snapshots=_rank_snapshots(),
         prices=_prices(),
@@ -63,11 +64,46 @@ def test_tech_bottleneck_v1_from_rank_snapshots_labels_point_in_time_source() ->
 
 
 def test_tech_bottleneck_v1_requires_snapshot_rows_for_requested_range() -> None:
-    from stock_research.tech_bottleneck_v1 import build_tech_bottleneck_v1_from_rank_snapshots
-
     with pytest.raises(ValueError, match="Tech Bottleneck candidate snapshots are missing"):
         build_tech_bottleneck_v1_from_rank_snapshots(
             candidate_snapshots=pd.DataFrame(),
+            prices=_prices(),
+            market_exposure=_market_exposure(),
+            start_date="2025-01-01",
+            end_date="2025-01-08",
+            top_n=2,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=20,
+        )
+
+
+@pytest.mark.parametrize(
+    "column",
+    ["candidate_as_of_date", "data_as_of_date", "filter_decision", "engine_version", "run_id"],
+)
+def test_tech_bottleneck_v1_rejects_invalid_snapshot_schema(column: str) -> None:
+    snapshots = _rank_snapshots().drop(columns=[column])
+
+    with pytest.raises(ValueError, match="candidate snapshot missing columns"):
+        build_tech_bottleneck_v1_from_rank_snapshots(
+            candidate_snapshots=snapshots,
+            prices=_prices(),
+            market_exposure=_market_exposure(),
+            start_date="2025-01-01",
+            end_date="2025-01-08",
+            top_n=2,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=20,
+        )
+
+
+def test_tech_bottleneck_v1_rejects_partial_snapshot_date_coverage() -> None:
+    snapshots = _rank_snapshots()
+    snapshots = snapshots[snapshots["trade_date"] == "2025-01-01"].copy()
+
+    with pytest.raises(ValueError, match="Tech Bottleneck candidate snapshots do not cover requested range"):
+        build_tech_bottleneck_v1_from_rank_snapshots(
+            candidate_snapshots=snapshots,
             prices=_prices(),
             market_exposure=_market_exposure(),
             start_date="2025-01-01",
@@ -109,7 +145,7 @@ def _rank_snapshots() -> pd.DataFrame:
                     "asset_id": asset_id,
                     "stock_name": details["stock_name"],
                     "first_hit_date": details["first_hit_date"],
-                    "candidate_as_of_date": details["first_hit_date"],
+                    "candidate_as_of_date": day,
                     "hit_count_as_of_date": details["hit_count_as_of_date"],
                     "primary_chain_id": f"chain-{asset_id}",
                     "primary_chain_name": f"Chain {asset_id}",
