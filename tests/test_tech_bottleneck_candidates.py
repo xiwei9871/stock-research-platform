@@ -195,7 +195,7 @@ def test_explicit_hit_count_as_of_date_is_used_without_static_filter_reason() ->
                     "asset_id": "A",
                     "stock_name": "Alpha",
                     "first_hit_date": "2025-01-01",
-                    "hit_count": 100,
+                    "trade_date": "2025-01-01",
                     "hit_count_as_of_date": 3,
                 }
             ]
@@ -218,6 +218,7 @@ def test_explicit_hit_count_as_of_date_preserves_existing_filter_reason() -> Non
                     "asset_id": "A",
                     "stock_name": "Alpha",
                     "first_hit_date": "2025-01-01",
+                    "trade_date": "2025-01-01",
                     "hit_count_as_of_date": 3,
                     "filter_reason": "source_note",
                 }
@@ -230,6 +231,72 @@ def test_explicit_hit_count_as_of_date_preserves_existing_filter_reason() -> Non
     )
 
     assert snapshots["filter_reason"].tolist() == ["source_note"]
+
+
+def test_static_hit_count_as_of_date_uses_conservative_one_without_changing_historical_score() -> None:
+    low_static = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 1}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 2),
+        start_date="2025-01-02",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-low",
+    )
+    high_static = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 99}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 2),
+        start_date="2025-01-02",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-high",
+    )
+
+    assert high_static["hit_count_as_of_date"].tolist() == [1.0]
+    assert high_static["filter_reason"].tolist() == ["static_source_hit_count_conservative_1"]
+    assert high_static["bottleneck_score"].tolist() == pytest.approx(low_static["bottleneck_score"].tolist())
+    assert high_static["bottleneck_rank"].tolist() == low_static["bottleneck_rank"].tolist()
+
+
+def test_dated_hit_count_as_of_rows_update_score_only_from_candidate_as_of_date() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "stock_name": "Alpha",
+                    "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
+                    "hit_count_as_of_date": 1,
+                },
+                {
+                    "asset_id": "A",
+                    "stock_name": "Alpha",
+                    "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-03",
+                    "hit_count_as_of_date": 9,
+                },
+                {
+                    "asset_id": "B",
+                    "stock_name": "Beta",
+                    "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
+                    "hit_count_as_of_date": 9,
+                },
+            ]
+        ),
+        prices=_prices(["A", "B"], "2025-01-01", 3),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        run_id="tech-bt-20250103-test",
+    )
+
+    by_date = snapshots[snapshots["asset_id"] == "A"].set_index("trade_date")
+    assert by_date.at["2025-01-01", "hit_count_as_of_date"] == 1.0
+    assert by_date.at["2025-01-02", "hit_count_as_of_date"] == 1.0
+    assert by_date.at["2025-01-03", "hit_count_as_of_date"] == 9.0
+    assert by_date.at["2025-01-03", "bottleneck_score"] > by_date.at["2025-01-02", "bottleneck_score"]
 
 
 def test_build_snapshot_normalizes_api_boundary_dates() -> None:
@@ -279,6 +346,7 @@ def test_explicit_hit_count_as_of_date_must_be_numeric() -> None:
                         "asset_id": "A",
                         "stock_name": "Alpha",
                         "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
                         "hit_count_as_of_date": "many",
                     }
                 ]
@@ -714,6 +782,63 @@ def test_snapshot_always_uses_formal_engine_version() -> None:
 
 def test_snapshot_builder_does_not_expose_engine_version_override() -> None:
     assert "engine_version" not in inspect.signature(build_point_in_time_candidate_snapshots).parameters
+
+
+@pytest.mark.parametrize("start_date,end_date", [("2025-01-03", "2025-01-02"), ("2025-1-3", "2025-1-2")])
+def test_snapshot_builder_rejects_start_date_after_end_date(start_date: str, end_date: str) -> None:
+    with pytest.raises(ValueError, match="start_date must be <= end_date"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+            ),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date=start_date,
+            end_date=end_date,
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_read_candidate_snapshots_rejects_start_date_after_end_date(tmp_path) -> None:
+    frame = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 1),
+        start_date="2025-01-01",
+        end_date="2025-01-01",
+        run_id="tech-bt-20250101-test",
+    )
+    path = tmp_path / "tech_bottleneck_daily_candidates.csv"
+    write_candidate_snapshots(frame, path)
+
+    with pytest.raises(ValueError, match="start_date must be <= end_date"):
+        read_candidate_snapshots(path, start_date="2025-01-03", end_date="2025-01-02")
+
+
+@pytest.mark.parametrize(
+    ("close", "message"),
+    [
+        ("bad-close", "close must be numeric"),
+        (float("inf"), "close must be finite"),
+        (0.0, "close must be > 0"),
+        (-1.0, "close must be > 0"),
+    ],
+)
+def test_snapshot_rejects_invalid_price_close_values(close, message: str) -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices["close"] = prices["close"].astype(object)
+    prices.loc[0, "close"] = close
+
+    with pytest.raises(ValueError, match=message):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
 
 
 @pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])

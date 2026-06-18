@@ -41,6 +41,7 @@ def build_point_in_time_candidate_snapshots(
 ) -> pd.DataFrame:
     start_date = _normalize_date_arg(start_date, name="start_date")
     end_date = _normalize_date_arg(end_date, name="end_date")
+    _validate_date_order(start_date, end_date)
     candidates = _normalize_base_candidates(base_candidates)
     normalized_prices = _normalize_prices(prices, start_date=start_date, end_date=end_date)
     trading_dates = sorted(normalized_prices["trade_date"].dropna().astype(str).unique().tolist())
@@ -57,10 +58,16 @@ def build_point_in_time_candidate_snapshots(
             (candidates["first_hit_date"] <= trade_date)
             & (candidates["financial_as_of_date"] <= trade_date)
             & (candidates["technical_as_of_date"] <= trade_date)
+            & (candidates["candidate_as_of_date"] <= trade_date)
         ]
         eligible = eligible[eligible["asset_id"].isin(_priced_assets_for_day(closes, trade_date))]
         if eligible.empty:
             continue
+        eligible = (
+            eligible.sort_values(["asset_id", "candidate_as_of_date"])
+            .groupby("asset_id", as_index=False, sort=False)
+            .tail(1)
+        )
         max_evidence = float(np.log1p(eligible["hit_count_as_of_date"]).max())
         max_evidence = max(max_evidence, 1.0)
         for row in eligible.itertuples(index=False):
@@ -189,6 +196,7 @@ def write_candidate_snapshots(frame: pd.DataFrame, path: str | Path) -> Path:
 def read_candidate_snapshots(path: str | Path, *, start_date: str, end_date: str) -> pd.DataFrame:
     start_date = _normalize_date_arg(start_date, name="start_date")
     end_date = _normalize_date_arg(end_date, name="end_date")
+    _validate_date_order(start_date, end_date)
     frame = pd.read_csv(path, low_memory=False)
     validate_candidate_snapshot_frame(frame)
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -245,6 +253,7 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
                 "first_hit_date",
                 "hit_count",
                 "hit_count_as_of_date",
+                "candidate_as_of_date",
                 "primary_chain_id",
                 "primary_chain_name",
                 "matched_bottleneck_dimensions",
@@ -260,7 +269,16 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         frame["first_hit_date"],
         invalid_message="invalid base candidate date: first_hit_date",
     )
-    if "hit_count_as_of_date" in frame.columns:
+    candidate_date_column = _candidate_date_column(frame)
+    if candidate_date_column is not None:
+        frame["candidate_as_of_date"] = _parse_required_date_column(
+            frame[candidate_date_column],
+            invalid_message=f"invalid base candidate date: {candidate_date_column}",
+        )
+    else:
+        frame["candidate_as_of_date"] = frame["first_hit_date"]
+
+    if "hit_count_as_of_date" in frame.columns and candidate_date_column is not None:
         frame["hit_count_as_of_date"] = _numeric_required_column(
             frame["hit_count_as_of_date"],
             invalid_message="hit_count_as_of_date must be numeric",
@@ -268,7 +286,11 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         frame["filter_reason"] = _string_column(frame, "filter_reason")
     else:
         frame["hit_count_as_of_date"] = 1.0
-        frame["filter_reason"] = "static_source_hit_count_conservative_1"
+        existing_reason = _string_column(frame, "filter_reason")
+        frame["filter_reason"] = existing_reason.where(
+            existing_reason.str.strip().ne(""),
+            "static_source_hit_count_conservative_1",
+        )
     for column in ["primary_chain_id", "primary_chain_name", "matched_bottleneck_dimensions"]:
         frame[column] = _string_column(frame, column)
     if "financial_as_of_date" not in frame.columns:
@@ -301,14 +323,17 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
     if bool(duplicates.any()):
         raise ValueError("duplicate price rows for trade_date and asset_id")
     for column in ["open", "close"]:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        frame[column] = _parse_price_numeric_column(frame[column], column=column)
     if "high" not in frame.columns:
         frame["high"] = frame[["open", "close"]].max(axis=1)
     if "low" not in frame.columns:
         frame["low"] = frame[["open", "close"]].min(axis=1)
-    frame["high"] = pd.to_numeric(frame["high"], errors="coerce")
-    frame["low"] = pd.to_numeric(frame["low"], errors="coerce")
-    return frame.dropna(subset=["trade_date", "asset_id", "close"]).sort_values(["trade_date", "asset_id"])
+    frame["high"] = _parse_price_numeric_column(frame["high"], column="high")
+    frame["low"] = _parse_price_numeric_column(frame["low"], column="low")
+    _validate_positive_price_column(frame["close"], column="close")
+    _validate_positive_price_column(frame["high"], column="high")
+    _validate_positive_price_column(frame["low"], column="low")
+    return frame.dropna(subset=["trade_date", "asset_id"]).sort_values(["trade_date", "asset_id"])
 
 
 def _bottleneck_score(*, row: Any, trade_date: str, closes: pd.DataFrame, high_120: pd.DataFrame, max_evidence: float) -> float:
@@ -352,11 +377,31 @@ def _normalize_date_arg(value: str, *, name: str) -> str:
     return str(parsed.dt.strftime("%Y-%m-%d").iloc[0])
 
 
+def _validate_date_order(start_date: str, end_date: str) -> None:
+    if start_date > end_date:
+        raise ValueError("start_date must be <= end_date")
+
+
 def _numeric_required_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
     parsed = pd.to_numeric(values, errors="coerce")
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed
+
+
+def _parse_price_numeric_column(values: pd.Series, *, column: str) -> pd.Series:
+    parsed = pd.to_numeric(values, errors="coerce")
+    if bool(parsed.isna().any()):
+        raise ValueError(f"{column} must be numeric")
+    finite = np.isfinite(parsed.astype(float))
+    if bool((~finite).any()):
+        raise ValueError(f"{column} must be finite")
+    return parsed
+
+
+def _validate_positive_price_column(values: pd.Series, *, column: str) -> None:
+    if bool((values <= 0).any()):
+        raise ValueError(f"{column} must be > 0")
 
 
 def _validate_finite_nonnegative(values: pd.Series, *, column: str) -> None:
@@ -389,3 +434,11 @@ def _parse_bool_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
 
 def _is_missing_or_empty(values: pd.Series) -> pd.Series:
     return values.isna() | values.astype(str).str.strip().eq("")
+
+
+def _candidate_date_column(frame: pd.DataFrame) -> str | None:
+    if "candidate_trade_date" in frame.columns:
+        return "candidate_trade_date"
+    if "trade_date" in frame.columns:
+        return "trade_date"
+    return None
