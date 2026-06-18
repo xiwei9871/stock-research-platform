@@ -47,10 +47,6 @@ def build_point_in_time_candidate_snapshots(
     if not trading_dates or candidates.empty:
         return pd.DataFrame(columns=TECH_BOTTLENECK_CANDIDATE_COLUMNS)
 
-    duplicates = normalized_prices.duplicated(subset=["trade_date", "asset_id"], keep=False)
-    if bool(duplicates.any()):
-        raise ValueError("duplicate price rows for trade_date and asset_id")
-
     closes = normalized_prices.pivot(index="trade_date", columns="asset_id", values="close").sort_index()
     high_120 = closes.rolling(120, min_periods=3).max()
     rows: list[dict[str, Any]] = []
@@ -161,17 +157,20 @@ def read_base_candidate_source(path: str | Path, *, end_date: str) -> pd.DataFra
 def validate_base_candidate_source_freshness(frame: pd.DataFrame, *, end_date: str) -> None:
     if frame.empty:
         raise ValueError("base candidate source is empty")
+    latest_dates: list[str] = []
     for column in ["source_latest_trade_date", "data_as_of_date", "generated_trade_date"]:
         if column in frame.columns:
             parsed = _parse_required_date_column(
                 frame[column],
                 invalid_message=f"invalid base candidate freshness metadata: {column}",
             )
-            latest = str(parsed.max())
-            if latest >= end_date:
-                return
-            raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
-    raise ValueError("base candidate source freshness metadata missing")
+            latest_dates.append(str(parsed.max()))
+    if not latest_dates:
+        raise ValueError("base candidate source freshness metadata missing")
+    if any(latest >= end_date for latest in latest_dates):
+        return
+    latest = max(latest_dates)
+    raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
 
 
 def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -224,6 +223,10 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
     frame = prices.copy()
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
     frame["asset_id"] = frame["asset_id"].astype(str)
+    frame = frame[frame["trade_date"].between(start_date, end_date)]
+    duplicates = frame.duplicated(subset=["trade_date", "asset_id"], keep=False)
+    if bool(duplicates.any()):
+        raise ValueError("duplicate price rows for trade_date and asset_id")
     for column in ["open", "close"]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     if "high" not in frame.columns:
@@ -232,7 +235,6 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         frame["low"] = frame[["open", "close"]].min(axis=1)
     frame["high"] = pd.to_numeric(frame["high"], errors="coerce")
     frame["low"] = pd.to_numeric(frame["low"], errors="coerce")
-    frame = frame[frame["trade_date"].between(start_date, end_date)]
     return frame.dropna(subset=["trade_date", "asset_id", "close"]).sort_values(["trade_date", "asset_id"])
 
 

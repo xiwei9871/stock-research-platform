@@ -260,6 +260,24 @@ def test_validate_base_candidate_source_rejects_invalid_freshness_metadata() -> 
         validate_base_candidate_source_freshness(invalid, end_date="2025-01-03")
 
 
+def test_validate_base_candidate_source_checks_all_present_freshness_metadata() -> None:
+    invalid_later_column = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "source_latest_trade_date": "2025-01-03",
+                "data_as_of_date": "not-a-date",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="invalid base candidate freshness metadata: data_as_of_date"):
+        validate_base_candidate_source_freshness(invalid_later_column, end_date="2025-01-03")
+
+
 def test_validate_base_candidate_source_requires_formal_freshness_metadata() -> None:
     missing = pd.DataFrame(
         [
@@ -279,6 +297,24 @@ def test_validate_base_candidate_source_requires_formal_freshness_metadata() -> 
 def test_snapshot_rejects_duplicate_price_rows() -> None:
     prices = _prices(["A"], "2025-01-01", 1)
     prices = pd.concat([prices, prices], ignore_index=True)
+
+    with pytest.raises(ValueError, match="duplicate price rows for trade_date and asset_id"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_snapshot_rejects_duplicate_price_rows_before_dropping_missing_close() -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    duplicate_missing_close = prices.copy()
+    duplicate_missing_close.loc[0, "close"] = None
+    prices = pd.concat([prices, duplicate_missing_close], ignore_index=True)
 
     with pytest.raises(ValueError, match="duplicate price rows for trade_date and asset_id"):
         build_point_in_time_candidate_snapshots(
