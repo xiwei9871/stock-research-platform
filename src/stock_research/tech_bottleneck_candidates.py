@@ -330,6 +330,7 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         frame["low"] = frame[["open", "close"]].min(axis=1)
     frame["high"] = _parse_price_numeric_column(frame["high"], column="high")
     frame["low"] = _parse_price_numeric_column(frame["low"], column="low")
+    _validate_positive_price_column(frame["open"], column="open")
     _validate_positive_price_column(frame["close"], column="close")
     _validate_positive_price_column(frame["high"], column="high")
     _validate_positive_price_column(frame["low"], column="low")

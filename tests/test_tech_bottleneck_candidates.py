@@ -841,6 +841,23 @@ def test_snapshot_rejects_invalid_price_close_values(close, message: str) -> Non
         )
 
 
+@pytest.mark.parametrize("open_price", [0.0, -1.0])
+def test_snapshot_rejects_non_positive_price_open_values(open_price: float) -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices.loc[0, "open"] = open_price
+
+    with pytest.raises(ValueError, match="open must be > 0"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
 @pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])
 def test_snapshot_rejects_invalid_base_candidate_dates(column: str) -> None:
     candidate = {
