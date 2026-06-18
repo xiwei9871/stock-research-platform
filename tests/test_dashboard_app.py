@@ -119,6 +119,33 @@ def test_platform_display_date_route_returns_readiness_gate(monkeypatch):
     }
 
 
+def test_platform_display_date_route_preserves_blocked_empty_display_date(monkeypatch):
+    def fake_readiness(score_version="manual_v1"):
+        return {
+            "status": "BLOCKED",
+            "latest_trade_date": "2026-06-17",
+            "latest_market_date": "2026-06-17",
+            "display_trade_date": "",
+            "candidate_trade_date": "2026-06-17",
+            "display_gate": {
+                "display_trade_date": "",
+                "candidate_trade_date": "2026-06-17",
+                "candidate_status": "contract_mismatch",
+            },
+            "warnings": ["contract mismatch"],
+        }
+
+    monkeypatch.setattr(dashboard_app, "build_platform_readiness", fake_readiness, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/platform/display-date")
+
+    assert response.status_code == 200
+    assert response.json()["display_trade_date"] == ""
+    assert response.json()["candidate_trade_date"] == "2026-06-17"
+    assert response.json()["status"] == "BLOCKED"
+
+
 def test_public_news_route_returns_filtered_items(monkeypatch):
     captured = {}
 

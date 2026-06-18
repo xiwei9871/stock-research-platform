@@ -128,12 +128,14 @@ def create_app() -> FastAPI:
         def build_payload():
             readiness = build_platform_readiness(score_version=score_version)
             display_gate = readiness.get("display_gate") if isinstance(readiness.get("display_gate"), dict) else {}
-            display_trade_date = str(
-                readiness.get("display_trade_date")
-                or display_gate.get("display_trade_date")
-                or readiness.get("latest_trade_date")
-                or ""
-            )
+            if "display_trade_date" in readiness:
+                display_trade_date = str(readiness.get("display_trade_date") or "")
+            else:
+                display_trade_date = str(
+                    display_gate.get("display_trade_date")
+                    or readiness.get("latest_trade_date")
+                    or ""
+                )
             candidate_trade_date = str(
                 readiness.get("candidate_trade_date")
                 or display_gate.get("candidate_trade_date")

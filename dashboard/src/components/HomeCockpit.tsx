@@ -300,8 +300,11 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const reviewHealth = healthGroup(readiness, 'review_chain');
   const contentHealth = healthGroup(readiness, 'content_chain');
   const healthGroups = readiness?.health_groups ?? [];
-  const displayTradeDate =
-    readiness?.display_trade_date || readiness?.latest_trade_date || readiness?.latest_market_date || summary?.latest_market_date || '-';
+  const displayTradeDate = readiness
+    ? readiness.display_trade_date !== undefined
+      ? readiness.display_trade_date || '-'
+      : readiness.latest_trade_date ?? readiness.latest_market_date ?? '-'
+    : summary?.latest_market_date ?? '-';
 
   useEffect(() => {
     let ignore = false;
