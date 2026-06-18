@@ -250,6 +250,9 @@ from stock_research.serenity_tight3b_c2_experiment import (
 from stock_research.serenity_source_backed_evidence_fill import (
     run_serenity_source_backed_evidence_fill,
 )
+from stock_research.tech_bottleneck_evidence_workflow import (
+    run_tech_bottleneck_evidence_workflow,
+)
 from stock_research.top10_historical_news_effectiveness_review import (
     run_top10_historical_news_effectiveness_review,
 )
@@ -2933,6 +2936,17 @@ def build_parser() -> argparse.ArgumentParser:
     serenity_source_backed_evidence.add_argument("--evidence-seed-path")
     serenity_source_backed_evidence.add_argument("--output-dir", required=True)
     serenity_source_backed_evidence.add_argument("--run-id", default="serenity_source_backed_evidence_fill")
+
+    tech_bottleneck_evidence = subparsers.add_parser("tech-bottleneck-evidence-workflow")
+    tech_bottleneck_evidence.add_argument("--asset-queue-path", required=True)
+    tech_bottleneck_evidence.add_argument("--evidence-detail-path", required=True)
+    tech_bottleneck_evidence.add_argument("--candidate-path")
+    tech_bottleneck_evidence.add_argument("--trade-date")
+    tech_bottleneck_evidence.add_argument("--top-n", type=int, default=100)
+    tech_bottleneck_evidence.add_argument(
+        "--output-dir",
+        default="outputs/research/tech_bottleneck_evidence_workflow",
+    )
 
     mid_trend_shadow_weekly_control = subparsers.add_parser(
         "review-mid-trend-shadow-weekly-control"
@@ -6093,6 +6107,22 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"serenity_source_backed_evidence|report|{result['paths']['report']}")
         print(f"serenity_source_backed_evidence|summary_rows|{len(result.get('summary', []))}")
         print(f"serenity_source_backed_evidence|manual_queue_rows|{len(result.get('manual_queue', []))}")
+    elif args.command == "tech-bottleneck-evidence-workflow":
+        result = run_tech_bottleneck_evidence_workflow(
+            asset_queue_path=args.asset_queue_path,
+            evidence_detail_path=args.evidence_detail_path,
+            candidate_path=args.candidate_path,
+            trade_date=args.trade_date,
+            top_n=args.top_n,
+            output_dir=args.output_dir,
+        )
+        print(f"tech_bottleneck_evidence|topn_queue|{result['paths']['topn_backfill_queue']}")
+        print(f"tech_bottleneck_evidence|weak_queue|{result['paths']['weak_evidence_queue']}")
+        print(f"tech_bottleneck_evidence|adjusted_candidates|{result['paths']['adjusted_candidates']}")
+        print(f"tech_bottleneck_evidence|yanbaoke_tasks|{result['paths']['yanbaoke_tasks']}")
+        print(f"tech_bottleneck_evidence|report|{result['paths']['report']}")
+        print(f"tech_bottleneck_evidence|topn_queue_rows|{len(result['topn_backfill_queue'])}")
+        print(f"tech_bottleneck_evidence|weak_queue_rows|{len(result['weak_evidence_queue'])}")
     elif args.command == "review-mid-trend-shadow-weekly-control":
         result = run_mid_trend_shadow_weekly_control_review(
             funnel_detail_path=args.funnel_detail_path,
