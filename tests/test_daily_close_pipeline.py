@@ -106,6 +106,8 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
         config=config,
         ts_codes=["000001.SZ", "600000.SH"],
         tushare_fetcher=fake_tushare_fetcher,
+        derived_adjusted_fetcher=lambda *args, **kwargs: [],
+        tushare_adjusted_fetcher=lambda *args, **kwargs: [],
         akshare_fetcher=fake_akshare_fetcher,
         daily_upserter=fake_upsert,
     )
@@ -130,6 +132,129 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
     ]
     assert result["quality"]["expected_count"] == 6
     assert result["quality"]["actual_count"] == 6
+
+
+def test_daily_stage_uses_tushare_adjusted_before_akshare(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    captured = {"akshare_ts_codes": None, "akshare_adjust_types": None, "upserted": []}
+    trade_date = date(2026, 6, 5)
+    config = dcp.PipelineConfig(
+        service="test",
+        tushare_token="token",
+        max_retries=1,
+        force_non_trading_day=True,
+    )
+
+    def fake_tushare_fetcher(trade_date, token, timeout_seconds, ts_codes=None):
+        return [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            }
+        ]
+
+    def fake_tushare_adjusted_fetcher(
+        trade_date, token, timeout_seconds, ts_codes, adjust_types, max_workers
+    ):
+        assert ts_codes == ["000001.SZ", "600000.SH"]
+        assert tuple(adjust_types) == ("hfq", "qfq")
+        return [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "qfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "hfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            },
+        ]
+
+    def fake_akshare_fetcher(trade_date, ts_codes, timeout_seconds, adjust_types=None):
+        captured["akshare_ts_codes"] = ts_codes
+        captured["akshare_adjust_types"] = tuple(adjust_types)
+        return [
+            {
+                "ts_code": "600000.SH",
+                "trade_date": trade_date,
+                "adjust_type": adjust_type,
+                "open": 20,
+                "high": 21,
+                "low": 19,
+                "close": 20.5,
+            }
+            for adjust_type in adjust_types
+        ]
+
+    result = dcp.run_daily_stage(
+        trade_date,
+        config=config,
+        ts_codes=["000001.SZ", "600000.SH"],
+        tushare_fetcher=fake_tushare_fetcher,
+        derived_adjusted_fetcher=lambda *args, **kwargs: [],
+        tushare_adjusted_fetcher=fake_tushare_adjusted_fetcher,
+        akshare_fetcher=fake_akshare_fetcher,
+        daily_upserter=lambda _service, rows: captured.update(upserted=rows) or len(rows),
+    )
+
+    assert result["status"] == "success"
+    assert captured["akshare_ts_codes"] == ["600000.SH"]
+    assert captured["akshare_adjust_types"] == ("hfq", "qfq", "raw")
+    assert result["quality"]["expected_count"] == 6
+    assert result["quality"]["actual_count"] == 6
+
+
+def test_derive_adjusted_daily_rows_uses_latest_local_factors(monkeypatch):
+    monkeypatch.setattr(
+        dcp,
+        "load_latest_adjustment_factors",
+        lambda service, ts_codes, before_date: {
+            "000001.SZ": {"qfq": 1.1, "hfq": 2.0}
+        },
+    )
+
+    rows = dcp.derive_adjusted_daily_rows(
+        "test",
+        trade_date=date(2026, 6, 18),
+        raw_rows=[
+            {
+                "ts_code": "000001.SZ",
+                "asset_id": "CN:SZ:000001",
+                "trade_date": date(2026, 6, 18),
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+                "preclose": 9.8,
+                "volume": 100,
+                "amount": 1000,
+                "source": "tushare",
+            }
+        ],
+        ts_codes=["000001.SZ"],
+        adjust_types=("qfq", "hfq"),
+    )
+
+    by_adjust = {row["adjust_type"]: row for row in rows}
+    assert by_adjust["qfq"]["close"] == 11.0
+    assert by_adjust["hfq"]["close"] == 20.0
+    assert by_adjust["hfq"]["source"] == "derived:tushare_raw_latest_factor"
 
 
 def test_daily_quality_requires_raw_qfq_and_hfq_for_each_symbol():
@@ -224,6 +349,62 @@ def test_tushare_daily_rows_filter_to_expected_universe(monkeypatch):
     )
 
     assert [row["ts_code"] for row in rows] == ["000001.SZ"]
+
+
+def test_tushare_adjusted_daily_rows_use_batch_adj_factor(monkeypatch):
+    class Frame:
+        empty = False
+
+        def __init__(self, rows):
+            self._rows = rows
+
+        def to_dict(self, orient):
+            assert orient == "records"
+            return self._rows
+
+    class Pro:
+        def daily(self, trade_date):
+            return Frame(
+                [
+                    {
+                        "ts_code": "000001.SZ",
+                        "open": 10,
+                        "high": 11,
+                        "low": 9,
+                        "close": 10,
+                        "pre_close": 9.8,
+                        "vol": 100,
+                        "amount": 1000,
+                        "pct_chg": 1.0,
+                    }
+                ]
+            )
+
+        def adj_factor(self, trade_date):
+            return Frame([{"ts_code": "000001.SZ", "adj_factor": 2.0}])
+
+    class Tushare:
+        @staticmethod
+        def pro_api(token):
+            return Pro()
+
+        @staticmethod
+        def pro_bar(*args, **kwargs):
+            raise AssertionError("pro_bar should not be called for daily adjusted batch")
+
+    monkeypatch.setitem(__import__("sys").modules, "tushare", Tushare)
+
+    rows = dcp.fetch_tushare_adjusted_daily_rows(
+        date(2026, 6, 18),
+        token="token",
+        timeout_seconds=5,
+        ts_codes=["000001.SZ"],
+        adjust_types=("qfq", "hfq"),
+    )
+
+    by_adjust = {row["adjust_type"]: row for row in rows}
+    assert by_adjust["qfq"]["close"] == 10.0
+    assert by_adjust["hfq"]["close"] == 20.0
 
 
 def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monkeypatch):

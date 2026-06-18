@@ -170,6 +170,12 @@ def parse_adjust_types(value: str) -> tuple[str, ...]:
     return adjust_types or DAILY_ADJUST_TYPES
 
 
+def multiply_optional(value: Any, factor: float) -> float | None:
+    if value in (None, ""):
+        return None
+    return float(value) * factor
+
+
 def ts_code_to_asset_id(ts_code: str) -> str:
     symbol, exchange = ts_code.split(".", 1)
     return asset_id_from_baostock_code(f"{exchange.lower()}.{symbol}")
@@ -538,6 +544,165 @@ def fetch_tushare_daily_rows(
     return call_with_timeout(_fetch, timeout_seconds)
 
 
+def fetch_tushare_adjusted_daily_rows(
+    trade_date: date,
+    *,
+    token: str | None,
+    timeout_seconds: int,
+    ts_codes: list[str],
+    adjust_types: tuple[str, ...],
+    max_workers: int = 8,
+) -> list[dict[str, Any]]:
+    if not token:
+        raise RuntimeError("TUSHARE_TOKEN is not configured")
+
+    wanted_adjust_types = {adjust_type for adjust_type in adjust_types if adjust_type in {"qfq", "hfq"}}
+    if not wanted_adjust_types:
+        return []
+
+    def _fetch() -> list[dict[str, Any]]:
+        import tushare as ts
+
+        pro = ts.pro_api(token)
+        daily = pro.daily(trade_date=format_trade_date(trade_date))
+        adj_factor = pro.adj_factor(trade_date=format_trade_date(trade_date))
+        if daily is None or daily.empty or adj_factor is None or adj_factor.empty:
+            return []
+        requested = set(ts_codes)
+        factors = {
+            str(row["ts_code"]): row.get("adj_factor")
+            for row in adj_factor.to_dict("records")
+            if str(row["ts_code"]) in requested
+        }
+        rows: list[dict[str, Any]] = []
+        for raw in daily.to_dict("records"):
+            ts_code = str(raw["ts_code"])
+            if ts_code not in requested:
+                continue
+            factor = factors.get(ts_code)
+            if factor in (None, ""):
+                continue
+            try:
+                hfq_factor = float(factor)
+            except (TypeError, ValueError):
+                continue
+            for adjust_type in sorted(wanted_adjust_types):
+                price_factor = hfq_factor if adjust_type == "hfq" else 1.0
+                rows.append(
+                    {
+                        "ts_code": ts_code,
+                        "asset_id": ts_code_to_asset_id(ts_code),
+                        "trade_date": trade_date,
+                        "open": multiply_optional(raw.get("open"), price_factor),
+                        "high": multiply_optional(raw.get("high"), price_factor),
+                        "low": multiply_optional(raw.get("low"), price_factor),
+                        "close": multiply_optional(raw.get("close"), price_factor),
+                        "preclose": multiply_optional(raw.get("pre_close"), price_factor),
+                        "volume": raw.get("vol"),
+                        "amount": raw.get("amount"),
+                        "turnover_rate": None,
+                        "pct_chg": raw.get("pct_chg"),
+                        "trade_status": "1",
+                        "is_st": False,
+                        "adjust_type": adjust_type,
+                        "source": "tushare",
+                    }
+                )
+        return rows
+
+    return call_with_timeout(_fetch, timeout_seconds)
+
+
+def load_latest_adjustment_factors(
+    service: str, *, ts_codes: list[str], before_date: date
+) -> dict[str, dict[str, float]]:
+    asset_to_ts = {ts_code_to_asset_id(ts_code): ts_code for ts_code in ts_codes}
+    if not asset_to_ts:
+        return {}
+    sql = """
+    WITH latest_raw AS (
+        SELECT DISTINCT ON (asset_id)
+            asset_id, trade_date, close
+        FROM market_daily_bar
+        WHERE adjust_type = 'raw'
+          AND trade_date < %s
+          AND asset_id = ANY(%s)
+          AND close IS NOT NULL
+          AND close <> 0
+        ORDER BY asset_id, trade_date DESC
+    )
+    SELECT
+        r.asset_id,
+        q.close / NULLIF(r.close, 0) AS qfq_factor,
+        h.close / NULLIF(r.close, 0) AS hfq_factor
+    FROM latest_raw r
+    LEFT JOIN market_daily_bar q
+      ON q.asset_id = r.asset_id
+     AND q.trade_date = r.trade_date
+     AND q.adjust_type = 'qfq'
+    LEFT JOIN market_daily_bar h
+      ON h.asset_id = r.asset_id
+     AND h.trade_date = r.trade_date
+     AND h.adjust_type = 'hfq'
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [before_date, list(asset_to_ts)])
+    factors: dict[str, dict[str, float]] = {}
+    for row in rows:
+        ts_code = asset_to_ts.get(str(row["asset_id"]))
+        if not ts_code:
+            continue
+        values: dict[str, float] = {}
+        for adjust_type, column in {"qfq": "qfq_factor", "hfq": "hfq_factor"}.items():
+            value = row.get(column)
+            if value is None:
+                continue
+            values[adjust_type] = float(value)
+        if values:
+            factors[ts_code] = values
+    return factors
+
+
+def derive_adjusted_daily_rows(
+    service: str,
+    *,
+    trade_date: date,
+    raw_rows: list[dict[str, Any]],
+    ts_codes: list[str],
+    adjust_types: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    wanted_adjust_types = tuple(
+        adjust_type for adjust_type in adjust_types if adjust_type in {"qfq", "hfq"}
+    )
+    if not wanted_adjust_types:
+        return []
+    factors = load_latest_adjustment_factors(
+        service, ts_codes=ts_codes, before_date=trade_date
+    )
+    raw_by_code = {
+        str(row["ts_code"]): row
+        for row in raw_rows
+        if row.get("trade_date") == trade_date and (row.get("adjust_type") or "raw") == "raw"
+    }
+    rows: list[dict[str, Any]] = []
+    for ts_code in ts_codes:
+        raw = raw_by_code.get(ts_code)
+        if not raw:
+            continue
+        code_factors = factors.get(ts_code, {})
+        for adjust_type in wanted_adjust_types:
+            factor = code_factors.get(adjust_type)
+            if factor is None:
+                continue
+            item = dict(raw)
+            item["adjust_type"] = adjust_type
+            item["source"] = "derived:tushare_raw_latest_factor"
+            for column in ("open", "high", "low", "close", "preclose"):
+                item[column] = multiply_optional(raw.get(column), factor)
+            rows.append(item)
+    return rows
+
+
 def fetch_akshare_daily_rows(
     trade_date: date,
     *,
@@ -782,6 +947,8 @@ def run_daily_stage(
     config: PipelineConfig,
     ts_codes: list[str] | None = None,
     tushare_fetcher: Callable[..., list[dict[str, Any]]] = fetch_tushare_daily_rows,
+    derived_adjusted_fetcher: Callable[..., list[dict[str, Any]]] = derive_adjusted_daily_rows,
+    tushare_adjusted_fetcher: Callable[..., list[dict[str, Any]]] = fetch_tushare_adjusted_daily_rows,
     akshare_fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_daily_rows,
     daily_upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_daily_bars,
 ) -> dict[str, Any]:
@@ -830,6 +997,66 @@ def run_daily_stage(
         for row in normalized_tushare
     }
     missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_derived_codes = sorted(
+        {ts_code for ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}}
+    )
+    missing_derived_types = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}})
+    )
+    derived_rows: list[dict[str, Any]] = []
+    if missing_derived_codes and missing_derived_types:
+        logger.info(
+            "daily adjusted source=derived_latest_factor missing=%s adjust_types=%s",
+            len(missing_derived_codes),
+            ",".join(missing_derived_types),
+        )
+        derived_rows = derived_adjusted_fetcher(
+            config.service,
+            trade_date=trade_date,
+            raw_rows=normalized_tushare,
+            ts_codes=missing_derived_codes,
+            adjust_types=missing_derived_types,
+        )
+    normalized_derived = normalize_daily_rows(
+        derived_rows, "derived:tushare_raw_latest_factor"
+    )
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in [*normalized_tushare, *normalized_derived]
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_tushare_adjusted_codes = sorted(
+        {ts_code for ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}}
+    )
+    missing_tushare_adjusted_types = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare if adjust_type in {"qfq", "hfq"}})
+    )
+    tushare_adjusted_rows: list[dict[str, Any]] = []
+    tushare_adjusted_attempts = 0
+    tushare_adjusted_error = None
+    if missing_tushare_adjusted_codes and missing_tushare_adjusted_types:
+        logger.info(
+            "daily adjusted source=tushare missing=%s adjust_types=%s",
+            len(missing_tushare_adjusted_codes),
+            ",".join(missing_tushare_adjusted_types),
+        )
+        tushare_adjusted_rows, tushare_adjusted_attempts, tushare_adjusted_error = retry_call(
+            lambda: tushare_adjusted_fetcher(
+                trade_date,
+                token=config.tushare_token,
+                timeout_seconds=config.request_timeout_seconds,
+                ts_codes=missing_tushare_adjusted_codes,
+                adjust_types=missing_tushare_adjusted_types,
+                max_workers=config.max_workers_daily,
+            ),
+            max_retries=config.max_retries,
+        )
+    normalized_tushare_adjusted = normalize_daily_rows(tushare_adjusted_rows, "tushare")
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
     missing_after_tushare = sorted({ts_code for ts_code, _adjust_type in missing_pairs_after_tushare})
     missing_adjust_types_after_tushare = tuple(
         sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare})
@@ -851,7 +1078,7 @@ def run_daily_stage(
     normalized_akshare = normalize_daily_rows(akshare_rows, "akshare")
     final_rows_by_key = {
         (row["ts_code"], row.get("adjust_type") or "raw"): row
-        for row in normalized_tushare
+        for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
     }
     for row in normalized_akshare:
         key = (row["ts_code"], row.get("adjust_type") or "raw")
@@ -866,17 +1093,17 @@ def run_daily_stage(
     status = "success" if quality["status"] in {"pass", "warning"} and final_rows else "failed"
     if status == "success" and (quality["missing_symbols"] or quality["abnormal_symbols"]):
         status = "partial_success"
-    error_summary = tushare_error or akshare_error
+    error_summary = tushare_error or tushare_adjusted_error or akshare_error
     upsert_job(
         service=config.service,
         trade_date=trade_date,
         job_name="daily_bar",
         stage="daily",
-        source="mixed" if normalized_tushare and normalized_akshare else ("tushare" if normalized_tushare else "akshare"),
+        source="mixed" if normalized_akshare else ("tushare" if normalized_tushare or normalized_tushare_adjusted else "akshare"),
         status=status,
         started_at=started,
         finished_at=finished,
-        attempt_count=max(tushare_attempts, akshare_attempts),
+        attempt_count=max(tushare_attempts, tushare_adjusted_attempts, akshare_attempts),
         rows_inserted=rows_upserted,
         rows_failed=len(quality["missing_symbols"]),
         missing_symbols_count=len(quality["missing_symbols"]),
