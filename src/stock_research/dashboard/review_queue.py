@@ -159,12 +159,13 @@ def _read_manifest_strategy_artifact(
         if not asset_id or not strategy_id:
             continue
         rank = _optional_int(row.get("rank") or row.get("source_rank")) or index
+        score, score_source, score_explanation = _manifest_strategy_score(row, strategy_id=strategy_id, rank=rank)
         normalized.append(
             {
                 "trade_date": str(row.get("trade_date") or "")[:10],
                 "asset_id": asset_id,
                 "rank": rank,
-                "score_total": _optional_float(row.get("score_total") or row.get("score")),
+                "score_total": score,
                 "score_version": "strategy_topn",
                 "score_components": _optional_json_object(row.get("score_components")),
                 "strategy_id": strategy_id,
@@ -175,8 +176,8 @@ def _read_manifest_strategy_artifact(
                 "source_rank": rank,
                 "review_tier": str(row.get("review_tier") or ("top5_focus" if rank <= 5 else "top10_watch")),
                 "stock_name": _optional_text(row.get("stock_name") or row.get("name") or row.get("security_name")),
-                "score_source": _optional_text(row.get("score_source")),
-                "score_explanation": _optional_text(row.get("score_explanation")),
+                "score_source": score_source,
+                "score_explanation": score_explanation,
                 "review_notes": _optional_json_list(row.get("review_notes")),
                 "warnings": _optional_json_list(row.get("warnings")),
                 "risk_flags": _optional_json_list(row.get("risk_flags")),
@@ -184,6 +185,22 @@ def _read_manifest_strategy_artifact(
             }
         )
     return normalized
+
+
+def _manifest_strategy_score(row: dict[str, Any], *, strategy_id: str, rank: int) -> tuple[float | None, str | None, str | None]:
+    existing_source = _optional_text(row.get("score_source"))
+    existing_explanation = _optional_text(row.get("score_explanation"))
+    raw_score = _optional_float(row.get("score_total") or row.get("score"))
+    if strategy_id == "tech_bottleneck" and raw_score is not None and raw_score <= 1.0:
+        return round(raw_score * 100.0, 2), existing_source or "bottleneck_score", existing_explanation or (
+            "技术瓶颈发现分已换算为 0-100 分"
+        )
+    if raw_score is not None:
+        return round(raw_score, 2), existing_source, existing_explanation
+    rank_score = max(0.0, 100.0 - float(max(rank - 1, 0) * 5))
+    return round(rank_score, 2), existing_source or "strategy_rank_score", existing_explanation or (
+        "策略真实产物未提供原始分；按策略内排名换算为 0-100 分"
+    )
 
 
 def _select_latest_strategy_sources(

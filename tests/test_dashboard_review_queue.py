@@ -309,6 +309,54 @@ def test_load_active_strategy_topn_rows_reads_manifest_strategy_artifacts(monkey
     assert rows[0]["review_notes"] == ["真实执行"]
 
 
+def test_manifest_strategy_artifacts_normalize_strategy_scores(monkeypatch, tmp_path):
+    artifact = tmp_path / "strategy_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,score_total,strategy_id,strategy_name,source_type,stock_name",
+                "2026-06-17,CN:SZ:002636,1,,lhb_shortline,LHB Shortline Combo,strategy_manifest,金安国纪",
+                "2026-06-17,CN:SH:601963,2,,mid_trend,Mid Trend Combo,strategy_manifest,重庆银行",
+                "2026-06-17,CN:SZ:300408,1,0.6375,tech_bottleneck,Tech Bottleneck Combo,strategy_manifest,三环集团",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda *, trade_date: [
+            {
+                "module": "review_queue_strategy_manifest",
+                "status": "success",
+                "artifact_path": str(tmp_path),
+                "latest_trade_date": trade_date,
+                "run_id": "strategy-eod-2026-06-17-local",
+            },
+            {
+                "module": "strategy_lhb_shortline",
+                "status": "success",
+                "artifact_path": str(artifact),
+                "latest_trade_date": trade_date,
+                "run_id": "strategy-eod-2026-06-17-local",
+            },
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-17", limit=10)
+
+    by_asset = {row["asset_id"]: row for row in rows}
+    assert by_asset["CN:SZ:002636"]["score_total"] == 100.0
+    assert by_asset["CN:SH:601963"]["score_total"] == 95.0
+    assert by_asset["CN:SZ:300408"]["score_total"] == 63.75
+    assert by_asset["CN:SZ:002636"]["score_source"] == "strategy_rank_score"
+    assert by_asset["CN:SZ:300408"]["score_source"] == "bottleneck_score"
+
+
 def test_build_review_queue_groups_all_buckets_and_sorts(monkeypatch):
     score_rows = [
         _score("000003.SZ", 3, 70),
