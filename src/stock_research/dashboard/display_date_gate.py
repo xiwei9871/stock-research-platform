@@ -158,9 +158,11 @@ def _evaluate_run(trade_date: str, run_id: str, rows: list[dict[str, Any]]) -> d
 def _tech_candidate_snapshot_failures(trade_date: str, by_module: dict[str, dict[str, Any]]) -> list[str]:
     metadata = by_module.get("strategy_tech_bottleneck", {}).get("metadata")
     if not isinstance(metadata, dict):
-        return []
+        return ["tech_bottleneck:candidate_snapshot_missing"]
     snapshot_date = _candidate_snapshot_latest_date(metadata)
-    if snapshot_date and snapshot_date != trade_date:
+    if not snapshot_date:
+        return ["tech_bottleneck:candidate_snapshot_missing"]
+    if snapshot_date != trade_date:
         return [f"tech_bottleneck:candidate_snapshot_stale:{snapshot_date}"]
     return []
 

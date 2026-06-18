@@ -152,8 +152,12 @@ def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[
     manifest_rows = _load_manifest_strategy_rows(trade_date=trade_date, limit=limit)
     if manifest_rows:
         return _attach_asset_names(manifest_rows)
+    suppress_tech_fallback = _has_untrusted_tech_manifest(trade_date=trade_date)
     artifact_rows = _load_strategy_artifact_topn_rows(trade_date=trade_date, limit=limit)
     db_rows = _load_db_strategy_position_rows(trade_date=trade_date, limit=limit)
+    if suppress_tech_fallback:
+        artifact_rows = _without_tech_bottleneck_rows(artifact_rows)
+        db_rows = _without_tech_bottleneck_rows(db_rows)
     return _attach_asset_names(
         _select_latest_strategy_sources(artifact_rows=artifact_rows, db_rows=db_rows)
     )
@@ -187,6 +191,25 @@ def _manifest_strategy_snapshot_valid(module: dict[str, Any]) -> bool:
     snapshot_date = _candidate_snapshot_latest_date(metadata)
     manifest_trade_date = str(module.get("trade_date") or module.get("latest_trade_date") or "")[:10]
     return bool(snapshot_date and manifest_trade_date and snapshot_date == manifest_trade_date)
+
+
+def _has_untrusted_tech_manifest(*, trade_date: str) -> bool:
+    if not trade_date:
+        return False
+    try:
+        modules = list(load_latest_data_run_manifest(trade_date=trade_date))
+    except Exception:
+        return False
+    for module in modules:
+        if str(module.get("module") or "") != "strategy_tech_bottleneck":
+            continue
+        if str(module.get("status") or "") == "success" and not _manifest_strategy_snapshot_valid(module):
+            return True
+    return False
+
+
+def _without_tech_bottleneck_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if str(row.get("strategy_id") or "") != "tech_bottleneck"]
 
 
 def _candidate_snapshot_latest_date(metadata: dict[str, Any]) -> str:

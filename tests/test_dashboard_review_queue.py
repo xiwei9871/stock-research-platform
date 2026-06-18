@@ -473,6 +473,34 @@ def test_load_manifest_strategy_rows_rejects_missing_tech_candidate_snapshot(mon
     assert rows == []
 
 
+def test_load_active_strategy_topn_rows_suppresses_tech_fallback_when_manifest_untrusted(monkeypatch):
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda *, trade_date: [
+            {
+                "module": "strategy_tech_bottleneck",
+                "status": "success",
+                "trade_date": "2026-06-18",
+                "latest_trade_date": "2026-06-18",
+                "artifact_path": "",
+                "metadata": {},
+            }
+        ],
+    )
+    fallback_rows = [
+        _strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+        _strategy_position("CN:SZ:300408", 1, strategy_id="tech_bottleneck", strategy_name="Tech Bottleneck Combo"),
+    ]
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: fallback_rows)
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-18", limit=10)
+
+    assert [row["strategy_id"] for row in rows] == ["mid_trend"]
+
+
 def test_manifest_strategy_artifacts_normalize_strategy_scores(monkeypatch, tmp_path):
     artifact = tmp_path / "strategy_review.csv"
     artifact.write_text(

@@ -171,6 +171,35 @@ def test_select_display_date_blocks_missing_tech_candidates_after_cutoff(monkeyp
     assert "missing:tech_bottleneck_candidates" in result["blocking_reasons"]
 
 
+def test_select_display_date_blocks_missing_tech_candidate_snapshot_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+    now = datetime(2026, 6, 18, 20, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+    modules = [
+        (
+            {
+                **row,
+                "metadata": {"summary": _valid_strategy_summary("tech_bottleneck")},
+            }
+            if row["module"] == "strategy_tech_bottleneck"
+            else row
+        )
+        for row in _ready_modules("2026-06-18")
+    ]
+
+    result = select_display_date(
+        modules,
+        now=now,
+        latest_market_date="2026-06-18",
+    )
+
+    assert result["display_trade_date"] == ""
+    assert result["candidate_status"] == "incomplete"
+    assert "tech_bottleneck:candidate_snapshot_missing" in result["blocking_reasons"]
+
+
 def test_select_display_date_blocks_stale_tech_candidate_snapshot(monkeypatch):
     monkeypatch.setattr(
         "stock_research.dashboard.display_date_gate.load_strategy_contracts",
