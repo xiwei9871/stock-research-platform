@@ -175,6 +175,7 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         bad = normalized[column] > normalized["trade_date"]
         if bool(bad.any()):
             raise ValueError(message)
+    _validate_candidate_as_of_covers_evidence_dates(normalized)
     stale_data_as_of = normalized["data_as_of_date"] != normalized["trade_date"]
     if bool(stale_data_as_of.any()):
         raise ValueError("data_as_of_date must equal trade_date")
@@ -331,6 +332,7 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         frame["technical_as_of_date"],
         invalid_message="invalid base candidate date: technical_as_of_date",
     )
+    _validate_candidate_as_of_covers_evidence_dates(frame)
     return frame.dropna(subset=["asset_id", "first_hit_date", "financial_as_of_date", "technical_as_of_date"])
 
 
@@ -448,6 +450,12 @@ def _validate_ohlc_consistency(frame: pd.DataFrame) -> None:
         raise ValueError("high must be >= max(open, close, low)")
     if bool((frame["low"] > frame[["open", "close", "high"]].min(axis=1)).any()):
         raise ValueError("low must be <= min(open, close, high)")
+
+
+def _validate_candidate_as_of_covers_evidence_dates(frame: pd.DataFrame) -> None:
+    for column in ["first_hit_date", "financial_as_of_date", "technical_as_of_date"]:
+        if bool((frame["candidate_as_of_date"] < frame[column]).any()):
+            raise ValueError(f"candidate_as_of_date must be >= {column}")
 
 
 def _validate_finite_nonnegative(values: pd.Series, *, column: str) -> None:

@@ -45,7 +45,7 @@ def test_snapshot_excludes_future_first_hit_and_future_as_of_dates() -> None:
                     "asset_id": "C",
                     "stock_name": "Gamma",
                     "first_hit_date": "2025-01-02",
-                    "candidate_trade_date": "2025-01-02",
+                    "candidate_trade_date": "2025-01-05",
                     "hit_count": 7,
                     "primary_chain_id": "chain-c",
                     "primary_chain_name": "PCB",
@@ -372,6 +372,31 @@ def test_snapshot_rejects_duplicate_candidate_source_as_of_rows() -> None:
         )
 
 
+@pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])
+def test_snapshot_rejects_candidate_as_of_before_source_evidence_dates(column: str) -> None:
+    candidate = {
+        "asset_id": "A",
+        "stock_name": "Alpha",
+        "first_hit_date": "2025-01-01",
+        "candidate_trade_date": "2025-01-01",
+        "hit_count_as_of_date": 1,
+        "financial_as_of_date": "2025-01-01",
+        "technical_as_of_date": "2025-01-01",
+    }
+    candidate[column] = "2025-01-02"
+    for other_column in {"first_hit_date", "financial_as_of_date", "technical_as_of_date"} - {column}:
+        candidate[other_column] = "2025-01-01"
+
+    with pytest.raises(ValueError, match=f"candidate_as_of_date must be >= {column}"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame([candidate]),
+            prices=_prices(["A"], "2025-01-01", 2),
+            start_date="2025-01-01",
+            end_date="2025-01-02",
+            run_id="tech-bt-20250102-test",
+        )
+
+
 def test_snapshot_emits_candidate_only_when_asset_has_same_day_price() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -500,6 +525,18 @@ def test_validate_candidate_snapshot_frame_rejects_future_candidate_as_of_date()
     frame.loc[0, "candidate_as_of_date"] = "2025-01-04"
 
     with pytest.raises(ValueError, match="candidate_as_of_date must be <= trade_date"):
+        validate_candidate_snapshot_frame(frame)
+
+
+@pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])
+def test_validate_candidate_snapshot_frame_rejects_candidate_as_of_before_evidence_dates(column: str) -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "candidate_as_of_date"] = "2025-01-01"
+    for other_column in {"first_hit_date", "financial_as_of_date", "technical_as_of_date"} - {column}:
+        frame.loc[0, other_column] = "2025-01-01"
+    frame.loc[0, column] = "2025-01-02"
+
+    with pytest.raises(ValueError, match=f"candidate_as_of_date must be >= {column}"):
         validate_candidate_snapshot_frame(frame)
 
 
@@ -1177,7 +1214,7 @@ def _valid_snapshot_frame() -> pd.DataFrame:
                 "stock_name": "Alpha",
                 "first_hit_date": "2025-01-02",
                     "candidate_trade_date": "2025-01-02",
-                "candidate_as_of_date": "2025-01-02",
+                "candidate_as_of_date": "2025-01-03",
                 "hit_count_as_of_date": 1,
                 "primary_chain_id": "",
                 "primary_chain_name": "",
