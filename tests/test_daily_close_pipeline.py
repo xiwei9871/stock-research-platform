@@ -166,6 +166,66 @@ def test_daily_quality_requires_raw_qfq_and_hfq_for_each_symbol():
     assert quality["missing_symbols"] == ["000001.SZ:hfq"]
 
 
+def test_tushare_daily_rows_filter_to_expected_universe(monkeypatch):
+    class Frame:
+        empty = False
+
+        def __init__(self, rows):
+            self._rows = rows
+
+        def to_dict(self, orient):
+            assert orient == "records"
+            return self._rows
+
+    class Pro:
+        def daily(self, trade_date):
+            return Frame(
+                [
+                    {
+                        "ts_code": "000001.SZ",
+                        "open": 10,
+                        "high": 11,
+                        "low": 9,
+                        "close": 10,
+                        "pre_close": 9.8,
+                        "vol": 100,
+                        "amount": 1000,
+                        "pct_chg": 1.0,
+                    },
+                    {
+                        "ts_code": "920000.BJ",
+                        "open": 20,
+                        "high": 21,
+                        "low": 19,
+                        "close": 20,
+                        "pre_close": 19.8,
+                        "vol": 200,
+                        "amount": 2000,
+                        "pct_chg": 1.0,
+                    },
+                ]
+            )
+
+        def daily_basic(self, trade_date):
+            return Frame([])
+
+    class Tushare:
+        @staticmethod
+        def pro_api(token):
+            return Pro()
+
+    monkeypatch.setitem(__import__("sys").modules, "tushare", Tushare)
+
+    rows = dcp.fetch_tushare_daily_rows(
+        date(2026, 6, 18),
+        token="token",
+        timeout_seconds=5,
+        ts_codes=["000001.SZ"],
+    )
+
+    assert [row["ts_code"] for row in rows] == ["000001.SZ"]
+
+
 def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)

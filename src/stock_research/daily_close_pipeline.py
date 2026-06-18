@@ -507,8 +507,11 @@ def fetch_tushare_daily_rows(
             str(row["ts_code"]): row for row in basic.to_dict("records")
         } if basic is not None and not basic.empty else {}
         rows = []
+        requested = set(ts_codes or [])
         for row in daily.to_dict("records"):
             ts_code = str(row["ts_code"])
+            if requested and ts_code not in requested:
+                continue
             basic_row = basic_by_code.get(ts_code, {})
             rows.append(
                 {
