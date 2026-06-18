@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
@@ -125,7 +126,7 @@ def filter_yanbaoke_reports(
         rule = normalize_hibor_broker(f"{org_name} {title}", rules)
         if not rule:
             continue
-        if "pdf" not in [str(fmt).lower() for fmt in row.get("formats") or []]:
+        if "pdf" not in _normalize_yanbaoke_formats(row.get("formats")):
             continue
         enriched = dict(row)
         report_title = _clean_yanbaoke_report_title(title, stock_name=stock_name, symbol=symbol, broker=rule.get("institution_name", ""))
@@ -601,6 +602,27 @@ def _safe_date(value: Any) -> str:
         return pd.Timestamp(text).strftime("%Y-%m-%d")
     except Exception:
         return ""
+
+
+def _normalize_yanbaoke_formats(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            parsed = re.split(r"[,/;|\\s]+", text)
+    else:
+        parsed = value
+    if isinstance(parsed, str):
+        parsed = [parsed]
+    try:
+        return [str(fmt).strip().lower() for fmt in parsed if str(fmt).strip()]
+    except TypeError:
+        return [str(parsed).strip().lower()] if str(parsed).strip() else []
 
 
 def _date_from_yanbaoke_title(title: str) -> str:

@@ -442,18 +442,22 @@ def _source_backed_fields(detail: pd.DataFrame, evidence: pd.DataFrame) -> list[
 def _evidence_lookup(evidence: pd.DataFrame) -> dict[tuple[str, str], list[dict[str, str]]]:
     lookup: dict[tuple[str, str], list[dict[str, str]]] = {}
     for row in evidence.to_dict("records"):
-        key = (_text(row.get("asset_id")), _text(row.get("field")))
-        lookup.setdefault(key, []).append(
-            {
-                "source_type": _text(row.get("source_type")),
-                "source_path": _text(row.get("source_path")),
-                "source_date": _text(row.get("source_date")),
-                "claim": _text(row.get("claim")),
-                "supports_value": _text(row.get("supports_value")),
-                "evidence_tier": _text(row.get("evidence_tier")),
-                "excerpt": _text(row.get("excerpt")),
-            }
-        )
+        asset_id = _text(row.get("asset_id"))
+        field = _text(row.get("field"))
+        ref = {
+            "source_type": _text(row.get("source_type")),
+            "source_path": _text(row.get("source_path")),
+            "source_date": _text(row.get("source_date")),
+            "claim": _text(row.get("claim")),
+            "supports_value": _text(row.get("supports_value")),
+            "evidence_tier": _text(row.get("evidence_tier")),
+            "excerpt": _text(row.get("excerpt")),
+        }
+        lookup.setdefault((asset_id, field), []).append(ref)
+        if field == "supplier_concentration_evidence":
+            lookup.setdefault((asset_id, "supplier_concentration_type"), []).append(ref)
+        elif field == "supplier_concentration_type":
+            lookup.setdefault((asset_id, "supplier_concentration_evidence"), []).append(ref)
     return lookup
 
 

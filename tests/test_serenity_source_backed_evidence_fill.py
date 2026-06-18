@@ -327,6 +327,46 @@ def test_source_backed_fill_accepts_new_supplier_concentration_type_field(tmp_pa
     assert long.loc[("CN:SZ:300567", "revenue_exposure_bucket"), "evidence_grade"] == "artifact_only"
 
 
+def test_source_backed_fill_maps_legacy_supplier_evidence_alias_to_type_field(tmp_path: Path):
+    structured = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002222",
+                "stock_name": "福晶科技",
+                "primary_chain_id": "ai_optical_interconnect",
+                "revenue_exposure_bucket": "meaningful_segment_exposure",
+                "customer_certification_stage": "",
+                "supplier_concentration_type": "likely_concentrated_supply_chain",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002222",
+                "field": "supplier_concentration_evidence",
+                "source_type": "broker_report",
+                "source_path": "data/manual/reports/002222.pdf",
+                "source_date": "2025-06-03",
+                "supports_value": "",
+                "claim": "研报包含国产替代和稀缺供应链描述。",
+                "evidence_tier": "tier2",
+                "excerpt": "国产替代 稀缺",
+            }
+        ]
+    )
+
+    result = build_serenity_source_backed_evidence_fill(
+        structured_detail=structured,
+        evidence_seed=evidence,
+        output_dir=tmp_path,
+        run_id="unit",
+    )
+
+    long = result["long"].set_index(["asset_id", "field"])
+    assert long.loc[("CN:SZ:002222", "supplier_concentration_type"), "evidence_grade"] == "primary_partial"
+
+
 def test_customer_certification_seed_combines_announcements_investor_qa_and_reports():
     structured = pd.DataFrame(
         [

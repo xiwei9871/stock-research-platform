@@ -128,6 +128,38 @@ def test_filter_yanbaoke_reports_uses_b_when_a_absent():
     assert filtered.iloc[0]["selected_tier_reason"] == "fallback_B"
 
 
+def test_filter_yanbaoke_reports_accepts_string_formats_and_b_tier_broker_config():
+    reports = pd.DataFrame(
+        [
+            {
+                "uuid": "u1",
+                "title": "20240923-华鑫证券-福晶科技-002222.SZ-公司事件点评报告_业绩环比改善_5页_289kb",
+                "url": "https://pc.yanbaoke.cn/info/u1",
+                "time": "2024-09-24",
+                "pagenum": 5,
+                "org_name": "华鑫证券",
+                "rtype_name": "事件点评",
+                "formats": "['pdf', 'doc', 'ppt']",
+                "content": "",
+            }
+        ]
+    )
+
+    filtered = filter_yanbaoke_reports(
+        reports,
+        ts_code="002222.SZ",
+        stock_name="福晶科技",
+        start_date="2024-01-01",
+        end_date="2026-06-18",
+        institutions_path="config/hibor_institutions.csv",
+        fallback_tier="B",
+    )
+
+    assert filtered["uuid"].tolist() == ["u1"]
+    assert filtered.iloc[0]["broker"] == "华鑫证券"
+    assert filtered.iloc[0]["broker_tier"] == "B"
+
+
 def test_choose_yanbaoke_download_candidates_prioritizes_base_then_top10_depth():
     candidates = pd.DataFrame(
         [
