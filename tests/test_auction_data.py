@@ -34,6 +34,7 @@ from stock_research.auction_data import (
     run_tushare_auction_full_backfill_plan,
     sync_tushare_stock_auction_bars,
     ts_code_from_spot_symbol,
+    load_stock_auction_bars,
     upsert_stock_open_auction_spot_snapshots,
     upsert_stock_open_auction_minute_bars,
     upsert_stock_auction_bars,
@@ -1598,6 +1599,90 @@ def test_build_lhb_auction_observation_detail_accepts_database_decimal_values():
     detail = build_lhb_auction_observation_detail(trades=trades, auction_bars=auction_bars)
 
     assert round(detail.iloc[0]["signal_close_auction_return"], 6) == 0.05
+
+
+def test_load_stock_auction_bars_falls_back_to_daily_open_proxy(monkeypatch):
+    calls = []
+
+    def fake_fetch_all(conn, sql, params):
+        calls.append((sql, params))
+        if "FROM market.stock_auction_bar" in sql:
+            return []
+        if "FROM market_daily_bar" in sql:
+            return [
+                {
+                    "trade_date": "2025-01-03",
+                    "asset_id": "CN:SZ:300615",
+                    "open": Decimal("10.60"),
+                    "volume": Decimal("1200000"),
+                    "amount": Decimal("13000000"),
+                }
+            ]
+        raise AssertionError(sql)
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "fetch_all", fake_fetch_all)
+
+    rows = load_stock_auction_bars(
+        ts_codes=["300615.SZ"],
+        start_date="2025-01-03",
+        end_date="2025-01-03",
+    )
+
+    assert len(rows) == 1
+    row = rows.iloc[0]
+    assert row["ts_code"] == "300615.SZ"
+    assert row["auction_phase"] == "open_call"
+    assert row["open"] == Decimal("10.60")
+    assert row["close"] == Decimal("10.60")
+    assert row["vwap"] == Decimal("10.60")
+    assert row["source"] == "daily_open_proxy"
+    assert len(calls) == 2
+
+
+def test_load_stock_auction_bars_prefers_real_open_call_over_proxy(monkeypatch):
+    def fake_fetch_all(conn, sql, params):
+        if "FROM market.stock_auction_bar" in sql:
+            return [
+                {
+                    "trade_date": "2025-01-03",
+                    "ts_code": "300615.SZ",
+                    "auction_phase": "open_call",
+                    "open": Decimal("10.50"),
+                    "high": Decimal("10.70"),
+                    "low": Decimal("10.40"),
+                    "close": Decimal("10.65"),
+                    "volume": Decimal("100"),
+                    "amount": Decimal("1065"),
+                    "vwap": Decimal("10.65"),
+                    "source": "tushare",
+                }
+            ]
+        if "FROM market_daily_bar" in sql:
+            return [
+                {
+                    "trade_date": "2025-01-03",
+                    "asset_id": "CN:SZ:300615",
+                    "open": Decimal("10.60"),
+                    "volume": Decimal("1200000"),
+                    "amount": Decimal("13000000"),
+                }
+            ]
+        raise AssertionError(sql)
+
+    monkeypatch.setattr(auction_data, "connect", lambda service: _Context("conn"))
+    monkeypatch.setattr(auction_data, "fetch_all", fake_fetch_all)
+
+    rows = load_stock_auction_bars(
+        ts_codes=["300615.SZ"],
+        start_date="2025-01-03",
+        end_date="2025-01-03",
+    )
+
+    assert len(rows) == 1
+    row = rows.iloc[0]
+    assert row["close"] == Decimal("10.65")
+    assert row["source"] == "tushare"
 
 
 def test_build_lhb_auction_enhanced_rule_scan_v1_scans_thresholds_and_robustness():

@@ -1488,7 +1488,7 @@ def _phase_frame(auction_bars: pd.DataFrame, auction_phase: str, prefix: str) ->
     if auction_bars.empty:
         return pd.DataFrame(columns=["trade_date", "ts_code"])
     frame = auction_bars[auction_bars["auction_phase"].eq(auction_phase)].copy()
-    keep = ["trade_date", "ts_code", "open", "close", "amount", "vwap"]
+    keep = ["trade_date", "ts_code", "open", "close", "amount", "vwap", "source"]
     frame = frame[[column for column in keep if column in frame.columns]]
     rename = {
         "trade_date": f"{prefix}_trade_date",
@@ -1496,6 +1496,7 @@ def _phase_frame(auction_bars: pd.DataFrame, auction_phase: str, prefix: str) ->
         "close": f"{prefix}_close",
         "amount": f"{prefix}_amount",
         "vwap": f"{prefix}_vwap",
+        "source": f"{prefix}_source",
     }
     return frame.rename(columns=rename)
 
@@ -1599,14 +1600,77 @@ def load_stock_auction_bars(
 ) -> pd.DataFrame:
     sql = """
     SELECT trade_date::text AS trade_date, ts_code, auction_phase, open, high, low, close,
-           volume, amount, vwap
+           volume, amount, vwap, source
     FROM market.stock_auction_bar
     WHERE ts_code = ANY(%s)
       AND trade_date BETWEEN %s AND %s
     ORDER BY trade_date, ts_code, auction_phase
     """
     with connect(research_service) as conn:
-        return pd.DataFrame(fetch_all(conn, sql, [ts_codes, start_date, end_date]))
+        real_rows = fetch_all(conn, sql, [ts_codes, start_date, end_date])
+        proxy_rows = _load_daily_open_auction_proxy_rows(
+            conn=conn,
+            ts_codes=ts_codes,
+            start_date=start_date,
+            end_date=end_date,
+            real_rows=real_rows,
+        )
+    rows = [*real_rows, *proxy_rows]
+    return pd.DataFrame(rows).sort_values(
+        ["trade_date", "ts_code", "auction_phase", "source"],
+        kind="stable",
+    ).reset_index(drop=True) if rows else pd.DataFrame()
+
+
+def _load_daily_open_auction_proxy_rows(
+    *,
+    conn: Any,
+    ts_codes: list[str],
+    start_date: str,
+    end_date: str,
+    real_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not ts_codes:
+        return []
+
+    existing_open = {
+        (str(row.get("trade_date")), str(row.get("ts_code")).upper())
+        for row in real_rows
+        if str(row.get("auction_phase")) == "open_call"
+    }
+    asset_to_ts_code = {asset_id_from_ts_code(code): str(code).upper() for code in ts_codes}
+    sql = """
+    SELECT trade_date::text AS trade_date, asset_id, open, volume, amount
+    FROM market_daily_bar
+    WHERE asset_id = ANY(%s)
+      AND trade_date BETWEEN %s AND %s
+      AND adjust_type = 'raw'
+    ORDER BY trade_date, asset_id
+    """
+    daily_rows = fetch_all(conn, sql, [list(asset_to_ts_code.keys()), start_date, end_date])
+    proxy_rows: list[dict[str, Any]] = []
+    for row in daily_rows:
+        trade_date = str(row["trade_date"])
+        ts_code = asset_to_ts_code.get(str(row["asset_id"]))
+        if not ts_code or (trade_date, ts_code) in existing_open:
+            continue
+        open_price = row.get("open")
+        proxy_rows.append(
+            {
+                "trade_date": trade_date,
+                "ts_code": ts_code,
+                "auction_phase": "open_call",
+                "open": open_price,
+                "high": open_price,
+                "low": open_price,
+                "close": open_price,
+                "volume": row.get("volume"),
+                "amount": row.get("amount"),
+                "vwap": open_price,
+                "source": "daily_open_proxy",
+            }
+        )
+    return proxy_rows
 
 
 def load_stock_close_auction_bars(
