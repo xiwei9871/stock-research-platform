@@ -81,9 +81,9 @@ def run_tech_bottleneck_eod_from_frames(
     equity = pd.DataFrame(strategy["equity_curve"])
     positions = pd.DataFrame(strategy["positions"])
     trades = pd.DataFrame(strategy["trades"])
-    review = _review_rows_from_positions(
-        positions,
+    review = _review_rows_from_snapshots(
         snapshots=snapshots,
+        trade_date=end_date,
         strategy_run_id=run_id,
     )
     review.to_csv(paths["review_path"], index=False)
@@ -189,10 +189,10 @@ def run_tech_bottleneck_eod(
     )
 
 
-def _review_rows_from_positions(
-    positions: pd.DataFrame,
-    *,
+def _review_rows_from_snapshots(
     snapshots: pd.DataFrame,
+    *,
+    trade_date: str,
     strategy_run_id: str,
 ) -> pd.DataFrame:
     columns = [
@@ -210,17 +210,13 @@ def _review_rows_from_positions(
         "source_rank",
         "review_tier",
     ]
-    if positions.empty:
+    if snapshots.empty:
         return pd.DataFrame(columns=columns)
 
-    latest_date = str(positions["trade_date"].dropna().astype(str).max())
-    frame = positions[positions["trade_date"].astype(str) == latest_date].copy()
-    if "bottleneck_rank" not in frame.columns or "bottleneck_score" not in frame.columns:
-        latest_snapshot = snapshots[snapshots["trade_date"].astype(str) == latest_date][
-            ["asset_id", "bottleneck_rank", "bottleneck_score"]
-        ].copy()
-        frame = frame.merge(latest_snapshot, on="asset_id", how="left")
-
+    frame = snapshots[snapshots["trade_date"].astype(str) == str(trade_date)].copy()
+    if frame.empty:
+        raise ValueError(f"Tech Bottleneck review snapshot missing for trade_date {trade_date}")
+    frame = frame[pd.to_numeric(frame["bottleneck_rank"], errors="coerce") <= TECH_BOTTLENECK_EOD_TOP_N].copy()
     frame["rank"] = pd.to_numeric(frame["bottleneck_rank"], errors="coerce").fillna(999).astype(int)
     frame["score_total"] = pd.to_numeric(frame["bottleneck_score"], errors="coerce").fillna(0.0) * 100.0
     frame["score_source"] = "bottleneck_score"

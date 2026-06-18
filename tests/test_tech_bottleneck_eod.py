@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from stock_research.cli import build_parser
+from stock_research.cli import main_for_args
 from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod, run_tech_bottleneck_eod_from_frames
 
 
@@ -34,6 +35,8 @@ def test_tech_bottleneck_eod_writes_artifacts_and_manifest_entries(tmp_path: Pat
     for key, path in expected_paths.items():
         assert Path(result[key]) == path
         assert path.exists()
+    review = pd.read_csv(expected_paths["review_path"])
+    assert set(review["trade_date"]) == {"2025-01-08"}
 
     assert {entry["module"] for entry in entries} == {"tech_bottleneck_candidates", "strategy_tech_bottleneck"}
     candidate_entry = next(entry for entry in entries if entry["module"] == "tech_bottleneck_candidates")
@@ -148,6 +151,39 @@ def test_cli_parser_requires_base_candidates_path() -> None:
                 "outputs/eod",
             ]
         )
+
+
+def test_cli_main_dispatches_tech_bottleneck_eod(monkeypatch, tmp_path: Path) -> None:
+    calls: list[dict[str, str]] = []
+
+    def fake_run(**kwargs):
+        calls.append({key: str(value) for key, value in kwargs.items()})
+        return {"ok": True}
+
+    monkeypatch.setattr("stock_research.tech_bottleneck_eod.run_tech_bottleneck_eod", fake_run)
+
+    main_for_args(
+        [
+            "run-tech-bottleneck-eod",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-01-08",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--base-candidates-path",
+            str(tmp_path / "strict_candidates.csv"),
+        ]
+    )
+
+    assert calls == [
+        {
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-08",
+            "output_dir": str(tmp_path / "out"),
+            "base_candidates_path": str(tmp_path / "strict_candidates.csv"),
+        }
+    ]
 
 
 def _unexpected_loader(*args, **kwargs) -> pd.DataFrame:
