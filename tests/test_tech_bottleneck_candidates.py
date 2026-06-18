@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 import pandas as pd
 import pytest
 
@@ -244,6 +246,30 @@ def test_build_snapshot_normalizes_api_boundary_dates() -> None:
     assert snapshots["trade_date"].unique().tolist() == ["2025-01-02"]
 
 
+def test_snapshot_emits_candidate_only_when_asset_has_same_day_price() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [
+                {"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2},
+                {"asset_id": "B", "stock_name": "Beta", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2},
+            ]
+        ),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2025-01-01", "asset_id": "A", "open": 10.0, "high": 10.0, "low": 9.0, "close": 10.0},
+                {"trade_date": "2025-01-01", "asset_id": "B", "open": 10.0, "high": 10.0, "low": 9.0, "close": 10.0},
+                {"trade_date": "2025-01-02", "asset_id": "B", "open": 11.0, "high": 11.0, "low": 10.0, "close": 11.0},
+            ]
+        ),
+        start_date="2025-01-02",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-test",
+    )
+
+    assert snapshots["trade_date"].unique().tolist() == ["2025-01-02"]
+    assert snapshots["asset_id"].tolist() == ["B"]
+
+
 def test_explicit_hit_count_as_of_date_must_be_numeric() -> None:
     with pytest.raises(ValueError, match="hit_count_as_of_date must be numeric"):
         build_point_in_time_candidate_snapshots(
@@ -339,6 +365,42 @@ def test_validate_candidate_snapshot_frame_rejects_non_numeric_metrics(column: s
     frame.loc[0, column] = "not-a-number"
 
     with pytest.raises(ValueError, match=f"{column} must be numeric"):
+        validate_candidate_snapshot_frame(frame)
+
+
+@pytest.mark.parametrize("column", ["bottleneck_score", "hit_count_as_of_date", "bottleneck_rank"])
+def test_validate_candidate_snapshot_frame_rejects_non_finite_numeric_metrics(column: str) -> None:
+    frame = _valid_snapshot_frame()
+    frame[column] = frame[column].astype(object)
+    frame.loc[0, column] = float("inf")
+
+    with pytest.raises(ValueError, match=f"{column} must be finite"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_negative_hit_count() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "hit_count_as_of_date"] = -1
+
+    with pytest.raises(ValueError, match="hit_count_as_of_date must be >= 0"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_negative_score() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "bottleneck_score"] = -0.1
+
+    with pytest.raises(ValueError, match="bottleneck_score must be >= 0"):
+        validate_candidate_snapshot_frame(frame)
+
+
+@pytest.mark.parametrize("rank", [0, 1.5])
+def test_validate_candidate_snapshot_frame_rejects_non_positive_or_decimal_rank(rank: float) -> None:
+    frame = _valid_snapshot_frame()
+    frame["bottleneck_rank"] = frame["bottleneck_rank"].astype(object)
+    frame.loc[0, "bottleneck_rank"] = rank
+
+    with pytest.raises(ValueError, match="bottleneck_rank must be finite positive integer"):
         validate_candidate_snapshot_frame(frame)
 
 
@@ -618,6 +680,40 @@ def test_snapshot_rejects_duplicate_price_rows_before_dropping_missing_close() -
             end_date="2025-01-01",
             run_id="tech-bt-20250101-test",
         )
+
+
+def test_snapshot_rejects_invalid_price_trade_date() -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices.loc[0, "trade_date"] = "not-a-date"
+
+    with pytest.raises(ValueError, match="invalid price date: trade_date"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_snapshot_always_uses_formal_engine_version() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 1),
+        start_date="2025-01-01",
+        end_date="2025-01-01",
+        run_id="tech-bt-20250101-test",
+    )
+
+    assert snapshots["engine_version"].unique().tolist() == [TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION]
+
+
+def test_snapshot_builder_does_not_expose_engine_version_override() -> None:
+    assert "engine_version" not in inspect.signature(build_point_in_time_candidate_snapshots).parameters
 
 
 @pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])

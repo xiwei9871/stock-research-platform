@@ -38,7 +38,6 @@ def build_point_in_time_candidate_snapshots(
     start_date: str,
     end_date: str,
     run_id: str,
-    engine_version: str = TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
 ) -> pd.DataFrame:
     start_date = _normalize_date_arg(start_date, name="start_date")
     end_date = _normalize_date_arg(end_date, name="end_date")
@@ -59,6 +58,7 @@ def build_point_in_time_candidate_snapshots(
             & (candidates["financial_as_of_date"] <= trade_date)
             & (candidates["technical_as_of_date"] <= trade_date)
         ]
+        eligible = eligible[eligible["asset_id"].isin(_priced_assets_for_day(closes, trade_date))]
         if eligible.empty:
             continue
         max_evidence = float(np.log1p(eligible["hit_count_as_of_date"]).max())
@@ -88,7 +88,7 @@ def build_point_in_time_candidate_snapshots(
                     "filter_decision": "pass",
                     "filter_reason": str(getattr(row, "filter_reason", "") or ""),
                     "bottleneck_score": score,
-                    "engine_version": engine_version,
+                    "engine_version": TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
                     "run_id": str(run_id),
                 }
             )
@@ -139,6 +139,15 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         normalized["bottleneck_rank"],
         invalid_message="bottleneck_rank must be numeric",
     )
+    _validate_finite_nonnegative(
+        normalized["hit_count_as_of_date"],
+        column="hit_count_as_of_date",
+    )
+    _validate_finite_nonnegative(
+        normalized["bottleneck_score"],
+        column="bottleneck_score",
+    )
+    _validate_positive_integer_rank(normalized["bottleneck_rank"])
 
     checks = [
         ("first_hit_date", "first_hit_date must be <= trade_date"),
@@ -157,8 +166,6 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
     if bool(duplicate_ranks.any()):
         raise ValueError("duplicate bottleneck_rank within trade_date")
     for trade_date, day in normalized.groupby("trade_date", sort=False):
-        if bool((day["bottleneck_rank"] % 1 != 0).any()):
-            raise ValueError("bottleneck_rank must be contiguous within trade_date")
         ranks = sorted(int(rank) for rank in day["bottleneck_rank"].tolist())
         if ranks != list(range(1, len(ranks) + 1)):
             raise ValueError("bottleneck_rank must be contiguous within trade_date")
@@ -284,7 +291,10 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         return pd.DataFrame(columns=["trade_date", "asset_id", "open", "high", "low", "close"])
 
     frame = prices.copy()
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["trade_date"] = _parse_required_date_column(
+        frame["trade_date"],
+        invalid_message="invalid price date: trade_date",
+    )
     frame["asset_id"] = frame["asset_id"].astype(str)
     frame = frame[frame["trade_date"].le(end_date)]
     duplicates = frame.duplicated(subset=["trade_date", "asset_id"], keep=False)
@@ -315,6 +325,13 @@ def _bottleneck_score(*, row: Any, trade_date: str, closes: pd.DataFrame, high_1
     return float(0.45 * evidence_norm + 0.25 * freshness + 0.30 * low_position)
 
 
+def _priced_assets_for_day(closes: pd.DataFrame, trade_date: str) -> set[str]:
+    if trade_date not in closes.index:
+        return set()
+    row = closes.loc[trade_date]
+    return {str(asset_id) for asset_id, close in row.items() if pd.notna(close)}
+
+
 def _string_column(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series([""] * len(frame), index=frame.index, dtype="object")
@@ -340,6 +357,23 @@ def _numeric_required_column(values: pd.Series, *, invalid_message: str) -> pd.S
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed
+
+
+def _validate_finite_nonnegative(values: pd.Series, *, column: str) -> None:
+    finite = np.isfinite(values.astype(float))
+    if bool((~finite).any()):
+        raise ValueError(f"{column} must be finite")
+    if bool((values < 0).any()):
+        raise ValueError(f"{column} must be >= 0")
+
+
+def _validate_positive_integer_rank(values: pd.Series) -> None:
+    finite = np.isfinite(values.astype(float))
+    if bool((~finite).any()):
+        raise ValueError("bottleneck_rank must be finite")
+    positive_integer = (values > 0) & (values % 1 == 0)
+    if bool((~positive_integer).any()):
+        raise ValueError("bottleneck_rank must be finite positive integer")
 
 
 def _parse_bool_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
