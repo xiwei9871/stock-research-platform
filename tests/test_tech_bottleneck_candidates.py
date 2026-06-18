@@ -125,6 +125,40 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
     assert with_future_candidate["filter_reason"].unique().tolist() == ["static_source_hit_count"]
 
 
+def test_one_day_snapshot_score_matches_full_rebuild_with_same_price_history() -> None:
+    candidates = pd.DataFrame(
+        [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 3}]
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-01", "asset_id": "A", "open": 100.0, "high": 100.0, "low": 99.0, "close": 100.0},
+            {"trade_date": "2025-01-02", "asset_id": "A", "open": 50.0, "high": 50.0, "low": 49.0, "close": 50.0},
+            {"trade_date": "2025-01-03", "asset_id": "A", "open": 20.0, "high": 20.0, "low": 19.0, "close": 20.0},
+            {"trade_date": "2025-01-04", "asset_id": "A", "open": 10.0, "high": 10.0, "low": 9.0, "close": 10.0},
+            {"trade_date": "2025-01-05", "asset_id": "A", "open": 10.0, "high": 10.0, "low": 9.0, "close": 10.0},
+        ]
+    )
+    full_rebuild = build_point_in_time_candidate_snapshots(
+        base_candidates=candidates,
+        prices=prices,
+        start_date="2025-01-01",
+        end_date="2025-01-05",
+        run_id="tech-bt-20250105-full",
+    )
+    one_day = build_point_in_time_candidate_snapshots(
+        base_candidates=candidates,
+        prices=prices,
+        start_date="2025-01-05",
+        end_date="2025-01-05",
+        run_id="tech-bt-20250105-daily",
+    )
+
+    full_score = full_rebuild.loc[full_rebuild["trade_date"].eq("2025-01-05"), "bottleneck_score"].iloc[0]
+    one_day_score = one_day.loc[one_day["trade_date"].eq("2025-01-05"), "bottleneck_score"].iloc[0]
+
+    assert one_day_score == pytest.approx(full_score)
+
+
 def test_explicit_hit_count_as_of_date_is_used_without_static_filter_reason() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -206,6 +240,54 @@ def test_validate_candidate_snapshot_frame_rejects_invalid_dates() -> None:
         validate_candidate_snapshot_frame(frame)
 
 
+def test_validate_candidate_snapshot_frame_rejects_duplicate_trade_date_asset_id() -> None:
+    frame = pd.concat([_valid_snapshot_frame(), _valid_snapshot_frame()], ignore_index=True)
+    frame.loc[1, "bottleneck_rank"] = 2
+
+    with pytest.raises(ValueError, match="duplicate candidate snapshot rows for trade_date and asset_id"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_duplicate_rank_within_trade_date() -> None:
+    frame = _ranked_snapshot_frame([1, 1])
+
+    with pytest.raises(ValueError, match="duplicate bottleneck_rank within trade_date"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_non_contiguous_ranks() -> None:
+    frame = _ranked_snapshot_frame([1, 3])
+
+    with pytest.raises(ValueError, match="bottleneck_rank must be contiguous within trade_date"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_top5_mismatch() -> None:
+    frame = _ranked_snapshot_frame([1, 2])
+    frame.loc[0, "is_top5"] = False
+
+    with pytest.raises(ValueError, match="is_top5 must equal bottleneck_rank <= 5"):
+        validate_candidate_snapshot_frame(frame)
+
+
+@pytest.mark.parametrize("column", ["bottleneck_score", "hit_count_as_of_date"])
+def test_validate_candidate_snapshot_frame_rejects_non_numeric_metrics(column: str) -> None:
+    frame = _valid_snapshot_frame()
+    frame[column] = frame[column].astype(object)
+    frame.loc[0, column] = "not-a-number"
+
+    with pytest.raises(ValueError, match=f"{column} must be numeric"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_invalid_filter_decision() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "filter_decision"] = "maybe"
+
+    with pytest.raises(ValueError, match="filter_decision must be one of"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -278,6 +360,41 @@ def test_validate_base_candidate_source_checks_all_present_freshness_metadata() 
         validate_base_candidate_source_freshness(invalid_later_column, end_date="2025-01-03")
 
 
+def test_validate_base_candidate_source_rejects_stale_coverage_even_with_fresh_generation_date() -> None:
+    stale_coverage = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "data_as_of_date": "2025-01-02",
+                "generated_trade_date": "2025-01-03",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="base candidate source is stale"):
+        validate_base_candidate_source_freshness(stale_coverage, end_date="2025-01-03")
+
+
+def test_validate_base_candidate_source_rejects_generation_only_freshness_metadata() -> None:
+    generation_only = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "generated_trade_date": "2025-01-03",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="base candidate source freshness metadata missing"):
+        validate_base_candidate_source_freshness(generation_only, end_date="2025-01-03")
+
+
 def test_validate_base_candidate_source_requires_formal_freshness_metadata() -> None:
     missing = pd.DataFrame(
         [
@@ -328,6 +445,28 @@ def test_snapshot_rejects_duplicate_price_rows_before_dropping_missing_close() -
         )
 
 
+@pytest.mark.parametrize("column", ["first_hit_date", "financial_as_of_date", "technical_as_of_date"])
+def test_snapshot_rejects_invalid_base_candidate_dates(column: str) -> None:
+    candidate = {
+        "asset_id": "A",
+        "stock_name": "Alpha",
+        "first_hit_date": "2025-01-01",
+        "hit_count": 3,
+        "financial_as_of_date": "2025-01-01",
+        "technical_as_of_date": "2025-01-01",
+    }
+    candidate[column] = "not-a-date"
+
+    with pytest.raises(ValueError, match=f"invalid base candidate date: {column}"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame([candidate]),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
 def _valid_snapshot_frame() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -353,6 +492,18 @@ def _valid_snapshot_frame() -> pd.DataFrame:
             }
         ]
     )
+
+
+def _ranked_snapshot_frame(ranks: list[int]) -> pd.DataFrame:
+    rows = []
+    for index, rank in enumerate(ranks):
+        row = _valid_snapshot_frame().iloc[0].to_dict()
+        row["asset_id"] = f"A{index}"
+        row["stock_name"] = f"Name{index}"
+        row["bottleneck_rank"] = rank
+        row["is_top5"] = rank <= 5
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def _prices(asset_ids: list[str], start_date: str, periods: int) -> pd.DataFrame:

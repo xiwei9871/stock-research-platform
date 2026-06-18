@@ -119,6 +119,18 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
             normalized[column],
             invalid_message=f"invalid date in candidate snapshot: {column}",
         )
+    normalized["hit_count_as_of_date"] = _numeric_required_column(
+        normalized["hit_count_as_of_date"],
+        invalid_message="hit_count_as_of_date must be numeric",
+    )
+    normalized["bottleneck_score"] = _numeric_required_column(
+        normalized["bottleneck_score"],
+        invalid_message="bottleneck_score must be numeric",
+    )
+    normalized["bottleneck_rank"] = _numeric_required_column(
+        normalized["bottleneck_rank"],
+        invalid_message="bottleneck_rank must be numeric",
+    )
 
     checks = [
         ("first_hit_date", "first_hit_date must be <= trade_date"),
@@ -130,6 +142,25 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         bad = normalized[column] > normalized["trade_date"]
         if bool(bad.any()):
             raise ValueError(message)
+    duplicates = normalized.duplicated(subset=["trade_date", "asset_id"], keep=False)
+    if bool(duplicates.any()):
+        raise ValueError("duplicate candidate snapshot rows for trade_date and asset_id")
+    duplicate_ranks = normalized.duplicated(subset=["trade_date", "bottleneck_rank"], keep=False)
+    if bool(duplicate_ranks.any()):
+        raise ValueError("duplicate bottleneck_rank within trade_date")
+    for trade_date, day in normalized.groupby("trade_date", sort=False):
+        if bool((day["bottleneck_rank"] % 1 != 0).any()):
+            raise ValueError("bottleneck_rank must be contiguous within trade_date")
+        ranks = sorted(int(rank) for rank in day["bottleneck_rank"].tolist())
+        if ranks != list(range(1, len(ranks) + 1)):
+            raise ValueError("bottleneck_rank must be contiguous within trade_date")
+    expected_top5 = normalized["bottleneck_rank"] <= 5
+    actual_top5 = _parse_bool_column(normalized["is_top5"], invalid_message="is_top5 must be boolean")
+    if bool((actual_top5 != expected_top5).any()):
+        raise ValueError("is_top5 must equal bottleneck_rank <= 5")
+    invalid_filter = ~normalized["filter_decision"].isin(["pass", "fail"])
+    if bool(invalid_filter.any()):
+        raise ValueError("filter_decision must be one of: pass, fail")
 
 
 def write_candidate_snapshots(frame: pd.DataFrame, path: str | Path) -> Path:
@@ -157,20 +188,25 @@ def read_base_candidate_source(path: str | Path, *, end_date: str) -> pd.DataFra
 def validate_base_candidate_source_freshness(frame: pd.DataFrame, *, end_date: str) -> None:
     if frame.empty:
         raise ValueError("base candidate source is empty")
-    latest_dates: list[str] = []
-    for column in ["source_latest_trade_date", "data_as_of_date", "generated_trade_date"]:
+    coverage_columns = ["source_latest_trade_date", "data_as_of_date"]
+    latest_coverage_dates: list[str] = []
+    for column in coverage_columns:
         if column in frame.columns:
             parsed = _parse_required_date_column(
                 frame[column],
                 invalid_message=f"invalid base candidate freshness metadata: {column}",
             )
-            latest_dates.append(str(parsed.max()))
-    if not latest_dates:
+            latest = str(parsed.max())
+            if latest < end_date:
+                raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
+            latest_coverage_dates.append(latest)
+    if "generated_trade_date" in frame.columns:
+        _parse_required_date_column(
+            frame["generated_trade_date"],
+            invalid_message="invalid base candidate freshness metadata: generated_trade_date",
+        )
+    if not latest_coverage_dates:
         raise ValueError("base candidate source freshness metadata missing")
-    if any(latest >= end_date for latest in latest_dates):
-        return
-    latest = max(latest_dates)
-    raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
 
 
 def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -193,7 +229,10 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     frame = candidates.copy()
     frame["asset_id"] = frame["asset_id"].astype(str)
     frame["stock_name"] = _string_column(frame, "stock_name")
-    frame["first_hit_date"] = pd.to_datetime(frame["first_hit_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["first_hit_date"] = _parse_required_date_column(
+        frame["first_hit_date"],
+        invalid_message="invalid base candidate date: first_hit_date",
+    )
     if "hit_count_as_of_date" in frame.columns:
         frame["hit_count_as_of_date"] = _numeric_required_column(
             frame["hit_count_as_of_date"],
@@ -211,8 +250,14 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         frame["financial_as_of_date"] = frame["first_hit_date"]
     if "technical_as_of_date" not in frame.columns:
         frame["technical_as_of_date"] = frame["first_hit_date"]
-    frame["financial_as_of_date"] = pd.to_datetime(frame["financial_as_of_date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    frame["technical_as_of_date"] = pd.to_datetime(frame["technical_as_of_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["financial_as_of_date"] = _parse_required_date_column(
+        frame["financial_as_of_date"],
+        invalid_message="invalid base candidate date: financial_as_of_date",
+    )
+    frame["technical_as_of_date"] = _parse_required_date_column(
+        frame["technical_as_of_date"],
+        invalid_message="invalid base candidate date: technical_as_of_date",
+    )
     return frame.dropna(subset=["asset_id", "first_hit_date", "financial_as_of_date", "technical_as_of_date"])
 
 
@@ -223,7 +268,7 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
     frame = prices.copy()
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
     frame["asset_id"] = frame["asset_id"].astype(str)
-    frame = frame[frame["trade_date"].between(start_date, end_date)]
+    frame = frame[frame["trade_date"].le(end_date)]
     duplicates = frame.duplicated(subset=["trade_date", "asset_id"], keep=False)
     if bool(duplicates.any()):
         raise ValueError("duplicate price rows for trade_date and asset_id")
@@ -267,6 +312,17 @@ def _parse_required_date_column(values: pd.Series, *, invalid_message: str) -> p
 
 def _numeric_required_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
     parsed = pd.to_numeric(values, errors="coerce")
+    if bool(parsed.isna().any()):
+        raise ValueError(invalid_message)
+    return parsed
+
+
+def _parse_bool_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
+    if pd.api.types.is_bool_dtype(values):
+        return values
+    normalized = values.astype(str).str.lower()
+    mapping = {"true": True, "false": False}
+    parsed = normalized.map(mapping)
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed
