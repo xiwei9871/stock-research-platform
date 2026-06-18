@@ -185,10 +185,8 @@ def _manifest_strategy_snapshot_valid(module: dict[str, Any]) -> bool:
         return True
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     snapshot_date = _candidate_snapshot_latest_date(metadata)
-    if not snapshot_date:
-        return True
     manifest_trade_date = str(module.get("trade_date") or module.get("latest_trade_date") or "")[:10]
-    return snapshot_date == manifest_trade_date
+    return bool(snapshot_date and manifest_trade_date and snapshot_date == manifest_trade_date)
 
 
 def _candidate_snapshot_latest_date(metadata: dict[str, Any]) -> str:

@@ -440,6 +440,39 @@ def test_load_manifest_strategy_rows_rejects_stale_tech_candidate_snapshot(monke
     assert rows == []
 
 
+def test_load_manifest_strategy_rows_rejects_missing_tech_candidate_snapshot(monkeypatch, tmp_path):
+    artifact = tmp_path / "tech_bottleneck_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,score_total,strategy_id,strategy_name,source_type,stock_name",
+                "2026-06-18,CN:SZ:300408,1,0.6375,tech_bottleneck,Tech Bottleneck Combo,strategy_manifest,三环集团",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda *, trade_date: [
+            {
+                "module": "strategy_tech_bottleneck",
+                "status": "success",
+                "artifact_path": str(artifact),
+                "trade_date": "2026-06-18",
+                "latest_trade_date": "2026-06-18",
+                "run_id": "strategy-eod-2026-06-18-local",
+                "metadata": {},
+            }
+        ],
+    )
+
+    rows = review_queue._load_manifest_strategy_rows(trade_date="2026-06-18", limit=10)
+
+    assert rows == []
+
+
 def test_manifest_strategy_artifacts_normalize_strategy_scores(monkeypatch, tmp_path):
     artifact = tmp_path / "strategy_review.csv"
     artifact.write_text(
