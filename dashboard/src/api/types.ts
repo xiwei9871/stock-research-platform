@@ -610,6 +610,9 @@ export type PlatformReadiness = {
   run_id?: string;
   latest_trade_date?: string;
   latest_market_date: string;
+  display_trade_date?: string;
+  candidate_trade_date?: string;
+  display_gate?: PlatformDisplayDateGate;
   source?: string;
   summary_path?: string;
   tiers?: Array<{ tier: string; status: string }>;
@@ -622,6 +625,28 @@ export type PlatformReadiness = {
   partial_data?: string[];
   next_actions?: string[];
   dashboard_url?: string;
+};
+
+export type PlatformDisplayDateGate = {
+  display_trade_date?: string;
+  latest_market_date?: string;
+  candidate_trade_date?: string;
+  cutoff_time?: string;
+  timezone?: string;
+  display_status?: string;
+  candidate_status?: string;
+  strategy_ready?: string;
+  contract_valid?: string;
+  blocking_reasons?: string[];
+};
+
+export type PlatformDisplayDate = {
+  display_trade_date: string;
+  candidate_trade_date: string;
+  latest_market_date: string;
+  status: string;
+  display_gate: PlatformDisplayDateGate;
+  warnings: string[];
 };
 
 export type StrategyCatalogItem = {

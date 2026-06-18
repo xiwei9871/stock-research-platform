@@ -300,6 +300,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const reviewHealth = healthGroup(readiness, 'review_chain');
   const contentHealth = healthGroup(readiness, 'content_chain');
   const healthGroups = readiness?.health_groups ?? [];
+  const displayTradeDate =
+    readiness?.display_trade_date || readiness?.latest_trade_date || readiness?.latest_market_date || summary?.latest_market_date || '-';
 
   useEffect(() => {
     let ignore = false;
@@ -401,7 +403,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       <section className="status-strip command-status-strip" aria-label="首页状态">
         <div>
           <span>平台日期</span>
-          <strong>{readiness?.latest_market_date || summary?.latest_market_date || '-'}</strong>
+          <strong>{displayTradeDate}</strong>
         </div>
         <div>
           <span>数据健康</span>

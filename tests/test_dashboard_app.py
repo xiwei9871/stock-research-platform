@@ -77,6 +77,48 @@ def test_dashboard_eod_route_cache_keys_include_query_parameters(monkeypatch):
     assert first.json() != second.json()
 
 
+def test_platform_display_date_route_returns_readiness_gate(monkeypatch):
+    calls = []
+
+    def fake_readiness(score_version="manual_v1"):
+        calls.append(score_version)
+        return {
+            "status": "OK",
+            "latest_trade_date": "2026-06-18",
+            "latest_market_date": "2026-06-18",
+            "display_trade_date": "2026-06-17",
+            "candidate_trade_date": "2026-06-18",
+            "display_gate": {
+                "display_trade_date": "2026-06-17",
+                "candidate_trade_date": "2026-06-18",
+                "candidate_status": "before_cutoff",
+            },
+            "warnings": ["before 20:30"],
+        }
+
+    monkeypatch.setattr(dashboard_app, "build_platform_readiness", fake_readiness, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get("/api/platform/display-date?score_version=manual_v1")
+    second = client.get("/api/platform/display-date?score_version=manual_v1")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls == ["manual_v1"]
+    assert first.json() == {
+        "display_trade_date": "2026-06-17",
+        "candidate_trade_date": "2026-06-18",
+        "latest_market_date": "2026-06-18",
+        "status": "OK",
+        "display_gate": {
+            "display_trade_date": "2026-06-17",
+            "candidate_trade_date": "2026-06-18",
+            "candidate_status": "before_cutoff",
+        },
+        "warnings": ["before 20:30"],
+    }
+
+
 def test_public_news_route_returns_filtered_items(monkeypatch):
     captured = {}
 

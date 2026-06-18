@@ -123,6 +123,37 @@ def create_app() -> FastAPI:
             lambda: build_platform_readiness(score_version=score_version),
         )
 
+    @app.get("/api/platform/display-date")
+    def platform_display_date(score_version: str = "manual_v1"):
+        def build_payload():
+            readiness = build_platform_readiness(score_version=score_version)
+            display_gate = readiness.get("display_gate") if isinstance(readiness.get("display_gate"), dict) else {}
+            display_trade_date = str(
+                readiness.get("display_trade_date")
+                or display_gate.get("display_trade_date")
+                or readiness.get("latest_trade_date")
+                or ""
+            )
+            candidate_trade_date = str(
+                readiness.get("candidate_trade_date")
+                or display_gate.get("candidate_trade_date")
+                or readiness.get("latest_trade_date")
+                or ""
+            )
+            return {
+                "display_trade_date": display_trade_date,
+                "candidate_trade_date": candidate_trade_date,
+                "latest_market_date": str(readiness.get("latest_market_date") or ""),
+                "status": readiness.get("status") or "",
+                "display_gate": display_gate,
+                "warnings": list(readiness.get("warnings") or []),
+            }
+
+        return app.state.eod_response_cache.get_or_set(
+            ("platform_display_date", score_version),
+            build_payload,
+        )
+
     @app.get("/api/market-monitor/eod")
     def market_monitor_eod(
         trade_date: str | None = None,

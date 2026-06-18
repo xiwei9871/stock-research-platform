@@ -23,6 +23,7 @@ import type {
   GlobalSearchResponse,
   MarketMonitorPayload,
   OutcomeAnalyticsRow,
+  PlatformDisplayDate,
   PlatformReadiness,
   PlatformSummary,
   PublicNewsCollectorStatus,
@@ -579,6 +580,10 @@ export async function fetchPlatformSummary(): Promise<PlatformSummary> {
 
 export async function fetchPlatformReadiness(): Promise<PlatformReadiness> {
   return getJson<PlatformReadiness>('/api/platform/readiness');
+}
+
+export async function fetchPlatformDisplayDate(): Promise<PlatformDisplayDate> {
+  return getJson<PlatformDisplayDate>('/api/platform/display-date');
 }
 
 export async function fetchStrategyCatalog(): Promise<StrategyCatalogItem[]> {

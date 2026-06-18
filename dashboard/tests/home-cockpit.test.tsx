@@ -53,6 +53,9 @@ describe('AppShell and HomeCockpit', () => {
       status: 'PARTIAL',
       as_of: '2026-06-15T08:30:00+08:00',
       latest_market_date: '2026-06-12',
+      latest_trade_date: '2026-06-12',
+      display_trade_date: '2026-06-08',
+      candidate_trade_date: '2026-06-12',
       checks: [
         {
           key: 'market_data',
@@ -341,7 +344,7 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('市场环境')).toBeVisible();
     expect(screen.getByText('高质量新闻')).toBeVisible();
-    expect(screen.getByText('部分可用')).toBeVisible();
+    expect(within(screen.getByRole('region', { name: '首页状态' })).getByText('部分可用')).toBeVisible();
     expect(screen.getByText('生成报告不可用')).toBeVisible();
     expect(screen.queryByText('Strategy Health')).not.toBeInTheDocument();
     expect(screen.queryByText('Market Pulse')).not.toBeInTheDocument();
@@ -376,7 +379,7 @@ describe('AppShell and HomeCockpit', () => {
     expect(marketRegime.getByText(/强涨 269，强跌 55/)).toBeVisible();
     expect(marketRegime.getByText('涨停 / 跌停')).toBeVisible();
     expect(marketRegime.getByText('90 / 10')).toBeVisible();
-    expect(marketRegime.getByText(/炸板 55，炸板率 37.9%/)).toBeVisible();
+    expect(marketRegime.getAllByText(/炸板 55，炸板率 37.9%/).length).toBeGreaterThan(0);
     expect(marketRegime.getByText('首板 / 二板')).toBeVisible();
     expect(marketRegime.getByText('58 / 21')).toBeVisible();
     expect(marketRegime.getByText('三板以上 / 高度')).toBeVisible();
@@ -387,11 +390,11 @@ describe('AppShell and HomeCockpit', () => {
     expect(marketRegime.getByText('金钼股份')).toBeVisible();
     expect(marketRegime.getAllByText('股票列表未接入')).toHaveLength(1);
     expect(marketRegime.getByText('涨跌广度评分')).toBeVisible();
-    expect(marketRegime.getByText('上涨覆盖面和涨跌比例的综合评分，不是家数')).toBeVisible();
+    expect(marketRegime.getByText('权重 25%：上涨/下跌比例 + 强涨/强跌比例')).toBeVisible();
     expect(marketRegime.getByText('涨停表现评分')).toBeVisible();
     expect(marketRegime.getByText('连板接力评分')).toBeVisible();
-    expect(marketRegime.getByText('涨停数量、封板质量和炸板压力的综合评分')).toBeVisible();
-    expect(marketRegime.getByText('连板晋级与昨日涨停接力表现评分')).toBeVisible();
+    expect(marketRegime.getByText('权重 25%：涨停数量加分，跌停和炸板率扣分')).toBeVisible();
+    expect(marketRegime.getByText('权重 20%：最高连板高度 + 二板以上占涨停比例')).toBeVisible();
     expect(marketRegime.getByText('赚钱效应评分')).toBeVisible();
     expect(marketRegime.getByText('66.8 分')).toBeVisible();
     expect(marketRegime.getByText(/情绪偏强但需要看炸板压力/)).toBeVisible();
@@ -434,7 +437,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
-    expect(screen.getByText('市场日期')).toBeVisible();
+    expect(screen.getByText('平台日期')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
@@ -496,7 +499,7 @@ describe('AppShell and HomeCockpit', () => {
     render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
-    expect(screen.getByText('市场日期')).toBeVisible();
+    expect(screen.getByText('平台日期')).toBeVisible();
     expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();

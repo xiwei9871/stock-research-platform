@@ -12,6 +12,7 @@ import {
   fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchPlatformDisplayDate,
   fetchPlatformReadiness,
   fetchPublicNews,
   fetchPublicNewsStatus,
@@ -150,6 +151,27 @@ describe('dashboard API client', () => {
         detail: 'Latest EOD data loaded'
       }
     ]);
+  });
+
+  it('fetches platform display date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        display_trade_date: '2026-06-17',
+        candidate_trade_date: '2026-06-18',
+        latest_market_date: '2026-06-18',
+        status: 'OK',
+        display_gate: { candidate_status: 'before_cutoff' },
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPlatformDisplayDate();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/platform/display-date');
+    expect(result.display_trade_date).toBe('2026-06-17');
+    expect(result.display_gate.candidate_status).toBe('before_cutoff');
   });
 
   it('fetches EOD market monitor with optional trade date', async () => {
