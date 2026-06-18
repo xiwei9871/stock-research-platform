@@ -7,6 +7,7 @@ from stock_research.stock_report_backfill import (
     build_stock_report_backfill_plan,
     build_stock_report_feature_backfill,
     merge_existing_status_into_tasks,
+    run_stock_report_backfill_run,
     run_stock_report_backfill_tasks,
 )
 from stock_research.stock_report_web_collection import build_stock_report_features_from_events
@@ -230,6 +231,26 @@ def test_backfill_run_writes_status_after_each_task(tmp_path: Path):
     first_snapshot = snapshots[0].set_index("symbol")
     assert first_snapshot.loc["002484", "status"] == "no_report"
     assert first_snapshot.loc["600183", "status"] == "pending"
+
+
+def test_backfill_run_wrapper_returns_tasks_path_for_cli_output(tmp_path: Path):
+    tasks = build_stock_report_backfill_plan(
+        assets=_assets().head(1),
+        start_date="2025-01-01",
+        end_date="2026-06-02",
+    )["tasks"]
+    tasks_path = tmp_path / "tasks.csv"
+    tasks.to_csv(tasks_path, index=False)
+
+    result = run_stock_report_backfill_run(
+        tasks_path=tasks_path,
+        start_date="2025-01-01",
+        end_date="2026-06-02",
+        output_dir=tmp_path,
+        sleep_seconds=0.0,
+    )
+
+    assert result["paths"]["tasks"] == str(tasks_path)
 
 
 def test_stock_report_watchdog_adapter_reads_status_counts(tmp_path: Path):
