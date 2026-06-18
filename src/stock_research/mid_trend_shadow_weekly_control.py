@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -229,6 +230,8 @@ def _simulate_variant(
             ma20=ma20,
             peak_close=peak_close,
             peak_drawdown_exit=peak_drawdown_exit,
+            buffer_signals=buffer,
+            buffer_rank=buffer_rank,
         )
         if exits:
             target = {asset: weight for asset, weight in current_weights.items() if asset not in exits}
@@ -1024,22 +1027,76 @@ def _exit_assets(
     ma20: pd.DataFrame,
     peak_close: dict[str, float],
     peak_drawdown_exit: float,
+    buffer_signals: pd.DataFrame | None = None,
+    buffer_rank: int = 10,
 ) -> set[str]:
-    if variant_name not in {"top5_weekly_ma20_exit", "top5_weekly_peak_drawdown_12_exit"}:
+    peak_exit_variants = {
+        "top5_weekly_peak_drawdown_12_exit",
+        "top5_weekly_max2_selective_trend_holding_protection_v1",
+    }
+    ma_exit_variants = {"top5_weekly_ma20_exit"}
+    buffer_exit_variants = {"top5_weekly_max2_selective_trend_holding_protection_v1"}
+    if variant_name not in (peak_exit_variants | ma_exit_variants | buffer_exit_variants):
         return set()
     exits: set[str] = set()
     for asset in current_weights:
         current_close = close.loc[trade_date].get(asset)
         if pd.isna(current_close):
             continue
-        if variant_name == "top5_weekly_ma20_exit":
+        if variant_name in ma_exit_variants:
             ma_value = ma20.loc[trade_date].get(asset)
             if pd.notna(ma_value) and float(current_close) < float(ma_value):
                 exits.add(asset)
-        if variant_name == "top5_weekly_peak_drawdown_12_exit":
+        if variant_name in peak_exit_variants:
             peak = float(peak_close.get(asset, current_close))
             if peak > 0 and float(current_close) / peak - 1.0 <= -float(peak_drawdown_exit):
                 exits.add(asset)
+    if variant_name in buffer_exit_variants:
+        exits.update(
+            _buffer_quality_exit_assets(
+                buffer_signals,
+                trade_date=trade_date,
+                current_assets=current_weights.keys(),
+                buffer_rank=buffer_rank,
+            )
+        )
+    return exits
+
+
+def _buffer_quality_exit_assets(
+    buffer_signals: pd.DataFrame | None,
+    *,
+    trade_date: str,
+    current_assets: Iterable[str],
+    buffer_rank: int,
+    weak_trend_min: float = 65.0,
+    weak_ret20_min: float = 60.0,
+) -> set[str]:
+    if buffer_signals is None or buffer_signals.empty:
+        return set()
+    day = buffer_signals[buffer_signals["trade_date"].astype(str).eq(str(trade_date))].copy()
+    if day.empty:
+        return set()
+    day["asset_id"] = day["asset_id"].astype(str)
+    current = {str(asset) for asset in current_assets}
+    exits: set[str] = set()
+    indexed = day.drop_duplicates("asset_id", keep="first").set_index("asset_id")
+    for asset in current:
+        if asset not in indexed.index:
+            exits.add(asset)
+            continue
+        row = indexed.loc[asset]
+        rank = _numeric_value(row.get("shadow_top10_rank"))
+        trend = _numeric_value(row.get("trend_r2_20_score"))
+        ret20 = _numeric_value(row.get("ret_20_score"))
+        if pd.notna(rank) and float(rank) > float(buffer_rank):
+            exits.add(asset)
+            continue
+        if pd.notna(trend) and float(trend) < float(weak_trend_min):
+            exits.add(asset)
+            continue
+        if pd.notna(ret20) and float(ret20) < float(weak_ret20_min):
+            exits.add(asset)
     return exits
 
 

@@ -193,7 +193,7 @@ def test_list_backtest_strategies_applies_balanced_contract_defaults(monkeypatch
         strategy_id = "tech_bottleneck"
         profile = "balanced"
         variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
-        top_n = 3
+        top_n = 5
         frequency = "biweekly"
         protection_name = "rank_exit_top10_1d"
         transaction_cost_bps = 20.0
@@ -223,7 +223,7 @@ def test_list_backtest_strategies_applies_balanced_contract_defaults(monkeypatch
 
     rows = backtests.list_backtest_strategies()
 
-    assert rows[0]["default_parameters"]["top_n"] == 3
+    assert rows[0]["default_parameters"]["top_n"] == 5
     assert rows[0]["default_parameters"]["rebalance_frequency"] == "biweekly"
     assert rows[0]["default_parameters"]["protection_name"] == "rank_exit_top10_1d"
     assert rows[0]["default_parameters"]["contract_profile"] == "balanced"
@@ -236,7 +236,7 @@ def test_run_fresh_backtest_applies_balanced_strategy_contract(monkeypatch):
         strategy_id = "tech_bottleneck"
         profile = "balanced"
         variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
-        top_n = 3
+        top_n = 5
         frequency = "biweekly"
         protection_name = "rank_exit_top10_1d"
         transaction_cost_bps = 20.0
@@ -263,10 +263,15 @@ def test_run_fresh_backtest_applies_balanced_strategy_contract(monkeypatch):
         }
     )
 
-    assert calls[0]["top_n"] == 3
+    assert calls[0]["top_n"] == 5
     assert calls[0]["rebalance_frequency"] == "biweekly"
     assert calls[0]["protection_name"] == "rank_exit_top10_1d"
     assert result["config"]["contract_profile"] == "balanced"
+    assert result["summary"]["top_n"] == 5
+    assert result["summary"]["frequency"] == "biweekly"
+    assert result["summary"]["protection_name"] == "rank_exit_top10_1d"
+    assert result["summary"]["transaction_cost_bps"] == 20.0
+    assert result["summary"]["adjust_type"] == "hfq"
 
 
 def test_run_fresh_backtest_preserves_explicit_params_over_strategy_contract(monkeypatch):
@@ -276,7 +281,7 @@ def test_run_fresh_backtest_preserves_explicit_params_over_strategy_contract(mon
         strategy_id = "tech_bottleneck"
         profile = "balanced"
         variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
-        top_n = 3
+        top_n = 5
         frequency = "biweekly"
         protection_name = "rank_exit_top10_1d"
         transaction_cost_bps = 20.0

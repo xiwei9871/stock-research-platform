@@ -50,6 +50,7 @@ def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
     assert "STRATEGY_OUTPUT_ROOT" in script
     assert "outputs/research" in script
     assert "strategy_daily_eod" in script
+    assert "web_tech_bottleneck_v1_runs" in script
     assert "rsync -az -e \"ssh ${SSH_OPTS}\"" in script
     assert "docker compose restart api dashboard" in script
     assert "REBUILD=1" in script

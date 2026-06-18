@@ -686,6 +686,18 @@ def _with_contract_config(result: dict[str, Any], run_config: dict[str, Any]) ->
         if str(key).startswith("contract_"):
             config[key] = value
     next_result["config"] = config
+    summary = dict(next_result.get("summary") or {})
+    summary_fields = {
+        "top_n": run_config.get("top_n"),
+        "frequency": run_config.get("rebalance_frequency"),
+        "protection_name": run_config.get("protection_name"),
+        "transaction_cost_bps": run_config.get("transaction_cost_bps"),
+        "adjust_type": run_config.get("adjust_type"),
+    }
+    for key, value in summary_fields.items():
+        if value is not None and (key not in summary or summary.get(key) in (None, "")):
+            summary[key] = value
+    next_result["summary"] = summary
     return next_result
 
 

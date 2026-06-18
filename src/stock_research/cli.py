@@ -493,6 +493,7 @@ from stock_research.mid_trend_shadow_control_v2_scan import (
 from stock_research.mid_trend_bad_rebalance_state_attribution import (
     run_bad_rebalance_state_attribution,
 )
+from stock_research.strategy_contract_rescan import run_official_strategy_contract_rescan
 from stock_research.watchlist.store import load_watchlist_daily_signals
 
 
@@ -2512,6 +2513,27 @@ def build_parser() -> argparse.ArgumentParser:
     serenity_tight3b_c2.add_argument("--transaction-cost-bps", type=float, default=20.0)
     serenity_tight3b_c2.add_argument("--adjust-type", default="hfq")
     serenity_tight3b_c2.add_argument("--output-dir", default="outputs/research")
+
+    strategy_contract_rescan = subparsers.add_parser("rescan-official-strategy-contracts")
+    strategy_contract_rescan.add_argument("--output-dir", required=True)
+    strategy_contract_rescan.add_argument(
+        "--lhb-summary-path",
+        action="append",
+        default=[],
+        help="Path to an LHB summary CSV. Repeat for multiple scan outputs.",
+    )
+    strategy_contract_rescan.add_argument(
+        "--mid-trend-summary-path",
+        action="append",
+        default=[],
+        help="Path to a Mid Trend summary CSV. Repeat for multiple scan outputs.",
+    )
+    strategy_contract_rescan.add_argument(
+        "--tech-bottleneck-summary-path",
+        action="append",
+        default=[],
+        help="Path to a Tech Bottleneck summary CSV. Repeat for multiple scan outputs.",
+    )
 
     serenity_source_backed_evidence = subparsers.add_parser("serenity-source-backed-evidence-fill")
     serenity_source_backed_evidence.add_argument("--structured-detail-path", required=True)
@@ -5299,6 +5321,17 @@ def main_for_args(argv: list[str] | None = None) -> None:
             print(f"serenity_tight3b_c2|best_trades|{result['paths']['best_trades']}")
         print(f"serenity_tight3b_c2|report|{result['paths']['report']}")
         print(f"serenity_tight3b_c2|rows|{len(result.get('summary', []))}")
+    elif args.command == "rescan-official-strategy-contracts":
+        result = run_official_strategy_contract_rescan(
+            output_dir=args.output_dir,
+            lhb_paths=[Path(path) for path in args.lhb_summary_path],
+            mid_trend_paths=[Path(path) for path in args.mid_trend_summary_path],
+            tech_bottleneck_paths=[Path(path) for path in args.tech_bottleneck_summary_path],
+        )
+        print(f"strategy_contract_rescan|summary|{result['paths']['candidates']}")
+        print(f"strategy_contract_rescan|contracts|{result['paths']['contracts']}")
+        print(f"strategy_contract_rescan|report|{result['paths']['report']}")
+        print(f"strategy_contract_rescan|rows|{result['candidate_count']}")
     elif args.command == "serenity-source-backed-evidence-fill":
         result = run_serenity_source_backed_evidence_fill(
             structured_detail_path=args.structured_detail_path,

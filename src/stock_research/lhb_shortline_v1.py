@@ -1504,6 +1504,8 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
                 "position_pct": config.position_weight,
                 "phase18c_max_positions": config.account_max_positions,
                 "transaction_cost_bps": config.transaction_cost_bps,
+                "adjust_type": config.adjust_type,
+                "frequency": config.rebalance_frequency,
                 "risk_profile": risk_profile,
                 "risk_profile_label": profile_def["label"],
                 "market_regime_profile": profile_def["market_regime_profile"],

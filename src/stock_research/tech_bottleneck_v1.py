@@ -103,6 +103,8 @@ def build_tech_bottleneck_v1_from_frames(
             "baseline_name": TECH_BOTTLENECK_V1_BASELINE_NAME,
             "simulation_start_date": config.start_date,
             "requested_start_date": report_start_date or config.start_date,
+            "transaction_cost_bps": config.transaction_cost_bps,
+            "adjust_type": config.adjust_type,
             "data_coverage": {
                 "source": "accepted_baseline_feature_inputs",
                 "candidate_rows": int(len(candidates)),

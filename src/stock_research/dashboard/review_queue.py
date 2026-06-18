@@ -257,10 +257,7 @@ def _manifest_strategy_score(row: dict[str, Any], *, strategy_id: str, rank: int
         )
     if raw_score is not None:
         return round(raw_score, 2), existing_source, existing_explanation
-    rank_score = max(0.0, 100.0 - float(max(rank - 1, 0) * 5))
-    return round(rank_score, 2), existing_source or "strategy_rank_score", existing_explanation or (
-        "策略真实产物未提供原始分；按策略内排名换算为 0-100 分"
-    )
+    return None, existing_source, existing_explanation
 
 
 def _select_latest_strategy_sources(

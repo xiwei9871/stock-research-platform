@@ -65,6 +65,44 @@ def test_mid_trend_v1_uses_weekly_control_benchmark_variant() -> None:
     assert {row["variant_name"] for row in result["trades"]} == {MID_TREND_V1_BENCHMARK_VARIANT}
 
 
+def test_mid_trend_v1_accepts_contract_benchmark_variant() -> None:
+    funnel = pd.DataFrame(
+        [
+            _candidate("2026-01-05", "A", 1, 95),
+            _candidate("2026-01-05", "B", 2, 94),
+            _candidate("2026-01-12", "B", 1, 96),
+            _candidate("2026-01-12", "A", 2, 90),
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2026-01-05", "asset_id": "A", "close": 10.0},
+            {"trade_date": "2026-01-05", "asset_id": "B", "close": 20.0},
+            {"trade_date": "2026-01-06", "asset_id": "A", "close": 11.0},
+            {"trade_date": "2026-01-06", "asset_id": "B", "close": 20.0},
+            {"trade_date": "2026-01-12", "asset_id": "A", "close": 11.0},
+            {"trade_date": "2026-01-12", "asset_id": "B", "close": 22.0},
+            {"trade_date": "2026-01-13", "asset_id": "A", "close": 11.0},
+            {"trade_date": "2026-01-13", "asset_id": "B", "close": 23.0},
+        ]
+    )
+
+    result = build_mid_trend_v1_from_frames(
+        funnel_detail=funnel,
+        prices=prices,
+        start_date="2026-01-05",
+        end_date="2026-01-13",
+        top_n=2,
+        buffer_rank=2,
+        benchmark_variant="top5_weekly_max_2_replacements",
+    )
+
+    assert result["summary"]["variant_name"] == "top5_weekly_max_2_replacements"
+    assert result["summary"]["benchmark_variant"] == "top5_weekly_max_2_replacements"
+    assert result["config"]["benchmark_variant"] == "top5_weekly_max_2_replacements"
+    assert {row["variant_name"] for row in result["trades"]} == {"top5_weekly_max_2_replacements"}
+
+
 def test_report_mild_bonus_score_caps_research_support_bonus() -> None:
     frame = pd.DataFrame(
         [

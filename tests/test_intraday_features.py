@@ -118,6 +118,23 @@ def test_build_industry_intraday_features_daily_aggregates_stock_features():
     assert values["industry_intraday_volatility_median"] == pytest.approx(0.03)
 
 
+def test_select_preferred_minute_source_uses_complete_source_per_asset():
+    bars = pd.DataFrame(
+        [
+            {"asset_id": "A", "source": "baostock", "trade_time": "2026-06-17 09:35:00", "close": 10},
+            {"asset_id": "A", "source": "akshare", "trade_time": "2026-06-17 09:35:00", "close": 11},
+            {"asset_id": "A", "source": "akshare", "trade_time": "2026-06-17 09:40:00", "close": 12},
+            {"asset_id": "B", "source": "baostock", "trade_time": "2026-06-17 09:35:00", "close": 20},
+            {"asset_id": "B", "source": "akshare", "trade_time": "2026-06-17 09:35:00", "close": 21},
+        ]
+    )
+
+    selected = intraday_features.select_preferred_minute_source(bars)
+
+    assert selected[selected["asset_id"] == "A"]["source"].unique().tolist() == ["akshare"]
+    assert selected[selected["asset_id"] == "B"]["source"].unique().tolist() == ["baostock"]
+
+
 def test_run_intraday_feature_gap_check_reports_missing_dates(monkeypatch):
     class _Context:
         def __enter__(self):

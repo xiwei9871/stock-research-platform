@@ -39,6 +39,7 @@ class MidTrendV1Config:
     adjust_type: str = "hfq"
     score_version: str = "manual_v1"
     engine_version: str = MID_TREND_V1_ENGINE_VERSION
+    benchmark_variant: str = MID_TREND_V1_BENCHMARK_VARIANT
 
 
 def build_mid_trend_v1_from_frames(
@@ -55,6 +56,7 @@ def build_mid_trend_v1_from_frames(
     max_position_weight: float | None = None,
     adjust_type: str = "hfq",
     score_version: str = "manual_v1",
+    benchmark_variant: str = MID_TREND_V1_BENCHMARK_VARIANT,
     report_start_date: str | None = None,
 ) -> dict[str, Any]:
     config = MidTrendV1Config(
@@ -68,6 +70,7 @@ def build_mid_trend_v1_from_frames(
         max_position_weight=max_position_weight,
         adjust_type=adjust_type,
         score_version=score_version,
+        benchmark_variant=benchmark_variant,
     )
     primary = build_mid_trend_shadow_top10_from_frame(funnel_detail, top_n=config.top_n)["top10"]
     buffer = build_mid_trend_shadow_top10_from_frame(funnel_detail, top_n=config.buffer_rank)["top10"]
@@ -78,7 +81,7 @@ def build_mid_trend_v1_from_frames(
         scoped_prices,
         start_date=config.start_date,
         end_date=config.end_date,
-        variant_name=MID_TREND_V1_BENCHMARK_VARIANT,
+        variant_name=config.benchmark_variant,
         top_n=config.top_n,
         buffer_rank=config.buffer_rank,
         max_weekly_replacements=config.max_weekly_replacements,
@@ -102,7 +105,7 @@ def build_mid_trend_v1_from_frames(
         {
             "engine_version": config.engine_version,
             "fresh_engine_note": "Mid Trend V1 DB lifecycle recompute via weekly control benchmark engine",
-            "benchmark_variant": MID_TREND_V1_BENCHMARK_VARIANT,
+            "benchmark_variant": config.benchmark_variant,
             "overlay_name": MID_TREND_V1_OVERLAY_NAME,
             "simulation_start_date": config.start_date,
             "requested_start_date": report_start_date or config.start_date,
@@ -148,6 +151,7 @@ def run_mid_trend_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str
         max_position_weight=_optional_float(payload.get("max_position_weight")),
         adjust_type=str(payload.get("adjust_type") or "hfq"),
         score_version=str(payload.get("score_version") or "manual_v1"),
+        benchmark_variant=str(payload.get("benchmark_variant") or MID_TREND_V1_BENCHMARK_VARIANT),
     )
     simulation_start_date = _simulation_start_date(config)
     load_config = (
@@ -169,6 +173,7 @@ def run_mid_trend_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str
         max_position_weight=config.max_position_weight,
         adjust_type=config.adjust_type,
         score_version=config.score_version,
+        benchmark_variant=config.benchmark_variant,
         report_start_date=config.start_date,
     )
 

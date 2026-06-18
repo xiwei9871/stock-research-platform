@@ -446,10 +446,10 @@ def test_manifest_strategy_artifacts_normalize_strategy_scores(monkeypatch, tmp_
     rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-17", limit=10)
 
     by_asset = {row["asset_id"]: row for row in rows}
-    assert by_asset["CN:SZ:002636"]["score_total"] == 100.0
-    assert by_asset["CN:SH:601963"]["score_total"] == 95.0
+    assert by_asset["CN:SZ:002636"]["score_total"] is None
+    assert by_asset["CN:SH:601963"]["score_total"] is None
     assert by_asset["CN:SZ:300408"]["score_total"] == 63.75
-    assert by_asset["CN:SZ:002636"]["score_source"] == "strategy_rank_score"
+    assert by_asset["CN:SZ:002636"]["score_source"] is None
     assert by_asset["CN:SZ:300408"]["score_source"] == "bottleneck_score"
 
 
@@ -618,6 +618,7 @@ def test_build_review_queue_loads_scores_for_explicit_trade_date(monkeypatch):
 
 
 def test_build_review_queue_is_deterministic_for_same_eod_inputs(monkeypatch):
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         review_queue,
         "load_platform_summary",
@@ -665,6 +666,7 @@ def test_build_review_queue_degrades_digest_failure_to_thin_item(monkeypatch):
 
 def test_build_review_queue_bounds_limit_and_uses_latest_market_date(monkeypatch):
     captured = {}
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda *args, **kwargs: [])
 
     def fake_summary(**kwargs):
         captured.update(kwargs)
@@ -705,6 +707,7 @@ def test_build_review_queue_bounds_lower_limit_and_upper_lookback_for_digest(mon
 
 def test_build_review_queue_uses_latest_score_date_when_market_date_missing(monkeypatch):
     captured = {}
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda *args, **kwargs: [])
 
     monkeypatch.setattr(
         review_queue,
@@ -726,6 +729,7 @@ def test_build_review_queue_uses_latest_score_date_when_market_date_missing(monk
 
 def test_build_review_queue_uses_empty_trade_date_when_summary_has_no_dates(monkeypatch):
     captured = {}
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda *args, **kwargs: [])
 
     monkeypatch.setattr(
         review_queue,

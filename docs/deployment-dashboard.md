@@ -100,9 +100,10 @@ For ordinary frontend and backend source changes, run:
 
 The script builds `dashboard/dist`, rsyncs `src/`, `dashboard/src/`, frontend
 build inputs, `dashboard/dist/`, the current `strategy_daily_eod` review
-directory, and the small strategy review artifact directories under
-`outputs/research` to 192.168.3.185, then restarts the API and dashboard
-containers. No image rebuild is needed for normal source changes.
+directory, the Tech Bottleneck equity/position run used by the home cockpit,
+and the small strategy review artifact directories under `outputs/research` to
+192.168.3.185, then restarts the API and dashboard containers. No image rebuild
+is needed for normal source changes.
 
 Use a rebuild only when dependencies, Dockerfiles, or system packages change:
 

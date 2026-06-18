@@ -15,6 +15,7 @@ strategy_output_dirs=(
   "mid_trend_shadow_top10_context_fixed_20260602"
   "mid_trend_refresh_20260602"
   "tech_bottleneck_discovery_v0_1_closeout_20260608"
+  "web_tech_bottleneck_v1_runs/tech_bottleneck_v1_20260616_manual"
 )
 
 echo "Building dashboard frontend"

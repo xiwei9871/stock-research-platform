@@ -53,6 +53,7 @@ def load_stock_minute_bars_for_intraday_features(
         trade_date::text AS trade_date,
         asset_id,
         ts_code,
+        source,
         trade_time,
         open,
         high,
@@ -68,7 +69,27 @@ def load_stock_minute_bars_for_intraday_features(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [trade_date, freq, adjust_type])
-    return pd.DataFrame(rows)
+    return select_preferred_minute_source(pd.DataFrame(rows))
+
+
+def select_preferred_minute_source(minute_bars: pd.DataFrame) -> pd.DataFrame:
+    if minute_bars.empty or "source" not in minute_bars.columns:
+        return minute_bars
+
+    frame = minute_bars.copy()
+    source_counts = (
+        frame.groupby(["asset_id", "source"], dropna=False)["trade_time"]
+        .nunique()
+        .reset_index(name="source_row_count")
+    )
+    source_counts["source_priority"] = source_counts["source"].map(
+        {"baostock": 0, "akshare": 1, "tushare": 2}
+    ).fillna(9)
+    preferred = source_counts.sort_values(
+        ["asset_id", "source_row_count", "source_priority"],
+        ascending=[True, False, True],
+    ).drop_duplicates("asset_id", keep="first")[["asset_id", "source"]]
+    return frame.merge(preferred, on=["asset_id", "source"], how="inner")
 
 
 def load_industry_memberships_for_intraday_features(

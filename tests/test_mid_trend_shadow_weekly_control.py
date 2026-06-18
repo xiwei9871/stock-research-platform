@@ -699,6 +699,104 @@ def test_drawdown_throttle_matches_max2_when_not_triggered():
     assert throttle["summary"]["trade_rows"] == baseline["summary"]["trade_rows"]
 
 
+def test_selective_trend_protection_risk_exit_ignores_weekly_replacement_limit():
+    signals = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-03", "asset_id": asset_id, "shadow_top10_rank": rank}
+            for rank, asset_id in enumerate(["A", "B", "C", "D", "E"], start=1)
+        ]
+        + [
+            {"trade_date": "2025-01-13", "asset_id": asset_id, "shadow_top10_rank": rank}
+            for rank, asset_id in enumerate(["F", "G", "H", "I", "J"], start=1)
+        ]
+    )
+    prices = []
+    for trade_date in pd.date_range("2025-01-03", "2025-01-17", freq="B"):
+        for asset_id in list("ABCDEFGHIJ"):
+            close = 100.0
+            if asset_id == "A" and trade_date >= pd.Timestamp("2025-01-08"):
+                close = 93.0
+            prices.append(
+                {
+                    "trade_date": trade_date.date().isoformat(),
+                    "asset_id": asset_id,
+                    "close": close,
+                }
+            )
+
+    result = _simulate_variant(
+        signals,
+        signals,
+        pd.DataFrame(prices),
+        start_date="2025-01-03",
+        end_date="2025-01-17",
+        variant_name="top5_weekly_max2_selective_trend_holding_protection_v1",
+        top_n=5,
+        buffer_rank=10,
+        max_weekly_replacements=0,
+        peak_drawdown_exit=0.05,
+        transaction_cost_bps=0,
+    )
+
+    risk_exits = result["trades"][
+        result["trades"]["reason"].eq("risk_exit") & result["trades"]["asset_id"].eq("A")
+    ]
+    assert len(risk_exits) == 1
+    assert risk_exits.iloc[0]["trade_date"] == "2025-01-08"
+
+
+def test_selective_trend_protection_exits_holding_that_leaves_buffer():
+    signals = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-03", "asset_id": asset_id, "shadow_top10_rank": rank}
+            for rank, asset_id in enumerate(["A", "B", "C", "D", "E"], start=1)
+        ]
+        + [
+            {"trade_date": "2025-01-06", "asset_id": asset_id, "shadow_top10_rank": rank}
+            for rank, asset_id in enumerate(["B", "C", "D", "E", "F"], start=1)
+        ]
+    )
+    buffer = pd.concat(
+        [
+            signals[signals["trade_date"].eq("2025-01-03")],
+            pd.DataFrame(
+                [
+                    {"trade_date": "2025-01-06", "asset_id": asset_id, "shadow_top10_rank": rank}
+                    for rank, asset_id in enumerate(["B", "C", "D", "E", "F", "G"], start=1)
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": trade_date.date().isoformat(), "asset_id": asset_id, "close": 100.0}
+            for trade_date in pd.date_range("2025-01-03", "2025-01-10", freq="B")
+            for asset_id in list("ABCDEFG")
+        ]
+    )
+
+    result = _simulate_variant(
+        signals,
+        buffer,
+        prices,
+        start_date="2025-01-03",
+        end_date="2025-01-10",
+        variant_name="top5_weekly_max2_selective_trend_holding_protection_v1",
+        top_n=5,
+        buffer_rank=10,
+        max_weekly_replacements=0,
+        peak_drawdown_exit=0.12,
+        transaction_cost_bps=0,
+    )
+
+    risk_exits = result["trades"][
+        result["trades"]["reason"].eq("risk_exit") & result["trades"]["asset_id"].eq("A")
+    ]
+    assert len(risk_exits) == 1
+    assert risk_exits.iloc[0]["trade_date"] == "2025-01-06"
+
+
 def test_rank_weighted_top5_uses_declining_position_weights():
     mild = _weights_for_variant(
         "top5_weekly_max2_rank_weight_mild_v1",
