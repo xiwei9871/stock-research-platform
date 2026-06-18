@@ -47,10 +47,12 @@ def build_point_in_time_candidate_snapshots(
     if not trading_dates or candidates.empty:
         return pd.DataFrame(columns=TECH_BOTTLENECK_CANDIDATE_COLUMNS)
 
+    duplicates = normalized_prices.duplicated(subset=["trade_date", "asset_id"], keep=False)
+    if bool(duplicates.any()):
+        raise ValueError("duplicate price rows for trade_date and asset_id")
+
     closes = normalized_prices.pivot(index="trade_date", columns="asset_id", values="close").sort_index()
     high_120 = closes.rolling(120, min_periods=3).max()
-    max_evidence = float(np.log1p(pd.to_numeric(candidates["hit_count"], errors="coerce").fillna(1)).max())
-    max_evidence = max(max_evidence, 1.0)
     rows: list[dict[str, Any]] = []
 
     for trade_date in trading_dates:
@@ -59,6 +61,10 @@ def build_point_in_time_candidate_snapshots(
             & (candidates["financial_as_of_date"] <= trade_date)
             & (candidates["technical_as_of_date"] <= trade_date)
         ]
+        if eligible.empty:
+            continue
+        max_evidence = float(np.log1p(eligible["hit_count_as_of_date"]).max())
+        max_evidence = max(max_evidence, 1.0)
         for row in eligible.itertuples(index=False):
             asset_id = str(row.asset_id)
             score = _bottleneck_score(
@@ -74,7 +80,7 @@ def build_point_in_time_candidate_snapshots(
                     "asset_id": asset_id,
                     "stock_name": str(getattr(row, "stock_name", "") or ""),
                     "first_hit_date": str(row.first_hit_date),
-                    "hit_count_as_of_date": float(row.hit_count),
+                    "hit_count_as_of_date": float(row.hit_count_as_of_date),
                     "primary_chain_id": str(getattr(row, "primary_chain_id", "") or ""),
                     "primary_chain_name": str(getattr(row, "primary_chain_name", "") or ""),
                     "matched_bottleneck_dimensions": str(getattr(row, "matched_bottleneck_dimensions", "") or ""),
@@ -82,7 +88,7 @@ def build_point_in_time_candidate_snapshots(
                     "technical_as_of_date": str(row.technical_as_of_date),
                     "data_as_of_date": trade_date,
                     "filter_decision": "pass",
-                    "filter_reason": "",
+                    "filter_reason": str(getattr(row, "filter_reason", "") or ""),
                     "bottleneck_score": score,
                     "engine_version": engine_version,
                     "run_id": str(run_id),
@@ -113,7 +119,10 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
     normalized = frame.copy()
     date_columns = ["trade_date", "first_hit_date", "financial_as_of_date", "technical_as_of_date", "data_as_of_date"]
     for column in date_columns:
-        normalized[column] = pd.to_datetime(normalized[column], errors="coerce").dt.strftime("%Y-%m-%d")
+        normalized[column] = _parse_required_date_column(
+            normalized[column],
+            invalid_message=f"invalid date in candidate snapshot: {column}",
+        )
 
     checks = [
         ("first_hit_date", "first_hit_date must be <= trade_date"),
@@ -154,15 +163,15 @@ def validate_base_candidate_source_freshness(frame: pd.DataFrame, *, end_date: s
         raise ValueError("base candidate source is empty")
     for column in ["source_latest_trade_date", "data_as_of_date", "generated_trade_date"]:
         if column in frame.columns:
-            latest = str(pd.to_datetime(frame[column], errors="coerce").dt.strftime("%Y-%m-%d").max())
+            parsed = _parse_required_date_column(
+                frame[column],
+                invalid_message=f"invalid base candidate freshness metadata: {column}",
+            )
+            latest = str(parsed.max())
             if latest >= end_date:
                 return
             raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
-    if "first_hit_date" in frame.columns:
-        latest_first_hit = str(pd.to_datetime(frame["first_hit_date"], errors="coerce").dt.strftime("%Y-%m-%d").max())
-        if latest_first_hit >= end_date:
-            return
-    raise ValueError("base candidate source is stale: no freshness column covers requested end_date")
+    raise ValueError("base candidate source freshness metadata missing")
 
 
 def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -173,6 +182,7 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
                 "stock_name",
                 "first_hit_date",
                 "hit_count",
+                "hit_count_as_of_date",
                 "primary_chain_id",
                 "primary_chain_name",
                 "matched_bottleneck_dimensions",
@@ -185,9 +195,17 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     frame["asset_id"] = frame["asset_id"].astype(str)
     frame["stock_name"] = _string_column(frame, "stock_name")
     frame["first_hit_date"] = pd.to_datetime(frame["first_hit_date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    if "hit_count" not in frame.columns:
-        frame["hit_count"] = 1.0
-    frame["hit_count"] = pd.to_numeric(frame["hit_count"], errors="coerce").fillna(1.0)
+    if "hit_count_as_of_date" in frame.columns:
+        frame["hit_count_as_of_date"] = _numeric_required_column(
+            frame["hit_count_as_of_date"],
+            invalid_message="hit_count_as_of_date must be numeric",
+        )
+        frame["filter_reason"] = _string_column(frame, "filter_reason")
+    else:
+        if "hit_count" not in frame.columns:
+            frame["hit_count"] = 1.0
+        frame["hit_count_as_of_date"] = pd.to_numeric(frame["hit_count"], errors="coerce").fillna(1.0)
+        frame["filter_reason"] = "static_source_hit_count"
     for column in ["primary_chain_id", "primary_chain_name", "matched_bottleneck_dimensions"]:
         frame[column] = _string_column(frame, column)
     if "financial_as_of_date" not in frame.columns:
@@ -219,7 +237,7 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
 
 
 def _bottleneck_score(*, row: Any, trade_date: str, closes: pd.DataFrame, high_120: pd.DataFrame, max_evidence: float) -> float:
-    evidence_norm = float(np.log1p(float(row.hit_count)) / max_evidence)
+    evidence_norm = float(np.log1p(float(row.hit_count_as_of_date)) / max_evidence)
     age_days = max((pd.Timestamp(trade_date) - pd.Timestamp(row.first_hit_date)).days, 0)
     freshness = max(0.0, 1.0 - age_days / 240.0)
     low_position = 0.5
@@ -236,3 +254,17 @@ def _string_column(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series([""] * len(frame), index=frame.index, dtype="object")
     return frame[column].fillna("").astype(str)
+
+
+def _parse_required_date_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
+    parsed = pd.to_datetime(values, errors="coerce")
+    if bool(parsed.isna().any()):
+        raise ValueError(invalid_message)
+    return parsed.dt.strftime("%Y-%m-%d")
+
+
+def _numeric_required_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
+    parsed = pd.to_numeric(values, errors="coerce")
+    if bool(parsed.isna().any()):
+        raise ValueError(invalid_message)
+    return parsed
