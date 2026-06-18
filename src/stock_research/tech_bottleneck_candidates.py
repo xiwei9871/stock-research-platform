@@ -29,6 +29,7 @@ TECH_BOTTLENECK_CANDIDATE_COLUMNS = [
     "engine_version",
     "run_id",
 ]
+_MISSING_IDENTITY_SENTINELS = {"nan", "none", "<na>", "nat", "null"}
 
 
 def build_point_in_time_candidate_snapshots(
@@ -123,9 +124,8 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
 
     normalized = frame.copy()
     for column in ["asset_id", "engine_version", "run_id"]:
-        if _is_missing_or_empty(normalized[column]).any():
-            raise ValueError(f"{column} must be non-empty")
-    bad_engine = normalized["engine_version"].astype(str) != TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION
+        normalized[column] = _normalize_identity_text(normalized[column], column=column)
+    bad_engine = normalized["engine_version"] != TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION
     if bool(bad_engine.any()):
         raise ValueError(f"engine_version must equal {TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION}")
     date_columns = ["trade_date", "first_hit_date", "financial_as_of_date", "technical_as_of_date", "data_as_of_date"]
@@ -272,7 +272,10 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         )
 
     frame = candidates.copy()
-    frame["asset_id"] = frame["asset_id"].astype(str)
+    missing_columns = [column for column in ["asset_id", "first_hit_date"] if column not in frame.columns]
+    if missing_columns:
+        raise ValueError(f"base candidate source missing columns: {missing_columns}")
+    frame["asset_id"] = _normalize_identity_text(frame["asset_id"], column="asset_id")
     frame["stock_name"] = _string_column(frame, "stock_name")
     frame["first_hit_date"] = _parse_required_date_column(
         frame["first_hit_date"],
@@ -322,14 +325,16 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         return pd.DataFrame(columns=["trade_date", "asset_id", "open", "high", "low", "close"])
 
     frame = prices.copy()
-    missing_price_columns = [column for column in ["open", "high", "low", "close"] if column not in frame.columns]
+    missing_price_columns = [
+        column for column in ["trade_date", "asset_id", "open", "high", "low", "close"] if column not in frame.columns
+    ]
     if missing_price_columns:
         raise ValueError(f"price input missing columns: {missing_price_columns}")
     frame["trade_date"] = _parse_required_date_column(
         frame["trade_date"],
         invalid_message="invalid price date: trade_date",
     )
-    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["asset_id"] = _normalize_identity_text(frame["asset_id"], column="asset_id")
     frame = frame[frame["trade_date"].le(end_date)]
     duplicates = frame.duplicated(subset=["trade_date", "asset_id"], keep=False)
     if bool(duplicates.any()):
@@ -371,6 +376,16 @@ def _string_column(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series([""] * len(frame), index=frame.index, dtype="object")
     return frame[column].fillna("").astype(str)
+
+
+def _normalize_identity_text(values: pd.Series, *, column: str) -> pd.Series:
+    missing = values.isna()
+    normalized = values.astype(str).str.strip()
+    sentinel = normalized.str.lower().isin(_MISSING_IDENTITY_SENTINELS)
+    empty = normalized.eq("")
+    if bool((missing | sentinel | empty).any()):
+        raise ValueError(f"{column} must be non-empty")
+    return normalized
 
 
 def _parse_required_date_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
@@ -447,10 +462,6 @@ def _parse_bool_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed
-
-
-def _is_missing_or_empty(values: pd.Series) -> pd.Series:
-    return values.isna() | values.astype(str).str.strip().eq("")
 
 
 def _candidate_date_column(frame: pd.DataFrame) -> str | None:

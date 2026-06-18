@@ -539,6 +539,14 @@ def test_validate_candidate_snapshot_frame_rejects_missing_identity_fields(colum
         validate_candidate_snapshot_frame(frame)
 
 
+def test_validate_candidate_snapshot_frame_rejects_sentinel_asset_id() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "asset_id"] = "nan"
+
+    with pytest.raises(ValueError, match="asset_id must be non-empty"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_validate_candidate_snapshot_frame_rejects_wrong_engine_version() -> None:
     frame = _valid_snapshot_frame()
     frame.loc[0, "engine_version"] = "other-engine"
@@ -830,6 +838,49 @@ def test_snapshot_rejects_invalid_price_trade_date() -> None:
         )
 
 
+@pytest.mark.parametrize("asset_id", [None, "<NA>"])
+def test_snapshot_rejects_missing_candidate_source_asset_id(asset_id) -> None:
+    with pytest.raises(ValueError, match="asset_id must be non-empty"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": asset_id,
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count": 3,
+                    }
+                ]
+            ),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+@pytest.mark.parametrize("column", ["asset_id", "first_hit_date"])
+def test_snapshot_rejects_missing_required_candidate_source_columns(column: str) -> None:
+    candidate = {
+        "asset_id": "A",
+        "stock_name": "Alpha",
+        "first_hit_date": "2025-01-01",
+        "candidate_trade_date": "2025-01-01",
+        "hit_count": 3,
+    }
+    candidate.pop(column)
+
+    with pytest.raises(ValueError, match=f"base candidate source missing columns: \\['{column}'\\]"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame([candidate]),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
 def test_snapshot_always_uses_formal_engine_version() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -909,8 +960,32 @@ def test_snapshot_rejects_invalid_price_close_values(close, message: str) -> Non
         )
 
 
-@pytest.mark.parametrize("column", ["high", "low"])
-def test_snapshot_rejects_missing_price_ohlc_columns(column: str) -> None:
+def test_snapshot_rejects_missing_price_source_asset_id() -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices.loc[0, "asset_id"] = "None"
+
+    with pytest.raises(ValueError, match="asset_id must be non-empty"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count": 3,
+                    }
+                ]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+@pytest.mark.parametrize("column", ["trade_date", "asset_id", "high", "low"])
+def test_snapshot_rejects_missing_price_source_columns(column: str) -> None:
     prices = _prices(["A"], "2025-01-01", 1).drop(columns=[column])
 
     with pytest.raises(ValueError, match=f"price input missing columns: \\['{column}'\\]"):
