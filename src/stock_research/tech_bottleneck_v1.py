@@ -333,12 +333,14 @@ def _candidate_snapshot_coverage(
         raise ValueError("Tech Bottleneck candidate snapshots are missing for requested range")
     available_start = str(filtered.min())
     available_end = str(filtered.max())
-    if available_start > start_date or available_end < end_date:
+    expected_dates = set(expected_trade_dates or [])
+    required_start = min(expected_dates) if expected_dates else start_date
+    required_end = max(expected_dates) if expected_dates else end_date
+    if available_start > required_start or available_end < required_end:
         raise ValueError(
             "Tech Bottleneck candidate snapshots do not cover requested range: "
-            f"requested {start_date}..{end_date}, available {available_start}..{available_end}"
+            f"requested {required_start}..{required_end}, available {available_start}..{available_end}"
         )
-    expected_dates = set(expected_trade_dates or [])
     if expected_dates:
         available_dates = set(filtered.astype(str).unique().tolist())
         missing_dates = sorted(expected_dates - available_dates)

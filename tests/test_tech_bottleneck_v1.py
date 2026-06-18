@@ -131,6 +131,23 @@ def test_tech_bottleneck_v1_rejects_interior_snapshot_date_gap() -> None:
         )
 
 
+def test_tech_bottleneck_v1_allows_non_trading_requested_endpoints() -> None:
+    result = build_tech_bottleneck_v1_from_rank_snapshots(
+        candidate_snapshots=_rank_snapshots(),
+        prices=_prices(),
+        market_exposure=_market_exposure(),
+        start_date="2024-12-31",
+        end_date="2025-01-09",
+        top_n=2,
+        rebalance_frequency="weekly",
+        transaction_cost_bps=20,
+    )
+
+    coverage = result["summary"]["data_coverage"]
+    assert coverage["candidate_snapshot_start_date"] == "2025-01-01"
+    assert coverage["candidate_snapshot_latest_date"] == "2025-01-08"
+
+
 def _candidates() -> pd.DataFrame:
     return pd.DataFrame(
         [
