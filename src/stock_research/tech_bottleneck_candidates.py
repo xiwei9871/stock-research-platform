@@ -306,6 +306,10 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     duplicates = frame.duplicated(subset=["asset_id", "candidate_as_of_date"], keep=False)
     if bool(duplicates.any()):
         raise ValueError("duplicate candidate source rows for asset_id and candidate_as_of_date")
+    if "filter_decision" in frame.columns:
+        source_filter_decision = _string_column(frame, "filter_decision").str.strip()
+        if bool((source_filter_decision != "pass").any()):
+            raise ValueError("base candidate filter_decision must be pass")
 
     if "hit_count_as_of_date" in frame.columns and candidate_date_column is not None:
         frame["hit_count_as_of_date"] = _numeric_required_column(

@@ -445,6 +445,51 @@ def test_snapshot_rejects_candidate_as_of_before_source_evidence_dates(column: s
         )
 
 
+@pytest.mark.parametrize("filter_decision", ["fail", "maybe"])
+def test_snapshot_rejects_non_pass_source_filter_decision(filter_decision: str) -> None:
+    with pytest.raises(ValueError, match="base candidate filter_decision must be pass"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count_as_of_date": 2,
+                        "filter_decision": filter_decision,
+                    }
+                ]
+            ),
+            prices=_prices(["A"], "2025-01-01", 1),
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_snapshot_treats_missing_source_filter_decision_as_pass() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "stock_name": "Alpha",
+                    "first_hit_date": "2025-01-01",
+                    "candidate_trade_date": "2025-01-01",
+                    "hit_count_as_of_date": 2,
+                }
+            ]
+        ),
+        prices=_prices(["A"], "2025-01-01", 1),
+        start_date="2025-01-01",
+        end_date="2025-01-01",
+        run_id="tech-bt-20250101-test",
+    )
+
+    assert snapshots["filter_decision"].tolist() == ["pass"]
+
+
 def test_snapshot_emits_candidate_only_when_asset_has_same_day_price() -> None:
     snapshots = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
