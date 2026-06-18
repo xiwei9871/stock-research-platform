@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createOperatorDecision,
+  fetchDailyBars,
   fetchAssetDecisions,
   fetchEvidenceDigest,
   fetchAssetNews,
@@ -35,6 +36,24 @@ import {
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
+  it('requests asset bars with explicit resolution and adjust type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ time: '2026-05-29 10:00:00', close: 10.5 }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDailyBars('000001.SZ', '2026-05-29', '2026-05-29', {
+      resolution: '30m',
+      adjustType: 'raw'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/assets/000001.SZ/bars?start_date=2026-05-29&end_date=2026-05-29&adjust_type=raw&resolution=30m'
+    );
+    expect(result[0].time).toBe('2026-05-29 10:00:00');
+  });
+
   it('runs default backtests through the background job endpoint', async () => {
     const fetchMock = vi
       .fn()

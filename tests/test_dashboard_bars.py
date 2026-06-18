@@ -96,3 +96,67 @@ def test_load_daily_bars_keeps_canonical_asset_id(monkeypatch):
 
     assert captured["params"] == ["CN:SH:600000", "2026-06-01", "2026-06-08", "qfq"]
     assert result == []
+
+
+def test_load_bars_aggregates_minute_resolution_with_normalized_asset_id(monkeypatch):
+    captured = {}
+
+    def fake_connect(service):
+        return FakeConnect()
+
+    def fake_fetch_all(conn, sql, params):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [
+            {
+                "time": "2026-06-08 09:35:00",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+                "volume": 100,
+                "amount": 1000,
+            },
+            {
+                "time": "2026-06-08 09:40:00",
+                "open": 10.5,
+                "high": 12,
+                "low": 10,
+                "close": 11.5,
+                "volume": 200,
+                "amount": 2200,
+            },
+        ]
+
+    monkeypatch.setattr(bars, "connect", fake_connect)
+    monkeypatch.setattr(bars, "fetch_all", fake_fetch_all)
+
+    result = bars.load_bars(
+        asset_id="000001.SZ",
+        start_date="2026-06-08",
+        end_date="2026-06-08",
+        resolution="10m",
+        adjust_type="raw",
+        source="baostock",
+    )
+
+    assert "FROM market.stock_minute_bar" in captured["sql"]
+    assert captured["params"] == [
+        "CN:SZ:000001",
+        "2026-06-08 09:30:00",
+        "2026-06-08 15:00:00",
+        "5min",
+        "raw",
+        "baostock",
+    ]
+    assert result == [
+        {
+            "time": "2026-06-08 09:40:00",
+            "open": 10.0,
+            "high": 12.0,
+            "low": 9.0,
+            "close": 11.5,
+            "volume": 300.0,
+            "amount": 3200.0,
+        }
+    ]

@@ -3,12 +3,14 @@ import {
   fetchAssetNews,
   fetchAssetProfile,
   fetchAssetResearchReports,
+  fetchDailyBars,
   fetchEvidenceDigest,
   searchAssets,
   updateOperatorDecision
 } from '../api/client';
 import type {
   AssetNewsResponse,
+  BarPoint,
   AssetProfile,
   AssetResearchReportResponse,
   AssetSummary,
@@ -25,6 +27,15 @@ const DEFAULT_START_DATE = '2025-12-10';
 const DEFAULT_END_DATE = '2026-06-08';
 const SCORE_VERSION = 'manual_v1';
 const ADJUST_TYPE = 'qfq';
+const STOCK_CHART_VISIBLE_BARS = 120;
+const CHART_RESOLUTIONS = [
+  { value: '1D', label: '日K' },
+  { value: '60m', label: '60m' },
+  { value: '30m', label: '30m' },
+  { value: '10m', label: '10m' },
+  { value: '5m', label: '5m' }
+] as const;
+type ChartResolution = (typeof CHART_RESOLUTIONS)[number]['value'];
 
 type StockWorkspaceProps = {
   initialAssetId?: string;
@@ -256,6 +267,10 @@ export function StockWorkspace({
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
   const [endDate, setEndDate] = useState(initialTradeDate);
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
+  const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
+  const [chartBars, setChartBars] = useState<BarPoint[]>([]);
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
   const [evidenceDigest, setEvidenceDigest] = useState<EvidenceDigestResponse | null>(null);
@@ -347,6 +362,7 @@ export function StockWorkspace({
           return;
         }
         setProfile(nextProfile as StockWorkspaceAssetProfile);
+        setChartBars(nextProfile.bars ?? []);
         void loadAssetMatches(normalizedAssetId, requestId);
       } catch (err: unknown) {
         if (!isLatestProfileRequest(requestId)) {
@@ -354,6 +370,7 @@ export function StockWorkspace({
         }
         setError(err instanceof Error ? err.message : String(err));
         setProfile(null);
+        setChartBars([]);
         setAssetMatches([]);
       } finally {
         if (isLatestProfileRequest(requestId)) {
@@ -463,6 +480,46 @@ export function StockWorkspace({
         }
       });
   }, [profile?.canonical_asset_id]);
+
+  useEffect(() => {
+    if (!profile) {
+      setChartBars([]);
+      setChartError(null);
+      setIsChartLoading(false);
+      return;
+    }
+    if (chartResolution === '1D') {
+      setChartBars(profile.bars ?? []);
+      setChartError(null);
+      setIsChartLoading(false);
+      return;
+    }
+
+    let ignore = false;
+    setIsChartLoading(true);
+    setChartError(null);
+    fetchDailyBars(profile.canonical_asset_id, startDate, endDate, {
+      resolution: chartResolution,
+      adjustType: 'raw'
+    })
+      .then((rows) => {
+        if (!ignore) {
+          setChartBars(rows);
+          setIsChartLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setChartBars([]);
+          setChartError(err instanceof Error ? err.message : String(err));
+          setIsChartLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [chartResolution, endDate, profile, startDate]);
 
   useEffect(() => {
     if (!profile) {
@@ -949,10 +1006,32 @@ export function StockWorkspace({
                 <div className="section-heading">
                   <h2>价格走势</h2>
                   <span className="muted">
-                    {profile.bars.length} bars / {startDate} to {endDate}
+                    {chartBars.length} bars / {startDate} to {endDate}
                   </span>
                 </div>
-                {profile.bars.length > 0 ? <AssetChart bars={profile.bars} /> : <p className="muted">No bars available.</p>}
+                <div className="segmented-control stock-chart-resolution" role="group" aria-label="K line period">
+                  {CHART_RESOLUTIONS.map((resolution) => (
+                    <button
+                      key={resolution.value}
+                      type="button"
+                      className={chartResolution === resolution.value ? 'active' : ''}
+                      aria-pressed={chartResolution === resolution.value}
+                      onClick={() => setChartResolution(resolution.value)}
+                    >
+                      {resolution.label}
+                    </button>
+                  ))}
+                </div>
+                {isChartLoading ? <p className="muted">Loading chart bars...</p> : null}
+                {chartError ? <p className="error-text">{chartError}</p> : null}
+                {!isChartLoading && chartBars.length > 0 ? (
+                  <AssetChart
+                    bars={chartBars}
+                    timeAxisMode={chartResolution === '1D' ? 'daily' : 'intraday'}
+                    visibleBarCount={STOCK_CHART_VISIBLE_BARS}
+                  />
+                ) : null}
+                {!isChartLoading && !chartError && chartBars.length === 0 ? <p className="muted">No bars available.</p> : null}
               </section>
 
               <section className="stock-evidence-grid">

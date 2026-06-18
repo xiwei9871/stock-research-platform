@@ -1111,6 +1111,27 @@ describe('dashboard app shell', () => {
     expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
   });
 
+  it('switches stock workspace chart to intraday bars', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+    expect(await screen.findByRole('heading', { name: /贵州茅台|Stock Workspace/ })).toBeInTheDocument();
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('1 bars');
+
+    apiMocks.fetchDailyBars.mockClear();
+    apiMocks.fetchDailyBars.mockResolvedValueOnce(makeBars(3));
+    fireEvent.click(screen.getByRole('button', { name: '30m' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-10', '2026-06-08', {
+        resolution: '30m',
+        adjustType: 'raw'
+      })
+    );
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('3 bars');
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('opens Review Queue from navigation and follows review stock action', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce({
       ...makeAssetProfile('000001.SZ'),

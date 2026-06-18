@@ -10,7 +10,7 @@ from stock_research.dashboard.backtests import (
     run_replay_backtest,
 )
 from stock_research.dashboard.backtest_jobs import BacktestJobStore
-from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
+from stock_research.dashboard.bars import load_bars, load_daily_bars, load_minute_bars, normalize_resolution
 from stock_research.dashboard.decisions import load_asset_decision_history, update_operator_decision_event
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
@@ -366,14 +366,24 @@ def create_app() -> FastAPI:
     @app.get("/api/assets/{asset_id}/bars")
     def asset_daily_bars(
         asset_id: str,
-        start_date: str,
         end_date: str,
+        start_date: str | None = None,
+        resolution: str = "1D",
         adjust_type: str = "qfq",
+        source: str = "baostock",
     ):
+        resolved_resolution = normalize_resolution(resolution)
         return {
             "asset_id": asset_id,
-            "resolution": "1D",
-            "items": load_daily_bars(asset_id, start_date, end_date, adjust_type),
+            "resolution": resolved_resolution,
+            "items": load_bars(
+                asset_id=asset_id,
+                end_date=end_date,
+                start_date=start_date,
+                resolution=resolved_resolution,
+                adjust_type=adjust_type,
+                source=source,
+            ),
         }
 
     @app.get("/api/assets/{asset_id}/minute-bars")

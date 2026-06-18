@@ -1,6 +1,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Time } from 'lightweight-charts';
 import { AssetChart } from '../src/charts/AssetChart';
 import { toStrategyChartMarkers } from '../src/charts/strategyMarkers';
 import type { BarPoint, StrategySignal, StrategyTrade } from '../src/api/types';
@@ -15,13 +16,15 @@ const chartMocks = vi.hoisted(() => {
     })),
     setData: vi.fn()
   };
+  const timeScale = {
+    fitContent: vi.fn(),
+    setVisibleLogicalRange: vi.fn()
+  };
   const chart = {
     addSeries: vi.fn((seriesType) => (seriesType === 'HistogramSeries' ? volumeSeries : candleSeries)),
     applyOptions: vi.fn(),
     remove: vi.fn(),
-    timeScale: vi.fn(() => ({
-      fitContent: vi.fn()
-    }))
+    timeScale: vi.fn(() => timeScale)
   };
 
   return {
@@ -175,5 +178,80 @@ describe('strategy chart markers', () => {
         wickDownColor: '#1f9d55'
       })
     );
+  });
+
+  it('uses a fixed initial visible bar count instead of fitting all dense intraday bars', () => {
+    const bars = Array.from({ length: 180 }, (_, index) => bar({ time: `2026-06-03 10:${String(index).padStart(2, '0')}:00` }));
+
+    render(createElement(AssetChart, { bars, visibleBarCount: 120 }));
+    const chart = chartMocks.createChart.mock.results[0].value;
+    const timeScale = chart.timeScale();
+
+    expect(timeScale.setVisibleLogicalRange).toHaveBeenCalledWith({ from: 60, to: 179 });
+    expect(timeScale.fitContent).not.toHaveBeenCalled();
+  });
+
+  it('formats intraday axis ticks like trading software', () => {
+    render(
+      createElement(AssetChart, {
+        bars: [bar({ time: '2026-06-03 10:00:00' }), bar({ time: '2026-06-03 10:30:00' })],
+        timeAxisMode: 'intraday'
+      })
+    );
+
+    expect(chartMocks.createChart).toHaveBeenCalledWith(
+      expect.any(HTMLDivElement),
+      expect.objectContaining({
+        timeScale: expect.objectContaining({
+          timeVisible: true,
+          secondsVisible: false,
+          tickMarkMaxCharacterLength: 8,
+          tickMarkFormatter: expect.any(Function)
+        }),
+        localization: expect.objectContaining({
+          locale: 'zh-CN',
+          timeFormatter: expect.any(Function)
+        })
+      })
+    );
+    const calls = chartMocks.createChart.mock.calls as unknown as Array<
+      [
+        HTMLDivElement,
+        {
+          timeScale: { tickMarkFormatter: (time: Time, tickMarkType: number, locale: string) => string | null };
+          localization: { timeFormatter: (time: Time) => string };
+        }
+      ]
+    >;
+    const options = calls[0][1];
+    expect(options.timeScale.tickMarkFormatter(1780453800 as Time, 0, 'zh-CN')).toBe('10:30');
+    expect(options.localization.timeFormatter(1780453800 as Time)).toBe('2026-06-03 10:30');
+  });
+
+  it('labels the first intraday bar of each trade date with the date', () => {
+    render(
+      createElement(AssetChart, {
+        bars: [
+          bar({ time: '2026-06-03 10:00:00' }),
+          bar({ time: '2026-06-03 10:30:00' }),
+          bar({ time: '2026-06-04 10:00:00' })
+        ],
+        timeAxisMode: 'intraday'
+      })
+    );
+
+    const calls = chartMocks.createChart.mock.calls as unknown as Array<
+      [
+        HTMLDivElement,
+        {
+          timeScale: { tickMarkFormatter: (time: Time, tickMarkType: number, locale: string) => string | null };
+        }
+      ]
+    >;
+    const formatter = calls[0][1].timeScale.tickMarkFormatter;
+
+    expect(formatter(1780452000 as Time, 0, 'zh-CN')).toBe('06-03');
+    expect(formatter(1780453800 as Time, 0, 'zh-CN')).toBe('10:30');
+    expect(formatter(1780538400 as Time, 0, 'zh-CN')).toBe('06-04');
   });
 });

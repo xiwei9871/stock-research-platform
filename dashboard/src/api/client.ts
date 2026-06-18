@@ -285,11 +285,14 @@ export async function fetchDailyBars(
   assetId: string,
   startDate: string,
   endDate: string,
-  adjustType = 'qfq'
+  options: string | { resolution?: string; adjustType?: string } = 'qfq'
 ): Promise<BarPoint[]> {
+  const adjustType = typeof options === 'string' ? options : options.adjustType ?? 'qfq';
+  const resolution = typeof options === 'string' ? undefined : options.resolution;
+  const resolutionQuery = resolution ? `&resolution=${encodeURIComponent(resolution)}` : '';
   const payload = await getJson<{ items: BarPoint[] }>(
     `/api/assets/${encodeURIComponent(assetId)}/bars?start_date=${encodeURIComponent(startDate)}` +
-      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}`
+      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}${resolutionQuery}`
   );
   return payload.items;
 }
