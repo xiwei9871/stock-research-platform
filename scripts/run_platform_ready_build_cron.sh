@@ -13,8 +13,9 @@ ENRICH_DATASETS="${PLATFORM_READY_ENRICH_DATASETS:-lhb,repurchase,survey,forecas
 
 if [ -z "$TRADE_DATE" ]; then
   TRADE_DATE="$("$PYTHON" - <<'PY'
-from stock_research.daily_close_pipeline import PipelineConfig, resolve_trade_date
-print(resolve_trade_date(None, PipelineConfig()).isoformat())
+from stock_research.daily_close_pipeline import PipelineConfig, parse_trade_date
+config = PipelineConfig()
+print(parse_trade_date(None, config.timezone).isoformat())
 PY
 )"
 fi

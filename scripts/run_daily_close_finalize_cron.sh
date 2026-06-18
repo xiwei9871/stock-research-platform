@@ -14,7 +14,11 @@ fi
 
 run_stage() {
   local stage="$1"
-  "${PYTHON_BIN}" -m scripts.daily_pipeline "${resolve_args[@]}" --stage "${stage}"
+  if [[ -n "${TRADE_DATE}" ]]; then
+    "${PYTHON_BIN}" -m scripts.daily_pipeline --date "${TRADE_DATE}" --stage "${stage}"
+  else
+    "${PYTHON_BIN}" -m scripts.daily_pipeline --stage "${stage}"
+  fi
 }
 
 run_stage retry_failed

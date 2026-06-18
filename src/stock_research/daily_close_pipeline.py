@@ -491,6 +491,78 @@ def load_retry_ts_codes(service: str, trade_date: date, stage: str = "minute5") 
         return [str(row["ts_code"]) for row in fetch_all(conn, sql, [trade_date, stage])]
 
 
+def load_retry_failed_symbols(service: str, trade_date: date, stage: str = "minute5") -> list[dict[str, str]]:
+    sql = """
+    SELECT DISTINCT ON (source, ts_code) ts_code, source
+    FROM ops.daily_pipeline_failed_symbol
+    WHERE trade_date = %s AND stage = %s AND dataset_name = 'minute5_bar'
+      AND status IN ('pending', 'failed')
+    ORDER BY source, ts_code, updated_at DESC
+    """
+    with connect(service) as conn:
+        return [
+            {"ts_code": str(row["ts_code"]), "source": str(row["source"])}
+            for row in fetch_all(conn, sql, [trade_date, stage])
+        ]
+
+
+def load_latest_minute5_missing_symbols(service: str, trade_date: date) -> list[str]:
+    sql = """
+    SELECT missing_symbols
+    FROM ops.daily_pipeline_quality
+    WHERE trade_date = %s
+      AND dataset_name = 'minute5_bar'
+    ORDER BY updated_at DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    if not rows:
+        return []
+    return [str(ts_code) for ts_code in rows[0].get("missing_symbols") or []]
+
+
+def inspect_minute5_quality_from_db(
+    service: str, expected_ts_codes: list[str], target_date: date
+) -> dict[str, Any]:
+    sql = """
+    SELECT
+        ts_code,
+        count(*)::int AS bar_count,
+        bool_or(trade_time::time BETWEEN time '09:00' AND time '11:35') AS has_morning,
+        bool_or(trade_time::time BETWEEN time '13:00' AND time '15:05') AS has_afternoon
+    FROM market.stock_minute_bar
+    WHERE trade_date = %s
+      AND freq = '5min'
+      AND adjust_type = 'raw'
+      AND ts_code = ANY(%s)
+    GROUP BY ts_code
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [target_date, expected_ts_codes])
+    by_code = {str(row["ts_code"]): row for row in rows}
+    missing, abnormal = [], []
+    for ts_code in expected_ts_codes:
+        row = by_code.get(ts_code)
+        if not row:
+            missing.append(ts_code)
+            continue
+        bar_count = int(row.get("bar_count") or 0)
+        if bar_count < 40 or not row.get("has_morning") or not row.get("has_afternoon"):
+            abnormal.append(ts_code)
+    status = "pass"
+    if missing or abnormal:
+        status = "warning" if by_code else "fail"
+    return {
+        "status": status,
+        "expected_count": len(expected_ts_codes),
+        "actual_count": len(by_code),
+        "missing_symbols": missing,
+        "abnormal_symbols": sorted(set(abnormal)),
+        "check_summary": f"minute5 covered={len(by_code)} missing={len(missing)} abnormal={len(set(abnormal))}",
+    }
+
+
 def call_with_timeout(
     func: Callable[..., Any], timeout_seconds: int, *args: Any, **kwargs: Any
 ) -> Any:
@@ -1464,18 +1536,138 @@ def run_retry_failed_stage(
     fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
 ) -> dict[str, Any]:
-    ts_codes = load_retry_ts_codes(config.service, trade_date, "minute5")
-    if not ts_codes:
+    missing_symbols = load_latest_minute5_missing_symbols(config.service, trade_date)
+    if not missing_symbols:
         return {"stage": "retry_failed", "status": "skipped", "rows": 0, "failed_symbols": []}
-    result = run_minute5_stage(
-        trade_date, config=config, ts_codes=ts_codes, fetcher=fetcher, upserter=upserter
-    )
-    for ts_code in ts_codes:
-        if ts_code not in result.get("failed_symbols", []):
-            mark_failed_symbol_success(
-                config.service, trade_date, "minute5", "minute5_bar", ts_code, "akshare"
+
+    akshare_failed = [ts_code for ts_code in missing_symbols if ts_code.endswith(".SH")]
+    baostock_failed = [ts_code for ts_code in missing_symbols if ts_code.endswith(".SZ")]
+    rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
+    failures: dict[str, str] = {}
+    attempts: dict[str, int] = {}
+    lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
+
+    def _fetch_with_source(source: str, ts_code: str) -> tuple[str, str, list[dict[str, Any]], int, str | None]:
+        source_fetcher = fetch_baostock_minute5_rows if source == "baostock" else fetcher
+        rows, attempt_count, error = retry_call(
+            lambda: source_fetcher(
+                ts_code,
+                start_date=lookback_start,
+                end_date=trade_date,
+                timeout_seconds=config.request_timeout_seconds,
+            ),
+            max_retries=config.max_retries,
+        )
+        return source, ts_code, rows, attempt_count, error
+
+    retry_plan = [
+        ("baostock", akshare_failed, config.max_workers_baostock_minute5),
+        ("akshare", baostock_failed, config.max_workers_akshare_minute5),
+    ]
+    for source, codes, workers in retry_plan:
+        if not codes:
+            continue
+        if source == "baostock":
+            executor = concurrent.futures.ProcessPoolExecutor(
+                max_workers=max(1, workers),
+                initializer=baostock_login_or_raise,
             )
-    return {"stage": "retry_failed", **result}
+            try:
+                future_to_code = {
+                    executor.submit(
+                        fetch_baostock_minute5_worker,
+                        ts_code,
+                        lookback_start,
+                        trade_date,
+                        config.request_timeout_seconds,
+                        config.max_retries,
+                    ): ts_code
+                    for ts_code in codes
+                }
+                pending = set(future_to_code)
+                deadline = time.monotonic() + config.minute5_source_timeout_seconds
+                while pending:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        for future in pending:
+                            failures[future_to_code[future]] = "minute5 fallback timeout"
+                        if hasattr(executor, "terminate_workers"):
+                            executor.terminate_workers()
+                        else:
+                            executor.shutdown(wait=False, cancel_futures=True)
+                        break
+                    done, pending = concurrent.futures.wait(
+                        pending,
+                        timeout=min(5.0, remaining),
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    for future in done:
+                        ts_code = future_to_code[future]
+                        try:
+                            ts_code, rows, attempt_count, error = future.result()
+                        except Exception as exc:  # noqa: BLE001 - worker failure is per-symbol failure.
+                            rows, attempt_count = [], 0
+                            error = f"{type(exc).__name__}: {exc}"
+                        attempts[ts_code] = attempt_count
+                        if error:
+                            failures[ts_code] = error
+                        else:
+                            rows_by_symbol[ts_code] = rows
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+                futures = [executor.submit(_fetch_with_source, source, ts_code) for ts_code in codes]
+                for future in concurrent.futures.as_completed(futures):
+                    _source, ts_code, rows, attempt_count, error = future.result()
+                    attempts[ts_code] = attempt_count
+                    if error:
+                        failures[ts_code] = error
+                    else:
+                        rows_by_symbol[ts_code] = rows
+
+    rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
+    rows_upserted = upserter(config.service, rows)
+    for ts_code in missing_symbols:
+        if ts_code not in failures and ts_code in rows_by_symbol:
+            original_source = "akshare" if ts_code.endswith(".SH") else "baostock"
+            mark_failed_symbol_success(
+                config.service, trade_date, "minute5", "minute5_bar", ts_code, original_source
+            )
+    expected_ts_codes = load_active_ts_codes(config.service, trade_date)
+    quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
+    upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+    coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
+    status = (
+        "success"
+        if not quality["missing_symbols"] and not quality["abnormal_symbols"]
+        else "partial_success"
+        if rows_upserted and coverage >= config.minute5_min_coverage_ratio
+        else "failed"
+    )
+    now = datetime.now(ZoneInfo(config.timezone))
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="minute5_bar",
+        stage="minute5",
+        source="fallback",
+        status=status,
+        started_at=now,
+        finished_at=now,
+        attempt_count=max(attempts.values(), default=0),
+        rows_inserted=rows_upserted,
+        rows_failed=len(failures),
+        missing_symbols_count=len(quality["missing_symbols"]),
+        error_summary="; ".join(f"{code}:{err}" for code, err in list(failures.items())[:5]) or None,
+    )
+    return {
+        "stage": "retry_failed",
+        "status": status,
+        "rows": rows_upserted,
+        "failed_symbols": sorted(failures),
+        "attempts": max(attempts.values(), default=0),
+    }
 
 
 @dataclass(frozen=True)
@@ -1576,6 +1768,14 @@ def _stage_status_from_jobs(rows: list[dict[str, Any]], stage: str) -> str:
     stage_rows = [row for row in rows if row["stage"] == stage]
     if not stage_rows:
         return "skipped"
+    if stage == "minute5":
+        fallback_statuses = {
+            row["status"] for row in stage_rows if row.get("source") == "fallback"
+        }
+        if "success" in fallback_statuses:
+            return "success"
+        if "partial_success" in fallback_statuses:
+            return "partial_success"
     statuses = {row["status"] for row in stage_rows}
     if "failed" in statuses:
         return "failed"
