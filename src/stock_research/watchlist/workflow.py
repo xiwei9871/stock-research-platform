@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -169,6 +170,7 @@ def build_watchlist_snapshot(
         score_version=score_version,
         top_n=top_n,
     )
+    watchlist_items = _append_top_score_candidates(watchlist_items, top_scores)
     asset_ids = sorted(
         {
             str(row.get("asset_id"))
@@ -209,6 +211,72 @@ def build_watchlist_snapshot(
     frame["trade_date"] = trade_date
     store_watchlist_daily_signals(frame)
     return frame
+
+
+def _append_top_score_candidates(
+    watchlist_items: pd.DataFrame,
+    top_scores: list[dict[str, object]],
+) -> pd.DataFrame:
+    if not top_scores:
+        return watchlist_items
+
+    existing_asset_ids = {
+        str(row.get("asset_id"))
+        for row in watchlist_items.to_dict("records")
+        if row.get("asset_id")
+    }
+    candidate_asset_ids = [
+        str(row.get("asset_id"))
+        for row in top_scores
+        if row.get("asset_id") and str(row.get("asset_id")) not in existing_asset_ids
+    ]
+    if not candidate_asset_ids:
+        return watchlist_items
+
+    identity = _load_asset_identity_map(candidate_asset_ids)
+    identity_map = {
+        str(row.get("asset_id")): row
+        for row in identity.to_dict("records")
+        if row.get("asset_id")
+    }
+    candidate_rows: list[dict[str, object]] = []
+    for row in top_scores:
+        asset_id = str(row.get("asset_id") or "")
+        if not asset_id or asset_id in existing_asset_ids:
+            continue
+        asset_identity = identity_map.get(asset_id, {})
+        rank = row.get("rank")
+        candidate_rows.append(
+            {
+                "watchlist_id": None,
+                "asset_id": asset_id,
+                "stock_code": asset_identity.get("ts_code") or _ts_code_from_asset_id(asset_id),
+                "stock_name": asset_identity.get("stock_name") or asset_id,
+                "priority": _candidate_priority(rank),
+                "source": "top_score",
+            }
+        )
+
+    if not candidate_rows:
+        return watchlist_items
+
+    candidates = pd.DataFrame(candidate_rows)
+    if watchlist_items.empty:
+        return candidates
+    return pd.concat([watchlist_items, candidates], ignore_index=True, sort=False)
+
+
+def _candidate_priority(rank: object) -> int:
+    try:
+        if pd.isna(rank):
+            return 100
+    except Exception:
+        pass
+    if isinstance(rank, bool):
+        return 100
+    if isinstance(rank, int | float | Decimal):
+        return int(rank)
+    return 100
 
 
 def explain_watchlist_asset(

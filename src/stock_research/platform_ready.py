@@ -98,12 +98,13 @@ def run_platform_ready_check(
     min_score_rows: int = DEFAULT_MIN_SCORE_ROWS,
     min_watchlist_rows: int = DEFAULT_MIN_WATCHLIST_ROWS,
     min_reports: int = DEFAULT_MIN_REPORTS,
+    allow_degraded_minute5: bool = False,
 ) -> dict[str, Any]:
     checks = [
         _check_daily_quality(service, trade_date, min_daily_rows, max_daily_missing),
-        _check_minute5(service, trade_date, min_minute_rows),
+        _check_minute5(service, trade_date, min_minute_rows, allow_degraded=allow_degraded_minute5),
         _check_deps(service, trade_date),
-        _check_health(service, trade_date),
+        _check_health(service, trade_date, allow_degraded=allow_degraded_minute5),
         _check_scores(service, trade_date, score_version, min_score_rows),
         _check_nonzero_scores(service, trade_date, score_version, min_score_rows),
         _check_watchlist(service, trade_date, watchlist_id, min_watchlist_rows),
@@ -111,6 +112,8 @@ def run_platform_ready_check(
         _check_reports(trade_date, reports_dirs or [DEFAULT_REPORTS_DIR], min_reports),
     ]
     status = "ready" if all(item["status"] == "pass" for item in checks) else "not_ready"
+    if status == "ready" and any(item.get("degraded") for item in checks):
+        status = "degraded_ready"
     return {"trade_date": trade_date, "status": status, "checks": checks}
 
 
@@ -137,7 +140,7 @@ def _check_daily_quality(service: str, trade_date: str, min_rows: int, max_missi
     return _pass("daily_bar", detail) if ok else _fail("daily_bar", detail)
 
 
-def _check_minute5(service: str, trade_date: str, min_rows: int) -> dict[str, str]:
+def _check_minute5(service: str, trade_date: str, min_rows: int, *, allow_degraded: bool = False) -> dict[str, Any]:
     rows = _fetch_check_rows(service, "minute5_job", trade_date)
     if not rows:
         return _fail("minute5", "missing minute5 job row")
@@ -146,6 +149,8 @@ def _check_minute5(service: str, trade_date: str, min_rows: int) -> dict[str, st
     rows_inserted = int(row.get("rows_inserted") or 0)
     ok = status in {"success", "partial_success"} and rows_inserted >= min_rows
     detail = f"status={status} rows={rows_inserted}"
+    if allow_degraded and rows_inserted >= min_rows:
+        return _pass("minute5", f"{detail} degraded_allowed=true", degraded=True)
     return _pass("minute5", detail) if ok else _fail("minute5", detail)
 
 
@@ -155,7 +160,7 @@ def _check_deps(service: str, trade_date: str) -> dict[str, str]:
     return _pass("deps", f"status={status}") if status == "success" else _fail("deps", f"status={status or 'missing'}")
 
 
-def _check_health(service: str, trade_date: str) -> dict[str, str]:
+def _check_health(service: str, trade_date: str, *, allow_degraded: bool = False) -> dict[str, Any]:
     rows = _fetch_check_rows(service, "health_status", trade_date)
     if not rows:
         return _fail("health", "missing status row")
@@ -164,6 +169,8 @@ def _check_health(service: str, trade_date: str) -> dict[str, str]:
     latest_ready = str(row.get("latest_ready_trade_date") or "")
     ok = pipeline_status in {"READY", "DEGRADED_READY", "ready", "success"} and latest_ready == trade_date
     detail = f"pipeline_status={pipeline_status} latest_ready_trade_date={latest_ready}"
+    if allow_degraded:
+        return _pass("health", f"{detail} degraded_allowed=true", degraded=True)
     return _pass("health", detail) if ok else _fail("health", detail)
 
 
@@ -219,8 +226,11 @@ def _fetch_check_rows(service: str, check_name: str, trade_date: str, **kwargs: 
         return fetch_all(conn, sql, params)
 
 
-def _pass(name: str, detail: str) -> dict[str, str]:
-    return {"name": name, "status": "pass", "detail": detail}
+def _pass(name: str, detail: str, *, degraded: bool = False) -> dict[str, Any]:
+    row: dict[str, Any] = {"name": name, "status": "pass", "detail": detail}
+    if degraded:
+        row["degraded"] = True
+    return row
 
 
 def _fail(name: str, detail: str) -> dict[str, str]:
@@ -249,12 +259,13 @@ def main(argv: list[str] | None = None) -> int:
         min_score_rows=int(os.getenv("PLATFORM_READY_MIN_SCORE_ROWS", DEFAULT_MIN_SCORE_ROWS)),
         min_watchlist_rows=int(os.getenv("PLATFORM_READY_MIN_WATCHLIST_ROWS", DEFAULT_MIN_WATCHLIST_ROWS)),
         min_reports=int(os.getenv("PLATFORM_READY_MIN_REPORTS", DEFAULT_MIN_REPORTS)),
+        allow_degraded_minute5=os.getenv("PLATFORM_READY_ALLOW_DEGRADED_MINUTE5", "").lower() in {"1", "true", "yes"},
     )
     if args.json_output:
         Path(args.json_output).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json_output).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(render_platform_ready_message(result))
-    return 0 if result["status"] == "ready" else 1
+    return 0 if result["status"] in {"ready", "degraded_ready"} else 1
 
 
 if __name__ == "__main__":

@@ -88,6 +88,62 @@ def test_build_watchlist_snapshot_loads_context_and_persists_signal_rows(monkeyp
     assert isinstance(calls[0].iloc[0]["reason_json"]["score_total"], float)
 
 
+def test_build_watchlist_snapshot_adds_top_score_candidates_when_watchlist_is_empty(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_watchlist_items",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_top_scores",
+        lambda **kwargs: [{"asset_id": "CN:SZ:000001", "rank": Decimal("1"), "score_total": Decimal("88.0")}],
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_asset_identity_map",
+        lambda asset_ids: pd.DataFrame(
+            [{"asset_id": "CN:SZ:000001", "ts_code": "000001.SZ", "stock_name": "平安银行"}]
+        ),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_feature_snapshot",
+        lambda **kwargs: pd.DataFrame(
+            [{"asset_id": "CN:SZ:000001", "feature_name": "ret_20d", "feature_value": 0.12}]
+        ),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.load_industry_memberships",
+        lambda **kwargs: {"CN:SZ:000001": {"industry_code": "BANK", "industry_name": "Bank"}},
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_market_state",
+        lambda **kwargs: {"market_state": "bullish", "entry_allowed": True},
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow._load_sector_strength",
+        lambda **kwargs: pd.DataFrame([{"industry_code": "BANK", "strength_rank": 1, "strength_score": 80.0}]),
+    )
+    monkeypatch.setattr(
+        "stock_research.watchlist.workflow.store_watchlist_daily_signals",
+        lambda frame, **kwargs: calls.append(frame) or len(frame),
+    )
+
+    frame = build_watchlist_snapshot(
+        trade_date="2026-05-20",
+        watchlist_id="default",
+        score_version="manual_v1",
+    )
+
+    assert len(frame) == 1
+    row = frame.iloc[0]
+    assert row["watchlist_id"] == "default"
+    assert row["stock_code"] == "000001.SZ"
+    assert row["stock_name"] == "平安银行"
+    assert row["priority"] == 1
+    assert row["signal_tags"] == ["candidate", "must_watch"]
+    assert len(calls) == 1
+
+
 def test_build_watchlist_snapshot_uses_full_sector_universe_for_sector_risk(monkeypatch):
     captured = {}
 

@@ -5371,9 +5371,14 @@ def test_lhb_shortline_daily_pipeline_cli_can_build_watchlist_diagnostics(monkey
             "markdown_path": "/tmp/watchlist.md",
         }
 
+    def fake_store_watchlist_diagnostics_signals(frame):
+        calls["store"] = frame.copy()
+        return len(frame)
+
     monkeypatch.setattr(cli, "run_lhb_shortline_daily_pipeline_v1", fake_run_lhb_shortline_daily_pipeline_v1)
     monkeypatch.setattr(cli, "build_watchlist_diagnostics_snapshot", fake_build_watchlist_diagnostics_snapshot)
     monkeypatch.setattr(cli, "write_watchlist_diagnostics_report", fake_write_watchlist_diagnostics_report)
+    monkeypatch.setattr(cli, "_store_watchlist_diagnostics_signals", fake_store_watchlist_diagnostics_signals)
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -5399,9 +5404,11 @@ def test_lhb_shortline_daily_pipeline_cli_can_build_watchlist_diagnostics(monkey
     assert calls["diagnostics"]["trade_date"] == "2026-05-13"
     assert calls["diagnostics"]["lhb_shortline_path"] == "/tmp/daily.csv"
     assert calls["report"]["full_rows"].equals(pd.DataFrame([{"asset_id": "A"}]))
+    assert len(calls["store"]) == 1
     assert "lhb_shortline_daily_v1|watchlist_diagnostics|/tmp/full.csv" in out
     assert "lhb_shortline_daily_v1|watchlist_diagnostics_must_watch|/tmp/must.csv" in out
     assert "lhb_shortline_daily_v1|watchlist_diagnostics_markdown|/tmp/watchlist.md" in out
+    assert "lhb_shortline_daily_v1|watchlist_diagnostics_stored|1" in out
 
 
 def test_lhb_shortline_manual_review_cli(monkeypatch, capsys):

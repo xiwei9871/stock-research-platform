@@ -189,6 +189,10 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
             "markdown_path": "/tmp/watchlist_diagnostics.md",
         }
 
+    def fake_store_watchlist_diagnostics_signals(frame):
+        calls["store"] = frame.copy()
+        return len(frame)
+
     monkeypatch.setattr(
         "stock_research.cli.build_watchlist_diagnostics_snapshot",
         fake_build_watchlist_diagnostics_snapshot,
@@ -196,6 +200,10 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
     monkeypatch.setattr(
         "stock_research.cli.write_watchlist_diagnostics_report",
         fake_write_watchlist_diagnostics_report,
+    )
+    monkeypatch.setattr(
+        "stock_research.cli._store_watchlist_diagnostics_signals",
+        fake_store_watchlist_diagnostics_signals,
     )
 
     cli.main_for_args(
@@ -222,6 +230,7 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
     assert "watchlist_diagnostics|full_csv|/tmp/watchlist_diagnostics.csv" in lines
     assert "watchlist_diagnostics|must_watch_csv|/tmp/watchlist_diagnostics_must_watch.csv" in lines
     assert "watchlist_diagnostics|markdown|/tmp/watchlist_diagnostics.md" in lines
+    assert "watchlist_diagnostics|stored|1" in lines
     assert calls["build"] == {
         "trade_date": "2026-05-20",
         "score_version": "custom_v2",
@@ -238,6 +247,7 @@ def test_build_watchlist_diagnostics_cli_prints_artifact_paths(monkeypatch, caps
         "trade_date": "2026-05-20",
         "watchlist_id": "diagnostics",
     }
+    assert len(calls["store"]) == 1
 
 
 def test_watchlist_report_cli_loads_persisted_rows_and_writes_report(monkeypatch):
