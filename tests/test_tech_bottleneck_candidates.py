@@ -445,7 +445,7 @@ def test_snapshot_rejects_candidate_as_of_before_source_evidence_dates(column: s
         )
 
 
-@pytest.mark.parametrize("filter_decision", ["fail", "maybe"])
+@pytest.mark.parametrize("filter_decision", ["fail", "maybe", " pass "])
 def test_snapshot_rejects_non_pass_source_filter_decision(filter_decision: str) -> None:
     with pytest.raises(ValueError, match="base candidate filter_decision must be pass"):
         build_point_in_time_candidate_snapshots(

@@ -307,7 +307,7 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
     if bool(duplicates.any()):
         raise ValueError("duplicate candidate source rows for asset_id and candidate_as_of_date")
     if "filter_decision" in frame.columns:
-        source_filter_decision = _string_column(frame, "filter_decision").str.strip()
+        source_filter_decision = _string_column(frame, "filter_decision")
         if bool((source_filter_decision != "pass").any()):
             raise ValueError("base candidate filter_decision must be pass")
 
