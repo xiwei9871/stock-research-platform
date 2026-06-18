@@ -436,6 +436,15 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "error_message": "",
         },
         {
+            "module": "review_queue_strategy_manifest",
+            "source": "dashboard",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 20,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
             "module": "review_evidence_snapshots",
             "source": "dashboard",
             "tier": "tier2",
@@ -472,7 +481,13 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "error_message": "",
         },
     ]
+    for module in modules:
+        module["trade_date"] = "2026-06-12"
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
     monkeypatch.setattr(
         readiness,
         "load_platform_summary",
@@ -521,6 +536,93 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
     ]
 
 
+def test_readiness_includes_display_date_gate(monkeypatch):
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-06-18",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+    monkeypatch.setattr(
+        readiness,
+        "_load_manifest_modules",
+        lambda: [
+            {
+                "run_id": "r1",
+                "trade_date": "2026-06-17",
+                "module": "daily_bars",
+                "status": "success",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        readiness,
+        "select_display_date",
+        lambda modules, latest_market_date, **kwargs: {
+            "display_trade_date": "2026-06-17",
+            "latest_market_date": latest_market_date,
+            "candidate_trade_date": "2026-06-18",
+            "display_status": "ready",
+            "candidate_status": "before_cutoff",
+            "strategy_ready": "3/3",
+            "contract_valid": "3/3",
+            "blocking_reasons": [],
+        },
+    )
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["display_trade_date"] == "2026-06-17"
+    assert payload["candidate_trade_date"] == "2026-06-18"
+    assert payload["display_gate"]["candidate_status"] == "before_cutoff"
+
+
+def test_display_gate_failure_blocks_manifest_readiness(monkeypatch):
+    modules = [
+        {"module": "daily_bars", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "technical_features", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "score_topn", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "lhb_features", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "review_queue", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "review_evidence_snapshots", "tier": "tier2", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "news", "tier": "tier2", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "research_reports", "tier": "tier2", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+        {"module": "generated_reports", "tier": "tier2", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
+    ]
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-06-12",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: True)
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["display_trade_date"] == ""
+    assert payload["display_gate"]["candidate_status"] == "incomplete"
+    assert payload["status"] == "BLOCKED"
+    assert "display_trade_date" in payload["missing_data"]
+    assert any(
+        warning.startswith("Display trade date unavailable: incomplete")
+        for warning in payload["warnings"]
+    )
+
+
 def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
     modules = [
         {"module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
@@ -531,12 +633,19 @@ def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
         {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_evidence_snapshots", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "news", "tier": "tier2", "status": "failed", "warnings": ["news down"], "error_message": "news down"},
         {"module": "research_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "generated_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
     ]
+    for module in modules:
+        module["trade_date"] = "2026-06-12"
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
     monkeypatch.setattr(
         readiness,
         "load_platform_summary",
@@ -566,6 +675,7 @@ def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
         {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {
             "module": "review_evidence_snapshots",
             "tier": "tier2",
@@ -577,7 +687,13 @@ def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
         {"module": "research_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "generated_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
     ]
+    for module in modules:
+        module["trade_date"] = "2026-06-12"
     monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
     monkeypatch.setattr(
         readiness,
         "load_platform_summary",

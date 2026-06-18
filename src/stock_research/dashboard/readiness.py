@@ -10,6 +10,7 @@ from stock_research.data_run_manifest import (
     load_latest_data_run_manifest,
     summarize_manifest_modules,
 )
+from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
 from stock_research.db import connect, fetch_all
@@ -150,6 +151,10 @@ def _build_manifest_readiness(
     errors = list(summary["errors"])
     checks = _manifest_checks(manifest_modules, latest_market_date, topn_preview)
     latest_trade_date = latest_market_date or _latest_trade_date_from_manifest(manifest_modules)
+    display_gate = select_display_date(
+        manifest_modules,
+        latest_market_date=latest_trade_date,
+    )
     health_groups = _build_manifest_health_groups(
         modules=manifest_modules,
         latest_market_date=latest_trade_date,
@@ -162,6 +167,13 @@ def _build_manifest_readiness(
     if not topn_preview:
         missing_data.extend(["score_topn", "review_queue"])
         warnings.extend([UNAVAILABLE_WARNINGS["topn_preview"], UNAVAILABLE_WARNINGS["review_queue"]])
+    if not display_gate["display_trade_date"] or display_gate["display_status"] != "ready":
+        missing_data.append("display_trade_date")
+        display_reason = str(display_gate.get("candidate_status") or "missing")
+        blocking_reasons = [str(reason) for reason in display_gate.get("blocking_reasons") or [] if str(reason)]
+        if blocking_reasons:
+            display_reason = f"{display_reason}: {', '.join(blocking_reasons)}"
+        warnings.append(f"Display trade date unavailable: {display_reason}")
 
     health_blocking_missing = _health_missing_keys(
         health_groups,
@@ -185,6 +197,9 @@ def _build_manifest_readiness(
         "run_id": run_id,
         "latest_trade_date": latest_trade_date,
         "latest_market_date": latest_trade_date,
+        "display_trade_date": display_gate["display_trade_date"],
+        "candidate_trade_date": display_gate["candidate_trade_date"],
+        "display_gate": display_gate,
         "source": "data_run_manifest",
         "summary_path": _summary_path_from_manifest(manifest_modules),
         "tiers": [
