@@ -7,14 +7,14 @@ from zoneinfo import ZoneInfo
 from stock_research.dashboard.display_date_gate import select_display_date
 
 
-def _module(trade_date, module, *, status="success", summary=None, run_id=None):
+def _module(trade_date, module, *, status="success", summary=None, run_id=None, metadata=None):
     return {
         "run_id": run_id or f"strategy-eod-{trade_date}-local",
         "trade_date": trade_date,
         "latest_trade_date": trade_date,
         "module": module,
         "status": status,
-        "metadata": {"summary": summary or {}},
+        "metadata": metadata or {"summary": summary or {}},
     }
 
 
@@ -62,10 +62,18 @@ def _ready_modules(trade_date):
         _module(trade_date, "technical_features"),
         _module(trade_date, "score_topn"),
         _module(trade_date, "lhb_features"),
+        _module(trade_date, "tech_bottleneck_candidates"),
         _module(trade_date, "review_queue_strategy_manifest"),
         _module(trade_date, "strategy_lhb_shortline", summary=_valid_strategy_summary("lhb_shortline")),
         _module(trade_date, "strategy_mid_trend", summary=_valid_strategy_summary("mid_trend")),
-        _module(trade_date, "strategy_tech_bottleneck", summary=_valid_strategy_summary("tech_bottleneck")),
+        _module(
+            trade_date,
+            "strategy_tech_bottleneck",
+            metadata={
+                "summary": _valid_strategy_summary("tech_bottleneck"),
+                "candidate_snapshot_latest_date": trade_date,
+            },
+        ),
     ]
 
 
@@ -138,6 +146,61 @@ def test_select_display_date_switches_after_cutoff_when_today_ready(monkeypatch)
     assert result["display_trade_date"] == "2026-06-18"
     assert result["display_status"] == "ready"
     assert result["strategy_ready"] == "3/3"
+
+
+def test_select_display_date_blocks_missing_tech_candidates_after_cutoff(monkeypatch):
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+    now = datetime(2026, 6, 18, 20, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+    modules = [
+        row
+        for row in _ready_modules("2026-06-18")
+        if row["module"] != "tech_bottleneck_candidates"
+    ]
+
+    result = select_display_date(
+        modules,
+        now=now,
+        latest_market_date="2026-06-18",
+    )
+
+    assert result["display_trade_date"] == ""
+    assert result["candidate_status"] == "incomplete"
+    assert "missing:tech_bottleneck_candidates" in result["blocking_reasons"]
+
+
+def test_select_display_date_blocks_stale_tech_candidate_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+    now = datetime(2026, 6, 18, 20, 40, tzinfo=ZoneInfo("Asia/Shanghai"))
+    modules = [
+        (
+            {
+                **row,
+                "metadata": {
+                    **row["metadata"],
+                    "candidate_snapshot_latest_date": "2026-06-17",
+                },
+            }
+            if row["module"] == "strategy_tech_bottleneck"
+            else row
+        )
+        for row in _ready_modules("2026-06-18")
+    ]
+
+    result = select_display_date(
+        modules,
+        now=now,
+        latest_market_date="2026-06-18",
+    )
+
+    assert result["display_trade_date"] == ""
+    assert result["candidate_status"] == "incomplete"
+    assert "tech_bottleneck:candidate_snapshot_stale:2026-06-17" in result["blocking_reasons"]
 
 
 def test_select_display_date_reports_fallback_latest_market_date(monkeypatch):

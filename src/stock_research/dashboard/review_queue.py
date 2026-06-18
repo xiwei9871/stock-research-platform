@@ -171,11 +171,31 @@ def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[st
         module_name = str(module.get("module") or "")
         if not module_name.startswith("strategy_") or str(module.get("status") or "") != "success":
             continue
+        if not _manifest_strategy_snapshot_valid(module):
+            continue
         if not _manifest_strategy_contract_valid(module):
             continue
         artifact_path = Path(str(module.get("artifact_path") or ""))
         rows.extend(_read_manifest_strategy_artifact(artifact_path, trade_date=trade_date, limit=limit, manifest=module))
     return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+
+
+def _manifest_strategy_snapshot_valid(module: dict[str, Any]) -> bool:
+    if str(module.get("module") or "") != "strategy_tech_bottleneck":
+        return True
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    snapshot_date = _candidate_snapshot_latest_date(metadata)
+    if not snapshot_date:
+        return True
+    manifest_trade_date = str(module.get("trade_date") or module.get("latest_trade_date") or "")[:10]
+    return snapshot_date == manifest_trade_date
+
+
+def _candidate_snapshot_latest_date(metadata: dict[str, Any]) -> str:
+    snapshot_date = metadata.get("candidate_snapshot_latest_date")
+    if not snapshot_date and isinstance(metadata.get("summary"), dict):
+        snapshot_date = metadata["summary"].get("candidate_snapshot_latest_date")
+    return str(snapshot_date or "")[:10]
 
 
 def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
