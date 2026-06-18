@@ -451,7 +451,7 @@ def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monke
     result = dcp.run_minute5_stage(
         date(2026, 6, 5),
         config=config,
-        ts_codes=["000001.SZ", "600000.SH"],
+        ts_codes=["600001.SH", "600000.SH"],
         fetcher=fake_fetcher,
         upserter=lambda _service, rows: len(rows),
     )
@@ -459,6 +459,75 @@ def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monke
     assert result["status"] == "partial_success"
     assert result["failed_symbols"] == ["600000.SH"]
     assert failed_symbols == ["600000.SH"]
+
+
+def test_split_minute5_sources_routes_sh_to_akshare_sz_to_baostock_and_ignores_bj():
+    result = dcp.split_minute5_sources(["600000.SH", "000001.SZ", "920000.BJ"])
+
+    assert result == {
+        "akshare": ["600000.SH"],
+        "baostock": ["000001.SZ"],
+    }
+
+
+def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
+    recorded_jobs = []
+    monkeypatch.setattr(dcp, "upsert_job", lambda **kwargs: recorded_jobs.append(kwargs))
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+    config = dcp.PipelineConfig(
+        service="test",
+        max_retries=1,
+        max_workers_akshare_minute5=2,
+        max_workers_baostock_minute5=2,
+        minute5_min_coverage_ratio=0.5,
+        force_non_trading_day=True,
+    )
+
+    def rows_for(ts_code: str, source: str):
+        rows = []
+        for hour in [9, 10, 11, 13, 14]:
+            for minute in [0, 5, 10, 15, 20, 25, 30, 35, 40]:
+                rows.append(
+                    {
+                        "asset_id": f"asset:{ts_code}",
+                        "ts_code": ts_code,
+                        "trade_time": datetime(2026, 6, 5, hour, minute),
+                        "trade_date": date(2026, 6, 5),
+                        "freq": "5min",
+                        "adjust_type": "raw",
+                        "open": 1,
+                        "high": 1,
+                        "low": 1,
+                        "close": 1,
+                        "volume": 1,
+                        "amount": 1,
+                        "source": source,
+                    }
+                )
+        return rows
+
+    def fake_akshare(ts_code, start_date, end_date, timeout_seconds):
+        return rows_for(ts_code, "akshare")
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return rows_for(ts_code, "baostock")
+
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=config,
+        ts_codes=["600000.SH", "000001.SZ"],
+        fetcher=fake_akshare,
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    finished = [job for job in recorded_jobs if job["status"] == "success"]
+    assert result["status"] == "success"
+    assert result["source_symbols"] == {"akshare": 1, "baostock": 1}
+    assert {job["source"] for job in finished} == {"akshare", "baostock"}
 
 
 def test_finalize_pipeline_status_degrades_for_partial_core(monkeypatch):

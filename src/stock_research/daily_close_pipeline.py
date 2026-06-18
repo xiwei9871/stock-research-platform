@@ -15,6 +15,11 @@ from zoneinfo import ZoneInfo
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute, execute_many, fetch_all
+from stock_research.minute_data import (
+    login_or_raise as baostock_login_or_raise,
+    minute_market_row as baostock_minute_market_row,
+    query_baostock_minute_rows,
+)
 
 
 JOB_STATUSES = {"pending", "running", "success", "partial_success", "failed", "skipped"}
@@ -99,13 +104,16 @@ class PipelineConfig:
     service: str = SETTINGS.research_service
     timezone: str = "Asia/Shanghai"
     tushare_token: str | None = None
-    max_workers_daily: int = 8
-    max_workers_minute5: int = 8
+    max_workers_daily: int = 2
+    max_workers_minute5: int = 2
+    max_workers_akshare_minute5: int = 2
+    max_workers_baostock_minute5: int = 2
     request_timeout_seconds: int = 20
     max_retries: int = 3
     daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
     minute5_lookback_days: int = 5
     minute5_min_coverage_ratio: float = 0.98
+    minute5_source_timeout_seconds: int = 2400
     daily_start_time: str = "17:00"
     minute5_start_time: str = "17:30"
     deps_start_time: str = "19:00"
@@ -118,8 +126,14 @@ class PipelineConfig:
             service=os.getenv("DB_SERVICE", SETTINGS.research_service),
             timezone=os.getenv("PIPELINE_TIMEZONE", "Asia/Shanghai"),
             tushare_token=os.getenv("TUSHARE_TOKEN") or load_local_tushare_token(),
-            max_workers_daily=int(os.getenv("MAX_WORKERS_DAILY", "8")),
-            max_workers_minute5=int(os.getenv("MAX_WORKERS_MINUTE5", "8")),
+            max_workers_daily=int(os.getenv("MAX_WORKERS_DAILY", "2")),
+            max_workers_minute5=int(os.getenv("MAX_WORKERS_MINUTE5", "2")),
+            max_workers_akshare_minute5=int(
+                os.getenv("MAX_WORKERS_AKSHARE_MINUTE5", os.getenv("MAX_WORKERS_MINUTE5", "2"))
+            ),
+            max_workers_baostock_minute5=int(
+                os.getenv("MAX_WORKERS_BAOSTOCK_MINUTE5", "2")
+            ),
             request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")),
             max_retries=int(os.getenv("MAX_RETRIES", "3")),
             daily_adjust_types=parse_adjust_types(
@@ -128,6 +142,9 @@ class PipelineConfig:
             minute5_lookback_days=int(os.getenv("MINUTE5_LOOKBACK_DAYS", "5")),
             minute5_min_coverage_ratio=float(
                 os.getenv("MINUTE5_MIN_COVERAGE_RATIO", "0.98")
+            ),
+            minute5_source_timeout_seconds=int(
+                os.getenv("MINUTE5_SOURCE_TIMEOUT_SECONDS", "2400")
             ),
             daily_start_time=os.getenv("DAILY_START_TIME", "17:00"),
             minute5_start_time=os.getenv("MINUTE5_START_TIME", "17:30"),
@@ -444,12 +461,22 @@ def load_active_ts_codes(service: str, trade_date: date | None = None) -> list[s
     SELECT symbol, exchange
     FROM asset_master
     WHERE status = 'listed'
-      AND exchange IN ('SH', 'SZ', 'BJ')
+      AND exchange IN ('SH', 'SZ')
     ORDER BY exchange, symbol
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql)
     return [f"{row['symbol']}.{row['exchange']}" for row in rows]
+
+
+def split_minute5_sources(ts_codes: list[str]) -> dict[str, list[str]]:
+    sources = {"akshare": [], "baostock": []}
+    for ts_code in ts_codes:
+        if ts_code.endswith(".SH"):
+            sources["akshare"].append(ts_code)
+        elif ts_code.endswith(".SZ"):
+            sources["baostock"].append(ts_code)
+    return sources
 
 
 def load_retry_ts_codes(service: str, trade_date: date, stage: str = "minute5") -> list[str]:
@@ -796,6 +823,47 @@ def fetch_akshare_minute5_rows(
     return call_with_timeout(_fetch, timeout_seconds)
 
 
+def ts_code_to_baostock_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    return f"{exchange.lower()}.{symbol}"
+
+
+def fetch_baostock_minute5_rows(
+    ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
+) -> list[dict[str, Any]]:
+    del timeout_seconds
+    raw_rows = query_baostock_minute_rows(
+        ts_code_to_baostock_code(ts_code),
+        start_date,
+        end_date,
+        freq="5min",
+        adjust_type="raw",
+    )
+    return [
+        baostock_minute_market_row(row, freq="5min", adjust_type="raw")
+        for row in raw_rows
+    ]
+
+
+def fetch_baostock_minute5_worker(
+    ts_code: str,
+    start_date: date,
+    end_date: date,
+    timeout_seconds: int,
+    max_retries: int,
+) -> tuple[str, list[dict[str, Any]], int, str | None]:
+    rows, attempt_count, error = retry_call(
+        lambda: fetch_baostock_minute5_rows(
+            ts_code,
+            start_date=start_date,
+            end_date=end_date,
+            timeout_seconds=timeout_seconds,
+        ),
+        max_retries=max_retries,
+    )
+    return ts_code, rows, attempt_count, error
+
+
 def normalize_daily_rows(rows: Iterable[dict[str, Any]], source: str) -> list[dict[str, Any]]:
     normalized = []
     for row in rows:
@@ -1126,6 +1194,7 @@ def run_minute5_stage(
     config: PipelineConfig,
     ts_codes: list[str] | None = None,
     fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
+    baostock_fetcher: Callable[..., list[dict[str, Any]]] = fetch_baostock_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
 ) -> dict[str, Any]:
     skip, calendar_status = should_skip_for_holiday(
@@ -1142,24 +1211,38 @@ def run_minute5_stage(
         )
     logger, log_path = setup_stage_logger(trade_date, "minute5")
     started = datetime.now(ZoneInfo(config.timezone))
-    upsert_job(
-        service=config.service,
-        trade_date=trade_date,
-        job_name="minute5_bar",
-        stage="minute5",
-        source="akshare",
-        status="running",
-        started_at=started,
-    )
     expected_ts_codes = ts_codes or load_active_ts_codes(config.service, trade_date)
     lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
-    failures: dict[str, str] = {}
-    attempts: dict[str, int] = {}
+    failures_by_source: dict[str, dict[str, str]] = {"akshare": {}, "baostock": {}}
+    attempts_by_source: dict[str, dict[str, int]] = {"akshare": {}, "baostock": {}}
+    source_rows_by_symbol: dict[str, dict[str, list[dict[str, Any]]]] = {
+        "akshare": {},
+        "baostock": {},
+    }
+    source_codes = split_minute5_sources(expected_ts_codes)
+    source_fetchers = {"akshare": fetcher, "baostock": baostock_fetcher}
+    source_workers = {
+        "akshare": config.max_workers_akshare_minute5,
+        "baostock": config.max_workers_baostock_minute5,
+    }
 
-    def _one(ts_code: str) -> tuple[str, list[dict[str, Any]], int, str | None]:
+    for source in ("akshare", "baostock"):
+        upsert_job(
+            service=config.service,
+            trade_date=trade_date,
+            job_name="minute5_bar",
+            stage="minute5",
+            source=source,
+            status="running",
+            started_at=started,
+        )
+
+    def _one(
+        source: str, ts_code: str
+    ) -> tuple[str, str, list[dict[str, Any]], int, str | None]:
         rows, attempt_count, error = retry_call(
-            lambda: fetcher(
+            lambda: source_fetchers[source](
                 ts_code,
                 start_date=lookback_start,
                 end_date=trade_date,
@@ -1167,30 +1250,187 @@ def run_minute5_stage(
             ),
             max_retries=config.max_retries,
         )
-        return ts_code, rows, attempt_count, error
+        return source, ts_code, rows, attempt_count, error
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=config.max_workers_minute5) as executor:
-        for ts_code, rows, attempt_count, error in executor.map(_one, expected_ts_codes):
-            attempts[ts_code] = attempt_count
-            if error:
-                failures[ts_code] = error
-                record_failed_symbol(
-                    service=config.service,
-                    trade_date=trade_date,
-                    stage="minute5",
-                    dataset_name="minute5_bar",
-                    ts_code=ts_code,
-                    source="akshare",
-                    error_type=error.split(":", 1)[0],
-                    error_summary=error,
-                    attempt_count=attempt_count,
-                )
-            else:
-                rows_by_symbol[ts_code] = rows
+    def _run_source(source: str, codes: list[str]) -> None:
+        if not codes:
+            return
+        if source == "baostock" and baostock_fetcher is fetch_baostock_minute5_rows:
+            executor = concurrent.futures.ProcessPoolExecutor(
+                max_workers=max(1, source_workers[source]),
+                initializer=baostock_login_or_raise,
+            )
+            try:
+                future_to_code = {
+                    executor.submit(
+                        fetch_baostock_minute5_worker,
+                        ts_code,
+                        lookback_start,
+                        trade_date,
+                        config.request_timeout_seconds,
+                        config.max_retries,
+                    ): ts_code
+                    for ts_code in codes
+                }
+                pending = set(future_to_code)
+                deadline = time.monotonic() + config.minute5_source_timeout_seconds
+                while pending:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        for future in pending:
+                            ts_code = future_to_code[future]
+                            failures_by_source[source][ts_code] = "minute5 source timeout"
+                            record_failed_symbol(
+                                service=config.service,
+                                trade_date=trade_date,
+                                stage="minute5",
+                                dataset_name="minute5_bar",
+                                ts_code=ts_code,
+                                source=source,
+                                error_type="TimeoutError",
+                                error_summary="minute5 source timeout",
+                                attempt_count=0,
+                            )
+                        if hasattr(executor, "terminate_workers"):
+                            executor.terminate_workers()
+                        else:
+                            executor.shutdown(wait=False, cancel_futures=True)
+                        return
+                    done, pending = concurrent.futures.wait(
+                        pending,
+                        timeout=min(5.0, remaining),
+                        return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    for future in done:
+                        ts_code = future_to_code[future]
+                        try:
+                            ts_code, rows, attempt_count, error = future.result()
+                        except Exception as exc:  # noqa: BLE001 - worker crash must be recorded per symbol.
+                            rows, attempt_count = [], 0
+                            error = f"{type(exc).__name__}: {exc}"
+                            ts_code = future_to_code[future]
+                        attempts_by_source[source][ts_code] = attempt_count
+                        if error:
+                            failures_by_source[source][ts_code] = error
+                            record_failed_symbol(
+                                service=config.service,
+                                trade_date=trade_date,
+                                stage="minute5",
+                                dataset_name="minute5_bar",
+                                ts_code=ts_code,
+                                source=source,
+                                error_type=error.split(":", 1)[0],
+                                error_summary=error,
+                                attempt_count=attempt_count,
+                            )
+                        else:
+                            source_rows_by_symbol[source][ts_code] = rows
+                            rows_by_symbol.setdefault(ts_code, []).extend(rows)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+            return
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, source_workers[source])
+        ) as executor:
+            futures = [executor.submit(_one, source, ts_code) for ts_code in codes]
+            for future in concurrent.futures.as_completed(futures):
+                source_name, ts_code, rows, attempt_count, error = future.result()
+                attempts_by_source[source_name][ts_code] = attempt_count
+                if error:
+                    failures_by_source[source_name][ts_code] = error
+                    record_failed_symbol(
+                        service=config.service,
+                        trade_date=trade_date,
+                        stage="minute5",
+                        dataset_name="minute5_bar",
+                        ts_code=ts_code,
+                        source=source_name,
+                        error_type=error.split(":", 1)[0],
+                        error_summary=error,
+                        attempt_count=attempt_count,
+                    )
+                else:
+                    source_rows_by_symbol[source_name][ts_code] = rows
+                    rows_by_symbol.setdefault(ts_code, []).extend(rows)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as source_executor:
+        source_futures = []
+        for source in ("akshare", "baostock"):
+            logger.info(
+                "minute5 source started source=%s symbols=%s workers=%s",
+                source,
+                len(source_codes[source]),
+                source_workers[source],
+            )
+            source_futures.append(
+                source_executor.submit(_run_source, source, source_codes[source])
+            )
+        for future in concurrent.futures.as_completed(source_futures):
+            future.result()
+
     all_rows = [row for rows in rows_by_symbol.values() for row in rows]
     rows_upserted = upserter(config.service, all_rows)
     quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
+
+    finished = datetime.now(ZoneInfo(config.timezone))
+
+    def _source_status(source: str) -> tuple[str, dict[str, Any]]:
+        codes = source_codes[source]
+        if not codes:
+            return "skipped", inspect_minute5_quality({}, [], trade_date)
+        source_quality = inspect_minute5_quality(
+            source_rows_by_symbol[source], codes, trade_date
+        )
+        source_coverage = (
+            source_quality["actual_count"] / source_quality["expected_count"]
+            if source_quality["expected_count"]
+            else 1.0
+        )
+        has_rows = any(source_rows_by_symbol[source].values())
+        if not has_rows:
+            return "failed", source_quality
+        if failures_by_source[source] or source_coverage < 1.0:
+            return (
+                "partial_success"
+                if source_coverage >= config.minute5_min_coverage_ratio
+                else "failed"
+            ), source_quality
+        return "success", source_quality
+
+    for source in ("akshare", "baostock"):
+        source_status, source_quality = _source_status(source)
+        source_rows = sum(
+            len(rows) for rows in source_rows_by_symbol[source].values()
+        )
+        source_failures = failures_by_source[source]
+        source_attempts = attempts_by_source[source]
+        upsert_job(
+            service=config.service,
+            trade_date=trade_date,
+            job_name="minute5_bar",
+            stage="minute5",
+            source=source,
+            status=source_status,
+            started_at=started,
+            finished_at=finished,
+            attempt_count=max(source_attempts.values(), default=0),
+            rows_inserted=source_rows,
+            rows_failed=len(source_failures),
+            missing_symbols_count=len(source_quality["missing_symbols"]),
+            error_summary="; ".join(
+                f"{code}:{err}" for code, err in list(source_failures.items())[:5]
+            )
+            or None,
+            error_detail_path=str(log_path) if source_failures else None,
+        )
+
+    failures = {
+        ts_code: error
+        for source_failures in failures_by_source.values()
+        for ts_code, error in source_failures.items()
+    }
     coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
     if not all_rows:
         status = "failed"
@@ -1198,35 +1438,21 @@ def run_minute5_stage(
         status = "partial_success" if coverage >= config.minute5_min_coverage_ratio else "failed"
     else:
         status = "success"
-    finished = datetime.now(ZoneInfo(config.timezone))
-    upsert_job(
-        service=config.service,
-        trade_date=trade_date,
-        job_name="minute5_bar",
-        stage="minute5",
-        source="akshare",
-        status=status,
-        started_at=started,
-        finished_at=finished,
-        attempt_count=max(attempts.values(), default=0),
-        rows_inserted=rows_upserted,
-        rows_failed=len(failures),
-        missing_symbols_count=len(quality["missing_symbols"]),
-        error_summary="; ".join(f"{code}:{err}" for code, err in list(failures.items())[:5]) or None,
-        error_detail_path=str(log_path) if failures else None,
-    )
     logger.info(
-        "minute5 stage finished status=%s rows=%s failures=%s coverage=%.4f",
+        "minute5 stage finished status=%s rows=%s failures=%s coverage=%.4f akshare_symbols=%s baostock_symbols=%s",
         status,
         rows_upserted,
         len(failures),
         coverage,
+        len(source_codes["akshare"]),
+        len(source_codes["baostock"]),
     )
     return {
         "stage": "minute5",
         "status": status,
         "rows": rows_upserted,
         "failed_symbols": sorted(failures),
+        "source_symbols": {source: len(codes) for source, codes in source_codes.items()},
         "quality": quality,
     }
 
