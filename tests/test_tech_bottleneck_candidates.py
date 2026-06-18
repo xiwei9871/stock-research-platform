@@ -332,6 +332,53 @@ def test_build_snapshot_normalizes_api_boundary_dates() -> None:
     assert snapshots["trade_date"].unique().tolist() == ["2025-01-02"]
 
 
+def test_snapshot_parses_integer_yyyymmdd_dates_as_iso_dates() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "stock_name": "Alpha",
+                    "first_hit_date": 20250102,
+                    "candidate_trade_date": 20250102,
+                    "financial_as_of_date": 20250102,
+                    "technical_as_of_date": 20250102,
+                    "hit_count_as_of_date": 2,
+                }
+            ]
+        ),
+        prices=_prices(["A"], "2025-01-02", 1),
+        start_date=20250102,
+        end_date=20250102,
+        run_id="tech-bt-20250102-test",
+    )
+
+    assert snapshots["trade_date"].tolist() == ["2025-01-02"]
+    assert snapshots["first_hit_date"].tolist() == ["2025-01-02"]
+    assert snapshots["candidate_as_of_date"].tolist() == ["2025-01-02"]
+
+
+def test_snapshot_rejects_invalid_numeric_date_values() -> None:
+    with pytest.raises(ValueError, match="invalid base candidate date: first_hit_date"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": 202501,
+                        "candidate_trade_date": "2025-01-02",
+                        "hit_count_as_of_date": 2,
+                    }
+                ]
+            ),
+            prices=_prices(["A"], "2025-01-02", 1),
+            start_date="2025-01-02",
+            end_date="2025-01-02",
+            run_id="tech-bt-20250102-test",
+        )
+
+
 def test_snapshot_requires_candidate_pit_date() -> None:
     with pytest.raises(ValueError, match="candidate_as_of_date missing: provide trade_date or candidate_trade_date"):
         build_point_in_time_candidate_snapshots(
@@ -629,7 +676,15 @@ def test_validate_candidate_snapshot_frame_rejects_invalid_filter_decision() -> 
     frame = _valid_snapshot_frame()
     frame.loc[0, "filter_decision"] = "maybe"
 
-    with pytest.raises(ValueError, match="filter_decision must be one of"):
+    with pytest.raises(ValueError, match="filter_decision must be pass"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_fail_filter_decision() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "filter_decision"] = "fail"
+
+    with pytest.raises(ValueError, match="filter_decision must be pass"):
         validate_candidate_snapshot_frame(frame)
 
 

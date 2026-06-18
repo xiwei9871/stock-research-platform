@@ -203,9 +203,9 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
     actual_top5 = _parse_bool_column(normalized["is_top5"], invalid_message="is_top5 must be boolean")
     if bool((actual_top5 != expected_top5).any()):
         raise ValueError("is_top5 must equal bottleneck_rank <= 5")
-    invalid_filter = ~normalized["filter_decision"].isin(["pass", "fail"])
+    invalid_filter = normalized["filter_decision"] != "pass"
     if bool(invalid_filter.any()):
-        raise ValueError("filter_decision must be one of: pass, fail")
+        raise ValueError("filter_decision must be pass")
 
 
 def write_candidate_snapshots(frame: pd.DataFrame, path: str | Path) -> Path:
@@ -408,17 +408,26 @@ def _normalize_identity_text(values: pd.Series, *, column: str) -> pd.Series:
 
 
 def _parse_required_date_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
-    parsed = pd.to_datetime(values, errors="coerce")
+    parsed = pd.to_datetime(values.map(_normalize_date_text_value), errors="coerce")
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed.dt.strftime("%Y-%m-%d")
 
 
 def _normalize_date_arg(value: str, *, name: str) -> str:
-    parsed = pd.to_datetime(pd.Series([value]), errors="coerce")
-    if bool(parsed.isna().any()):
-        raise ValueError(f"invalid date: {name}")
-    return str(parsed.dt.strftime("%Y-%m-%d").iloc[0])
+    parsed = _parse_required_date_column(pd.Series([value]), invalid_message=f"invalid date: {name}")
+    return str(parsed.iloc[0])
+
+
+def _normalize_date_text_value(value: Any) -> str:
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if text.isdigit():
+        if len(text) != 8:
+            return ""
+        return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+    return text
 
 
 def _validate_date_order(start_date: str, end_date: str) -> None:
