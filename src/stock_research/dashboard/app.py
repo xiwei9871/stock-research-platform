@@ -26,6 +26,11 @@ from stock_research.dashboard.watchlist import (
     load_watchlist_signals_for_dashboard,
 )
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
+from stock_research.intraday_pipeline import (
+    IntradayConfig,
+    load_intraday_status,
+    parse_trade_date,
+)
 from stock_research.public_news.service import (
     load_public_news_for_dashboard,
     refresh_public_news_for_dashboard,
@@ -47,6 +52,12 @@ def create_app() -> FastAPI:
     @app.get("/api/data/status")
     def data_status():
         return load_data_status_for_dashboard()
+
+    @app.get("/api/intraday/status")
+    def intraday_status(date: str | None = None):
+        config = IntradayConfig.from_env()
+        run_date = parse_trade_date(date, config.timezone)
+        return load_intraday_status(config.service, run_date)
 
     @app.get("/api/public-news")
     def public_news(

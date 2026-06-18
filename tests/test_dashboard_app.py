@@ -51,6 +51,27 @@ def test_data_status_route_returns_pipeline_status(monkeypatch):
     assert response.json()["pipeline_status"] == "READY"
 
 
+def test_intraday_status_route_returns_status(monkeypatch):
+    monkeypatch.setattr(dashboard_app.IntradayConfig, "from_env", lambda: dashboard_app.IntradayConfig(service="test"))
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_intraday_status",
+        lambda service, run_date: {
+            "run_date": run_date.isoformat(),
+            "jobs": [],
+            "universe_count": 1,
+            "universe": [{"ts_code": "000001.SZ"}],
+            "market_sentiment": None,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/intraday/status?date=20260618")
+
+    assert response.status_code == 200
+    assert response.json()["universe_count"] == 1
+
+
 def test_public_news_route_returns_filtered_items(monkeypatch):
     captured = {}
 

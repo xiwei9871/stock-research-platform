@@ -127,6 +127,11 @@ from stock_research.daily_close_pipeline import (
     parse_trade_date as parse_daily_close_trade_date,
     run_pipeline_stage as run_daily_close_pipeline_stage,
 )
+from stock_research.intraday_pipeline import (
+    IntradayConfig,
+    parse_trade_date as parse_intraday_trade_date,
+    run_intraday_stage,
+)
 from stock_research.daily_incremental import (
     build_default_step_runners,
     check_market_data_freshness,
@@ -1312,6 +1317,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
     )
     daily_close_pipeline.add_argument("--force", action="store_true")
+
+    intraday_pipeline = subparsers.add_parser("intraday-pipeline")
+    intraday_pipeline.add_argument("--date")
+    intraday_pipeline.add_argument("--previous-date")
+    intraday_pipeline.add_argument(
+        "--stage",
+        choices=["all", "universe", "minute5", "sentiment", "status"],
+        default="all",
+    )
+    intraday_pipeline.add_argument("--top-n", type=int)
+    intraday_pipeline.add_argument("--score-version")
+    intraday_pipeline.add_argument("--watchlist-id")
+    intraday_pipeline.add_argument("--portfolio-id")
 
     subparsers.add_parser("finance-audit")
 
@@ -4577,6 +4595,36 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             )
         trade_date = parse_daily_close_trade_date(args.date, config.timezone)
         result = run_daily_close_pipeline_stage(args.stage, trade_date, config)
+        print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
+    elif args.command == "intraday-pipeline":
+        config = IntradayConfig.from_env()
+        config = IntradayConfig(
+            **{
+                **config.__dict__,
+                **{
+                    key: value
+                    for key, value in {
+                        "top_n": args.top_n,
+                        "score_version": args.score_version,
+                        "watchlist_id": args.watchlist_id,
+                        "portfolio_id": args.portfolio_id,
+                    }.items()
+                    if value is not None
+                },
+            }
+        )
+        trade_date = parse_intraday_trade_date(args.date, config.timezone)
+        previous_date = (
+            parse_intraday_trade_date(args.previous_date, config.timezone)
+            if args.previous_date
+            else None
+        )
+        result = run_intraday_stage(
+            args.stage,
+            run_date=trade_date,
+            previous_trade_date=previous_date,
+            config=config,
+        )
         print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
