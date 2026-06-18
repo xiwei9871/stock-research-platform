@@ -18,6 +18,7 @@ export MAX_WORKERS_DAILY=8
 export MAX_WORKERS_MINUTE5=8
 export REQUEST_TIMEOUT_SECONDS=20
 export MAX_RETRIES=3
+export DAILY_ADJUST_TYPES=raw,qfq,hfq
 export MINUTE5_LOOKBACK_DAYS=5
 export MINUTE5_MIN_COVERAGE_RATIO=0.98
 export PIPELINE_FORCE_NON_TRADING_DAY=false
@@ -36,6 +37,19 @@ Tables are created under `ops`:
 - `ops.daily_pipeline_quality`
 - `ops.daily_pipeline_failed_symbol`
 - `ops.daily_pipeline_status`
+
+## Daily Bars
+
+The `daily` stage writes `market_daily_bar` for all configured daily adjust
+types. The default is `raw,qfq,hfq`.
+
+- Tushare is the primary source for full-market raw daily bars.
+- AkShare is the fallback source for missing `(ts_code, adjust_type)` pairs,
+  including `qfq` and `hfq`.
+- `ops.daily_pipeline_quality.dataset_name = 'daily_bar'` counts required
+  `(ts_code, adjust_type)` pairs, not only stock symbols. With the default
+  adjust types, `expected_count` is about three times the active A-share symbol
+  count.
 
 ## Cron
 

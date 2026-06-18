@@ -20,6 +20,7 @@ from stock_research.db import connect, execute, execute_many, fetch_all
 JOB_STATUSES = {"pending", "running", "success", "partial_success", "failed", "skipped"}
 PIPELINE_READY_STATUSES = {"READY", "DEGRADED_READY"}
 PIPELINE_FINAL_STATUSES = {"READY", "DEGRADED_READY", "NOT_READY"}
+DAILY_ADJUST_TYPES = ("raw", "qfq", "hfq")
 
 
 DAILY_CLOSE_PIPELINE_SQL = """
@@ -102,6 +103,7 @@ class PipelineConfig:
     max_workers_minute5: int = 8
     request_timeout_seconds: int = 20
     max_retries: int = 3
+    daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
     minute5_lookback_days: int = 5
     minute5_min_coverage_ratio: float = 0.98
     daily_start_time: str = "17:00"
@@ -120,6 +122,9 @@ class PipelineConfig:
             max_workers_minute5=int(os.getenv("MAX_WORKERS_MINUTE5", "8")),
             request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")),
             max_retries=int(os.getenv("MAX_RETRIES", "3")),
+            daily_adjust_types=parse_adjust_types(
+                os.getenv("DAILY_ADJUST_TYPES", ",".join(DAILY_ADJUST_TYPES))
+            ),
             minute5_lookback_days=int(os.getenv("MINUTE5_LOOKBACK_DAYS", "5")),
             minute5_min_coverage_ratio=float(
                 os.getenv("MINUTE5_MIN_COVERAGE_RATIO", "0.98")
@@ -155,6 +160,14 @@ def parse_trade_date(value: str | date | None, timezone: str = "Asia/Shanghai") 
 
 def format_trade_date(value: date) -> str:
     return value.strftime("%Y%m%d")
+
+
+def parse_adjust_types(value: str) -> tuple[str, ...]:
+    adjust_types = tuple(part.strip() for part in value.split(",") if part.strip())
+    unsupported = sorted(set(adjust_types) - set(DAILY_ADJUST_TYPES))
+    if unsupported:
+        raise ValueError(f"unsupported daily adjust types: {unsupported}")
+    return adjust_types or DAILY_ADJUST_TYPES
 
 
 def ts_code_to_asset_id(ts_code: str) -> str:
@@ -472,7 +485,11 @@ def retry_call(
 
 
 def fetch_tushare_daily_rows(
-    trade_date: date, *, token: str | None, timeout_seconds: int
+    trade_date: date,
+    *,
+    token: str | None,
+    timeout_seconds: int,
+    ts_codes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if not token:
         raise RuntimeError("TUSHARE_TOKEN is not configured")
@@ -519,41 +536,48 @@ def fetch_tushare_daily_rows(
 
 
 def fetch_akshare_daily_rows(
-    trade_date: date, *, ts_codes: list[str], timeout_seconds: int
+    trade_date: date,
+    *,
+    ts_codes: list[str],
+    timeout_seconds: int,
+    adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
 ) -> list[dict[str, Any]]:
     def _fetch_one(ts_code: str) -> list[dict[str, Any]]:
         import akshare as ak
 
-        frame = ak.stock_zh_a_hist(
-            symbol=ts_code_symbol(ts_code),
-            period="daily",
-            start_date=format_trade_date(trade_date),
-            end_date=format_trade_date(trade_date),
-            adjust="",
-        )
-        if frame is None or frame.empty:
-            return []
-        row = frame.iloc[-1].to_dict()
-        return [
-            {
-                "ts_code": ts_code,
-                "asset_id": ts_code_to_asset_id(ts_code),
-                "trade_date": trade_date,
-                "open": row.get("开盘"),
-                "high": row.get("最高"),
-                "low": row.get("最低"),
-                "close": row.get("收盘"),
-                "preclose": None,
-                "volume": row.get("成交量"),
-                "amount": row.get("成交额"),
-                "turnover_rate": row.get("换手率"),
-                "pct_chg": row.get("涨跌幅"),
-                "trade_status": "1",
-                "is_st": False,
-                "adjust_type": "raw",
-                "source": "akshare",
-            }
-        ]
+        rows = []
+        for adjust_type in adjust_types:
+            frame = ak.stock_zh_a_hist(
+                symbol=ts_code_symbol(ts_code),
+                period="daily",
+                start_date=format_trade_date(trade_date),
+                end_date=format_trade_date(trade_date),
+                adjust="" if adjust_type == "raw" else adjust_type,
+            )
+            if frame is None or frame.empty:
+                continue
+            row = frame.iloc[-1].to_dict()
+            rows.append(
+                {
+                    "ts_code": ts_code,
+                    "asset_id": ts_code_to_asset_id(ts_code),
+                    "trade_date": trade_date,
+                    "open": row.get("开盘"),
+                    "high": row.get("最高"),
+                    "low": row.get("最低"),
+                    "close": row.get("收盘"),
+                    "preclose": None,
+                    "volume": row.get("成交量"),
+                    "amount": row.get("成交额"),
+                    "turnover_rate": row.get("换手率"),
+                    "pct_chg": row.get("涨跌幅"),
+                    "trade_status": "1",
+                    "is_st": False,
+                    "adjust_type": adjust_type,
+                    "source": "akshare",
+                }
+            )
+        return rows
 
     rows: list[dict[str, Any]] = []
     for ts_code in ts_codes:
@@ -681,31 +705,39 @@ def upsert_minute5_bars(service: str, rows: list[dict[str, Any]]) -> int:
 
 
 def inspect_daily_quality(
-    rows: list[dict[str, Any]], expected_ts_codes: list[str], trade_date: date
+    rows: list[dict[str, Any]],
+    expected_ts_codes: list[str],
+    trade_date: date,
+    adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES,
 ) -> dict[str, Any]:
-    by_code = {str(row["ts_code"]): row for row in rows if row.get("trade_date") == trade_date}
-    missing = sorted(set(expected_ts_codes) - set(by_code))
+    by_key = {
+        (str(row["ts_code"]), str(row.get("adjust_type") or "raw")): row
+        for row in rows
+        if row.get("trade_date") == trade_date
+    }
+    expected_keys = {(ts_code, adjust_type) for ts_code in expected_ts_codes for adjust_type in adjust_types}
+    missing = [f"{ts_code}:{adjust_type}" for ts_code, adjust_type in sorted(expected_keys - set(by_key))]
     abnormal = []
-    for ts_code, row in by_code.items():
+    for (ts_code, adjust_type), row in by_key.items():
         open_, high, low, close = row.get("open"), row.get("high"), row.get("low"), row.get("close")
         if any(value in (None, 0) for value in [open_, high, low, close]):
-            abnormal.append(ts_code)
+            abnormal.append(f"{ts_code}:{adjust_type}")
             continue
         try:
             if not (float(low) <= float(close) <= float(high)):
-                abnormal.append(ts_code)
+                abnormal.append(f"{ts_code}:{adjust_type}")
         except (TypeError, ValueError):
-            abnormal.append(ts_code)
+            abnormal.append(f"{ts_code}:{adjust_type}")
     status = "pass"
     if missing or abnormal:
-        status = "warning" if by_code else "fail"
+        status = "warning" if by_key else "fail"
     return {
         "status": status,
-        "expected_count": len(expected_ts_codes),
-        "actual_count": len(by_code),
+        "expected_count": len(expected_keys),
+        "actual_count": len(by_key),
         "missing_symbols": missing,
         "abnormal_symbols": sorted(set(abnormal)),
-        "check_summary": f"daily rows={len(by_code)} missing={len(missing)} abnormal={len(set(abnormal))}",
+        "check_summary": f"daily rows={len(by_key)} missing={len(missing)} abnormal={len(set(abnormal))}",
     }
 
 
@@ -777,13 +809,28 @@ def run_daily_stage(
     logger.info("daily stage started source=tushare expected=%s", len(expected_ts_codes))
     tushare_rows, tushare_attempts, tushare_error = retry_call(
         lambda: tushare_fetcher(
-            trade_date, token=config.tushare_token, timeout_seconds=config.request_timeout_seconds
+            trade_date,
+            token=config.tushare_token,
+            timeout_seconds=config.request_timeout_seconds,
+            ts_codes=expected_ts_codes,
         ),
         max_retries=config.max_retries,
     )
     normalized_tushare = normalize_daily_rows(tushare_rows, "tushare")
-    tushare_codes = {row["ts_code"] for row in normalized_tushare}
-    missing_after_tushare = sorted(set(expected_ts_codes) - tushare_codes)
+    expected_keys = {
+        (ts_code, adjust_type)
+        for ts_code in expected_ts_codes
+        for adjust_type in config.daily_adjust_types
+    }
+    tushare_keys = {
+        (row["ts_code"], row.get("adjust_type") or "raw")
+        for row in normalized_tushare
+    }
+    missing_pairs_after_tushare = expected_keys - tushare_keys
+    missing_after_tushare = sorted({ts_code for ts_code, _adjust_type in missing_pairs_after_tushare})
+    missing_adjust_types_after_tushare = tuple(
+        sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare})
+    )
     akshare_rows: list[dict[str, Any]] = []
     akshare_attempts = 0
     akshare_error = None
@@ -794,16 +841,23 @@ def run_daily_stage(
                 trade_date,
                 ts_codes=missing_after_tushare,
                 timeout_seconds=config.request_timeout_seconds,
+                adjust_types=missing_adjust_types_after_tushare,
             ),
             max_retries=config.max_retries,
         )
     normalized_akshare = normalize_daily_rows(akshare_rows, "akshare")
-    akshare_rows_by_code = {row["ts_code"]: row for row in normalized_akshare}
-    final_rows = normalized_tushare + [
-        row for code, row in akshare_rows_by_code.items() if code not in tushare_codes
-    ]
+    final_rows_by_key = {
+        (row["ts_code"], row.get("adjust_type") or "raw"): row
+        for row in normalized_tushare
+    }
+    for row in normalized_akshare:
+        key = (row["ts_code"], row.get("adjust_type") or "raw")
+        final_rows_by_key.setdefault(key, row)
+    final_rows = list(final_rows_by_key.values())
     rows_upserted = daily_upserter(config.service, final_rows)
-    quality = inspect_daily_quality(final_rows, expected_ts_codes, trade_date)
+    quality = inspect_daily_quality(
+        final_rows, expected_ts_codes, trade_date, config.daily_adjust_types
+    )
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="daily_bar", **quality)
     finished = datetime.now(ZoneInfo(config.timezone))
     status = "success" if quality["status"] in {"pass", "warning"} and final_rows else "failed"

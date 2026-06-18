@@ -33,11 +33,30 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
         force_non_trading_day=True,
     )
 
-    def fake_tushare_fetcher(trade_date, token, timeout_seconds):
+    def fake_tushare_fetcher(trade_date, token, timeout_seconds, ts_codes=None):
         return [
             {
                 "ts_code": "000001.SZ",
                 "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "qfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "hfq",
                 "open": 10,
                 "high": 11,
                 "low": 9,
@@ -45,12 +64,32 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
             }
         ]
 
-    def fake_akshare_fetcher(trade_date, ts_codes, timeout_seconds):
+    def fake_akshare_fetcher(trade_date, ts_codes, timeout_seconds, adjust_types=None):
         captured["akshare_ts_codes"] = ts_codes
+        assert tuple(adjust_types) == ("hfq", "qfq", "raw")
         return [
             {
                 "ts_code": "600000.SH",
                 "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 20,
+                "high": 21,
+                "low": 19,
+                "close": 20.5,
+            },
+            {
+                "ts_code": "600000.SH",
+                "trade_date": trade_date,
+                "adjust_type": "qfq",
+                "open": 20,
+                "high": 21,
+                "low": 19,
+                "close": 20.5,
+            },
+            {
+                "ts_code": "600000.SH",
+                "trade_date": trade_date,
+                "adjust_type": "hfq",
                 "open": 20,
                 "high": 21,
                 "low": 19,
@@ -73,7 +112,58 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
 
     assert result["status"] == "success"
     assert captured["akshare_ts_codes"] == ["600000.SH"]
-    assert [row["source"] for row in captured["upserted"]] == ["tushare", "akshare"]
+    assert [row["adjust_type"] for row in captured["upserted"]] == [
+        "raw",
+        "qfq",
+        "hfq",
+        "raw",
+        "qfq",
+        "hfq",
+    ]
+    assert [row["source"] for row in captured["upserted"]] == [
+        "tushare",
+        "tushare",
+        "tushare",
+        "akshare",
+        "akshare",
+        "akshare",
+    ]
+    assert result["quality"]["expected_count"] == 6
+    assert result["quality"]["actual_count"] == 6
+
+
+def test_daily_quality_requires_raw_qfq_and_hfq_for_each_symbol():
+    trade_date = date(2026, 6, 5)
+
+    quality = dcp.inspect_daily_quality(
+        [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+            },
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "qfq",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+            },
+        ],
+        ["000001.SZ"],
+        trade_date,
+    )
+
+    assert quality["status"] == "warning"
+    assert quality["expected_count"] == 3
+    assert quality["actual_count"] == 2
+    assert quality["missing_symbols"] == ["000001.SZ:hfq"]
 
 
 def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monkeypatch):
