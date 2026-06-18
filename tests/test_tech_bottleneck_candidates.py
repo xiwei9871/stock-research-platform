@@ -122,7 +122,33 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
 
     assert with_future_score == pytest.approx(baseline_score)
     assert with_future_candidate["asset_id"].unique().tolist() == ["A"]
-    assert with_future_candidate["filter_reason"].unique().tolist() == ["static_source_hit_count"]
+    assert with_future_candidate["filter_reason"].unique().tolist() == ["static_source_hit_count_conservative_1"]
+
+
+def test_static_hit_count_uses_conservative_one_without_changing_historical_score_or_rank() -> None:
+    low_static = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 1}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 2),
+        start_date="2025-01-02",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-low",
+    )
+    high_static = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count": 1000}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 2),
+        start_date="2025-01-02",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-high",
+    )
+
+    assert high_static["hit_count_as_of_date"].tolist() == [1.0]
+    assert high_static["filter_reason"].tolist() == ["static_source_hit_count_conservative_1"]
+    assert high_static["bottleneck_score"].tolist() == pytest.approx(low_static["bottleneck_score"].tolist())
+    assert high_static["bottleneck_rank"].tolist() == low_static["bottleneck_rank"].tolist()
 
 
 def test_one_day_snapshot_score_matches_full_rebuild_with_same_price_history() -> None:
@@ -180,6 +206,42 @@ def test_explicit_hit_count_as_of_date_is_used_without_static_filter_reason() ->
 
     assert snapshots["hit_count_as_of_date"].tolist() == [3.0]
     assert snapshots["filter_reason"].tolist() == [""]
+
+
+def test_explicit_hit_count_as_of_date_preserves_existing_filter_reason() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [
+                {
+                    "asset_id": "A",
+                    "stock_name": "Alpha",
+                    "first_hit_date": "2025-01-01",
+                    "hit_count_as_of_date": 3,
+                    "filter_reason": "source_note",
+                }
+            ]
+        ),
+        prices=_prices(["A"], "2025-01-01", 1),
+        start_date="2025-01-01",
+        end_date="2025-01-01",
+        run_id="tech-bt-20250101-test",
+    )
+
+    assert snapshots["filter_reason"].tolist() == ["source_note"]
+
+
+def test_build_snapshot_normalizes_api_boundary_dates() -> None:
+    snapshots = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 2}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 3),
+        start_date="2025-1-2",
+        end_date="2025-1-2",
+        run_id="tech-bt-20250102-test",
+    )
+
+    assert snapshots["trade_date"].unique().tolist() == ["2025-01-02"]
 
 
 def test_explicit_hit_count_as_of_date_must_be_numeric() -> None:
@@ -288,6 +350,25 @@ def test_validate_candidate_snapshot_frame_rejects_invalid_filter_decision() -> 
         validate_candidate_snapshot_frame(frame)
 
 
+@pytest.mark.parametrize("column", ["asset_id", "engine_version", "run_id"])
+@pytest.mark.parametrize("value", ["", None])
+def test_validate_candidate_snapshot_frame_rejects_missing_identity_fields(column: str, value) -> None:
+    frame = _valid_snapshot_frame()
+    frame[column] = frame[column].astype(object)
+    frame.loc[0, column] = value
+
+    with pytest.raises(ValueError, match=f"{column} must be non-empty"):
+        validate_candidate_snapshot_frame(frame)
+
+
+def test_validate_candidate_snapshot_frame_rejects_wrong_engine_version() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "engine_version"] = "other-engine"
+
+    with pytest.raises(ValueError, match="engine_version must equal"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     frame = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
@@ -306,6 +387,24 @@ def test_write_and_read_candidate_snapshots_round_trip(tmp_path) -> None:
     assert loaded["trade_date"].unique().tolist() == ["2025-01-02"]
     assert loaded["asset_id"].tolist() == ["A"]
     assert loaded["bottleneck_rank"].tolist() == [1]
+
+
+def test_read_candidate_snapshots_normalizes_api_boundary_dates(tmp_path) -> None:
+    frame = build_point_in_time_candidate_snapshots(
+        base_candidates=pd.DataFrame(
+            [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3}]
+        ),
+        prices=_prices(["A"], "2025-01-01", 2),
+        start_date="2025-01-01",
+        end_date="2025-01-02",
+        run_id="tech-bt-20250102-test",
+    )
+    path = tmp_path / "tech_bottleneck_daily_candidates.csv"
+
+    write_candidate_snapshots(frame, path)
+    loaded = read_candidate_snapshots(path, start_date="2025-1-2", end_date="2025-1-2")
+
+    assert loaded["trade_date"].unique().tolist() == ["2025-01-02"]
 
 
 def test_validate_base_candidate_source_requires_fresh_generation_date() -> None:
@@ -360,6 +459,30 @@ def test_validate_base_candidate_source_checks_all_present_freshness_metadata() 
         validate_base_candidate_source_freshness(invalid_later_column, end_date="2025-01-03")
 
 
+def test_validate_base_candidate_source_rejects_stale_row_even_when_another_row_is_fresh() -> None:
+    mixed = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "source_latest_trade_date": "2025-01-02",
+            },
+            {
+                "asset_id": "B",
+                "stock_name": "Beta",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "source_latest_trade_date": "2025-01-03",
+            },
+        ]
+    )
+
+    with pytest.raises(ValueError, match="base candidate source is stale"):
+        validate_base_candidate_source_freshness(mixed, end_date="2025-01-03")
+
+
 def test_validate_base_candidate_source_rejects_stale_coverage_even_with_fresh_generation_date() -> None:
     stale_coverage = pd.DataFrame(
         [
@@ -378,6 +501,42 @@ def test_validate_base_candidate_source_rejects_stale_coverage_even_with_fresh_g
         validate_base_candidate_source_freshness(stale_coverage, end_date="2025-01-03")
 
 
+def test_validate_base_candidate_source_rejects_stale_generated_trade_date() -> None:
+    stale_generated = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "data_as_of_date": "2025-01-03",
+                "generated_trade_date": "2025-01-02",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="generated_trade_date is stale"):
+        validate_base_candidate_source_freshness(stale_generated, end_date="2025-01-03")
+
+
+def test_validate_base_candidate_source_rejects_generated_date_before_coverage_date() -> None:
+    contradictory = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "data_as_of_date": "2025-01-03",
+                "generated_trade_date": "2025-01-02",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="generated_trade_date must be >= coverage date"):
+        validate_base_candidate_source_freshness(contradictory, end_date="2025-01-02")
+
+
 def test_validate_base_candidate_source_rejects_generation_only_freshness_metadata() -> None:
     generation_only = pd.DataFrame(
         [
@@ -393,6 +552,22 @@ def test_validate_base_candidate_source_rejects_generation_only_freshness_metada
 
     with pytest.raises(ValueError, match="base candidate source freshness metadata missing"):
         validate_base_candidate_source_freshness(generation_only, end_date="2025-01-03")
+
+
+def test_validate_base_candidate_source_normalizes_api_end_date() -> None:
+    fresh = pd.DataFrame(
+        [
+            {
+                "asset_id": "A",
+                "stock_name": "Alpha",
+                "first_hit_date": "2025-01-01",
+                "hit_count": 3,
+                "data_as_of_date": "2025-01-02",
+            }
+        ]
+    )
+
+    validate_base_candidate_source_freshness(fresh, end_date="2025-1-2")
 
 
 def test_validate_base_candidate_source_requires_formal_freshness_metadata() -> None:

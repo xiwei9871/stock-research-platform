@@ -40,6 +40,8 @@ def build_point_in_time_candidate_snapshots(
     run_id: str,
     engine_version: str = TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
 ) -> pd.DataFrame:
+    start_date = _normalize_date_arg(start_date, name="start_date")
+    end_date = _normalize_date_arg(end_date, name="end_date")
     candidates = _normalize_base_candidates(base_candidates)
     normalized_prices = _normalize_prices(prices, start_date=start_date, end_date=end_date)
     trading_dates = sorted(normalized_prices["trade_date"].dropna().astype(str).unique().tolist())
@@ -113,6 +115,12 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         return
 
     normalized = frame.copy()
+    for column in ["asset_id", "engine_version", "run_id"]:
+        if _is_missing_or_empty(normalized[column]).any():
+            raise ValueError(f"{column} must be non-empty")
+    bad_engine = normalized["engine_version"].astype(str) != TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION
+    if bool(bad_engine.any()):
+        raise ValueError(f"engine_version must equal {TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION}")
     date_columns = ["trade_date", "first_hit_date", "financial_as_of_date", "technical_as_of_date", "data_as_of_date"]
     for column in date_columns:
         normalized[column] = _parse_required_date_column(
@@ -172,6 +180,8 @@ def write_candidate_snapshots(frame: pd.DataFrame, path: str | Path) -> Path:
 
 
 def read_candidate_snapshots(path: str | Path, *, start_date: str, end_date: str) -> pd.DataFrame:
+    start_date = _normalize_date_arg(start_date, name="start_date")
+    end_date = _normalize_date_arg(end_date, name="end_date")
     frame = pd.read_csv(path, low_memory=False)
     validate_candidate_snapshot_frame(frame)
     frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -186,26 +196,36 @@ def read_base_candidate_source(path: str | Path, *, end_date: str) -> pd.DataFra
 
 
 def validate_base_candidate_source_freshness(frame: pd.DataFrame, *, end_date: str) -> None:
+    end_date = _normalize_date_arg(end_date, name="end_date")
     if frame.empty:
         raise ValueError("base candidate source is empty")
     coverage_columns = ["source_latest_trade_date", "data_as_of_date"]
-    latest_coverage_dates: list[str] = []
+    parsed_coverage: dict[str, pd.Series] = {}
     for column in coverage_columns:
         if column in frame.columns:
             parsed = _parse_required_date_column(
                 frame[column],
                 invalid_message=f"invalid base candidate freshness metadata: {column}",
             )
-            latest = str(parsed.max())
-            if latest < end_date:
-                raise ValueError(f"base candidate source is stale: {latest} < {end_date}")
-            latest_coverage_dates.append(latest)
+            stale = parsed < end_date
+            if bool(stale.any()):
+                oldest = str(parsed[stale].min())
+                raise ValueError(f"base candidate source is stale: {oldest} < {end_date}")
+            parsed_coverage[column] = parsed
     if "generated_trade_date" in frame.columns:
-        _parse_required_date_column(
+        generated = _parse_required_date_column(
             frame["generated_trade_date"],
             invalid_message="invalid base candidate freshness metadata: generated_trade_date",
         )
-    if not latest_coverage_dates:
+        stale_generated = generated < end_date
+        if bool(stale_generated.any()):
+            oldest_generated = str(generated[stale_generated].min())
+            raise ValueError(f"generated_trade_date is stale: {oldest_generated} < {end_date}")
+        for column, coverage in parsed_coverage.items():
+            contradictory = generated < coverage
+            if bool(contradictory.any()):
+                raise ValueError("generated_trade_date must be >= coverage date")
+    if not parsed_coverage:
         raise ValueError("base candidate source freshness metadata missing")
 
 
@@ -240,10 +260,8 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         )
         frame["filter_reason"] = _string_column(frame, "filter_reason")
     else:
-        if "hit_count" not in frame.columns:
-            frame["hit_count"] = 1.0
-        frame["hit_count_as_of_date"] = pd.to_numeric(frame["hit_count"], errors="coerce").fillna(1.0)
-        frame["filter_reason"] = "static_source_hit_count"
+        frame["hit_count_as_of_date"] = 1.0
+        frame["filter_reason"] = "static_source_hit_count_conservative_1"
     for column in ["primary_chain_id", "primary_chain_name", "matched_bottleneck_dimensions"]:
         frame[column] = _string_column(frame, column)
     if "financial_as_of_date" not in frame.columns:
@@ -310,6 +328,13 @@ def _parse_required_date_column(values: pd.Series, *, invalid_message: str) -> p
     return parsed.dt.strftime("%Y-%m-%d")
 
 
+def _normalize_date_arg(value: str, *, name: str) -> str:
+    parsed = pd.to_datetime(pd.Series([value]), errors="coerce")
+    if bool(parsed.isna().any()):
+        raise ValueError(f"invalid date: {name}")
+    return str(parsed.dt.strftime("%Y-%m-%d").iloc[0])
+
+
 def _numeric_required_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
     parsed = pd.to_numeric(values, errors="coerce")
     if bool(parsed.isna().any()):
@@ -326,3 +351,7 @@ def _parse_bool_column(values: pd.Series, *, invalid_message: str) -> pd.Series:
     if bool(parsed.isna().any()):
         raise ValueError(invalid_message)
     return parsed
+
+
+def _is_missing_or_empty(values: pd.Series) -> pd.Series:
+    return values.isna() | values.astype(str).str.strip().eq("")
