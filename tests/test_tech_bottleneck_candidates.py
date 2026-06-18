@@ -427,6 +427,14 @@ def test_validate_candidate_snapshot_frame_rejects_invalid_dates() -> None:
         validate_candidate_snapshot_frame(frame)
 
 
+def test_validate_candidate_snapshot_frame_rejects_stale_data_as_of_date() -> None:
+    frame = _valid_snapshot_frame()
+    frame.loc[0, "data_as_of_date"] = "2025-01-02"
+
+    with pytest.raises(ValueError, match="data_as_of_date must equal trade_date"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_validate_candidate_snapshot_frame_rejects_duplicate_trade_date_asset_id() -> None:
     frame = pd.concat([_valid_snapshot_frame(), _valid_snapshot_frame()], ignore_index=True)
     frame.loc[1, "bottleneck_rank"] = 2
@@ -893,6 +901,30 @@ def test_snapshot_rejects_invalid_price_close_values(close, message: str) -> Non
             base_candidates=pd.DataFrame(
                 [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
                     "candidate_trade_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+@pytest.mark.parametrize("column", ["high", "low"])
+def test_snapshot_rejects_missing_price_ohlc_columns(column: str) -> None:
+    prices = _prices(["A"], "2025-01-01", 1).drop(columns=[column])
+
+    with pytest.raises(ValueError, match=f"price input missing columns: \\['{column}'\\]"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count": 3,
+                    }
+                ]
             ),
             prices=prices,
             start_date="2025-01-01",

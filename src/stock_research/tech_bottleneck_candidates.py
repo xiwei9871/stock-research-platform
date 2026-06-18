@@ -160,12 +160,14 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         ("first_hit_date", "first_hit_date must be <= trade_date"),
         ("financial_as_of_date", "financial_as_of_date must be <= trade_date"),
         ("technical_as_of_date", "technical_as_of_date must be <= trade_date"),
-        ("data_as_of_date", "data_as_of_date must be <= trade_date"),
     ]
     for column, message in checks:
         bad = normalized[column] > normalized["trade_date"]
         if bool(bad.any()):
             raise ValueError(message)
+    stale_data_as_of = normalized["data_as_of_date"] != normalized["trade_date"]
+    if bool(stale_data_as_of.any()):
+        raise ValueError("data_as_of_date must equal trade_date")
     duplicates = normalized.duplicated(subset=["trade_date", "asset_id"], keep=False)
     if bool(duplicates.any()):
         raise ValueError("duplicate candidate snapshot rows for trade_date and asset_id")
@@ -320,6 +322,9 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         return pd.DataFrame(columns=["trade_date", "asset_id", "open", "high", "low", "close"])
 
     frame = prices.copy()
+    missing_price_columns = [column for column in ["open", "high", "low", "close"] if column not in frame.columns]
+    if missing_price_columns:
+        raise ValueError(f"price input missing columns: {missing_price_columns}")
     frame["trade_date"] = _parse_required_date_column(
         frame["trade_date"],
         invalid_message="invalid price date: trade_date",
@@ -331,10 +336,6 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
         raise ValueError("duplicate price rows for trade_date and asset_id")
     for column in ["open", "close"]:
         frame[column] = _parse_price_numeric_column(frame[column], column=column)
-    if "high" not in frame.columns:
-        frame["high"] = frame[["open", "close"]].max(axis=1)
-    if "low" not in frame.columns:
-        frame["low"] = frame[["open", "close"]].min(axis=1)
     frame["high"] = _parse_price_numeric_column(frame["high"], column="high")
     frame["low"] = _parse_price_numeric_column(frame["low"], column="low")
     _validate_positive_price_column(frame["open"], column="open")
