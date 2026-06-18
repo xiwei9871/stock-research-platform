@@ -12,7 +12,12 @@ from stock_research.db import connect, fetch_all
 from stock_research.serenity_tight3b_c2_experiment import (
     ProtectionConfig,
     build_serenity_tight3b_c2_experiment_from_frames,
+    build_serenity_tight3b_c2_experiment_from_rank_frames,
     _summary_frame,
+)
+from stock_research.tech_bottleneck_candidates import (
+    TECH_BOTTLENECK_CANDIDATE_SOURCE,
+    read_candidate_snapshots,
 )
 
 
@@ -30,6 +35,11 @@ TECH_BOTTLENECK_V1_MARKET_EXPOSURE_PATH = Path(
     "market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/"
     "market_regime_confirmation_daily.csv"
 )
+_OUTPUT_ROOT = Path(getattr(SETTINGS, "output_root", "/Users/xiwei/stock_research/outputs"))
+TECH_BOTTLENECK_V1_SNAPSHOT_ROOT = (
+    _OUTPUT_ROOT / "research" / "tech_bottleneck_point_in_time_candidates"
+)
+TECH_BOTTLENECK_V1_SNAPSHOT_FILENAME = "tech_bottleneck_daily_candidates.csv"
 
 
 @dataclass(frozen=True)
@@ -130,6 +140,101 @@ def build_tech_bottleneck_v1_from_frames(
     }
 
 
+def build_tech_bottleneck_v1_from_rank_snapshots(
+    *,
+    candidate_snapshots: pd.DataFrame,
+    prices: pd.DataFrame,
+    market_exposure: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+    top_n: int = 5,
+    rebalance_frequency: str = "weekly",
+    transaction_cost_bps: float = 20.0,
+    max_position_weight: float | None = None,
+    adjust_type: str = "hfq",
+    report_start_date: str | None = None,
+) -> dict[str, Any]:
+    frequency = _supported_frequency(rebalance_frequency)
+    config = TechBottleneckV1Config(
+        start_date=start_date,
+        end_date=end_date,
+        top_n=int(top_n),
+        rebalance_frequency=frequency,
+        transaction_cost_bps=float(transaction_cost_bps),
+        max_position_weight=max_position_weight,
+        adjust_type=adjust_type,
+    )
+    snapshot_coverage = _candidate_snapshot_coverage(
+        candidate_snapshots,
+        start_date=config.start_date,
+        end_date=config.end_date,
+    )
+    result = build_serenity_tight3b_c2_experiment_from_rank_frames(
+        ranks=candidate_snapshots,
+        prices=prices,
+        market_exposure=market_exposure,
+        start_date=config.start_date,
+        end_date=config.end_date,
+        universe_name="strict_153_st_only_financial_state",
+        top_n_values=[config.top_n],
+        rebalance_frequencies=[config.rebalance_frequency],
+        protection_configs=[{"name": TECH_BOTTLENECK_V1_PROTECTION_NAME, "rank_exit": 10, "confirm_days": 1}],
+        transaction_cost_bps=config.transaction_cost_bps,
+        adjust_type=config.adjust_type,
+    )
+    run = {
+        "summary": result["summary"].iloc[0].to_dict() if not result["summary"].empty else {},
+        "equity": result["best_equity"],
+        "positions": result["best_positions"],
+        "trades": result["best_trades"],
+    }
+    if report_start_date and report_start_date > config.start_date:
+        run = _slice_lifecycle_result(
+            run,
+            requested_start_date=report_start_date,
+            requested_end_date=config.end_date,
+            top_n=config.top_n,
+            frequency=config.rebalance_frequency,
+        )
+    summary = _dashboard_summary(run["summary"])
+    summary.update(
+        {
+            "engine_version": config.engine_version,
+            "fresh_engine_note": "Tech Bottleneck V1 fresh recompute via accepted Serenity C2 baseline",
+            "baseline_name": TECH_BOTTLENECK_V1_BASELINE_NAME,
+            "simulation_start_date": config.start_date,
+            "requested_start_date": report_start_date or config.start_date,
+            "transaction_cost_bps": config.transaction_cost_bps,
+            "adjust_type": config.adjust_type,
+            "position_rows": int(len(run["positions"])),
+            "trade_rows": int(len(run["trades"])),
+            "data_coverage": {
+                "source": TECH_BOTTLENECK_CANDIDATE_SOURCE,
+                "candidate_snapshot_rows": snapshot_coverage["rows"],
+                "candidate_snapshot_start_date": snapshot_coverage["start_date"],
+                "candidate_snapshot_latest_date": snapshot_coverage["latest_date"],
+                "price_rows": int(len(prices)),
+                "market_exposure_rows": int(len(market_exposure)),
+            },
+        }
+    )
+    config_payload = asdict(config)
+    if report_start_date:
+        config_payload["start_date"] = report_start_date
+        config_payload["simulation_start_date"] = config.start_date
+    return {
+        "strategy_id": "tech_bottleneck",
+        "strategy_name": "Tech Bottleneck Discovery",
+        "read_only": False,
+        "source_kind": TECH_BOTTLENECK_V1_ENGINE_VERSION,
+        "config": config_payload,
+        "summary": summary,
+        "equity_curve": _records(run["equity"]),
+        "positions": _records(run["positions"]),
+        "trades": _records(run["trades"]),
+    }
+
+
 def run_tech_bottleneck_v1_backtest_for_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
     requested_start_date = str(payload["start_date"])
     config = TechBottleneckV1Config(
@@ -142,8 +247,8 @@ def run_tech_bottleneck_v1_backtest_for_dashboard(payload: dict[str, Any]) -> di
         adjust_type=str(payload.get("adjust_type") or "hfq"),
     )
     frames = load_tech_bottleneck_v1_frames(config)
-    return build_tech_bottleneck_v1_from_frames(
-        candidates=frames["candidates"],
+    return build_tech_bottleneck_v1_from_rank_snapshots(
+        candidate_snapshots=frames["candidate_snapshots"],
         prices=frames["prices"],
         market_exposure=frames["market_exposure"],
         start_date=config.start_date,
@@ -162,12 +267,16 @@ def load_tech_bottleneck_v1_frames(
     *,
     service: str = SETTINGS.research_service,
 ) -> dict[str, pd.DataFrame]:
-    candidates = pd.read_csv(TECH_BOTTLENECK_V1_CANDIDATES_PATH, low_memory=False)
+    candidate_snapshots = read_candidate_snapshots(
+        _latest_candidate_snapshot_path(),
+        start_date=config.start_date,
+        end_date=config.end_date,
+    )
     market_exposure = pd.read_csv(TECH_BOTTLENECK_V1_MARKET_EXPOSURE_PATH, low_memory=False)
     market_exposure = _extend_market_exposure(market_exposure, end_date=config.end_date)
-    asset_ids = sorted(candidates["asset_id"].dropna().astype(str).unique().tolist())
+    asset_ids = sorted(candidate_snapshots["asset_id"].dropna().astype(str).unique().tolist())
     return {
-        "candidates": candidates,
+        "candidate_snapshots": candidate_snapshots,
         "market_exposure": market_exposure,
         "prices": _load_prices(
             start_date=config.start_date,
@@ -183,6 +292,39 @@ def _simulation_start_date(requested_start_date: str) -> str:
     if requested_start_date > TECH_BOTTLENECK_V1_BENCHMARK_START_DATE:
         return TECH_BOTTLENECK_V1_BENCHMARK_START_DATE
     return requested_start_date
+
+
+def _latest_candidate_snapshot_path() -> Path:
+    candidates = [
+        path
+        for path in TECH_BOTTLENECK_V1_SNAPSHOT_ROOT.rglob(TECH_BOTTLENECK_V1_SNAPSHOT_FILENAME)
+        if path.is_file()
+    ]
+    if not candidates:
+        raise FileNotFoundError(
+            f"no Tech Bottleneck candidate snapshot found under {TECH_BOTTLENECK_V1_SNAPSHOT_ROOT}"
+        )
+    return max(candidates, key=lambda path: (path.stat().st_mtime, str(path)))
+
+
+def _candidate_snapshot_coverage(
+    candidate_snapshots: pd.DataFrame,
+    *,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    if candidate_snapshots.empty or "trade_date" not in candidate_snapshots.columns:
+        raise ValueError("Tech Bottleneck candidate snapshots are missing for requested range")
+    dates = pd.to_datetime(candidate_snapshots["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    in_range = dates.between(start_date, end_date)
+    filtered = dates[in_range].dropna()
+    if filtered.empty:
+        raise ValueError("Tech Bottleneck candidate snapshots are missing for requested range")
+    return {
+        "rows": int(in_range.sum()),
+        "start_date": str(filtered.min()),
+        "latest_date": str(filtered.max()),
+    }
 
 
 def _slice_lifecycle_result(

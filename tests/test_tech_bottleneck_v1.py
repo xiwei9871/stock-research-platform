@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
+from stock_research.tech_bottleneck_candidates import (
+    TECH_BOTTLENECK_CANDIDATE_COLUMNS,
+    TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
+)
 from stock_research.tech_bottleneck_v1 import (
     TECH_BOTTLENECK_V1_ENGINE_VERSION,
     TECH_BOTTLENECK_V1_PROTECTION_NAME,
@@ -36,6 +41,43 @@ def test_tech_bottleneck_v1_uses_accepted_c2_baseline() -> None:
     assert {"trade_date", "equity", "drawdown"}.issubset(result["equity_curve"][0])
 
 
+def test_tech_bottleneck_v1_from_rank_snapshots_labels_point_in_time_source() -> None:
+    from stock_research.tech_bottleneck_v1 import build_tech_bottleneck_v1_from_rank_snapshots
+
+    result = build_tech_bottleneck_v1_from_rank_snapshots(
+        candidate_snapshots=_rank_snapshots(),
+        prices=_prices(),
+        market_exposure=_market_exposure(),
+        start_date="2025-01-01",
+        end_date="2025-01-08",
+        top_n=2,
+        rebalance_frequency="weekly",
+        transaction_cost_bps=20,
+    )
+
+    summary = result["summary"]
+    assert summary["data_coverage"]["source"] == "point_in_time_daily_candidates"
+    assert summary["data_coverage"]["candidate_snapshot_latest_date"] == "2025-01-08"
+    assert summary["data_coverage"]["candidate_snapshot_rows"] == len(_rank_snapshots())
+    assert result["trades"]
+
+
+def test_tech_bottleneck_v1_requires_snapshot_rows_for_requested_range() -> None:
+    from stock_research.tech_bottleneck_v1 import build_tech_bottleneck_v1_from_rank_snapshots
+
+    with pytest.raises(ValueError, match="Tech Bottleneck candidate snapshots are missing"):
+        build_tech_bottleneck_v1_from_rank_snapshots(
+            candidate_snapshots=pd.DataFrame(),
+            prices=_prices(),
+            market_exposure=_market_exposure(),
+            start_date="2025-01-01",
+            end_date="2025-01-08",
+            top_n=2,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=20,
+        )
+
+
 def _candidates() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -44,6 +86,47 @@ def _candidates() -> pd.DataFrame:
             {"asset_id": "C", "stock_name": "Gamma", "first_hit_date": "2025-01-03", "hit_count": 1},
         ]
     )
+
+
+def _rank_snapshots() -> pd.DataFrame:
+    rows = []
+    base = {
+        "A": {"stock_name": "Alpha", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 5, "score": 0.9},
+        "B": {"stock_name": "Beta", "first_hit_date": "2025-01-01", "hit_count_as_of_date": 3, "score": 0.8},
+        "C": {"stock_name": "Gamma", "first_hit_date": "2025-01-03", "hit_count_as_of_date": 1, "score": 0.7},
+    }
+    for trade_date in pd.date_range("2025-01-01", periods=8, freq="D"):
+        day = trade_date.strftime("%Y-%m-%d")
+        eligible = [
+            (asset_id, details)
+            for asset_id, details in base.items()
+            if str(details["first_hit_date"]) <= day
+        ]
+        for rank, (asset_id, details) in enumerate(eligible, start=1):
+            rows.append(
+                {
+                    "trade_date": day,
+                    "asset_id": asset_id,
+                    "stock_name": details["stock_name"],
+                    "first_hit_date": details["first_hit_date"],
+                    "candidate_as_of_date": details["first_hit_date"],
+                    "hit_count_as_of_date": details["hit_count_as_of_date"],
+                    "primary_chain_id": f"chain-{asset_id}",
+                    "primary_chain_name": f"Chain {asset_id}",
+                    "matched_bottleneck_dimensions": "cash_conversion",
+                    "financial_as_of_date": details["first_hit_date"],
+                    "technical_as_of_date": day,
+                    "data_as_of_date": day,
+                    "filter_decision": "pass",
+                    "filter_reason": "",
+                    "bottleneck_score": float(details["score"]) - (rank * 0.01),
+                    "bottleneck_rank": rank,
+                    "is_top5": rank <= 5,
+                    "engine_version": TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION,
+                    "run_id": "tech-bt-20250108-test",
+                }
+            )
+    return pd.DataFrame(rows, columns=TECH_BOTTLENECK_CANDIDATE_COLUMNS)
 
 
 def _prices() -> pd.DataFrame:
