@@ -29,13 +29,60 @@ BACKTEST_LAB_STRATEGY_IDS = {
     "tech_bottleneck",
 }
 
+
+def load_strategy_contracts(profile: str = "balanced") -> dict[str, Any]:
+    from stock_research.strategy_contracts import (
+        load_strategy_contracts as _load_strategy_contracts,
+    )
+
+    return _load_strategy_contracts(profile=profile)
+
+
+def strategy_contract_run_config(contract: Any) -> dict[str, Any]:
+    from stock_research.strategy_contracts import (
+        strategy_contract_run_config as _strategy_contract_run_config,
+    )
+
+    return _strategy_contract_run_config(contract)
+
+
+def validate_strategy_summary_against_contract(summary: dict[str, Any], contract: Any) -> Any:
+    from stock_research.strategy_contracts import (
+        validate_strategy_summary_against_contract as _validate_strategy_summary_against_contract,
+    )
+
+    return _validate_strategy_summary_against_contract(summary, contract)
+
+
 def list_backtest_strategies() -> list[dict[str, Any]]:
     strategies = [
         strategy
         for strategy in list_strategy_catalog()
         if strategy["strategy_id"] in BACKTEST_LAB_STRATEGY_IDS and strategy["status"] == "runnable"
     ]
+    strategies = _apply_strategy_contract_defaults(strategies)
     return _enrich_strategies_with_latest_eod_metrics(_enrich_strategies_with_latest_db_metrics(strategies))
+
+
+def _apply_strategy_contract_defaults(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    try:
+        contracts = load_strategy_contracts(profile="balanced")
+    except Exception:
+        return strategies
+    next_strategies: list[dict[str, Any]] = []
+    for strategy in strategies:
+        contract = contracts.get(str(strategy.get("strategy_id") or ""))
+        if contract is None:
+            next_strategies.append(strategy)
+            continue
+        contract_config = strategy_contract_run_config(contract)
+        default_parameters = dict(strategy.get("default_parameters") or {})
+        for key, value in contract_config.items():
+            default_parameters[key] = value
+        next_strategy = dict(strategy)
+        next_strategy["default_parameters"] = default_parameters
+        next_strategies.append(next_strategy)
+    return next_strategies
 
 
 def _enrich_strategies_with_latest_db_metrics(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -68,6 +115,21 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
     )
 
     summary = _eod_summary(module)
+    contract_status = _validate_eod_summary_contract(str(strategy["strategy_id"]), summary)
+    if contract_status:
+        status, reason = contract_status
+        if status != "success":
+            next_strategy = dict(strategy)
+            next_strategy["latest_metrics"] = {
+                "as_of_date": latest_trade_date or metrics.get("as_of_date"),
+                "signal_status": "contract_mismatch",
+                "signal_count": signal_count,
+                "contract_status": status,
+                "contract_reason": reason,
+            }
+            next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
+            return next_strategy
+        metrics["contract_status"] = status
     if summary:
         metrics.update(_metrics_from_eod_summary(summary))
     else:
@@ -83,6 +145,19 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         signal_count=signal_count,
     )
     return next_strategy
+
+
+def _validate_eod_summary_contract(strategy_id: str, summary: dict[str, Any]) -> tuple[str, str] | None:
+    if not summary:
+        return None
+    try:
+        contract = load_strategy_contracts(profile="balanced").get(strategy_id)
+    except Exception:
+        return None
+    if contract is None:
+        return None
+    result = validate_strategy_summary_against_contract(summary, contract)
+    return result.status, result.reason
 
 
 def _latest_eod_strategy_module(strategy_id: str) -> dict[str, Any] | None:
@@ -488,6 +563,7 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
     started = time.perf_counter()
     started_at = datetime.now(timezone.utc).isoformat()
     strategy_id, params, run_config, config = _parse_backtest_request(payload)
+    run_config = _apply_strategy_contract_run_config(strategy_id, run_config, payload)
     if strategy_id == "lhb_shortline":
         result = run_lhb_shortline_v1_backtest_for_dashboard(
             {
@@ -497,7 +573,7 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
         return _with_execution_metadata(
-            to_json_safe(result),
+            _with_contract_config(to_json_safe(result), run_config),
             mode="fresh",
             source=str(result.get("source_kind") or "lhb_shortline_v1"),
             started_at=started_at,
@@ -512,7 +588,7 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
         return _with_execution_metadata(
-            to_json_safe(result),
+            _with_contract_config(to_json_safe(result), run_config),
             mode="fresh",
             source=str(result.get("source_kind") or "mid_trend_v1"),
             started_at=started_at,
@@ -527,7 +603,7 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
         return _with_execution_metadata(
-            to_json_safe(result),
+            _with_contract_config(to_json_safe(result), run_config),
             mode="fresh",
             source=str(result.get("source_kind") or "tech_bottleneck_v1"),
             started_at=started_at,
@@ -576,6 +652,41 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         started_at=started_at,
         elapsed_ms=(time.perf_counter() - started) * 1000.0,
     )
+
+
+def _apply_strategy_contract_run_config(
+    strategy_id: str,
+    run_config: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        contract = load_strategy_contracts(profile="balanced").get(strategy_id)
+    except Exception:
+        contract = None
+    if contract is None:
+        return run_config
+    contract_config = strategy_contract_run_config(contract)
+    merged = dict(run_config)
+    for key, value in contract_config.items():
+        if key.startswith("contract_") or _payload_missing(payload, key):
+            merged[key] = value
+    return merged
+
+
+def _payload_missing(payload: dict[str, Any], key: str) -> bool:
+    return key not in payload or payload.get(key) is None or payload.get(key) == ""
+
+
+def _with_contract_config(result: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
+    if not any(str(key).startswith("contract_") for key in run_config):
+        return result
+    next_result = dict(result)
+    config = dict(next_result.get("config") or {})
+    for key, value in run_config.items():
+        if str(key).startswith("contract_"):
+            config[key] = value
+    next_result["config"] = config
+    return next_result
 
 
 def run_backtest(payload: dict[str, Any]) -> dict[str, Any]:

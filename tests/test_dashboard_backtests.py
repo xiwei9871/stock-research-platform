@@ -1,3 +1,5 @@
+import builtins
+import importlib
 import math
 from pathlib import Path
 
@@ -12,6 +14,19 @@ from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     VectorizedTopNResult,
 )
+
+
+def test_backtests_import_does_not_require_strategy_contracts(monkeypatch):
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "stock_research.strategy_contracts":
+            raise ModuleNotFoundError(name)
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    importlib.reload(backtests)
 
 
 def test_strategy_metrics_prefer_eod_manifest_strategy_artifacts(monkeypatch, tmp_path):
@@ -57,6 +72,7 @@ def test_strategy_metrics_prefer_eod_manifest_strategy_artifacts(monkeypatch, tm
         ],
         raising=False,
     )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {})
 
     strategy = {
         "strategy_id": "mid_trend",
@@ -170,6 +186,213 @@ def test_list_backtest_strategies_returns_validated_combo_rows_only():
     assert {row["status"] for row in rows} == {"runnable"}
     assert "manual_v1_topn_rotation" not in by_id
     assert "position_control" not in by_id
+
+
+def test_list_backtest_strategies_applies_balanced_contract_defaults(monkeypatch):
+    class Contract:
+        strategy_id = "tech_bottleneck"
+        profile = "balanced"
+        variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
+        top_n = 3
+        frequency = "biweekly"
+        protection_name = "rank_exit_top10_1d"
+        transaction_cost_bps = 20.0
+        adjust_type = "hfq"
+        contract_id = "tech_bottleneck:balanced:test"
+
+    monkeypatch.setattr(
+        backtests,
+        "list_strategy_catalog",
+        lambda: [
+            {
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Combo",
+                "status": "runnable",
+                "default_parameters": {
+                    "top_n": 5,
+                    "rebalance_frequency": "weekly",
+                    "transaction_cost_bps": 20,
+                    "adjust_type": "hfq",
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {"tech_bottleneck": Contract()})
+    monkeypatch.setattr(backtests, "_enrich_strategies_with_latest_db_metrics", lambda rows: rows)
+    monkeypatch.setattr(backtests, "_enrich_strategies_with_latest_eod_metrics", lambda rows: rows)
+
+    rows = backtests.list_backtest_strategies()
+
+    assert rows[0]["default_parameters"]["top_n"] == 3
+    assert rows[0]["default_parameters"]["rebalance_frequency"] == "biweekly"
+    assert rows[0]["default_parameters"]["protection_name"] == "rank_exit_top10_1d"
+    assert rows[0]["default_parameters"]["contract_profile"] == "balanced"
+
+
+def test_run_fresh_backtest_applies_balanced_strategy_contract(monkeypatch):
+    calls = []
+
+    class Contract:
+        strategy_id = "tech_bottleneck"
+        profile = "balanced"
+        variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
+        top_n = 3
+        frequency = "biweekly"
+        protection_name = "rank_exit_top10_1d"
+        transaction_cost_bps = 20.0
+        adjust_type = "hfq"
+        contract_id = "tech_bottleneck:balanced:test"
+
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {"tech_bottleneck": Contract()})
+
+    def fake_runner(payload):
+        calls.append(payload)
+        return {
+            "strategy_id": "tech_bottleneck",
+            "source_kind": "tech_bottleneck_v1",
+            "summary": {"engine_version": "tech_bottleneck_v1"},
+        }
+
+    monkeypatch.setattr(backtests, "run_tech_bottleneck_v1_backtest_for_dashboard", fake_runner)
+
+    result = backtests.run_fresh_backtest(
+        {
+            "strategy_id": "tech_bottleneck",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-17",
+        }
+    )
+
+    assert calls[0]["top_n"] == 3
+    assert calls[0]["rebalance_frequency"] == "biweekly"
+    assert calls[0]["protection_name"] == "rank_exit_top10_1d"
+    assert result["config"]["contract_profile"] == "balanced"
+
+
+def test_run_fresh_backtest_preserves_explicit_params_over_strategy_contract(monkeypatch):
+    calls = []
+
+    class Contract:
+        strategy_id = "tech_bottleneck"
+        profile = "balanced"
+        variant = "strict_153_st_only_financial_state:biweekly:rank_exit_top10_1d"
+        top_n = 3
+        frequency = "biweekly"
+        protection_name = "rank_exit_top10_1d"
+        transaction_cost_bps = 20.0
+        adjust_type = "hfq"
+        contract_id = "tech_bottleneck:balanced:test"
+
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {"tech_bottleneck": Contract()})
+
+    def fake_runner(payload):
+        calls.append(payload)
+        return {
+            "strategy_id": "tech_bottleneck",
+            "source_kind": "tech_bottleneck_v1",
+            "config": {"top_n": payload["top_n"], "rebalance_frequency": payload["rebalance_frequency"]},
+            "summary": {"engine_version": "tech_bottleneck_v1"},
+        }
+
+    monkeypatch.setattr(backtests, "run_tech_bottleneck_v1_backtest_for_dashboard", fake_runner)
+
+    result = backtests.run_fresh_backtest(
+        {
+            "strategy_id": "tech_bottleneck",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-17",
+            "top_n": 5,
+            "rebalance_frequency": "weekly",
+        }
+    )
+
+    assert calls[0]["top_n"] == 5
+    assert calls[0]["rebalance_frequency"] == "weekly"
+    assert calls[0]["protection_name"] == "rank_exit_top10_1d"
+    assert result["config"]["contract_profile"] == "balanced"
+
+
+def test_strategy_metrics_hide_stale_performance_when_contract_mismatched(monkeypatch, tmp_path):
+    artifact = tmp_path / "strategy_mid_trend_review.csv"
+    artifact.write_text(
+        "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name\n"
+        "2026-06-17,CN:SZ:000001,1,mid_trend,Mid Trend Combo,平安银行\n",
+        encoding="utf-8",
+    )
+
+    class Contract:
+        strategy_id = "mid_trend"
+        profile = "balanced"
+        engine = "mid_trend_v1"
+        variant = "top5_weekly_max_2_replacements"
+        top_n = 5
+        frequency = "weekly"
+        protection_name = None
+        transaction_cost_bps = 20.0
+        adjust_type = "hfq"
+        contract_id = "mid_trend:balanced:test"
+
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {"mid_trend": Contract()})
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "latest_trade_date": "2026-06-17",
+                "row_count": 1,
+                "artifact_path": str(artifact),
+                "metadata": {
+                    "summary": {
+                        "engine_version": "mid_trend_v1",
+                        "variant_name": "old_wrong_variant",
+                        "top_n": 5,
+                        "transaction_cost_bps": 20.0,
+                        "adjust_type": "hfq",
+                        "frequency": "weekly",
+                        "total_return": 9.0,
+                        "max_drawdown": -0.1,
+                    }
+                },
+            }
+        ],
+        raising=False,
+    )
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend Combo",
+            "latest_metrics": {
+                "as_of_date": "2026-06-02",
+                "total_return_pct": 55.99,
+                "max_drawdown_pct": -17.52,
+                "latest_day_return_pct": 0.43,
+                "latest_day_drawdown_pct": -8.68,
+                "latest_period_return_pct": -4.43,
+                "latest_period_label": "最近调仓周期",
+                "signal_status": "connected",
+                "signal_count": 5,
+            },
+        }
+    )
+
+    metrics = enriched["latest_metrics"]
+    assert metrics["as_of_date"] == "2026-06-17"
+    assert metrics["signal_status"] == "contract_mismatch"
+    assert metrics["signal_count"] == 1
+    assert metrics["contract_status"] == "failed"
+    assert "variant mismatch" in metrics["contract_reason"]
+    for key in [
+        "total_return_pct",
+        "max_drawdown_pct",
+        "latest_day_return_pct",
+        "latest_day_drawdown_pct",
+        "latest_period_return_pct",
+        "latest_period_label",
+    ]:
+        assert key not in metrics
 
 
 def test_latest_strategy_metrics_use_latest_database_trade_date(monkeypatch):
