@@ -2514,6 +2514,13 @@ def build_parser() -> argparse.ArgumentParser:
     serenity_tight3b_c2.add_argument("--adjust-type", default="hfq")
     serenity_tight3b_c2.add_argument("--output-dir", default="outputs/research")
 
+    tech_bottleneck_eod = subparsers.add_parser("run-tech-bottleneck-eod")
+    tech_bottleneck_eod.add_argument("--start-date", default="2025-01-01")
+    tech_bottleneck_eod.add_argument("--end-date", required=True)
+    tech_bottleneck_eod.add_argument("--output-dir", required=True)
+    tech_bottleneck_eod.add_argument("--base-candidates-path", required=True)
+    tech_bottleneck_eod.set_defaults(func=_cmd_run_tech_bottleneck_eod)
+
     strategy_contract_rescan = subparsers.add_parser("rescan-official-strategy-contracts")
     strategy_contract_rescan.add_argument("--output-dir", required=True)
     strategy_contract_rescan.add_argument(
@@ -3846,6 +3853,18 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
         return False
     versions = {str(value) for value in frame["diagnostics_rule_version"].dropna().unique()}
     return versions == {DIAGNOSTICS_RULE_VERSION}
+
+
+def _cmd_run_tech_bottleneck_eod(args: argparse.Namespace) -> int:
+    from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod
+
+    run_tech_bottleneck_eod(
+        start_date=str(args.start_date),
+        end_date=str(args.end_date),
+        output_dir=str(args.output_dir),
+        base_candidates_path=str(args.base_candidates_path),
+    )
+    return 0
 
 
 def main_for_args(argv: list[str] | None = None) -> None:
@@ -5321,6 +5340,9 @@ def main_for_args(argv: list[str] | None = None) -> None:
             print(f"serenity_tight3b_c2|best_trades|{result['paths']['best_trades']}")
         print(f"serenity_tight3b_c2|report|{result['paths']['report']}")
         print(f"serenity_tight3b_c2|rows|{len(result.get('summary', []))}")
+    elif args.command == "run-tech-bottleneck-eod":
+        _cmd_run_tech_bottleneck_eod(args)
+        print(f"tech_bottleneck_eod|output_dir|{args.output_dir}")
     elif args.command == "rescan-official-strategy-contracts":
         result = run_official_strategy_contract_rescan(
             output_dir=args.output_dir,
