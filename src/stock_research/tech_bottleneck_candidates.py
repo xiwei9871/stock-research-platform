@@ -14,6 +14,7 @@ TECH_BOTTLENECK_CANDIDATE_COLUMNS = [
     "asset_id",
     "stock_name",
     "first_hit_date",
+    "candidate_as_of_date",
     "hit_count_as_of_date",
     "primary_chain_id",
     "primary_chain_name",
@@ -86,6 +87,7 @@ def build_point_in_time_candidate_snapshots(
                     "asset_id": asset_id,
                     "stock_name": str(getattr(row, "stock_name", "") or ""),
                     "first_hit_date": str(row.first_hit_date),
+                    "candidate_as_of_date": str(row.candidate_as_of_date),
                     "hit_count_as_of_date": float(row.hit_count_as_of_date),
                     "primary_chain_id": str(getattr(row, "primary_chain_id", "") or ""),
                     "primary_chain_name": str(getattr(row, "primary_chain_name", "") or ""),
@@ -128,7 +130,14 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
     bad_engine = normalized["engine_version"] != TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION
     if bool(bad_engine.any()):
         raise ValueError(f"engine_version must equal {TECH_BOTTLENECK_CANDIDATE_ENGINE_VERSION}")
-    date_columns = ["trade_date", "first_hit_date", "financial_as_of_date", "technical_as_of_date", "data_as_of_date"]
+    date_columns = [
+        "trade_date",
+        "first_hit_date",
+        "candidate_as_of_date",
+        "financial_as_of_date",
+        "technical_as_of_date",
+        "data_as_of_date",
+    ]
     for column in date_columns:
         normalized[column] = _parse_required_date_column(
             normalized[column],
@@ -158,6 +167,7 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
 
     checks = [
         ("first_hit_date", "first_hit_date must be <= trade_date"),
+        ("candidate_as_of_date", "candidate_as_of_date must be <= trade_date"),
         ("financial_as_of_date", "financial_as_of_date must be <= trade_date"),
         ("technical_as_of_date", "technical_as_of_date must be <= trade_date"),
     ]
@@ -289,12 +299,16 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         )
     else:
         raise ValueError("candidate_as_of_date missing: provide trade_date or candidate_trade_date")
+    duplicates = frame.duplicated(subset=["asset_id", "candidate_as_of_date"], keep=False)
+    if bool(duplicates.any()):
+        raise ValueError("duplicate candidate source rows for asset_id and candidate_as_of_date")
 
     if "hit_count_as_of_date" in frame.columns and candidate_date_column is not None:
         frame["hit_count_as_of_date"] = _numeric_required_column(
             frame["hit_count_as_of_date"],
             invalid_message="hit_count_as_of_date must be numeric",
         )
+        _validate_finite_nonnegative(frame["hit_count_as_of_date"], column="hit_count_as_of_date")
         frame["filter_reason"] = _string_column(frame, "filter_reason")
     else:
         frame["hit_count_as_of_date"] = 1.0
