@@ -114,6 +114,23 @@ def test_tech_bottleneck_v1_rejects_partial_snapshot_date_coverage() -> None:
         )
 
 
+def test_tech_bottleneck_v1_rejects_interior_snapshot_date_gap() -> None:
+    snapshots = _rank_snapshots()
+    snapshots = snapshots[snapshots["trade_date"] != "2025-01-04"].copy()
+
+    with pytest.raises(ValueError, match="missing trade dates 2025-01-04"):
+        build_tech_bottleneck_v1_from_rank_snapshots(
+            candidate_snapshots=snapshots,
+            prices=_prices(),
+            market_exposure=_market_exposure(),
+            start_date="2025-01-01",
+            end_date="2025-01-08",
+            top_n=2,
+            rebalance_frequency="weekly",
+            transaction_cost_bps=20,
+        )
+
+
 def _candidates() -> pd.DataFrame:
     return pd.DataFrame(
         [

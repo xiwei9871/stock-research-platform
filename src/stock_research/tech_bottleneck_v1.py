@@ -173,6 +173,11 @@ def build_tech_bottleneck_v1_from_rank_snapshots(
         candidate_snapshots,
         start_date=config.start_date,
         end_date=config.end_date,
+        expected_trade_dates=_expected_trade_dates_from_prices(
+            prices,
+            start_date=config.start_date,
+            end_date=config.end_date,
+        ),
     )
     result = build_serenity_tight3b_c2_experiment_from_rank_frames(
         ranks=candidate_snapshots,
@@ -317,6 +322,7 @@ def _candidate_snapshot_coverage(
     *,
     start_date: str,
     end_date: str,
+    expected_trade_dates: list[str] | None = None,
 ) -> dict[str, Any]:
     if candidate_snapshots.empty or "trade_date" not in candidate_snapshots.columns:
         raise ValueError("Tech Bottleneck candidate snapshots are missing for requested range")
@@ -332,11 +338,33 @@ def _candidate_snapshot_coverage(
             "Tech Bottleneck candidate snapshots do not cover requested range: "
             f"requested {start_date}..{end_date}, available {available_start}..{available_end}"
         )
+    expected_dates = set(expected_trade_dates or [])
+    if expected_dates:
+        available_dates = set(filtered.astype(str).unique().tolist())
+        missing_dates = sorted(expected_dates - available_dates)
+        if missing_dates:
+            preview = ", ".join(missing_dates[:5])
+            raise ValueError(
+                "Tech Bottleneck candidate snapshots do not cover requested range: "
+                f"missing trade dates {preview}"
+            )
     return {
         "rows": int(in_range.sum()),
         "start_date": available_start,
         "latest_date": available_end,
     }
+
+
+def _expected_trade_dates_from_prices(
+    prices: pd.DataFrame,
+    *,
+    start_date: str,
+    end_date: str,
+) -> list[str]:
+    if prices.empty or "trade_date" not in prices.columns:
+        return []
+    dates = pd.to_datetime(prices["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    return sorted(dates[dates.between(start_date, end_date)].dropna().astype(str).unique().tolist())
 
 
 def _slice_lifecycle_result(
