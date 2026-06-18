@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.daily_close_pipeline import resolve_strategy_trade_date
 from stock_research.db import connect, fetch_all
 from stock_research.run_card import write_run_card
 from stock_research.services.universe_service import UniverseResult, get_universe_allowed_ids
@@ -93,7 +94,10 @@ def generate_selection(
     top_n: int = SETTINGS.selection_top_n,
     universe_result: UniverseResult | None = None,
     output_dir: str | Path | None = None,
+    use_pipeline_ready_date: bool = True,
 ) -> list[dict[str, Any]]:
+    if use_pipeline_ready_date:
+        trade_date = resolve_strategy_trade_date(trade_date)
     matrix = load_feature_matrix(trade_date)
     trade_status = load_trade_status(trade_date)
     allowed_ids = get_universe_allowed_ids(universe_result)

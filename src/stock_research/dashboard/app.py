@@ -25,6 +25,7 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.public_news.service import (
     load_public_news_for_dashboard,
     refresh_public_news_for_dashboard,
@@ -42,6 +43,10 @@ def create_app() -> FastAPI:
         top_n: int = 30,
     ):
         return build_dashboard_overview(trade_date, score_version, watchlist_id, top_n)
+
+    @app.get("/api/data/status")
+    def data_status():
+        return load_data_status_for_dashboard()
 
     @app.get("/api/public-news")
     def public_news(

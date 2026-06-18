@@ -122,6 +122,11 @@ from stock_research.factor_eval_store import (
 from stock_research.factor_store import load_top_scores, score_stored_factor_daily
 from stock_research.factor_gate_watchdog import run_factor_gate_batch_watchdog
 from stock_research.daily_pipeline import run_daily_factor_pipeline
+from stock_research.daily_close_pipeline import (
+    PipelineConfig as DailyClosePipelineConfig,
+    parse_trade_date as parse_daily_close_trade_date,
+    run_pipeline_stage as run_daily_close_pipeline_stage,
+)
 from stock_research.daily_incremental import (
     build_default_step_runners,
     check_market_data_freshness,
@@ -1298,6 +1303,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
+
+    daily_close_pipeline = subparsers.add_parser("daily-pipeline")
+    daily_close_pipeline.add_argument("--date")
+    daily_close_pipeline.add_argument(
+        "--stage",
+        choices=["all", "daily", "minute5", "deps", "health", "retry_failed", "status"],
+        default="all",
+    )
+    daily_close_pipeline.add_argument("--force", action="store_true")
 
     subparsers.add_parser("finance-audit")
 
@@ -4555,6 +4569,15 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
+    elif args.command == "daily-pipeline":
+        config = DailyClosePipelineConfig.from_env()
+        if args.force:
+            config = DailyClosePipelineConfig(
+                **{**config.__dict__, "force_non_trading_day": True}
+            )
+        trade_date = parse_daily_close_trade_date(args.date, config.timezone)
+        result = run_daily_close_pipeline_stage(args.stage, trade_date, config)
+        print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))

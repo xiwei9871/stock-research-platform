@@ -27,6 +27,30 @@ def test_overview_route_returns_payload(monkeypatch):
     assert response.json()["trade_date"] == "2026-05-29"
 
 
+def test_data_status_route_returns_pipeline_status(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_data_status_for_dashboard",
+        lambda: {
+            "latest_ready_trade_date": "2026-06-05",
+            "current_trade_date": "2026-06-05",
+            "pipeline_status": "READY",
+            "daily_status": "success",
+            "minute5_status": "success",
+            "deps_status": "success",
+            "failed_jobs": [],
+            "warnings": [],
+            "last_updated_at": "2026-06-05T20:00:00+08:00",
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/data/status")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline_status"] == "READY"
+
+
 def test_public_news_route_returns_filtered_items(monkeypatch):
     captured = {}
 
