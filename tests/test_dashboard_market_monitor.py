@@ -57,6 +57,66 @@ def test_build_market_monitor_eod_uses_latest_complete_date(monkeypatch):
     assert payload["generated_reports"][0]["report_type"] == "daily_topn_report"
 
 
+def test_build_market_monitor_eod_defaults_to_display_gate_date(monkeypatch):
+    requested_top_scores: list[tuple[str, str, int]] = []
+    monkeypatch.setattr(
+        market_monitor,
+        "load_platform_summary",
+        lambda score_version="manual_v1", top_n=5: {
+            "latest_market_date": "2026-06-18",
+            "latest_factor_date": "2026-06-18",
+            "latest_score_date": "2026-06-18",
+            "market_asset_count": 5300,
+            "score_asset_count": 3100,
+            "factor_count": 42,
+            "topn_preview": [
+                {
+                    "trade_date": "2026-06-18",
+                    "asset_id": "LATEST.SZ",
+                    "rank": 1,
+                    "score_total": 99.0,
+                    "score_version": "manual_v1",
+                    "score_components": {},
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(market_monitor, "load_latest_data_run_manifest", lambda: [{"trade_date": "2026-06-18"}])
+    monkeypatch.setattr(
+        market_monitor,
+        "select_display_date",
+        lambda modules, latest_market_date: {
+            "display_trade_date": "2026-06-17",
+            "candidate_trade_date": latest_market_date,
+            "display_status": "ready",
+        },
+    )
+    monkeypatch.setattr(market_monitor, "load_report_links", lambda trade_date: [])
+    monkeypatch.setattr(market_monitor, "load_market_emotion_row", lambda trade_date: None)
+    monkeypatch.setattr(market_monitor, "load_emotion_stock_lists", lambda trade_date: {})
+
+    def fake_load_top_scores(trade_date: str, score_version: str, top_n: int):
+        requested_top_scores.append((trade_date, score_version, top_n))
+        return [
+            {
+                "trade_date": trade_date,
+                "asset_id": "DISPLAY.SZ",
+                "rank": 1,
+                "score_total": 88.0,
+                "score_version": score_version,
+                "score_components": {},
+            }
+        ]
+
+    monkeypatch.setattr(market_monitor, "load_top_scores_for_dashboard", fake_load_top_scores, raising=False)
+
+    payload = market_monitor.build_market_monitor_eod()
+
+    assert payload["trade_date"] == "2026-06-17"
+    assert requested_top_scores == [("2026-06-17", "manual_v1", 5)]
+    assert payload["strategy_signal_summary"]["topn_preview"][0]["asset_id"] == "DISPLAY.SZ"
+
+
 def test_build_market_monitor_eod_maps_market_emotion_row(monkeypatch):
     monkeypatch.setattr(
         market_monitor,

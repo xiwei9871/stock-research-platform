@@ -7,6 +7,7 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import load_latest_data_run_manifest
+from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.evidence_digest import build_evidence_digest
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
@@ -24,6 +25,20 @@ BUCKET_LABELS = {
 RESEARCH_OUTPUT_ROOT = Path("/Users/xiwei/stock_research/outputs/research")
 
 
+def load_strategy_contracts(*, profile: str = "balanced") -> dict[str, Any]:
+    from stock_research.strategy_contracts import load_strategy_contracts as load_contracts
+
+    return load_contracts(profile=profile)
+
+
+def validate_strategy_summary_against_contract(summary: dict[str, Any], contract: Any) -> Any:
+    from stock_research.strategy_contracts import (
+        validate_strategy_summary_against_contract as validate_summary,
+    )
+
+    return validate_summary(summary, contract)
+
+
 def build_review_queue(
     *,
     trade_date: str | None = None,
@@ -38,9 +53,7 @@ def build_review_queue(
     summary_top_n = 10 if normalized_review_mode == "strategy_topn" else bounded_limit
     summary = load_platform_summary(score_version=score_version, top_n=summary_top_n)
     explicit_trade_date = bool(trade_date)
-    selected_trade_date = str(trade_date) if explicit_trade_date else str(
-        summary.get("latest_market_date") or summary.get("latest_score_date") or ""
-    )
+    selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
     if normalized_review_mode == "strategy_topn":
         strategy_rows = load_active_strategy_topn_rows(trade_date=selected_trade_date, limit=min(bounded_limit, 10))
         if strategy_rows:
@@ -53,7 +66,7 @@ def build_review_queue(
 
     score_rows = (
         load_top_scores_for_dashboard(selected_trade_date, score_version, bounded_limit)
-        if explicit_trade_date
+        if explicit_trade_date or _should_load_scores_for_default_date(summary, selected_trade_date)
         else summary.get("topn_preview") or []
     )
     warnings: list[str] = []
@@ -111,6 +124,30 @@ def build_review_queue(
     }
 
 
+def _default_display_trade_date(summary: dict[str, Any]) -> str:
+    latest_market_date = str(summary.get("latest_market_date") or "")
+    try:
+        gate = select_display_date(
+            list(load_latest_data_run_manifest()),
+            latest_market_date=latest_market_date,
+        )
+    except Exception:
+        gate = {}
+    return str(
+        gate.get("display_trade_date")
+        or latest_market_date
+        or summary.get("latest_score_date")
+        or ""
+    )
+
+
+def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:
+    if not selected_trade_date:
+        return False
+    latest_score_date = str(summary.get("latest_score_date") or summary.get("latest_market_date") or "")
+    return selected_trade_date != latest_score_date
+
+
 def load_active_strategy_topn_rows(*, trade_date: str, limit: int) -> list[dict[str, Any]]:
     manifest_rows = _load_manifest_strategy_rows(trade_date=trade_date, limit=limit)
     if manifest_rows:
@@ -134,9 +171,32 @@ def _load_manifest_strategy_rows(*, trade_date: str, limit: int) -> list[dict[st
         module_name = str(module.get("module") or "")
         if not module_name.startswith("strategy_") or str(module.get("status") or "") != "success":
             continue
+        if not _manifest_strategy_contract_valid(module):
+            continue
         artifact_path = Path(str(module.get("artifact_path") or ""))
         rows.extend(_read_manifest_strategy_artifact(artifact_path, trade_date=trade_date, limit=limit, manifest=module))
     return _select_latest_strategy_sources(artifact_rows=rows, db_rows=[])
+
+
+def _manifest_strategy_contract_valid(module: dict[str, Any]) -> bool:
+    strategy_id = {
+        "strategy_lhb_shortline": "lhb_shortline",
+        "strategy_mid_trend": "mid_trend",
+        "strategy_tech_bottleneck": "tech_bottleneck",
+    }.get(str(module.get("module") or ""))
+    if not strategy_id:
+        return True
+    metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
+    summary = metadata.get("summary") if isinstance(metadata.get("summary"), dict) else {}
+    if not summary:
+        return True
+    try:
+        contract = load_strategy_contracts(profile="balanced").get(strategy_id)
+    except Exception:
+        return True
+    if contract is None:
+        return True
+    return validate_strategy_summary_against_contract(summary, contract).status == "success"
 
 
 def _read_manifest_strategy_artifact(

@@ -107,6 +107,44 @@ def test_build_review_queue_defaults_to_active_strategy_top10_groups(monkeypatch
     assert payload["groups"][0]["items"][0]["strategy_run_id"] == "mid_trend:run"
 
 
+def test_build_review_queue_defaults_to_display_gate_date(monkeypatch):
+    captured: dict[str, object] = {}
+    rows = [
+        {
+            **_strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo"),
+            "trade_date": "2026-06-17",
+        }
+    ]
+    monkeypatch.setattr(
+        review_queue,
+        "load_platform_summary",
+        lambda **kwargs: {"latest_market_date": "2026-06-18", "latest_score_date": "2026-06-18", "topn_preview": []},
+    )
+    monkeypatch.setattr(review_queue, "load_latest_data_run_manifest", lambda: [{"trade_date": "2026-06-18"}])
+    monkeypatch.setattr(
+        review_queue,
+        "select_display_date",
+        lambda modules, latest_market_date: {
+            "display_trade_date": "2026-06-17",
+            "candidate_trade_date": latest_market_date,
+            "display_status": "ready",
+        },
+    )
+
+    def fake_strategy_rows(*, trade_date, limit):
+        captured["trade_date"] = trade_date
+        captured["limit"] = limit
+        return rows
+
+    monkeypatch.setattr(review_queue, "load_active_strategy_topn_rows", fake_strategy_rows, raising=False)
+
+    payload = review_queue.build_review_queue(trade_date=None, limit=10)
+
+    assert captured == {"trade_date": "2026-06-17", "limit": 10}
+    assert payload["trade_date"] == "2026-06-17"
+    assert payload["groups"][0]["items"][0]["asset_id"] == "CN:SZ:000001"
+
+
 def test_build_review_queue_strategy_mode_uses_lightweight_digest(monkeypatch):
     rows = [_strategy_position("CN:SZ:000001", 1, strategy_id="mid_trend", strategy_name="Mid Trend Combo")]
     monkeypatch.setattr(
@@ -307,6 +345,64 @@ def test_load_active_strategy_topn_rows_reads_manifest_strategy_artifacts(monkey
     ]
     assert rows[0]["stock_name"] == "博硕科技"
     assert rows[0]["review_notes"] == ["真实执行"]
+
+
+def test_load_active_strategy_topn_rows_skips_contract_mismatched_manifest(monkeypatch, tmp_path):
+    artifact = tmp_path / "mid_trend_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,source_type,stock_name",
+                "2026-06-17,CN:SH:601963,1,mid_trend,Mid Trend Combo,strategy_manifest,重庆银行",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class Contract:
+        strategy_id = "mid_trend"
+        profile = "balanced"
+        engine = "mid_trend_v1"
+        variant = "top5_weekly_max_2_replacements"
+        top_n = 5
+        frequency = "weekly"
+        protection_name = None
+        transaction_cost_bps = 20.0
+        adjust_type = "hfq"
+        contract_id = "mid_trend:balanced:test"
+
+    monkeypatch.setattr(review_queue, "load_strategy_contracts", lambda profile="balanced": {"mid_trend": Contract()})
+    monkeypatch.setattr(
+        review_queue,
+        "load_latest_data_run_manifest",
+        lambda *, trade_date: [
+            {
+                "module": "strategy_mid_trend",
+                "status": "success",
+                "artifact_path": str(artifact),
+                "latest_trade_date": trade_date,
+                "run_id": "strategy-eod-2026-06-17-local",
+                "metadata": {
+                    "summary": {
+                        "engine_version": "mid_trend_v1",
+                        "variant_name": "old_wrong_variant",
+                        "top_n": 5,
+                        "transaction_cost_bps": 20.0,
+                        "adjust_type": "hfq",
+                        "frequency": "weekly",
+                    }
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(review_queue, "_load_strategy_artifact_topn_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_load_db_strategy_position_rows", lambda *, trade_date, limit: [])
+    monkeypatch.setattr(review_queue, "_attach_asset_names", lambda rows: rows)
+
+    rows = review_queue.load_active_strategy_topn_rows(trade_date="2026-06-17", limit=10)
+
+    assert rows == []
 
 
 def test_manifest_strategy_artifacts_normalize_strategy_scores(monkeypatch, tmp_path):

@@ -8,6 +8,8 @@ from functools import lru_cache
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.data_run_manifest import load_latest_data_run_manifest
+from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.scores import load_top_scores_for_dashboard
@@ -312,7 +314,7 @@ def build_market_monitor_eod(
     latest_factor_date = str(summary.get("latest_factor_date") or "")
     latest_score_date = str(summary.get("latest_score_date") or "")
     explicit_trade_date = bool(trade_date)
-    selected_trade_date = trade_date or latest_market_date
+    selected_trade_date = str(trade_date) if explicit_trade_date else _default_display_trade_date(summary)
     warnings: list[str] = []
     if not latest_market_date:
         warnings.append("latest complete market date is unavailable")
@@ -339,7 +341,7 @@ def build_market_monitor_eod(
 
     topn_preview = (
         load_top_scores_for_dashboard(selected_trade_date, score_version, top_n)
-        if explicit_trade_date and selected_trade_date
+        if selected_trade_date and (explicit_trade_date or _should_load_scores_for_default_date(summary, selected_trade_date))
         else list(summary.get("topn_preview") or [])
     )
     reports = load_report_links(selected_trade_date) if selected_trade_date else []
@@ -391,3 +393,25 @@ def build_market_monitor_eod(
         "generated_reports": reports[:8],
         "warnings": warnings,
     }
+
+
+def _default_display_trade_date(summary: dict[str, Any]) -> str:
+    latest_market_date = str(summary.get("latest_market_date") or "")
+    try:
+        gate = select_display_date(
+            list(load_latest_data_run_manifest()),
+            latest_market_date=latest_market_date,
+        )
+    except Exception:
+        gate = {}
+    return str(
+        gate.get("display_trade_date")
+        or latest_market_date
+        or summary.get("latest_score_date")
+        or ""
+    )
+
+
+def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:
+    latest_score_date = str(summary.get("latest_score_date") or summary.get("latest_market_date") or "")
+    return selected_trade_date != latest_score_date
