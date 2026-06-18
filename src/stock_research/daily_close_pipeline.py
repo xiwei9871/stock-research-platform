@@ -26,6 +26,7 @@ JOB_STATUSES = {"pending", "running", "success", "partial_success", "failed", "s
 PIPELINE_READY_STATUSES = {"READY", "DEGRADED_READY"}
 PIPELINE_FINAL_STATUSES = {"READY", "DEGRADED_READY", "NOT_READY"}
 DAILY_ADJUST_TYPES = ("raw", "qfq", "hfq")
+DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO = 0.01
 
 
 DAILY_CLOSE_PIPELINE_SQL = """
@@ -113,6 +114,7 @@ class PipelineConfig:
     daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
     minute5_lookback_days: int = 5
     minute5_min_coverage_ratio: float = 0.98
+    external_data_max_quality_gap_ratio: float = DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO
     minute5_source_timeout_seconds: int = 2400
     daily_start_time: str = "17:00"
     minute5_start_time: str = "17:30"
@@ -142,6 +144,9 @@ class PipelineConfig:
             minute5_lookback_days=int(os.getenv("MINUTE5_LOOKBACK_DAYS", "5")),
             minute5_min_coverage_ratio=float(
                 os.getenv("MINUTE5_MIN_COVERAGE_RATIO", "0.98")
+            ),
+            external_data_max_quality_gap_ratio=float(
+                os.getenv("EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO", str(DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO))
             ),
             minute5_source_timeout_seconds=int(
                 os.getenv("MINUTE5_SOURCE_TIMEOUT_SECONDS", "2400")
@@ -1786,6 +1791,44 @@ def _stage_status_from_jobs(rows: list[dict[str, Any]], stage: str) -> str:
     return "running"
 
 
+def _load_latest_external_quality(service: str, trade_date: date) -> dict[str, dict[str, Any]]:
+    sql = """
+    SELECT DISTINCT ON (dataset_name)
+        dataset_name,
+        status,
+        expected_count,
+        actual_count,
+        jsonb_array_length(missing_symbols) AS missing_count,
+        jsonb_array_length(abnormal_symbols) AS abnormal_count
+    FROM ops.daily_pipeline_quality
+    WHERE trade_date = %s
+      AND dataset_name IN ('daily_bar', 'minute5_bar')
+    ORDER BY dataset_name, updated_at DESC
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    return {str(row["dataset_name"]): row for row in rows if row.get("dataset_name")}
+
+
+def _quality_status(
+    fallback_status: str,
+    quality_row: dict[str, Any] | None,
+    *,
+    max_gap_ratio: float,
+) -> str:
+    if not quality_row:
+        return fallback_status
+    expected = int(quality_row.get("expected_count") or 0)
+    if expected <= 0:
+        return fallback_status
+    missing = int(quality_row.get("missing_count") or 0)
+    abnormal = int(quality_row.get("abnormal_count") or 0)
+    gap = missing + abnormal
+    if gap / expected > max_gap_ratio:
+        return "failed"
+    return "success" if gap == 0 else "partial_success"
+
+
 def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dict[str, Any]:
     calendar_status = trading_calendar_status(config.service, trade_date)
     sql = """
@@ -1796,8 +1839,17 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
     """
     with connect(config.service) as conn:
         rows = fetch_all(conn, sql, [trade_date])
-    daily_status = _stage_status_from_jobs(rows, "daily")
-    minute5_status = _stage_status_from_jobs(rows, "minute5")
+    quality_by_dataset = _load_latest_external_quality(config.service, trade_date)
+    daily_status = _quality_status(
+        _stage_status_from_jobs(rows, "daily"),
+        quality_by_dataset.get("daily_bar"),
+        max_gap_ratio=config.external_data_max_quality_gap_ratio,
+    )
+    minute5_status = _quality_status(
+        _stage_status_from_jobs(rows, "minute5"),
+        quality_by_dataset.get("minute5_bar"),
+        max_gap_ratio=config.external_data_max_quality_gap_ratio,
+    )
     deps_status = _stage_status_from_jobs(rows, "deps")
     failed_jobs = [
         {
@@ -1819,7 +1871,9 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         pipeline_status = "READY"
     elif not critical_ok or daily_status == "failed" or minute5_status == "failed":
         pipeline_status = "NOT_READY"
-    elif any(row["status"] == "partial_success" for row in rows):
+    elif daily_status == "partial_success" or minute5_status == "partial_success" or any(
+        row["status"] == "partial_success" for row in rows
+    ):
         pipeline_status = "DEGRADED_READY"
     else:
         pipeline_status = "READY"

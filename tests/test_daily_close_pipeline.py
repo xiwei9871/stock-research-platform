@@ -553,6 +553,61 @@ def test_finalize_pipeline_status_degrades_for_partial_core(monkeypatch):
     assert result["failed_jobs"][0]["job_name"] == "minute5_bar"
 
 
+def test_finalize_pipeline_status_uses_quality_threshold_over_old_failed_jobs(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {
+            "stage": "daily",
+            "job_name": "daily_bar",
+            "source": "tushare",
+            "status": "failed",
+            "error_summary": "old source failure",
+        },
+        {
+            "stage": "minute5",
+            "job_name": "minute5_bar",
+            "source": "akshare",
+            "status": "failed",
+            "error_summary": "old source failure",
+        },
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+    quality = [
+        {
+            "dataset_name": "daily_bar",
+            "expected_count": 15627,
+            "actual_count": 15564,
+            "missing_count": 63,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_bar",
+            "expected_count": 5209,
+            "actual_count": 5188,
+            "missing_count": 21,
+            "abnormal_count": 0,
+        },
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return quality
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 6, 17))
+
+    result = dcp.finalize_pipeline_status(
+        date(2026, 6, 18),
+        config=dcp.PipelineConfig(service="test", external_data_max_quality_gap_ratio=0.01),
+    )
+
+    assert result["pipeline_status"] == "DEGRADED_READY"
+    assert result["daily_status"] == "partial_success"
+    assert result["minute5_status"] == "partial_success"
+    assert result["latest_ready_trade_date"] == date(2026, 6, 18)
+
+
 def test_closed_trading_calendar_skips_daily_stage(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(

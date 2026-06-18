@@ -17,30 +17,35 @@ DEFAULT_MIN_MINUTE_ROWS = 1
 DEFAULT_MIN_SCORE_ROWS = 3
 DEFAULT_MIN_WATCHLIST_ROWS = 1
 DEFAULT_MIN_REPORTS = 1
+DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO = 0.01
 
 
 CHECK_SQL = {
     "daily_quality": """
-        SELECT status, expected_count, actual_count, jsonb_array_length(missing_symbols) AS missing_count
+        SELECT
+          status,
+          expected_count,
+          actual_count,
+          jsonb_array_length(missing_symbols) AS missing_count,
+          jsonb_array_length(abnormal_symbols) AS abnormal_count
         FROM ops.daily_pipeline_quality
         WHERE trade_date = %s
           AND dataset_name = 'daily_bar'
         ORDER BY updated_at DESC
         LIMIT 1
     """,
-    "minute5_job": """
+    "minute5_quality": """
         SELECT
-          CASE
-            WHEN bool_or(status = 'failed') THEN 'failed'
-            WHEN bool_or(status = 'partial_success') THEN 'partial_success'
-            WHEN bool_or(status = 'success') THEN 'success'
-            ELSE COALESCE(max(status), 'missing')
-          END AS status,
-          COALESCE(sum(rows_inserted), 0)::int AS rows_inserted
-        FROM ops.daily_pipeline_job
+          status,
+          expected_count,
+          actual_count,
+          jsonb_array_length(missing_symbols) AS missing_count,
+          jsonb_array_length(abnormal_symbols) AS abnormal_count
+        FROM ops.daily_pipeline_quality
         WHERE trade_date = %s
-          AND stage = 'minute5'
-          AND job_name = 'minute5_bar'
+          AND dataset_name = 'minute5_bar'
+        ORDER BY updated_at DESC
+        LIMIT 1
     """,
     "deps_job": """
         SELECT status
@@ -99,10 +104,19 @@ def run_platform_ready_check(
     min_watchlist_rows: int = DEFAULT_MIN_WATCHLIST_ROWS,
     min_reports: int = DEFAULT_MIN_REPORTS,
     allow_degraded_minute5: bool = False,
+    external_data_max_quality_gap_ratio: float = DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO,
+    daily_max_quality_gap_ratio: float | None = None,
+    minute5_max_quality_gap_ratio: float | None = None,
 ) -> dict[str, Any]:
+    daily_gap_ratio = external_data_max_quality_gap_ratio if daily_max_quality_gap_ratio is None else daily_max_quality_gap_ratio
+    minute5_gap_ratio = (
+        external_data_max_quality_gap_ratio
+        if minute5_max_quality_gap_ratio is None
+        else minute5_max_quality_gap_ratio
+    )
     checks = [
-        _check_daily_quality(service, trade_date, min_daily_rows, max_daily_missing),
-        _check_minute5(service, trade_date, min_minute_rows, allow_degraded=allow_degraded_minute5),
+        _check_daily_quality(service, trade_date, min_daily_rows, max_daily_missing, daily_gap_ratio),
+        _check_minute5(service, trade_date, min_minute_rows, max_gap_ratio=minute5_gap_ratio),
         _check_deps(service, trade_date),
         _check_health(service, trade_date, allow_degraded=allow_degraded_minute5),
         _check_scores(service, trade_date, score_version, min_score_rows),
@@ -127,31 +141,64 @@ def render_platform_ready_message(result: dict[str, Any]) -> str:
     return "\n".join(lines)[:1800]
 
 
-def _check_daily_quality(service: str, trade_date: str, min_rows: int, max_missing: int) -> dict[str, str]:
+def _check_daily_quality(
+    service: str,
+    trade_date: str,
+    min_rows: int,
+    max_missing: int,
+    max_gap_ratio: float,
+) -> dict[str, Any]:
     rows = _fetch_check_rows(service, "daily_quality", trade_date)
     if not rows:
         return _fail("daily_bar", "missing daily quality row")
-    row = rows[0]
+    return _check_external_quality_row(
+        name="daily_bar",
+        row=rows[0],
+        min_rows=min_rows,
+        max_gap_ratio=max_gap_ratio,
+        max_missing=max_missing,
+    )
+
+
+def _check_minute5(service: str, trade_date: str, min_rows: int, *, max_gap_ratio: float) -> dict[str, Any]:
+    rows = _fetch_check_rows(service, "minute5_quality", trade_date)
+    if not rows:
+        return _fail("minute5", "missing minute5 quality row")
+    return _check_external_quality_row(
+        name="minute5",
+        row=rows[0],
+        min_rows=min_rows,
+        max_gap_ratio=max_gap_ratio,
+    )
+
+
+def _check_external_quality_row(
+    *,
+    name: str,
+    row: dict[str, Any],
+    min_rows: int,
+    max_gap_ratio: float,
+    max_missing: int | None = None,
+) -> dict[str, Any]:
     actual = int(row.get("actual_count") or 0)
     expected = int(row.get("expected_count") or 0)
     missing = int(row.get("missing_count") or 0)
-    ok = actual >= min_rows and missing <= max_missing
-    detail = f"status={row.get('status')} actual={actual} expected={expected} missing={missing}"
-    return _pass("daily_bar", detail) if ok else _fail("daily_bar", detail)
-
-
-def _check_minute5(service: str, trade_date: str, min_rows: int, *, allow_degraded: bool = False) -> dict[str, Any]:
-    rows = _fetch_check_rows(service, "minute5_job", trade_date)
-    if not rows:
-        return _fail("minute5", "missing minute5 job row")
-    row = rows[0]
-    status = str(row.get("status") or "")
-    rows_inserted = int(row.get("rows_inserted") or 0)
-    ok = status in {"success", "partial_success"} and rows_inserted >= min_rows
-    detail = f"status={status} rows={rows_inserted}"
-    if allow_degraded and rows_inserted >= min_rows:
-        return _pass("minute5", f"{detail} degraded_allowed=true", degraded=True)
-    return _pass("minute5", detail) if ok else _fail("minute5", detail)
+    abnormal = int(row.get("abnormal_count") or 0)
+    gap = missing + abnormal
+    gap_ratio = gap / expected if expected else 1.0
+    ok = actual >= min_rows and expected > 0 and gap_ratio <= max_gap_ratio
+    if max_missing is not None:
+        ok = ok and missing <= max_missing
+    detail = (
+        f"status={row.get('status')} actual={actual} expected={expected} "
+        f"missing={missing} abnormal={abnormal} gap_ratio={gap_ratio:.4f} "
+        f"max_gap_ratio={max_gap_ratio:.4f}"
+    )
+    if max_missing is not None:
+        detail += f" max_missing={max_missing}"
+    if not ok:
+        return _fail(name, detail)
+    return _pass(name, detail, degraded=gap > 0)
 
 
 def _check_deps(service: str, trade_date: str) -> dict[str, str]:
@@ -260,12 +307,22 @@ def main(argv: list[str] | None = None) -> int:
         min_watchlist_rows=int(os.getenv("PLATFORM_READY_MIN_WATCHLIST_ROWS", DEFAULT_MIN_WATCHLIST_ROWS)),
         min_reports=int(os.getenv("PLATFORM_READY_MIN_REPORTS", DEFAULT_MIN_REPORTS)),
         allow_degraded_minute5=os.getenv("PLATFORM_READY_ALLOW_DEGRADED_MINUTE5", "").lower() in {"1", "true", "yes"},
+        external_data_max_quality_gap_ratio=float(
+            os.getenv("EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO", str(DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO))
+        ),
+        daily_max_quality_gap_ratio=_optional_float_env("DAILY_MAX_QUALITY_GAP_RATIO"),
+        minute5_max_quality_gap_ratio=_optional_float_env("MINUTE5_MAX_QUALITY_GAP_RATIO"),
     )
     if args.json_output:
         Path(args.json_output).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json_output).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(render_platform_ready_message(result))
     return 0 if result["status"] in {"ready", "degraded_ready"} else 1
+
+
+def _optional_float_env(name: str) -> float | None:
+    value = os.getenv(name)
+    return float(value) if value else None
 
 
 if __name__ == "__main__":
