@@ -8,6 +8,7 @@ from stock_research.yanbaoke_reports import (
     choose_yanbaoke_download_candidates,
     download_yanbaoke_report_pdf,
     filter_yanbaoke_reports,
+    import_yanbaoke_report_downloads,
     run_yanbaoke_report_backfill,
     search_yanbaoke_reports,
 )
@@ -336,6 +337,71 @@ def test_build_yanbaoke_sources_events_from_downloads_uses_existing_schema(tmp_p
     assert '"broker_tier": "B"' in source["metadata"]
 
 
+def test_import_yanbaoke_downloads_writes_industry_chain_evidence_seed(monkeypatch, tmp_path: Path):
+    pdf_path = tmp_path / "report.pdf"
+    pdf_path.write_bytes(b"%PDF-1.7\nfake")
+    downloads = pd.DataFrame(
+        [
+            {
+                "uuid": "u1",
+                "detail_url": "https://pc.yanbaoke.cn/info/u1",
+                "pdf_path": str(pdf_path),
+                "broker": "中邮证券",
+                "broker_tier": "B",
+                "publish_date": "2025-10-26",
+                "ts_code": "603530.SH",
+                "asset_id": "CN:SH:603530",
+                "stock_name": "神马电力",
+                "report_title": "深度报告",
+                "status": "downloaded",
+            }
+        ]
+    )
+    structured_path = tmp_path / "structured.csv"
+    pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:603530",
+                "stock_name": "神马电力",
+                "primary_chain_id": "high_end_sensors",
+                "revenue_exposure_bucket": "meaningful_segment_exposure",
+                "customer_certification_stage": "order_or_delivery",
+                "supplier_concentration_type": "likely_concentrated_supply_chain",
+            }
+        ]
+    ).to_csv(structured_path, index=False)
+
+    def fake_seed(**kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "asset_id": "CN:SH:603530",
+                    "field": "revenue_exposure_bucket",
+                    "source_type": "broker_report",
+                    "source_path": str(pdf_path),
+                    "source_date": "2025-10-26",
+                    "supports_value": "meaningful_segment_exposure",
+                    "claim": "PDF全文包含收入证据。",
+                    "evidence_tier": "tier1",
+                    "excerpt": "收入增长",
+                }
+            ]
+        )
+
+    monkeypatch.setattr("stock_research.yanbaoke_reports.build_pdf_text_industry_chain_evidence_seed", fake_seed)
+
+    result = import_yanbaoke_report_downloads(
+        downloads,
+        output_dir=tmp_path / "import",
+        run_pdf_backfill=False,
+        industry_structured_detail_path=structured_path,
+    )
+
+    assert result["industry_evidence"] is not None
+    assert Path(result["paths"]["industry_evidence_seed"]).exists()
+    assert pd.read_csv(result["paths"]["industry_evidence_seed"]).iloc[0]["asset_id"] == "CN:SH:603530"
+
+
 def test_run_yanbaoke_report_backfill_searches_downloads_and_imports(monkeypatch, tmp_path: Path):
     tasks_path = tmp_path / "tasks.csv"
     pd.DataFrame(
@@ -455,6 +521,8 @@ def test_cli_dispatches_run_yanbaoke_report_backfill(monkeypatch, tmp_path: Path
             "000001.SZ",
             "--max-broker-share",
             "0.25",
+            "--industry-structured-detail-path",
+            str(tmp_path / "structured.csv"),
             "--no-import",
         ]
     )
@@ -470,6 +538,7 @@ def test_cli_dispatches_run_yanbaoke_report_backfill(monkeypatch, tmp_path: Path
     assert called["top_ts_codes"] == {"603530.SH"}
     assert called["position_ts_codes"] == {"000001.SZ"}
     assert called["max_broker_share"] == 0.25
+    assert called["industry_structured_detail_path"] == str(tmp_path / "structured.csv")
     assert called["import_pdfs"] is False
     assert "yanbaoke_backfill|downloaded|1" in out
 

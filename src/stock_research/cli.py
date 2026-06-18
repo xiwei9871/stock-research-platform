@@ -3402,6 +3402,7 @@ def build_parser() -> argparse.ArgumentParser:
     yanbaoke_run.add_argument("--no-import", dest="import_pdfs", action="store_false")
     yanbaoke_run.add_argument("--no-pdf-backfill", dest="run_pdf_backfill", action="store_false")
     yanbaoke_run.add_argument("--feature-trade-date")
+    yanbaoke_run.add_argument("--industry-structured-detail-path")
     yanbaoke_run.set_defaults(import_pdfs=True, run_pdf_backfill=True)
 
     daily_health = subparsers.add_parser("daily-health")
@@ -6666,12 +6667,15 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             import_pdfs=args.import_pdfs,
             run_pdf_backfill=args.run_pdf_backfill,
             feature_trade_date=args.feature_trade_date,
+            industry_structured_detail_path=args.industry_structured_detail_path,
         )
         print(f"yanbaoke_backfill|tasks|{result['paths']['tasks']}")
         print(f"yanbaoke_backfill|discovered|{result['paths']['discovered']}")
         print(f"yanbaoke_backfill|filtered|{result['paths']['filtered']}")
         print(f"yanbaoke_backfill|downloads|{result['paths']['downloads']}")
         print(f"yanbaoke_backfill|report|{result['paths']['report']}")
+        if result.get("import") and result["import"].get("paths", {}).get("industry_evidence_seed"):
+            print(f"yanbaoke_backfill|industry_evidence_seed|{result['import']['paths']['industry_evidence_seed']}")
         print(f"yanbaoke_backfill|processed_tasks|{result['summary']['processed_tasks']}")
         print(f"yanbaoke_backfill|done_tasks|{result['summary']['done_tasks']}")
         print(f"yanbaoke_backfill|downloaded|{result['summary']['downloaded_count']}")

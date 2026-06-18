@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from stock_research.serenity_source_backed_evidence_fill import (
+    build_pdf_text_industry_chain_evidence_seed,
     build_customer_certification_evidence_seed,
     build_report_index_evidence_seed,
     build_serenity_source_backed_evidence_fill,
@@ -207,6 +208,94 @@ def test_report_index_evidence_seed_extracts_source_backed_claims_from_local_rep
     assert customer["supports_value"] == "order"
     assert customer["source_type"] == "broker_report"
     assert "订单" in customer["claim"]
+
+
+def test_pdf_text_industry_chain_seed_extracts_revenue_customer_and_supplier_evidence():
+    structured = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002222",
+                "stock_name": "福晶科技",
+                "primary_chain_id": "ai_optical_interconnect",
+                "revenue_exposure_bucket": "meaningful_segment_exposure",
+                "customer_certification_stage": "order_or_delivery",
+                "supplier_concentration_type": "likely_concentrated_supply_chain",
+            }
+        ]
+    )
+    reports = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002222",
+                "stock_name": "福晶科技",
+                "publish_date": "2025-06-03",
+                "broker": "中航证券",
+                "report_title": "三大业务并驾齐驱 至期光子构筑新增长曲线",
+                "pdf_path": "data/manual/reports/002222.pdf",
+                "source_type": "annual_report",
+            }
+        ]
+    )
+
+    def fake_fetcher(path: str) -> str:
+        assert path == "data/manual/reports/002222.pdf"
+        return (
+            "公司光通信和激光晶体业务收入持续增长，核心产品进入放量阶段。"
+            "公司已向重点客户批量供货并完成多轮验证。"
+            "上游高端晶体材料供应稀缺，国产替代空间较大。"
+        )
+
+    seed = build_pdf_text_industry_chain_evidence_seed(
+        structured_detail=structured,
+        report_index=reports,
+        fetcher=fake_fetcher,
+    )
+
+    assert set(seed["field"]) == {
+        "revenue_exposure_bucket",
+        "customer_certification_stage",
+        "supplier_concentration_type",
+    }
+    assert seed.set_index("field").loc["revenue_exposure_bucket", "supports_value"] == "meaningful_segment_exposure"
+    assert seed.set_index("field").loc["customer_certification_stage", "supports_value"] == "order_or_delivery"
+    assert seed.set_index("field").loc["supplier_concentration_type", "supports_value"] == "likely_concentrated_supply_chain"
+    assert seed["source_type"].eq("annual_report").all()
+    assert seed["source_path"].eq("data/manual/reports/002222.pdf").all()
+    assert seed["excerpt"].str.contains("批量供货|国产替代", regex=True).any()
+
+
+def test_pdf_text_industry_chain_seed_ignores_generic_financial_boilerplate():
+    structured = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600206",
+                "stock_name": "有研新材",
+                "primary_chain_id": "high_end_sensors",
+                "revenue_exposure_bucket": "meaningful_segment_exposure",
+                "customer_certification_stage": "",
+                "supplier_concentration_type": "likely_concentrated_supply_chain",
+            }
+        ]
+    )
+    reports = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SH:600206",
+                "publish_date": "2023-04-27",
+                "report_title": "2022年年度报告",
+                "pdf_path": "data/manual/reports/600206.pdf",
+                "source_type": "annual_report",
+            }
+        ]
+    )
+
+    seed = build_pdf_text_industry_chain_evidence_seed(
+        structured_detail=structured,
+        report_index=reports,
+        fetcher=lambda _: "本公司实现净利润，提取法定公积金。少数股东权益影响额。公司不存在其他事项。",
+    )
+
+    assert seed.empty
 
 
 def test_report_index_evidence_seed_does_not_promote_negative_or_unidentified_values():

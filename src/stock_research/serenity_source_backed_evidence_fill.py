@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from stock_research.stock_report_pdf_backfill import fetch_pdf_text
+
 
 SOURCE_BACKED_FIELDS = [
     "revenue_exposure_bucket",
@@ -37,6 +39,19 @@ STRONG_TIERS = {"tier1", "primary", "primary_strong", "strong"}
 REVENUE_EVIDENCE_KEYWORDS = {"收入", "业务", "分部", "产品", "核心", "占比", "利润", "放量"}
 CUSTOMER_EVIDENCE_KEYWORDS = {"客户", "认证", "验证", "design-in", "design in", "定点", "订单", "交付", "量产", "出货", "放量"}
 SUPPLIER_EVIDENCE_KEYWORDS = {"进口", "国产替代", "集中", "份额", "稀缺", "少数", "独供", "龙头", "瓶颈"}
+PDF_REVENUE_EVIDENCE_KEYWORDS = {"营业收入", "主营业务", "产品收入", "分部收入", "订单", "放量", "出货", "产能", "业务收入"}
+PDF_CUSTOMER_EVIDENCE_KEYWORDS = CUSTOMER_EVIDENCE_KEYWORDS
+PDF_SUPPLIER_EVIDENCE_KEYWORDS = {
+    "进口依赖",
+    "国产替代",
+    "供应稀缺",
+    "供应商集中",
+    "市场份额",
+    "市占率",
+    "独供",
+    "龙头",
+    "瓶颈",
+}
 ORDER_DELIVERY_KEYWORDS = {"订单", "交付", "量产", "出货", "批量", "放量", "供货"}
 STRONG_ORDER_DELIVERY_KEYWORDS = {"订单", "交付", "量产", "出货", "放量", "供货"}
 DESIGN_IN_STAGE_KEYWORDS = {"design-in", "design in", "定点", "导入", "指定供应商"}
@@ -210,6 +225,95 @@ def build_report_index_evidence_seed(
                     "supports_value": supports_value,
                     "claim": _claim(report, "研报包含进口依赖、国产替代、集中度、份额、稀缺或龙头相关表述，可用于供应集中度审计。"),
                     "evidence_tier": "tier1" if supports_value else "tier2",
+                }
+            )
+    columns = [
+        "asset_id",
+        "field",
+        "source_type",
+        "source_path",
+        "source_date",
+        "supports_value",
+        "claim",
+        "evidence_tier",
+        "excerpt",
+    ]
+    return pd.DataFrame(rows, columns=columns)
+
+
+def build_pdf_text_industry_chain_evidence_seed(
+    *,
+    structured_detail: pd.DataFrame,
+    report_index: pd.DataFrame,
+    fetcher: Any | None = None,
+) -> pd.DataFrame:
+    detail = _prepare_structured_detail(structured_detail)
+    reports = report_index.copy()
+    for column in [
+        "asset_id",
+        "stock_name",
+        "publish_date",
+        "broker",
+        "report_title",
+        "pdf_path",
+        "source_url",
+        "detail_url",
+        "source_type",
+    ]:
+        if column not in reports.columns:
+            reports[column] = ""
+    reports["asset_id"] = reports["asset_id"].map(_text)
+    detail_by_asset = {row["asset_id"]: row for row in detail.to_dict("records")}
+    fetch = fetcher or fetch_pdf_text
+    rows = []
+    for report in reports.to_dict("records"):
+        asset_id = _text(report.get("asset_id"))
+        candidate = detail_by_asset.get(asset_id)
+        if not candidate:
+            continue
+        source_path = _text(report.get("pdf_path")) or _text(report.get("source_url")) or _text(report.get("detail_url"))
+        if not source_path:
+            continue
+        try:
+            pdf_text = fetch(source_path)
+        except Exception:
+            continue
+        common = {
+            "asset_id": asset_id,
+            "source_type": _text(report.get("source_type")) or "broker_report",
+            "source_path": source_path,
+            "source_date": _text(report.get("publish_date")),
+            "evidence_tier": "tier1",
+        }
+        for field, keywords, fallback in [
+            (
+                "revenue_exposure_bucket",
+                PDF_REVENUE_EVIDENCE_KEYWORDS,
+                "PDF全文包含产品、业务、收入、订单或放量相关表述，可用于收入暴露审计。",
+            ),
+            (
+                "customer_certification_stage",
+                PDF_CUSTOMER_EVIDENCE_KEYWORDS,
+                "PDF全文包含客户、认证、订单、交付、量产或供货相关表述，可用于客户阶段审计。",
+            ),
+            (
+                "supplier_concentration_type" if "supplier_concentration_type" in detail.columns else "supplier_concentration_evidence",
+                PDF_SUPPLIER_EVIDENCE_KEYWORDS,
+                "PDF全文包含国产替代、进口依赖、稀缺、集中度、份额或龙头相关表述，可用于供应链稀缺性审计。",
+            ),
+        ]:
+            excerpt = _matching_excerpt(pdf_text, keywords)
+            if not excerpt:
+                continue
+            supports_value = _supportable_value(_text(candidate.get(field)))
+            rows.append(
+                {
+                    **common,
+                    "field": field,
+                    "supports_value": supports_value,
+                    "claim": _claim(report, fallback),
+                    "evidence_tier": "tier1" if supports_value else "tier2",
+                    "excerpt": excerpt,
                 }
             )
     columns = [
@@ -707,6 +811,22 @@ def _is_positive_evidence_value(field: str, value: Any) -> bool:
 def _excerpt(text: str, max_chars: int = 180) -> str:
     compact = " ".join(_text(text).split())
     return compact[:max_chars]
+
+
+def _matching_excerpt(text: str, keywords: set[str], max_chars: int = 220) -> str:
+    compact = " ".join(_text(text).split())
+    if not compact:
+        return ""
+    lowered = compact.lower()
+    matches = [
+        lowered.find(keyword.lower())
+        for keyword in keywords
+        if keyword and lowered.find(keyword.lower()) >= 0
+    ]
+    if not matches:
+        return ""
+    start = max(0, min(matches) - 70)
+    return compact[start : start + max_chars]
 
 
 def _claim(report: dict[str, Any], fallback: str) -> str:
