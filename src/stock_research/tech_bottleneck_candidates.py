@@ -176,6 +176,13 @@ def validate_candidate_snapshot_frame(frame: pd.DataFrame) -> None:
         ranks = sorted(int(rank) for rank in day["bottleneck_rank"].tolist())
         if ranks != list(range(1, len(ranks) + 1)):
             raise ValueError("bottleneck_rank must be contiguous within trade_date")
+    expected_order = normalized.sort_values(
+        ["trade_date", "bottleneck_score", "hit_count_as_of_date", "asset_id"],
+        ascending=[True, False, False, True],
+    )
+    expected_ranks = expected_order.groupby("trade_date").cumcount() + 1
+    if bool((normalized.loc[expected_order.index, "bottleneck_rank"].to_numpy() != expected_ranks.to_numpy()).any()):
+        raise ValueError("bottleneck_rank must match score ordering")
     expected_top5 = normalized["bottleneck_rank"] <= 5
     actual_top5 = _parse_bool_column(normalized["is_top5"], invalid_message="is_top5 must be boolean")
     if bool((actual_top5 != expected_top5).any()):
@@ -334,6 +341,7 @@ def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -
     _validate_positive_price_column(frame["close"], column="close")
     _validate_positive_price_column(frame["high"], column="high")
     _validate_positive_price_column(frame["low"], column="low")
+    _validate_ohlc_consistency(frame)
     return frame.dropna(subset=["trade_date", "asset_id"]).sort_values(["trade_date", "asset_id"])
 
 
@@ -403,6 +411,13 @@ def _parse_price_numeric_column(values: pd.Series, *, column: str) -> pd.Series:
 def _validate_positive_price_column(values: pd.Series, *, column: str) -> None:
     if bool((values <= 0).any()):
         raise ValueError(f"{column} must be > 0")
+
+
+def _validate_ohlc_consistency(frame: pd.DataFrame) -> None:
+    if bool((frame["high"] < frame[["open", "close", "low"]].max(axis=1)).any()):
+        raise ValueError("high must be >= max(open, close, low)")
+    if bool((frame["low"] > frame[["open", "close", "high"]].min(axis=1)).any()):
+        raise ValueError("low must be <= min(open, close, high)")
 
 
 def _validate_finite_nonnegative(values: pd.Series, *, column: str) -> None:

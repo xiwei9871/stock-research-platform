@@ -449,6 +449,15 @@ def test_validate_candidate_snapshot_frame_rejects_non_contiguous_ranks() -> Non
         validate_candidate_snapshot_frame(frame)
 
 
+def test_validate_candidate_snapshot_frame_rejects_rank_order_mismatch() -> None:
+    frame = _ranked_snapshot_frame([1, 2])
+    frame.loc[0, "bottleneck_score"] = 0.1
+    frame.loc[1, "bottleneck_score"] = 0.9
+
+    with pytest.raises(ValueError, match="bottleneck_rank must match score ordering"):
+        validate_candidate_snapshot_frame(frame)
+
+
 def test_validate_candidate_snapshot_frame_rejects_top5_mismatch() -> None:
     frame = _ranked_snapshot_frame([1, 2])
     frame.loc[0, "is_top5"] = False
@@ -902,6 +911,54 @@ def test_snapshot_rejects_non_positive_price_open_values(open_price: float) -> N
             base_candidates=pd.DataFrame(
                 [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
                     "candidate_trade_date": "2025-01-01", "hit_count": 3}]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_snapshot_rejects_price_high_below_close() -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices.loc[0, "high"] = prices.loc[0, "close"] - 0.01
+
+    with pytest.raises(ValueError, match="high must be >= max\\(open, close, low\\)"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count": 3,
+                    }
+                ]
+            ),
+            prices=prices,
+            start_date="2025-01-01",
+            end_date="2025-01-01",
+            run_id="tech-bt-20250101-test",
+        )
+
+
+def test_snapshot_rejects_price_low_above_close() -> None:
+    prices = _prices(["A"], "2025-01-01", 1)
+    prices.loc[0, "low"] = prices.loc[0, "close"] + 0.01
+
+    with pytest.raises(ValueError, match="low must be <= min\\(open, close, high\\)"):
+        build_point_in_time_candidate_snapshots(
+            base_candidates=pd.DataFrame(
+                [
+                    {
+                        "asset_id": "A",
+                        "stock_name": "Alpha",
+                        "first_hit_date": "2025-01-01",
+                        "candidate_trade_date": "2025-01-01",
+                        "hit_count": 3,
+                    }
+                ]
             ),
             prices=prices,
             start_date="2025-01-01",
