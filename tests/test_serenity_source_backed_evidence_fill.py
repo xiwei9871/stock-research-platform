@@ -126,6 +126,58 @@ def test_source_backed_fill_writes_gap_summary_and_manual_queue(tmp_path: Path):
     }
 
 
+def test_source_backed_fill_accepts_akshare_mainbiz_as_primary_revenue_source(tmp_path: Path):
+    structured = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002169",
+                "stock_name": "智光电气",
+                "primary_chain_id": "power_grid_energy_infrastructure",
+                "revenue_exposure_bucket": "meaningful_segment_exposure",
+                "customer_certification_stage": "not_identified",
+                "supplier_concentration_evidence": "concentration_not_established",
+                "evidence_source_provenance": "",
+            }
+        ]
+    )
+    evidence = pd.DataFrame(
+        [
+            {
+                "asset_id": "CN:SZ:002169",
+                "field": "revenue_exposure_bucket",
+                "source_type": "akshare_mainbiz",
+                "source_path": (
+                    "finance.main_business_composition:CN:SZ:002169:2025-12-31:"
+                    "按产品分类:数字能源技术及产品"
+                ),
+                "source_date": "2025-12-31",
+                "supports_value": "meaningful_segment_exposure",
+                "claim": "主营构成显示数字能源技术及产品收入占比86.68%。",
+                "evidence_tier": "tier1",
+                "excerpt": "数字能源技术及产品 revenue_ratio=86.68%",
+            }
+        ]
+    )
+
+    result = build_serenity_source_backed_evidence_fill(
+        structured_detail=structured,
+        evidence_seed=evidence,
+        output_dir=tmp_path,
+        run_id="unit",
+    )
+
+    long = result["long"].set_index(["asset_id", "field"])
+    assert long.loc[("CN:SZ:002169", "revenue_exposure_bucket"), "evidence_grade"] == "primary_strong"
+    assert long.loc[("CN:SZ:002169", "revenue_exposure_bucket"), "source_backed_value"] == (
+        "meaningful_segment_exposure"
+    )
+    assert len(result["manual_queue"]) == 2
+    assert set(result["manual_queue"]["needed_source_type"]) == {
+        "customer validation, design-in, qualification, fixed-point, order, delivery, or mass-production evidence",
+        "market share, import dependency, domestic substitute scarcity, supplier count, or single/leading supplier evidence",
+    }
+
+
 def test_cli_dispatches_source_backed_evidence_fill(monkeypatch, capsys, tmp_path: Path):
     import stock_research.cli as cli
 

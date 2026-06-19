@@ -25,6 +25,7 @@ FIELD_SOURCE_NEEDS = {
 }
 
 PRIMARY_SOURCE_TYPES = {
+    "akshare_mainbiz",
     "annual_report",
     "company_announcement",
     "investor_qa",
