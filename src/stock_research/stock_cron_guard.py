@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect
@@ -83,6 +85,56 @@ def refresh_trading_calendar_from_tushare(
     exchanges: tuple[str, ...],
     token: str | None = None,
 ) -> int:
+    return sync_trading_calendar_range_from_tushare(
+        service=service,
+        start_date=trade_date,
+        end_date=trade_date,
+        exchanges=exchanges,
+        token=token,
+    )
+
+
+def _normalize_tushare_calendar_date(value: object) -> str:
+    raw = str(value)
+    if len(raw) == 8 and raw.isdigit():
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+    return raw[:10]
+
+
+def build_trading_calendar_rows_from_tushare_records(
+    records: list[dict[str, Any]],
+    *,
+    exchanges: tuple[str, ...],
+    source_version: str,
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for record in records:
+        trade_date = _normalize_tushare_calendar_date(record.get("cal_date"))
+        is_open = str(record.get("is_open")) == "1"
+        for exchange in exchanges:
+            rows.append(
+                {
+                    "exchange": exchange,
+                    "trade_date": trade_date,
+                    "is_open": is_open,
+                    "source": "tushare",
+                    "source_version": source_version,
+                }
+            )
+    return rows
+
+
+def sync_trading_calendar_range_from_tushare(
+    *,
+    service: str,
+    start_date: date,
+    end_date: date,
+    exchanges: tuple[str, ...],
+    source_version: str = "tushare_trade_cal_v1",
+    token: str | None = None,
+    max_retries: int = 1,
+    retry_sleep_seconds: float = 0.0,
+) -> int:
     actual_token = token or os.getenv("TUSHARE_TOKEN") or load_local_tushare_token()
     if not actual_token:
         return 0
@@ -90,29 +142,30 @@ def refresh_trading_calendar_from_tushare(
     import tushare as ts
 
     pro = ts.pro_api(actual_token)
-    df = pro.trade_cal(
-        exchange="",
-        start_date=format_trade_date(trade_date),
-        end_date=format_trade_date(trade_date),
-    )
+    last_error: Exception | None = None
+    for attempt in range(1, max(1, max_retries) + 1):
+        try:
+            df = pro.trade_cal(
+                exchange="",
+                start_date=format_trade_date(start_date),
+                end_date=format_trade_date(end_date),
+            )
+            break
+        except Exception as exc:  # noqa: BLE001 - external source may rate limit.
+            last_error = exc
+            if attempt >= max(1, max_retries):
+                raise
+            time.sleep(max(0.0, retry_sleep_seconds))
+    else:
+        raise last_error or RuntimeError("Tushare trade_cal failed")
     if df is None or df.empty:
         return 0
 
-    rows = []
-    for row in df.to_dict("records"):
-        if str(row.get("cal_date")) != format_trade_date(trade_date):
-            continue
-        is_open = str(row.get("is_open")) == "1"
-        for exchange in exchanges:
-            rows.append(
-                {
-                    "exchange": exchange,
-                    "trade_date": trade_date.isoformat(),
-                    "is_open": is_open,
-                    "source": "tushare",
-                    "source_version": "tushare_trade_cal_v1",
-                }
-            )
+    rows = build_trading_calendar_rows_from_tushare_records(
+        df.to_dict("records"),
+        exchanges=exchanges,
+        source_version=source_version,
+    )
     if not rows:
         return 0
     with connect(service) as conn:

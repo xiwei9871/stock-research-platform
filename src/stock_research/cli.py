@@ -127,6 +127,7 @@ from stock_research.daily_close_pipeline import (
     parse_trade_date as parse_daily_close_trade_date,
     run_pipeline_stage as run_daily_close_pipeline_stage,
 )
+from stock_research.stock_cron_guard import sync_trading_calendar_range_from_tushare
 from stock_research.intraday_pipeline import (
     IntradayConfig,
     parse_trade_date as parse_intraday_trade_date,
@@ -1547,6 +1548,22 @@ def build_parser() -> argparse.ArgumentParser:
     seed_trading_calendar.add_argument("--end-date", required=True)
     seed_trading_calendar.add_argument("--exchanges", type=parse_exchanges, required=True)
     seed_trading_calendar.add_argument("--source-version", required=True)
+
+    sync_tushare_trading_calendar = subparsers.add_parser("sync-tushare-trading-calendar")
+    sync_tushare_trading_calendar.add_argument("--start-date", required=True)
+    sync_tushare_trading_calendar.add_argument("--end-date", required=True)
+    sync_tushare_trading_calendar.add_argument(
+        "--exchanges",
+        type=parse_exchanges,
+        default=["SH", "SZ"],
+    )
+    sync_tushare_trading_calendar.add_argument(
+        "--source-version",
+        default="tushare_trade_cal_v1",
+    )
+    sync_tushare_trading_calendar.add_argument("--max-retries", type=int, default=3)
+    sync_tushare_trading_calendar.add_argument("--retry-sleep-seconds", type=float, default=70.0)
+    sync_tushare_trading_calendar.add_argument("--service", default=SETTINGS.research_service)
 
     sync_asset_lifecycle = subparsers.add_parser("sync-asset-lifecycle")
     sync_asset_lifecycle.add_argument("--source-version", required=True)
@@ -4945,6 +4962,17 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             source_version=args.source_version,
         )
         print(f"trading_calendar_seeded|rows|{count}")
+    elif args.command == "sync-tushare-trading-calendar":
+        count = sync_trading_calendar_range_from_tushare(
+            service=args.service,
+            start_date=dt.date.fromisoformat(args.start_date),
+            end_date=dt.date.fromisoformat(args.end_date),
+            exchanges=tuple(args.exchanges),
+            source_version=args.source_version,
+            max_retries=args.max_retries,
+            retry_sleep_seconds=args.retry_sleep_seconds,
+        )
+        print(f"tushare_trading_calendar_synced|rows|{count}")
     elif args.command == "sync-asset-lifecycle":
         count = sync_asset_lifecycle_from_master(source_version=args.source_version)
         print(f"asset_lifecycle_synced|rows|{count}")

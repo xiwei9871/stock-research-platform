@@ -6998,6 +6998,43 @@ def test_seed_trading_calendar_cli_prints_count(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "trading_calendar_seeded|rows|44"
 
 
+def test_sync_tushare_trading_calendar_cli_prints_count(monkeypatch, capsys):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "sync_trading_calendar_range_from_tushare",
+        lambda **kwargs: calls.append(kwargs) or 180,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "sync-tushare-trading-calendar",
+            "--start-date",
+            "2026-06-19",
+            "--end-date",
+            "2026-09-17",
+            "--exchanges",
+            "SH,SZ",
+            "--source-version",
+            "tushare_trade_cal_v1",
+            "--service",
+            "test",
+        ],
+    )
+
+    cli.main()
+
+    assert calls[0]["service"] == "test"
+    assert calls[0]["exchanges"] == ("SH", "SZ")
+    assert capsys.readouterr().out.strip() == "tushare_trading_calendar_synced|rows|180"
+
+
 def test_sync_asset_lifecycle_cli_prints_count(monkeypatch, capsys):
     import sys
 
