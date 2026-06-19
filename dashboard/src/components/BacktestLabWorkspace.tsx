@@ -11,7 +11,7 @@ import { BacktestResultDetail } from './BacktestResultDetail';
 
 const DEFAULT_STRATEGY_ID = 'lhb_shortline';
 const DEFAULT_START_DATE = '2026-01-01';
-const DEFAULT_END_DATE = '2026-06-08';
+const DEFAULT_END_DATE = '2026-06-18';
 const DEFAULT_COMBO_STRATEGY_IDS = new Set(['lhb_shortline', 'mid_trend', 'tech_bottleneck']);
 
 type LHBRiskProfile = 'return_max' | 'balanced' | 'drawdown_control';
@@ -25,6 +25,7 @@ type ComparisonRow = {
 };
 type BacktestLabWorkspaceProps = {
   embedded?: boolean;
+  defaultEndDate?: string;
 };
 
 function formatValue(value: BacktestScalar | undefined) {
@@ -106,11 +107,11 @@ function elapsedSeconds(result: BacktestRunResult | null) {
   return `${Number((result.elapsed_ms / 1000).toFixed(2))}s`;
 }
 
-export function BacktestLabWorkspace({ embedded = false }: BacktestLabWorkspaceProps = {}) {
+export function BacktestLabWorkspace({ embedded = false, defaultEndDate = DEFAULT_END_DATE }: BacktestLabWorkspaceProps = {}) {
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [strategyId, setStrategyId] = useState(DEFAULT_STRATEGY_ID);
   const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
-  const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
+  const [endDate, setEndDate] = useState(defaultEndDate || DEFAULT_END_DATE);
   const [topN, setTopN] = useState(5);
   const [transactionCostBps, setTransactionCostBps] = useState(10);
   const [maxPositions, setMaxPositions] = useState(20);

@@ -154,4 +154,28 @@ describe('MarketMonitorWorkspace', () => {
     await waitFor(() => expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5, tradeDate: '2026-06-11' }));
     expect(screen.getByRole('tab', { name: /炸板/ })).toHaveAttribute('aria-selected', 'true');
   });
+
+  it('explains stock list pending and empty states without implying market emotion is missing', async () => {
+    apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(
+      makeMarketMonitorPayload({
+        emotion_stock_lists: {
+          auction_status: 'pending_source',
+          auction: [],
+          limit_up: [],
+          broken_limit_up: [],
+          limit_down: []
+        }
+      })
+    );
+
+    render(<MarketMonitorWorkspace />);
+
+    expect(await screen.findByText('综合强度')).toBeInTheDocument();
+    expect(screen.getByText('股票名单源未接入或当日未产出；上方市场情绪指标仍可用于判断市场热度。')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /涨停 0/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('当前日期暂无涨停股票。')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /竞价 0/ }));
+    expect(screen.getByText('竞价数据源未接入。')).toBeInTheDocument();
+  });
 });

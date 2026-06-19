@@ -311,6 +311,20 @@ describe('NewsWorkspace', () => {
 });
 
 describe('ReportsWorkspace', () => {
+  it('uses the supplied latest trade date for generated reports', async () => {
+    render(<ReportsWorkspace initialTradeDate="2026-06-18" />);
+
+    expect(screen.getByLabelText('report trade date')).toHaveValue('2026-06-18');
+    await waitFor(() =>
+      expect(apiMocks.fetchOverview).toHaveBeenCalledWith({
+        tradeDate: '2026-06-18',
+        scoreVersion: 'manual_v1',
+        watchlistId: 'default',
+        topN: 5
+      })
+    );
+  });
+
   it('filters generated reports by the initial query', async () => {
     const { rerender } = render(<ReportsWorkspace initialQuery="茅台" />);
 

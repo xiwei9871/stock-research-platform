@@ -22,9 +22,7 @@ import { AssetChart } from '../charts/AssetChart';
 import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
-const DEFAULT_TRADE_DATE = '2026-06-08';
-const DEFAULT_START_DATE = '2025-12-10';
-const DEFAULT_END_DATE = '2026-06-08';
+const DEFAULT_TRADE_DATE = '2026-06-18';
 const SCORE_VERSION = 'manual_v1';
 const ADJUST_TYPE = 'qfq';
 const STOCK_CHART_VISIBLE_BARS = 120;
@@ -39,11 +37,18 @@ type ChartResolution = (typeof CHART_RESOLUTIONS)[number]['value'];
 
 type StockWorkspaceProps = {
   initialAssetId?: string;
+  defaultTradeDate?: string;
   entryContext?: StockEntryContext;
   onOpenNews?: (context: StockEntryContext) => void;
   onOpenResearchReports?: (context: StockEntryContext) => void;
   onOpenMarketMonitor?: (context: StockEntryContext) => void;
 };
+
+function offsetDate(dateValue: string, dayOffset: number) {
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + dayOffset);
+  return date.toISOString().slice(0, 10);
+}
 
 type FactorDisplayRow = {
   group: string;
@@ -256,15 +261,17 @@ function lineageText(lineage: Record<string, unknown> | undefined, key: string) 
 
 export function StockWorkspace({
   initialAssetId = DEFAULT_ASSET_ID,
+  defaultTradeDate = DEFAULT_TRADE_DATE,
   entryContext,
   onOpenNews,
   onOpenResearchReports,
   onOpenMarketMonitor
 }: StockWorkspaceProps) {
-  const initialTradeDate = entryContext?.tradeDate ?? DEFAULT_TRADE_DATE;
+  const initialTradeDate = entryContext?.tradeDate ?? defaultTradeDate ?? DEFAULT_TRADE_DATE;
+  const initialStartDate = offsetDate(initialTradeDate, -180);
   const [assetId, setAssetId] = useState(initialAssetId);
   const [tradeDate, setTradeDate] = useState(initialTradeDate);
-  const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
+  const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialTradeDate);
   const [profile, setProfile] = useState<StockWorkspaceAssetProfile | null>(null);
   const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
@@ -431,7 +438,7 @@ export function StockWorkspace({
 
   useEffect(() => {
     mountedRef.current = true;
-    void loadProfile(initialAssetId, initialTradeDate, DEFAULT_START_DATE, initialTradeDate);
+    void loadProfile(initialAssetId, initialTradeDate, initialStartDate, initialTradeDate);
     return () => {
       mountedRef.current = false;
       profileRequestIdRef.current += 1;
@@ -440,7 +447,7 @@ export function StockWorkspace({
       evidenceDigestRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
-  }, [initialAssetId, initialTradeDate]);
+  }, [initialAssetId, initialStartDate, initialTradeDate]);
 
   useEffect(() => {
     if (!profile?.canonical_asset_id) {

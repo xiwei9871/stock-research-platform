@@ -8,7 +8,11 @@ const VALIDATION_TAB_ID = 'strategy-lab-tab-validation';
 const BACKTEST_PANEL_ID = 'strategy-lab-panel-backtest';
 const VALIDATION_PANEL_ID = 'strategy-lab-panel-validation';
 
-export function StrategyLabWorkspace() {
+type StrategyLabWorkspaceProps = {
+  defaultEndDate?: string;
+};
+
+export function StrategyLabWorkspace({ defaultEndDate }: StrategyLabWorkspaceProps = {}) {
   const [tab, setTab] = useState<StrategyLabTab>('backtest');
   const backtestTabRef = useRef<HTMLButtonElement>(null);
   const validationTabRef = useRef<HTMLButtonElement>(null);
@@ -75,7 +79,7 @@ export function StrategyLabWorkspace() {
         </button>
       </div>
       <div role="tabpanel" id={activePanelId} aria-labelledby={activeTabId}>
-        {isBacktest ? <BacktestLabWorkspace embedded /> : <StrategyValidationWorkspace />}
+        {isBacktest ? <BacktestLabWorkspace embedded defaultEndDate={defaultEndDate} /> : <StrategyValidationWorkspace />}
       </div>
     </section>
   );

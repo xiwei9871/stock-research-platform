@@ -168,7 +168,7 @@ describe('FactorLabWorkspace', () => {
 
     await waitFor(() =>
       expect(apiMocks.fetchFactorScorePreview).toHaveBeenCalledWith(
-        '2026-06-08',
+        '2026-06-18',
         [{ factor_name: 'ret_20', direction: 'higher', weight: 1 }],
         30
       )

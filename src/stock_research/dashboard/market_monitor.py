@@ -8,7 +8,7 @@ from functools import lru_cache
 from typing import Any
 
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import load_latest_data_run_manifest
+from stock_research.data_run_manifest import load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
@@ -399,7 +399,7 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
     latest_market_date = str(summary.get("latest_market_date") or "")
     try:
         gate = select_display_date(
-            list(load_latest_data_run_manifest()),
+            list(load_recent_data_run_manifest()),
             latest_market_date=latest_market_date,
         )
     except Exception:

@@ -78,7 +78,10 @@ def run_tech_bottleneck_eod_from_frames(
         "positions_path": output / TECH_BOTTLENECK_EOD_POSITIONS_FILENAME,
         "trades_path": output / TECH_BOTTLENECK_EOD_TRADES_FILENAME,
     }
-    equity = pd.DataFrame(strategy["equity_curve"])
+    equity = _anchor_equity_curve_to_initial_equity(
+        pd.DataFrame(strategy["equity_curve"]),
+        start_date=start_date,
+    )
     positions = pd.DataFrame(strategy["positions"])
     trades = pd.DataFrame(strategy["trades"])
     review = _review_rows_from_snapshots(
@@ -164,6 +167,7 @@ def run_tech_bottleneck_eod(
     end_date: str,
     output_dir: str | Path,
     base_candidates_path: str | Path,
+    manifest_upsert: Callable[[dict[str, Any]], Any] = upsert_data_run_manifest,
 ) -> dict[str, Any]:
     base_candidates = read_base_candidate_source(base_candidates_path, end_date=end_date)
     market_exposure = pd.read_csv(TECH_BOTTLENECK_V1_MARKET_EXPOSURE_PATH, low_memory=False)
@@ -185,8 +189,35 @@ def run_tech_bottleneck_eod(
         end_date=end_date,
         run_id=run_id,
         output_dir=output_dir,
+        manifest_upsert=manifest_upsert,
         candidate_source_path=base_candidates_path,
     )
+
+
+def _anchor_equity_curve_to_initial_equity(equity: pd.DataFrame, *, start_date: str) -> pd.DataFrame:
+    if equity.empty or "trade_date" not in equity.columns or "equity" not in equity.columns:
+        return equity
+    frame = equity.copy()
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame = frame.dropna(subset=["trade_date"]).sort_values("trade_date", kind="stable").reset_index(drop=True)
+    if frame.empty:
+        return equity
+    first_equity = pd.to_numeric(pd.Series([frame.iloc[0].get("equity")]), errors="coerce").iloc[0]
+    if pd.notna(first_equity) and abs(float(first_equity) - 1.0) < 1e-12:
+        return frame
+
+    anchor = frame.iloc[0].copy()
+    anchor["trade_date"] = str(start_date)
+    anchor["equity"] = 1.0
+    if "drawdown" in frame.columns:
+        anchor["drawdown"] = 0.0
+    for column in ["gross_return", "net_return", "turnover", "transaction_cost", "actual_exposure", "holdings_count"]:
+        if column in frame.columns:
+            anchor[column] = 0.0
+    if str(frame.iloc[0]["trade_date"]) == str(start_date):
+        frame.iloc[0] = anchor
+        return frame
+    return pd.concat([pd.DataFrame([anchor]), frame], ignore_index=True).reindex(columns=equity.columns)
 
 
 def _review_rows_from_snapshots(

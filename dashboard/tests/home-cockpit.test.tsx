@@ -504,6 +504,41 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.getByRole('button', { name: '打开策略实验室' })).toBeVisible();
+    const marketRegime = within(screen.getByRole('region', { name: '市场环境' }));
+    expect(marketRegime.getByText('市场环境加载中')).toBeVisible();
+    expect(marketRegime.queryByText('市场情绪数据暂未接入。')).not.toBeInTheDocument();
+  });
+
+  it('marks failed strategy EOD outputs as not ready instead of showing stale performance', async () => {
+    vi.mocked(api.fetchBacktestStrategies).mockResolvedValueOnce([
+      {
+        strategy_id: 'tech_bottleneck',
+        strategy_name: 'Tech Bottleneck Combo',
+        status: 'runnable',
+        description: 'Tech bottleneck combo',
+        factor_groups: ['技术形态'],
+        signal_inputs: ['技术'],
+        default_parameters: { top_n: 5 },
+        latest_evidence: 'Tech Bottleneck Combo 正式策略产物失败：base candidate source freshness metadata missing',
+        latest_metrics: {
+          as_of_date: '2026-06-18',
+          signal_status: 'strategy_failed',
+          signal_count: 0,
+          error_message: 'base candidate source freshness metadata missing'
+        },
+        primary_action: 'Run backtest'
+      }
+    ]);
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    const strategyPerformance = within(screen.getByRole('region', { name: '启用策略表现' }));
+    expect(strategyPerformance.getByText('Tech Bottleneck Combo')).toBeVisible();
+    expect(strategyPerformance.getByText('未就绪')).toBeVisible();
+    expect(strategyPerformance.getByText('正式产物失败')).toBeVisible();
+    expect(strategyPerformance.getByText(/base candidate source freshness metadata missing/)).toBeVisible();
+    expect(strategyPerformance.queryByText('+60.1%')).not.toBeInTheDocument();
   });
 
   it('navigates to Data Explorer from Home', async () => {

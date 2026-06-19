@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchFactorLibrary, fetchFactorScorePreview } from '../api/client';
 import type { FactorLibraryRow, FactorScorePreview, FactorSelection } from '../api/types';
 
-const DEFAULT_TRADE_DATE = '2026-06-08';
+const DEFAULT_TRADE_DATE = '2026-06-18';
 const DEFAULT_TOP_N = 30;
 
 function formatValue(value: string | number | null | undefined) {
@@ -20,7 +20,12 @@ function getDefaultSelection(row: FactorLibraryRow): FactorSelection {
   };
 }
 
-export function FactorLabWorkspace() {
+type FactorLabWorkspaceProps = {
+  defaultTradeDate?: string;
+};
+
+export function FactorLabWorkspace({ defaultTradeDate = DEFAULT_TRADE_DATE }: FactorLabWorkspaceProps = {}) {
+  const tradeDate = defaultTradeDate || DEFAULT_TRADE_DATE;
   const [libraryRows, setLibraryRows] = useState<FactorLibraryRow[]>([]);
   const [selectedByName, setSelectedByName] = useState<Record<string, FactorSelection>>({});
   const [preview, setPreview] = useState<FactorScorePreview | null>(null);
@@ -106,7 +111,7 @@ export function FactorLabWorkspace() {
     setIsPreviewLoading(true);
     setPreviewError(null);
 
-    fetchFactorScorePreview(DEFAULT_TRADE_DATE, selectedFactors, DEFAULT_TOP_N)
+    fetchFactorScorePreview(tradeDate, selectedFactors, DEFAULT_TOP_N)
       .then((nextPreview) => {
         if (!mountedRef.current || previewRequestIdRef.current !== requestId) {
           return;
@@ -132,7 +137,7 @@ export function FactorLabWorkspace() {
       <section className="factor-lab-toolbar" aria-label="Preview controls">
         <div>
           <span>Trade Date</span>
-          <strong>{DEFAULT_TRADE_DATE}</strong>
+          <strong>{tradeDate}</strong>
         </div>
         <div>
           <span>Top N</span>

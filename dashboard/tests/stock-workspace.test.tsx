@@ -181,7 +181,7 @@ function makeEvidenceDigest(overrides: Partial<EvidenceDigestResponse> = {}): Ev
   return {
     asset_id: '000001.SZ',
     canonical_asset_id: '000001.SZ',
-    trade_date: '2026-06-08',
+    trade_date: '2026-06-18',
     title: '平安银行 evidence digest',
     score: 62,
     bucket: 'mixed',
@@ -348,9 +348,9 @@ describe('StockWorkspace', () => {
   it('creates operator decisions from Evidence Digest lineage and refreshes history', async () => {
     apiMocks.fetchEvidenceDigest.mockResolvedValueOnce(
       makeEvidenceDigest({
-        run_id: 'eod-2026-06-08-local',
-        digest_key: '2026-06-08:manual_v1:000001.SZ',
-        latest_trade_date: '2026-06-08',
+        run_id: 'eod-2026-06-18-local',
+        digest_key: '2026-06-18:manual_v1:000001.SZ',
+        latest_trade_date: '2026-06-18',
         lineage: {
           source_type: 'score_topn',
           source_name: 'manual_v1_topn',
@@ -366,7 +366,7 @@ describe('StockWorkspace', () => {
           decisions: [
             {
               ...makeProfile().decisions[0],
-              event_id: 'operator_decision:operator-decision-api-2026-06-08:0:abc',
+              event_id: 'operator_decision:operator-decision-api-2026-06-18:0:abc',
               decision_label: 'observe',
               notes: '观察回踩确认'
             }
@@ -388,11 +388,11 @@ describe('StockWorkspace', () => {
         asset_id: '000001.SZ',
         stock_code: '000001.SZ',
         stock_name: '平安银行',
-        decision_date: '2026-06-08',
+        decision_date: '2026-06-18',
         operator_action: 'watch',
         operator_note: '观察回踩确认',
-        run_id: 'eod-2026-06-08-local',
-        digest_key: '2026-06-08:manual_v1:000001.SZ',
+        run_id: 'eod-2026-06-18-local',
+        digest_key: '2026-06-18:manual_v1:000001.SZ',
         review_item_snapshot_id: 'review_item_snapshot:abc',
         evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
         source_type: 'score_topn',
@@ -496,7 +496,7 @@ describe('StockWorkspace', () => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
         '2026-06-12',
-        '2025-12-10',
+        '2025-12-14',
         '2026-06-12',
         'manual_v1',
         'qfq'
@@ -807,7 +807,7 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchEvidenceDigest).toHaveBeenCalledWith('000001.SZ', {
-        tradeDate: '2026-06-08',
+        tradeDate: '2026-06-18',
         lookbackDays: 90
       })
     );
@@ -818,7 +818,7 @@ describe('StockWorkspace', () => {
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchEvidenceDigest).toHaveBeenLastCalledWith('600000.SH', {
-        tradeDate: '2026-06-08',
+        tradeDate: '2026-06-18',
         lookbackDays: 90
       })
     );
@@ -1054,9 +1054,9 @@ describe('StockWorkspace', () => {
     await waitFor(() => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
         '600000.SH',
-        '2026-06-08',
-        '2025-12-10',
-        '2026-06-08',
+        '2026-06-18',
+        '2025-12-20',
+        '2026-06-18',
         'manual_v1',
         'qfq'
       );

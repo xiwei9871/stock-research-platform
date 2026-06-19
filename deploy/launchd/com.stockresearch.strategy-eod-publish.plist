@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.stockresearch.strategy-eod-publish</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/xiwei/stock_research/.worktrees/v0.1-local-eod-web/scripts/run_strategy_eod_publish_daily.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/xiwei/stock_research/.worktrees/v0.1-local-eod-web</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/xiwei</string>
+    <key>PATH</key>
+    <string>/Users/xiwei/.local/npm/bin:/Users/xiwei/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>20</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/xiwei/stock_research/.worktrees/v0.1-local-eod-web/logs/strategy_eod_publish.launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/xiwei/stock_research/.worktrees/v0.1-local-eod-web/logs/strategy_eod_publish.launchd.err.log</string>
+</dict>
+</plist>

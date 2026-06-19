@@ -103,25 +103,31 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         return strategy
 
     latest_trade_date = str(module.get("latest_trade_date") or module.get("trade_date") or "")
+    if str(module.get("status") or "") != "success":
+        return _with_failed_eod_strategy_metrics(strategy, module, latest_trade_date=latest_trade_date)
+
     rows = _read_eod_strategy_rows(module, latest_trade_date=latest_trade_date, strategy_id=str(strategy["strategy_id"]))
     signal_count = len(rows) or _optional_int(module.get("row_count"))
     metrics = dict(strategy.get("latest_metrics") or {})
+    summary = _eod_summary(module)
+    performance_as_of_date = _performance_as_of_date(summary, fallback=latest_trade_date)
     metrics.update(
         {
-            "as_of_date": latest_trade_date or metrics.get("as_of_date"),
+            "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+            "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
             "signal_status": "candidate_rows" if strategy["strategy_id"] == "lhb_shortline" else "current_holdings",
             "signal_count": signal_count,
         }
     )
 
-    summary = _eod_summary(module)
     contract_status = _validate_eod_summary_contract(str(strategy["strategy_id"]), summary)
     if contract_status:
         status, reason = contract_status
         if status != "success":
             next_strategy = dict(strategy)
             next_strategy["latest_metrics"] = {
-                "as_of_date": latest_trade_date or metrics.get("as_of_date"),
+                "as_of_date": performance_as_of_date or metrics.get("as_of_date"),
+                "signal_as_of_date": latest_trade_date or metrics.get("signal_as_of_date"),
                 "signal_status": "contract_mismatch",
                 "signal_count": signal_count,
                 "contract_status": status,
@@ -130,10 +136,19 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
             next_strategy["latest_evidence"] = f"策略产物未通过正式身份合同校验：{reason}"
             return next_strategy
         metrics["contract_status"] = status
+    equity_metrics = _metrics_from_eod_equity_path(module, strategy)
     if summary:
         metrics.update(_metrics_from_eod_summary(summary))
+        for key in [
+            "latest_day_return_pct",
+            "latest_day_drawdown_pct",
+            "latest_period_return_pct",
+            "latest_period_label",
+        ]:
+            if key in equity_metrics:
+                metrics[key] = equity_metrics[key]
     else:
-        metrics.update(_metrics_from_eod_equity_path(module, strategy))
+        metrics.update(equity_metrics)
 
     next_strategy = dict(strategy)
     next_strategy["latest_metrics"] = metrics
@@ -142,7 +157,30 @@ def _with_latest_eod_strategy_metrics(strategy: dict[str, Any]) -> dict[str, Any
         module=module,
         rows=rows,
         latest_trade_date=latest_trade_date,
+        performance_as_of_date=performance_as_of_date,
         signal_count=signal_count,
+    )
+    return next_strategy
+
+
+def _with_failed_eod_strategy_metrics(
+    strategy: dict[str, Any],
+    module: dict[str, Any],
+    *,
+    latest_trade_date: str,
+) -> dict[str, Any]:
+    error_message = str(module.get("error_message") or "")
+    next_strategy = dict(strategy)
+    next_strategy["latest_metrics"] = {
+        "as_of_date": latest_trade_date or str(module.get("trade_date") or ""),
+        "signal_status": "strategy_failed",
+        "signal_count": 0,
+        "error_message": error_message,
+    }
+    strategy_name = str(strategy.get("strategy_name") or strategy.get("strategy_id") or "策略")
+    next_strategy["latest_evidence"] = (
+        f"{strategy_name} 正式策略产物失败"
+        f"：{error_message}" if error_message else f"{strategy_name} 正式策略产物失败。"
     )
     return next_strategy
 
@@ -173,7 +211,7 @@ def _latest_eod_strategy_module(strategy_id: str) -> dict[str, Any] | None:
     except Exception:
         return None
     for module in modules:
-        if str(module.get("module") or "") == module_name and str(module.get("status") or "") == "success":
+        if str(module.get("module") or "") == module_name:
             return module
     return None
 
@@ -228,9 +266,20 @@ def _metrics_from_eod_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return metrics
 
 
+def _performance_as_of_date(summary: dict[str, Any], *, fallback: str) -> str:
+    return str(
+        summary.get("actual_end_date")
+        or summary.get("equity_latest_date")
+        or summary.get("end_date")
+        or fallback
+        or ""
+    )
+
+
 def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, Any]) -> dict[str, Any]:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
-    equity_path = Path(str(metadata.get("equity_path") or ""))
+    output_paths = metadata.get("output_paths") if isinstance(metadata.get("output_paths"), dict) else {}
+    equity_path = Path(str(metadata.get("equity_path") or output_paths.get("equity_path") or ""))
     if not equity_path.exists():
         return {}
     try:
@@ -248,8 +297,12 @@ def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, An
         latest_first_frame = frame.iloc[::-1]
     equity_rows = latest_first_frame.head(8).to_dict("records")
     latest = equity_rows[0]
+    previous = equity_rows[1] if len(equity_rows) > 1 else None
     latest_equity = _finite_or_none(latest.get("equity"))
+    previous_equity = _finite_or_none(previous.get("equity")) if previous else None
     latest_daily_return = _finite_or_none(latest.get("daily_return") or latest.get("net_return"))
+    if latest_daily_return is None and latest_equity is not None and previous_equity not in (None, 0.0):
+        latest_daily_return = latest_equity / previous_equity - 1.0
     scoped_return, scoped_drawdown = _scoped_equity_return_and_drawdown(scoped_frame)
     latest_period_return, latest_period_label = _latest_period_return(
         strategy=strategy,
@@ -296,6 +349,7 @@ def _eod_strategy_evidence(
     module: dict[str, Any],
     rows: list[dict[str, Any]],
     latest_trade_date: str,
+    performance_as_of_date: str,
     signal_count: int | None,
 ) -> str:
     strategy_id = str(strategy.get("strategy_id") or "")
@@ -305,15 +359,20 @@ def _eod_strategy_evidence(
     names = [str(row.get("stock_name") or "") for row in rows if str(row.get("stock_name") or "")]
     name_text = f"；名单：{'、'.join(names[:5])}" if names else ""
     if strategy_id == "lhb_shortline":
+        if performance_as_of_date and performance_as_of_date != latest_trade_date:
+            return (
+                f"LHB Shortline 真策略候选产物：候选日期 {latest_trade_date}，当日候选 {signal_count or 0} 只；"
+                f"收益估值截止 {performance_as_of_date}{name_text}。"
+            )
         return f"LHB Shortline 真策略候选产物：{latest_trade_date} 当日候选 {signal_count or 0} 只{name_text}。"
     if strategy_id == "mid_trend":
         return (
-            f"Mid Trend V1 真回测已估值截止 {latest_trade_date}；"
+            f"Mid Trend V1 真回测已估值截止 {performance_as_of_date or latest_trade_date}；"
             f"复盘标的为当前持仓，持仓来源日 {source_position_date or '未记录'}{name_text}。"
         )
     if strategy_id == "tech_bottleneck":
         return (
-            f"Tech Bottleneck V1 真回测已估值截止 {latest_trade_date}；"
+            f"Tech Bottleneck V1 真回测已估值截止 {performance_as_of_date or latest_trade_date}；"
             f"复盘标的为当前持仓，持仓来源日 {source_position_date or '未记录'}{name_text}。"
         )
     return str(strategy.get("latest_evidence") or "")

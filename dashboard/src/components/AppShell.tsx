@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataExplorerWorkspace } from './DataExplorerWorkspace';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
@@ -11,6 +11,7 @@ import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
+import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
 import type { GlobalSearchResult } from '../api/types';
 
 type WorkspaceMode =
@@ -69,6 +70,8 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
 ];
 
+const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
+
 export function AppShell() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
   const [selectedAssetId, setSelectedAssetId] = useState('000001.SZ');
@@ -77,6 +80,25 @@ export function AppShell() {
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [stockHandoff, setStockHandoff] = useState<StockHandoff>({ version: 0 });
+  const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled([fetchPlatformReadiness(), fetchPlatformSummary()]).then(([readinessResult, summaryResult]) => {
+      if (cancelled) {
+        return;
+      }
+      const readinessDate =
+        readinessResult.status === 'fulfilled'
+          ? readinessResult.value.display_trade_date ?? readinessResult.value.latest_trade_date
+          : undefined;
+      const summaryDate = summaryResult.status === 'fulfilled' ? summaryResult.value.latest_market_date : undefined;
+      setDisplayTradeDate(readinessDate || summaryDate || FALLBACK_DISPLAY_TRADE_DATE);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
     setSelectedAssetId(assetId);
@@ -254,6 +276,7 @@ export function AppShell() {
             <StockWorkspace
               key={`stock:${stockHandoff.version}`}
               initialAssetId={stockHandoff.assetId ?? selectedAssetId}
+              defaultTradeDate={displayTradeDate}
               entryContext={stockHandoff}
               onOpenNews={openNewsWorkspaceFromStock}
               onOpenResearchReports={openResearchReportsWorkspaceFromStock}
@@ -262,20 +285,21 @@ export function AppShell() {
           ) : null}
           {workspaceMode === 'watchlist' ? (
             <WatchlistWorkspace
+              defaultTradeDate={displayTradeDate}
               onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
             />
           ) : null}
-          {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace /> : null}
+          {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
           {workspaceMode === 'generatedReports' ? (
             <GeneratedReportsWorkspace
               key={`generatedReports:${generatedReportsHandoff.version}`}
               initialQuery={generatedReportsHandoff.query}
-              initialTradeDate={generatedReportsHandoff.tradeDate}
+              initialTradeDate={generatedReportsHandoff.tradeDate ?? displayTradeDate}
               initialPath={generatedReportsHandoff.path}
             />
           ) : null}
-          {workspaceMode === 'data' ? <DataExplorerWorkspace /> : null}
-          {workspaceMode === 'factors' ? <FactorLabWorkspace /> : null}
+          {workspaceMode === 'data' ? <DataExplorerWorkspace defaultTradeDate={displayTradeDate} /> : null}
+          {workspaceMode === 'factors' ? <FactorLabWorkspace defaultTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'news' ? (
             <NewsWorkspace
               key={`news:${newsHandoff.version}`}

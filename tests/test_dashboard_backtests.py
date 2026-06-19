@@ -149,6 +149,236 @@ def test_lhb_eod_manifest_candidate_rows_override_empty_position_status(monkeypa
     assert "当日候选 5 只" in enriched["latest_evidence"]
 
 
+def test_lhb_eod_metrics_use_actual_end_date_when_requested_date_has_no_equity(monkeypatch, tmp_path):
+    artifact = tmp_path / "strategy_lhb_shortline_review.csv"
+    artifact.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name",
+                "2026-06-18,002636.SZ,1,lhb_shortline,LHB Shortline Combo,金安国纪",
+                "2026-06-18,300620.SZ,2,lhb_shortline,LHB Shortline Combo,光库科技",
+                "2026-06-18,600696.SH,3,lhb_shortline,LHB Shortline Combo,岩石股份",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_lhb_shortline",
+                "status": "success",
+                "trade_date": "2026-06-18",
+                "latest_trade_date": "2026-06-18",
+                "row_count": 3,
+                "artifact_path": str(artifact),
+                "metadata": {
+                    "summary": {
+                        "engine_version": "lhb_shortline_v1",
+                        "phase18c_strategy": "auction_enhanced_rerank",
+                        "risk_profile": "balanced",
+                        "top_n": 5,
+                        "transaction_cost_bps": 10.0,
+                        "adjust_type": "hfq",
+                        "frequency": "daily",
+                        "requested_end_date": "2026-06-18",
+                        "actual_end_date": "2026-06-17",
+                        "total_return": 0.6300712969458271,
+                        "max_drawdown": -0.026913544927369082,
+                    }
+                },
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {})
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "default_parameters": {"rebalance_frequency": "daily"},
+            "latest_metrics": {"as_of_date": "2026-06-08"},
+        }
+    )
+
+    assert enriched["latest_metrics"]["as_of_date"] == "2026-06-17"
+    assert enriched["latest_metrics"]["signal_as_of_date"] == "2026-06-18"
+    assert "候选日期 2026-06-18" in enriched["latest_evidence"]
+    assert "收益估值截止 2026-06-17" in enriched["latest_evidence"]
+
+
+def test_eod_metrics_use_equity_curve_for_latest_day_return_when_summary_is_stale(monkeypatch, tmp_path):
+    review = tmp_path / "strategy_lhb_shortline_review.csv"
+    review.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name",
+                "2026-06-18,002636.SZ,1,lhb_shortline,LHB Shortline Combo,金安国纪",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    equity = tmp_path / "strategy_lhb_shortline_equity.csv"
+    equity.write_text(
+        "\n".join(
+            [
+                "trade_date,equity,drawdown",
+                "2026-06-17,1.630071,0.0",
+                "2026-06-18,1.630071,0.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_lhb_shortline",
+                "status": "success",
+                "trade_date": "2026-06-18",
+                "latest_trade_date": "2026-06-18",
+                "row_count": 1,
+                "artifact_path": str(review),
+                "metadata": {
+                    "equity_path": str(equity),
+                    "summary": {
+                        "actual_end_date": "2026-06-18",
+                        "total_return": 0.630071,
+                        "max_drawdown": -0.0269,
+                        "latest_day_return": -0.001,
+                    },
+                },
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {})
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "default_parameters": {"rebalance_frequency": "daily"},
+            "latest_metrics": {},
+        }
+    )
+
+    assert enriched["latest_metrics"]["as_of_date"] == "2026-06-18"
+    assert enriched["latest_metrics"]["latest_day_return_pct"] == 0.0
+
+
+def test_eod_metrics_read_equity_path_from_output_paths(monkeypatch, tmp_path):
+    review = tmp_path / "strategy_tech_bottleneck_review.csv"
+    review.write_text(
+        "\n".join(
+            [
+                "trade_date,asset_id,rank,strategy_id,strategy_name,stock_name",
+                "2026-06-18,CN:SH:600183,1,tech_bottleneck,Tech Bottleneck Combo,生益科技",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    equity = tmp_path / "strategy_tech_bottleneck_equity.csv"
+    equity.write_text(
+        "\n".join(
+            [
+                "trade_date,equity,drawdown",
+                "2026-06-17,1.20,-0.01",
+                "2026-06-18,1.23,0.0",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_tech_bottleneck",
+                "status": "success",
+                "trade_date": "2026-06-18",
+                "latest_trade_date": "2026-06-18",
+                "row_count": 1,
+                "artifact_path": str(review),
+                "metadata": {
+                    "output_paths": {"equity_path": str(equity)},
+                    "summary": {
+                        "actual_end_date": "2026-06-18",
+                        "total_return": 0.23,
+                        "max_drawdown": -0.12,
+                        "latest_day_return": -0.0503,
+                    },
+                },
+            }
+        ],
+        raising=False,
+    )
+    monkeypatch.setattr(backtests, "load_strategy_contracts", lambda profile="balanced": {})
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "tech_bottleneck",
+            "strategy_name": "Tech Bottleneck Combo",
+            "default_parameters": {"rebalance_frequency": "biweekly"},
+            "latest_metrics": {},
+        }
+    )
+
+    assert enriched["latest_metrics"]["latest_day_return_pct"] == pytest.approx(2.5)
+
+
+def test_failed_latest_eod_strategy_hides_stale_catalog_metrics(monkeypatch):
+    monkeypatch.setattr(
+        backtests,
+        "load_latest_data_run_manifest",
+        lambda: [
+            {
+                "module": "strategy_tech_bottleneck",
+                "status": "failed",
+                "trade_date": "2026-06-18",
+                "latest_trade_date": None,
+                "row_count": 0,
+                "error_message": "base candidate source freshness metadata missing",
+            },
+            {
+                "module": "tech_bottleneck_candidates",
+                "status": "failed",
+                "trade_date": "2026-06-18",
+                "error_message": "base candidate source freshness metadata missing",
+            },
+        ],
+        raising=False,
+    )
+
+    enriched = backtests._with_latest_eod_strategy_metrics(
+        {
+            "strategy_id": "tech_bottleneck",
+            "strategy_name": "Tech Bottleneck Combo",
+            "latest_evidence": "旧研究产物：2026-06-05",
+            "latest_metrics": {
+                "as_of_date": "2026-06-05",
+                "total_return_pct": 23.51,
+                "max_drawdown_pct": -12.58,
+                "latest_day_return_pct": -5.03,
+                "signal_status": "connected",
+                "signal_count": 5,
+            },
+        }
+    )
+
+    assert enriched["latest_metrics"] == {
+        "as_of_date": "2026-06-18",
+        "signal_status": "strategy_failed",
+        "signal_count": 0,
+        "error_message": "base candidate source freshness metadata missing",
+    }
+    assert "Tech Bottleneck Combo 正式策略产物失败" in enriched["latest_evidence"]
+    assert "base candidate source freshness metadata missing" in enriched["latest_evidence"]
+
+
 def test_eod_equity_path_metrics_rebase_to_latest_year(tmp_path):
     equity_path = tmp_path / "tech_equity.csv"
     equity_path.write_text(

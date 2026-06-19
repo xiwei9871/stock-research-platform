@@ -158,9 +158,9 @@ describe('DataExplorerWorkspace', () => {
 
     expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
       '000001.SZ',
-      '2026-06-08',
-      '2025-12-10',
-      '2026-06-08',
+      '2026-06-18',
+      '2025-12-20',
+      '2026-06-18',
       'manual_v1',
       'qfq'
     );
@@ -176,10 +176,10 @@ describe('DataExplorerWorkspace', () => {
     expect(screen.queryByText(/"min_date"/)).not.toBeInTheDocument();
     expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
     expect(screen.getByText('Chart Range')).toBeInTheDocument();
-    expect(screen.getByLabelText('chart start date')).toHaveValue('2025-12-10');
-    expect(screen.getByLabelText('chart end date')).toHaveValue('2026-06-08');
+    expect(screen.getByLabelText('chart start date')).toHaveValue('2025-12-20');
+    expect(screen.getByLabelText('chart end date')).toHaveValue('2026-06-18');
     expect(screen.getByText('Factor Snapshot')).toBeInTheDocument();
-    expect(screen.getByText('as of 2026-06-08')).toBeInTheDocument();
+    expect(screen.getByText('as of 2026-06-18')).toBeInTheDocument();
   });
 
   it('lets the user choose an explicit chart range for the asset profile', async () => {
@@ -193,7 +193,7 @@ describe('DataExplorerWorkspace', () => {
     await waitFor(() =>
       expect(apiMocks.fetchAssetProfile).toHaveBeenLastCalledWith(
         '000001.SZ',
-        '2026-06-08',
+        '2026-06-18',
         '2026-01-01',
         '2026-06-01',
         'manual_v1',

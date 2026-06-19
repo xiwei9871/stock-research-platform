@@ -660,14 +660,16 @@ export type StrategyCatalogItem = {
   latest_evidence: string;
   latest_metrics?: {
     as_of_date: string | null;
-    total_return_pct: number | null;
-    max_drawdown_pct: number | null;
-    latest_day_return_pct: number | null;
-    latest_day_drawdown_pct: number | null;
+    total_return_pct?: number | null;
+    max_drawdown_pct?: number | null;
+    latest_day_return_pct?: number | null;
+    latest_day_drawdown_pct?: number | null;
     latest_period_return_pct?: number | null;
     latest_period_label?: string | null;
     signal_status: 'connected' | 'no_position_rows' | string;
     signal_count: number | null;
+    signal_as_of_date?: string | null;
+    error_message?: string | null;
   };
   primary_action: string;
 };

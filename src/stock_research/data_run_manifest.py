@@ -183,6 +183,32 @@ def load_latest_data_run_manifest(
         return list(fetch_all(conn, sql, params))
 
 
+def load_recent_data_run_manifest(
+    *,
+    trade_date: str | None = None,
+    lookback_days: int = 14,
+    service: str = SETTINGS.research_service,
+) -> list[dict[str, Any]]:
+    if trade_date:
+        return load_latest_data_run_manifest(trade_date=trade_date, service=service)
+    sql = """
+    WITH latest_date AS (
+        SELECT max(trade_date) AS trade_date
+        FROM ops.data_run_manifest
+        WHERE trade_date IS NOT NULL
+    )
+    SELECT *
+    FROM ops.data_run_manifest
+    WHERE trade_date >= (
+        SELECT trade_date - (%(lookback_days)s::int * INTERVAL '1 day')
+        FROM latest_date
+    )
+    ORDER BY trade_date, run_id, tier, module, COALESCE(ended_at, created_at)
+    """
+    with connect(service) as conn:
+        return list(fetch_all(conn, sql, {"lookback_days": int(lookback_days)}))
+
+
 def summarize_manifest_modules(modules: list[dict[str, Any]]) -> dict[str, Any]:
     warnings: list[str] = []
     errors: list[str] = []

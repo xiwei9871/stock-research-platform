@@ -318,6 +318,17 @@ def _normalize_base_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         )
         _validate_finite_nonnegative(frame["hit_count_as_of_date"], column="hit_count_as_of_date")
         frame["filter_reason"] = _string_column(frame, "filter_reason")
+    elif "hit_count" in frame.columns:
+        frame["hit_count_as_of_date"] = _numeric_required_column(
+            frame["hit_count"],
+            invalid_message="hit_count must be numeric",
+        )
+        _validate_finite_nonnegative(frame["hit_count_as_of_date"], column="hit_count_as_of_date")
+        existing_reason = _string_column(frame, "filter_reason")
+        frame["filter_reason"] = existing_reason.where(
+            existing_reason.str.strip().ne(""),
+            "legacy_hit_count_as_candidate_evidence",
+        )
     else:
         frame["hit_count_as_of_date"] = 1.0
         existing_reason = _string_column(frame, "filter_reason")

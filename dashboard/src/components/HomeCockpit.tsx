@@ -153,6 +153,9 @@ function strategyEvidenceMetrics(strategy: StrategyCatalogItem) {
     (typeof nav === 'number' && !Number.isNaN(nav) ? (nav - 1) * 100 : null);
   const maxDrawdownPct = strategy.latest_metrics?.max_drawdown_pct ?? (drawdownMatch ? Number(drawdownMatch[1]) : null);
   let status = 'Evidence';
+  if (strategy.latest_metrics?.signal_status === 'strategy_failed') {
+    status = 'NotReady';
+  }
   if (typeof maxDrawdownPct === 'number' && !Number.isNaN(maxDrawdownPct)) {
     if (maxDrawdownPct <= -15) status = 'Review';
     else if (maxDrawdownPct <= -10) status = 'Caution';
@@ -189,6 +192,7 @@ function metricClass(value: number | null | undefined) {
 }
 
 function signalLabel(metrics: ReturnType<typeof strategyEvidenceMetrics>) {
+  if (metrics.signalStatus === 'strategy_failed') return '正式产物失败';
   if (typeof metrics.signalCount === 'number') {
     if (metrics.signalStatus === 'candidate_rows') return `当日候选 ${metrics.signalCount}`;
     if (metrics.signalStatus === 'current_holdings') return `当前持仓 ${metrics.signalCount}`;
@@ -205,7 +209,8 @@ function statusLabel(status: string) {
     Normal: '正常',
     Caution: '谨慎',
     Review: '复盘',
-    Evidence: '待验证'
+    Evidence: '待验证',
+    NotReady: '未就绪'
   };
   return labels[status] ?? status;
 }
@@ -288,6 +293,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
   const [marketMonitor, setMarketMonitor] = useState<MarketMonitorPayload | null>(null);
+  const [marketMonitorLoading, setMarketMonitorLoading] = useState(true);
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
   const [readiness, setReadiness] = useState<PlatformReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
@@ -311,6 +317,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setIsLoading(true);
     setError(null);
     setWidgetWarnings([]);
+    setMarketMonitor(null);
+    setMarketMonitorLoading(true);
     setReadiness(null);
     setReadinessError(null);
 
@@ -346,11 +354,15 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
 
     void fetchMarketMonitorEod({ topN: 5 }).then(
       (marketPayload) => {
-        if (!ignore) setMarketMonitor(marketPayload);
+        if (!ignore) {
+          setMarketMonitor(marketPayload);
+          setMarketMonitorLoading(false);
+        }
       },
       (err: unknown) => {
         if (!ignore) {
           setMarketMonitor(null);
+          setMarketMonitorLoading(false);
           addWidgetWarning(`市场环境不可用：${errorMessage(err)}`);
         }
       }
@@ -538,6 +550,13 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
             <h2>市场环境</h2>
             <span className="status-chip neutral">{formatState(marketMonitor?.market_emotion?.summary?.state)}</span>
           </div>
+          {marketMonitorLoading ? (
+            <div className="empty-state">
+              <strong>市场环境加载中</strong>
+              <p className="muted">正在读取最新可用交易日的市场情绪、涨跌家数和涨跌停结构。</p>
+            </div>
+          ) : (
+            <>
           <div className="market-regime-grid">
             <div className="market-regime-card primary">
               <span>涨跌家数</span>
@@ -617,6 +636,8 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           </div>
           <p className="market-emotion-formula">{marketEmotionFormulaReadout()}</p>
           <p className="market-regime-readout">{marketEmotionReadout(marketMonitor)}</p>
+            </>
+          )}
         </section>
 
         <section className="workspace-panel quality-news-panel" aria-label="高质量新闻">

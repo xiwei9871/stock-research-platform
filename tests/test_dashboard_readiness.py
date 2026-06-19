@@ -228,6 +228,8 @@ def test_build_platform_readiness_dedupes_warnings_preserving_order(monkeypatch)
 
 def test_manifest_health_marks_news_data_available_when_manifest_module_missing(monkeypatch):
     monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: False)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: False)
 
     groups = readiness._build_manifest_health_groups(
         modules=[
@@ -266,6 +268,41 @@ def test_manifest_health_marks_news_data_available_when_manifest_module_missing(
     assert news["status"] == "partial"
     assert news["detail"] == "新闻数据可用；未写入当日日终 manifest"
     assert news["latest_trade_date"] == "2026-06-16"
+
+
+def test_manifest_health_marks_content_sources_available_when_manifest_modules_missing(monkeypatch):
+    monkeypatch.setattr(readiness, "_has_public_news", lambda: True)
+    monkeypatch.setattr(readiness, "_has_research_reports", lambda: True)
+    monkeypatch.setattr(readiness, "_has_generated_reports", lambda latest_market_date: latest_market_date == "2026-06-18")
+
+    groups = readiness._build_manifest_health_groups(
+        modules=[
+            {
+                "module": "daily_bars",
+                "status": "success",
+                "latest_trade_date": "2026-06-18",
+                "row_count": 100,
+            },
+            {
+                "module": "score_topn",
+                "status": "success",
+                "latest_trade_date": "2026-06-18",
+                "row_count": 20,
+            },
+        ],
+        latest_market_date="2026-06-18",
+        topn_preview=[{"asset_id": "CN:SZ:000001"}],
+    )
+
+    content = next(group for group in groups if group["key"] == "content_chain")
+    items = {item["key"]: item for item in content["items"]}
+
+    assert items["news"]["status"] == "partial"
+    assert items["news"]["detail"] == "新闻数据可用；未写入当日日终 manifest"
+    assert items["research_reports"]["status"] == "partial"
+    assert items["research_reports"]["detail"] == "研报数据可用；未写入当日日终 manifest"
+    assert items["generated_reports"]["status"] == "partial"
+    assert items["generated_reports"]["detail"] == "生成报告可用；未写入当日日终 manifest"
 
 
 def test_build_platform_readiness_does_not_call_build_review_queue(monkeypatch):
@@ -425,6 +462,17 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "row_count": 5,
             "warnings": [],
             "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
+        },
+        {
+            "module": "tech_bottleneck_candidates",
+            "source": "point_in_time_daily_candidates",
+            "tier": "tier1",
+            "status": "success",
+            "row_count": 153,
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
         },
         {
             "module": "review_queue",
@@ -579,6 +627,52 @@ def test_readiness_includes_display_date_gate(monkeypatch):
     assert payload["display_gate"]["candidate_status"] == "before_cutoff"
 
 
+def test_manifest_readiness_reports_display_trade_date_run_when_recent_manifest_contains_history(monkeypatch):
+    modules = [
+        {"run_id": "r1", "trade_date": "2026-06-17", "module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-06-17", "module": "strategy_tech_bottleneck", "tier": "tier1", "status": "failed", "warnings": [], "error_message": "old failure"},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "daily_bars", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "technical_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "lhb_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r2", "trade_date": "2026-06-18", "module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+    ]
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-06-18",
+            "topn_preview": [{"asset_id": "A"}],
+        },
+    )
+    monkeypatch.setattr(readiness, "_load_manifest_modules", lambda: modules)
+    monkeypatch.setattr(
+        readiness,
+        "select_display_date",
+        lambda manifest_modules, latest_market_date, **kwargs: {
+            "display_trade_date": "2026-06-18",
+            "latest_market_date": latest_market_date,
+            "candidate_trade_date": "2026-06-18",
+            "display_status": "ready",
+            "candidate_status": "ready",
+            "strategy_ready": "3/3",
+            "contract_valid": "3/3",
+            "blocking_reasons": [],
+        },
+    )
+
+    payload = readiness.build_platform_readiness()
+
+    assert payload["run_id"] == "r2"
+    assert {item["run_id"] for item in payload["modules"]} == {"r2"}
+    assert payload["errors"] == []
+    health_groups = {group["key"]: group for group in payload["health_groups"]}
+    assert health_groups["strategy_execution"]["ready_count"] == 3
+
+
 def test_display_gate_failure_blocks_manifest_readiness(monkeypatch):
     modules = [
         {"module": "daily_bars", "tier": "tier1", "status": "success", "trade_date": "2026-06-12", "warnings": [], "error_message": ""},
@@ -631,7 +725,22 @@ def test_build_platform_readiness_v2_tier2_failure_is_partial(monkeypatch):
         {"module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
-        {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {
+            "module": "strategy_tech_bottleneck",
+            "tier": "tier1",
+            "status": "success",
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
+        },
+        {
+            "module": "tech_bottleneck_candidates",
+            "tier": "tier1",
+            "status": "success",
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
+        },
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_evidence_snapshots", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
@@ -673,7 +782,22 @@ def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
         {"module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
-        {"module": "strategy_tech_bottleneck", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {
+            "module": "strategy_tech_bottleneck",
+            "tier": "tier1",
+            "status": "success",
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
+        },
+        {
+            "module": "tech_bottleneck_candidates",
+            "tier": "tier1",
+            "status": "success",
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-06-12"},
+        },
         {"module": "review_queue", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {"module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
         {

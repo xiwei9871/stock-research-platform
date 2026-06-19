@@ -3,10 +3,11 @@ import { fetchWatchlistSignals } from '../api/client';
 import type { WatchlistSignalRow } from '../api/types';
 
 const DEFAULT_WATCHLIST_ID = 'default';
-const DEFAULT_TRADE_DATE = '2026-06-08';
+const DEFAULT_TRADE_DATE = '2026-06-18';
 
 type WatchlistWorkspaceProps = {
   onOpenAsset?: (assetId: string) => void;
+  defaultTradeDate?: string;
 };
 
 function formatTags(tags: string[]) {
@@ -31,9 +32,9 @@ function rowMatchesQuery(row: WatchlistSignalRow, query: string) {
   ].some((value) => value.toLowerCase().includes(needle));
 }
 
-export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
+export function WatchlistWorkspace({ onOpenAsset, defaultTradeDate = DEFAULT_TRADE_DATE }: WatchlistWorkspaceProps) {
   const [watchlistId, setWatchlistId] = useState(DEFAULT_WATCHLIST_ID);
-  const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
+  const [tradeDate, setTradeDate] = useState(defaultTradeDate || DEFAULT_TRADE_DATE);
   const [status, setStatus] = useState('all');
   const [minPriority, setMinPriority] = useState(0);
   const [query, setQuery] = useState('');
@@ -157,7 +158,7 @@ export function WatchlistWorkspace({ onOpenAsset }: WatchlistWorkspaceProps) {
         ) : visibleRows.length === 0 ? (
           <div className="empty-state">
             <strong>当前观察池暂无记录。</strong>
-            <p className="muted">在个股工作台点击“观察”后，人工观察标的会进入这里。</p>
+            <p className="muted">当前日期暂无观察记录。你可以在个股工作台点击“观察”创建人工观察项；如果想看策略候选池，请切换到复盘队列。</p>
             <p className="muted">{`当前查询：${watchlistId} / ${tradeDate}`}</p>
           </div>
         ) : (

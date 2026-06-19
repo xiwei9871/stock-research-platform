@@ -302,12 +302,18 @@ def run_lhb_shortline_market_regime_account(
     market_regime: pd.DataFrame,
     max_positions: int,
     base_position_pct: float,
+    daily_bars: pd.DataFrame | None = None,
+    minute_bars: pd.DataFrame | None = None,
+    end_date: str = "",
 ) -> dict[str, Any]:
     account_trades, account_curve = _build_lhb_shortline_market_regime_account_frames(
         lifecycle_trades=lifecycle_trades,
         market_regime=market_regime,
         max_positions=max_positions,
         base_position_pct=base_position_pct,
+        daily_bars=daily_bars,
+        minute_bars=minute_bars,
+        end_date=end_date,
     )
     summary = _summarize_lhb_shortline_market_regime_account(
         account_trades=account_trades,
@@ -327,6 +333,9 @@ def _build_lhb_shortline_market_regime_account_frames(
     market_regime: pd.DataFrame,
     max_positions: int,
     base_position_pct: float,
+    daily_bars: pd.DataFrame | None = None,
+    minute_bars: pd.DataFrame | None = None,
+    end_date: str = "",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     trade_columns = [
         "account_trade_status",
@@ -397,13 +406,21 @@ def _build_lhb_shortline_market_regime_account_frames(
     candidates = trades[
         fill_status.eq("filled")
         & trades["entry_trade_date"].notna()
-        & trades["exit_trade_date"].notna()
-        & trades["realized_return"].notna()
     ].copy()
+    if end_date:
+        candidates = candidates[candidates["entry_trade_date"].astype(str).le(str(end_date))].copy()
     candidates = candidates.sort_values(["entry_trade_date", "trade_date", "top_n", "ts_code"], kind="stable").reset_index(drop=True)
 
     regime_by_date = _lhb_shortline_regime_by_entry_date(market_regime)
-    dates = sorted(set(candidates["entry_trade_date"].dropna()) | set(candidates["exit_trade_date"].dropna()))
+    price_lookup, market_dates = _lhb_shortline_close_lookup(minute_bars=minute_bars, daily_bars=daily_bars)
+    event_dates = set(candidates["entry_trade_date"].dropna()) | set(candidates["exit_trade_date"].dropna())
+    if end_date:
+        event_dates.add(str(end_date))
+    start_event_date = min(event_dates) if event_dates else ""
+    if market_dates and start_event_date:
+        dates = [date for date in market_dates if start_event_date <= date <= (str(end_date) if end_date else max(event_dates))]
+    else:
+        dates = sorted(event_dates)
     cash = 1.0
     running_max = 1.0
     open_positions: dict[str, dict[str, Any]] = {}
@@ -418,9 +435,9 @@ def _build_lhb_shortline_market_regime_account_frames(
         daily_pnl = 0.0
 
         for ts_code, position in list(open_positions.items()):
-            if str(position["exit_trade_date"]) != str(date):
+            if not position.get("exit_trade_date") or str(position["exit_trade_date"]) != str(date):
                 continue
-            pnl = float(position["position_notional"]) * float(position["realized_return"])
+            pnl = float(position["position_notional"]) * float(position.get("realized_return") or 0.0)
             proceeds = float(position["position_notional"]) + pnl
             cash += proceeds
             daily_pnl += pnl
@@ -441,8 +458,14 @@ def _build_lhb_shortline_market_regime_account_frames(
                 if len(open_positions) >= int(max_positions):
                     account_rows.append({**base_record, "account_trade_status": "max_positions_skipped", "skip_reason": "max_positions_reached"})
                     continue
-                equity_before_entry = cash + sum(float(pos["position_notional"]) for pos in open_positions.values())
-                invested = sum(float(pos["position_notional"]) for pos in open_positions.values())
+                equity_before_entry = cash + sum(
+                    _lhb_shortline_mark_to_market_value(pos, date, price_lookup)
+                    for pos in open_positions.values()
+                )
+                invested = sum(
+                    _lhb_shortline_mark_to_market_value(pos, date, price_lookup)
+                    for pos in open_positions.values()
+                )
                 position_scale = float(regime["position_scale"])
                 max_total_exposure = float(regime["max_total_exposure"])
                 exposure_room = max(equity_before_entry * max_total_exposure - invested, 0.0)
@@ -463,13 +486,26 @@ def _build_lhb_shortline_market_regime_account_frames(
                 trade_records[trade_idx] = record
                 open_positions[ts_code] = {
                     "trade_idx": trade_idx,
-                    "exit_trade_date": row.get("exit_trade_date"),
-                    "realized_return": float(row.get("realized_return")),
+                    "ts_code": ts_code,
+                    "entry_price": _finite_or_none(row.get("entry_price")),
+                    "exit_trade_date": (
+                        str(row.get("exit_trade_date"))
+                        if pd.notna(row.get("exit_trade_date")) and (not end_date or str(row.get("exit_trade_date")) <= str(end_date))
+                        else ""
+                    ),
+                    "realized_return": _finite_or_none(row.get("realized_return")),
                     "position_notional": notional,
                 }
                 opened_count += 1
 
-        invested = sum(float(pos["position_notional"]) for pos in open_positions.values())
+        invested = sum(
+            _lhb_shortline_mark_to_market_value(pos, date, price_lookup)
+            for pos in open_positions.values()
+        )
+        for position in open_positions.values():
+            current_value = _lhb_shortline_mark_to_market_value(position, date, price_lookup)
+            record = trade_records[int(position["trade_idx"])]
+            record["pnl"] = current_value - float(position["position_notional"])
         equity = cash + invested
         running_max = max(running_max, equity)
         curve_rows.append(
@@ -488,6 +524,66 @@ def _build_lhb_shortline_market_regime_account_frames(
         )
 
     return pd.DataFrame(account_rows).reindex(columns=trade_columns), pd.DataFrame(curve_rows).reindex(columns=curve_columns)
+
+
+def _lhb_shortline_close_lookup(
+    *,
+    minute_bars: pd.DataFrame | None,
+    daily_bars: pd.DataFrame | None,
+) -> tuple[dict[tuple[str, str], float], list[str]]:
+    minute_lookup, minute_dates = _lhb_shortline_price_close_lookup(minute_bars, prefer_last_trade_time=True)
+    if minute_lookup:
+        return minute_lookup, minute_dates
+    return _lhb_shortline_price_close_lookup(daily_bars, prefer_last_trade_time=False)
+
+
+def _lhb_shortline_price_close_lookup(
+    bars: pd.DataFrame | None,
+    *,
+    prefer_last_trade_time: bool,
+) -> tuple[dict[tuple[str, str], float], list[str]]:
+    if bars is None or bars.empty or "trade_date" not in bars.columns:
+        return {}, []
+    frame = bars.copy()
+    if "ts_code" not in frame.columns or "close" not in frame.columns:
+        return {}, []
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["ts_code"] = frame["ts_code"].map(_canonical_ts_code)
+    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+    frame = frame.dropna(subset=["trade_date", "ts_code", "close"])
+    if prefer_last_trade_time and "trade_time" in frame.columns:
+        frame["_trade_time_sort"] = pd.to_datetime(frame["trade_time"], errors="coerce")
+        frame = (
+            frame.sort_values(["trade_date", "ts_code", "_trade_time_sort"], kind="stable")
+            .drop_duplicates(["trade_date", "ts_code"], keep="last")
+        )
+    lookup = {
+        (str(row.trade_date), str(row.ts_code)): float(row.close)
+        for row in frame[["trade_date", "ts_code", "close"]].itertuples(index=False)
+    }
+    dates = sorted(frame["trade_date"].dropna().astype(str).unique().tolist())
+    return lookup, dates
+
+
+def _lhb_shortline_mark_to_market_value(
+    position: dict[str, Any],
+    trade_date: str,
+    price_lookup: dict[tuple[str, str], float],
+) -> float:
+    notional = float(position.get("position_notional") or 0.0)
+    entry_price = _finite_or_none(position.get("entry_price"))
+    ts_code = str(position.get("ts_code") or "")
+    close = price_lookup.get((str(trade_date), _canonical_ts_code(ts_code)))
+    if entry_price is None or entry_price <= 0 or close is None or close <= 0:
+        return notional
+    return notional * float(close) / float(entry_price)
+
+
+def _finite_or_none(value: Any) -> float | None:
+    parsed = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(parsed):
+        return None
+    return float(parsed)
 
 
 def _lhb_shortline_regime_by_entry_date(market_regime: pd.DataFrame) -> dict[str, dict[str, Any]]:
@@ -551,11 +647,24 @@ def _summarize_lhb_shortline_market_regime_account(
     returns = pd.to_numeric(closed.get("realized_return", pd.Series(dtype="float64")), errors="coerce")
     final_equity = float(pd.to_numeric(pd.Series([account_curve.iloc[-1].get("equity")]), errors="coerce").fillna(1.0).iloc[0])
     max_drawdown = float(pd.to_numeric(account_curve.get("drawdown", pd.Series(dtype="float64")), errors="coerce").min())
+    latest = account_curve.iloc[-1]
+    previous = account_curve.iloc[-2] if len(account_curve) > 1 else None
+    latest_equity = _finite_or_none(latest.get("equity"))
+    previous_equity = _finite_or_none(previous.get("equity")) if previous is not None else None
+    latest_day_return = (
+        latest_equity / previous_equity - 1.0
+        if latest_equity is not None and previous_equity not in (None, 0.0)
+        else None
+    )
     return {
         "initial_equity": 1.0,
         "final_equity": final_equity,
         "total_return": final_equity - 1.0,
         "max_drawdown": max_drawdown,
+        "actual_end_date": str(latest.get("trade_date") or ""),
+        "latest_day_return": latest_day_return,
+        "latest_day_drawdown": _finite_or_none(latest.get("drawdown")),
+        "open_position_count": int(_finite_or_none(latest.get("open_position_count")) or 0),
         "filled_trade_count": int(len(filled)),
         "closed_trade_count": int(len(closed)),
         "skipped_market_regime_count": int(account_trades["account_trade_status"].eq("market_regime_skipped").sum()) if not account_trades.empty else 0,
@@ -566,6 +675,61 @@ def _summarize_lhb_shortline_market_regime_account(
         "avg_position_notional": float(pd.to_numeric(closed.get("position_notional", pd.Series(dtype="float64")), errors="coerce").mean()) if not closed.empty else None,
         "sharpe_ratio": _annualized_sharpe_from_equity_curve(account_curve),
     }
+
+
+def _extend_lhb_shortline_account_curve_to_end_date(
+    *,
+    account_curve: pd.DataFrame,
+    daily_bars: pd.DataFrame,
+    end_date: str,
+) -> pd.DataFrame:
+    if account_curve.empty or "trade_date" not in account_curve.columns or daily_bars.empty or "trade_date" not in daily_bars.columns:
+        return account_curve
+
+    curve = account_curve.copy()
+    curve["trade_date"] = pd.to_datetime(curve["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    curve = curve.dropna(subset=["trade_date"]).sort_values("trade_date").reset_index(drop=True)
+    if curve.empty:
+        return account_curve
+
+    end_date_text = str(pd.to_datetime(end_date, errors="coerce").date())
+    last_date = str(curve["trade_date"].iloc[-1])
+    if last_date >= end_date_text:
+        return curve
+
+    available_dates = (
+        pd.to_datetime(daily_bars["trade_date"], errors="coerce")
+        .dropna()
+        .dt.strftime("%Y-%m-%d")
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+    missing_dates = [date for date in available_dates if last_date < date <= end_date_text]
+    if not missing_dates:
+        return curve
+
+    append_rows: list[dict[str, Any]] = []
+    last_row = curve.iloc[-1].to_dict()
+    for trade_date in missing_dates:
+        row = dict(last_row)
+        row["trade_date"] = trade_date
+        for column in ["opened_count", "closed_count", "daily_realized_pnl"]:
+            if column in curve.columns:
+                row[column] = 0
+        if "invested_notional" in curve.columns:
+            row["invested_notional"] = 0.0
+        if "open_position_count" in curve.columns:
+            row["open_position_count"] = 0
+        append_rows.append(row)
+
+    extended = pd.concat([curve, pd.DataFrame(append_rows)], ignore_index=True)
+    if "equity" in extended.columns:
+        equity = pd.to_numeric(extended["equity"], errors="coerce")
+        running_max = equity.cummax()
+        if "drawdown" in extended.columns:
+            extended["drawdown"] = equity / running_max - 1.0
+    return extended.reindex(columns=account_curve.columns)
 
 
 def _canonical_ts_code(value: Any) -> str:
@@ -766,6 +930,15 @@ def _filter_rows_to_lhb_shortline_asof_cutoff(
         if column not in filtered.columns:
             continue
         dates = pd.to_datetime(filtered[column], errors="coerce")
+        if not require_known_dates and column == "exit_trade_date":
+            future_exit = dates.gt(cutoff)
+            if bool(future_exit.any()):
+                for exit_column in ["exit_trade_date", "exit_time", "exit_price", "exit_status", "exit_signal", "exit_reason"]:
+                    if exit_column in filtered.columns:
+                        filtered.loc[future_exit, exit_column] = pd.NA
+                if "realized_return" in filtered.columns:
+                    filtered.loc[future_exit, "realized_return"] = pd.NA
+            dates = pd.to_datetime(filtered[column], errors="coerce")
         column_mask = dates.le(cutoff)
         if require_known_dates:
             column_mask = column_mask & dates.notna()
@@ -1398,7 +1571,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         lifecycle_trades,
         end_date=config.end_date,
         date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
-        require_known_dates=True,
+        require_known_dates=False,
     )
     lifecycle_trades["gross_realized_return"] = pd.to_numeric(
         lifecycle_trades.get("realized_return", pd.Series(dtype="float64")), errors="coerce"
@@ -1427,7 +1600,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         account_trades,
         end_date=config.end_date,
         date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
-        require_known_dates=True,
+        require_known_dates=False,
     )
     account_curve = _filter_rows_to_lhb_shortline_asof_cutoff(
         account_curve,
@@ -1439,7 +1612,7 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
         selected_trades,
         end_date=config.end_date,
         date_columns=("trade_date", "entry_trade_date", "exit_trade_date"),
-        require_known_dates=True,
+        require_known_dates=False,
     )
     if "strategy" in account_trades.columns:
         account_trades = account_trades[
@@ -1477,6 +1650,9 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
                 market_regime=market_regime,
                 max_positions=config.account_max_positions,
                 base_position_pct=config.position_weight,
+                daily_bars=frames.daily_bars,
+                minute_bars=frames.minute_bars,
+                end_date=config.end_date,
             )
             account_trades = market_account["account_trades"].copy()
             account_curve = market_account["account_curve"].copy()
@@ -1486,9 +1662,17 @@ def run_lhb_shortline_v1_lifecycle_from_frames(
             if not account_curve.empty:
                 account_curve["strategy"] = strategy
                 account_curve["top_n"] = config.top_n
+            account_curve = _extend_lhb_shortline_account_curve_to_end_date(
+                account_curve=account_curve,
+                daily_bars=frames.daily_bars,
+                end_date=config.end_date,
+            )
             summary = {
                 **baseline_summary,
-                **market_account["summary"],
+                **_summarize_lhb_shortline_market_regime_account(
+                    account_trades=account_trades,
+                    account_curve=account_curve,
+                ),
             }
         existing_sharpe = pd.to_numeric(
             pd.Series([summary.get("sharpe_ratio")]), errors="coerce"

@@ -64,6 +64,29 @@ def test_tech_bottleneck_eod_writes_artifacts_and_manifest_entries(tmp_path: Pat
     assert result["review_rows"] >= 1
 
 
+def test_tech_bottleneck_eod_equity_file_is_anchored_to_initial_equity(tmp_path: Path) -> None:
+    entries: list[dict[str, object]] = []
+
+    run_tech_bottleneck_eod_from_frames(
+        base_candidates=_base_candidates(),
+        prices=_prices(),
+        market_exposure=_market_exposure(),
+        start_date="2025-01-01",
+        end_date="2025-01-08",
+        run_id="strategy-eod-20250108-local",
+        output_dir=tmp_path,
+        manifest_upsert=entries.append,
+        candidate_source_path=tmp_path / "strict_base_candidates.csv",
+    )
+
+    equity = pd.read_csv(tmp_path / "strategy_tech_bottleneck_equity.csv")
+    summary = next(entry for entry in entries if entry["module"] == "strategy_tech_bottleneck")["metadata"]["summary"]
+    assert equity.iloc[0]["equity"] == pytest.approx(1.0)
+    assert equity.iloc[0]["drawdown"] == pytest.approx(0.0)
+    assert equity.iloc[-1]["equity"] == pytest.approx(summary["final_equity"])
+    assert equity.iloc[-1]["equity"] - 1.0 == pytest.approx(summary["total_return"])
+
+
 def test_tech_bottleneck_eod_idempotent_rerun_rewrites_same_manifest_ids(tmp_path: Path) -> None:
     first_entries: list[dict[str, object]] = []
     second_entries: list[dict[str, object]] = []

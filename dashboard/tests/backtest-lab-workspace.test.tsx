@@ -184,7 +184,7 @@ describe('BacktestLabWorkspace', () => {
       expect(apiMocks.runBacktest).toHaveBeenCalledWith({
         strategy_id: 'lhb_shortline',
         start_date: '2026-01-01',
-        end_date: '2026-06-08',
+        end_date: '2026-06-18',
         score_version: 'manual_v1',
         top_n: 5,
         transaction_cost_bps: 10,
@@ -418,6 +418,64 @@ describe('BacktestLabWorkspace', () => {
     expect(within(ledger).queryByText('new_internal_reason')).not.toBeInTheDocument();
   });
 
+  it('renders portfolio rebalance trades for Mid Trend and Tech Bottleneck results', () => {
+    render(
+      <BacktestResultDetail
+        result={{
+          ...makeRunResult('mid_trend', 'Mid Trend Combo'),
+          summary: {
+            final_equity: 1.35,
+            total_return: 0.35,
+            max_drawdown: -0.13,
+            trade_rows: 185,
+            position_rows: 113
+          },
+          trades: [
+            {
+              trade_date: '2026-06-10',
+              asset_id: 'CN:SZ:300408',
+              side: 'buy',
+              previous_weight: 0,
+              target_weight: 0.2,
+              turnover_contribution: 0.2,
+              transaction_cost: 0.0004,
+              reason: 'rebalance'
+            },
+            {
+              trade_date: '2026-06-11',
+              asset_id: 'CN:SH:601963',
+              side: 'sell',
+              previous_weight: 0.2,
+              target_weight: 0,
+              delta_weight: -0.2,
+              turnover_contribution: 0.2,
+              transaction_cost: 0.0004,
+              reason: 'risk_exit'
+            }
+          ],
+          positions: []
+        }}
+      />
+    );
+
+    const ledger = screen.getByRole('heading', { name: 'Rebalance Trades' }).closest('section')!;
+    expect(within(ledger).getByRole('columnheader', { name: 'Trade Date' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('columnheader', { name: 'Side' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('columnheader', { name: 'Previous Weight' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('columnheader', { name: 'Target Weight' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '2026-06-11' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: 'CN:SH:601963' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: 'CN:SZ:300408' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '买入' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '卖出' })).toBeInTheDocument();
+    expect(within(ledger).getAllByRole('cell', { name: '20.00%' }).length).toBeGreaterThanOrEqual(2);
+    expect(within(ledger).getAllByRole('cell', { name: '0.00%' })).toHaveLength(2);
+    expect(within(ledger).getByRole('cell', { name: '+20.00%' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '-20.00%' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '定期调仓' })).toBeInTheDocument();
+    expect(within(ledger).getByRole('cell', { name: '风险退出' })).toBeInTheDocument();
+  });
+
   it('renders concise LHB shortline v1 strategy setup and keeps engine details folded', () => {
     const result = makeRunResult('lhb_shortline', 'LHB Shortline Combo');
     render(
@@ -520,7 +578,7 @@ describe('BacktestLabWorkspace', () => {
       expect(apiMocks.runBacktest).toHaveBeenCalledWith({
         strategy_id: 'lhb_shortline',
         start_date: '2026-01-01',
-        end_date: '2026-06-08',
+        end_date: '2026-06-18',
         score_version: 'manual_v1',
         top_n: 5,
         transaction_cost_bps: 10,
@@ -555,7 +613,7 @@ describe('BacktestLabWorkspace', () => {
       expect(apiMocks.runBacktest).toHaveBeenNthCalledWith(index + 1, {
         strategy_id: strategyId,
         start_date: '2026-01-01',
-        end_date: '2026-06-08',
+        end_date: '2026-06-18',
         score_version: 'manual_v1',
         top_n: 5,
         transaction_cost_bps: 10,

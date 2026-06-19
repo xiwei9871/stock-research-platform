@@ -131,10 +131,10 @@ def test_future_candidate_does_not_change_past_candidate_score() -> None:
 
     assert with_future_score == pytest.approx(baseline_score)
     assert with_future_candidate["asset_id"].unique().tolist() == ["A"]
-    assert with_future_candidate["filter_reason"].unique().tolist() == ["static_source_hit_count_conservative_1"]
+    assert with_future_candidate["filter_reason"].unique().tolist() == ["legacy_hit_count_as_candidate_evidence"]
 
 
-def test_static_hit_count_uses_conservative_one_without_changing_historical_score_or_rank() -> None:
+def test_legacy_hit_count_is_used_as_candidate_evidence_when_as_of_count_missing() -> None:
     low_static = build_point_in_time_candidate_snapshots(
         base_candidates=pd.DataFrame(
             [{"asset_id": "A", "stock_name": "Alpha", "first_hit_date": "2025-01-01",
@@ -156,9 +156,10 @@ def test_static_hit_count_uses_conservative_one_without_changing_historical_scor
         run_id="tech-bt-20250102-high",
     )
 
-    assert high_static["hit_count_as_of_date"].tolist() == [1.0]
-    assert high_static["filter_reason"].tolist() == ["static_source_hit_count_conservative_1"]
-    assert high_static["bottleneck_score"].tolist() == pytest.approx(low_static["bottleneck_score"].tolist())
+    assert low_static["hit_count_as_of_date"].tolist() == [1.0]
+    assert high_static["hit_count_as_of_date"].tolist() == [1000.0]
+    assert high_static["filter_reason"].tolist() == ["legacy_hit_count_as_candidate_evidence"]
+    assert high_static["bottleneck_score"].iloc[0] > low_static["bottleneck_score"].iloc[0]
     assert high_static["bottleneck_rank"].tolist() == low_static["bottleneck_rank"].tolist()
 
 

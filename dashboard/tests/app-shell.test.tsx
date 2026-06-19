@@ -1010,7 +1010,7 @@ describe('dashboard app shell', () => {
 
     expect(screen.getByText('A股策略研究')).toBeVisible();
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
-    expect(screen.getByText('市场日期')).toBeVisible();
+    expect(screen.getByText('平台日期')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('市场环境')).toBeVisible();
@@ -1123,7 +1123,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: '30m' }));
 
     await waitFor(() =>
-      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-10', '2026-06-08', {
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-20', '2026-06-18', {
         resolution: '30m',
         adjustType: 'raw'
       })
@@ -1157,7 +1157,7 @@ describe('dashboard app shell', () => {
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
         '2026-06-10',
-        '2025-12-10',
+        '2025-12-12',
         '2026-06-10',
         'manual_v1',
         'qfq'
@@ -1990,7 +1990,7 @@ describe('dashboard app shell', () => {
   });
 
   it('explains why Generated Reports can be empty', async () => {
-    apiMocks.fetchOverview.mockResolvedValueOnce({ ...makeOverview(), reports: [] });
+    apiMocks.fetchOverview.mockResolvedValue({ ...makeOverview(), reports: [] });
 
     render(<App />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
@@ -2138,7 +2138,7 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('权重表现待接入')).toBeInTheDocument();
     expect(screen.getByText('情绪拆解待接入')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '涨停 0' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('暂无股票')).toBeInTheDocument();
+    expect(screen.getByText('股票名单源未接入。')).toBeInTheDocument();
   });
 
   it('supports keyboard navigation across market monitor stock tabs', async () => {

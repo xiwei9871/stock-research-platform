@@ -136,6 +136,7 @@ def build_mid_trend_v1_from_frames(
         "config": config_payload,
         "summary": summary,
         "equity_curve": _records(result["equity_curve"]),
+        "signals": _records(primary),
         "positions": _records(result["positions"]),
         "trades": _records(result["trades"]),
     }

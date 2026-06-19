@@ -9,8 +9,21 @@ REBUILD="${REBUILD:-0}"
 STRATEGY_OUTPUT_ROOT="${STRATEGY_OUTPUT_ROOT:-/Users/xiwei/stock_research/outputs/research}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+find_latest_strategy_daily_eod() {
+  find "${STRATEGY_OUTPUT_ROOT}/strategy_daily_eod" -mindepth 1 -maxdepth 1 -type d -name '????-??-??' 2>/dev/null \
+    | sed "s#^${STRATEGY_OUTPUT_ROOT}/##" \
+    | sort \
+    | tail -1
+}
+
+LATEST_STRATEGY_DAILY_EOD="${LATEST_STRATEGY_DAILY_EOD:-$(find_latest_strategy_daily_eod)}"
+if [[ -z "$LATEST_STRATEGY_DAILY_EOD" ]]; then
+  echo "No strategy_daily_eod artifact directory found under ${STRATEGY_OUTPUT_ROOT}" >&2
+  exit 1
+fi
+
 strategy_output_dirs=(
-  "strategy_daily_eod/2026-06-16"
+  "$LATEST_STRATEGY_DAILY_EOD"
   "web_lhb_shortline_v1_runs"
   "mid_trend_shadow_top10_context_fixed_20260602"
   "mid_trend_refresh_20260602"

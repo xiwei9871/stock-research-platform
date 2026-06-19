@@ -46,6 +46,18 @@ function formatWeight(value: unknown) {
   return Math.abs(numberValue) <= 1 ? formatUnsignedPercent(numberValue) : formatValue(numberValue);
 }
 
+function formatSignedWeight(value: unknown) {
+  const numberValue = asNumber(value);
+  if (numberValue === null) {
+    return '-';
+  }
+  if (Math.abs(numberValue) <= 1) {
+    const sign = numberValue > 0 ? '+' : '';
+    return `${sign}${(numberValue * 100).toFixed(2)}%`;
+  }
+  return formatValue(numberValue);
+}
+
 function formatMultiple(value: unknown) {
   const numberValue = asNumber(value);
   return numberValue === null ? '-' : `${Number(numberValue.toFixed(4))}x`;
@@ -113,6 +125,20 @@ const EXIT_REASON_LABELS: Record<string, string> = {
   normal_exit: '常规卖出'
 };
 
+const REBALANCE_REASON_LABELS: Record<string, string> = {
+  rebalance: '定期调仓',
+  risk_exit: '风险退出',
+  rank_exit: '排名退出',
+  buy: '买入',
+  sell: '卖出'
+};
+
+const SIDE_LABELS: Record<string, string> = {
+  buy: '买入',
+  sell: '卖出',
+  hold: '持有'
+};
+
 function formatExitReason(value: unknown) {
   if (value === undefined || value === null || value === '') {
     return { label: '-', title: undefined };
@@ -127,6 +153,45 @@ function formatExitReason(value: unknown) {
     label: labels.length > 0 ? Array.from(new Set(labels)).join('，') : '其他卖出原因',
     title: raw
   };
+}
+
+function formatRebalanceReason(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return { label: '-', title: undefined };
+  }
+  const raw = String(value);
+  const label = REBALANCE_REASON_LABELS[raw] ?? raw;
+  return { label, title: label === raw ? undefined : raw };
+}
+
+function formatSide(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return '-';
+  }
+  const raw = String(value);
+  return SIDE_LABELS[raw] ?? raw;
+}
+
+function hasRebalanceTradeShape(rows: ResultRow[]) {
+  return rows.some(
+    (row) =>
+      getFirstValue(row, ['side']) !== null &&
+      (getFirstValue(row, ['previous_weight', 'target_weight', 'delta_weight', 'turnover_contribution']) !== null ||
+        getFirstValue(row, ['reason']) !== null)
+  );
+}
+
+function getDeltaWeight(row: ResultRow) {
+  const explicitDelta = getFirstValue(row, ['delta_weight']);
+  if (explicitDelta !== null) {
+    return explicitDelta;
+  }
+  const previousWeight = asNumber(getFirstValue(row, ['previous_weight']));
+  const targetWeight = asNumber(getFirstValue(row, ['target_weight', 'weight']));
+  if (previousWeight === null || targetWeight === null) {
+    return null;
+  }
+  return targetWeight - previousWeight;
 }
 
 function getLatestEquity(result: BacktestRunResult) {
@@ -232,6 +297,9 @@ function TradeLedgerTable({ positions, trades }: { positions: ResultRow[]; trade
   }
 
   const rows = trades.length > 0 ? trades : positions;
+  if (hasRebalanceTradeShape(rows)) {
+    return <RebalanceTradeTable rows={rows} />;
+  }
 
   return (
     <div className="table-scroll">
@@ -268,6 +336,46 @@ function TradeLedgerTable({ positions, trades }: { positions: ResultRow[]; trade
                 <td>{formatWeight(getFirstValue(row, ['position_notional', 'position_weight', 'weight', 'target_weight', 'notional_pct']))}</td>
                 <td>{formatPercent(getFirstValue(row, ['return', 'trade_return', 'pnl_pct', 'realized_return']))}</td>
                 <td title={exitReason.title}>{exitReason.label}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RebalanceTradeTable({ rows }: { rows: ResultRow[] }) {
+  return (
+    <div className="table-scroll">
+      <table className="data-table backtest-result-table">
+        <thead>
+          <tr>
+            <th>Trade Date</th>
+            <th>Stock</th>
+            <th>Side</th>
+            <th>Previous Weight</th>
+            <th>Target Weight</th>
+            <th>Delta Weight</th>
+            <th>Turnover</th>
+            <th>Cost</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const reason = formatRebalanceReason(getFirstValue(row, ['reason', 'exit_reason']));
+            return (
+              <tr key={resultRowKey(row, index)}>
+                <td>{formatValue(getFirstValue(row, ['trade_date', 'rebalance_date', 'date']))}</td>
+                <td>{formatValue(getFirstValue(row, ['asset_id', 'ts_code', 'symbol', 'stock_code', 'code']))}</td>
+                <td>{formatSide(getFirstValue(row, ['side']))}</td>
+                <td>{formatWeight(getFirstValue(row, ['previous_weight']))}</td>
+                <td>{formatWeight(getFirstValue(row, ['target_weight', 'weight']))}</td>
+                <td>{formatSignedWeight(getDeltaWeight(row))}</td>
+                <td>{formatWeight(getFirstValue(row, ['turnover_contribution', 'turnover']))}</td>
+                <td>{formatValue(getFirstValue(row, ['transaction_cost', 'cost']))}</td>
+                <td title={reason.title}>{reason.label}</td>
               </tr>
             );
           })}
@@ -316,7 +424,7 @@ export function BacktestResultDetail({ result }: BacktestResultDetailProps) {
   const endDate = getMetric(result, ['end_date']) ?? result.config.end_date;
   const actualStartDate = getMetric(result, ['actual_start_date']);
   const actualEndDate = getMetric(result, ['actual_end_date']);
-  const filledTradeCount = getMetric(result, ['filled_trade_count', 'closed_trade_count']);
+  const filledTradeCount = getMetric(result, ['filled_trade_count', 'closed_trade_count', 'trade_rows']);
   const winRate = getMetric(result, ['win_rate']);
   const avgTradeReturn = getMetric(result, ['avg_trade_return']);
   const topN = getMetric(result, ['top_n', 'phase18c_top_n']) ?? result.config.top_n;
@@ -452,7 +560,7 @@ export function BacktestResultDetail({ result }: BacktestResultDetailProps) {
       </details>
 
       <section className="backtest-result-section">
-        <h3>Completed Trades</h3>
+        <h3>{hasRebalanceTradeShape(result.trades) ? 'Rebalance Trades' : 'Completed Trades'}</h3>
         <TradeLedgerTable positions={result.positions} trades={result.trades} />
       </section>
     </section>

@@ -7,9 +7,11 @@ from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import (
-    load_latest_data_run_manifest,
+    load_recent_data_run_manifest,
     summarize_manifest_modules,
 )
+
+load_latest_data_run_manifest = load_recent_data_run_manifest
 from stock_research.dashboard.display_date_gate import select_display_date
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import DEFAULT_REPORTS_DIR
@@ -145,18 +147,22 @@ def _build_manifest_readiness(
     topn_preview: list[dict[str, Any]],
     warnings: list[str],
 ) -> dict[str, Any]:
-    summary = summarize_manifest_modules(manifest_modules)
-    missing_data = list(summary["missing_data"])
-    partial_data = list(summary["partial_data"])
-    errors = list(summary["errors"])
-    checks = _manifest_checks(manifest_modules, latest_market_date, topn_preview)
     latest_trade_date = latest_market_date or _latest_trade_date_from_manifest(manifest_modules)
     display_gate = select_display_date(
         manifest_modules,
         latest_market_date=latest_trade_date,
     )
+    active_modules = _manifest_modules_for_trade_date(
+        manifest_modules,
+        trade_date=str(display_gate.get("display_trade_date") or ""),
+    )
+    summary = summarize_manifest_modules(active_modules)
+    missing_data = list(summary["missing_data"])
+    partial_data = list(summary["partial_data"])
+    errors = list(summary["errors"])
+    checks = _manifest_checks(active_modules, latest_market_date, topn_preview)
     health_groups = _build_manifest_health_groups(
-        modules=manifest_modules,
+        modules=active_modules,
         latest_market_date=latest_trade_date,
         topn_preview=topn_preview,
     )
@@ -189,7 +195,7 @@ def _build_manifest_readiness(
     status = "BLOCKED" if missing_data else (
         "PARTIAL" if partial_data or summary["status"] == "PARTIAL" else summary["status"]
     )
-    run_id = str(manifest_modules[0].get("run_id") or "") if manifest_modules else ""
+    run_id = str(active_modules[0].get("run_id") or "") if active_modules else ""
     return {
         "mode": "eod_local",
         "status": status,
@@ -201,13 +207,13 @@ def _build_manifest_readiness(
         "candidate_trade_date": display_gate["candidate_trade_date"],
         "display_gate": display_gate,
         "source": "data_run_manifest",
-        "summary_path": _summary_path_from_manifest(manifest_modules),
+        "summary_path": _summary_path_from_manifest(active_modules),
         "tiers": [
             {"tier": "tier1", "status": "BLOCKED" if missing_data else summary["tier1_status"]},
             {"tier": "tier2", "status": summary["tier2_status"]},
             {"tier": "tier3", "status": summary["tier3_status"]},
         ],
-        "modules": manifest_modules,
+        "modules": active_modules,
         "checks": checks,
         "health_groups": health_groups,
         "warnings": _dedupe([*summary["warnings"], *warnings]),
@@ -256,6 +262,21 @@ def _manifest_checks(
             )
         )
     return checks
+
+
+def _manifest_modules_for_trade_date(
+    modules: list[dict[str, Any]],
+    *,
+    trade_date: str,
+) -> list[dict[str, Any]]:
+    if not trade_date:
+        return modules
+    filtered = [
+        item
+        for item in modules
+        if str(item.get("trade_date") or item.get("latest_trade_date") or "") == trade_date
+    ]
+    return filtered or modules
 
 
 def _build_manifest_health_groups(
@@ -356,12 +377,20 @@ def _build_manifest_health_groups(
             key="research_reports",
             label="Research Reports",
             modules=("research_reports",),
+            fallback_ready=_research_reports_available(),
+            fallback_detail="研报数据可用；未写入当日日终 manifest",
+            fallback_status="partial",
+            fallback_latest_trade_date=latest_market_date,
         ),
         _manifest_health_item(
             by_module,
             key="generated_reports",
             label="Generated Reports",
             modules=("generated_reports",),
+            fallback_ready=_generated_reports_available(latest_market_date),
+            fallback_detail="生成报告可用；未写入当日日终 manifest",
+            fallback_status="partial",
+            fallback_latest_trade_date=latest_market_date,
         ),
     ]
     return [
@@ -509,6 +538,22 @@ def _manifest_health_item(
 def _public_news_available() -> bool:
     try:
         return _has_public_news()
+    except Exception:
+        return False
+
+
+def _research_reports_available() -> bool:
+    try:
+        return _has_research_reports()
+    except Exception:
+        return False
+
+
+def _generated_reports_available(latest_market_date: str) -> bool:
+    if not latest_market_date:
+        return False
+    try:
+        return _has_generated_reports(latest_market_date)
     except Exception:
         return False
 

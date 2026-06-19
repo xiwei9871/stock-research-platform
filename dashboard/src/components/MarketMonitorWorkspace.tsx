@@ -43,6 +43,17 @@ const STOCK_TABS: Array<{ key: StockTabKey; label: string }> = [
   { key: 'limit_down', label: '跌停' }
 ];
 
+function stockListEmptyMessage(tab: StockTabKey, stockLists: MarketMonitorPayload['emotion_stock_lists'] | undefined) {
+  if (!stockLists) {
+    return '股票名单源未接入。';
+  }
+  if (tab === 'auction' && stockLists.auction_status !== 'available') {
+    return '竞价数据源未接入。';
+  }
+  const label = STOCK_TABS.find((item) => item.key === tab)?.label ?? '当前';
+  return `当前日期暂无${label}股票。`;
+}
+
 export function MarketMonitorWorkspace({
   initialTradeDate,
   initialMonitorTab = 'limit_up',
@@ -116,6 +127,7 @@ export function MarketMonitorWorkspace({
   const emotionComponents = emotion?.components ?? [];
   const stockLists = payload?.emotion_stock_lists;
   const stockCount = (tab: StockTabKey) => stockLists?.[tab]?.length ?? 0;
+  const allStockListsEmpty = !stockLists || STOCK_TABS.every((tab) => stockCount(tab.key) === 0);
   const dataModeLabel = payload?.freshness?.label?.toLowerCase().includes('historical')
     ? 'Historical EOD Snapshot'
     : 'EOD Snapshot';
@@ -287,6 +299,9 @@ export function MarketMonitorWorkspace({
           <h2>股票列表</h2>
           <span className="status-chip neutral">EOD</span>
         </div>
+        {allStockListsEmpty ? (
+          <p className="pending-note">股票名单源未接入或当日未产出；上方市场情绪指标仍可用于判断市场热度。</p>
+        ) : null}
         <div className="stock-tabs" role="tablist" aria-label="Market emotion stock lists" onKeyDown={handleStockTabKeyDown}>
           {STOCK_TABS.map((tab) => (
             <button
@@ -319,8 +334,8 @@ export function MarketMonitorWorkspace({
               role="tabpanel"
             >
               {isActivePanel ? (
-                tab.key === 'auction' && tabRows.length === 0 ? (
-                  <p className="pending-note">竞价数据待接入</p>
+                tabRows.length === 0 ? (
+                  <p className="pending-note">{stockListEmptyMessage(tab.key, stockLists)}</p>
                 ) : (
                   <table className="emotion-stock-table">
                     <thead>

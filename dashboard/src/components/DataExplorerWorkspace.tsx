@@ -4,7 +4,7 @@ import type { AssetProfile } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
-const DEFAULT_TRADE_DATE = '2026-06-08';
+const DEFAULT_TRADE_DATE = '2026-06-18';
 const DEFAULT_ADJUST_TYPE = 'qfq';
 const SCORE_VERSION = 'manual_v1';
 
@@ -73,11 +73,16 @@ function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
     .map(([key, value]) => ({ group: '-', name: key, value }));
 }
 
-export function DataExplorerWorkspace() {
+type DataExplorerWorkspaceProps = {
+  defaultTradeDate?: string;
+};
+
+export function DataExplorerWorkspace({ defaultTradeDate = DEFAULT_TRADE_DATE }: DataExplorerWorkspaceProps = {}) {
+  const initialTradeDate = defaultTradeDate || DEFAULT_TRADE_DATE;
   const [assetId, setAssetId] = useState(DEFAULT_ASSET_ID);
-  const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
-  const [chartStartDate, setChartStartDate] = useState(offsetDate(DEFAULT_TRADE_DATE, -180));
-  const [chartEndDate, setChartEndDate] = useState(DEFAULT_TRADE_DATE);
+  const [tradeDate, setTradeDate] = useState(initialTradeDate);
+  const [chartStartDate, setChartStartDate] = useState(offsetDate(initialTradeDate, -180));
+  const [chartEndDate, setChartEndDate] = useState(initialTradeDate);
   const [adjustType, setAdjustType] = useState(DEFAULT_ADJUST_TYPE);
   const [profile, setProfile] = useState<AssetProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -112,7 +117,7 @@ export function DataExplorerWorkspace() {
 
   useEffect(() => {
     mountedRef.current = true;
-    loadProfile(DEFAULT_ASSET_ID, DEFAULT_TRADE_DATE, DEFAULT_ADJUST_TYPE);
+    loadProfile(DEFAULT_ASSET_ID, initialTradeDate, DEFAULT_ADJUST_TYPE);
     return () => {
       mountedRef.current = false;
     };

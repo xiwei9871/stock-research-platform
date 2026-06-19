@@ -3,7 +3,7 @@ import { fetchOverview } from '../api/client';
 import type { ReportLink } from '../api/types';
 import { ReportPanel } from './ReportPanel';
 
-const DEFAULT_TRADE_DATE = '2026-06-08';
+const DEFAULT_TRADE_DATE = '2026-06-18';
 const SCORE_VERSION = 'manual_v1';
 const WATCHLIST_ID = 'default';
 const TOP_N = 5;

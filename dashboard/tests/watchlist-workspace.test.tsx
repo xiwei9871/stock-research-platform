@@ -64,7 +64,15 @@ describe('WatchlistWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open 000001.SZ' }));
 
     expect(onOpenAsset).toHaveBeenCalledWith('000001.SZ');
-    expect(apiMocks.fetchWatchlistSignals).toHaveBeenCalledWith('default', '2026-06-08');
+    expect(apiMocks.fetchWatchlistSignals).toHaveBeenCalledWith('default', '2026-06-18');
+  });
+
+  it('uses the supplied latest trade date instead of the legacy hard-coded date', async () => {
+    render(<WatchlistWorkspace defaultTradeDate="2026-06-18" />);
+
+    expect(await screen.findByText('平安银行')).toBeInTheDocument();
+    expect(screen.getByLabelText('trade date')).toHaveValue('2026-06-18');
+    expect(apiMocks.fetchWatchlistSignals).toHaveBeenCalledWith('default', '2026-06-18');
   });
 
   it('filters by status and minimum priority', async () => {
@@ -88,7 +96,7 @@ describe('WatchlistWorkspace', () => {
     render(<WatchlistWorkspace />);
 
     expect(await screen.findByText('当前观察池暂无记录。')).toBeInTheDocument();
-    expect(screen.getByText('在个股工作台点击“观察”后，人工观察标的会进入这里。')).toBeInTheDocument();
-    expect(screen.getByText('当前查询：default / 2026-06-08')).toBeInTheDocument();
+    expect(screen.getByText('当前日期暂无观察记录。你可以在个股工作台点击“观察”创建人工观察项；如果想看策略候选池，请切换到复盘队列。')).toBeInTheDocument();
+    expect(screen.getByText('当前查询：default / 2026-06-18')).toBeInTheDocument();
   });
 });
