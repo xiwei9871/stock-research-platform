@@ -20,6 +20,9 @@ PY
 )"
 fi
 
+source "$ROOT/scripts/stock_cron_guard.sh"
+stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
+
 ENRICH_START_DATE="${PLATFORM_READY_ENRICH_START_DATE:-$("$PYTHON" - <<PY
 from datetime import date, timedelta
 print((date.fromisoformat("$TRADE_DATE") - timedelta(days=14)).isoformat())

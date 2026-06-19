@@ -18,6 +18,9 @@ PY
 )"
 fi
 
+source "$ROOT/scripts/stock_cron_guard.sh"
+stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
+
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$RUN_LOG")"
 
 set +e

@@ -7,6 +7,9 @@ cd "$ROOT"
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 TRADE_DATE="${TRADE_DATE:-}"
 
+source "$ROOT/scripts/stock_cron_guard.sh"
+stock_cron_guard_or_exit "$PYTHON_BIN" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
+
 resolve_args=()
 if [[ -n "${TRADE_DATE}" ]]; then
   resolve_args+=(--date "${TRADE_DATE}")
