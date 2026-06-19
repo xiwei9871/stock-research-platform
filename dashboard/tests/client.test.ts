@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  fetchDailyBars,
   fetchAssetDecisions,
   fetchAssetOutcomes,
   fetchExperimentProposals,
@@ -70,6 +71,24 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/public-news/refresh', { method: 'POST' });
     expect(result.counts_by_category.live).toBe(2);
+  });
+
+  it('fetches asset bars with an explicit resolution', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ time: '2026-05-29 10:00:00', close: 10.5 }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDailyBars('000001.SZ', '2026-05-29', '2026-05-29', {
+      resolution: '30m',
+      adjustType: 'raw'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/assets/000001.SZ/bars?start_date=2026-05-29&end_date=2026-05-29&adjust_type=raw&resolution=30m'
+    );
+    expect(result[0].time).toBe('2026-05-29 10:00:00');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

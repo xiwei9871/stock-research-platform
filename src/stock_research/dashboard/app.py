@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
-from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
+from stock_research.dashboard.bars import load_bars, load_minute_bars, normalize_resolution
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
@@ -91,16 +91,26 @@ def create_app() -> FastAPI:
         return asset
 
     @app.get("/api/assets/{asset_id}/bars")
-    def asset_daily_bars(
+    def asset_bars(
         asset_id: str,
-        start_date: str,
         end_date: str,
+        start_date: str | None = None,
         adjust_type: str = "qfq",
+        resolution: str = "1D",
+        source: str = "akshare",
     ):
+        resolved_resolution = normalize_resolution(resolution)
         return {
             "asset_id": asset_id,
-            "resolution": "1D",
-            "items": load_daily_bars(asset_id, start_date, end_date, adjust_type),
+            "resolution": resolved_resolution,
+            "items": load_bars(
+                asset_id=asset_id,
+                start_date=start_date,
+                end_date=end_date,
+                resolution=resolved_resolution,
+                adjust_type=adjust_type,
+                source=source,
+            ),
         }
 
     @app.get("/api/assets/{asset_id}/minute-bars")

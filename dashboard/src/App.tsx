@@ -59,6 +59,14 @@ import { WatchlistList } from './components/WatchlistList';
 
 const DEFAULT_TRADE_DATE = '2026-05-29';
 const DEFAULT_ASSET_ID = '000001.SZ';
+const CHART_RESOLUTIONS = [
+  { value: '1D', label: '日K' },
+  { value: '60m', label: '60m' },
+  { value: '30m', label: '30m' },
+  { value: '10m', label: '10m' },
+  { value: '5m', label: '5m' }
+] as const;
+type ChartResolution = (typeof CHART_RESOLUTIONS)[number]['value'];
 
 function dateNDaysBefore(dateText: string, days: number) {
   const [year, month, day] = dateText.split('-').map(Number);
@@ -73,6 +81,7 @@ function dateNDaysBefore(dateText: string, days: number) {
 export function App() {
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [selectedAssetId, setSelectedAssetId] = useState(DEFAULT_ASSET_ID);
+  const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [bars, setBars] = useState<BarPoint[]>([]);
   const [score, setScore] = useState<ScoreRow | null>(null);
@@ -403,8 +412,12 @@ export function App() {
     let ignore = false;
     setError(null);
     setAssetLoading(true);
+    const chartOptions = {
+      resolution: chartResolution,
+      adjustType: chartResolution === '1D' ? 'qfq' : 'raw'
+    };
     Promise.all([
-      fetchDailyBars(selectedAssetId, startDate, tradeDate),
+      fetchDailyBars(selectedAssetId, undefined, tradeDate, chartOptions),
       fetchAssetScore(selectedAssetId, tradeDate),
       fetchAssetSignals(selectedAssetId, tradeDate),
       fetchAssetDecisions(selectedAssetId, startDate, tradeDate),
@@ -430,7 +443,7 @@ export function App() {
     return () => {
       ignore = true;
     };
-  }, [selectedAssetId, startDate, tradeDate]);
+  }, [selectedAssetId, chartResolution, startDate, tradeDate]);
 
   return (
     <main className="workbench">
@@ -465,6 +478,19 @@ export function App() {
           {error ? <span className="error-text">{error}</span> : null}
         </header>
         <section className="chart-panel">
+          <div className="chart-toolbar" aria-label="chart resolution">
+            {CHART_RESOLUTIONS.map((resolution) => (
+              <button
+                key={resolution.value}
+                type="button"
+                className="segment-button"
+                aria-pressed={chartResolution === resolution.value}
+                onClick={() => setChartResolution(resolution.value)}
+              >
+                {resolution.label}
+              </button>
+            ))}
+          </div>
           {assetLoading ? (
             <p className="muted">Loading asset review...</p>
           ) : bars.length > 0 ? (

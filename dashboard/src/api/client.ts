@@ -59,13 +59,17 @@ export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
 
 export async function fetchDailyBars(
   assetId: string,
-  startDate: string,
+  startDate: string | undefined,
   endDate: string,
-  adjustType = 'qfq'
+  options: { resolution?: string; adjustType?: string } = {}
 ): Promise<BarPoint[]> {
+  const searchParams = new URLSearchParams();
+  if (startDate) searchParams.set('start_date', startDate);
+  searchParams.set('end_date', endDate);
+  searchParams.set('adjust_type', options.adjustType ?? 'qfq');
+  if (options.resolution) searchParams.set('resolution', options.resolution);
   const payload = await getJson<{ items: BarPoint[] }>(
-    `/api/assets/${encodeURIComponent(assetId)}/bars?start_date=${encodeURIComponent(startDate)}` +
-      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}`
+    `/api/assets/${encodeURIComponent(assetId)}/bars?${searchParams.toString()}`
   );
   return payload.items;
 }

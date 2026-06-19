@@ -674,6 +674,45 @@ describe('dashboard app shell', () => {
     });
   });
 
+  it('switches the asset chart between daily and intraday resolutions', async () => {
+    apiMocks.fetchDailyBars
+      .mockResolvedValueOnce(makeBars(1))
+      .mockResolvedValueOnce([
+        {
+          time: '2026-05-29 10:00:00',
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10.5,
+          volume: 300,
+          amount: 3000
+        },
+        {
+          time: '2026-05-29 10:30:00',
+          open: 10.5,
+          high: 12,
+          low: 10,
+          close: 11.5,
+          volume: 400,
+          amount: 4000
+        }
+      ]);
+
+    render(<App />);
+
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('1 bars');
+    fireEvent.click(screen.getByRole('button', { name: '30m' }));
+
+    await waitFor(() => {
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-05-29', {
+        resolution: '30m',
+        adjustType: 'raw'
+      });
+      expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
+    });
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('filters, searches, and refreshes public news', async () => {
     render(<App />);
 
@@ -1014,7 +1053,10 @@ describe('dashboard app shell', () => {
     fireEvent.click(await screen.findByText('Vanke'));
 
     await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', undefined, '2026-05-29', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      });
       expect(apiMocks.fetchAssetDecisions).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
       expect(apiMocks.fetchAssetOutcomes).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
     });
@@ -1026,7 +1068,10 @@ describe('dashboard app shell', () => {
     fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
 
     await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-09-02', '2026-03-01');
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-03-01', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      });
     });
   });
 

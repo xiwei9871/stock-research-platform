@@ -176,6 +176,37 @@ def test_minute_bars_route_passes_source(monkeypatch):
     assert response.json()["items"] == [{"time": "2026-05-29 09:35:00"}]
 
 
+def test_asset_bars_route_passes_resolution_to_unified_loader(monkeypatch):
+    captured = {}
+
+    def fake_load_bars(**kwargs):
+        captured.update(kwargs)
+        return [{"time": "2026-05-29 10:00:00", "close": 10.5}]
+
+    monkeypatch.setattr(dashboard_app, "load_bars", fake_load_bars)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/000001.SZ/bars"
+        "?end_date=2026-05-29"
+        "&resolution=30m"
+        "&adjust_type=raw"
+        "&source=akshare"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "000001.SZ",
+        "start_date": None,
+        "end_date": "2026-05-29",
+        "resolution": "30m",
+        "adjust_type": "raw",
+        "source": "akshare",
+    }
+    assert response.json()["resolution"] == "30m"
+    assert response.json()["items"] == [{"time": "2026-05-29 10:00:00", "close": 10.5}]
+
+
 def test_asset_decisions_route_returns_read_only_history(monkeypatch):
     captured = {}
 
