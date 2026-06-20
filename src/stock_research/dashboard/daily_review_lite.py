@@ -90,11 +90,11 @@ def load_daily_review_lite(
             "trade_date": trade_date,
             "state": "empty",
             "selected_run": None,
-            "summary": {},
+            "summary": None,
             "warnings": [],
             "artifacts": [],
             "missing_sources": [],
-            "sections": {},
+            "sections": _empty_sections(),
         }
 
     artifact_detail, artifact_files = _artifact_health(selected_package["report_paths"])
@@ -128,11 +128,11 @@ def load_daily_review_lite(
             "trade_date": trade_date,
             "state": "failed",
             "selected_run": selected_run,
-            "summary": {},
+            "summary": None,
             "warnings": [],
             "artifacts": artifacts,
             "missing_sources": [],
-            "sections": {},
+            "sections": _empty_sections(),
         }
 
     review = json.loads(core_artifact.read_text(encoding="utf-8"))
@@ -313,12 +313,12 @@ def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
     next_day_plan = review.get("next_day_plan") or {}
     return {
         "data_readiness": {
-            "status": _top_level_state(review.get("status") or "partial"),
+            "status": _section_status(review.get("status") or "partial"),
             "warnings": warnings,
             "sources": review.get("data_readiness") or {},
         },
         "market_review": {
-            "status": "ready",
+            "status": "success",
             "warnings": [],
             "payload": review.get("market_review") or {},
         },
@@ -336,17 +336,17 @@ def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
             ),
         },
         "holding_review": {
-            "status": "ready",
+            "status": "success",
             "warnings": [],
             "items": review.get("holding_reviews") or [],
         },
         "operator_plan": {
-            "status": "ready",
+            "status": "success",
             "warnings": [],
             "payload": review.get("operator_plan") or {},
         },
         "next_day_checklist": {
-            "status": "partial" if next_day_plan.get("data_warnings") else "ready",
+            "status": "partial" if next_day_plan.get("data_warnings") else "success",
             "warnings": list(next_day_plan.get("data_warnings") or []),
             **_map_next_day_checklist(review),
         },
@@ -367,7 +367,7 @@ def _map_strategy_section(
     warnings = _strategy_warnings(review, strategy_id)
     return {
         "strategy_id": strategy_id,
-        "status": "partial" if warnings else "ready",
+        "status": "partial" if warnings else "success",
         "warnings": warnings,
         "summary": strategy_summary or summary,
         "top_items": top_items,
@@ -538,6 +538,54 @@ def _top_level_state(status: str) -> str:
     if normalized == "failed":
         return "failed"
     return "empty"
+
+
+def _section_status(status: str) -> str:
+    normalized = str(status or "").lower()
+    if normalized == "success":
+        return "success"
+    if normalized == "partial":
+        return "partial"
+    return "empty"
+
+
+def _empty_sections() -> dict[str, Any]:
+    return {
+        "data_readiness": {"status": "empty", "warnings": [], "sources": {}},
+        "market_review": {"status": "empty", "warnings": [], "payload": {}},
+        "strategy_summaries": {
+            "lhb": {
+                "strategy_id": "lhb",
+                "status": "empty",
+                "warnings": [],
+                "summary": {},
+                "top_items": [],
+            },
+            "mid_trend": {
+                "strategy_id": "mid_trend",
+                "status": "empty",
+                "warnings": [],
+                "summary": {},
+                "top_items": [],
+            },
+            "technical_bottleneck": {
+                "strategy_id": "technical_bottleneck",
+                "status": "empty",
+                "warnings": [],
+                "summary": {},
+                "top_items": [],
+            },
+        },
+        "holding_review": {"status": "empty", "warnings": [], "items": []},
+        "operator_plan": {"status": "empty", "warnings": [], "payload": {}},
+        "next_day_checklist": {
+            "status": "empty",
+            "warnings": [],
+            "must_review_items": [],
+            "forbidden_actions": [],
+            "data_warnings": [],
+        },
+    }
 
 
 def _build_summary(review: dict[str, Any], selected_run: dict[str, Any]) -> dict[str, Any]:

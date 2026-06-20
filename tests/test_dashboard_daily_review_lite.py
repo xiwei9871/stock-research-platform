@@ -11,6 +11,14 @@ from stock_research.dashboard.daily_review_lite import (
 
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "daily_review_v1"
+SECTION_KEYS = {
+    "data_readiness",
+    "market_review",
+    "strategy_summaries",
+    "holding_review",
+    "operator_plan",
+    "next_day_checklist",
+}
 
 
 class _Cursor:
@@ -113,8 +121,17 @@ def test_load_daily_review_lite_returns_empty_when_no_run_or_fallback(monkeypatc
     assert result["trade_date"] == "2026-06-20"
     assert result["state"] == "empty"
     assert result["selected_run"] is None
+    assert result["summary"] is None
     assert result["artifacts"] == []
-    assert result["sections"] == {}
+    assert result["sections"].keys() == SECTION_KEYS
+    assert result["sections"]["data_readiness"]["status"] == "empty"
+    assert result["sections"]["market_review"]["status"] == "empty"
+    assert result["sections"]["holding_review"]["status"] == "empty"
+    assert result["sections"]["operator_plan"]["status"] == "empty"
+    assert result["sections"]["next_day_checklist"]["status"] == "empty"
+    assert result["sections"]["strategy_summaries"]["lhb"]["status"] == "empty"
+    assert result["sections"]["strategy_summaries"]["mid_trend"]["status"] == "empty"
+    assert result["sections"]["strategy_summaries"]["technical_bottleneck"]["status"] == "empty"
 
 
 def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp_path: Path):
@@ -183,29 +200,27 @@ def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp
         "warning_count": 1,
     }
     assert result["warnings"] == ["source_missing:lhb_feed"]
-    assert result["sections"].keys() == {
-        "data_readiness",
-        "market_review",
-        "strategy_summaries",
-        "holding_review",
-        "operator_plan",
-        "next_day_checklist",
-    }
+    assert result["sections"].keys() == SECTION_KEYS
     assert result["sections"]["data_readiness"]["status"] == "partial"
     assert result["sections"]["data_readiness"]["warnings"] == ["source_missing:lhb_feed"]
-    assert result["sections"]["market_review"]["status"] == "ready"
+    assert result["sections"]["market_review"]["status"] == "success"
     assert result["sections"]["market_review"]["warnings"] == []
-    assert result["sections"]["holding_review"]["status"] == "ready"
+    assert result["sections"]["holding_review"]["status"] == "success"
     assert result["sections"]["holding_review"]["warnings"] == []
-    assert result["sections"]["operator_plan"]["status"] == "ready"
+    assert result["sections"]["operator_plan"]["status"] == "success"
     assert result["sections"]["operator_plan"]["warnings"] == []
     assert (
         result["sections"]["strategy_summaries"]["lhb"]["status"] == "partial"
+    )
+    assert result["sections"]["strategy_summaries"]["mid_trend"]["status"] == "success"
+    assert (
+        result["sections"]["strategy_summaries"]["technical_bottleneck"]["status"] == "success"
     )
     assert result["sections"]["strategy_summaries"]["lhb"]["warnings"] == [
         "source_missing:lhb_feed"
     ]
     assert result["sections"]["strategy_summaries"]["lhb"]["top_items"][0]["asset_id"] == "CN:SH:600000"
+    assert result["sections"]["next_day_checklist"]["status"] == "partial"
     assert result["sections"]["next_day_checklist"]["must_review_items"][0]["reasons"] == [
         {
             "strategy_id": "lhb",
@@ -282,8 +297,16 @@ def test_load_daily_review_lite_returns_failed_when_core_artifact_missing(
     result = load_daily_review_lite("2026-06-20", reports_root=tmp_path)
 
     assert result["state"] == "failed"
+    assert result["summary"] is None
     assert result["selected_run"]["artifact_health"] == "missing"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "missing"
+    assert result["sections"].keys() == SECTION_KEYS
+    assert result["sections"]["data_readiness"]["status"] == "empty"
+    assert result["sections"]["market_review"]["status"] == "empty"
+    assert result["sections"]["holding_review"]["status"] == "empty"
+    assert result["sections"]["operator_plan"]["status"] == "empty"
+    assert result["sections"]["next_day_checklist"]["status"] == "empty"
+    assert result["sections"]["strategy_summaries"]["lhb"]["status"] == "empty"
 
 
 def test_load_daily_review_lite_uses_fallback_when_run_id_resolves_to_wrong_trade_date(
