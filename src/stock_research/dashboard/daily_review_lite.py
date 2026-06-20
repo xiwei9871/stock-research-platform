@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect
@@ -91,7 +92,7 @@ def load_daily_review_lite(
             "selected_run": None,
             "summary": {},
             "warnings": [],
-            "artifacts": {},
+            "artifacts": [],
             "missing_sources": [],
             "sections": {},
         }
@@ -107,8 +108,8 @@ def load_daily_review_lite(
         "artifact_health_detail": artifact_detail,
     }
 
-    artifacts = {
-        key: {
+    artifacts = [
+        {
             "key": key,
             "label": spec["label"],
             "kind": spec["format"],
@@ -116,9 +117,10 @@ def load_daily_review_lite(
             "available": artifact_detail[key] == "healthy",
             "filename": artifact_files[key].name if artifact_files[key] is not None else None,
             "content_type": spec["content_type"],
+            "url": _artifact_url(trade_date, key, selected_package["run_id"]),
         }
         for key, spec in _ARTIFACT_REGISTRY.items()
-    }
+    ]
 
     core_artifact = artifact_files["daily_review_json"]
     if artifact_detail["daily_review_json"] != "healthy" or core_artifact is None:
@@ -234,7 +236,8 @@ def _resolve_package(
     )
     if row is not None:
         if str(row.get("trade_date"))[:10] != trade_date:
-            return None
+            row = None
+    if row is not None:
         return {
             "run_id": str(row["run_id"]),
             "status": str(row.get("status") or "partial"),
@@ -299,24 +302,54 @@ def _map_daily_review_lite(
         "selected_run": selected_run,
         "summary": _build_summary(review, selected_run),
         "warnings": list(review.get("warnings") or []),
-        "sections": {
-            "strategy_summaries": {
-                "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
-                "mid_trend": _map_strategy_section(
-                    review,
-                    "mid_trend",
-                    review.get("mid_trend_review") or {},
-                ),
-                "technical_bottleneck": _map_strategy_section(
-                    review,
-                    "technical_bottleneck",
-                    review.get("technical_bottleneck_review") or {},
-                ),
-            },
-            "next_day_checklist": _map_next_day_checklist(review),
-        },
+        "sections": _map_sections(review),
         "artifacts": artifacts,
         "missing_sources": _map_missing_sources(review, metadata),
+    }
+
+
+def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
+    warnings = list(review.get("warnings") or [])
+    next_day_plan = review.get("next_day_plan") or {}
+    return {
+        "data_readiness": {
+            "status": _top_level_state(review.get("status") or "partial"),
+            "warnings": warnings,
+            "sources": review.get("data_readiness") or {},
+        },
+        "market_review": {
+            "status": "ready",
+            "warnings": [],
+            "payload": review.get("market_review") or {},
+        },
+        "strategy_summaries": {
+            "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
+            "mid_trend": _map_strategy_section(
+                review,
+                "mid_trend",
+                review.get("mid_trend_review") or {},
+            ),
+            "technical_bottleneck": _map_strategy_section(
+                review,
+                "technical_bottleneck",
+                review.get("technical_bottleneck_review") or {},
+            ),
+        },
+        "holding_review": {
+            "status": "ready",
+            "warnings": [],
+            "items": review.get("holding_reviews") or [],
+        },
+        "operator_plan": {
+            "status": "ready",
+            "warnings": [],
+            "payload": review.get("operator_plan") or {},
+        },
+        "next_day_checklist": {
+            "status": "partial" if next_day_plan.get("data_warnings") else "ready",
+            "warnings": list(next_day_plan.get("data_warnings") or []),
+            **_map_next_day_checklist(review),
+        },
     }
 
 
@@ -331,8 +364,11 @@ def _map_strategy_section(
         for item in (review.get("strategy_items") or [])
         if item.get("strategy_id") == strategy_id
     ]
+    warnings = _strategy_warnings(review, strategy_id)
     return {
         "strategy_id": strategy_id,
+        "status": "partial" if warnings else "ready",
+        "warnings": warnings,
         "summary": strategy_summary or summary,
         "top_items": top_items,
     }
@@ -505,15 +541,47 @@ def _top_level_state(status: str) -> str:
 
 
 def _build_summary(review: dict[str, Any], selected_run: dict[str, Any]) -> dict[str, Any]:
+    strategy_summaries = review.get("strategy_summaries") or {}
+    next_day_plan = review.get("next_day_plan") or {}
     return {
-        "status": selected_run["status"],
-        "report_type": REPORT_TYPE,
+        "market_status": (review.get("market_review") or {}).get("emotion_state"),
+        "overall_position_bias": (review.get("operator_plan") or {}).get("overall_position_bias"),
+        "lhb_conclusion": (strategy_summaries.get("lhb") or {}).get("conclusion"),
+        "mid_trend_conclusion": (strategy_summaries.get("mid_trend") or {}).get("conclusion"),
+        "technical_bottleneck_conclusion": (
+            strategy_summaries.get("technical_bottleneck") or {}
+        ).get("conclusion"),
+        "must_review_asset_ids": [
+            item.get("asset_id")
+            for item in (next_day_plan.get("must_review_items") or [])
+            if item.get("asset_id")
+        ],
         "warning_count": len(review.get("warnings") or []),
-        "must_review_count": len(
-            ((review.get("next_day_plan") or {}).get("must_review_items") or [])
-        ),
-        "missing_source_count": len(review.get("warnings") or []),
     }
+
+
+def _strategy_warnings(review: dict[str, Any], strategy_id: str) -> list[str]:
+    mapping = {
+        "lhb": {"lhb_review", "next_day_plan"},
+        "mid_trend": {"mid_trend_review"},
+        "technical_bottleneck": {"technical_bottleneck_review"},
+    }
+    targets = mapping.get(strategy_id) or set()
+    warnings: list[str] = []
+    for item in _map_missing_sources(review, {}):
+        affected = set(item.get("affected_sections") or [])
+        if affected & targets:
+            summary = item.get("summary")
+            if isinstance(summary, str) and summary:
+                warnings.append(f"source_missing:{item['source_key']}")
+    return warnings
+
+
+def _artifact_url(trade_date: str, key: str, run_id: str) -> str:
+    return (
+        f"/api/daily-review-lite/artifacts/{trade_date}/{key}"
+        f"?run_id={quote(run_id, safe='')}"
+    )
 
 
 def _normalize_reason_entry(reason: Any) -> dict[str, Any]:

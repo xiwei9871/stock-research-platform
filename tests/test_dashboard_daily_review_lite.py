@@ -113,7 +113,7 @@ def test_load_daily_review_lite_returns_empty_when_no_run_or_fallback(monkeypatc
     assert result["trade_date"] == "2026-06-20"
     assert result["state"] == "empty"
     assert result["selected_run"] is None
-    assert result["artifacts"] == {}
+    assert result["artifacts"] == []
     assert result["sections"] == {}
 
 
@@ -173,8 +173,38 @@ def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp
     assert result["selected_run"]["source"] == "report_run"
     assert result["selected_run"]["artifact_health"] == "healthy"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "healthy"
-    assert result["summary"]["status"] == "partial"
+    assert result["summary"] == {
+        "market_status": "cold",
+        "overall_position_bias": "defensive",
+        "lhb_conclusion": "trial",
+        "mid_trend_conclusion": "hold core names",
+        "technical_bottleneck_conclusion": "monitor upgrades only",
+        "must_review_asset_ids": ["CN:SH:600000"],
+        "warning_count": 1,
+    }
     assert result["warnings"] == ["source_missing:lhb_feed"]
+    assert result["sections"].keys() == {
+        "data_readiness",
+        "market_review",
+        "strategy_summaries",
+        "holding_review",
+        "operator_plan",
+        "next_day_checklist",
+    }
+    assert result["sections"]["data_readiness"]["status"] == "partial"
+    assert result["sections"]["data_readiness"]["warnings"] == ["source_missing:lhb_feed"]
+    assert result["sections"]["market_review"]["status"] == "ready"
+    assert result["sections"]["market_review"]["warnings"] == []
+    assert result["sections"]["holding_review"]["status"] == "ready"
+    assert result["sections"]["holding_review"]["warnings"] == []
+    assert result["sections"]["operator_plan"]["status"] == "ready"
+    assert result["sections"]["operator_plan"]["warnings"] == []
+    assert (
+        result["sections"]["strategy_summaries"]["lhb"]["status"] == "partial"
+    )
+    assert result["sections"]["strategy_summaries"]["lhb"]["warnings"] == [
+        "source_missing:lhb_feed"
+    ]
     assert result["sections"]["strategy_summaries"]["lhb"]["top_items"][0]["asset_id"] == "CN:SH:600000"
     assert result["sections"]["next_day_checklist"]["must_review_items"][0]["reasons"] == [
         {
@@ -195,10 +225,12 @@ def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp
         "affected_sections": ["lhb", "next_day_plan"],
         "confidence_impact": "LHB conclusion confidence reduced",
     }
-    assert result["artifacts"]["daily_review_json"]["kind"] == "json"
-    assert result["artifacts"]["daily_review_json"]["available"] is True
-    assert result["artifacts"]["daily_review_json"]["filename"] == "daily_review.json"
-    assert "path" not in result["artifacts"]["daily_review_json"]
+    artifact = next(item for item in result["artifacts"] if item["key"] == "daily_review_json")
+    assert artifact["kind"] == "json"
+    assert artifact["available"] is True
+    assert artifact["filename"] == "daily_review.json"
+    assert artifact["url"] == "/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc"
+    assert "path" not in artifact
 
 
 def test_load_daily_review_lite_marks_fallback_source(monkeypatch, tmp_path: Path):
@@ -216,6 +248,7 @@ def test_load_daily_review_lite_marks_fallback_source(monkeypatch, tmp_path: Pat
     assert result["selected_run"]["source"] == "fallback"
     assert result["selected_run"]["status"] == "partial"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "healthy"
+    assert result["summary"]["must_review_asset_ids"] == ["CN:SH:600000"]
     assert result["sections"]["strategy_summaries"]["technical_bottleneck"]["top_items"][0][
         "asset_id"
     ] == "CN:SH:600000"
@@ -253,7 +286,13 @@ def test_load_daily_review_lite_returns_failed_when_core_artifact_missing(
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "missing"
 
 
-def test_load_daily_review_lite_ignores_run_id_from_wrong_trade_date(monkeypatch, tmp_path: Path):
+def test_load_daily_review_lite_uses_fallback_when_run_id_resolves_to_wrong_trade_date(
+    monkeypatch,
+    tmp_path: Path,
+):
+    review = _load_fixture_review()
+    package_root = tmp_path / "2026-06-20"
+    _write_package(package_root, review)
     monkeypatch.setattr(
         "stock_research.dashboard.daily_review_lite._select_daily_review_run_by_id",
         lambda run_id, service=None: {
@@ -269,8 +308,9 @@ def test_load_daily_review_lite_ignores_run_id_from_wrong_trade_date(monkeypatch
 
     result = load_daily_review_lite("2026-06-20", run_id="daily_review_v1:2026-06-19:abc", reports_root=tmp_path)
 
-    assert result["state"] == "empty"
-    assert result["selected_run"] is None
+    assert result["state"] == "partial"
+    assert result["selected_run"]["source"] == "fallback"
+    assert result["selected_run"]["run_id"] == "fallback:2026-06-20"
 
 
 def test_resolve_daily_review_lite_artifact_rejects_unknown_key(monkeypatch, tmp_path: Path):
