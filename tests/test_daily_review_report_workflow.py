@@ -1,7 +1,12 @@
 import json
 from pathlib import Path
 
-from stock_research.reports.daily_review_contract import ACTION_VALUES, REVIEW_PRIORITY_VALUES
+from stock_research.reports.daily_review_contract import (
+    ACTION_VALUES,
+    REVIEW_PRIORITY_VALUES,
+    normalize_action,
+    normalize_review_priority,
+)
 from stock_research.reports.daily_review_report_workflow import build_daily_review, write_daily_review_package
 
 
@@ -83,3 +88,60 @@ def test_action_and_priority_sets_are_stable():
         "research_required",
     }
     assert REVIEW_PRIORITY_VALUES == {"P0", "P1", "P2", "P3"}
+
+
+def test_normalize_helpers_use_controlled_defaults():
+    assert normalize_action("hold") == "hold"
+    assert normalize_action("unexpected") == "manual_review"
+    assert normalize_review_priority("P0") == "P0"
+    assert normalize_review_priority("unexpected") == "P2"
+
+
+def test_build_daily_review_normalizes_holding_actions():
+    holding_reviews = _read_json("holding_reviews.json")
+    holding_reviews[0]["action"] = "unexpected"
+
+    result = build_daily_review(
+        trade_date="2026-06-20",
+        run_id="daily_review_v1_20260620_2200",
+        data_readiness=_read_json("data_readiness.json"),
+        market_review=_read_json("market_review.json"),
+        lhb_review=_read_json("lhb_review.json"),
+        mid_trend_review=_read_json("mid_trend_review.json"),
+        technical_bottleneck_review=_read_json("technical_bottleneck_review.json"),
+        holding_reviews=holding_reviews,
+    )
+
+    assert result["holding_reviews"][0]["action"] == "manual_review"
+
+
+def test_write_daily_review_package_records_report_run(tmp_path, monkeypatch):
+    result = build_daily_review(
+        trade_date="2026-06-20",
+        run_id="daily_review_v1_20260620_2200",
+        data_readiness=_read_json("data_readiness.json"),
+        market_review=_read_json("market_review.json"),
+        lhb_review=_read_json("lhb_review.json"),
+        mid_trend_review=_read_json("mid_trend_review.json"),
+        technical_bottleneck_review=_read_json("technical_bottleneck_review.json"),
+        holding_reviews=_read_json("holding_reviews.json"),
+    )
+    recorded: dict[str, object] = {}
+
+    def _fake_record_report_run(**kwargs):
+        recorded.update(kwargs)
+        return "stored-run-id"
+
+    monkeypatch.setattr(
+        "stock_research.reports.daily_review_report_workflow.record_report_run",
+        _fake_record_report_run,
+    )
+
+    paths = write_daily_review_package(result, output_root=tmp_path, record_run=True)
+
+    assert recorded["trade_date"] == "2026-06-20"
+    assert recorded["report_type"] == "daily_review_v1"
+    assert recorded["status"] == result["status"]
+    assert recorded["report_paths"] == paths
+    assert recorded["metadata"]["schema_version"] == "daily_review_v1"
+    assert "warnings" in recorded["metadata"]
