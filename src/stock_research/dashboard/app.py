@@ -1,6 +1,14 @@
+from datetime import date
+import re
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from stock_research.dashboard.bars import load_bars, load_minute_bars, normalize_resolution
+from stock_research.dashboard.daily_review_lite import (
+    load_daily_review_lite,
+    resolve_daily_review_lite_artifact,
+)
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
@@ -39,6 +47,15 @@ from stock_research.public_news.service import (
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API")
+    trade_date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+    def validate_trade_date(trade_date: str) -> str:
+        if not trade_date_pattern.match(trade_date):
+            raise HTTPException(status_code=400, detail="invalid trade_date")
+        try:
+            return date.fromisoformat(trade_date).isoformat()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid trade_date") from exc
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
@@ -78,6 +95,26 @@ def create_app() -> FastAPI:
     @app.post("/api/public-news/refresh")
     def public_news_refresh():
         return refresh_public_news_for_dashboard()
+
+    @app.get("/api/daily-review-lite")
+    def daily_review_lite(trade_date: str, run_id: str | None = None):
+        validated_trade_date = validate_trade_date(trade_date)
+        return load_daily_review_lite(validated_trade_date, run_id=run_id)
+
+    @app.get("/api/daily-review-lite/artifacts/{trade_date}/{key}")
+    def daily_review_lite_artifact(trade_date: str, key: str, run_id: str | None = None):
+        validated_trade_date = validate_trade_date(trade_date)
+        try:
+            artifact = resolve_daily_review_lite_artifact(validated_trade_date, key, run_id=run_id)
+        except ValueError:
+            artifact = None
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        return FileResponse(
+            artifact["path"],
+            media_type=artifact["content_type"],
+            filename=artifact["filename"],
+        )
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):

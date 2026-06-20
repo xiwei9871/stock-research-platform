@@ -135,6 +135,89 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
     assert response.json()["counts_by_category"] == {"live": 2}
 
 
+def test_daily_review_lite_route_returns_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_daily_review_lite",
+        lambda trade_date, run_id=None: {
+            "trade_date": trade_date,
+            "state": "ready",
+            "selected_run": {"run_id": run_id or "run-1"},
+            "summary": {"headline": "ok"},
+            "warnings": [],
+            "artifacts": [],
+            "missing_sources": [],
+            "sections": {},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite?trade_date=2026-06-18")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "trade_date": "2026-06-18",
+        "state": "ready",
+        "selected_run": {"run_id": "run-1"},
+        "summary": {"headline": "ok"},
+        "warnings": [],
+        "artifacts": [],
+        "missing_sources": [],
+        "sections": {},
+    }
+
+
+def test_daily_review_lite_route_rejects_invalid_trade_date():
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite?trade_date=20260618")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid trade_date"
+
+
+def test_daily_review_lite_artifact_route_streams_registered_file(monkeypatch, tmp_path):
+    artifact_path = tmp_path / "daily_review.json"
+    artifact_path.write_text('{"status":"ok"}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: {
+            "path": str(artifact_path),
+            "content_type": "application/json",
+            "filename": "daily_review.json",
+            "trade_date": trade_date,
+            "key": key,
+            "run_id": run_id,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/daily-review-lite/artifacts/2026-06-18/daily_review_json?run_id=run-1"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert "filename=\"daily_review.json\"" in response.headers["content-disposition"]
+    assert response.text == '{"status":"ok"}'
+
+
+def test_daily_review_lite_artifact_route_returns_404_for_missing_artifact(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: None,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/2026-06-18/missing_key")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "artifact not found"
+
+
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):
     monkeypatch.setattr(dashboard_app, "load_asset_detail", lambda asset_id: None)
     client = TestClient(dashboard_app.create_app())
