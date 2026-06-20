@@ -97,12 +97,33 @@ Top-level shape:
   "bucket": "trial_list",
   "state": "watch",
   "action": "manual_review",
+  "review_priority": "P1",
   "confidence": "medium",
   "reason": {},
   "evidence": {},
   "source_refs": []
 }
 ```
+
+`review_priority` is one of:
+
+- `P0`: must review before the next open.
+- `P1`: important review item for the next session.
+- `P2`: normal watch item.
+- `P3`: low-priority context item.
+
+Any field named `action` must use a controlled enum, not free text. First-phase values are:
+
+- `no_action`
+- `manual_review`
+- `watch`
+- `add_candidate`
+- `hold`
+- `warning`
+- `reduce_review`
+- `exit_review`
+- `forbidden`
+- `research_required`
 
 `holding_reviews` keeps strategy ownership explicit so short-line, mid-trend, and bottleneck logic do not overwrite each other:
 
@@ -115,11 +136,13 @@ Top-level shape:
   "holding_logic": "",
   "current_state": "healthy",
   "risk_status": "normal",
-  "planned_action": "hold",
+  "action": "hold",
   "exit_condition": "",
   "evidence": {}
 }
 ```
+
+The same `asset_id` may appear multiple times in `holding_reviews` when it is reviewed under different `strategy_id` values. Daily Review v1 must not merge LHB, Mid Trend, and Technical Bottleneck holding logic into a single overwritten row. The natural uniqueness key for later persistence is `(trade_date, strategy_id, asset_id, entry_reason)` or an explicit item id derived from those fields, not just `(trade_date, asset_id)`.
 
 `operator_plan` is manual and non-executing:
 
@@ -156,6 +179,9 @@ Each source records:
 - `status`: `ready`, `missing`, `stale`, `partial`, or `not_configured`
 - `required`: boolean
 - `summary`
+- `freshness`: object with `latest_available_date`, `expected_date`, `is_fresh`, and optional `max_allowed_lag_days`
+- `confidence_impact`: short explanation of how missing or stale data affects conclusions
+- `blocking_modules`: list of review module ids affected by this source, such as `market_review`, `lhb_review`, `mid_trend_review`, or `technical_bottleneck_review`
 - `source_refs`
 
 Missing optional sources downgrade the overall run to `partial`. Missing core scaffolding needed to write the package is `failed`.
@@ -219,7 +245,7 @@ Fields:
 - `candidate_exits`
 - `rebalance_suggestion`
 
-Daily actions are conservative: hold, warning, reduce review, exit review, add candidate, or no operation. The module should avoid high-turnover daily replacement behavior.
+Daily actions are conservative: `hold`, `warning`, `reduce_review`, `exit_review`, `add_candidate`, or `no_action`. The module should avoid high-turnover daily replacement behavior.
 
 ### Technical Bottleneck Review
 
@@ -274,6 +300,32 @@ Avoid:
 - `order_plan`
 - `auto_position_action`
 
+## Operator Plan Template
+
+`operator_plan_template.json` is designed for human backfill after reading the report. It must preserve the source run id and a manual decision lifecycle:
+
+```json
+{
+  "trade_date": "2026-06-20",
+  "created_from_run_id": "daily_review_v1_20260620_2200",
+  "decision_status": "pending",
+  "operator_id": "",
+  "overall_position_bias": "",
+  "must_check_before_open": [],
+  "forbidden_actions": [],
+  "manual_decisions": []
+}
+```
+
+`decision_status` is one of:
+
+- `pending`: generated but not reviewed by the operator.
+- `confirmed`: operator reviewed and confirmed the plan.
+- `skipped`: operator intentionally skipped the plan for the session.
+- `invalidated`: later data or operator judgment invalidated the generated plan.
+
+The template is a manual review artifact only. It must not imply an order, broker action, cash movement, or true position mutation.
+
 ## CLI
 
 Add a CLI equivalent to:
@@ -314,15 +366,26 @@ When `--record-run` is provided, generated artifact paths are recorded in `repor
 
 The Markdown report follows this order:
 
-1. Data readiness
-2. Market review
-3. LHB short-line review
-4. Mid Trend review
-5. Technical Bottleneck review
-6. Holding review
-7. Operator plan
-8. Next-day checklist
-9. Warnings and missing data
+1. Executive Summary
+2. Data readiness
+3. Market review
+4. LHB short-line review
+5. Mid Trend review
+6. Technical Bottleneck review
+7. Holding review
+8. Operator plan
+9. Next-day checklist
+10. Warnings and missing data
+
+The Executive Summary must lead with:
+
+- data status
+- market status
+- LHB conclusion
+- Mid Trend conclusion
+- Technical Bottleneck conclusion
+- `P0` must-review items
+- forbidden actions
 
 It should answer:
 
@@ -351,9 +414,19 @@ First phase tests should cover:
 - Generating Markdown sections in the required order.
 - Generating `partial` status when one optional source is missing.
 - Ensuring operator plan text and JSON remain manual-review-only.
+- Preserving multiple `holding_reviews` rows for the same `asset_id` under different `strategy_id` values.
+- Rejecting or normalizing actions outside the controlled enum.
+- Carrying `review_priority` values through `strategy_items` and surfacing `P0` items in the Markdown Executive Summary.
+- Writing `operator_plan_template.json` with `created_from_run_id` and `decision_status`.
 - Writing the package to the expected directory.
 - Recording `report.report_run` through a mocked store call.
 - CLI argument parsing for module entrypoint and main CLI alias if added.
+- Golden fixture coverage using fixed source payloads and expected outputs:
+  - `tests/fixtures/daily_review_v1/source_payloads/*.json`
+  - `tests/fixtures/daily_review_v1/expected_daily_review.json`
+  - `tests/fixtures/daily_review_v1/expected_daily_review.md`
+
+Golden fixture tests should fail on unintended structure drift in `daily_review.json` or section/content drift in `daily_review.md`. Intentional contract changes must update both the spec and golden expected files in the same change.
 
 ## Future Phases
 
