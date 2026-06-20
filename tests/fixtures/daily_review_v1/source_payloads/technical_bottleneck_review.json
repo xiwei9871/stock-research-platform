@@ -1,0 +1,16 @@
+{
+  "new_observations": [],
+  "upgraded_items": [
+    {
+      "asset_id": "CN:SH:600000",
+      "from_layer": "S2_prepare",
+      "to_layer": "S3_trading_candidate",
+      "action": "watch"
+    }
+  ],
+  "downgraded_items": [],
+  "near_breakout_items": [],
+  "failed_breakout_items": [],
+  "research_required_items": [],
+  "migration_summary": "monitor upgrades only"
+}

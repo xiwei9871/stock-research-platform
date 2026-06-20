@@ -1,0 +1,17 @@
+{
+  "portfolio_health": "stable",
+  "holding_health_list": [
+    {
+      "asset_id": "CN:SH:600000",
+      "state": "healthy",
+      "action": "hold"
+    }
+  ],
+  "topn_relation": "core names remain valid",
+  "top50_relation": "no broad replacement needed",
+  "protection_events": [],
+  "candidate_adds": [],
+  "candidate_reduces": [],
+  "candidate_exits": [],
+  "rebalance_suggestion": "hold core names"
+}

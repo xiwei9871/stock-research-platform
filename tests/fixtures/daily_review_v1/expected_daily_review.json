@@ -1,0 +1,9 @@
+{
+  "trade_date": "2026-06-20",
+  "report_type": "daily_review_v1",
+  "schema_version": "daily_review_v1",
+  "status": "partial",
+  "warnings": [
+    "source_missing:lhb_feed"
+  ]
+}
