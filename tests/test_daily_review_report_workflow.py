@@ -1,12 +1,8 @@
 import json
 from pathlib import Path
 
-from stock_research.reports.daily_review_report_workflow import (
-    ACTION_VALUES,
-    REVIEW_PRIORITY_VALUES,
-    build_daily_review,
-    write_daily_review_package,
-)
+from stock_research.reports.daily_review_contract import ACTION_VALUES, REVIEW_PRIORITY_VALUES
+from stock_research.reports.daily_review_report_workflow import build_daily_review, write_daily_review_package
 
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "daily_review_v1"
