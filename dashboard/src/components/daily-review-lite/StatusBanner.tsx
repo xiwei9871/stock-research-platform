@@ -6,7 +6,9 @@ type StatusBannerProps = {
 
 export function StatusBanner({ payload }: StatusBannerProps) {
   const sourceLabel =
-    payload.selected_run?.source === 'fallback'
+    payload.selected_run === null
+      ? 'No report run selected'
+      : payload.selected_run.source === 'fallback'
       ? 'Loaded from fallback package scan'
       : 'Loaded from report.run';
 

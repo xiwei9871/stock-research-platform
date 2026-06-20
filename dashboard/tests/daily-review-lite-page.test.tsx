@@ -157,14 +157,67 @@ describe('DailyReviewLitePage', () => {
 
   it('renders the empty-state shell with the selected trade date preserved', async () => {
     renderResolvedPage(
-      makeResponse({
+      {
         trade_date: '2026-06-21',
         state: 'empty',
-        selected_run: {
-          ...makeResponse().selected_run!,
-          run_id: 'daily_review_v1:2026-06-21:def456'
-        }
-      }),
+        selected_run: null,
+        summary: null,
+        warnings: [],
+        missing_sources: [],
+        sections: {
+          data_readiness: {
+            status: 'empty',
+            warnings: [],
+            sources: {}
+          },
+          market_review: {
+            status: 'empty',
+            warnings: [],
+            payload: {}
+          },
+          strategy_summaries: {
+            lhb: {
+              strategy_id: 'lhb',
+              status: 'empty',
+              warnings: [],
+              summary: {},
+              top_items: []
+            },
+            mid_trend: {
+              strategy_id: 'mid_trend',
+              status: 'empty',
+              warnings: [],
+              summary: {},
+              top_items: []
+            },
+            technical_bottleneck: {
+              strategy_id: 'technical_bottleneck',
+              status: 'empty',
+              warnings: [],
+              summary: {},
+              top_items: []
+            }
+          },
+          holding_review: {
+            status: 'empty',
+            warnings: [],
+            items: []
+          },
+          operator_plan: {
+            status: 'empty',
+            warnings: [],
+            payload: {}
+          },
+          next_day_checklist: {
+            status: 'empty',
+            warnings: [],
+            must_review_items: [],
+            forbidden_actions: [],
+            data_warnings: []
+          }
+        },
+        artifacts: []
+      },
       '2026-06-21'
     );
 
@@ -174,7 +227,7 @@ describe('DailyReviewLitePage', () => {
 
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-21');
     expect(screen.getByText('No report found for selected date')).toBeInTheDocument();
-    expect(screen.getByText('daily_review_v1:2026-06-21:def456')).toBeInTheDocument();
+    expect(screen.queryByText('Loaded from report.run')).not.toBeInTheDocument();
   });
 
   it('renders the failed-state shell while keeping banner metadata and safe artifacts visible', async () => {
