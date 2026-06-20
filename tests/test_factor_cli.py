@@ -1305,6 +1305,26 @@ def test_cli_accepts_daily_research_report_command():
     assert args.record_run is True
 
 
+def test_cli_accepts_run_daily_review_v1_command():
+    args = build_parser().parse_args(
+        [
+            "run-daily-review-v1",
+            "--trade-date",
+            "2026-06-20",
+            "--output-root",
+            "/tmp/daily_review",
+            "--apply-report-run-schema",
+            "--record-run",
+        ]
+    )
+
+    assert args.command == "run-daily-review-v1"
+    assert args.trade_date == "2026-06-20"
+    assert args.output_root == "/tmp/daily_review"
+    assert args.apply_report_run_schema is True
+    assert args.record_run is True
+
+
 def test_cli_accepts_evaluate_factor_gate_command():
     args = build_parser().parse_args(
         [
