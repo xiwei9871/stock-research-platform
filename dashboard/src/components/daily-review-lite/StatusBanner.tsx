@@ -11,7 +11,7 @@ export function StatusBanner({ payload }: StatusBannerProps) {
       : 'Loaded from report.run';
 
   return (
-    <section aria-label="Review status">
+    <section className="daily-review-lite-banner" aria-label="Review status">
       <p>{sourceLabel}</p>
       <p>State: {payload.state}</p>
       {payload.selected_run?.run_id ? <p>{payload.selected_run.run_id}</p> : null}
@@ -33,6 +33,9 @@ export function StatusBanner({ payload }: StatusBannerProps) {
             >
               {missingSource.source_key ? <p>{missingSource.source_key}</p> : null}
               {missingSource.summary ? <p>{missingSource.summary}</p> : null}
+              {missingSource.affected_sections.length > 0 ? (
+                <p>Affected sections: {missingSource.affected_sections.join(', ')}</p>
+              ) : null}
               {missingSource.confidence_impact ? (
                 <p>Confidence impact: {missingSource.confidence_impact}</p>
               ) : null}

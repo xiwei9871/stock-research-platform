@@ -14,8 +14,12 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready'; payload: DailyReviewLiteResponse | null };
 
-export function DailyReviewLitePage() {
-  const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
+type DailyReviewLitePageProps = {
+  initialTradeDate?: string;
+};
+
+export function DailyReviewLitePage({ initialTradeDate = DEFAULT_TRADE_DATE }: DailyReviewLitePageProps) {
+  const [tradeDate, setTradeDate] = useState(initialTradeDate);
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
@@ -55,61 +59,96 @@ export function DailyReviewLitePage() {
     return <p>No data returned.</p>;
   }
 
+  const content = renderPageContent(loadState.payload);
+
   return (
-    <main>
-      <header>
+    <main className="daily-review-lite-page">
+      <header className="daily-review-lite-header">
         <h1>Daily Review Lite</h1>
         <p>Structured read-only review of the Daily Review v1 report package</p>
       </header>
-      <label>
-        Trade Date
+      <label className="daily-review-lite-date-field">
+        <span>Trade Date</span>
         <input type="date" value={tradeDate} onChange={(event) => setTradeDate(event.target.value)} />
       </label>
       <StatusBanner payload={loadState.payload} />
+      {content}
+    </main>
+  );
+}
+
+function renderPageContent(payload: DailyReviewLiteResponse) {
+  if (payload.state === 'empty') {
+    return (
+      <section className="daily-review-lite-message-card" aria-label="Daily Review Lite state">
+        <p>No report found for selected date</p>
+      </section>
+    );
+  }
+
+  if (payload.state === 'failed') {
+    return (
+      <div className="daily-review-lite-sections">
+        <section className="daily-review-lite-message-card" aria-label="Daily Review Lite state">
+          <p>Package artifacts could not be read or parsed.</p>
+        </section>
+        {payload.artifacts.length > 0 ? (
+          <SectionCard title="Artifacts" status={artifactStatus(payload)}>
+            <ArtifactLinks artifacts={payload.artifacts} />
+          </SectionCard>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="daily-review-lite-sections">
       <SectionCard
         title="Data Readiness"
-        status={loadState.payload.sections.data_readiness.status}
-        warnings={loadState.payload.sections.data_readiness.warnings}
+        status={payload.sections.data_readiness.status}
+        warnings={payload.sections.data_readiness.warnings}
       >
-        <pre>{JSON.stringify(loadState.payload.sections.data_readiness.sources, null, 2)}</pre>
+        <pre>{JSON.stringify(payload.sections.data_readiness.sources, null, 2)}</pre>
       </SectionCard>
       <SectionCard
         title="Market Review"
-        status={loadState.payload.sections.market_review.status}
-        warnings={loadState.payload.sections.market_review.warnings}
+        status={payload.sections.market_review.status}
+        warnings={payload.sections.market_review.warnings}
       >
-        <pre>{JSON.stringify(loadState.payload.sections.market_review.payload, null, 2)}</pre>
+        <pre>{JSON.stringify(payload.sections.market_review.payload, null, 2)}</pre>
       </SectionCard>
-      <SectionCard title="Strategy Summaries" status={strategyStatus(loadState.payload)} warnings={[]}>
-        <StrategySummaryGrid strategySummaries={loadState.payload.sections.strategy_summaries} />
+      <SectionCard title="Strategy Summaries" status={strategyStatus(payload)} warnings={[]}>
+        <div className="daily-review-lite-section-grid">
+          <StrategySummaryGrid strategySummaries={payload.sections.strategy_summaries} />
+        </div>
       </SectionCard>
       <SectionCard
         title="Holding Review"
-        status={loadState.payload.sections.holding_review.status}
-        warnings={loadState.payload.sections.holding_review.warnings}
+        status={payload.sections.holding_review.status}
+        warnings={payload.sections.holding_review.warnings}
       >
-        <pre>{JSON.stringify(loadState.payload.sections.holding_review.items, null, 2)}</pre>
+        <pre>{JSON.stringify(payload.sections.holding_review.items, null, 2)}</pre>
       </SectionCard>
       <SectionCard
         title="Operator Plan"
-        status={loadState.payload.sections.operator_plan.status}
-        warnings={loadState.payload.sections.operator_plan.warnings}
+        status={payload.sections.operator_plan.status}
+        warnings={payload.sections.operator_plan.warnings}
       >
-        <pre>{JSON.stringify(loadState.payload.sections.operator_plan.payload, null, 2)}</pre>
+        <pre>{JSON.stringify(payload.sections.operator_plan.payload, null, 2)}</pre>
       </SectionCard>
       <SectionCard
         title="Next-day Checklist"
-        status={loadState.payload.sections.next_day_checklist.status}
-        warnings={loadState.payload.sections.next_day_checklist.warnings}
+        status={payload.sections.next_day_checklist.status}
+        warnings={payload.sections.next_day_checklist.warnings}
       >
-        <ChecklistTable items={loadState.payload.sections.next_day_checklist.must_review_items} />
-        <pre>{JSON.stringify(loadState.payload.sections.next_day_checklist.forbidden_actions, null, 2)}</pre>
-        <pre>{JSON.stringify(loadState.payload.sections.next_day_checklist.data_warnings, null, 2)}</pre>
+        <ChecklistTable items={payload.sections.next_day_checklist.must_review_items} />
+        <pre>{JSON.stringify(payload.sections.next_day_checklist.forbidden_actions, null, 2)}</pre>
+        <pre>{JSON.stringify(payload.sections.next_day_checklist.data_warnings, null, 2)}</pre>
       </SectionCard>
-      <SectionCard title="Artifacts" status={artifactStatus(loadState.payload)}>
-        <ArtifactLinks artifacts={loadState.payload.artifacts} />
+      <SectionCard title="Artifacts" status={artifactStatus(payload)}>
+        <ArtifactLinks artifacts={payload.artifacts} />
       </SectionCard>
-    </main>
+    </div>
   );
 }
 

@@ -103,9 +103,9 @@ function makeResponse(overrides: Partial<DailyReviewLiteResponse> = {}): DailyRe
   };
 }
 
-function renderResolvedPage(response: DailyReviewLiteResponse | null) {
+function renderResolvedPage(response: DailyReviewLiteResponse | null, initialTradeDate?: string) {
   apiMocks.fetchDailyReviewLite.mockResolvedValueOnce(response);
-  render(<DailyReviewLitePage />);
+  render(<DailyReviewLitePage initialTradeDate={initialTradeDate} />);
 }
 
 afterEach(() => {
@@ -153,6 +153,67 @@ describe('DailyReviewLitePage', () => {
     await waitFor(() => {
       expect(screen.getByText('No data returned.')).toBeInTheDocument();
     });
+  });
+
+  it('renders the empty-state shell with the selected trade date preserved', async () => {
+    renderResolvedPage(
+      makeResponse({
+        trade_date: '2026-06-21',
+        state: 'empty',
+        selected_run: {
+          ...makeResponse().selected_run!,
+          run_id: 'daily_review_v1:2026-06-21:def456'
+        }
+      }),
+      '2026-06-21'
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-21');
+    expect(screen.getByText('No report found for selected date')).toBeInTheDocument();
+    expect(screen.getByText('daily_review_v1:2026-06-21:def456')).toBeInTheDocument();
+  });
+
+  it('renders the failed-state shell while keeping banner metadata and safe artifacts visible', async () => {
+    renderResolvedPage(
+      makeResponse({
+        trade_date: '2026-06-22',
+        state: 'failed',
+        selected_run: {
+          ...makeResponse().selected_run!,
+          run_id: 'daily_review_v1:2026-06-22:ghi789',
+          artifact_health: 'invalid'
+        },
+        artifacts: [
+          {
+            key: 'daily_review_json',
+            label: 'Daily Review JSON',
+            kind: 'json',
+            required: true,
+            available: true,
+            filename: 'daily_review_2026-06-22.json',
+            content_type: 'application/json',
+            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-22&key=daily_review_json'
+          }
+        ]
+      }),
+      '2026-06-22'
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Package artifacts could not be read or parsed.')).toBeInTheDocument();
+    expect(screen.getByText('daily_review_v1:2026-06-22:ghi789')).toBeInTheDocument();
+    expect(screen.getByText('Artifact health: invalid')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
+      'href',
+      '/api/daily-review-lite/artifacts?trade_date=2026-06-22&key=daily_review_json'
+    );
   });
 
   it('renders the fallback source label when the selected run came from fallback scanning', async () => {
@@ -206,6 +267,7 @@ describe('DailyReviewLitePage', () => {
     );
     expect(missingSources[0]).toHaveTextContent('raw_lhb_payload');
     expect(missingSources[0]).toHaveTextContent('LHB payload missing for trade date.');
+    expect(missingSources[0]).toHaveTextContent('Affected sections: lhb, next_day_checklist');
     expect(missingSources[0]).toHaveTextContent('Confidence impact: LHB confidence reduced');
     expect(missingSources[1]).toHaveTextContent('Operator notes package missing.');
     expect(consoleErrorSpy).not.toHaveBeenCalled();

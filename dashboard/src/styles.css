@@ -12,6 +12,128 @@ body {
   margin: 0;
 }
 
+.daily-review-lite-page {
+  display: grid;
+  gap: 20px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.daily-review-lite-header {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-review-lite-header h1,
+.daily-review-lite-header p,
+.daily-review-lite-date-field,
+.daily-review-lite-banner p,
+.daily-review-lite-banner ul,
+.daily-review-lite-banner li,
+.daily-review-lite-message-card p {
+  margin: 0;
+}
+
+.daily-review-lite-date-field {
+  display: grid;
+  gap: 6px;
+  max-width: 220px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.daily-review-lite-date-field input {
+  height: 40px;
+  border: 1px solid #c4cbd6;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #18202a;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.daily-review-lite-banner,
+.daily-review-lite-message-card,
+.daily-review-lite-sections > section {
+  border: 1px solid #d9dee7;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.daily-review-lite-banner {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.daily-review-lite-banner ul {
+  padding-left: 20px;
+}
+
+.daily-review-lite-banner li + li {
+  margin-top: 8px;
+}
+
+.daily-review-lite-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.daily-review-lite-sections > section {
+  padding: 18px 20px;
+}
+
+.daily-review-lite-sections > section > header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.daily-review-lite-sections > section > header h2,
+.daily-review-lite-sections > section > header h3 {
+  margin: 0;
+}
+
+.daily-review-lite-sections > section > pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.daily-review-lite-message-card {
+  padding: 24px 20px;
+}
+
+.daily-review-lite-section-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.daily-review-lite-section-grid > section {
+  border: 1px solid #e5e8ef;
+  border-radius: 12px;
+  background: #fbfcfe;
+  padding: 14px 16px;
+}
+
+@media (max-width: 900px) {
+  .daily-review-lite-page {
+    padding: 16px;
+  }
+
+  .daily-review-lite-sections,
+  .daily-review-lite-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .workbench {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
