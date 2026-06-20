@@ -135,7 +135,19 @@ def load_daily_review_lite(
             "sections": _empty_sections(),
         }
 
-    review = json.loads(core_artifact.read_text(encoding="utf-8"))
+    try:
+        review = json.loads(core_artifact.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "trade_date": trade_date,
+            "state": "failed",
+            "selected_run": selected_run,
+            "summary": None,
+            "warnings": [],
+            "artifacts": artifacts,
+            "missing_sources": [],
+            "sections": _empty_sections(),
+        }
     return _map_daily_review_lite(
         trade_date=trade_date,
         review=review,
@@ -191,7 +203,7 @@ def _select_latest_daily_review_run(
     FROM report.report_run
     WHERE trade_date = %(trade_date)s
       AND report_type = %(report_type)s
-      AND status IN ('success', 'partial')
+      AND status IN ('success', 'partial', 'failed')
     ORDER BY updated_at DESC
     LIMIT 1
     """
@@ -212,7 +224,7 @@ def _select_daily_review_run_by_id(
     FROM report.report_run
     WHERE run_id = %(run_id)s
       AND report_type = %(report_type)s
-      AND status IN ('success', 'partial')
+      AND status IN ('success', 'partial', 'failed')
     LIMIT 1
     """
     params = {"run_id": run_id, "report_type": REPORT_TYPE}
@@ -293,7 +305,7 @@ def _map_daily_review_lite(
     trade_date: str,
     review: dict[str, Any],
     selected_run: dict[str, Any],
-    artifacts: dict[str, dict[str, Any]],
+    artifacts: list[dict[str, Any]],
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
     return {
@@ -311,6 +323,10 @@ def _map_daily_review_lite(
 def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
     warnings = list(review.get("warnings") or [])
     next_day_plan = review.get("next_day_plan") or {}
+    market_review = review.get("market_review") or {}
+    holding_reviews = review.get("holding_reviews") or []
+    operator_plan = review.get("operator_plan") or {}
+    next_day_payload = _map_next_day_checklist(review)
     return {
         "data_readiness": {
             "status": _section_status(review.get("status") or "partial"),
@@ -318,9 +334,9 @@ def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
             "sources": review.get("data_readiness") or {},
         },
         "market_review": {
-            "status": "success",
+            "status": _payload_status(market_review),
             "warnings": [],
-            "payload": review.get("market_review") or {},
+            "payload": market_review,
         },
         "strategy_summaries": {
             "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
@@ -336,19 +352,23 @@ def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
             ),
         },
         "holding_review": {
-            "status": "success",
+            "status": _payload_status(holding_reviews),
             "warnings": [],
-            "items": review.get("holding_reviews") or [],
+            "items": holding_reviews,
         },
         "operator_plan": {
-            "status": "success",
+            "status": _payload_status(operator_plan),
             "warnings": [],
-            "payload": review.get("operator_plan") or {},
+            "payload": operator_plan,
         },
         "next_day_checklist": {
-            "status": "partial" if next_day_plan.get("data_warnings") else "success",
+            "status": (
+                "partial"
+                if next_day_plan.get("data_warnings")
+                else _payload_status(next_day_payload.get("must_review_items") or [])
+            ),
             "warnings": list(next_day_plan.get("data_warnings") or []),
-            **_map_next_day_checklist(review),
+            **next_day_payload,
         },
     }
 
@@ -365,9 +385,10 @@ def _map_strategy_section(
         if item.get("strategy_id") == strategy_id
     ]
     warnings = _strategy_warnings(review, strategy_id)
+    base_status = _payload_status(strategy_summary or summary or top_items)
     return {
         "strategy_id": strategy_id,
-        "status": "partial" if warnings else "success",
+        "status": "partial" if warnings else base_status,
         "warnings": warnings,
         "summary": strategy_summary or summary,
         "top_items": top_items,
@@ -630,6 +651,14 @@ def _artifact_url(trade_date: str, key: str, run_id: str) -> str:
         f"/api/daily-review-lite/artifacts/{trade_date}/{key}"
         f"?run_id={quote(run_id, safe='')}"
     )
+
+
+def _payload_status(payload: Any) -> str:
+    if isinstance(payload, dict):
+        return "success" if payload else "empty"
+    if isinstance(payload, list):
+        return "success" if payload else "empty"
+    return "success" if payload not in (None, "") else "empty"
 
 
 def _normalize_reason_entry(reason: Any) -> dict[str, Any]:

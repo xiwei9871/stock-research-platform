@@ -105,7 +105,7 @@ def test_select_latest_daily_review_run_queries_report_run(monkeypatch):
     assert result == row
     assert "FROM report.report_run" in sql
     assert "report_type = %(report_type)s" in sql
-    assert "status IN ('success', 'partial')" in sql
+    assert "status IN ('success', 'partial', 'failed')" in sql
     assert "ORDER BY updated_at DESC" in sql
     assert params == {"trade_date": "2026-06-20", "report_type": "daily_review_v1"}
 
@@ -309,6 +309,40 @@ def test_load_daily_review_lite_returns_failed_when_core_artifact_missing(
     assert result["sections"]["strategy_summaries"]["lhb"]["status"] == "empty"
 
 
+def test_load_daily_review_lite_returns_failed_when_core_artifact_json_is_invalid(
+    monkeypatch,
+    tmp_path: Path,
+):
+    package_root = tmp_path / "2026-06-20"
+    package_root.mkdir(parents=True, exist_ok=True)
+    (package_root / "daily_review.json").write_text("{not-json", encoding="utf-8")
+    row = {
+        "run_id": "daily_review_v1:2026-06-20:invalid",
+        "trade_date": "2026-06-20",
+        "report_type": "daily_review_v1",
+        "status": "failed",
+        "report_paths": {
+            "package_root": str(package_root),
+            "json_path": str(package_root / "daily_review.json"),
+        },
+        "metadata": {},
+        "updated_at": "2026-06-20T22:00:00Z",
+    }
+    monkeypatch.setattr(
+        "stock_research.dashboard.daily_review_lite._select_latest_daily_review_run",
+        lambda trade_date, service=None: row,
+    )
+
+    result = load_daily_review_lite("2026-06-20", reports_root=tmp_path)
+
+    assert result["state"] == "failed"
+    assert result["selected_run"]["status"] == "failed"
+    assert result["selected_run"]["artifact_health"] == "invalid"
+    assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "healthy"
+    assert result["summary"] is None
+    assert result["sections"]["data_readiness"]["status"] == "empty"
+
+
 def test_load_daily_review_lite_uses_fallback_when_run_id_resolves_to_wrong_trade_date(
     monkeypatch,
     tmp_path: Path,
@@ -334,6 +368,110 @@ def test_load_daily_review_lite_uses_fallback_when_run_id_resolves_to_wrong_trad
     assert result["state"] == "partial"
     assert result["selected_run"]["source"] == "fallback"
     assert result["selected_run"]["run_id"] == "fallback:2026-06-20"
+
+
+def test_resolve_daily_review_lite_artifact_returns_controlled_metadata(monkeypatch, tmp_path: Path):
+    review = _load_fixture_review()
+    package_root = tmp_path / "2026-06-20"
+    _write_package(package_root, review)
+    row = {
+        "run_id": "daily_review_v1:2026-06-20:artifact",
+        "trade_date": "2026-06-20",
+        "report_type": "daily_review_v1",
+        "status": "partial",
+        "report_paths": {
+            "package_root": str(package_root),
+            "json_path": str(package_root / "daily_review.json"),
+            "markdown_path": str(package_root / "daily_review.md"),
+        },
+        "metadata": {},
+        "updated_at": "2026-06-20T22:00:00Z",
+    }
+    monkeypatch.setattr(
+        "stock_research.dashboard.daily_review_lite._select_latest_daily_review_run",
+        lambda trade_date, service=None: row,
+    )
+
+    result = resolve_daily_review_lite_artifact("2026-06-20", "daily_review_json", reports_root=tmp_path)
+
+    assert result == {
+        "key": "daily_review_json",
+        "label": "Daily Review JSON",
+        "kind": "json",
+        "content_type": "application/json",
+        "required": True,
+        "path": str(package_root / "daily_review.json"),
+        "filename": "daily_review.json",
+        "trade_date": "2026-06-20",
+        "run_id": "daily_review_v1:2026-06-20:artifact",
+        "source": "report_run",
+    }
+
+
+def test_resolve_daily_review_lite_artifact_returns_none_when_registered_file_missing(
+    monkeypatch,
+    tmp_path: Path,
+):
+    package_root = tmp_path / "2026-06-20"
+    package_root.mkdir(parents=True, exist_ok=True)
+    row = {
+        "run_id": "daily_review_v1:2026-06-20:missing-artifact",
+        "trade_date": "2026-06-20",
+        "report_type": "daily_review_v1",
+        "status": "partial",
+        "report_paths": {
+            "package_root": str(package_root),
+            "json_path": str(package_root / "daily_review.json"),
+        },
+        "metadata": {},
+        "updated_at": "2026-06-20T22:00:00Z",
+    }
+    monkeypatch.setattr(
+        "stock_research.dashboard.daily_review_lite._select_latest_daily_review_run",
+        lambda trade_date, service=None: row,
+    )
+
+    result = resolve_daily_review_lite_artifact("2026-06-20", "daily_review_json", reports_root=tmp_path)
+
+    assert result is None
+
+
+def test_resolve_daily_review_lite_artifact_uses_explicit_run_id(monkeypatch, tmp_path: Path):
+    review = _load_fixture_review()
+    package_root = tmp_path / "2026-06-20"
+    _write_package(package_root, review)
+    calls = []
+
+    def _fake_select(run_id, service=None):
+        calls.append(run_id)
+        return {
+            "run_id": run_id,
+            "trade_date": "2026-06-20",
+            "report_type": "daily_review_v1",
+            "status": "failed",
+            "report_paths": {
+                "package_root": str(package_root),
+                "json_path": str(package_root / "daily_review.json"),
+            },
+            "metadata": {},
+            "updated_at": "2026-06-20T22:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        "stock_research.dashboard.daily_review_lite._select_daily_review_run_by_id",
+        _fake_select,
+    )
+
+    result = resolve_daily_review_lite_artifact(
+        "2026-06-20",
+        "daily_review_json",
+        run_id="daily_review_v1:2026-06-20:explicit",
+        reports_root=tmp_path,
+    )
+
+    assert calls == ["daily_review_v1:2026-06-20:explicit"]
+    assert result["run_id"] == "daily_review_v1:2026-06-20:explicit"
+    assert result["source"] == "report_run"
 
 
 def test_resolve_daily_review_lite_artifact_rejects_unknown_key(monkeypatch, tmp_path: Path):
