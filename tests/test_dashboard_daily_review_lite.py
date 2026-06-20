@@ -114,6 +114,7 @@ def test_load_daily_review_lite_returns_empty_when_no_run_or_fallback(monkeypatc
     assert result["state"] == "empty"
     assert result["selected_run"] is None
     assert result["artifacts"] == {}
+    assert result["sections"] == {}
 
 
 def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp_path: Path):
@@ -152,8 +153,10 @@ def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp
         "metadata": {
             "missing_sources": [
                 {
-                    "source": "raw_lhb_payload",
+                    "source_key": "raw_lhb_payload",
+                    "summary": "LHB payload missing for trade date.",
                     "affected_sections": ["lhb", "next_day_plan"],
+                    "confidence_impact": "LHB conclusion confidence reduced",
                 }
             ]
         },
@@ -170,16 +173,31 @@ def test_load_daily_review_lite_maps_partial_report_run_payload(monkeypatch, tmp
     assert result["selected_run"]["source"] == "report_run"
     assert result["selected_run"]["artifact_health"] == "healthy"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "healthy"
-    assert result["lhb"]["top_items"][0]["asset_id"] == "CN:SH:600000"
-    assert result["next_day_checklist"]["must_review_items"][0]["reasons"] == [
+    assert result["summary"]["status"] == "partial"
+    assert result["warnings"] == ["source_missing:lhb_feed"]
+    assert result["sections"]["strategy_summaries"]["lhb"]["top_items"][0]["asset_id"] == "CN:SH:600000"
+    assert result["sections"]["next_day_checklist"]["must_review_items"][0]["reasons"] == [
         {
             "strategy_id": "lhb",
             "summary": "bank rotation leader",
             "detail": "LHB signal still needs opening-strength confirmation.",
         }
     ]
-    assert result["missing_sources"][0]["affected_sections"] == ["lhb", "next_day_plan"]
+    assert result["sections"]["next_day_checklist"]["must_review_items"][0]["actions"] == [
+        "manual_review"
+    ]
+    assert (
+        result["sections"]["next_day_checklist"]["must_review_items"][0]["review_priority"] == "P0"
+    )
+    assert result["missing_sources"][0] == {
+        "source_key": "raw_lhb_payload",
+        "summary": "LHB payload missing for trade date.",
+        "affected_sections": ["lhb", "next_day_plan"],
+        "confidence_impact": "LHB conclusion confidence reduced",
+    }
+    assert result["artifacts"]["daily_review_json"]["kind"] == "json"
     assert result["artifacts"]["daily_review_json"]["available"] is True
+    assert result["artifacts"]["daily_review_json"]["filename"] == "daily_review.json"
     assert "path" not in result["artifacts"]["daily_review_json"]
 
 
@@ -195,9 +213,12 @@ def test_load_daily_review_lite_marks_fallback_source(monkeypatch, tmp_path: Pat
     result = load_daily_review_lite("2026-06-20", reports_root=tmp_path)
 
     assert result["state"] == "partial"
-    assert result["selected_run"]["source"] == "fallback_scan"
+    assert result["selected_run"]["source"] == "fallback"
     assert result["selected_run"]["status"] == "partial"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "healthy"
+    assert result["sections"]["strategy_summaries"]["technical_bottleneck"]["top_items"][0][
+        "asset_id"
+    ] == "CN:SH:600000"
 
 
 def test_load_daily_review_lite_returns_failed_when_core_artifact_missing(
@@ -230,6 +251,26 @@ def test_load_daily_review_lite_returns_failed_when_core_artifact_missing(
     assert result["state"] == "failed"
     assert result["selected_run"]["artifact_health"] == "missing"
     assert result["selected_run"]["artifact_health_detail"]["daily_review_json"] == "missing"
+
+
+def test_load_daily_review_lite_ignores_run_id_from_wrong_trade_date(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "stock_research.dashboard.daily_review_lite._select_daily_review_run_by_id",
+        lambda run_id, service=None: {
+            "run_id": run_id,
+            "trade_date": "2026-06-19",
+            "report_type": "daily_review_v1",
+            "status": "success",
+            "report_paths": {},
+            "metadata": {},
+            "updated_at": "2026-06-19T22:00:00Z",
+        },
+    )
+
+    result = load_daily_review_lite("2026-06-20", run_id="daily_review_v1:2026-06-19:abc", reports_root=tmp_path)
+
+    assert result["state"] == "empty"
+    assert result["selected_run"] is None
 
 
 def test_resolve_daily_review_lite_artifact_rejects_unknown_key(monkeypatch, tmp_path: Path):

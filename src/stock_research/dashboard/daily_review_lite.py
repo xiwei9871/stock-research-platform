@@ -89,8 +89,11 @@ def load_daily_review_lite(
             "trade_date": trade_date,
             "state": "empty",
             "selected_run": None,
+            "summary": {},
+            "warnings": [],
             "artifacts": {},
             "missing_sources": [],
+            "sections": {},
         }
 
     artifact_detail, artifact_files = _artifact_health(selected_package["report_paths"])
@@ -108,10 +111,11 @@ def load_daily_review_lite(
         key: {
             "key": key,
             "label": spec["label"],
-            "format": spec["format"],
-            "content_type": spec["content_type"],
+            "kind": spec["format"],
             "required": spec["required"],
             "available": artifact_detail[key] == "healthy",
+            "filename": artifact_files[key].name if artifact_files[key] is not None else None,
+            "content_type": spec["content_type"],
         }
         for key, spec in _ARTIFACT_REGISTRY.items()
     }
@@ -122,8 +126,11 @@ def load_daily_review_lite(
             "trade_date": trade_date,
             "state": "failed",
             "selected_run": selected_run,
+            "summary": {},
+            "warnings": [],
             "artifacts": artifacts,
             "missing_sources": [],
+            "sections": {},
         }
 
     review = json.loads(core_artifact.read_text(encoding="utf-8"))
@@ -161,7 +168,7 @@ def resolve_daily_review_lite_artifact(
     return {
         "key": key,
         "label": spec["label"],
-        "format": spec["format"],
+        "kind": spec["format"],
         "content_type": spec["content_type"],
         "required": spec["required"],
         "path": str(artifact_path),
@@ -226,6 +233,8 @@ def _resolve_package(
         else _select_latest_daily_review_run(trade_date, service=service)
     )
     if row is not None:
+        if str(row.get("trade_date"))[:10] != trade_date:
+            return None
         return {
             "run_id": str(row["run_id"]),
             "status": str(row.get("status") or "partial"),
@@ -272,7 +281,7 @@ def _scan_fallback_package(trade_date: str, *, reports_root: str | Path) -> dict
         "updated_at": None,
         "report_paths": known_paths,
         "metadata": {},
-        "source": "fallback_scan",
+        "source": "fallback",
     }
 
 
@@ -288,20 +297,26 @@ def _map_daily_review_lite(
         "trade_date": trade_date,
         "state": _top_level_state(selected_run["status"]),
         "selected_run": selected_run,
+        "summary": _build_summary(review, selected_run),
+        "warnings": list(review.get("warnings") or []),
+        "sections": {
+            "strategy_summaries": {
+                "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
+                "mid_trend": _map_strategy_section(
+                    review,
+                    "mid_trend",
+                    review.get("mid_trend_review") or {},
+                ),
+                "technical_bottleneck": _map_strategy_section(
+                    review,
+                    "technical_bottleneck",
+                    review.get("technical_bottleneck_review") or {},
+                ),
+            },
+            "next_day_checklist": _map_next_day_checklist(review),
+        },
         "artifacts": artifacts,
         "missing_sources": _map_missing_sources(review, metadata),
-        "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
-        "mid_trend": _map_strategy_section(
-            review,
-            "mid_trend",
-            review.get("mid_trend_review") or {},
-        ),
-        "technical_bottleneck": _map_strategy_section(
-            review,
-            "technical_bottleneck",
-            review.get("technical_bottleneck_review") or {},
-        ),
-        "next_day_checklist": _map_next_day_checklist(review),
     }
 
 
@@ -415,8 +430,10 @@ def _map_missing_sources(review: dict[str, Any], metadata: dict[str, Any]) -> li
     if isinstance(missing_sources, list):
         return [
             {
-                "source": item.get("source"),
+                "source_key": item.get("source_key") or item.get("source"),
+                "summary": item.get("summary"),
                 "affected_sections": list(item.get("affected_sections") or []),
+                "confidence_impact": item.get("confidence_impact"),
             }
             for item in missing_sources
             if isinstance(item, dict)
@@ -426,7 +443,14 @@ def _map_missing_sources(review: dict[str, Any], metadata: dict[str, Any]) -> li
         status = str((details or {}).get("status") or "").lower()
         if status == "missing":
             blocking_modules = list((details or {}).get("blocking_modules") or [])
-            mapped.append({"source": source, "affected_sections": blocking_modules})
+            mapped.append(
+                {
+                    "source_key": source,
+                    "summary": (details or {}).get("summary"),
+                    "affected_sections": blocking_modules,
+                    "confidence_impact": (details or {}).get("confidence_impact"),
+                }
+            )
     return mapped
 
 
@@ -444,7 +468,7 @@ def _artifact_health_state(detail: dict[str, str]) -> str:
     if detail.get("daily_review_json") != "healthy":
         return "missing"
     if any(value != "healthy" for value in detail.values()):
-        return "degraded"
+        return "invalid"
     return "healthy"
 
 
@@ -478,6 +502,18 @@ def _top_level_state(status: str) -> str:
     if normalized == "failed":
         return "failed"
     return "empty"
+
+
+def _build_summary(review: dict[str, Any], selected_run: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": selected_run["status"],
+        "report_type": REPORT_TYPE,
+        "warning_count": len(review.get("warnings") or []),
+        "must_review_count": len(
+            ((review.get("next_day_plan") or {}).get("must_review_items") or [])
+        ),
+        "missing_source_count": len(review.get("warnings") or []),
+    }
 
 
 def _normalize_reason_entry(reason: Any) -> dict[str, Any]:
