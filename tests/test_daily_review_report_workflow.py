@@ -140,6 +140,20 @@ def test_build_daily_review_includes_non_lhb_p0_items_in_operator_plan():
     )
 
     assert result["operator_plan"]["must_check_before_open"] == ["CN:SZ:000001"]
+    assert result["next_day_plan"]["must_review_items"] == [
+        {
+            "asset_id": "CN:SZ:000001",
+            "ts_code": "000001.SZ",
+            "stock_name": "平安银行",
+            "strategy_ids": ["mid_trend"],
+            "reasons": [
+                {
+                    "strategy_id": "mid_trend",
+                    "reason": {"setup": "fresh mid-trend breakout"},
+                }
+            ],
+        }
+    ]
 
 
 def test_write_daily_review_package_carries_non_lhb_p0_into_operator_plan_template(tmp_path):
@@ -177,6 +191,51 @@ def test_write_daily_review_package_carries_non_lhb_p0_into_operator_plan_templa
         "forbidden_actions": [],
         "manual_decisions": [],
     }
+
+
+def test_build_daily_review_deduplicates_next_day_items_and_keeps_strategy_sources():
+    result = _build_fixture_review(
+        lhb_review={
+            "forbidden_actions": [],
+            "lhb_watchlist": [
+                {
+                    "asset_id": "CN:SH:600000",
+                    "ts_code": "600000.SH",
+                    "stock_name": "浦发银行",
+                    "state": "watch",
+                    "action": "manual_review",
+                    "review_priority": "P0",
+                    "reason": {"setup": "shortline rebound"},
+                }
+            ],
+        },
+        mid_trend_review={
+            "candidate_adds": [
+                {
+                    "asset_id": "CN:SH:600000",
+                    "ts_code": "600000.SH",
+                    "stock_name": "浦发银行",
+                    "state": "watch",
+                    "action": "add_candidate",
+                    "review_priority": "P0",
+                    "reason": {"setup": "trend continuation"},
+                }
+            ],
+        },
+    )
+
+    assert result["next_day_plan"]["must_review_items"] == [
+        {
+            "asset_id": "CN:SH:600000",
+            "ts_code": "600000.SH",
+            "stock_name": "浦发银行",
+            "strategy_ids": ["lhb", "mid_trend"],
+            "reasons": [
+                {"strategy_id": "lhb", "reason": {"setup": "shortline rebound"}},
+                {"strategy_id": "mid_trend", "reason": {"setup": "trend continuation"}},
+            ],
+        }
+    ]
 
 
 def test_build_daily_review_marks_empty_readiness_as_partial():

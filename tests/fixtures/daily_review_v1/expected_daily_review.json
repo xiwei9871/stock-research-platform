@@ -240,7 +240,22 @@
   },
   "next_day_plan": {
     "must_review_items": [
-      "CN:SH:600000"
+      {
+        "asset_id": "CN:SH:600000",
+        "ts_code": "600000.SH",
+        "stock_name": "浦发银行",
+        "strategy_ids": [
+          "lhb"
+        ],
+        "reasons": [
+          {
+            "strategy_id": "lhb",
+            "reason": {
+              "setup": "bank rotation leader"
+            }
+          }
+        ]
+      }
     ],
     "forbidden_actions": [
       "chase stale LHB names"

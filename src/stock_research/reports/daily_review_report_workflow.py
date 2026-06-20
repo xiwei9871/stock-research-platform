@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -317,16 +318,49 @@ def _build_operator_plan(
 
 
 def _build_next_day_plan(review: dict[str, Any]) -> dict[str, Any]:
-    p0_items = [
-        item["asset_id"]
-        for item in review["strategy_items"]
-        if item.get("review_priority") == "P0"
-    ]
+    p0_items = _build_must_review_items(review["strategy_items"])
     return {
         "must_review_items": p0_items,
         "forbidden_actions": list(review["operator_plan"].get("forbidden_actions") or []),
         "data_warnings": list(review.get("warnings") or []),
     }
+
+
+def _build_must_review_items(strategy_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for item in strategy_items:
+        if item.get("review_priority") != "P0":
+            continue
+        asset_id = str(item.get("asset_id") or "").strip()
+        ts_code = str(item.get("ts_code") or "").strip()
+        stock_name = str(item.get("stock_name") or "").strip()
+        group_key = asset_id or ts_code
+        if not group_key:
+            continue
+
+        entry = grouped.get(group_key)
+        if entry is None:
+            entry = {
+                "asset_id": asset_id,
+                "ts_code": ts_code,
+                "stock_name": stock_name,
+                "strategy_ids": [],
+                "reasons": [],
+            }
+            grouped[group_key] = entry
+            order.append(group_key)
+
+        strategy_id = str(item.get("strategy_id") or "").strip()
+        if strategy_id and strategy_id not in entry["strategy_ids"]:
+            entry["strategy_ids"].append(strategy_id)
+        entry["reasons"].append(
+            {
+                "strategy_id": strategy_id,
+                "reason": item.get("reason", {}),
+            }
+        )
+    return [grouped[key] for key in order]
 
 
 def _build_manifest(review: dict[str, Any]) -> dict[str, Any]:
@@ -377,11 +411,7 @@ def _render_daily_review_markdown(review: dict[str, Any]) -> str:
     lhb_review = review["lhb_review"]
     mid_trend_review = review["mid_trend_review"]
     technical_review = review["technical_bottleneck_review"]
-    p0_items = [
-        item["asset_id"]
-        for item in review["strategy_items"]
-        if item.get("review_priority") == "P0"
-    ]
+    p0_items = review["next_day_plan"].get("must_review_items") or []
     forbidden_actions = list(review["operator_plan"].get("forbidden_actions") or [])
 
     lines = [
@@ -397,7 +427,7 @@ def _render_daily_review_markdown(review: dict[str, Any]) -> str:
             "- Technical Bottleneck conclusion: "
             f"{review['strategy_summaries']['technical_bottleneck'].get('conclusion', 'manual_review')}"
         ),
-        f"- P0 must-review: {', '.join(p0_items) if p0_items else 'none'}",
+        f"- P0 must-review: {_format_must_review_items(p0_items)}",
         f"- Forbidden actions: {', '.join(forbidden_actions) if forbidden_actions else 'none'}",
         "",
         "## Data Readiness",
@@ -471,7 +501,7 @@ def _render_daily_review_markdown(review: dict[str, Any]) -> str:
             "",
             (
                 "- Must review items: "
-                f"{', '.join(review['next_day_plan'].get('must_review_items') or []) or 'none'}"
+                f"{_format_must_review_items(review['next_day_plan'].get('must_review_items') or [])}"
             ),
             (
                 "- Data warnings: "
@@ -492,11 +522,22 @@ def _render_daily_review_markdown(review: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _format_must_review_items(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "none"
+    labels: list[str] = []
+    for item in items:
+        asset_id = str(item.get("asset_id") or "").strip()
+        ts_code = str(item.get("ts_code") or "").strip()
+        labels.append(asset_id or ts_code or "unknown")
+    return ", ".join(labels)
+
+
 def _write_json(path: str | Path, payload: Any) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default) + "\n",
         encoding="utf-8",
     )
 
@@ -505,3 +546,11 @@ def _write_text(path: str | Path, content: str) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Path):
+        return str(value)
+    raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")

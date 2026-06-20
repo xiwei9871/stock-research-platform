@@ -115,6 +115,18 @@ def test_run_daily_review_report_rejects_placeholder_loader_bundle(monkeypatch, 
         write_called = True
         return {}
 
+    monkeypatch.setattr(
+        cli,
+        "load_daily_review_inputs",
+        lambda trade_date: {
+            "data_readiness": {},
+            "market_review": {},
+            "lhb_review": {},
+            "mid_trend_review": {},
+            "technical_bottleneck_review": {},
+            "holding_reviews": [],
+        },
+    )
     monkeypatch.setattr(cli, "build_daily_review", fake_build_daily_review)
     monkeypatch.setattr(cli, "write_daily_review_package", fake_write_daily_review_package)
 
@@ -126,6 +138,25 @@ def test_run_daily_review_report_rejects_placeholder_loader_bundle(monkeypatch, 
 
     assert build_called is False
     assert write_called is False
+
+
+def test_run_daily_review_report_rejects_non_dict_holding_review_rows(monkeypatch, tmp_path):
+    cli = _import_cli()
+
+    monkeypatch.setattr(
+        cli,
+        "load_daily_review_inputs",
+        lambda trade_date: {
+            **_fixture_inputs(),
+            "holding_reviews": ["bad-row"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="holding_reviews rows must be dict objects"):
+        cli.run_daily_review_report(
+            trade_date="2026-06-20",
+            output_root=tmp_path,
+        )
 
 
 def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, tmp_path):
