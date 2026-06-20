@@ -20,8 +20,23 @@ export function StatusBanner({ payload }: StatusBannerProps) {
       ) : null}
       {payload.warnings.length > 0 ? (
         <ul aria-label="Warnings">
-          {payload.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
+          {payload.warnings.map((warning, index) => (
+            <li key={`${warning}-${index}`}>{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+      {payload.missing_sources.length > 0 ? (
+        <ul aria-label="Missing sources">
+          {payload.missing_sources.map((missingSource, index) => (
+            <li
+              key={`${missingSource.source_key ?? 'unknown'}-${missingSource.summary ?? 'no-summary'}-${index}`}
+            >
+              {missingSource.source_key ? <p>{missingSource.source_key}</p> : null}
+              {missingSource.summary ? <p>{missingSource.summary}</p> : null}
+              {missingSource.confidence_impact ? (
+                <p>Confidence impact: {missingSource.confidence_impact}</p>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : null}

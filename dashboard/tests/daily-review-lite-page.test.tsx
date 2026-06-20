@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyReviewLiteResponse } from '../src/api/types';
 import { DailyReviewLitePage } from '../src/pages/DailyReviewLitePage';
@@ -20,7 +20,7 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
-function makeResponse(): DailyReviewLiteResponse {
+function makeResponse(overrides: Partial<DailyReviewLiteResponse> = {}): DailyReviewLiteResponse {
   return {
     trade_date: '2026-06-20',
     state: 'ready',
@@ -98,8 +98,14 @@ function makeResponse(): DailyReviewLiteResponse {
         data_warnings: []
       }
     },
-    artifacts: []
+    artifacts: [],
+    ...overrides
   };
+}
+
+function renderResolvedPage(response: DailyReviewLiteResponse | null) {
+  apiMocks.fetchDailyReviewLite.mockResolvedValueOnce(response);
+  render(<DailyReviewLitePage />);
 }
 
 afterEach(() => {
@@ -129,5 +135,79 @@ describe('DailyReviewLitePage', () => {
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-20');
     expect(screen.getByText('Loaded from report.run')).toBeInTheDocument();
     expect(screen.getByText('daily_review_v1:2026-06-20:abc123')).toBeInTheDocument();
+  });
+
+  it('renders an error state when the fetch rejects', async () => {
+    apiMocks.fetchDailyReviewLite.mockRejectedValueOnce(new Error('network offline'));
+
+    render(<DailyReviewLitePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load Daily Review Lite: network offline')).toBeInTheDocument();
+    });
+  });
+
+  it('renders a null payload fallback when no data is returned', async () => {
+    renderResolvedPage(null);
+
+    await waitFor(() => {
+      expect(screen.getByText('No data returned.')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the fallback source label when the selected run came from fallback scanning', async () => {
+    renderResolvedPage(
+      makeResponse({
+        selected_run: {
+          ...makeResponse().selected_run!,
+          source: 'fallback'
+        }
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Loaded from fallback package scan')).toBeInTheDocument();
+    });
+  });
+
+  it('renders warnings and missing sources in a structured banner without duplicate key warnings', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderResolvedPage(
+      makeResponse({
+        warnings: ['source_missing:lhb_feed', 'source_missing:lhb_feed'],
+        missing_sources: [
+          {
+            source_key: 'raw_lhb_payload',
+            summary: 'LHB payload missing for trade date.',
+            affected_sections: ['lhb', 'next_day_checklist'],
+            confidence_impact: 'LHB confidence reduced'
+          },
+          {
+            source_key: null,
+            summary: 'Operator notes package missing.',
+            affected_sections: [],
+            confidence_impact: null
+          }
+        ]
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    });
+
+    const warnings = within(screen.getByRole('list', { name: 'Warnings' })).getAllByRole('listitem');
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toHaveTextContent('source_missing:lhb_feed');
+    expect(warnings[1]).toHaveTextContent('source_missing:lhb_feed');
+
+    const missingSources = within(screen.getByRole('list', { name: 'Missing sources' })).getAllByRole(
+      'listitem'
+    );
+    expect(missingSources[0]).toHaveTextContent('raw_lhb_payload');
+    expect(missingSources[0]).toHaveTextContent('LHB payload missing for trade date.');
+    expect(missingSources[0]).toHaveTextContent('Confidence impact: LHB confidence reduced');
+    expect(missingSources[1]).toHaveTextContent('Operator notes package missing.');
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 });
