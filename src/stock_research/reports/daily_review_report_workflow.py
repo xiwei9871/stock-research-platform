@@ -25,14 +25,11 @@ def build_daily_review(
     holding_reviews: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
     readiness_payload = deepcopy(data_readiness or {})
-    market_payload = _normalize_contract_fields(deepcopy(market_review or {}))
-    lhb_payload = _normalize_contract_fields(deepcopy(lhb_review or {}))
-    mid_trend_payload = _normalize_contract_fields(deepcopy(mid_trend_review or {}))
-    technical_payload = _normalize_contract_fields(deepcopy(technical_bottleneck_review or {}))
-    holding_payload = [
-        _normalize_contract_fields(deepcopy(item))
-        for item in (holding_reviews or [])
-    ]
+    market_payload = deepcopy(market_review or {})
+    lhb_payload = deepcopy(lhb_review or {})
+    mid_trend_payload = deepcopy(mid_trend_review or {})
+    technical_payload = deepcopy(technical_bottleneck_review or {})
+    holding_payload = [deepcopy(item) for item in (holding_reviews or [])]
 
     warnings = _collect_readiness_warnings(readiness_payload)
     review = {
@@ -132,22 +129,6 @@ def write_daily_review_package(
         )
 
     return report_paths
-
-
-def _normalize_contract_fields(value: Any) -> Any:
-    if isinstance(value, dict):
-        normalized: dict[str, Any] = {}
-        for key, item in value.items():
-            if key == "action":
-                normalized[key] = normalize_action(item)
-            elif key == "review_priority":
-                normalized[key] = normalize_review_priority(item)
-            else:
-                normalized[key] = _normalize_contract_fields(item)
-        return normalized
-    if isinstance(value, list):
-        return [_normalize_contract_fields(item) for item in value]
-    return value
 
 
 def _normalize_holding_reviews(
