@@ -210,4 +210,140 @@ describe('DailyReviewLitePage', () => {
     expect(missingSources[1]).toHaveTextContent('Operator notes package missing.');
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
+
+  it('renders the fixed section stack, strategy cards, checklist details, artifacts, and local warnings for a partial payload', async () => {
+    renderResolvedPage(
+      makeResponse({
+        state: 'partial',
+        selected_run: {
+          ...makeResponse().selected_run!,
+          source: 'fallback',
+          status: 'partial'
+        },
+        sections: {
+          data_readiness: {
+            status: 'partial',
+            warnings: ['raw_lhb_payload missing'],
+            sources: {
+              raw_lhb_payload: {
+                available: false
+              }
+            }
+          },
+          market_review: {
+            status: 'success',
+            warnings: [],
+            payload: {
+              breadth: 'mixed'
+            }
+          },
+          strategy_summaries: {
+            lhb: {
+              strategy_id: 'lhb',
+              status: 'partial',
+              warnings: ['LHB feed incomplete'],
+              summary: {
+                conclusion: 'observe'
+              },
+              top_items: []
+            },
+            mid_trend: {
+              strategy_id: 'mid_trend',
+              status: 'success',
+              warnings: [],
+              summary: {
+                conclusion: 'hold'
+              },
+              top_items: []
+            },
+            technical_bottleneck: {
+              strategy_id: 'technical_bottleneck',
+              status: 'success',
+              warnings: [],
+              summary: {
+                conclusion: 'watch'
+              },
+              top_items: []
+            }
+          },
+          holding_review: {
+            status: 'empty',
+            warnings: ['no active holdings snapshot'],
+            items: []
+          },
+          operator_plan: {
+            status: 'success',
+            warnings: [],
+            payload: {
+              notes: ['reduce turnover']
+            }
+          },
+          next_day_checklist: {
+            status: 'partial',
+            warnings: ['one checklist source delayed'],
+            must_review_items: [
+              {
+                asset_id: '600000.SH',
+                ts_code: '600000.SH',
+                stock_name: '浦发银行',
+                strategy_ids: ['mid_trend'],
+                reasons: [
+                  {
+                    strategy_id: 'mid_trend',
+                    summary: 'Earnings gap needs confirmation',
+                    detail: 'watch for volume follow-through'
+                  }
+                ],
+                actions: ['Review opening auction', 'Confirm breakout holds'],
+                review_priority: 'high'
+              }
+            ],
+            forbidden_actions: ['Do not add new positions without confirmation'],
+            data_warnings: ['operator notes pending']
+          }
+        },
+        artifacts: [
+          {
+            key: 'daily_review_json',
+            label: 'Daily Review JSON',
+            kind: 'json',
+            required: true,
+            available: true,
+            filename: 'daily_review_2026-06-20.json',
+            content_type: 'application/json',
+            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+          }
+        ]
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Loaded from fallback package scan')).toBeInTheDocument();
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
+    expect(headings).toEqual([
+      'Data Readiness',
+      'Market Review',
+      'Strategy Summaries',
+      'Holding Review',
+      'Operator Plan',
+      'Next-day Checklist',
+      'Artifacts'
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'LHB' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mid Trend' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Technical Bottleneck' })).toBeInTheDocument();
+    expect(screen.getByText('浦发银行')).toBeInTheDocument();
+    expect(screen.getByText('watch for volume follow-through')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
+      'href',
+      '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+    );
+    expect(screen.getByText('raw_lhb_payload missing')).toBeInTheDocument();
+    expect(screen.getByText('LHB feed incomplete')).toBeInTheDocument();
+  });
 });
