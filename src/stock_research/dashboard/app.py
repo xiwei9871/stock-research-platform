@@ -106,7 +106,9 @@ def create_app() -> FastAPI:
         validated_trade_date = validate_trade_date(trade_date)
         try:
             artifact = resolve_daily_review_lite_artifact(validated_trade_date, key, run_id=run_id)
-        except ValueError:
+        except ValueError as exc:
+            if str(exc) != f"unknown artifact key: {key}":
+                raise
             artifact = None
         if artifact is None:
             raise HTTPException(status_code=404, detail="artifact not found")

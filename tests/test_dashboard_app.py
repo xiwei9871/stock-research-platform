@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
 
@@ -202,6 +203,40 @@ def test_daily_review_lite_artifact_route_streams_registered_file(monkeypatch, t
     assert response.headers["content-type"] == "application/json"
     assert "filename=\"daily_review.json\"" in response.headers["content-disposition"]
     assert response.text == '{"status":"ok"}'
+
+
+def test_daily_review_lite_artifact_route_rejects_invalid_trade_date():
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/20260618/daily_review_json")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid trade_date"
+
+
+def test_daily_review_lite_artifact_route_returns_404_for_unknown_artifact_key(monkeypatch):
+    def fake_resolve(trade_date, key, run_id=None):
+        raise ValueError(f"unknown artifact key: {key}")
+
+    monkeypatch.setattr(dashboard_app, "resolve_daily_review_lite_artifact", fake_resolve)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/2026-06-18/missing_key")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "artifact not found"
+
+
+def test_daily_review_lite_artifact_route_does_not_mask_unexpected_value_error(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: (_ for _ in ()).throw(ValueError("broken metadata")),
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    with pytest.raises(ValueError, match="broken metadata"):
+        client.get("/api/daily-review-lite/artifacts/2026-06-18/daily_review_json")
 
 
 def test_daily_review_lite_artifact_route_returns_404_for_missing_artifact(monkeypatch):
