@@ -5794,6 +5794,56 @@ def test_daily_research_report_cli_prints_report_paths(monkeypatch, capsys, tmp_
     ]
 
 
+def test_run_daily_review_v1_main_cli_alias_forwards_args_and_prints_report_paths(
+    monkeypatch, capsys, tmp_path
+):
+    import sys
+
+    import stock_research.cli as cli
+
+    calls = []
+    monkeypatch.setattr(
+        cli,
+        "run_daily_review_report",
+        lambda **kwargs: calls.append(kwargs)
+        or {
+            "report_paths": {
+                "json_path": tmp_path / "daily_review.json",
+                "markdown_path": tmp_path / "daily_review.md",
+                "manifest_path": tmp_path / "manifest.json",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "stock-research",
+            "run-daily-review-v1",
+            "--trade-date",
+            "2026-06-20",
+            "--apply-report-run-schema",
+            "--record-run",
+        ],
+    )
+
+    cli.main()
+
+    assert calls == [
+        {
+            "trade_date": "2026-06-20",
+            "output_root": "/Users/xiwei/stock_research/reports/daily_review",
+            "apply_report_run_schema_first": True,
+            "record_run": True,
+        }
+    ]
+    assert capsys.readouterr().out.splitlines() == [
+        f"daily_review_v1|json_path|{tmp_path / 'daily_review.json'}",
+        f"daily_review_v1|markdown_path|{tmp_path / 'daily_review.md'}",
+        f"daily_review_v1|manifest_path|{tmp_path / 'manifest.json'}",
+    ]
+
+
 def test_evaluate_factor_gate_cli_prints_and_stores_status(monkeypatch, capsys):
     import sys
 
