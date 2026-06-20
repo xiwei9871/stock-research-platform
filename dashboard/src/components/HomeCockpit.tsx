@@ -25,7 +25,6 @@ type WorkspaceMode =
   | 'watchlist'
   | 'factors'
   | 'strategyLab'
-  | 'data'
   | 'generatedReports';
 
 type HomeCockpitProps = {

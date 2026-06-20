@@ -38,7 +38,7 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
     assert "/api/assets/000001.SZ/profile" in script
     assert "Backtest Lab" in script
     assert "Market Monitor" in script
-    assert "Data Explorer" in script
+    assert "Stock Workspace" in script
     assert "TOPN" in script
 
 

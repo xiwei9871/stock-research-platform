@@ -58,7 +58,7 @@ fi
 bundle_body="$(fetch "${BASE_URL%/}${js_asset}")"
 require_body_contains "$bundle_body" "Backtest Lab" "frontend bundle"
 require_body_contains "$bundle_body" "Market Monitor" "frontend bundle"
-require_body_contains "$bundle_body" "Data Explorer" "frontend bundle"
+require_body_contains "$bundle_body" "Stock Workspace" "frontend bundle"
 require_body_not_old_dashboard "$bundle_body"
 
 echo "Checking /api/platform/summary endpoint"

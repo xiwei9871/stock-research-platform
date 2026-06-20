@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { DataExplorerWorkspace } from './DataExplorerWorkspace';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
 import { GlobalSearchBox } from './GlobalSearchBox';
@@ -24,7 +23,6 @@ type WorkspaceMode =
   | 'watchlist'
   | 'factors'
   | 'strategyLab'
-  | 'data'
   | 'generatedReports';
 
 type MarketMonitorTab = 'auction' | 'limit_up' | 'broken_limit_up' | 'limit_down';
@@ -66,7 +64,6 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
   { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
   { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
-  { mode: 'data', label: '数据探索', ariaLabel: 'Open Data Explorer workspace' },
   { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
 ];
 
@@ -298,7 +295,6 @@ export function AppShell() {
               initialPath={generatedReportsHandoff.path}
             />
           ) : null}
-          {workspaceMode === 'data' ? <DataExplorerWorkspace defaultTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'factors' ? <FactorLabWorkspace defaultTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'news' ? (
             <NewsWorkspace

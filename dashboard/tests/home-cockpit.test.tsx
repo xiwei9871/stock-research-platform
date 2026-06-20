@@ -541,14 +541,14 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.queryByText('+60.1%')).not.toBeInTheDocument();
   });
 
-  it('navigates to Data Explorer from Home', async () => {
+  it('does not expose Data Explorer in primary navigation', async () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
 
     const sideNav = screen.getByRole('complementary', { name: 'Workspace navigation' });
-    fireEvent.click(within(sideNav).getByRole('button', { name: 'Open Data Explorer workspace' }));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Data Explorer' })).toBeVisible());
+    expect(within(sideNav).queryByRole('button', { name: 'Open Data Explorer workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Data Explorer' })).not.toBeInTheDocument();
   });
 
   it('exposes side navigation with unique accessible names and current state', async () => {

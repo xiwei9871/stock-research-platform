@@ -296,13 +296,12 @@ describe('DataExplorerWorkspace', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('opens from AppShell Data Explorer navigation', async () => {
+  it('keeps Data Explorer out of AppShell primary navigation', async () => {
     render(<AppShell />);
 
     const navigation = screen.getByRole('complementary', { name: 'Workspace navigation' });
-    fireEvent.click(within(navigation).getByRole('button', { name: 'Open Data Explorer workspace' }));
 
-    expect(screen.getByRole('heading', { name: 'Data Explorer' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('平安银行')).toBeInTheDocument());
+    expect(within(navigation).queryByRole('button', { name: 'Open Data Explorer workspace' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Data Explorer' })).not.toBeInTheDocument();
   });
 });

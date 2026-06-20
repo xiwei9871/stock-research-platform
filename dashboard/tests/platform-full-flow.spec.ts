@@ -657,14 +657,7 @@ test('platform full flow covers all research workspaces with mocked API response
   await assertNoUnsafeExecutionControls(page);
   await assertNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Open Data Explorer workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Data Explorer' })).toBeVisible();
-  await expect(page.getByText('平安银行')).toBeVisible();
-  await expect(page.getByText('CN:SZ:000001')).toBeVisible();
-  await expect(page.getByText('Score 88.5')).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'ret_20' })).toBeVisible();
-  await assertNoUnsafeExecutionControls(page);
-  await assertNoHorizontalOverflow(page);
+  await expect(page.getByRole('button', { name: 'Open Data Explorer workspace' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Open Factor Lab workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Factor Lab' })).toBeVisible();
