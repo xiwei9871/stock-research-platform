@@ -139,6 +139,10 @@ def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, t
                 "package_root": str(tmp_path / "2026-06-20"),
                 "json_path": str(tmp_path / "2026-06-20" / "daily_review.json"),
                 "markdown_path": str(tmp_path / "2026-06-20" / "daily_review.md"),
+                "evidence_paths": {
+                    "market_state": str(tmp_path / "2026-06-20" / "evidence" / "market_state.json"),
+                    "lhb_review": str(tmp_path / "2026-06-20" / "evidence" / "lhb_review.json"),
+                },
             }
         }
 
@@ -169,4 +173,12 @@ def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, t
         f"daily_review_v1|package_root|{tmp_path / '2026-06-20'}",
         f"daily_review_v1|json_path|{tmp_path / '2026-06-20' / 'daily_review.json'}",
         f"daily_review_v1|markdown_path|{tmp_path / '2026-06-20' / 'daily_review.md'}",
+        (
+            "daily_review_v1|evidence_paths.market_state|"
+            f"{tmp_path / '2026-06-20' / 'evidence' / 'market_state.json'}"
+        ),
+        (
+            "daily_review_v1|evidence_paths.lhb_review|"
+            f"{tmp_path / '2026-06-20' / 'evidence' / 'lhb_review.json'}"
+        ),
     ]

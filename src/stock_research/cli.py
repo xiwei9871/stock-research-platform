@@ -400,7 +400,10 @@ from stock_research.research_preflight import (
     default_research_factor_names,
 )
 from stock_research.research_windows import load_market_date_bounds
-from stock_research.reports.daily_review_report_cli import run_daily_review_report
+from stock_research.reports.daily_review_report_cli import (
+    iter_daily_review_report_path_lines,
+    run_daily_review_report,
+)
 from stock_research.reports.daily_research_report_cli import run_daily_research_report
 from stock_research.reports.agent_research_report import build_agent_research_report
 from stock_research.reports.watchlist_report import (
@@ -6908,8 +6911,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             apply_report_run_schema_first=args.apply_report_run_schema,
             record_run=args.record_run,
         )
-        for key, value in result["report_paths"].items():
-            print(f"daily_review_v1|{key}|{value}")
+        for line in iter_daily_review_report_path_lines(result["report_paths"]):
+            print(line)
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
             start_date=args.start_date,

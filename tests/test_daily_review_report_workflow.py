@@ -116,6 +116,38 @@ def test_build_daily_review_normalizes_holding_actions():
     assert result["holding_reviews"][0]["action"] == "manual_review"
 
 
+def test_build_daily_review_includes_non_lhb_p0_items_in_operator_plan():
+    result = _build_fixture_review(
+        lhb_review={"forbidden_actions": []},
+        mid_trend_review={
+            "portfolio_health": "stable",
+            "rebalance_suggestion": "add selectively",
+            "topn_relation": "aligned",
+            "candidate_adds": [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "ts_code": "000001.SZ",
+                    "stock_name": "平安银行",
+                    "bucket": "core_watch",
+                    "state": "watch",
+                    "action": "add_candidate",
+                    "review_priority": "P0",
+                    "reason": {"setup": "fresh mid-trend breakout"},
+                    "source_refs": ["mid_trend_signal"],
+                }
+            ],
+        },
+    )
+
+    assert result["operator_plan"]["must_check_before_open"] == ["CN:SZ:000001"]
+
+
+def test_build_daily_review_marks_empty_readiness_as_partial():
+    result = _build_fixture_review(data_readiness={})
+
+    assert result["status"] == "partial"
+
+
 def test_write_daily_review_package_keeps_evidence_payloads_faithful(tmp_path):
     lhb_review = _read_json("lhb_review.json")
     lhb_review["lhb_watchlist"][0]["action"] = "unexpected_nested_action"

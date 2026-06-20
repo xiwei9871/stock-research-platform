@@ -5811,6 +5811,10 @@ def test_run_daily_review_v1_main_cli_alias_forwards_args_and_prints_report_path
                 "json_path": tmp_path / "daily_review.json",
                 "markdown_path": tmp_path / "daily_review.md",
                 "manifest_path": tmp_path / "manifest.json",
+                "evidence_paths": {
+                    "market_state": tmp_path / "evidence" / "market_state.json",
+                    "lhb_review": tmp_path / "evidence" / "lhb_review.json",
+                },
             }
         },
     )
@@ -5841,6 +5845,8 @@ def test_run_daily_review_v1_main_cli_alias_forwards_args_and_prints_report_path
         f"daily_review_v1|json_path|{tmp_path / 'daily_review.json'}",
         f"daily_review_v1|markdown_path|{tmp_path / 'daily_review.md'}",
         f"daily_review_v1|manifest_path|{tmp_path / 'manifest.json'}",
+        f"daily_review_v1|evidence_paths.market_state|{tmp_path / 'evidence' / 'market_state.json'}",
+        f"daily_review_v1|evidence_paths.lhb_review|{tmp_path / 'evidence' / 'lhb_review.json'}",
     ]
 
 

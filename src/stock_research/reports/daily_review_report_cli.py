@@ -69,6 +69,27 @@ def run_daily_review_report(
     return {"review": review, "report_paths": report_paths}
 
 
+def iter_daily_review_report_path_lines(
+    report_paths: dict[str, Any],
+    *,
+    prefix: str = "daily_review_v1",
+):
+    for key, value in _flatten_report_paths(report_paths):
+        yield f"{prefix}|{key}|{value}"
+
+
+def _flatten_report_paths(
+    report_paths: dict[str, Any],
+    parent_key: str = "",
+):
+    for key, value in report_paths.items():
+        full_key = f"{parent_key}.{key}" if parent_key else key
+        if isinstance(value, dict):
+            yield from _flatten_report_paths(value, full_key)
+            continue
+        yield full_key, value
+
+
 def _validate_daily_review_inputs(inputs: Any) -> dict[str, Any]:
     if not isinstance(inputs, dict):
         raise ValueError("daily review inputs must be a dict")
@@ -101,8 +122,8 @@ def main(runner=run_daily_review_report) -> None:
         apply_report_run_schema_first=args.apply_report_run_schema,
         record_run=args.record_run,
     )
-    for key, value in result["report_paths"].items():
-        print(f"daily_review_v1|{key}|{value}")
+    for line in iter_daily_review_report_path_lines(result["report_paths"]):
+        print(line)
 
 
 if __name__ == "__main__":

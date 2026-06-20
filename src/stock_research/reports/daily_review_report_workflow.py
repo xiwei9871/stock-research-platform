@@ -30,6 +30,12 @@ def build_daily_review(
     mid_trend_payload = deepcopy(mid_trend_review or {})
     technical_payload = deepcopy(technical_bottleneck_review or {})
     holding_payload = [deepcopy(item) for item in (holding_reviews or [])]
+    strategy_items = _build_strategy_items(
+        trade_date=trade_date,
+        lhb_review=lhb_payload,
+        mid_trend_review=mid_trend_payload,
+        technical_bottleneck_review=technical_payload,
+    )
 
     warnings = _collect_readiness_warnings(readiness_payload)
     review = {
@@ -48,17 +54,12 @@ def build_daily_review(
             "mid_trend": _build_mid_trend_summary(mid_trend_payload),
             "technical_bottleneck": _build_technical_summary(technical_payload),
         },
-        "strategy_items": _build_strategy_items(
-            trade_date=trade_date,
-            lhb_review=lhb_payload,
-            mid_trend_review=mid_trend_payload,
-            technical_bottleneck_review=technical_payload,
-        ),
+        "strategy_items": strategy_items,
         "holding_reviews": _normalize_holding_reviews(holding_payload, trade_date=trade_date),
         "operator_plan": _build_operator_plan(
             market_review=market_payload,
             lhb_review=lhb_payload,
-            trade_date=trade_date,
+            strategy_items=strategy_items,
         ),
         "next_day_plan": {},
         "report_paths": {},
@@ -159,6 +160,8 @@ def _collect_readiness_warnings(data_readiness: dict[str, Any]) -> list[str]:
 
 
 def _derive_status(data_readiness: dict[str, Any]) -> str:
+    if not data_readiness:
+        return "partial"
     for details in data_readiness.values():
         status = str(details.get("status") or "").strip().lower()
         freshness = details.get("freshness") or {}
@@ -294,18 +297,16 @@ def _build_operator_plan(
     *,
     market_review: dict[str, Any],
     lhb_review: dict[str, Any],
-    trade_date: str,
+    strategy_items: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    must_check_before_open = [
-        item["asset_id"]
-        for item in _build_rows_from_candidates(
-            trade_date=trade_date,
-            strategy_id="lhb",
-            item_type="candidate",
-            rows=lhb_review.get("lhb_watchlist") or [],
-        )
-        if item["review_priority"] == "P0"
-    ]
+    must_check_before_open: list[str] = []
+    seen_asset_ids: set[str] = set()
+    for item in strategy_items:
+        asset_id = str(item.get("asset_id") or "")
+        if item.get("review_priority") != "P0" or not asset_id or asset_id in seen_asset_ids:
+            continue
+        must_check_before_open.append(asset_id)
+        seen_asset_ids.add(asset_id)
     return {
         "mode": "manual_review_only",
         "overall_position_bias": market_review.get("target_exposure", ""),
