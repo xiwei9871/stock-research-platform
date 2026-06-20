@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchDailyReviewLite } from '../api/client';
-import type { DailyReviewLiteResponse } from '../api/types';
+import type { DailyReviewLiteArtifactHealth, DailyReviewLiteResponse, DailyReviewLiteSectionStatus } from '../api/types';
 import { ArtifactLinks } from '../components/daily-review-lite/ArtifactLinks';
 import { ChecklistTable } from '../components/daily-review-lite/ChecklistTable';
 import { SectionCard } from '../components/daily-review-lite/SectionCard';
@@ -106,7 +106,7 @@ export function DailyReviewLitePage() {
         <pre>{JSON.stringify(loadState.payload.sections.next_day_checklist.forbidden_actions, null, 2)}</pre>
         <pre>{JSON.stringify(loadState.payload.sections.next_day_checklist.data_warnings, null, 2)}</pre>
       </SectionCard>
-      <SectionCard title="Artifacts" status={loadState.payload.state === 'partial' ? 'partial' : 'success'}>
+      <SectionCard title="Artifacts" status={artifactStatus(loadState.payload)}>
         <ArtifactLinks artifacts={loadState.payload.artifacts} />
       </SectionCard>
     </main>
@@ -115,11 +115,32 @@ export function DailyReviewLitePage() {
 
 function strategyStatus(payload: DailyReviewLiteResponse) {
   const statuses = Object.values(payload.sections.strategy_summaries).map((section) => section.status);
-  if (statuses.includes('partial')) {
+  const uniqueStatuses = new Set(statuses);
+  if (uniqueStatuses.has('partial')) {
     return 'partial';
   }
-  if (statuses.every((status) => status === 'empty')) {
+  if (uniqueStatuses.size === 1 && uniqueStatuses.has('empty')) {
     return 'empty';
   }
-  return 'success';
+  if (uniqueStatuses.size === 1 && uniqueStatuses.has('success')) {
+    return 'success';
+  }
+  return 'partial';
+}
+
+function artifactStatus(payload: DailyReviewLiteResponse): DailyReviewLiteSectionStatus {
+  if (payload.artifacts.length === 0) {
+    return 'empty';
+  }
+
+  const health = payload.selected_run?.artifact_health;
+  if (health && mapArtifactHealthToSectionStatus(health) === 'partial') {
+    return 'partial';
+  }
+
+  return payload.artifacts.every((artifact) => artifact.available) ? 'success' : 'partial';
+}
+
+function mapArtifactHealthToSectionStatus(health: DailyReviewLiteArtifactHealth): DailyReviewLiteSectionStatus {
+  return health === 'healthy' ? 'success' : 'partial';
 }

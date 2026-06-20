@@ -13,7 +13,7 @@ export function ArtifactLinks({ artifacts }: ArtifactLinksProps) {
     <ul>
       {artifacts.map((artifact) => (
         <li key={artifact.key}>
-          <a href={artifact.url}>{artifact.label}</a>
+          {artifact.available ? <a href={artifact.url}>{artifact.label}</a> : <span>{artifact.label}</span>}
           <span> ({artifact.kind})</span>
         </li>
       ))}

@@ -346,4 +346,95 @@ describe('DailyReviewLitePage', () => {
     expect(screen.getByText('raw_lhb_payload missing')).toBeInTheDocument();
     expect(screen.getByText('LHB feed incomplete')).toBeInTheDocument();
   });
+
+  it('renders unavailable artifacts as non-clickable text and derives artifact section status from artifact health', async () => {
+    renderResolvedPage(
+      makeResponse({
+        state: 'ready',
+        selected_run: {
+          ...makeResponse().selected_run!,
+          artifact_health: 'missing',
+          artifact_health_detail: {
+            daily_review_json: 'healthy',
+            operator_notes_md: 'missing'
+          }
+        },
+        artifacts: [
+          {
+            key: 'daily_review_json',
+            label: 'Daily Review JSON',
+            kind: 'json',
+            required: true,
+            available: true,
+            filename: 'daily_review_2026-06-20.json',
+            content_type: 'application/json',
+            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+          },
+          {
+            key: 'operator_notes_md',
+            label: 'Operator Notes Markdown',
+            kind: 'markdown',
+            required: false,
+            available: false,
+            filename: null,
+            content_type: 'text/markdown',
+            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=operator_notes_md'
+          }
+        ]
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Artifacts' })).toBeInTheDocument();
+    });
+
+    const artifactsSection = screen.getByRole('region', { name: 'Artifacts' });
+    expect(within(artifactsSection).getByText('Status: partial')).toBeInTheDocument();
+    expect(within(artifactsSection).getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
+      'href',
+      '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+    );
+    expect(within(artifactsSection).queryByRole('link', { name: 'Operator Notes Markdown' })).not.toBeInTheDocument();
+    expect(within(artifactsSection).getByText('Operator Notes Markdown')).toBeInTheDocument();
+  });
+
+  it('renders a partial strategy summaries wrapper when strategy states are mixed between success and empty', async () => {
+    renderResolvedPage(
+      makeResponse({
+        sections: {
+          ...makeResponse().sections,
+          strategy_summaries: {
+            lhb: {
+              strategy_id: 'lhb',
+              status: 'success',
+              warnings: [],
+              summary: {},
+              top_items: []
+            },
+            mid_trend: {
+              strategy_id: 'mid_trend',
+              status: 'empty',
+              warnings: [],
+              summary: {},
+              top_items: []
+            },
+            technical_bottleneck: {
+              strategy_id: 'technical_bottleneck',
+              status: 'success',
+              warnings: [],
+              summary: {},
+              top_items: []
+            }
+          }
+        }
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Strategy Summaries' })).toBeInTheDocument();
+    });
+
+    const strategySection = screen.getByRole('region', { name: 'Strategy Summaries' });
+    expect(within(strategySection).getByText('Status: partial')).toBeInTheDocument();
+  });
 });

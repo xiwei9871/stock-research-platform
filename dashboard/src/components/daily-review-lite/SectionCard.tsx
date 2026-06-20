@@ -27,7 +27,7 @@ export function SectionCard({
       {warnings.length > 0 ? (
         <>
           <p>Warnings</p>
-          <ul>
+          <ul aria-label={`${title} warnings`}>
             {warnings.map((warning, index) => (
               <li key={`${title}-${index}-${warning}`}>{warning}</li>
             ))}
