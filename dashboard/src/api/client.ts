@@ -1,5 +1,6 @@
 import type {
   BarPoint,
+  DailyReviewLiteResponse,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -55,6 +56,16 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
 
 export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
   return postJson('/api/public-news/refresh');
+}
+
+export async function fetchDailyReviewLite(
+  tradeDate: string,
+  runId?: string
+): Promise<DailyReviewLiteResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('trade_date', tradeDate);
+  if (runId) searchParams.set('run_id', runId);
+  return getJson(`/api/daily-review-lite?${searchParams.toString()}`);
 }
 
 export async function fetchDailyBars(

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   fetchDailyBars,
+  fetchDailyReviewLite,
   fetchAssetDecisions,
   fetchAssetOutcomes,
   fetchExperimentProposals,
@@ -89,6 +90,120 @@ describe('dashboard API client', () => {
       '/api/assets/000001.SZ/bars?start_date=2026-05-29&end_date=2026-05-29&adjust_type=raw&resolution=30m'
     );
     expect(result[0].time).toBe('2026-05-29 10:00:00');
+  });
+
+  it('fetches daily review lite with trade date and run id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-20',
+        state: 'ready',
+        selected_run: {
+          run_id: 'daily_review_v1:2026-06-20:abc',
+          report_type: 'daily_review_v1',
+          status: 'success',
+          updated_at: '2026-06-20T22:00:00Z',
+          source: 'report_run',
+          artifact_health: 'healthy',
+          artifact_health_detail: {
+            daily_review_json: 'healthy'
+          }
+        },
+        summary: {
+          market_status: 'cold',
+          overall_position_bias: 'defensive',
+          lhb_conclusion: 'trial',
+          mid_trend_conclusion: 'hold core names',
+          technical_bottleneck_conclusion: 'monitor upgrades only',
+          must_review_asset_ids: ['CN:SH:600000'],
+          warning_count: 1
+        },
+        warnings: ['source_missing:lhb_feed'],
+        missing_sources: [
+          {
+            source_key: 'raw_lhb_payload',
+            summary: 'LHB payload missing for trade date.',
+            affected_sections: ['lhb', 'next_day_plan'],
+            confidence_impact: 'LHB conclusion confidence reduced'
+          }
+        ],
+        sections: {
+          data_readiness: {
+            status: 'partial',
+            warnings: ['source_missing:lhb_feed'],
+            sources: {}
+          },
+          market_review: {
+            status: 'success',
+            warnings: [],
+            payload: {}
+          },
+          strategy_summaries: {
+            lhb: {
+              strategy_id: 'lhb',
+              status: 'partial',
+              warnings: ['source_missing:lhb_feed'],
+              summary: {},
+              top_items: []
+            },
+            mid_trend: {
+              strategy_id: 'mid_trend',
+              status: 'success',
+              warnings: [],
+              summary: {},
+              top_items: []
+            },
+            technical_bottleneck: {
+              strategy_id: 'technical_bottleneck',
+              status: 'success',
+              warnings: [],
+              summary: {},
+              top_items: []
+            }
+          },
+          holding_review: {
+            status: 'empty',
+            warnings: [],
+            items: []
+          },
+          operator_plan: {
+            status: 'success',
+            warnings: [],
+            payload: {}
+          },
+          next_day_checklist: {
+            status: 'partial',
+            warnings: [],
+            must_review_items: [],
+            forbidden_actions: [],
+            data_warnings: []
+          }
+        },
+        artifacts: [
+          {
+            key: 'daily_review_json',
+            label: 'Daily Review JSON',
+            kind: 'json',
+            required: true,
+            available: true,
+            filename: 'daily_review.json',
+            content_type: 'application/json',
+            url: '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc'
+          }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDailyReviewLite('2026-06-20', 'daily_review_v1:2026-06-20:abc');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/daily-review-lite?trade_date=2026-06-20&run_id=daily_review_v1%3A2026-06-20%3Aabc'
+    );
+    expect(result.artifacts[0].url).toBe(
+      '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc'
+    );
+    expect(result.selected_run?.artifact_health).toBe('healthy');
   });
 
   it('fetches asset decisions with date range and limit', async () => {

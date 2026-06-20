@@ -400,3 +400,133 @@ export type DashboardOverview = {
   watchlist_signals: WatchlistSignalRow[];
   reports: ReportLink[];
 };
+
+export type DailyReviewLiteState = 'ready' | 'partial' | 'failed' | 'empty';
+
+export type DailyReviewLiteRunStatus = 'success' | 'partial' | 'failed';
+
+export type DailyReviewLiteArtifactHealth = 'healthy' | 'missing' | 'invalid';
+
+export type DailyReviewLiteSectionStatus = 'success' | 'partial' | 'empty';
+
+export type DailyReviewLiteSelectedRun = {
+  run_id: string;
+  report_type: string;
+  status: DailyReviewLiteRunStatus;
+  updated_at: string | null;
+  source: string;
+  artifact_health: DailyReviewLiteArtifactHealth;
+  artifact_health_detail: Record<string, DailyReviewLiteArtifactHealth>;
+};
+
+export type DailyReviewLiteSummary = {
+  market_status: string | null;
+  overall_position_bias: string | null;
+  lhb_conclusion: string | null;
+  mid_trend_conclusion: string | null;
+  technical_bottleneck_conclusion: string | null;
+  must_review_asset_ids: string[];
+  warning_count: number;
+};
+
+export type DailyReviewLiteMissingSource = {
+  source_key: string | null;
+  summary: string | null;
+  affected_sections: string[];
+  confidence_impact: string | null;
+};
+
+export type DailyReviewLiteArtifactDescriptor = {
+  key: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  available: boolean;
+  filename: string | null;
+  content_type: string;
+  url: string;
+};
+
+export type DailyReviewLiteReason = {
+  strategy_id: string | null;
+  summary: string | null;
+  detail?: string | null;
+};
+
+export type DailyReviewLiteStrategyItem = {
+  asset_id: string | null;
+  ts_code: string | null;
+  stock_name: string | null;
+  item_type: string | null;
+  state: string | null;
+  action: string | null;
+  review_priority: string | null;
+  reason?: {
+    summary?: string | null;
+    detail?: string | null;
+  };
+};
+
+export type DailyReviewLiteStrategySection = {
+  strategy_id: string;
+  status: DailyReviewLiteSectionStatus;
+  warnings: string[];
+  summary: Record<string, unknown>;
+  top_items: DailyReviewLiteStrategyItem[];
+};
+
+export type DailyReviewLiteChecklistItem = {
+  asset_id: string | null;
+  ts_code: string | null;
+  stock_name: string | null;
+  strategy_ids: string[];
+  reasons: DailyReviewLiteReason[];
+  actions: string[];
+  review_priority: string | null;
+};
+
+export type DailyReviewLiteSections = {
+  data_readiness: {
+    status: DailyReviewLiteSectionStatus;
+    warnings: string[];
+    sources: Record<string, unknown>;
+  };
+  market_review: {
+    status: DailyReviewLiteSectionStatus;
+    warnings: string[];
+    payload: Record<string, unknown>;
+  };
+  strategy_summaries: {
+    lhb: DailyReviewLiteStrategySection;
+    mid_trend: DailyReviewLiteStrategySection;
+    technical_bottleneck: DailyReviewLiteStrategySection;
+  };
+  holding_review: {
+    status: DailyReviewLiteSectionStatus;
+    warnings: string[];
+    items: Record<string, unknown>[];
+  };
+  operator_plan: {
+    status: DailyReviewLiteSectionStatus;
+    warnings: string[];
+    payload: Record<string, unknown>;
+  };
+  next_day_checklist: {
+    status: DailyReviewLiteSectionStatus;
+    warnings: string[];
+    must_review_items: DailyReviewLiteChecklistItem[];
+    forbidden_actions: string[];
+    data_warnings: string[];
+  };
+};
+
+export type DailyReviewLiteResponse = {
+  trade_date: string;
+  state: DailyReviewLiteState;
+  selected_run: DailyReviewLiteSelectedRun | null;
+  summary: DailyReviewLiteSummary | null;
+  warnings: string[];
+  missing_sources: DailyReviewLiteMissingSource[];
+  sections: DailyReviewLiteSections;
+  artifacts: DailyReviewLiteArtifactDescriptor[];
+};
