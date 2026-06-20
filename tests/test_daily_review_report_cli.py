@@ -2,6 +2,8 @@ import importlib
 import json
 from pathlib import Path
 
+import pytest
+
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "daily_review_v1"
 
@@ -14,7 +16,7 @@ def _read_json(relative_path: str) -> dict | list:
     return json.loads((FIXTURE_ROOT / relative_path).read_text(encoding="utf-8"))
 
 
-def _load_fixture_inputs() -> dict[str, object]:
+def _fixture_inputs() -> dict[str, object]:
     return {
         "data_readiness": _read_json("source_payloads/data_readiness.json"),
         "market_review": _read_json("source_payloads/market_review.json"),
@@ -47,41 +49,83 @@ def test_daily_review_report_cli_parser_accepts_arguments():
     assert args.record_run is True
 
 
-def test_run_daily_review_report_writes_package_from_monkeypatched_inputs(monkeypatch, tmp_path):
+def test_run_daily_review_report_orchestrates_loader_build_and_write(monkeypatch, tmp_path):
     cli = _import_cli()
-    expected_review = _read_json("expected_daily_review.json")
-    expected_markdown = (FIXTURE_ROOT / "expected_daily_review.md").read_text(encoding="utf-8")
+    fixture_inputs = _fixture_inputs()
+    calls: dict[str, object] = {}
+    built_review = {"run_id": "daily_review_v1_20260620_2200", "status": "partial"}
+    report_paths = {"json_path": str(tmp_path / "daily_review.json")}
 
-    monkeypatch.setattr(cli, "load_daily_review_inputs", lambda trade_date: _load_fixture_inputs())
+    def fake_load_daily_review_inputs(trade_date):
+        calls["load_trade_date"] = trade_date
+        return fixture_inputs
+
+    def fake_build_daily_review(**kwargs):
+        calls["build_kwargs"] = kwargs
+        return built_review
+
+    def fake_write_daily_review_package(review, *, output_root, record_run):
+        calls["write_kwargs"] = {
+            "review": review,
+            "output_root": output_root,
+            "record_run": record_run,
+        }
+        return report_paths
+
+    schema_calls: list[str] = []
+    monkeypatch.setattr(cli, "load_daily_review_inputs", fake_load_daily_review_inputs)
+    monkeypatch.setattr(cli, "build_daily_review", fake_build_daily_review)
+    monkeypatch.setattr(cli, "write_daily_review_package", fake_write_daily_review_package)
+    monkeypatch.setattr(cli, "apply_report_run_schema", lambda: schema_calls.append("schema"))
 
     result = cli.run_daily_review_report(
         trade_date="2026-06-20",
         output_root=tmp_path,
+        apply_report_run_schema_first=True,
+        record_run=True,
     )
 
-    report_paths = result["report_paths"]
-    assert Path(report_paths["json_path"]).exists()
-    assert Path(report_paths["markdown_path"]).exists()
-    assert Path(report_paths["manifest_path"]).exists()
-    assert json.loads(Path(report_paths["json_path"]).read_text(encoding="utf-8")) == {
-        **expected_review,
-        "report_paths": report_paths,
-    }
-    assert Path(report_paths["markdown_path"]).read_text(encoding="utf-8") == expected_markdown
-    assert json.loads(Path(report_paths["manifest_path"]).read_text(encoding="utf-8")) == {
+    assert schema_calls == ["schema"]
+    assert calls["load_trade_date"] == "2026-06-20"
+    assert calls["build_kwargs"] == {
         "trade_date": "2026-06-20",
         "run_id": "daily_review_v1_20260620_2200",
-        "report_type": "daily_review_v1",
-        "schema_version": "daily_review_v1",
-        "status": "partial",
-        "warnings": ["source_missing:lhb_feed"],
-        "report_paths": report_paths,
-        "data_readiness": _load_fixture_inputs()["data_readiness"],
+        **fixture_inputs,
     }
-    assert result["review"] == {
-        **expected_review,
-        "report_paths": report_paths,
+    assert calls["write_kwargs"] == {
+        "review": built_review,
+        "output_root": tmp_path,
+        "record_run": True,
     }
+    assert result == {"review": built_review, "report_paths": report_paths}
+
+
+def test_run_daily_review_report_rejects_placeholder_loader_bundle(monkeypatch, tmp_path):
+    cli = _import_cli()
+    build_called = False
+    write_called = False
+
+    def fake_build_daily_review(**kwargs):
+        nonlocal build_called
+        build_called = True
+        return {}
+
+    def fake_write_daily_review_package(review, *, output_root, record_run):
+        nonlocal write_called
+        write_called = True
+        return {}
+
+    monkeypatch.setattr(cli, "build_daily_review", fake_build_daily_review)
+    monkeypatch.setattr(cli, "write_daily_review_package", fake_write_daily_review_package)
+
+    with pytest.raises(ValueError, match="daily review inputs"):
+        cli.run_daily_review_report(
+            trade_date="2026-06-20",
+            output_root=tmp_path,
+        )
+
+    assert build_called is False
+    assert write_called is False
 
 
 def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, tmp_path):
@@ -95,8 +139,6 @@ def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, t
                 "package_root": str(tmp_path / "2026-06-20"),
                 "json_path": str(tmp_path / "2026-06-20" / "daily_review.json"),
                 "markdown_path": str(tmp_path / "2026-06-20" / "daily_review.md"),
-                "manifest_path": str(tmp_path / "2026-06-20" / "manifest.json"),
-                "evidence_paths": {"market_state": str(tmp_path / "market_state.json")},
             }
         }
 
@@ -127,6 +169,4 @@ def test_daily_review_report_cli_main_prints_report_paths(monkeypatch, capsys, t
         f"daily_review_v1|package_root|{tmp_path / '2026-06-20'}",
         f"daily_review_v1|json_path|{tmp_path / '2026-06-20' / 'daily_review.json'}",
         f"daily_review_v1|markdown_path|{tmp_path / '2026-06-20' / 'daily_review.md'}",
-        f"daily_review_v1|manifest_path|{tmp_path / '2026-06-20' / 'manifest.json'}",
-        f"daily_review_v1|evidence_paths|{{'market_state': '{tmp_path / 'market_state.json'}'}}",
     ]

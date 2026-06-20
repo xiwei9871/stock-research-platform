@@ -10,6 +10,15 @@ from stock_research.reports.daily_review_report_workflow import (
     write_daily_review_package,
 )
 
+REQUIRED_INPUT_KEYS = (
+    "data_readiness",
+    "market_review",
+    "lhb_review",
+    "mid_trend_review",
+    "technical_bottleneck_review",
+    "holding_reviews",
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m stock_research.reports.daily_review_report_cli")
@@ -41,15 +50,16 @@ def run_daily_review_report(
         apply_report_run_schema()
 
     inputs = load_daily_review_inputs(trade_date)
+    validated_inputs = _validate_daily_review_inputs(inputs)
     review = build_daily_review(
         trade_date=trade_date,
         run_id=f"daily_review_v1_{trade_date.replace('-', '')}_2200",
-        data_readiness=inputs.get("data_readiness"),
-        market_review=inputs.get("market_review"),
-        lhb_review=inputs.get("lhb_review"),
-        mid_trend_review=inputs.get("mid_trend_review"),
-        technical_bottleneck_review=inputs.get("technical_bottleneck_review"),
-        holding_reviews=inputs.get("holding_reviews"),
+        data_readiness=validated_inputs["data_readiness"],
+        market_review=validated_inputs["market_review"],
+        lhb_review=validated_inputs["lhb_review"],
+        mid_trend_review=validated_inputs["mid_trend_review"],
+        technical_bottleneck_review=validated_inputs["technical_bottleneck_review"],
+        holding_reviews=validated_inputs["holding_reviews"],
     )
     report_paths = write_daily_review_package(
         review,
@@ -57,6 +67,30 @@ def run_daily_review_report(
         record_run=record_run,
     )
     return {"review": review, "report_paths": report_paths}
+
+
+def _validate_daily_review_inputs(inputs: Any) -> dict[str, Any]:
+    if not isinstance(inputs, dict):
+        raise ValueError("daily review inputs must be a dict")
+
+    missing_keys = [key for key in REQUIRED_INPUT_KEYS if key not in inputs]
+    if missing_keys:
+        raise ValueError(f"daily review inputs missing required keys: {', '.join(missing_keys)}")
+
+    validated_inputs = {key: inputs[key] for key in REQUIRED_INPUT_KEYS}
+    if not isinstance(validated_inputs["holding_reviews"], list):
+        raise ValueError("daily review inputs holding_reviews must be a list")
+
+    for key in REQUIRED_INPUT_KEYS:
+        if key == "holding_reviews":
+            continue
+        if not isinstance(validated_inputs[key], dict):
+            raise ValueError(f"daily review inputs {key} must be a dict")
+
+    if all(not validated_inputs[key] for key in REQUIRED_INPUT_KEYS):
+        raise ValueError("daily review inputs cannot be an all-empty placeholder bundle")
+
+    return validated_inputs
 
 
 def main(runner=run_daily_review_report) -> None:
