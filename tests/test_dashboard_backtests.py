@@ -500,7 +500,7 @@ def test_run_fresh_backtest_applies_balanced_strategy_contract(monkeypatch):
     assert result["summary"]["top_n"] == 5
     assert result["summary"]["frequency"] == "biweekly"
     assert result["summary"]["protection_name"] == "rank_exit_top10_1d"
-    assert result["summary"]["transaction_cost_bps"] == 20.0
+    assert result["summary"]["transaction_cost_bps"] == 10.0
     assert result["summary"]["adjust_type"] == "hfq"
 
 
@@ -1242,6 +1242,81 @@ def test_run_fresh_backtest_routes_tech_bottleneck_to_v1(monkeypatch):
     assert calls["payload"]["top_n"] == 5
     assert calls["payload"]["rebalance_frequency"] == "weekly"
     assert calls["payload"]["transaction_cost_bps"] == 20.0
+
+
+def test_run_fresh_backtest_routes_tech_bottleneck_to_eod_when_snapshot_missing(monkeypatch, tmp_path):
+    calls = {}
+
+    def missing_snapshot_runner(payload):
+        raise FileNotFoundError("no Tech Bottleneck candidate snapshot found")
+
+    def fake_prepare_source(*, trade_date, output_dir):
+        calls["prepare"] = {"trade_date": trade_date, "output_dir": output_dir}
+        path = tmp_path / "strict_candidates.csv"
+        path.write_text("asset_id,first_hit_date\nCN:SH:600183,2026-01-05\n", encoding="utf-8")
+        return path
+
+    def fake_eod_runner(**kwargs):
+        calls["eod"] = kwargs
+        output_dir = Path(kwargs["output_dir"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        equity = output_dir / "strategy_tech_bottleneck_equity.csv"
+        positions = output_dir / "strategy_tech_bottleneck_positions.csv"
+        trades = output_dir / "strategy_tech_bottleneck_trades.csv"
+        review = output_dir / "strategy_tech_bottleneck_review.csv"
+        equity.write_text("trade_date,equity,drawdown\n2026-01-01,1.0,0.0\n2026-06-18,1.42,0.0\n", encoding="utf-8")
+        positions.write_text("trade_date,asset_id,weight\n2026-06-18,CN:SH:600183,0.2\n", encoding="utf-8")
+        trades.write_text("trade_date,asset_id,action\n2026-06-18,CN:SH:600183,buy\n", encoding="utf-8")
+        review.write_text("trade_date,asset_id,rank\n2026-06-18,CN:SH:600183,1\n", encoding="utf-8")
+        return {
+            "manifest_entries": [
+                {
+                    "module": "strategy_tech_bottleneck",
+                    "metadata": {
+                        "summary": {
+                            "engine_version": "tech_bottleneck_v1",
+                            "final_equity": 1.42,
+                            "total_return": 0.42,
+                            "max_drawdown": -0.08,
+                            "transaction_cost_bps": 10.0,
+                            "top_n": 5,
+                            "frequency": "biweekly",
+                            "adjust_type": "hfq",
+                            "protection_name": "rank_exit_top10_1d",
+                            "universe": "strict_153_st_only_financial_state",
+                        },
+                        "output_paths": {
+                            "equity_path": str(equity),
+                            "positions_path": str(positions),
+                            "trades_path": str(trades),
+                            "review_path": str(review),
+                        },
+                    },
+                }
+            ]
+        }
+
+    monkeypatch.setattr(backtests, "run_tech_bottleneck_v1_backtest_for_dashboard", missing_snapshot_runner)
+    monkeypatch.setattr(backtests, "_prepare_tech_bottleneck_base_candidate_source", fake_prepare_source)
+    monkeypatch.setattr(backtests, "run_tech_bottleneck_eod", fake_eod_runner)
+    monkeypatch.setattr(backtests, "TECH_BOTTLENECK_LAB_OUTPUT_ROOT", tmp_path)
+
+    payload = backtests.run_fresh_backtest(
+        {
+            "strategy_id": "tech_bottleneck",
+            "start_date": "2026-01-01",
+            "end_date": "2026-06-18",
+            "top_n": 5,
+            "transaction_cost_bps": 10,
+            "max_position_weight": 0.2,
+            "adjust_type": "hfq",
+        }
+    )
+
+    assert payload["result_source"] == "tech_bottleneck_eod"
+    assert payload["summary"]["final_equity"] == pytest.approx(1.42)
+    assert calls["eod"]["end_date"] == "2026-06-18"
+    assert calls["eod"]["manifest_upsert"]("entry") == "entry"
 
 
 def test_run_backtest_rejects_unknown_strategy():

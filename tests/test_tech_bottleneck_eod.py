@@ -61,6 +61,10 @@ def test_tech_bottleneck_eod_writes_artifacts_and_manifest_entries(tmp_path: Pat
     assert strategy_entry["metadata"]["summary"]["top_n"] == 5
     assert strategy_entry["metadata"]["summary"]["frequency"] == "biweekly"
     assert strategy_entry["metadata"]["summary"]["protection_name"] == "rank_exit_top10_1d"
+    assert strategy_entry["metadata"]["summary"]["transaction_cost_bps"] == 10.0
+    assert strategy_entry["metadata"]["summary"]["max_position_weight"] == 0.2
+    assert strategy_entry["metadata"]["config"]["transaction_cost_bps"] == 10.0
+    assert strategy_entry["metadata"]["config"]["max_position_weight"] == 0.2
     assert result["review_rows"] >= 1
 
 

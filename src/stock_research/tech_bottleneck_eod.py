@@ -9,6 +9,7 @@ import pandas as pd
 
 from stock_research.config import SETTINGS
 from stock_research.data_run_manifest import build_manifest_entry, upsert_data_run_manifest
+from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
 from stock_research.tech_bottleneck_candidates import (
     TECH_BOTTLENECK_CANDIDATE_SOURCE,
     build_point_in_time_candidate_snapshots,
@@ -26,7 +27,8 @@ from stock_research.tech_bottleneck_v1 import (
 
 TECH_BOTTLENECK_EOD_REBALANCE_FREQUENCY = "biweekly"
 TECH_BOTTLENECK_EOD_TOP_N = 5
-TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS = 20.0
+TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS = OFFICIAL_TRANSACTION_COST_BPS
+TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT = OFFICIAL_MAX_POSITION_WEIGHT
 TECH_BOTTLENECK_EOD_ADJUST_TYPE = "hfq"
 TECH_BOTTLENECK_EOD_SNAPSHOT_FILENAME = "tech_bottleneck_daily_candidates.csv"
 TECH_BOTTLENECK_EOD_REVIEW_FILENAME = "strategy_tech_bottleneck_review.csv"
@@ -68,6 +70,7 @@ def run_tech_bottleneck_eod_from_frames(
         top_n=TECH_BOTTLENECK_EOD_TOP_N,
         rebalance_frequency=TECH_BOTTLENECK_EOD_REBALANCE_FREQUENCY,
         transaction_cost_bps=TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS,
+        max_position_weight=TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT,
         adjust_type=TECH_BOTTLENECK_EOD_ADJUST_TYPE,
     )
 
@@ -99,6 +102,18 @@ def run_tech_bottleneck_eod_from_frames(
     output_paths = {key: str(path) for key, path in paths.items()}
     candidate_source = str(candidate_source_path) if candidate_source_path is not None else TECH_BOTTLENECK_CANDIDATE_SOURCE
     summary = _json_ready(strategy["summary"])
+    summary.setdefault("transaction_cost_bps", TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS)
+    summary.setdefault("max_position_weight", TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT)
+    config = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "top_n": TECH_BOTTLENECK_EOD_TOP_N,
+        "rebalance_frequency": TECH_BOTTLENECK_EOD_REBALANCE_FREQUENCY,
+        "transaction_cost_bps": TECH_BOTTLENECK_EOD_TRANSACTION_COST_BPS,
+        "max_position_weight": TECH_BOTTLENECK_EOD_MAX_POSITION_WEIGHT,
+        "adjust_type": TECH_BOTTLENECK_EOD_ADJUST_TYPE,
+        "engine_version": TECH_BOTTLENECK_V1_ENGINE_VERSION,
+    }
 
     candidate_metadata = {
         "candidate_snapshot_latest_date": latest_snapshot_date,
@@ -112,6 +127,7 @@ def run_tech_bottleneck_eod_from_frames(
         "candidate_snapshot_row_count": int(len(snapshots)),
         "output_paths": output_paths,
         "summary": summary,
+        "config": config,
     }
 
     candidate_entry = build_manifest_entry(

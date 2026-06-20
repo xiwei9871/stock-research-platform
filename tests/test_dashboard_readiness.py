@@ -511,6 +511,24 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
             "error_message": "",
         },
         {
+            "module": "news_features",
+            "source": "news_feature_daily",
+            "tier": "tier2",
+            "status": "success",
+            "row_count": 5,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
+            "module": "news_enrichment",
+            "source": "topn_news_enrichment",
+            "tier": "tier2",
+            "status": "success",
+            "row_count": 5,
+            "warnings": [],
+            "error_message": "",
+        },
+        {
             "module": "research_reports",
             "source": "research",
             "tier": "tier2",
@@ -576,9 +594,11 @@ def test_build_platform_readiness_v2_ok_from_manifest(monkeypatch):
         "Evidence Digest",
         "Stock Workspace",
     ]
-    assert health_groups["content_chain"]["ready_count"] == 3
+    assert health_groups["content_chain"]["ready_count"] == 5
     assert [item["label"] for item in health_groups["content_chain"]["items"]] == [
         "News",
+        "News Features",
+        "News Enrichment",
         "Research Reports",
         "Generated Reports",
     ]
@@ -808,6 +828,8 @@ def test_build_platform_readiness_v2_snapshot_failure_is_partial(monkeypatch):
             "error_message": "snapshot db offline",
         },
         {"module": "news", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "news_features", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
+        {"module": "news_enrichment", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "research_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
         {"module": "generated_reports", "tier": "tier2", "status": "success", "warnings": [], "error_message": ""},
     ]

@@ -1,6 +1,154 @@
 from stock_research import strategy_eod_publish
 
 
+def test_write_eod_news_artifacts_builds_features_enrichment_and_manifest(monkeypatch, tmp_path):
+    calls = []
+    review_rows = strategy_eod_publish.pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-18",
+                "asset_id": "CN:SZ:002080",
+                "rank": 1,
+                "score_total": 87.6,
+                "strategy_name": "LHB Shortline Combo",
+            }
+        ]
+    )
+    mentions = strategy_eod_publish.pd.DataFrame(
+        [
+            {
+                "source_event_id": "n1",
+                "asset_id": "CN:SZ:002080",
+                "ts_code": "002080.SZ",
+                "stock_name": "中材科技",
+                "mapping_method": "stock_name_exact",
+                "trade_date": "2026-06-18",
+                "published_at": "2026-06-18 10:00:00+08:00",
+                "source_name": "sina_finance",
+                "event_family": "",
+                "source_channel": "market",
+                "title": "中材科技获得大单 主力资金流入",
+                "content": "",
+            }
+        ]
+    )
+    source_events = strategy_eod_publish.pd.DataFrame(
+        [
+            {
+                "source_event_id": "n1",
+                "source_name": "sina_finance",
+                "title": "中材科技获得大单 主力资金流入",
+                "published_at": "2026-06-18 10:00:00+08:00",
+                "quality_score": 82,
+            }
+        ]
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_load_eod_public_news_events", lambda trade_date: source_events)
+    monkeypatch.setattr(strategy_eod_publish, "_load_eod_news_mentions", lambda trade_date: mentions)
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_persist_news_features",
+        lambda features, trade_date: calls.append(("persist_features", trade_date, len(features))),
+    )
+
+    entries = strategy_eod_publish._write_eod_news_artifacts(
+        run_id="strategy-eod-2026-06-18-local",
+        trade_date="2026-06-18",
+        output_dir=tmp_path,
+        review_rows=review_rows,
+        started_at=strategy_eod_publish.datetime.now(strategy_eod_publish.timezone.utc),
+    )
+
+    modules = {entry["module"]: entry for entry in entries}
+    assert modules["news"]["status"] == "success"
+    assert modules["news"]["row_count"] == 1
+    assert modules["news_features"]["status"] == "success"
+    assert modules["news_features"]["asset_count"] == 1
+    assert modules["news_enrichment"]["status"] == "success"
+    assert modules["news_enrichment"]["row_count"] == 1
+    assert calls == [("persist_features", "2026-06-18", 1)]
+    assert (tmp_path / "public_news_events.csv").exists()
+    assert (tmp_path / "news_feature_daily.csv").exists()
+    assert (tmp_path / "topn_news_enrichment.csv").exists()
+
+
+def test_write_review_evidence_snapshot_entry_uses_snapshot_runner(tmp_path):
+    result = {
+        "status": "success",
+        "row_count": 4,
+        "asset_count": 2,
+        "review_item_snapshot_count": 2,
+        "evidence_digest_snapshot_count": 2,
+        "warnings": [],
+        "errors": [],
+        "artifact_path": str(tmp_path / "review_evidence_snapshots_summary.json"),
+        "snapshot_status": "success",
+    }
+    calls = []
+
+    entry = strategy_eod_publish._write_review_evidence_snapshot_entry(
+        run_id="strategy-eod-2026-06-18-local",
+        trade_date="2026-06-18",
+        output_dir=tmp_path,
+        started_at=strategy_eod_publish.datetime.now(strategy_eod_publish.timezone.utc),
+        snapshot_runner=lambda **kwargs: calls.append(kwargs) or result,
+    )
+
+    assert calls == [
+        {
+            "run_id": "strategy-eod-2026-06-18-local",
+            "trade_date": "2026-06-18",
+            "output_dir": tmp_path,
+            "limit": 30,
+        }
+    ]
+    assert entry["module"] == "review_evidence_snapshots"
+    assert entry["status"] == "success"
+    assert entry["row_count"] == 4
+    assert entry["asset_count"] == 2
+    assert entry["metadata"]["review_item_snapshot_count"] == 2
+    assert entry["metadata"]["evidence_digest_snapshot_count"] == 2
+
+
+def test_write_report_content_manifest_entries_marks_reports_ready(monkeypatch, tmp_path):
+    generated = tmp_path / "daily_report_2026-06-18.md"
+    generated.write_text("report", encoding="utf-8")
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_load_research_report_manifest_stats",
+        lambda trade_date: {
+            "row_count": 42,
+            "asset_count": 12,
+            "latest_trade_date": "2026-06-18",
+        },
+    )
+    monkeypatch.setattr(strategy_eod_publish, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    entries = strategy_eod_publish._write_report_content_manifest_entries(
+        run_id="strategy-eod-2026-06-18-local",
+        trade_date="2026-06-18",
+        started_at=strategy_eod_publish.datetime.now(strategy_eod_publish.timezone.utc),
+    )
+
+    modules = {entry["module"]: entry for entry in entries}
+    assert modules["research_reports"]["status"] == "success"
+    assert modules["research_reports"]["row_count"] == 42
+    assert modules["research_reports"]["asset_count"] == 12
+    assert modules["generated_reports"]["status"] == "success"
+    assert modules["generated_reports"]["row_count"] == 1
+    assert modules["generated_reports"]["artifact_path"] == str(generated)
+
+
+def test_strategy_payload_uses_official_10bps_and_20pct_position_cap() -> None:
+    lhb = strategy_eod_publish._strategy_payload("lhb_shortline", "2026-06-18")
+    mid = strategy_eod_publish._strategy_payload("mid_trend", "2026-06-18")
+
+    assert lhb["transaction_cost_bps"] == 10.0
+    assert lhb["max_position_weight"] == 0.2
+    assert mid["transaction_cost_bps"] == 10.0
+    assert mid["max_position_weight"] == 0.2
+
+
 def test_review_rows_use_lhb_candidate_final_score_when_positions_have_no_score() -> None:
     review = strategy_eod_publish._review_rows_from_result(
         {

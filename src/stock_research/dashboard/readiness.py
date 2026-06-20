@@ -25,6 +25,8 @@ CHECK_LABELS = {
     "platform_summary": "Platform Summary",
     "review_queue": "Review Queue",
     "news": "News",
+    "news_features": "News Features",
+    "news_enrichment": "News Enrichment",
     "research_reports": "Research Reports",
     "generated_reports": "Generated Reports",
     "review_evidence_snapshots": "Review/Evidence Snapshots",
@@ -35,6 +37,8 @@ UNAVAILABLE_WARNINGS = {
     "topn_preview": "TopN preview unavailable",
     "review_queue": "Review Queue unavailable",
     "news": "News unavailable",
+    "news_features": "News Features unavailable",
+    "news_enrichment": "News Enrichment unavailable",
     "research_reports": "Research Reports unavailable",
     "generated_reports": "Generated Reports unavailable",
     "review_evidence_snapshots": "Review/Evidence Snapshots unavailable",
@@ -248,6 +252,8 @@ def _manifest_checks(
     )
     for key, module in [
         ("news", "news"),
+        ("news_features", "news_features"),
+        ("news_enrichment", "news_enrichment"),
         ("research_reports", "research_reports"),
         ("generated_reports", "generated_reports"),
         ("review_evidence_snapshots", "review_evidence_snapshots"),
@@ -371,6 +377,18 @@ def _build_manifest_health_groups(
             fallback_detail="新闻数据可用；未写入当日日终 manifest",
             fallback_status="partial",
             fallback_latest_trade_date=latest_market_date,
+        ),
+        _manifest_health_item(
+            by_module,
+            key="news_features",
+            label="News Features",
+            modules=("news_features",),
+        ),
+        _manifest_health_item(
+            by_module,
+            key="news_enrichment",
+            label="News Enrichment",
+            modules=("news_enrichment",),
         ),
         _manifest_health_item(
             by_module,

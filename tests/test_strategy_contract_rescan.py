@@ -464,7 +464,7 @@ def test_contract_rejects_mismatched_variant() -> None:
         "engine_version": "mid_trend_v1",
         "variant_name": "other",
         "top_n": 5,
-        "transaction_cost_bps": 20.0,
+        "transaction_cost_bps": 10.0,
         "adjust_type": "hfq",
         "frequency": "weekly",
     }
@@ -494,7 +494,7 @@ def test_contract_accepts_matching_tech_bottleneck_summary() -> None:
         "frequency": "weekly",
         "protection_name": "rank_exit_top10_1d",
         "top_n": 5,
-        "transaction_cost_bps": 20.0,
+        "transaction_cost_bps": 10.0,
         "adjust_type": "hfq",
     }
 
@@ -601,6 +601,7 @@ def test_strategy_contract_run_config_maps_profiles_to_backend_payload() -> None
         "top_n": 5,
         "rebalance_frequency": "daily",
         "transaction_cost_bps": 10.0,
+        "max_position_weight": 0.2,
         "adjust_type": "qfq",
         "risk_profile": "balanced",
         "contract_id": "lhb_shortline:balanced:v1",
@@ -609,3 +610,5 @@ def test_strategy_contract_run_config_maps_profiles_to_backend_payload() -> None
     }
     assert strategy_contract_run_config(tech)["rebalance_frequency"] == "biweekly"
     assert strategy_contract_run_config(tech)["top_n"] == 5
+    assert strategy_contract_run_config(tech)["transaction_cost_bps"] == 10.0
+    assert strategy_contract_run_config(tech)["max_position_weight"] == 0.2

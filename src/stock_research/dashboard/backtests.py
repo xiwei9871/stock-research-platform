@@ -17,7 +17,11 @@ from stock_research.dashboard.strategy_backtest_adapters import (
 from stock_research.db import connect, fetch_all
 from stock_research.lhb_shortline_v1 import run_lhb_shortline_v1_backtest_for_dashboard
 from stock_research.mid_trend_v1 import run_mid_trend_v1_backtest_for_dashboard
-from stock_research.tech_bottleneck_v1 import run_tech_bottleneck_v1_backtest_for_dashboard
+from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod
+from stock_research.tech_bottleneck_v1 import (
+    TECH_BOTTLENECK_V1_CANDIDATES_PATH,
+    run_tech_bottleneck_v1_backtest_for_dashboard,
+)
 from stock_research.vectorized_topn_backtest import (
     VectorizedTopNConfig,
     run_vectorized_topn_backtest,
@@ -28,6 +32,7 @@ BACKTEST_LAB_STRATEGY_IDS = {
     "mid_trend",
     "tech_bottleneck",
 }
+TECH_BOTTLENECK_LAB_OUTPUT_ROOT = Path(getattr(SETTINGS, "output_root", "/Users/xiwei/stock_research/outputs")) / "research" / "strategy_lab_tech_bottleneck"
 
 
 def load_strategy_contracts(profile: str = "balanced") -> dict[str, Any]:
@@ -654,17 +659,23 @@ def run_fresh_backtest(payload: dict[str, Any]) -> dict[str, Any]:
             elapsed_ms=(time.perf_counter() - started) * 1000.0,
         )
     if strategy_id == "tech_bottleneck":
-        result = run_tech_bottleneck_v1_backtest_for_dashboard(
-            {
-                "start_date": params.start_date,
-                "end_date": params.end_date,
-                **run_config,
-            }
-        )
+        tech_payload = {
+            "start_date": params.start_date,
+            "end_date": params.end_date,
+            **run_config,
+        }
+        try:
+            result = run_tech_bottleneck_v1_backtest_for_dashboard(tech_payload)
+            source = str(result.get("source_kind") or "tech_bottleneck_v1")
+        except FileNotFoundError as exc:
+            if "candidate snapshot" not in str(exc):
+                raise
+            result = _run_tech_bottleneck_eod_backtest_for_lab(tech_payload)
+            source = "tech_bottleneck_eod"
         return _with_execution_metadata(
             _with_contract_config(to_json_safe(result), run_config),
             mode="fresh",
-            source=str(result.get("source_kind") or "tech_bottleneck_v1"),
+            source=source,
             started_at=started_at,
             elapsed_ms=(time.perf_counter() - started) * 1000.0,
         )
@@ -730,6 +741,93 @@ def _apply_strategy_contract_run_config(
         if key.startswith("contract_") or _payload_missing(payload, key):
             merged[key] = value
     return merged
+
+
+def _run_tech_bottleneck_eod_backtest_for_lab(payload: dict[str, Any]) -> dict[str, Any]:
+    end_date = str(payload["end_date"])
+    start_date = str(payload["start_date"])
+    output_dir = TECH_BOTTLENECK_LAB_OUTPUT_ROOT / end_date
+    base_candidates_path = _prepare_tech_bottleneck_base_candidate_source(
+        trade_date=end_date,
+        output_dir=output_dir,
+    )
+    eod_result = run_tech_bottleneck_eod(
+        start_date=start_date,
+        end_date=end_date,
+        output_dir=output_dir,
+        base_candidates_path=base_candidates_path,
+        manifest_upsert=lambda entry: entry,
+    )
+    strategy_entry = next(
+        (
+            entry
+            for entry in eod_result.get("manifest_entries", [])
+            if str(entry.get("module") or "") == "strategy_tech_bottleneck"
+        ),
+        {},
+    )
+    metadata = dict(strategy_entry.get("metadata") or {})
+    output_paths = dict(metadata.get("output_paths") or {})
+    summary = dict(metadata.get("summary") or {})
+    config = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "top_n": payload.get("top_n"),
+        "rebalance_frequency": payload.get("rebalance_frequency"),
+        "transaction_cost_bps": payload.get("transaction_cost_bps"),
+        "max_position_weight": payload.get("max_position_weight"),
+        "adjust_type": payload.get("adjust_type"),
+        "engine_version": "tech_bottleneck_v1",
+    }
+    return {
+        "strategy_id": "tech_bottleneck",
+        "strategy_name": "Tech Bottleneck Combo",
+        "read_only": False,
+        "source_kind": "tech_bottleneck_eod",
+        "config": config,
+        "summary": summary,
+        "equity_curve": _csv_records(output_paths.get("equity_path")),
+        "positions": _csv_records(output_paths.get("positions_path")),
+        "trades": _csv_records(output_paths.get("trades_path")),
+    }
+
+
+def _prepare_tech_bottleneck_base_candidate_source(*, trade_date: str, output_dir: Path) -> Path:
+    legacy = pd.read_csv(TECH_BOTTLENECK_V1_CANDIDATES_PATH, low_memory=False)
+    if legacy.empty:
+        raise ValueError("tech bottleneck legacy candidate seed is empty")
+    missing = [column for column in ["asset_id", "first_hit_date"] if column not in legacy.columns]
+    if missing:
+        raise ValueError(f"tech bottleneck legacy candidate seed missing columns: {missing}")
+
+    source = legacy.copy()
+    source["candidate_trade_date"] = source["first_hit_date"]
+    source["filter_decision"] = "pass"
+    if "fundamental_trade_date" in source.columns:
+        fundamental_dates = pd.to_datetime(source["fundamental_trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        source["financial_as_of_date"] = fundamental_dates.fillna(source["first_hit_date"].astype(str))
+    else:
+        source["financial_as_of_date"] = source["first_hit_date"]
+    if "technical_as_of_date" not in source.columns:
+        source["technical_as_of_date"] = source["first_hit_date"]
+    source["source_latest_trade_date"] = trade_date
+    source["data_as_of_date"] = trade_date
+    source["generated_trade_date"] = trade_date
+    source["candidate_source_mode"] = "legacy_static_seed_daily_pit"
+
+    output = output_dir / "tech_bottleneck_candidate_source" / "strict_153_st_only_financial_state_candidates.csv"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    source.to_csv(output, index=False)
+    return output
+
+
+def _csv_records(path: str | Path | None) -> list[dict[str, Any]]:
+    if not path:
+        return []
+    source = Path(path)
+    if not source.exists():
+        return []
+    return pd.read_csv(source, low_memory=False).to_dict("records")
 
 
 def _payload_missing(payload: dict[str, Any], key: str) -> bool:

@@ -11,6 +11,8 @@ DEFAULT_STRATEGY_CONTRACT_PATH = Path(
     "official_strategy_contract_rescan_20260101_20260617_fresh_all/"
     "official_strategy_contracts.json"
 )
+OFFICIAL_TRANSACTION_COST_BPS = 10.0
+OFFICIAL_MAX_POSITION_WEIGHT = 0.2
 
 
 @dataclass(frozen=True)
@@ -56,7 +58,8 @@ def strategy_contract_run_config(contract: StrategyContract) -> dict[str, Any]:
     config: dict[str, Any] = {
         "top_n": contract.top_n,
         "rebalance_frequency": contract.frequency,
-        "transaction_cost_bps": contract.transaction_cost_bps,
+        "transaction_cost_bps": OFFICIAL_TRANSACTION_COST_BPS,
+        "max_position_weight": OFFICIAL_MAX_POSITION_WEIGHT,
         "adjust_type": contract.adjust_type,
         "contract_id": contract.contract_id,
         "contract_profile": contract.profile,
@@ -83,7 +86,7 @@ def validate_strategy_summary_against_contract(
         (
             "transaction_cost_bps",
             _optional_float(summary.get("transaction_cost_bps")),
-            float(contract.transaction_cost_bps),
+            OFFICIAL_TRANSACTION_COST_BPS,
         ),
         ("adjust_type", str(summary.get("adjust_type") or ""), contract.adjust_type),
     ]

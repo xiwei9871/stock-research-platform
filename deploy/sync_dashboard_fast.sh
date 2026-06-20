@@ -23,6 +23,7 @@ if [[ -z "$LATEST_STRATEGY_DAILY_EOD" ]]; then
 fi
 
 strategy_output_dirs=(
+  "official_strategy_contract_rescan_20260101_20260617_fresh_all"
   "$LATEST_STRATEGY_DAILY_EOD"
   "web_lhb_shortline_v1_runs"
   "mid_trend_shadow_top10_context_fixed_20260602"
