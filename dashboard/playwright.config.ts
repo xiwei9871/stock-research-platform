@@ -1,9 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const playwrightPort = process.env.PLAYWRIGHT_PORT ?? '5174';
+const baseURL = `http://127.0.0.1:${playwrightPort}`;
+
 export default defineConfig({
   testDir: './tests',
   use: {
-    baseURL: 'http://127.0.0.1:5174',
+    baseURL,
     trace: 'on-first-retry'
   },
   projects: [
@@ -13,8 +16,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'pnpm dev',
-    url: 'http://127.0.0.1:5174',
+    command: `pnpm exec vite --host 127.0.0.1 --port ${playwrightPort}`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120000
   }
