@@ -68,6 +68,17 @@ describe('DashboardShell', () => {
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
   });
 
+  it('infers the lite workspace from a valid trade_date query param when workspace is omitted', () => {
+    window.history.replaceState({}, '', '/?trade_date=2026-06-19');
+
+    render(<DashboardShell />);
+
+    expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
+    expect(new URLSearchParams(window.location.search).get('workspace')).toBeNull();
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
+  });
+
   it('normalizes unknown workspace query params to the canonical workbench fallback', () => {
     window.history.replaceState({}, '', '/?workspace=unknown-workspace');
 

@@ -70,7 +70,12 @@ function readWorkspaceFromUrl() {
     return { workspace: DEFAULT_WORKSPACE, shouldCanonicalize: false };
   }
 
-  const rawWorkspace = new URLSearchParams(window.location.search).get('workspace');
+  const params = new URLSearchParams(window.location.search);
+  const rawWorkspace = params.get('workspace');
+  if (rawWorkspace === null && hasValidTradeDate(params.get('trade_date'))) {
+    return { workspace: 'daily-review-lite' as Workspace, shouldCanonicalize: false };
+  }
+
   return {
     workspace: normalizeWorkspace(rawWorkspace),
     shouldCanonicalize: rawWorkspace !== null && !isWorkspace(rawWorkspace)
@@ -96,4 +101,8 @@ function normalizeWorkspace(workspace: string | null): Workspace {
 
 function isWorkspace(workspace: string | null): workspace is Workspace {
   return NAV_ITEMS.some((item) => item.workspace === workspace);
+}
+
+function hasValidTradeDate(value: string | null) {
+  return value !== null && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }

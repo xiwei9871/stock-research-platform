@@ -9,7 +9,8 @@
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
     "test:e2e": "playwright test tests/app-smoke.spec.ts",
-    "test:e2e:lite": "CI=1 PLAYWRIGHT_PORT=4174 playwright test tests/daily-review-lite.spec.ts"
+    "test:e2e:lite": "CI=1 PLAYWRIGHT_PORT=4174 playwright test tests/daily-review-lite.spec.ts",
+    "test:e2e:dashboard-lite": "CI=1 PLAYWRIGHT_PORT=4274 playwright test tests/dashboard-lite-workspace.spec.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
