@@ -8,11 +8,23 @@ vi.mock('../src/workspaces/WorkbenchWorkspace', () => ({
 }));
 
 vi.mock('../src/pages/DailyReviewLitePage', () => ({
-  DailyReviewLitePage: ({ initialTradeDate }: { initialTradeDate?: string }) => (
+  DailyReviewLitePage: ({
+    initialTradeDate,
+    tradeDate,
+    onTradeDateChange
+  }: {
+    initialTradeDate?: string;
+    tradeDate?: string;
+    onTradeDateChange?: (value: string) => void;
+  }) => (
     <div data-testid="daily-review-lite-workspace">
       <label>
         <span>Trade Date</span>
-        <input type="date" value={initialTradeDate ?? ''} readOnly />
+        <input
+          type="date"
+          value={tradeDate ?? initialTradeDate ?? ''}
+          onChange={(event) => onTradeDateChange?.(event.target.value)}
+        />
       </label>
     </div>
   )
@@ -68,14 +80,14 @@ describe('DashboardShell', () => {
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
   });
 
-  it('infers the lite workspace from a valid trade_date query param when workspace is omitted', () => {
+  it('canonicalizes a bare trade_date query param to the lite workspace URL state', () => {
     window.history.replaceState({}, '', '/?trade_date=2026-06-19');
 
     render(<DashboardShell />);
 
     expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
-    expect(new URLSearchParams(window.location.search).get('workspace')).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('workspace')).toBe('daily-review-lite');
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
   });
 
@@ -108,5 +120,22 @@ describe('DashboardShell', () => {
     expect(screen.getByTestId('workbench-workspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
     expect(new URLSearchParams(window.location.search).get('workspace')).toBe('review-queue');
+  });
+
+  it('syncs the lite trade date from popstate events while staying in the lite workspace', () => {
+    window.history.replaceState({}, '', '/?workspace=daily-review-lite&trade_date=2026-06-19');
+
+    render(<DashboardShell />);
+
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
+
+    window.history.pushState({}, '', '/?workspace=daily-review-lite&trade_date=2026-06-20');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-20');
   });
 });

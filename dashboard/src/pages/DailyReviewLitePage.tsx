@@ -14,18 +14,21 @@ type LoadState =
 
 type DailyReviewLitePageProps = {
   initialTradeDate?: string;
+  tradeDate?: string;
+  onTradeDateChange?: (value: string) => void;
 };
 
-export function DailyReviewLitePage({ initialTradeDate }: DailyReviewLitePageProps) {
-  const [tradeDate, setTradeDate] = useState(() => resolveInitialTradeDate(initialTradeDate));
+export function DailyReviewLitePage({ initialTradeDate, tradeDate, onTradeDateChange }: DailyReviewLitePageProps) {
+  const [uncontrolledTradeDate, setUncontrolledTradeDate] = useState(() => resolveInitialTradeDate(initialTradeDate));
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
+  const selectedTradeDate = tradeDate ?? uncontrolledTradeDate;
 
   useEffect(() => {
     let cancelled = false;
 
     setLoadState({ status: 'loading' });
 
-    fetchDailyReviewLite(tradeDate, undefined)
+    fetchDailyReviewLite(selectedTradeDate, undefined)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -43,7 +46,14 @@ export function DailyReviewLitePage({ initialTradeDate }: DailyReviewLitePagePro
     return () => {
       cancelled = true;
     };
-  }, [tradeDate]);
+  }, [selectedTradeDate]);
+
+  function handleTradeDateChange(nextTradeDate: string) {
+    if (tradeDate === undefined) {
+      setUncontrolledTradeDate(nextTradeDate);
+    }
+    onTradeDateChange?.(nextTradeDate);
+  }
 
   return (
     <main className="daily-review-lite-page">
@@ -53,7 +63,7 @@ export function DailyReviewLitePage({ initialTradeDate }: DailyReviewLitePagePro
       </header>
       <label className="daily-review-lite-date-field">
         <span>Trade Date</span>
-        <input type="date" value={tradeDate} onChange={(event) => setTradeDate(event.target.value)} />
+        <input type="date" value={selectedTradeDate} onChange={(event) => handleTradeDateChange(event.target.value)} />
       </label>
       {loadState.status === 'ready' && loadState.payload !== null ? <StatusBanner payload={loadState.payload} /> : null}
       {renderPageBody(loadState)}

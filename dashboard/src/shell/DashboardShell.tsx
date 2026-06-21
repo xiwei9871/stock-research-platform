@@ -9,17 +9,24 @@ const NAV_ITEMS = [
 ] as const;
 
 type Workspace = (typeof NAV_ITEMS)[number]['workspace'];
+type ShellUrlState = {
+  workspace: Workspace;
+  tradeDate?: string;
+};
 
 const DEFAULT_WORKSPACE: Workspace = 'review-queue';
 
 export function DashboardShell() {
-  const [workspace, setWorkspace] = useState<Workspace>(() => readWorkspaceFromUrl().workspace);
+  const [urlState, setUrlState] = useState<ShellUrlState>(() => {
+    const { workspace, tradeDate } = readUrlStateFromUrl();
+    return { workspace, tradeDate };
+  });
 
   useEffect(() => {
-    syncWorkspaceWithUrl();
+    syncUrlStateWithUrl();
 
     const handlePopState = () => {
-      syncWorkspaceWithUrl();
+      syncUrlStateWithUrl();
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -28,21 +35,34 @@ export function DashboardShell() {
     };
   }, []);
 
-  function syncWorkspaceWithUrl() {
-    const { workspace: nextWorkspace, shouldCanonicalize } = readWorkspaceFromUrl();
+  function syncUrlStateWithUrl() {
+    const { workspace, tradeDate, shouldCanonicalize } = readUrlStateFromUrl();
     if (shouldCanonicalize) {
-      writeWorkspaceToUrl(nextWorkspace, { replace: true });
+      writeUrlStateToUrl({ workspace, tradeDate }, { replace: true });
     }
-    setWorkspace(nextWorkspace);
+    setUrlState({ workspace, tradeDate });
   }
 
   function handleWorkspaceSelect(nextWorkspace: Workspace) {
-    writeWorkspaceToUrl(nextWorkspace);
-    setWorkspace(nextWorkspace);
+    const nextState = {
+      workspace: nextWorkspace,
+      tradeDate: urlState.tradeDate
+    };
+    writeUrlStateToUrl(nextState);
+    setUrlState(nextState);
+  }
+
+  function handleTradeDateChange(nextTradeDate: string) {
+    const nextState = {
+      workspace: 'daily-review-lite' as Workspace,
+      tradeDate: nextTradeDate
+    };
+    writeUrlStateToUrl(nextState);
+    setUrlState(nextState);
   }
 
   const WorkspaceComponent =
-    workspace === 'daily-review-lite' ? DailyReviewLiteWorkspace : WorkbenchWorkspace;
+    urlState.workspace === 'daily-review-lite' ? DailyReviewLiteWorkspace : WorkbenchWorkspace;
 
   return (
     <div className="dashboard-shell">
@@ -51,7 +71,7 @@ export function DashboardShell() {
           <button
             key={item.workspace}
             type="button"
-            aria-pressed={workspace === item.workspace}
+            aria-pressed={urlState.workspace === item.workspace}
             onClick={() => handleWorkspaceSelect(item.workspace)}
           >
             {item.label}
@@ -59,32 +79,41 @@ export function DashboardShell() {
         ))}
       </nav>
       <div className="dashboard-shell-content">
-        <WorkspaceComponent />
+        {urlState.workspace === 'daily-review-lite' ? (
+          <WorkspaceComponent tradeDate={urlState.tradeDate} onTradeDateChange={handleTradeDateChange} />
+        ) : (
+          <WorkspaceComponent />
+        )}
       </div>
     </div>
   );
 }
 
-function readWorkspaceFromUrl() {
+function readUrlStateFromUrl(): ShellUrlState & { shouldCanonicalize: boolean } {
   if (typeof window === 'undefined') {
-    return { workspace: DEFAULT_WORKSPACE, shouldCanonicalize: false };
+    return { workspace: DEFAULT_WORKSPACE, tradeDate: undefined, shouldCanonicalize: false };
   }
 
   const params = new URLSearchParams(window.location.search);
   const rawWorkspace = params.get('workspace');
-  if (rawWorkspace === null && hasValidTradeDate(params.get('trade_date'))) {
-    return { workspace: 'daily-review-lite' as Workspace, shouldCanonicalize: false };
-  }
+  const tradeDate = normalizeTradeDate(params.get('trade_date'));
+  const workspace = rawWorkspace === null && tradeDate ? ('daily-review-lite' as Workspace) : normalizeWorkspace(rawWorkspace);
 
   return {
-    workspace: normalizeWorkspace(rawWorkspace),
-    shouldCanonicalize: rawWorkspace !== null && !isWorkspace(rawWorkspace)
+    workspace,
+    tradeDate,
+    shouldCanonicalize: (rawWorkspace === null && tradeDate !== undefined) || (rawWorkspace !== null && !isWorkspace(rawWorkspace))
   };
 }
 
-function writeWorkspaceToUrl(workspace: Workspace, options?: { replace?: boolean }) {
+function writeUrlStateToUrl({ workspace, tradeDate }: ShellUrlState, options?: { replace?: boolean }) {
   const url = new URL(window.location.href);
   url.searchParams.set('workspace', workspace);
+  if (tradeDate) {
+    url.searchParams.set('trade_date', tradeDate);
+  } else {
+    url.searchParams.delete('trade_date');
+  }
   const nextUrl = `${url.pathname}${url.search}`;
 
   if (options?.replace) {
@@ -103,6 +132,14 @@ function isWorkspace(workspace: string | null): workspace is Workspace {
   return NAV_ITEMS.some((item) => item.workspace === workspace);
 }
 
-function hasValidTradeDate(value: string | null) {
+function hasValidTradeDate(value: string | null): value is string {
   return value !== null && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function normalizeTradeDate(value: string | null): string | undefined {
+  if (!hasValidTradeDate(value)) {
+    return undefined;
+  }
+
+  return value;
 }
