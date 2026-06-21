@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardShell } from '../src/shell/DashboardShell';
 
@@ -38,5 +38,45 @@ describe('DashboardShell', () => {
 
     expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
     expect(new URLSearchParams(window.location.search).get('workspace')).toBe('daily-review-lite');
+  });
+
+  it('mounts the lite workspace from the workspace query param', () => {
+    window.history.replaceState({}, '', '/?workspace=daily-review-lite');
+
+    render(<DashboardShell />);
+
+    expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('normalizes unknown workspace query params to the canonical workbench fallback', () => {
+    window.history.replaceState({}, '', '/?workspace=unknown-workspace');
+
+    render(<DashboardShell />);
+
+    expect(screen.getByTestId('workbench-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
+    expect(new URLSearchParams(window.location.search).get('workspace')).toBe('review-queue');
+  });
+
+  it('syncs workspace state from popstate events after the URL changes', () => {
+    render(<DashboardShell />);
+
+    window.history.pushState({}, '', '/?workspace=daily-review-lite');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
+
+    window.history.pushState({}, '', '/?workspace=not-real');
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(screen.getByTestId('workbench-workspace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
+    expect(new URLSearchParams(window.location.search).get('workspace')).toBe('review-queue');
   });
 });

@@ -8,12 +8,18 @@ const NAV_ITEMS = [
   { label: '市场监控', workspace: 'market-monitor' }
 ] as const;
 
+type Workspace = (typeof NAV_ITEMS)[number]['workspace'];
+
+const DEFAULT_WORKSPACE: Workspace = 'review-queue';
+
 export function DashboardShell() {
-  const [workspace, setWorkspace] = useState(() => readWorkspaceFromUrl());
+  const [workspace, setWorkspace] = useState<Workspace>(() => readWorkspaceFromUrl().workspace);
 
   useEffect(() => {
+    syncWorkspaceWithUrl();
+
     const handlePopState = () => {
-      setWorkspace(readWorkspaceFromUrl());
+      syncWorkspaceWithUrl();
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -22,7 +28,15 @@ export function DashboardShell() {
     };
   }, []);
 
-  function handleWorkspaceSelect(nextWorkspace: string) {
+  function syncWorkspaceWithUrl() {
+    const { workspace: nextWorkspace, shouldCanonicalize } = readWorkspaceFromUrl();
+    if (shouldCanonicalize) {
+      writeWorkspaceToUrl(nextWorkspace, { replace: true });
+    }
+    setWorkspace(nextWorkspace);
+  }
+
+  function handleWorkspaceSelect(nextWorkspace: Workspace) {
     writeWorkspaceToUrl(nextWorkspace);
     setWorkspace(nextWorkspace);
   }
@@ -51,14 +65,33 @@ export function DashboardShell() {
 
 function readWorkspaceFromUrl() {
   if (typeof window === 'undefined') {
-    return null;
+    return { workspace: DEFAULT_WORKSPACE, shouldCanonicalize: false };
   }
 
-  return new URLSearchParams(window.location.search).get('workspace');
+  const rawWorkspace = new URLSearchParams(window.location.search).get('workspace');
+  return {
+    workspace: normalizeWorkspace(rawWorkspace),
+    shouldCanonicalize: rawWorkspace !== null && !isWorkspace(rawWorkspace)
+  };
 }
 
-function writeWorkspaceToUrl(workspace: string) {
+function writeWorkspaceToUrl(workspace: Workspace, options?: { replace?: boolean }) {
   const url = new URL(window.location.href);
   url.searchParams.set('workspace', workspace);
-  window.history.pushState({}, '', `${url.pathname}${url.search}`);
+  const nextUrl = `${url.pathname}${url.search}`;
+
+  if (options?.replace) {
+    window.history.replaceState({}, '', nextUrl);
+    return;
+  }
+
+  window.history.pushState({}, '', nextUrl);
+}
+
+function normalizeWorkspace(workspace: string | null): Workspace {
+  return isWorkspace(workspace) ? workspace : DEFAULT_WORKSPACE;
+}
+
+function isWorkspace(workspace: string | null): workspace is Workspace {
+  return NAV_ITEMS.some((item) => item.workspace === workspace);
 }
