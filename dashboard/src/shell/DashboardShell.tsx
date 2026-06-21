@@ -45,8 +45,8 @@ export function DashboardShell() {
     workspace === 'daily-review-lite' ? DailyReviewLiteWorkspace : WorkbenchWorkspace;
 
   return (
-    <>
-      <nav aria-label="Dashboard workspaces">
+    <div className="dashboard-shell">
+      <nav className="dashboard-shell-nav" aria-label="Dashboard workspaces">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.workspace}
@@ -58,8 +58,10 @@ export function DashboardShell() {
           </button>
         ))}
       </nav>
-      <WorkspaceComponent />
-    </>
+      <main className="dashboard-shell-content">
+        <WorkspaceComponent />
+      </main>
+    </div>
   );
 }
 

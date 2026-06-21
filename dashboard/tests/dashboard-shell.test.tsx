@@ -50,8 +50,14 @@ describe('DashboardShell', () => {
   it('mounts the lite workspace from the workspace and trade_date query params', () => {
     window.history.replaceState({}, '', '/?workspace=daily-review-lite&trade_date=2026-06-19');
 
-    render(<DashboardShell />);
+    const { container } = render(<DashboardShell />);
 
+    expect(container.firstElementChild).toHaveClass('dashboard-shell');
+    expect(container.querySelector('.dashboard-shell-nav')).toHaveAttribute(
+      'aria-label',
+      'Dashboard workspaces'
+    );
+    expect(container.querySelector('.dashboard-shell-content')).toBeInTheDocument();
     expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');

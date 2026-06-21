@@ -12,6 +12,50 @@ body {
   margin: 0;
 }
 
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.dashboard-shell-nav {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 20px 16px;
+  background: #ffffff;
+  border-right: 1px solid #d9dee7;
+}
+
+.dashboard-shell-nav button {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #202936;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+.dashboard-shell-nav button:hover {
+  background: #f5f8fc;
+  border-color: #d9dee7;
+}
+
+.dashboard-shell-nav button[aria-pressed="true"] {
+  background: #edf4ff;
+  border-color: #9ab3d5;
+  color: #183b63;
+  font-weight: 700;
+}
+
+.dashboard-shell-content {
+  min-width: 0;
+}
+
 .daily-review-lite-page {
   display: grid;
   gap: 20px;
@@ -124,6 +168,19 @@ body {
 }
 
 @media (max-width: 900px) {
+  .dashboard-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-shell-nav {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: stretch;
+    border-right: 0;
+    border-bottom: 1px solid #d9dee7;
+    overflow-x: auto;
+  }
+
   .daily-review-lite-page {
     padding: 16px;
   }
