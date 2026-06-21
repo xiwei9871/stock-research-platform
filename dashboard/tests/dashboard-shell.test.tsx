@@ -25,9 +25,14 @@ afterEach(() => {
 
 describe('DashboardShell', () => {
   it('renders the workspace nav order and switches to the lite workspace via URL state', () => {
-    render(<DashboardShell />);
+    const { container } = render(<DashboardShell />);
 
     expect(screen.getByTestId('workbench-workspace')).toBeInTheDocument();
+
+    expect(container.firstElementChild).toHaveClass('dashboard-shell');
+    const shellContent = container.querySelector('.dashboard-shell-content');
+    expect(shellContent?.tagName).toBe('DIV');
+    expect(shellContent).toContainElement(screen.getByTestId('workbench-workspace'));
 
     const navigation = screen.getByRole('navigation', { name: 'Dashboard workspaces' });
     const navButtons = within(navigation).getAllByRole('button');

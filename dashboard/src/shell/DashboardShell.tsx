@@ -58,9 +58,9 @@ export function DashboardShell() {
           </button>
         ))}
       </nav>
-      <main className="dashboard-shell-content">
+      <div className="dashboard-shell-content">
         <WorkspaceComponent />
-      </main>
+      </div>
     </div>
   );
 }
