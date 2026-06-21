@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 test('renders the Daily Review Lite smoke path from a mocked API payload', async ({ page }) => {
+  let requestUrl: string | null = null;
+  const artifactHref =
+    '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123';
+
   await page.route('/api/daily-review-lite**', async (route) => {
+    requestUrl = route.request().url();
     await route.fulfill({
       json: {
         trade_date: '2026-06-20',
@@ -89,7 +94,7 @@ test('renders the Daily Review Lite smoke path from a mocked API payload', async
             available: true,
             filename: 'daily_review.json',
             content_type: 'application/json',
-            url: '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
+            url: artifactHref
           }
         ]
       }
@@ -101,5 +106,10 @@ test('renders the Daily Review Lite smoke path from a mocked API payload', async
   await expect(page.getByRole('heading', { name: 'Daily Review Lite' })).toBeVisible();
   await expect(page.getByText('Loaded from fallback package scan')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Strategy Summaries' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Daily Review JSON' })).toBeVisible();
+  const artifactLink = page.getByRole('link', { name: 'Daily Review JSON' });
+  await expect(artifactLink).toBeVisible();
+  await expect(artifactLink).toHaveAttribute('href', artifactHref);
+
+  expect(requestUrl).not.toBeNull();
+  expect(new URL(requestUrl!).searchParams.get('trade_date')).toBe('2026-06-20');
 });
