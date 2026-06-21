@@ -74,6 +74,32 @@ def test_backfill_watchdog_host_scripts_skip_after_completion_sentinel(
     assert "skipped because backfill completion sentinel is current" in contents
 
 
+def test_minute_backfill_watchdog_host_uses_workers_8_by_default(tmp_path):
+    run_log = tmp_path / "minute_backfill_watchdog.host.log"
+    invoke_log = tmp_path / "python_invoked.log"
+    sentinel = tmp_path / "watchdog.completed"
+    fake_python = _write_fake_python(tmp_path)
+    env = _host_env(
+        tmp_path=tmp_path,
+        env_prefix="MINUTE_BACKFILL_WATCHDOG",
+        fake_python=fake_python,
+        run_log=run_log,
+        invoke_log=invoke_log,
+        sentinel=sentinel,
+    )
+
+    result = subprocess.run(
+        ["bash", "/Users/xiwei/stock_research/scripts/run_minute_backfill_watchdog_host.sh"],
+        check=False,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "--workers 8" in invoke_log.read_text()
+
+
 def _write_fake_python(tmp_path: Path) -> Path:
     fake_python = tmp_path / "fake_python.sh"
     fake_python.write_text(

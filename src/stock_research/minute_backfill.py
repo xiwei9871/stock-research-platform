@@ -513,6 +513,66 @@ def run_baostock_minute_backfill(
     return result
 
 
+def benchmark_baostock_minute_backfill_workers(
+    *,
+    worker_counts: list[int],
+    start_date: str | None = None,
+    end_date: str | None = None,
+    freq: str | None = None,
+    adjust_types: list[str] | None = None,
+    batch_by: str = "month",
+    max_jobs: int = 50,
+    retry_failed: bool = False,
+    sleep_seconds: float = 0.5,
+    reset_stale_before_run: bool = True,
+) -> dict[str, Any]:
+    if not worker_counts:
+        raise ValueError("worker_counts must not be empty")
+    rows: list[dict[str, Any]] = []
+    for workers in worker_counts:
+        if workers <= 0:
+            raise ValueError("worker_counts must be positive")
+        started_at = time.monotonic()
+        result = run_baostock_minute_backfill(
+            start_date=start_date,
+            end_date=end_date,
+            freq=freq,
+            adjust_types=adjust_types,
+            batch_by=batch_by,
+            max_jobs=max_jobs,
+            retry_failed=retry_failed,
+            sleep_seconds=sleep_seconds,
+            workers=workers,
+            reset_stale_before_run=reset_stale_before_run,
+        )
+        elapsed_seconds = round(time.monotonic() - started_at, 6)
+        attempted = int(result["attempted"])
+        row_count = int(result["rows"])
+        rows.append(
+            {
+                "workers": workers,
+                "attempted": attempted,
+                "success": int(result["success"]),
+                "failed": int(result["failed"]),
+                "rows": row_count,
+                "elapsed_seconds": elapsed_seconds,
+                "jobs_per_second": round(attempted / elapsed_seconds, 6) if elapsed_seconds else 0.0,
+                "rows_per_second": round(row_count / elapsed_seconds, 6) if elapsed_seconds else 0.0,
+                "failed_rate": round(int(result["failed"]) / attempted, 6) if attempted else 0.0,
+            }
+        )
+    best = max(rows, key=lambda row: row["rows_per_second"]) if rows else None
+    return {
+        "summary": {
+            "worker_counts": worker_counts,
+            "best_workers_by_rows_per_second": best["workers"] if best else None,
+            "total_attempted": sum(int(row["attempted"]) for row in rows),
+            "total_failed": sum(int(row["failed"]) for row in rows),
+        },
+        "rows": rows,
+    }
+
+
 def load_backfill_status_rows(
     start_date: dt.date | None = None,
     end_date: dt.date | None = None,

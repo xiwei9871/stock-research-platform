@@ -92,7 +92,7 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     assert generic_calls[0]["stale_after_minutes"] == 20
     assert generic_calls[0]["run_timeout_seconds"] == 1800
     assert generic_calls[0]["max_jobs"] == 1200
-    assert generic_calls[0]["workers"] == 6
+    assert generic_calls[0]["workers"] == 8
     assert generic_calls[0]["send_message"] is None
     assert sent == []
     assert result["pre_summary"] == {
@@ -695,26 +695,52 @@ def test_cron_jobs_include_minute_backfill_watchdog():
     )
 
 
-def test_cron_jobs_include_stock_daily_data_pipeline():
+def test_cron_jobs_include_stock_close_and_ready_jobs():
     jobs = json.loads(Path("/Users/xiwei/.openclaw/cron/jobs.json").read_text())["jobs"]
-    job = next((item for item in jobs if item["name"] == "stock-daily-data-pipeline"), None)
+    minute_job = next(
+        (item for item in jobs if item["name"] == "stock-daily-close-minute5-split"),
+        None,
+    )
+    build_job = next(
+        (item for item in jobs if item["name"] == "stock-platform-ready-build"),
+        None,
+    )
+    check_job = next(
+        (item for item in jobs if item["name"] == "stock-platform-ready-check"),
+        None,
+    )
 
-    assert job is not None
-    assert job["enabled"] is True
-    assert job["agentId"] == "agent_jarvis"
-    assert job["schedule"] == {
+    assert minute_job is not None
+    assert minute_job["enabled"] is True
+    assert minute_job["agentId"] == "agent_jarvis"
+    assert minute_job["schedule"] == {
         "kind": "cron",
-        "expr": "10 21 * * 1-5",
+        "expr": "0 17 * * 1-5",
         "tz": "Asia/Shanghai",
+        "staggerMs": 0,
     }
-    assert job["delivery"] == {"mode": "none"}
-    assert job["failureAlert"]["channel"] == "feishu"
-    assert job["payload"]["kind"] == "agentTurn"
-    assert job["payload"]["toolsAllow"] == ["exec"]
-    assert job["payload"]["timeoutSeconds"] == 7200
-    assert "/Users/xiwei/stock_research/scripts/run_stock_daily_data_pipeline.sh" in job["payload"]["message"]
-    assert "/approval" not in job["payload"]["message"]
-    assert "不要申请 approval" in job["payload"]["message"]
-    assert job["payload"]["message"].lower().count("approval") == 1
-    assert "飞书进度报告由脚本自己发送" in job["payload"]["message"]
-    assert job["sessionTarget"] == "isolated"
+    assert minute_job["payload"]["timeoutSeconds"] == 5400
+    assert (
+        "/Users/xiwei/stock_research/scripts/run_daily_close_pipeline_cron.sh minute5"
+        in minute_job["payload"]["message"]
+    )
+
+    assert build_job is not None
+    assert build_job["enabled"] is True
+    assert build_job["schedule"] == {
+        "kind": "cron",
+        "expr": "0 19 * * 1-5",
+        "tz": "Asia/Shanghai",
+        "staggerMs": 0,
+    }
+    assert build_job["payload"]["timeoutSeconds"] == 5400
+
+    assert check_job is not None
+    assert check_job["enabled"] is True
+    assert check_job["schedule"] == {
+        "kind": "cron",
+        "expr": "55 19 * * 1-5",
+        "tz": "Asia/Shanghai",
+        "staggerMs": 0,
+    }
+    assert check_job["payload"]["timeoutSeconds"] == 1200

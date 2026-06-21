@@ -157,6 +157,7 @@ def run_stock_report_backfill_run(
         sleep_seconds=sleep_seconds,
         output_dir=output_dir,
     )
+    result.setdefault("paths", {})["tasks"] = str(tasks_path)
     if write_db:
         upsert_stock_report_sources_events(
             sources=result["sources"],

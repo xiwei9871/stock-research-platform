@@ -9,6 +9,8 @@ import {
   fetchExperimentReplay,
   fetchOutcomeAnalytics,
   fetchOverview,
+  fetchPublicNews,
+  refreshPublicNews,
   fetchShadowAnalyticsReview,
   fetchShadowFollowUpQueue,
   fetchShadowFollowUpResolution,
@@ -25,6 +27,7 @@ import type {
   ExperimentProposalRow,
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
+  PublicNewsItem,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -41,6 +44,7 @@ import { ExperimentProposalsPanel } from './components/ExperimentProposalsPanel'
 import { ExperimentReplayPanel } from './components/ExperimentReplayPanel';
 import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
+import { PublicNewsPanel } from './components/PublicNewsPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
 import { ShadowOutcomesPanel } from './components/ShadowOutcomesPanel';
@@ -55,6 +59,14 @@ import { WatchlistList } from './components/WatchlistList';
 
 const DEFAULT_TRADE_DATE = '2026-05-29';
 const DEFAULT_ASSET_ID = '000001.SZ';
+const CHART_RESOLUTIONS = [
+  { value: '1D', label: '日K' },
+  { value: '60m', label: '60m' },
+  { value: '30m', label: '30m' },
+  { value: '10m', label: '10m' },
+  { value: '5m', label: '5m' }
+] as const;
+type ChartResolution = (typeof CHART_RESOLUTIONS)[number]['value'];
 
 function dateNDaysBefore(dateText: string, days: number) {
   const [year, month, day] = dateText.split('-').map(Number);
@@ -69,6 +81,7 @@ function dateNDaysBefore(dateText: string, days: number) {
 export function App() {
   const [tradeDate, setTradeDate] = useState(DEFAULT_TRADE_DATE);
   const [selectedAssetId, setSelectedAssetId] = useState(DEFAULT_ASSET_ID);
+  const [chartResolution, setChartResolution] = useState<ChartResolution>('1D');
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [bars, setBars] = useState<BarPoint[]>([]);
   const [score, setScore] = useState<ScoreRow | null>(null);
@@ -76,6 +89,8 @@ export function App() {
   const [decisions, setDecisions] = useState<DecisionEventRow[]>([]);
   const [outcomes, setOutcomes] = useState<DecisionOutcomeRow[]>([]);
   const [outcomeAnalytics, setOutcomeAnalytics] = useState<OutcomeAnalyticsRow[]>([]);
+  const [publicNews, setPublicNews] = useState<PublicNewsItem[]>([]);
+  const [publicNewsWarnings, setPublicNewsWarnings] = useState<string[]>([]);
   const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
   const [experimentReplay, setExperimentReplay] = useState<ExperimentReplayRow[]>([]);
   const [shadowWatchlist, setShadowWatchlist] = useState<ShadowWatchlistRow[]>([]);
@@ -88,6 +103,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [assetLoading, setAssetLoading] = useState(false);
+  const [publicNewsLoading, setPublicNewsLoading] = useState(false);
   const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
   const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
@@ -147,6 +163,37 @@ export function App() {
       ignore = true;
     };
   }, [startDate, tradeDate]);
+
+  useEffect(() => {
+    let ignore = false;
+    setPublicNewsLoading(true);
+    fetchPublicNews({ source: 'sina_finance', limit: 100, offset: 0 })
+      .then((payload) => {
+        if (!ignore) {
+          setPublicNews(payload.items);
+          setPublicNewsWarnings(payload.warnings ?? []);
+          setPublicNewsLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setPublicNews([]);
+          setPublicNewsWarnings([err instanceof Error ? err.message : String(err)]);
+          setPublicNewsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function handlePublicNewsRefresh() {
+    const refreshResult = await refreshPublicNews();
+    const payload = await fetchPublicNews({ source: 'sina_finance', limit: 100, offset: 0 });
+    setPublicNews(payload.items);
+    setPublicNewsWarnings([...(refreshResult.warnings ?? []), ...(payload.warnings ?? [])]);
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -365,8 +412,12 @@ export function App() {
     let ignore = false;
     setError(null);
     setAssetLoading(true);
+    const chartOptions = {
+      resolution: chartResolution,
+      adjustType: chartResolution === '1D' ? 'qfq' : 'raw'
+    };
     Promise.all([
-      fetchDailyBars(selectedAssetId, startDate, tradeDate),
+      fetchDailyBars(selectedAssetId, undefined, tradeDate, chartOptions),
       fetchAssetScore(selectedAssetId, tradeDate),
       fetchAssetSignals(selectedAssetId, tradeDate),
       fetchAssetDecisions(selectedAssetId, startDate, tradeDate),
@@ -392,7 +443,7 @@ export function App() {
     return () => {
       ignore = true;
     };
-  }, [selectedAssetId, startDate, tradeDate]);
+  }, [selectedAssetId, chartResolution, startDate, tradeDate]);
 
   return (
     <main className="workbench">
@@ -427,6 +478,19 @@ export function App() {
           {error ? <span className="error-text">{error}</span> : null}
         </header>
         <section className="chart-panel">
+          <div className="chart-toolbar" aria-label="chart resolution">
+            {CHART_RESOLUTIONS.map((resolution) => (
+              <button
+                key={resolution.value}
+                type="button"
+                className="segment-button"
+                aria-pressed={chartResolution === resolution.value}
+                onClick={() => setChartResolution(resolution.value)}
+              >
+                {resolution.label}
+              </button>
+            ))}
+          </div>
           {assetLoading ? (
             <p className="muted">Loading asset review...</p>
           ) : bars.length > 0 ? (
@@ -441,6 +505,12 @@ export function App() {
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />
         <OutcomeAnalyticsPanel rows={outcomeAnalytics} />
+        <PublicNewsPanel
+          items={publicNews}
+          warnings={publicNewsWarnings}
+          isLoading={publicNewsLoading}
+          onRefresh={handlePublicNewsRefresh}
+        />
         <ExperimentProposalsPanel rows={experimentProposals} />
         <ExperimentReplayPanel rows={experimentReplay} isLoading={experimentReplayLoading} />
         <ShadowWatchlistPanel rows={shadowWatchlist} isLoading={shadowWatchlistLoading} />

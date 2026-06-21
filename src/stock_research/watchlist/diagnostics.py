@@ -32,6 +32,7 @@ def build_watchlist_diagnostics(
     factor_frame: pd.DataFrame | None = None,
     dragon_frame: pd.DataFrame | None = None,
     lhb_frame: pd.DataFrame | None = None,
+    lhb_shortline_frame: pd.DataFrame | None = None,
     event_frame: pd.DataFrame | None = None,
     market_frame: pd.DataFrame | None = None,
     risk_watch_n: int,
@@ -54,6 +55,11 @@ def build_watchlist_diagnostics(
         how="left",
     )
     frame = frame.merge(
+        _merge_ready_frame(_normalize_lhb_shortline_frame(lhb_shortline_frame), defaults=_lhb_shortline_defaults()),
+        on="asset_id",
+        how="left",
+    )
+    frame = frame.merge(
         _merge_ready_frame(event_frame, defaults=_event_defaults()),
         on="asset_id",
         how="left",
@@ -68,6 +74,7 @@ def build_watchlist_diagnostics(
     frame["failure_flag"] = frame["failure_flag"].map(_coerce_bool)
     frame["event_structure"] = frame.apply(_resolved_event_structure, axis=1)
     frame["watch_group"] = frame.apply(_classify_watch_group, axis=1)
+    frame["watch_group"] = frame.apply(_apply_lhb_shortline_watch_group, axis=1)
     frame["watch_priority"] = frame.apply(_priority_value, axis=1)
     frame["diagnostic_reason"] = frame.apply(_diagnostic_reason, axis=1)
     frame["risk_note"] = frame.apply(_risk_note, axis=1)
@@ -172,13 +179,24 @@ def _risk_note(row: pd.Series) -> str:
         notes.append("intraday_fade")
     if row.get("watch_group") == "high_odds_burst_watch":
         notes.append("high_odds_burst")
+    shortline_group = _normalize_text(row.get("lhb_shortline_watch_group"))
+    if shortline_group in {"avoid_watch", "exit_watch"}:
+        notes.append(f"lhb_shortline:{shortline_group}")
+    shortline_exit = _normalize_text(row.get("lhb_shortline_exit_reason"))
+    if shortline_exit:
+        notes.append(shortline_exit)
     return ",".join(notes)
 
 
 def _opportunity_note(row: pd.Series) -> str:
-    if row.get("watch_group") != "opportunity_watch":
-        return ""
-    return _normalize_text(row.get("event_structure"))
+    notes: list[str] = []
+    if row.get("watch_group") == "opportunity_watch":
+        notes.append(_normalize_text(row.get("event_structure")))
+    if row.get("watch_group") in {"opportunity_watch", "high_odds_burst_watch"}:
+        shortline_reason = _normalize_text(row.get("lhb_shortline_watch_reason"))
+        if shortline_reason:
+            notes.append(shortline_reason)
+    return ",".join(note for note in notes if note)
 
 
 def _coerce_float(value: Any) -> float:
@@ -247,7 +265,6 @@ def _has_negative_lhb_signal(row: pd.Series) -> bool:
     if (
         _coerce_bool(row.get("lhb_negative_net_buy"))
         or _coerce_bool(row.get("lhb_institution_selling"))
-        or _coerce_bool(row.get("lhb_high_pump_risk"))
     ):
         return True
     return _coerce_bool(row.get("lhb_after_event_attention")) and (
@@ -297,6 +314,15 @@ def _lhb_defaults() -> dict[str, Any]:
     }
 
 
+def _lhb_shortline_defaults() -> dict[str, Any]:
+    return {
+        "lhb_shortline_watch_group": "",
+        "lhb_shortline_watch_reason": "",
+        "lhb_shortline_exit_signal": "",
+        "lhb_shortline_exit_reason": "",
+    }
+
+
 def _event_defaults() -> dict[str, Any]:
     return {
         "event_structure": "",
@@ -312,6 +338,7 @@ def _classification_defaults() -> dict[str, Any]:
     return {
         **_dragon_defaults(),
         **_lhb_defaults(),
+        **_lhb_shortline_defaults(),
         **_event_defaults(),
         "amount_vs_20d": 0.0,
         "high_to_close_drawdown": 0.0,
@@ -418,3 +445,30 @@ def _latest_per_asset_id(frame: pd.DataFrame) -> pd.DataFrame:
         )
         return ordered.drop_duplicates(subset=["asset_id"], keep="last")
     return frame.drop_duplicates(subset=["asset_id"], keep="first")
+
+
+def _normalize_lhb_shortline_frame(frame: pd.DataFrame | None) -> pd.DataFrame:
+    result = _ensure_asset_frame(frame)
+    if result.empty:
+        return result
+    rename_map = {
+        "watch_group": "lhb_shortline_watch_group",
+        "watch_reason": "lhb_shortline_watch_reason",
+        "exit_signal": "lhb_shortline_exit_signal",
+        "exit_reason": "lhb_shortline_exit_reason",
+    }
+    return result.rename(columns={key: value for key, value in rename_map.items() if key in result.columns})
+
+
+def _apply_lhb_shortline_watch_group(row: pd.Series) -> str:
+    current = _normalize_text(row.get("watch_group"))
+    shortline = _normalize_text(row.get("lhb_shortline_watch_group"))
+    if shortline in {"avoid_watch", "exit_watch"}:
+        return "risk_watch"
+    if current == "risk_watch":
+        return current
+    if shortline == "follow_watch" and current == "candidate":
+        return "opportunity_watch"
+    if shortline == "high_elasticity_watch" and current == "candidate":
+        return "high_odds_burst_watch"
+    return current

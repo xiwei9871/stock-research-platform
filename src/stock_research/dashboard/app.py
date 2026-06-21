@@ -1,6 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from datetime import date
+import re
 
-from stock_research.dashboard.bars import load_daily_bars, load_minute_bars
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+
+from stock_research.dashboard.bars import load_bars, load_minute_bars, normalize_resolution
+from stock_research.dashboard.daily_review_lite import (
+    load_daily_review_lite,
+    resolve_daily_review_lite_artifact,
+)
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
@@ -25,10 +33,29 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.daily_close_pipeline import load_data_status_for_dashboard
+from stock_research.intraday_pipeline import (
+    IntradayConfig,
+    load_intraday_status,
+    parse_trade_date,
+)
+from stock_research.public_news.service import (
+    load_public_news_for_dashboard,
+    refresh_public_news_for_dashboard,
+)
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API")
+    trade_date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+    def validate_trade_date(trade_date: str) -> str:
+        if not trade_date_pattern.match(trade_date):
+            raise HTTPException(status_code=400, detail="invalid trade_date")
+        try:
+            return date.fromisoformat(trade_date).isoformat()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid trade_date") from exc
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
@@ -38,6 +65,58 @@ def create_app() -> FastAPI:
         top_n: int = 30,
     ):
         return build_dashboard_overview(trade_date, score_version, watchlist_id, top_n)
+
+    @app.get("/api/data/status")
+    def data_status():
+        return load_data_status_for_dashboard()
+
+    @app.get("/api/intraday/status")
+    def intraday_status(date: str | None = None):
+        config = IntradayConfig.from_env()
+        run_date = parse_trade_date(date, config.timezone)
+        return load_intraday_status(config.service, run_date)
+
+    @app.get("/api/public-news")
+    def public_news(
+        source: str | None = None,
+        category: str | None = None,
+        q: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        return load_public_news_for_dashboard(
+            source=source,
+            category=category,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.post("/api/public-news/refresh")
+    def public_news_refresh():
+        return refresh_public_news_for_dashboard()
+
+    @app.get("/api/daily-review-lite")
+    def daily_review_lite(trade_date: str, run_id: str | None = None):
+        validated_trade_date = validate_trade_date(trade_date)
+        return load_daily_review_lite(validated_trade_date, run_id=run_id)
+
+    @app.get("/api/daily-review-lite/artifacts/{trade_date}/{key}")
+    def daily_review_lite_artifact(trade_date: str, key: str, run_id: str | None = None):
+        validated_trade_date = validate_trade_date(trade_date)
+        try:
+            artifact = resolve_daily_review_lite_artifact(validated_trade_date, key, run_id=run_id)
+        except ValueError as exc:
+            if str(exc) != f"unknown artifact key: {key}":
+                raise
+            artifact = None
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        return FileResponse(
+            artifact["path"],
+            media_type=artifact["content_type"],
+            filename=artifact["filename"],
+        )
 
     @app.get("/api/assets/search")
     def assets_search(q: str, limit: int = 20):
@@ -51,16 +130,26 @@ def create_app() -> FastAPI:
         return asset
 
     @app.get("/api/assets/{asset_id}/bars")
-    def asset_daily_bars(
+    def asset_bars(
         asset_id: str,
-        start_date: str,
         end_date: str,
+        start_date: str | None = None,
         adjust_type: str = "qfq",
+        resolution: str = "1D",
+        source: str = "akshare",
     ):
+        resolved_resolution = normalize_resolution(resolution)
         return {
             "asset_id": asset_id,
-            "resolution": "1D",
-            "items": load_daily_bars(asset_id, start_date, end_date, adjust_type),
+            "resolution": resolved_resolution,
+            "items": load_bars(
+                asset_id=asset_id,
+                start_date=start_date,
+                end_date=end_date,
+                resolution=resolved_resolution,
+                adjust_type=adjust_type,
+                source=source,
+            ),
         }
 
     @app.get("/api/assets/{asset_id}/minute-bars")

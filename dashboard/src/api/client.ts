@@ -1,11 +1,14 @@
 import type {
   BarPoint,
+  DailyReviewLiteResponse,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
+  PublicNewsRefreshResponse,
+  PublicNewsResponse,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -24,6 +27,14 @@ type OverviewParams = {
   topN: number;
 };
 
+type PublicNewsParams = {
+  source?: string;
+  category?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+};
+
 export async function fetchOverview(params: OverviewParams): Promise<DashboardOverview> {
   return getJson(
     `/api/dashboard/overview?trade_date=${encodeURIComponent(params.tradeDate)}` +
@@ -33,15 +44,43 @@ export async function fetchOverview(params: OverviewParams): Promise<DashboardOv
   );
 }
 
+export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<PublicNewsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.source) searchParams.set('source', params.source);
+  if (params.category) searchParams.set('category', params.category);
+  if (params.q) searchParams.set('q', params.q);
+  searchParams.set('limit', String(params.limit ?? 100));
+  searchParams.set('offset', String(params.offset ?? 0));
+  return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
+  return postJson('/api/public-news/refresh');
+}
+
+export async function fetchDailyReviewLite(
+  tradeDate: string,
+  runId?: string
+): Promise<DailyReviewLiteResponse> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('trade_date', tradeDate);
+  if (runId) searchParams.set('run_id', runId);
+  return getJson(`/api/daily-review-lite?${searchParams.toString()}`);
+}
+
 export async function fetchDailyBars(
   assetId: string,
-  startDate: string,
+  startDate: string | undefined,
   endDate: string,
-  adjustType = 'qfq'
+  options: { resolution?: string; adjustType?: string } = {}
 ): Promise<BarPoint[]> {
+  const searchParams = new URLSearchParams();
+  if (startDate) searchParams.set('start_date', startDate);
+  searchParams.set('end_date', endDate);
+  searchParams.set('adjust_type', options.adjustType ?? 'qfq');
+  if (options.resolution) searchParams.set('resolution', options.resolution);
   const payload = await getJson<{ items: BarPoint[] }>(
-    `/api/assets/${encodeURIComponent(assetId)}/bars?start_date=${encodeURIComponent(startDate)}` +
-      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}`
+    `/api/assets/${encodeURIComponent(assetId)}/bars?${searchParams.toString()}`
   );
   return payload.items;
 }
@@ -236,6 +275,14 @@ async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`GET ${url} failed with ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function postJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) {
+    throw new Error(`POST ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
 }

@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
 
@@ -25,6 +26,231 @@ def test_overview_route_returns_payload(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["trade_date"] == "2026-05-29"
+
+
+def test_data_status_route_returns_pipeline_status(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_data_status_for_dashboard",
+        lambda: {
+            "latest_ready_trade_date": "2026-06-05",
+            "current_trade_date": "2026-06-05",
+            "pipeline_status": "READY",
+            "daily_status": "success",
+            "minute5_status": "success",
+            "deps_status": "success",
+            "failed_jobs": [],
+            "warnings": [],
+            "last_updated_at": "2026-06-05T20:00:00+08:00",
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/data/status")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline_status"] == "READY"
+
+
+def test_intraday_status_route_returns_status(monkeypatch):
+    monkeypatch.setattr(dashboard_app.IntradayConfig, "from_env", lambda: dashboard_app.IntradayConfig(service="test"))
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_intraday_status",
+        lambda service, run_date: {
+            "run_date": run_date.isoformat(),
+            "jobs": [],
+            "universe_count": 1,
+            "universe": [{"ts_code": "000001.SZ"}],
+            "market_sentiment": None,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/intraday/status?date=20260618")
+
+    assert response.status_code == 200
+    assert response.json()["universe_count"] == 1
+
+
+def test_public_news_route_returns_filtered_items(monkeypatch):
+    captured = {}
+
+    def fake_load_public_news(**kwargs):
+        captured.update(kwargs)
+        return {
+            "items": [
+                {
+                    "news_id": "news-1",
+                    "source": "sina_finance",
+                    "source_channel": "7x24",
+                    "category": "live",
+                    "title": "全球快讯",
+                    "summary": "摘要",
+                    "url": "https://finance.sina.com.cn/live/1",
+                    "published_at": "2026-06-11 09:00:00",
+                    "collected_at": "2026-06-11T09:01:00+00:00",
+                    "raw_id": "",
+                    "raw_payload": {},
+                    "status": "available",
+                }
+            ],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "load_public_news_for_dashboard", fake_load_public_news)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/public-news?source=sina_finance&category=live&q=%E5%BF%AB%E8%AE%AF&limit=10&offset=2"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "source": "sina_finance",
+        "category": "live",
+        "q": "快讯",
+        "limit": 10,
+        "offset": 2,
+    }
+    assert response.json()["items"][0]["title"] == "全球快讯"
+
+
+def test_public_news_refresh_route_returns_counts(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "refresh_public_news_for_dashboard",
+        lambda: {
+            "received": 2,
+            "stored": 2,
+            "items_received": 2,
+            "counts_by_category": {"live": 2},
+            "warnings": [],
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.post("/api/public-news/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["counts_by_category"] == {"live": 2}
+
+
+def test_daily_review_lite_route_returns_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_daily_review_lite",
+        lambda trade_date, run_id=None: {
+            "trade_date": trade_date,
+            "state": "ready",
+            "selected_run": {"run_id": run_id or "run-1"},
+            "summary": {"headline": "ok"},
+            "warnings": [],
+            "artifacts": [],
+            "missing_sources": [],
+            "sections": {},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite?trade_date=2026-06-18")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "trade_date": "2026-06-18",
+        "state": "ready",
+        "selected_run": {"run_id": "run-1"},
+        "summary": {"headline": "ok"},
+        "warnings": [],
+        "artifacts": [],
+        "missing_sources": [],
+        "sections": {},
+    }
+
+
+def test_daily_review_lite_route_rejects_invalid_trade_date():
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite?trade_date=20260618")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid trade_date"
+
+
+def test_daily_review_lite_artifact_route_streams_registered_file(monkeypatch, tmp_path):
+    artifact_path = tmp_path / "daily_review.json"
+    artifact_path.write_text('{"status":"ok"}', encoding="utf-8")
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: {
+            "path": str(artifact_path),
+            "content_type": "application/json",
+            "filename": "daily_review.json",
+            "trade_date": trade_date,
+            "key": key,
+            "run_id": run_id,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/daily-review-lite/artifacts/2026-06-18/daily_review_json?run_id=run-1"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert "filename=\"daily_review.json\"" in response.headers["content-disposition"]
+    assert response.text == '{"status":"ok"}'
+
+
+def test_daily_review_lite_artifact_route_rejects_invalid_trade_date():
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/20260618/daily_review_json")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid trade_date"
+
+
+def test_daily_review_lite_artifact_route_returns_404_for_unknown_artifact_key(monkeypatch):
+    def fake_resolve(trade_date, key, run_id=None):
+        raise ValueError(f"unknown artifact key: {key}")
+
+    monkeypatch.setattr(dashboard_app, "resolve_daily_review_lite_artifact", fake_resolve)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/2026-06-18/missing_key")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "artifact not found"
+
+
+def test_daily_review_lite_artifact_route_does_not_mask_unexpected_value_error(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: (_ for _ in ()).throw(ValueError("broken metadata")),
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    with pytest.raises(ValueError, match="broken metadata"):
+        client.get("/api/daily-review-lite/artifacts/2026-06-18/daily_review_json")
+
+
+def test_daily_review_lite_artifact_route_returns_404_for_missing_artifact(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "resolve_daily_review_lite_artifact",
+        lambda trade_date, key, run_id=None: None,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/daily-review-lite/artifacts/2026-06-18/missing_key")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "artifact not found"
 
 
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):
@@ -66,6 +292,37 @@ def test_minute_bars_route_passes_source(monkeypatch):
         "tushare",
     ]
     assert response.json()["items"] == [{"time": "2026-05-29 09:35:00"}]
+
+
+def test_asset_bars_route_passes_resolution_to_unified_loader(monkeypatch):
+    captured = {}
+
+    def fake_load_bars(**kwargs):
+        captured.update(kwargs)
+        return [{"time": "2026-05-29 10:00:00", "close": 10.5}]
+
+    monkeypatch.setattr(dashboard_app, "load_bars", fake_load_bars)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/000001.SZ/bars"
+        "?end_date=2026-05-29"
+        "&resolution=30m"
+        "&adjust_type=raw"
+        "&source=akshare"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "000001.SZ",
+        "start_date": None,
+        "end_date": "2026-05-29",
+        "resolution": "30m",
+        "adjust_type": "raw",
+        "source": "akshare",
+    }
+    assert response.json()["resolution"] == "30m"
+    assert response.json()["items"] == [{"time": "2026-05-29 10:00:00", "close": 10.5}]
 
 
 def test_asset_decisions_route_returns_read_only_history(monkeypatch):

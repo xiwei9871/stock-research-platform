@@ -12,6 +12,30 @@ def test_schema_contains_core_tables():
     assert "CREATE TABLE IF NOT EXISTS data_quality_check" in sql
 
 
+def test_schema_creates_stock_auction_tables():
+    sql = CREATE_TABLES_SQL + CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS staging.tushare_stock_auction_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_auction_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_auction_minute_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_auction_minute_bar" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.eastmoney_stock_spot_snapshot" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_open_auction_snapshot" in sql
+    assert "CREATE TABLE IF NOT EXISTS staging.xtick_stock_auction_detail" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.stock_auction_detail" in sql
+    assert "auction_phase text NOT NULL CHECK (auction_phase IN ('open_call', 'close_call'))" in sql
+    assert "source text NOT NULL CHECK (source IN ('eastmoney_spot_snapshot'))" in sql
+    assert "PRIMARY KEY (trade_date, asset_id, auction_phase, source)" in sql
+    assert "PRIMARY KEY (trade_time, asset_id, auction_phase, freq, source)" in sql
+    assert "PRIMARY KEY (trade_date, asset_id, target_time, source)" in sql
+    assert "PRIMARY KEY (trade_time, asset_id, source)" in sql
+    assert "idx_market_stock_auction_bar_date_phase" in sql
+    assert "idx_market_stock_auction_minute_bar_date_phase" in sql
+    assert "idx_market_stock_open_auction_snapshot_date_target" in sql
+    assert "idx_market_stock_open_auction_snapshot_asset_time" in sql
+    assert "idx_market_stock_auction_detail_date_time" in sql
+
+
 def test_schema_uses_replay_keys():
     sql = CREATE_TABLES_SQL
     assert "run_id" in sql
@@ -504,6 +528,254 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert minute_args.adjust_types == ["raw", "qfq"]
     assert minute_args.limit_assets == 10
 
+    auction_args = build_parser().parse_args(
+        [
+            "sync-tushare-auction-bars",
+            "--ts-codes",
+            "600023.SH,000001.SZ",
+            "--start-date",
+            "2026-03-05",
+            "--end-date",
+            "2026-03-06",
+            "--auction-phases",
+            "open_call,close_call",
+        ]
+    )
+    assert auction_args.command == "sync-tushare-auction-bars"
+    assert auction_args.ts_codes == ["600023.SH", "000001.SZ"]
+    assert auction_args.start_date == "2026-03-05"
+    assert auction_args.end_date == "2026-03-06"
+    assert auction_args.auction_phases == ["open_call", "close_call"]
+
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "collect-open-auction-spot-snapshot-v1",
+            "--trade-date",
+            "2026-06-11",
+            "--target-time",
+            "09:17",
+        ]
+    )
+    assert args.command == "collect-open-auction-spot-snapshot-v1"
+    assert args.target_time == "09:17"
+
+    cron_args = parser.parse_args(["open-auction-spot-snapshot-cron-entry"])
+    assert cron_args.command == "open-auction-spot-snapshot-cron-entry"
+
+    auction_observation_args = build_parser().parse_args(
+        [
+            "lhb-auction-observation-v1",
+            "--trades-path",
+            "phase15.csv",
+            "--start-date",
+            "2025-01-02",
+            "--end-date",
+            "2025-01-06",
+            "--ts-codes",
+            "300615.SZ,605080.SH",
+            "--output-dir",
+            "outputs/research/lhb_auction_observation_smoke",
+        ]
+    )
+    assert auction_observation_args.command == "lhb-auction-observation-v1"
+    assert auction_observation_args.trades_path == "phase15.csv"
+    assert auction_observation_args.ts_codes == ["300615.SZ", "605080.SH"]
+    assert auction_observation_args.output_dir == "outputs/research/lhb_auction_observation_smoke"
+
+    phase18_args = build_parser().parse_args(
+        [
+            "lhb-phase18-auction-rule-scan-v1",
+            "--detail-path",
+            "lhb_auction_observation_detail_v1.csv",
+            "--rule-layer",
+            "follow_pool_core",
+            "--thresholds",
+            "0.02,0.04,0.06",
+            "--output-dir",
+            "outputs/research/lhb_phase18",
+        ]
+    )
+    assert phase18_args.command == "lhb-phase18-auction-rule-scan-v1"
+    assert phase18_args.detail_path == "lhb_auction_observation_detail_v1.csv"
+    assert phase18_args.rule_layer == "follow_pool_core"
+    assert phase18_args.thresholds == [0.02, 0.04, 0.06]
+    assert phase18_args.output_dir == "outputs/research/lhb_phase18"
+
+    phase18b_args = build_parser().parse_args(
+        [
+            "lhb-phase18b-auction-topn-rerank-v1",
+            "--detail-path",
+            "phase14c_detail.csv",
+            "--top-n",
+            "5,10",
+            "--output-dir",
+            "outputs/research/lhb_phase18b",
+        ]
+    )
+    assert phase18b_args.command == "lhb-phase18b-auction-topn-rerank-v1"
+    assert phase18b_args.detail_path == "phase14c_detail.csv"
+    assert phase18b_args.top_n == [5, 10]
+    assert phase18b_args.output_dir == "outputs/research/lhb_phase18b"
+
+    phase18c_args = build_parser().parse_args(
+        [
+            "lhb-phase18c-auction-cash-account-v1",
+            "--lifecycle-trades-path",
+            "lifecycle.csv",
+            "--scored-candidates-path",
+            "scored.csv",
+            "--top-n",
+            "3,5,10",
+            "--max-positions",
+            "10",
+            "--position-pct",
+            "0.1",
+            "--output-dir",
+            "outputs/research/lhb_phase18c",
+        ]
+    )
+    assert phase18c_args.command == "lhb-phase18c-auction-cash-account-v1"
+    assert phase18c_args.lifecycle_trades_path == "lifecycle.csv"
+    assert phase18c_args.scored_candidates_path == "scored.csv"
+    assert phase18c_args.top_n == [3, 5, 10]
+    assert phase18c_args.max_positions == 10
+    assert phase18c_args.position_pct == 0.1
+
+    phase18d_args = build_parser().parse_args(
+        [
+            "lhb-phase18d-close-auction-lifecycle-v1",
+            "--trades-path",
+            "account_trades.csv",
+            "--strategy",
+            "auction_enhanced_rerank",
+            "--top-n",
+            "5",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-05",
+            "--output-dir",
+            "outputs/research/lhb_phase18d",
+        ]
+    )
+    assert phase18d_args.command == "lhb-phase18d-close-auction-lifecycle-v1"
+    assert phase18d_args.trades_path == "account_trades.csv"
+    assert phase18d_args.strategy == "auction_enhanced_rerank"
+    assert phase18d_args.top_n == 5
+    assert phase18d_args.start_date == "2025-01-01"
+    assert phase18d_args.end_date == "2026-06-05"
+    assert phase18d_args.output_dir == "outputs/research/lhb_phase18d"
+
+    phase18e_args = build_parser().parse_args(
+        [
+            "lhb-phase18e-joint-exit-diagnostics-v1",
+            "--account-trades-path",
+            "account_trades.csv",
+            "--auction-observation-path",
+            "auction_observation.csv",
+            "--close-lifecycle-path",
+            "close_lifecycle.csv",
+            "--intraday-indicator-path",
+            "phase16d.csv",
+            "--strategy",
+            "auction_enhanced_rerank",
+            "--top-n",
+            "5",
+            "--output-dir",
+            "outputs/research/lhb_phase18e",
+        ]
+    )
+    assert phase18e_args.command == "lhb-phase18e-joint-exit-diagnostics-v1"
+    assert phase18e_args.account_trades_path == "account_trades.csv"
+    assert phase18e_args.auction_observation_path == "auction_observation.csv"
+    assert phase18e_args.close_lifecycle_path == "close_lifecycle.csv"
+    assert phase18e_args.intraday_indicator_path == "phase16d.csv"
+    assert phase18e_args.strategy == "auction_enhanced_rerank"
+    assert phase18e_args.top_n == 5
+    assert phase18e_args.output_dir == "outputs/research/lhb_phase18e"
+
+    phase18f_args = build_parser().parse_args(
+        [
+            "lhb-phase18f-tradable-joint-exit-replay-v1",
+            "--account-trades-path",
+            "account_trades.csv",
+            "--joint-state-detail-path",
+            "joint_state.csv",
+            "--close-lifecycle-detail-path",
+            "close_lifecycle_detail.csv",
+            "--selected-trades-path",
+            "selected.csv",
+            "--minute-bars-path",
+            "minute.csv",
+            "--strategy",
+            "auction_enhanced_rerank",
+            "--top-n",
+            "5",
+            "--freq",
+            "5min",
+            "--adjust-type",
+            "raw",
+            "--output-dir",
+            "outputs/research/lhb_phase18f",
+        ]
+    )
+    assert phase18f_args.command == "lhb-phase18f-tradable-joint-exit-replay-v1"
+    assert phase18f_args.account_trades_path == "account_trades.csv"
+    assert phase18f_args.joint_state_detail_path == "joint_state.csv"
+    assert phase18f_args.close_lifecycle_detail_path == "close_lifecycle_detail.csv"
+    assert phase18f_args.selected_trades_path == "selected.csv"
+    assert phase18f_args.minute_bars_path == "minute.csv"
+    assert phase18f_args.strategy == "auction_enhanced_rerank"
+    assert phase18f_args.top_n == 5
+    assert phase18f_args.freq == "5min"
+    assert phase18f_args.adjust_type == "raw"
+    assert phase18f_args.output_dir == "outputs/research/lhb_phase18f"
+
+    auction_backfill_plan_args = build_parser().parse_args(
+        [
+            "lhb-auction-backfill-plan-v1",
+            "--candidate-paths",
+            "selected.csv,phase18.csv",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2026-06-09",
+            "--auction-phases",
+            "open_call,close_call",
+            "--trade-dates",
+            "2025-01-02,2025-01-03",
+            "--min-coverage-ratio",
+            "0.95",
+            "--output-dir",
+            "outputs/research/lhb_auction_backfill_20250101",
+        ]
+    )
+    assert auction_backfill_plan_args.command == "lhb-auction-backfill-plan-v1"
+    assert auction_backfill_plan_args.candidate_paths == ["selected.csv", "phase18.csv"]
+    assert auction_backfill_plan_args.auction_phases == ["open_call", "close_call"]
+    assert auction_backfill_plan_args.trade_dates == ["2025-01-02", "2025-01-03"]
+    assert auction_backfill_plan_args.min_coverage_ratio == 0.95
+
+    auction_backfill_run_args = build_parser().parse_args(
+        [
+            "lhb-auction-backfill-run-v1",
+            "--plan-path",
+            "plan.csv",
+            "--ts-codes-path",
+            "universe.csv",
+            "--max-calls",
+            "500",
+            "--sleep-seconds",
+            "1.3",
+            "--output-dir",
+            "outputs/research/lhb_auction_backfill_20250101",
+        ]
+    )
+    assert auction_backfill_run_args.command == "lhb-auction-backfill-run-v1"
+    assert auction_backfill_run_args.max_calls == 500
+    assert auction_backfill_run_args.sleep_seconds == 1.3
+
     plan_args = build_parser().parse_args(
         [
             "plan-baostock-minute-backfill",
@@ -575,6 +847,32 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert range_args.command == "run-baostock-minute-backfill-range"
     assert range_args.workers == 6
     assert range_args.report_account == "jarvis"
+
+    benchmark_args = build_parser().parse_args(
+        [
+            "benchmark-baostock-minute-backfill",
+            "--start-date",
+            "2026-06-10",
+            "--end-date",
+            "2026-06-10",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw",
+            "--max-jobs",
+            "300",
+            "--workers-list",
+            "4,8,12",
+            "--retry-failed",
+            "--sleep-seconds",
+            "0.05",
+        ]
+    )
+    assert benchmark_args.command == "benchmark-baostock-minute-backfill"
+    assert benchmark_args.worker_counts == [4, 8, 12]
+    assert benchmark_args.max_jobs == 300
+    assert benchmark_args.freq == "5min"
+    assert benchmark_args.adjust_types == ["raw"]
 
     status_args = build_parser().parse_args(["baostock-minute-backfill-status"])
     assert status_args.command == "baostock-minute-backfill-status"

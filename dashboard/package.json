@@ -5,10 +5,11 @@
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5174",
+    "dev": "vite --host 127.0.0.1 --port ${PLAYWRIGHT_PORT:-5174}",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "playwright test tests/app-smoke.spec.ts"
+    "test:e2e": "playwright test tests/app-smoke.spec.ts",
+    "test:e2e:lite": "CI=1 PLAYWRIGHT_PORT=4174 playwright test tests/daily-review-lite.spec.ts"
   },
   "dependencies": {
     "react": "^19.0.0",

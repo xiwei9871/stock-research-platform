@@ -15,6 +15,7 @@ import type {
   ExperimentProposalRow,
   ExperimentReplayRow,
   OutcomeAnalyticsRow,
+  PublicNewsItem,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -36,6 +37,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
+  fetchPublicNews: vi.fn(),
+  refreshPublicNews: vi.fn(),
   fetchShadowAnalyticsReview: vi.fn(),
   fetchShadowFollowUpQueue: vi.fn(),
   fetchShadowFollowUpResolution: vi.fn(),
@@ -222,6 +225,39 @@ function makeOutcomeAnalytics(): OutcomeAnalyticsRow[] {
       analytics_artifact_path: 'outputs/p9/operator_decision_outcome_analytics.json',
       manual_review_required: true,
       auto_trade_enabled: false
+    }
+  ];
+}
+
+function makePublicNews(): PublicNewsItem[] {
+  return [
+    {
+      news_id: 'news-live-1',
+      source: 'sina_finance',
+      source_channel: '7x24',
+      category: 'live',
+      title: '全球快讯',
+      summary: '全球财经快讯摘要',
+      url: 'https://finance.sina.com.cn/live/1',
+      published_at: '2026-06-11 09:00:00',
+      collected_at: '2026-06-11T09:01:00+00:00',
+      raw_id: '',
+      raw_payload: {},
+      status: 'available'
+    },
+    {
+      news_id: 'news-macro-1',
+      source: 'sina_finance',
+      source_channel: '宏观',
+      category: 'macro',
+      title: '宏观政策更新',
+      summary: '政策摘要',
+      url: 'https://finance.sina.com.cn/macro/1',
+      published_at: '2026-06-11 08:00:00',
+      collected_at: '2026-06-11T08:01:00+00:00',
+      raw_id: '',
+      raw_payload: {},
+      status: 'available'
     }
   ];
 }
@@ -540,6 +576,14 @@ describe('dashboard app shell', () => {
     apiMocks.fetchAssetDecisions.mockResolvedValue(makeDecisions());
     apiMocks.fetchAssetOutcomes.mockResolvedValue(makeOutcomes());
     apiMocks.fetchOutcomeAnalytics.mockResolvedValue(makeOutcomeAnalytics());
+    apiMocks.fetchPublicNews.mockResolvedValue({ items: makePublicNews(), warnings: [] });
+    apiMocks.refreshPublicNews.mockResolvedValue({
+      received: 2,
+      stored: 2,
+      items_received: 2,
+      counts_by_category: { live: 1, macro: 1 },
+      warnings: []
+    });
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
@@ -575,6 +619,9 @@ describe('dashboard app shell', () => {
     expect(screen.getByText(/5D\s+\+20.0%/)).toBeVisible();
     expect(screen.getByText('Outcome Analytics')).toBeVisible();
     expect(screen.getByText(/5D\s+\+15.0%/)).toBeVisible();
+    expect(screen.getByText('Public News')).toBeVisible();
+    expect(screen.getByText('全球快讯')).toBeVisible();
+    expect(screen.getByText('宏观政策更新')).toBeVisible();
     expect(screen.getByText('Experiment Proposals')).toBeVisible();
     expect(screen.getByText('Replay dashboard top-N')).toBeVisible();
     expect(screen.getByText('Experiment Replay')).toBeVisible();
@@ -625,6 +672,69 @@ describe('dashboard app shell', () => {
       watchlistId: 'default',
       topN: 30
     });
+  });
+
+  it('switches the asset chart between daily and intraday resolutions', async () => {
+    apiMocks.fetchDailyBars
+      .mockResolvedValueOnce(makeBars(1))
+      .mockResolvedValueOnce([
+        {
+          time: '2026-05-29 10:00:00',
+          open: 10,
+          high: 11,
+          low: 9,
+          close: 10.5,
+          volume: 300,
+          amount: 3000
+        },
+        {
+          time: '2026-05-29 10:30:00',
+          open: 10.5,
+          high: 12,
+          low: 10,
+          close: 11.5,
+          volume: 400,
+          amount: 4000
+        }
+      ]);
+
+    render(<App />);
+
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('1 bars');
+    fireEvent.click(screen.getByRole('button', { name: '30m' }));
+
+    await waitFor(() => {
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-05-29', {
+        resolution: '30m',
+        adjustType: 'raw'
+      });
+      expect(screen.getByTestId('asset-chart')).toHaveTextContent('2 bars');
+    });
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('filters, searches, and refreshes public news', async () => {
+    render(<App />);
+
+    const panel = (await screen.findByText('Public News')).closest('section');
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getByText('全球快讯')).toBeVisible();
+    expect(within(panel as HTMLElement).getByText('宏观政策更新')).toBeVisible();
+
+    fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: '宏观' }));
+    expect(within(panel as HTMLElement).queryByText('全球快讯')).not.toBeInTheDocument();
+    expect(within(panel as HTMLElement).getByText('宏观政策更新')).toBeVisible();
+
+    fireEvent.change(within(panel as HTMLElement).getByLabelText('news search'), {
+      target: { value: '全球' }
+    });
+    expect(within(panel as HTMLElement).getByText('No public news for current filters.')).toBeVisible();
+
+    fireEvent.click(within(panel as HTMLElement).getByRole('button', { name: 'Refresh news' }));
+    await waitFor(() => {
+      expect(apiMocks.refreshPublicNews).toHaveBeenCalled();
+    });
+    expect(apiMocks.fetchPublicNews).toHaveBeenCalled();
   });
 
   it('shows loading states while overview and selected asset data are pending', async () => {
@@ -943,7 +1053,10 @@ describe('dashboard app shell', () => {
     fireEvent.click(await screen.findByText('Vanke'));
 
     await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000002.SZ', undefined, '2026-05-29', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      });
       expect(apiMocks.fetchAssetDecisions).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
       expect(apiMocks.fetchAssetOutcomes).toHaveBeenLastCalledWith('000002.SZ', expect.any(String), '2026-05-29');
     });
@@ -955,7 +1068,10 @@ describe('dashboard app shell', () => {
     fireEvent.change(screen.getByLabelText('trade date'), { target: { value: '2026-03-01' } });
 
     await waitFor(() => {
-      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-09-02', '2026-03-01');
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-03-01', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      });
     });
   });
 

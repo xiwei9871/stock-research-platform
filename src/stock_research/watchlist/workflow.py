@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +114,7 @@ def build_watchlist_diagnostics_snapshot(
     top_n: int = 50,
     risk_watch_n: int = 10,
     opportunity_watch_n: int = 10,
+    lhb_shortline_path: str | Path | None = None,
 ) -> dict[str, pd.DataFrame]:
     top_scores = _load_top_score_frame(
         trade_date=trade_date,
@@ -125,6 +127,11 @@ def build_watchlist_diagnostics_snapshot(
     factor_frame = _load_watchlist_factor_frame(trade_date=trade_date, asset_ids=asset_ids)
     dragon_frame = _load_dragon_frame(trade_date=trade_date, asset_ids=asset_ids)
     lhb_frame = _load_lhb_frame(trade_date=trade_date, asset_identity=asset_identity)
+    lhb_shortline_frame = _load_lhb_shortline_watchlist_frame(
+        trade_date=trade_date,
+        asset_identity=asset_identity,
+        path=Path(lhb_shortline_path) if lhb_shortline_path else None,
+    )
     event_frame = _load_event_frame(trade_date=trade_date, asset_identity=asset_identity)
     market_frame = _load_market_frame(trade_date=trade_date, asset_ids=asset_ids)
     diagnostics = build_watchlist_diagnostics(
@@ -133,6 +140,7 @@ def build_watchlist_diagnostics_snapshot(
         factor_frame=factor_frame,
         dragon_frame=dragon_frame,
         lhb_frame=lhb_frame,
+        lhb_shortline_frame=lhb_shortline_frame,
         event_frame=event_frame,
         market_frame=market_frame,
         risk_watch_n=risk_watch_n,
@@ -162,6 +170,7 @@ def build_watchlist_snapshot(
         score_version=score_version,
         top_n=top_n,
     )
+    watchlist_items = _append_top_score_candidates(watchlist_items, top_scores)
     asset_ids = sorted(
         {
             str(row.get("asset_id"))
@@ -202,6 +211,72 @@ def build_watchlist_snapshot(
     frame["trade_date"] = trade_date
     store_watchlist_daily_signals(frame)
     return frame
+
+
+def _append_top_score_candidates(
+    watchlist_items: pd.DataFrame,
+    top_scores: list[dict[str, object]],
+) -> pd.DataFrame:
+    if not top_scores:
+        return watchlist_items
+
+    existing_asset_ids = {
+        str(row.get("asset_id"))
+        for row in watchlist_items.to_dict("records")
+        if row.get("asset_id")
+    }
+    candidate_asset_ids = [
+        str(row.get("asset_id"))
+        for row in top_scores
+        if row.get("asset_id") and str(row.get("asset_id")) not in existing_asset_ids
+    ]
+    if not candidate_asset_ids:
+        return watchlist_items
+
+    identity = _load_asset_identity_map(candidate_asset_ids)
+    identity_map = {
+        str(row.get("asset_id")): row
+        for row in identity.to_dict("records")
+        if row.get("asset_id")
+    }
+    candidate_rows: list[dict[str, object]] = []
+    for row in top_scores:
+        asset_id = str(row.get("asset_id") or "")
+        if not asset_id or asset_id in existing_asset_ids:
+            continue
+        asset_identity = identity_map.get(asset_id, {})
+        rank = row.get("rank")
+        candidate_rows.append(
+            {
+                "watchlist_id": None,
+                "asset_id": asset_id,
+                "stock_code": asset_identity.get("ts_code") or _ts_code_from_asset_id(asset_id),
+                "stock_name": asset_identity.get("stock_name") or asset_id,
+                "priority": _candidate_priority(rank),
+                "source": "top_score",
+            }
+        )
+
+    if not candidate_rows:
+        return watchlist_items
+
+    candidates = pd.DataFrame(candidate_rows)
+    if watchlist_items.empty:
+        return candidates
+    return pd.concat([watchlist_items, candidates], ignore_index=True, sort=False)
+
+
+def _candidate_priority(rank: object) -> int:
+    try:
+        if pd.isna(rank):
+            return 100
+    except Exception:
+        pass
+    if isinstance(rank, bool):
+        return 100
+    if isinstance(rank, int | float | Decimal):
+        return int(rank)
+    return 100
 
 
 def explain_watchlist_asset(
@@ -458,6 +533,38 @@ def _load_lhb_frame(*, trade_date: str, asset_identity: pd.DataFrame) -> pd.Data
     )
     frame = asset_identity.merge(latest_events, on="ts_code", how="inner", suffixes=("", "_event"))
     return _ensure_frame_columns(frame, columns).loc[:, columns].reset_index(drop=True)
+
+
+def _load_lhb_shortline_watchlist_frame(
+    *,
+    trade_date: str,
+    asset_identity: pd.DataFrame,
+    path: Path | None,
+) -> pd.DataFrame:
+    columns = ["asset_id", "watch_group", "watch_reason", "exit_signal", "exit_reason"]
+    if path is None or asset_identity.empty:
+        return pd.DataFrame(columns=columns)
+
+    try:
+        frame = pd.read_csv(path, low_memory=False)
+    except FileNotFoundError:
+        return pd.DataFrame(columns=columns)
+
+    if frame.empty or "ts_code" not in frame.columns:
+        return pd.DataFrame(columns=columns)
+
+    frame = frame.copy()
+    frame["ts_code"] = frame["ts_code"].astype(str).str.strip().str.upper()
+    if "trade_date" in frame.columns:
+        frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        frame = frame[frame["trade_date"].eq(str(trade_date))]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    identity = _ensure_frame_columns(asset_identity, ["asset_id", "ts_code"]).loc[:, ["asset_id", "ts_code"]].copy()
+    identity["ts_code"] = identity["ts_code"].astype(str).str.strip().str.upper()
+    merged = identity.merge(frame, on="ts_code", how="inner", suffixes=("", "_shortline"))
+    return _ensure_frame_columns(merged, columns).loc[:, columns].reset_index(drop=True)
 
 
 def _load_event_frame(*, trade_date: str, asset_identity: pd.DataFrame) -> pd.DataFrame:

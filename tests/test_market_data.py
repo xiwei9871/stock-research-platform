@@ -2,6 +2,7 @@ import pytest
 
 from stock_research import market_data
 from stock_research.market_data import (
+    latest_complete_source_trade_date,
     latest_source_trade_date,
     load_market_daily_bars,
     normalize_source_row,
@@ -72,6 +73,29 @@ def test_normalize_source_row_maps_real_source_fields():
 def test_latest_source_trade_date_rejects_invalid_table_name():
     with pytest.raises(ValueError, match="Invalid stock table name"):
         latest_source_trade_date("stock_hfq", table_name="stock_hfq.sh600000")
+
+
+def test_latest_complete_source_trade_date_rejects_incomplete_latest_day(monkeypatch):
+    latest_by_service = {"stock_hfq": "2026-06-16", "stock_qfq": "2026-06-16"}
+    counts = {
+        ("stock_hfq", "2026-06-16"): 1121,
+        ("stock_qfq", "2026-06-16"): 0,
+        ("stock_hfq", "2026-06-15"): 5207,
+        ("stock_qfq", "2026-06-15"): 5207,
+    }
+
+    monkeypatch.setattr(
+        market_data,
+        "latest_source_trade_date",
+        lambda service: latest_by_service[service],
+    )
+    monkeypatch.setattr(
+        market_data,
+        "source_trade_date_table_count",
+        lambda service, trade_date: counts[(service, trade_date)],
+    )
+
+    assert latest_complete_source_trade_date() == "2026-06-15"
 
 
 def test_raw_payload_hash_is_stable_for_key_order():

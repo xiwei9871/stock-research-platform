@@ -20,11 +20,13 @@ env/
 /build/
 /dist/
 /cache/
+/data/manual/
 /logs/
 /reports/
 /output/
 /outputs/
 /.worktrees/
+/.superpowers/
 /dashboard/node_modules/
 /dashboard/dist/
 /dashboard/test-results/
@@ -34,6 +36,7 @@ env/
 .env
 .env.*
 *.local
+config/local_secrets.json
 
 # Editor state
 .idea/

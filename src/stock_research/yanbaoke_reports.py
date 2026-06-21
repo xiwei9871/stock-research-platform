@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
@@ -24,6 +25,7 @@ from stock_research.stock_report_pdf_backfill import (
     build_stock_report_pdf_field_backfill,
     upsert_stock_report_pdf_fields,
 )
+from stock_research.serenity_source_backed_evidence_fill import build_pdf_text_industry_chain_evidence_seed
 from stock_research.stock_report_web_collection import (
     build_stock_report_features_from_events,
     upsert_stock_report_features,
@@ -44,6 +46,7 @@ YANBAOKE_DOWNLOADS_FILE = "yanbaoke_downloaded_reports.csv"
 YANBAOKE_REPORT_FILE = "yanbaoke_backfill_report.md"
 YANBAOKE_SOURCE_FILE = "yanbaoke_report_source_candidates.csv"
 YANBAOKE_EVENT_FILE = "yanbaoke_report_event_candidates.csv"
+YANBAOKE_INDUSTRY_EVIDENCE_FILE = "yanbaoke_industry_chain_evidence_seed.csv"
 
 
 def search_yanbaoke_reports(
@@ -125,7 +128,7 @@ def filter_yanbaoke_reports(
         rule = normalize_hibor_broker(f"{org_name} {title}", rules)
         if not rule:
             continue
-        if "pdf" not in [str(fmt).lower() for fmt in row.get("formats") or []]:
+        if "pdf" not in _normalize_yanbaoke_formats(row.get("formats")):
             continue
         enriched = dict(row)
         report_title = _clean_yanbaoke_report_title(title, stock_name=stock_name, symbol=symbol, broker=rule.get("institution_name", ""))
@@ -380,6 +383,7 @@ def import_yanbaoke_report_downloads(
     service: str = SETTINGS.research_service,
     run_pdf_backfill: bool = True,
     feature_trade_date: str | None = None,
+    industry_structured_detail_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -404,16 +408,28 @@ def import_yanbaoke_report_downloads(
         feature_result = build_stock_report_features_from_events(feature_events, trade_date=feature_trade_date, output_dir=output)
         if write_db:
             feature_result["db"] = upsert_stock_report_features(features=feature_result["features"], service=service)
+    industry_evidence = None
+    if industry_structured_detail_path is not None and Path(industry_structured_detail_path).exists():
+        structured_detail = pd.read_csv(industry_structured_detail_path, low_memory=False)
+        industry_evidence = build_pdf_text_industry_chain_evidence_seed(
+            structured_detail=structured_detail,
+            report_index=downloads,
+        )
+        industry_path = output / YANBAOKE_INDUSTRY_EVIDENCE_FILE
+        industry_evidence.to_csv(industry_path, index=False)
     paths = {"sources": str(source_path), "events": str(event_path)}
     if pdf_result and pdf_result.get("paths", {}).get("fields"):
         paths["fields"] = pdf_result["paths"]["fields"]
     if feature_result and feature_result.get("paths", {}).get("features"):
         paths["features"] = feature_result["paths"]["features"]
+    if industry_evidence is not None:
+        paths["industry_evidence_seed"] = str(output / YANBAOKE_INDUSTRY_EVIDENCE_FILE)
     return {
         "summary": {"pdf_count": len(sources), "source_rows": len(sources), "event_rows": len(events), "write_db": write_db},
         "sources": sources,
         "events": events,
         "pdf": pdf_result,
+        "industry_evidence": industry_evidence,
         "features": feature_result["features"] if feature_result else pd.DataFrame(),
         "db": db_result,
         "paths": paths,
@@ -444,6 +460,7 @@ def run_yanbaoke_report_backfill(
     import_pdfs: bool = True,
     run_pdf_backfill: bool = True,
     feature_trade_date: str | None = None,
+    industry_structured_detail_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -552,6 +569,7 @@ def run_yanbaoke_report_backfill(
             service=service,
             run_pdf_backfill=run_pdf_backfill,
             feature_trade_date=feature_trade_date,
+            industry_structured_detail_path=industry_structured_detail_path,
         )
     return {
         "tasks": tasks,
@@ -601,6 +619,27 @@ def _safe_date(value: Any) -> str:
         return pd.Timestamp(text).strftime("%Y-%m-%d")
     except Exception:
         return ""
+
+
+def _normalize_yanbaoke_formats(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            parsed = re.split(r"[,/;|\\s]+", text)
+    else:
+        parsed = value
+    if isinstance(parsed, str):
+        parsed = [parsed]
+    try:
+        return [str(fmt).strip().lower() for fmt in parsed if str(fmt).strip()]
+    except TypeError:
+        return [str(parsed).strip().lower()] if str(parsed).strip() else []
 
 
 def _date_from_yanbaoke_title(title: str) -> str:
