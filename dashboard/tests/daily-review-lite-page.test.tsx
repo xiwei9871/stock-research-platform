@@ -163,6 +163,16 @@ describe('DailyReviewLitePage', () => {
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
   });
 
+  it('prefers initialTradeDate over the trade_date query param', () => {
+    window.history.replaceState({}, '', '/?trade_date=2026-06-19');
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+
+    render(<DailyReviewLitePage initialTradeDate="2026-06-22" />);
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-22', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+  });
+
   it('renders an error state when the fetch rejects', async () => {
     apiMocks.fetchDailyReviewLite.mockRejectedValueOnce(new Error('network offline'));
 
