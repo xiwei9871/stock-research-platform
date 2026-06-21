@@ -7,8 +7,15 @@ vi.mock('../src/workspaces/WorkbenchWorkspace', () => ({
   WorkbenchWorkspace: () => <div data-testid="workbench-workspace">workbench workspace</div>
 }));
 
-vi.mock('../src/workspaces/DailyReviewLiteWorkspace', () => ({
-  DailyReviewLiteWorkspace: () => <div data-testid="daily-review-lite-workspace">lite workspace</div>
+vi.mock('../src/pages/DailyReviewLitePage', () => ({
+  DailyReviewLitePage: ({ initialTradeDate }: { initialTradeDate?: string }) => (
+    <div data-testid="daily-review-lite-workspace">
+      <label>
+        <span>Trade Date</span>
+        <input type="date" value={initialTradeDate ?? ''} readOnly />
+      </label>
+    </div>
+  )
 }));
 
 afterEach(() => {
@@ -40,13 +47,14 @@ describe('DashboardShell', () => {
     expect(new URLSearchParams(window.location.search).get('workspace')).toBe('daily-review-lite');
   });
 
-  it('mounts the lite workspace from the workspace query param', () => {
-    window.history.replaceState({}, '', '/?workspace=daily-review-lite');
+  it('mounts the lite workspace from the workspace and trade_date query params', () => {
+    window.history.replaceState({}, '', '/?workspace=daily-review-lite&trade_date=2026-06-19');
 
     render(<DashboardShell />);
 
     expect(screen.getByTestId('daily-review-lite-workspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Daily Review Lite' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
   });
 
   it('normalizes unknown workspace query params to the canonical workbench fallback', () => {
