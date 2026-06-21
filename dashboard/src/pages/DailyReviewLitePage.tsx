@@ -7,8 +7,6 @@ import { SectionCard } from '../components/daily-review-lite/SectionCard';
 import { StatusBanner } from '../components/daily-review-lite/StatusBanner';
 import { StrategySummaryGrid } from '../components/daily-review-lite/StrategySummaryGrid';
 
-const DEFAULT_TRADE_DATE = '2026-06-20';
-
 type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -18,8 +16,8 @@ type DailyReviewLitePageProps = {
   initialTradeDate?: string;
 };
 
-export function DailyReviewLitePage({ initialTradeDate = DEFAULT_TRADE_DATE }: DailyReviewLitePageProps) {
-  const [tradeDate, setTradeDate] = useState(initialTradeDate);
+export function DailyReviewLitePage({ initialTradeDate }: DailyReviewLitePageProps) {
+  const [tradeDate, setTradeDate] = useState(() => resolveInitialTradeDate(initialTradeDate));
   const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
@@ -47,20 +45,6 @@ export function DailyReviewLitePage({ initialTradeDate = DEFAULT_TRADE_DATE }: D
     };
   }, [tradeDate]);
 
-  if (loadState.status === 'loading') {
-    return <p>Loading Daily Review Lite...</p>;
-  }
-
-  if (loadState.status === 'error') {
-    return <p>Failed to load Daily Review Lite: {loadState.message}</p>;
-  }
-
-  if (loadState.payload === null) {
-    return <p>No data returned.</p>;
-  }
-
-  const content = renderPageContent(loadState.payload);
-
   return (
     <main className="daily-review-lite-page">
       <header className="daily-review-lite-header">
@@ -71,19 +55,39 @@ export function DailyReviewLitePage({ initialTradeDate = DEFAULT_TRADE_DATE }: D
         <span>Trade Date</span>
         <input type="date" value={tradeDate} onChange={(event) => setTradeDate(event.target.value)} />
       </label>
-      <StatusBanner payload={loadState.payload} />
-      {content}
+      {loadState.status === 'ready' && loadState.payload !== null ? <StatusBanner payload={loadState.payload} /> : null}
+      {renderPageBody(loadState)}
     </main>
+  );
+}
+
+function renderPageBody(loadState: LoadState) {
+  if (loadState.status === 'loading') {
+    return renderStateMessage('Loading Daily Review Lite...');
+  }
+
+  if (loadState.status === 'error') {
+    return renderStateMessage(`Failed to load Daily Review Lite: ${loadState.message}`);
+  }
+
+  if (loadState.payload === null) {
+    return renderStateMessage('No data returned.');
+  }
+
+  return renderPageContent(loadState.payload);
+}
+
+function renderStateMessage(message: string) {
+  return (
+    <section className="daily-review-lite-message-card" aria-label="Daily Review Lite state">
+      <p>{message}</p>
+    </section>
   );
 }
 
 function renderPageContent(payload: DailyReviewLiteResponse) {
   if (payload.state === 'empty') {
-    return (
-      <section className="daily-review-lite-message-card" aria-label="Daily Review Lite state">
-        <p>No report found for selected date</p>
-      </section>
-    );
+    return renderStateMessage('No report found for selected date');
   }
 
   if (payload.state === 'failed') {
@@ -182,4 +186,47 @@ function artifactStatus(payload: DailyReviewLiteResponse): DailyReviewLiteSectio
 
 function mapArtifactHealthToSectionStatus(health: DailyReviewLiteArtifactHealth): DailyReviewLiteSectionStatus {
   return health === 'healthy' ? 'success' : 'partial';
+}
+
+function resolveInitialTradeDate(initialTradeDate?: string) {
+  if (initialTradeDate) {
+    return initialTradeDate;
+  }
+
+  const tradeDateParam = getTradeDateQueryParam();
+  if (tradeDateParam) {
+    return tradeDateParam;
+  }
+
+  return getDefaultTradeDateForToday();
+}
+
+function getTradeDateQueryParam() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const value = new URLSearchParams(window.location.search).get('trade_date');
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function getDefaultTradeDateForToday() {
+  const candidate = new Date();
+  candidate.setHours(0, 0, 0, 0);
+
+  const dayOfWeek = candidate.getDay();
+  if (dayOfWeek === 6) {
+    candidate.setDate(candidate.getDate() - 1);
+  } else if (dayOfWeek === 0) {
+    candidate.setDate(candidate.getDate() - 2);
+  }
+
+  return formatLocalDate(candidate);
+}
+
+function formatLocalDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

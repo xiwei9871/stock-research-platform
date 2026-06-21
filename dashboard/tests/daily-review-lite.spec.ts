@@ -101,7 +101,7 @@ test('renders the Daily Review Lite smoke path from a mocked API payload', async
     });
   });
 
-  await page.goto('/');
+  await page.goto('/?trade_date=2026-06-20');
 
   await expect(page.getByRole('heading', { name: 'Daily Review Lite' })).toBeVisible();
   await expect(page.getByText('Loaded from fallback package scan')).toBeVisible();

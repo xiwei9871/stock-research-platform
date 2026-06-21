@@ -111,17 +111,75 @@ function renderResolvedPage(response: DailyReviewLiteResponse | null, initialTra
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
+  window.history.replaceState({}, '', '/');
 });
 
 describe('DailyReviewLitePage', () => {
-  it('renders the ready-state shell after loading the default trade date', async () => {
+  it('uses the current local trade date by default and keeps the shell mounted while loading', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-22T10:00:00'));
     const request = createDeferred<DailyReviewLiteResponse>();
     apiMocks.fetchDailyReviewLite.mockReturnValueOnce(request.promise);
 
     render(<DailyReviewLitePage />);
 
+    expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
     expect(screen.getByText('Loading Daily Review Lite...')).toBeInTheDocument();
-    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-20', undefined);
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-22', undefined);
+  });
+
+  it('prefers the trade_date query param and falls back weekends to the previous Friday', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-22T10:00:00'));
+    window.history.replaceState({}, '', '/?trade_date=2026-06-21');
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+
+    render(<DailyReviewLitePage />);
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-21', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-21');
+
+    cleanup();
+    vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
+    vi.setSystemTime(new Date('2026-06-21T10:00:00'));
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+
+    render(<DailyReviewLitePage />);
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-19', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
+  });
+
+  it('renders an error state when the fetch rejects', async () => {
+    apiMocks.fetchDailyReviewLite.mockRejectedValueOnce(new Error('network offline'));
+
+    render(<DailyReviewLitePage initialTradeDate="2026-06-22" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load Daily Review Lite: network offline')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+  });
+
+  it('renders a null payload fallback when no data is returned', async () => {
+    renderResolvedPage(null, '2026-06-22');
+
+    await waitFor(() => {
+      expect(screen.getByText('No data returned.')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Daily Review Lite' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+  });
+
+  it('renders the ready-state shell content after loading with an explicit initial trade date', async () => {
+    const request = createDeferred<DailyReviewLiteResponse>();
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(request.promise);
+
+    render(<DailyReviewLitePage initialTradeDate="2026-06-22" />);
 
     request.resolve(makeResponse());
 
@@ -132,27 +190,9 @@ describe('DailyReviewLitePage', () => {
     expect(
       screen.getByText('Structured read-only review of the Daily Review v1 report package')
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-20');
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
     expect(screen.getByText('Loaded from report.run')).toBeInTheDocument();
     expect(screen.getByText('daily_review_v1:2026-06-20:abc123')).toBeInTheDocument();
-  });
-
-  it('renders an error state when the fetch rejects', async () => {
-    apiMocks.fetchDailyReviewLite.mockRejectedValueOnce(new Error('network offline'));
-
-    render(<DailyReviewLitePage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load Daily Review Lite: network offline')).toBeInTheDocument();
-    });
-  });
-
-  it('renders a null payload fallback when no data is returned', async () => {
-    renderResolvedPage(null);
-
-    await waitFor(() => {
-      expect(screen.getByText('No data returned.')).toBeInTheDocument();
-    });
   });
 
   it('renders the empty-state shell with the selected trade date preserved', async () => {
@@ -249,7 +289,7 @@ describe('DailyReviewLitePage', () => {
             available: true,
             filename: 'daily_review_2026-06-22.json',
             content_type: 'application/json',
-            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-22&key=daily_review_json'
+            url: '/api/daily-review-lite/artifacts/2026-06-22/daily_review_json?run_id=daily_review_v1%3A2026-06-22%3Aghi789'
           }
         ]
       }),
@@ -265,7 +305,7 @@ describe('DailyReviewLitePage', () => {
     expect(screen.getByText('Artifact health: invalid')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
       'href',
-      '/api/daily-review-lite/artifacts?trade_date=2026-06-22&key=daily_review_json'
+      '/api/daily-review-lite/artifacts/2026-06-22/daily_review_json?run_id=daily_review_v1%3A2026-06-22%3Aghi789'
     );
   });
 
@@ -426,7 +466,7 @@ describe('DailyReviewLitePage', () => {
             available: true,
             filename: 'daily_review_2026-06-20.json',
             content_type: 'application/json',
-            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+            url: '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
           }
         ]
       })
@@ -456,7 +496,7 @@ describe('DailyReviewLitePage', () => {
     expect(screen.getByText('watch for volume follow-through')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
       'href',
-      '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+      '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
     );
     expect(screen.getByText('raw_lhb_payload missing')).toBeInTheDocument();
     expect(screen.getByText('LHB feed incomplete')).toBeInTheDocument();
@@ -483,7 +523,7 @@ describe('DailyReviewLitePage', () => {
             available: true,
             filename: 'daily_review_2026-06-20.json',
             content_type: 'application/json',
-            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+            url: '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
           },
           {
             key: 'operator_notes_md',
@@ -493,7 +533,7 @@ describe('DailyReviewLitePage', () => {
             available: false,
             filename: null,
             content_type: 'text/markdown',
-            url: '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=operator_notes_md'
+            url: '/api/daily-review-lite/artifacts/2026-06-20/operator_notes_md?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
           }
         ]
       })
@@ -507,7 +547,7 @@ describe('DailyReviewLitePage', () => {
     expect(within(artifactsSection).getByText('Status: partial')).toBeInTheDocument();
     expect(within(artifactsSection).getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute(
       'href',
-      '/api/daily-review-lite/artifacts?trade_date=2026-06-20&key=daily_review_json'
+      '/api/daily-review-lite/artifacts/2026-06-20/daily_review_json?run_id=daily_review_v1%3A2026-06-20%3Aabc123'
     );
     expect(within(artifactsSection).queryByRole('link', { name: 'Operator Notes Markdown' })).not.toBeInTheDocument();
     expect(within(artifactsSection).getByText('Operator Notes Markdown')).toBeInTheDocument();
