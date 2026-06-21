@@ -110,6 +110,7 @@ test('enters Daily Review Lite from the dashboard shell with a mocked Lite paylo
   await expect(page.getByRole('heading', { name: 'Daily Review Lite' })).toBeVisible();
   await expect(page.getByText('Loaded from fallback package scan')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Strategy Summaries' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Daily Review JSON' })).toHaveAttribute('href', artifactHref);
 
   expect(requestUrl).not.toBeNull();
   await expect(page).toHaveURL(/workspace=daily-review-lite/);
