@@ -347,7 +347,7 @@ describe('dashboard API client', () => {
     expect(logoutHeaders.get('X-CSRF-Token')).toBe('csrf-1');
   });
 
-  it('adds csrf headers to mutating watchlist and supported review requests', async () => {
+  it('adds csrf headers to mutating watchlist and review item create requests', async () => {
     Object.defineProperty(document, 'cookie', {
       value: 'theme=light; stock_research_csrf=csrf-1',
       configurable: true
@@ -363,7 +363,8 @@ describe('dashboard API client', () => {
       source: 'manual',
       notes: 'relative strength'
     });
-    await updateMyReviewItem(12, 34, {
+    await createMyReviewItem(12, {
+      asset_id: 'CN:SZ:000001',
       decision: 'watch',
       conviction: 'medium',
       tags: [],
@@ -391,11 +392,12 @@ describe('dashboard API client', () => {
     const reviewHeaders = new Headers(fetchMock.mock.calls[1][1]?.headers);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/my/reviews/12/items/34',
+      '/api/my/reviews/12/items',
       expect.objectContaining({
-        method: 'PATCH',
+        method: 'POST',
         credentials: 'include',
         body: JSON.stringify({
+          asset_id: 'CN:SZ:000001',
           decision: 'watch',
           conviction: 'medium',
           tags: [],
@@ -408,11 +410,15 @@ describe('dashboard API client', () => {
     expect(reviewHeaders.get('X-CSRF-Token')).toBe('csrf-1');
   });
 
-  it('falls back to the first csrf-like cookie when the default cookie name is absent', async () => {
+  it('supports an explicit global csrf cookie-name override for admin mutations', async () => {
     Object.defineProperty(document, 'cookie', {
-      value: 'theme=light; custom_csrf_cookie=fallback-1; session=value',
+      value: 'theme=light; dashboard_csrf=override-1; session=value',
       configurable: true
     });
+    const globalWithOverride = globalThis as typeof globalThis & {
+      __STOCK_RESEARCH_CSRF_COOKIE_NAME__?: string;
+    };
+    globalWithOverride.__STOCK_RESEARCH_CSRF_COOKIE_NAME__ = 'dashboard_csrf';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -427,44 +433,44 @@ describe('dashboard API client', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await createUser({
-      username: 'analyst',
-      email: 'analyst@example.com',
-      display_name: 'Analyst',
-      password: 'secret123',
-      role: 'user'
-    });
+    try {
+      await createUser({
+        username: 'analyst',
+        email: 'analyst@example.com',
+        display_name: 'Analyst',
+        password: 'secret123',
+        role: 'user'
+      });
 
-    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/admin/users',
-      expect.objectContaining({
-        method: 'POST',
-        credentials: 'include'
-      })
-    );
-    expect(headers.get('X-CSRF-Token')).toBe('fallback-1');
+      const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/users',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include'
+        })
+      );
+      expect(headers.get('X-CSRF-Token')).toBe('override-1');
+    } finally {
+      delete globalWithOverride.__STOCK_RESEARCH_CSRF_COOKIE_NAME__;
+    }
   });
 
-  it('fetches a review session from the existing review sessions route', async () => {
+  it('fetches a review session from the dedicated session route', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        items: [
-          {
-            id: 31,
-            user_id: 7,
-            trade_date: '2026-06-21',
-            title: 'Morning review',
-            summary: '',
-            market_view: '',
-            position_view: '',
-            next_action: '',
-            created_at: '2026-06-21T09:00:00Z',
-            updated_at: '2026-06-21T09:00:00Z',
-            items: []
-          }
-        ]
+        id: 31,
+        user_id: 7,
+        trade_date: '2026-06-21',
+        title: 'Morning review',
+        summary: '',
+        market_view: '',
+        position_view: '',
+        next_action: '',
+        created_at: '2026-06-21T09:00:00Z',
+        updated_at: '2026-06-21T09:00:00Z',
+        items: []
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -472,46 +478,98 @@ describe('dashboard API client', () => {
     const result = await fetchMyReviewSession(31);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/my/reviews', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/my/reviews/31', { credentials: 'include' });
     expect(result.id).toBe(31);
   });
 
-  it('throws a clear error when a derived review session is missing', async () => {
+  it('updates a review session through the dedicated session route', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ items: [] })
+      json: async () => ({
+        id: 31,
+        user_id: 7,
+        trade_date: '2026-06-21',
+        title: 'Updated title',
+        summary: 'Revised summary',
+        market_view: '',
+        position_view: '',
+        next_action: '',
+        created_at: '2026-06-21T09:00:00Z',
+        updated_at: '2026-06-21T10:00:00Z',
+        items: []
+      })
+    });
+    Object.defineProperty(document, 'cookie', {
+      value: 'stock_research_csrf=csrf-1',
+      configurable: true
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchMyReviewSession(99)).rejects.toThrow('Review session 99 not found in /api/my/reviews');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/my/reviews', { credentials: 'include' });
-  });
+    await updateMyReviewSession(31, {
+      title: 'Updated title',
+      summary: 'Revised summary'
+    });
 
-  it('fails fast for unsupported review session updates', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(updateMyReviewSession(31, { title: 'Updated title' })).rejects.toThrow(
-      'PATCH /api/my/reviews/{sessionId} is not available in this build'
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/my/reviews/31',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        body: JSON.stringify({
+          title: 'Updated title',
+          summary: 'Revised summary'
+        })
+      })
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('X-CSRF-Token')).toBe('csrf-1');
   });
 
-  it('fails fast for unsupported review item creation', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(
-      createMyReviewItem(31, {
+  it('updates review items through the existing item route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 34,
+        session_id: 12,
+        user_id: 7,
         asset_id: 'CN:SZ:000001',
         decision: 'watch',
         conviction: 'medium',
         tags: [],
         notes: '',
-        follow_up_required: false
+        follow_up_required: false,
+        created_at: '2026-06-21T09:00:00Z',
+        updated_at: '2026-06-21T10:00:00Z'
       })
-    ).rejects.toThrow('POST /api/my/reviews/{sessionId}/items is not available in this build');
-    expect(fetchMock).not.toHaveBeenCalled();
+    });
+    Object.defineProperty(document, 'cookie', {
+      value: 'stock_research_csrf=csrf-1',
+      configurable: true
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await updateMyReviewItem(12, 34, {
+      decision: 'watch',
+      conviction: 'medium',
+      tags: [],
+      notes: '',
+      follow_up_required: false
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/my/reviews/12/items/34',
+      expect.objectContaining({
+        method: 'PATCH',
+        credentials: 'include',
+        body: JSON.stringify({
+          decision: 'watch',
+          conviction: 'medium',
+          tags: [],
+          notes: '',
+          follow_up_required: false
+        })
+      })
+    );
   });
 });

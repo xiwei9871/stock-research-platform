@@ -21,29 +21,18 @@ function readCookie(name: string): string | null {
   return null;
 }
 
+function getCsrfCookieName(): string {
+  const override = (
+    globalThis as typeof globalThis & {
+      __STOCK_RESEARCH_CSRF_COOKIE_NAME__?: string;
+    }
+  ).__STOCK_RESEARCH_CSRF_COOKIE_NAME__;
+
+  return override || CSRF_COOKIE_NAME;
+}
+
 function readCsrfCookie(): string | null {
-  const preferredToken = readCookie(CSRF_COOKIE_NAME);
-  if (preferredToken) {
-    return preferredToken;
-  }
-
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  for (const part of document.cookie.split(';')) {
-    const trimmed = part.trim();
-    const separatorIndex = trimmed.indexOf('=');
-    if (separatorIndex <= 0) {
-      continue;
-    }
-    const cookieName = trimmed.slice(0, separatorIndex);
-    if (cookieName.toLowerCase().includes('csrf')) {
-      return decodeURIComponent(trimmed.slice(separatorIndex + 1));
-    }
-  }
-
-  return null;
+  return readCookie(getCsrfCookieName());
 }
 
 function buildInit(
