@@ -89,13 +89,11 @@ class ResetPasswordPayload(BaseModel):
 
 class WatchlistItemPayload(BaseModel):
     asset_id: str
-    trade_date_added: str
-    source: str
+    source: str = "manual"
     notes: str = ""
 
 
 class WatchlistItemUpdatePayload(BaseModel):
-    trade_date_added: str | None = None
     source: str | None = None
     notes: str | None = None
 
@@ -260,7 +258,6 @@ def create_app() -> FastAPI:
             return create_user_watchlist_item(
                 user_id=current_user.id,
                 asset_id=payload.asset_id,
-                trade_date_added=payload.trade_date_added,
                 source=payload.source,
                 notes=payload.notes,
                 actor_user_id=current_user.id,
@@ -281,7 +278,6 @@ def create_app() -> FastAPI:
         item = update_user_watchlist_item(
             user_id=current_user.id,
             asset_id=asset_id,
-            trade_date_added=payload.trade_date_added,
             source=payload.source,
             notes=payload.notes,
             actor_user_id=current_user.id,

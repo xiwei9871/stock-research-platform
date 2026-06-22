@@ -1,7 +1,8 @@
+import json
+from datetime import date
 from typing import Any
 
 from stock_research.config import SETTINGS
-from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.user_models import UserWatchlistItem
 from stock_research.db import connect
 
@@ -41,7 +42,6 @@ def create_user_watchlist_item(
     *,
     user_id: int,
     asset_id: str,
-    trade_date_added: str,
     source: str,
     notes: str,
     actor_user_id: int,
@@ -69,7 +69,7 @@ def create_user_watchlist_item(
     params = {
         "user_id": user_id,
         "asset_id": asset_id,
-        "trade_date_added": trade_date_added,
+        "trade_date_added": date.today().isoformat(),
         "source": source,
         "notes": notes,
     }
@@ -77,17 +77,17 @@ def create_user_watchlist_item(
         with conn.cursor() as cur:
             cur.execute(sql, params)
             row = cur.fetchone()
-    if row is None:
-        raise RuntimeError("failed to create watchlist item")
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="watchlist_add_item",
-        target_type="user_watchlist_item",
-        target_id=asset_id,
-        metadata={"asset_id": asset_id, "user_id": user_id},
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+            if row is None:
+                raise RuntimeError("failed to create watchlist item")
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="watchlist_add_item",
+                target_id=asset_id,
+                metadata={"asset_id": asset_id, "user_id": user_id},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return _serialize_user_watchlist_item(row)
 
 
@@ -95,7 +95,6 @@ def update_user_watchlist_item(
     *,
     user_id: int,
     asset_id: str,
-    trade_date_added: str | None,
     source: str | None,
     notes: str | None,
     actor_user_id: int,
@@ -105,8 +104,7 @@ def update_user_watchlist_item(
 ) -> dict[str, object] | None:
     sql = f"""
     UPDATE watchlist.user_watchlist_item
-    SET trade_date_added = COALESCE(%(trade_date_added)s, trade_date_added),
-        source = COALESCE(%(source)s, source),
+    SET source = COALESCE(%(source)s, source),
         notes = COALESCE(%(notes)s, notes),
         updated_at = now()
     WHERE user_id = %(user_id)s
@@ -117,7 +115,6 @@ def update_user_watchlist_item(
     params = {
         "user_id": user_id,
         "asset_id": asset_id,
-        "trade_date_added": trade_date_added,
         "source": source,
         "notes": notes,
     }
@@ -125,17 +122,17 @@ def update_user_watchlist_item(
         with conn.cursor() as cur:
             cur.execute(sql, params)
             row = cur.fetchone()
-    if row is None:
-        return None
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="watchlist_update_item",
-        target_type="user_watchlist_item",
-        target_id=asset_id,
-        metadata={"asset_id": asset_id, "user_id": user_id},
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+            if row is None:
+                return None
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="watchlist_update_item",
+                target_id=asset_id,
+                metadata={"asset_id": asset_id, "user_id": user_id},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return _serialize_user_watchlist_item(row)
 
 
@@ -161,17 +158,17 @@ def soft_delete_user_watchlist_item(
         with conn.cursor() as cur:
             cur.execute(sql, {"user_id": user_id, "asset_id": asset_id})
             row = cur.fetchone()
-    if row is None:
-        return False
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="watchlist_remove_item",
-        target_type="user_watchlist_item",
-        target_id=asset_id,
-        metadata={"asset_id": asset_id, "user_id": user_id},
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+            if row is None:
+                return False
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="watchlist_remove_item",
+                target_id=asset_id,
+                metadata={"asset_id": asset_id, "user_id": user_id},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return True
 
 
@@ -192,3 +189,35 @@ def _serialize_value(value: Any) -> str:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _insert_audit_log(
+    cur,
+    *,
+    action: str,
+    target_id: str,
+    actor_user_id: int | None = None,
+    metadata: dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO audit.audit_log (
+            actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent
+        )
+        VALUES (
+            %(actor_user_id)s, %(action)s, %(target_type)s, %(target_id)s,
+            %(metadata)s::jsonb, %(ip_address)s, %(user_agent)s
+        )
+        """,
+        {
+            "actor_user_id": actor_user_id,
+            "action": action,
+            "target_type": "user_watchlist_item",
+            "target_id": target_id,
+            "metadata": json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+        },
+    )

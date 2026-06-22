@@ -1,5 +1,6 @@
 from fastapi import Request
 from fastapi.testclient import TestClient
+from psycopg import errors as psycopg_errors
 
 from stock_research.dashboard import app as dashboard_app
 
@@ -120,7 +121,7 @@ def test_create_my_watchlist_item_passes_actor_context(monkeypatch):
             "id": 5,
             "user_id": kwargs["user_id"],
             "asset_id": kwargs["asset_id"],
-            "trade_date_added": kwargs["trade_date_added"],
+            "trade_date_added": "2026-06-21",
             "source": kwargs["source"],
             "notes": kwargs["notes"],
             "created_at": "2026-06-20T10:00:00+00:00",
@@ -142,7 +143,6 @@ def test_create_my_watchlist_item_passes_actor_context(monkeypatch):
             "/api/my/watchlist/items",
             json={
                 "asset_id": "CN:SZ:000001",
-                "trade_date_added": "2026-06-21",
                 "source": "manual",
                 "notes": "relative strength",
             },
@@ -156,7 +156,6 @@ def test_create_my_watchlist_item_passes_actor_context(monkeypatch):
         {
             "user_id": 13,
             "asset_id": "CN:SZ:000001",
-            "trade_date_added": "2026-06-21",
             "source": "manual",
             "notes": "relative strength",
             "actor_user_id": 13,
@@ -164,6 +163,36 @@ def test_create_my_watchlist_item_passes_actor_context(monkeypatch):
             "user_agent": "testclient",
         }
     ]
+
+
+def test_create_my_watchlist_item_returns_409_for_duplicate(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=13, username="breakout")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_create_user_watchlist_item(**kwargs):
+        raise psycopg_errors.UniqueViolation("duplicate key value violates unique constraint")
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "create_user_watchlist_item",
+        fake_create_user_watchlist_item,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post(
+            "/api/my/watchlist/items",
+            json={"asset_id": "CN:SZ:000001"},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "watchlist item already exists"}
 
 
 def test_update_my_watchlist_item_passes_actor_context(monkeypatch):
@@ -213,7 +242,6 @@ def test_update_my_watchlist_item_passes_actor_context(monkeypatch):
         {
             "user_id": 17,
             "asset_id": "CN:SZ:300750",
-            "trade_date_added": None,
             "source": "journal",
             "notes": "post-earnings setup",
             "actor_user_id": 17,
@@ -221,6 +249,36 @@ def test_update_my_watchlist_item_passes_actor_context(monkeypatch):
             "user_agent": "testclient",
         }
     ]
+
+
+def test_update_my_watchlist_item_returns_404_when_missing(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=17, username="momentum")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_update_user_watchlist_item(**kwargs):
+        return None
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "update_user_watchlist_item",
+        fake_update_user_watchlist_item,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.patch(
+            "/api/my/watchlist/items/CN:SZ:300750",
+            json={"source": "journal", "notes": "post-earnings setup"},
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "watchlist item not found"}
 
 
 def test_delete_my_watchlist_item_soft_deletes(monkeypatch):
@@ -265,17 +323,147 @@ def test_delete_my_watchlist_item_soft_deletes(monkeypatch):
     ]
 
 
-def test_soft_delete_user_watchlist_item_sets_deleted_at_and_records_audit(monkeypatch):
+def test_delete_my_watchlist_item_returns_404_when_missing(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=19, username="reversal")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_soft_delete_user_watchlist_item(**kwargs):
+        return False
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "soft_delete_user_watchlist_item",
+        fake_soft_delete_user_watchlist_item,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.delete("/api/my/watchlist/items/CN:SH:688256")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "watchlist item not found"}
+
+
+def test_create_user_watchlist_item_sets_today_and_inserts_audit_in_same_cursor(monkeypatch):
+    from stock_research.dashboard import user_watchlist
+
+    class _FakeDate:
+        @staticmethod
+        def today():
+            class _Today:
+                @staticmethod
+                def isoformat():
+                    return "2026-06-22"
+
+            return _Today()
+
+    conn = _Connection(
+        rows=[
+            {
+                "id": 31,
+                "user_id": 23,
+                "asset_id": "CN:SH:600000",
+                "trade_date_added": "2026-06-22",
+                "source": "manual",
+                "notes": "breakout",
+                "created_at": "2026-06-22T09:30:00+00:00",
+                "updated_at": "2026-06-22T09:30:00+00:00",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(user_watchlist, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(user_watchlist, "date", _FakeDate)
+
+    item = user_watchlist.create_user_watchlist_item(
+        user_id=23,
+        asset_id="CN:SH:600000",
+        source="manual",
+        notes="breakout",
+        actor_user_id=23,
+        ip_address="203.0.113.9",
+        user_agent="pytest",
+    )
+
+    assert item["trade_date_added"] == "2026-06-22"
+    sql, params = conn.cursor_obj.calls[0]
+    assert "INSERT INTO watchlist.user_watchlist_item" in sql
+    assert params == {
+        "user_id": 23,
+        "asset_id": "CN:SH:600000",
+        "trade_date_added": "2026-06-22",
+        "source": "manual",
+        "notes": "breakout",
+    }
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["action"] == "watchlist_add_item"
+    assert audit_params["target_id"] == "CN:SH:600000"
+    assert audit_params["actor_user_id"] == 23
+
+
+def test_update_user_watchlist_item_updates_fields_and_inserts_audit_in_same_cursor(monkeypatch):
+    from stock_research.dashboard import user_watchlist
+
+    conn = _Connection(
+        rows=[
+            {
+                "id": 31,
+                "user_id": 23,
+                "asset_id": "CN:SH:600000",
+                "trade_date_added": "2026-06-20",
+                "source": "journal",
+                "notes": "trim risk",
+                "created_at": "2026-06-20T09:30:00+00:00",
+                "updated_at": "2026-06-22T09:30:00+00:00",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(user_watchlist, "connect", lambda service: _Context(conn))
+
+    item = user_watchlist.update_user_watchlist_item(
+        user_id=23,
+        asset_id="CN:SH:600000",
+        source="journal",
+        notes="trim risk",
+        actor_user_id=23,
+        ip_address="203.0.113.9",
+        user_agent="pytest",
+    )
+
+    assert item is not None
+    sql, params = conn.cursor_obj.calls[0]
+    assert "UPDATE watchlist.user_watchlist_item" in sql
+    assert "SET source = COALESCE(%(source)s, source)," in sql
+    assert "notes = COALESCE(%(notes)s, notes)," in sql
+    assert "SET trade_date_added" not in sql
+    assert "%(trade_date_added)s" not in sql
+    assert params == {
+        "user_id": 23,
+        "asset_id": "CN:SH:600000",
+        "source": "journal",
+        "notes": "trim risk",
+    }
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["action"] == "watchlist_update_item"
+    assert audit_params["target_id"] == "CN:SH:600000"
+    assert audit_params["actor_user_id"] == 23
+
+
+def test_soft_delete_user_watchlist_item_sets_deleted_at_and_inserts_audit_in_same_cursor(monkeypatch):
     from stock_research.dashboard import user_watchlist
 
     conn = _Connection(rows=[{"asset_id": "CN:SH:600000"}])
-    audit_events = []
-
-    def fake_record_audit_log(**kwargs):
-        audit_events.append(kwargs)
 
     monkeypatch.setattr(user_watchlist, "connect", lambda service: _Context(conn))
-    monkeypatch.setattr(user_watchlist, "record_audit_log", fake_record_audit_log)
 
     deleted = user_watchlist.soft_delete_user_watchlist_item(
         user_id=23,
@@ -294,14 +482,8 @@ def test_soft_delete_user_watchlist_item_sets_deleted_at_and_records_audit(monke
     assert "asset_id = %(asset_id)s" in sql
     assert "deleted_at IS NULL" in sql
     assert params == {"user_id": 23, "asset_id": "CN:SH:600000"}
-    assert audit_events == [
-        {
-            "actor_user_id": 23,
-            "action": "watchlist_remove_item",
-            "target_type": "user_watchlist_item",
-            "target_id": "CN:SH:600000",
-            "metadata": {"asset_id": "CN:SH:600000", "user_id": 23},
-            "ip_address": "203.0.113.9",
-            "user_agent": "pytest",
-        }
-    ]
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["action"] == "watchlist_remove_item"
+    assert audit_params["target_id"] == "CN:SH:600000"
+    assert audit_params["actor_user_id"] == 23
