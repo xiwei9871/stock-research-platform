@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: {
     command: `pnpm exec vite --host 127.0.0.1 --port ${PLAYWRIGHT_PORT}`,
     url: PLAYWRIGHT_BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120000
   }
 });

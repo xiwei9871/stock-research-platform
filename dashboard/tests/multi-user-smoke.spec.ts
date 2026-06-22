@@ -51,7 +51,9 @@ test('multi-user dashboard login smoke flow works for watchlist and reviews', as
 
   await page.getByRole('button', { name: '我的观察池' }).click();
   await expect(page.getByRole('heading', { name: '我的观察池' })).toBeVisible();
+  await expect(page.getByText('暂无观察资产。')).toBeVisible();
 
   await page.getByRole('button', { name: '我的复盘' }).click();
   await expect(page.getByRole('heading', { name: '我的复盘' })).toBeVisible();
+  await expect(page.getByText('暂无复盘记录。')).toBeVisible();
 });
