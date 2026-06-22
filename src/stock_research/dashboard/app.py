@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from psycopg import errors as psycopg_errors
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import (
@@ -105,10 +105,13 @@ class WatchlistItemUpdatePayload(BaseModel):
     notes: str | None = None
 
 
+NonBlankText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
 class ReviewItemPayload(BaseModel):
-    asset_id: str
-    decision: str
-    conviction: str
+    asset_id: NonBlankText
+    decision: NonBlankText
+    conviction: NonBlankText
     tags: list[str] | None = None
     notes: str | None = None
     follow_up_required: bool | None = None
@@ -118,8 +121,8 @@ class ReviewItemPatchPayload(BaseModel):
     tags: list[str] | None = None
     notes: str | None = None
     follow_up_required: bool | None = None
-    decision: str | None = None
-    conviction: str | None = None
+    decision: NonBlankText | None = None
+    conviction: NonBlankText | None = None
 
 
 class ReviewSessionPayload(BaseModel):
