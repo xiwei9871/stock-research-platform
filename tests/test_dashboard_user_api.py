@@ -1,5 +1,7 @@
+import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
+from psycopg import OperationalError
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard import app as dashboard_app
@@ -128,3 +130,16 @@ def test_login_returns_429_when_recent_failures_exceed_limit(monkeypatch):
     assert response.status_code == 429
     assert response.json()["detail"] == "too many login attempts"
     assert calls["authenticate"] == 0
+
+
+def test_app_startup_propagates_user_schema_bootstrap_errors(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "apply_user_platform_schema",
+        lambda: (_ for _ in ()).throw(OperationalError("db unavailable")),
+        raising=False,
+    )
+
+    with pytest.raises(OperationalError, match="db unavailable"):
+        with TestClient(dashboard_app.create_app()):
+            pass

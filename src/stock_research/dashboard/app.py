@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
-from psycopg import Error as PsycopgError
 from pydantic import BaseModel
 
 from stock_research.dashboard.audit import record_audit_log
@@ -62,10 +61,7 @@ class LoginPayload(BaseModel):
 def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        try:
-            apply_user_platform_schema()
-        except PsycopgError:
-            pass
+        apply_user_platform_schema()
         yield
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
