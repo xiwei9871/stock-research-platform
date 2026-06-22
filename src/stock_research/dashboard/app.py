@@ -105,7 +105,7 @@ class WatchlistItemUpdatePayload(BaseModel):
     notes: str | None = None
 
 
-class ReviewItemCreatePayload(BaseModel):
+class ReviewItemPayload(BaseModel):
     asset_id: str
     decision: str
     conviction: str
@@ -129,7 +129,7 @@ class ReviewSessionPayload(BaseModel):
     market_view: str = ""
     position_view: str = ""
     next_action: str = ""
-    items: list[ReviewItemCreatePayload] = Field(default_factory=list)
+    items: list[ReviewItemPayload] = Field(default_factory=list)
 
 
 def create_app() -> FastAPI:

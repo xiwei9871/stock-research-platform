@@ -94,6 +94,13 @@ def test_get_my_reviews_returns_items(monkeypatch):
     assert events["list_calls"] == [{"user_id": 11}]
 
 
+def test_review_session_payload_uses_review_item_payload_for_create_contract():
+    review_item_payload = getattr(dashboard_app, "ReviewItemPayload", None)
+
+    assert review_item_payload is not None
+    assert dashboard_app.ReviewSessionPayload.model_fields["items"].annotation == list[review_item_payload]
+
+
 def test_create_my_review_session_passes_actor_context(monkeypatch):
     events: dict[str, object] = {"auth_checks": [], "csrf_checks": [], "create_calls": []}
 
