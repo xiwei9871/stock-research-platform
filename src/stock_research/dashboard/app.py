@@ -12,6 +12,7 @@ from stock_research.dashboard.auth import (
     count_recent_login_failures,
     create_user_session,
     require_csrf,
+    require_admin_user,
     require_current_user,
     revoke_user_session,
 )
@@ -41,6 +42,13 @@ from stock_research.dashboard.watchlist import (
     load_watchlist_signals_for_dashboard,
 )
 from stock_research.dashboard.user_models import CurrentUser
+from stock_research.dashboard.user_admin import (
+    create_user_account,
+    disable_user_account,
+    enable_user_account,
+    list_user_accounts,
+    reset_user_password,
+)
 from stock_research.dashboard.user_schema import apply_user_platform_schema
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.intraday_pipeline import (
@@ -56,6 +64,18 @@ from stock_research.public_news.service import (
 
 class LoginPayload(BaseModel):
     identifier: str
+    password: str
+
+
+class AdminCreateUserPayload(BaseModel):
+    username: str
+    email: str | None = None
+    display_name: str
+    password: str
+    role: str
+
+
+class ResetPasswordPayload(BaseModel):
     password: str
 
 
@@ -124,6 +144,96 @@ def create_app() -> FastAPI:
             target_type="user_account",
             target_id=str(current_user.id),
             metadata={"identifier": current_user.username},
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {"ok": True}
+
+    @app.get("/api/admin/users")
+    def admin_list_users(_current_user: CurrentUser = Depends(require_admin_user)):
+        return {"items": list_user_accounts()}
+
+    @app.post("/api/admin/users")
+    def admin_create_user(
+        payload: AdminCreateUserPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_admin_user),
+        _: None = Depends(require_csrf),
+    ):
+        user_account = create_user_account(
+            username=payload.username,
+            email=payload.email,
+            display_name=payload.display_name,
+            password=payload.password,
+            role=payload.role,
+        )
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="admin_create_user",
+            target_type="user_account",
+            target_id=str(user_account["id"]),
+            metadata={"username": str(user_account["username"])},
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return user_account
+
+    @app.post("/api/admin/users/{user_id}/reset-password")
+    def admin_reset_password(
+        user_id: int,
+        payload: ResetPasswordPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_admin_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not reset_user_password(user_id=user_id, password=payload.password):
+            raise HTTPException(status_code=404, detail="user not found")
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="admin_reset_password",
+            target_type="user_account",
+            target_id=str(user_id),
+            metadata={},
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {"ok": True}
+
+    @app.post("/api/admin/users/{user_id}/disable")
+    def admin_disable_user(
+        user_id: int,
+        request: Request,
+        current_user: CurrentUser = Depends(require_admin_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not disable_user_account(user_id=user_id):
+            raise HTTPException(status_code=404, detail="user not found")
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="admin_disable_user",
+            target_type="user_account",
+            target_id=str(user_id),
+            metadata={},
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {"ok": True}
+
+    @app.post("/api/admin/users/{user_id}/enable")
+    def admin_enable_user(
+        user_id: int,
+        request: Request,
+        current_user: CurrentUser = Depends(require_admin_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not enable_user_account(user_id=user_id):
+            raise HTTPException(status_code=404, detail="user not found")
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="admin_enable_user",
+            target_type="user_account",
+            target_id=str(user_id),
+            metadata={},
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
         )
