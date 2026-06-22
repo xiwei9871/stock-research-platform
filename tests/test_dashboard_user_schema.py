@@ -42,6 +42,7 @@ def test_apply_user_platform_schema_creates_tables_and_indexes(monkeypatch):
 
     sql = conn.cursor_obj.calls[0][0]
     assert "CREATE SCHEMA IF NOT EXISTS identity" in sql
+    assert "CREATE SCHEMA IF NOT EXISTS watchlist" in sql
     assert "CREATE TABLE IF NOT EXISTS identity.user_account" in sql
     assert "CREATE TABLE IF NOT EXISTS identity.user_session" in sql
     assert "CREATE TABLE IF NOT EXISTS watchlist.user_watchlist_item" in sql

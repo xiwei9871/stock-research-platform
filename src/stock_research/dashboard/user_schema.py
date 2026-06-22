@@ -4,6 +4,7 @@ from stock_research.db import connect
 
 CREATE_USER_PLATFORM_SCHEMA_SQL = """
 CREATE SCHEMA IF NOT EXISTS identity;
+CREATE SCHEMA IF NOT EXISTS watchlist;
 CREATE SCHEMA IF NOT EXISTS journal;
 CREATE SCHEMA IF NOT EXISTS audit;
 
