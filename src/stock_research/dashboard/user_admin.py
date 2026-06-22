@@ -1,8 +1,9 @@
+import json
+from typing import Any
 from typing import Literal
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect
-from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import hash_password
 
 
@@ -52,14 +53,16 @@ def create_user_account(
         email,
         password_hash,
         display_name,
-        role
+        role,
+        password_updated_at
     )
     VALUES (
         %(username)s,
         %(email)s,
         %(password_hash)s,
         %(display_name)s,
-        %(role)s
+        %(role)s,
+        now()
     )
     RETURNING {USER_ACCOUNT_COLUMNS}
     """
@@ -74,19 +77,19 @@ def create_user_account(
         with conn.cursor() as cur:
             cur.execute(sql, params)
             row = cur.fetchone()
-    if row is None:
-        raise RuntimeError("failed to create user account")
-    user_account = _serialize_user_account(row)
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="admin_create_user",
-        target_type="user_account",
-        target_id=str(user_account["id"]),
-        metadata={"username": str(user_account["username"])},
-        ip_address=ip_address,
-        user_agent=user_agent,
-        service=service,
-    )
+            if row is None:
+                raise RuntimeError("failed to create user account")
+            user_account = _serialize_user_account(row)
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="admin_create_user",
+                target_type="user_account",
+                target_id=str(user_account["id"]),
+                metadata={"username": str(user_account["username"])},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return user_account
 
 
@@ -120,16 +123,16 @@ def reset_user_password(
             if row is None:
                 return False
             _revoke_user_sessions(cur, user_id=user_id)
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="admin_reset_password",
-        target_type="user_account",
-        target_id=str(user_id),
-        metadata={},
-        ip_address=ip_address,
-        user_agent=user_agent,
-        service=service,
-    )
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="admin_reset_password",
+                target_type="user_account",
+                target_id=str(user_id),
+                metadata={},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return True
 
 
@@ -167,16 +170,16 @@ def set_user_active_state(
                 return False
             if not is_active:
                 _revoke_user_sessions(cur, user_id=user_id)
-    record_audit_log(
-        actor_user_id=actor_user_id,
-        action="admin_enable_user" if is_active else "admin_disable_user",
-        target_type="user_account",
-        target_id=str(user_id),
-        metadata={},
-        ip_address=ip_address,
-        user_agent=user_agent,
-        service=service,
-    )
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="admin_enable_user" if is_active else "admin_disable_user",
+                target_type="user_account",
+                target_id=str(user_id),
+                metadata={},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
     return True
 
 
@@ -225,6 +228,39 @@ def _revoke_user_sessions(cur, *, user_id: int) -> None:
           AND revoked_at IS NULL
         """,
         {"user_id": user_id},
+    )
+
+
+def _insert_audit_log(
+    cur,
+    *,
+    action: str,
+    target_type: str,
+    target_id: str,
+    actor_user_id: int | None = None,
+    metadata: dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO audit.audit_log (
+            actor_user_id, action, target_type, target_id, metadata, ip_address, user_agent
+        )
+        VALUES (
+            %(actor_user_id)s, %(action)s, %(target_type)s, %(target_id)s,
+            %(metadata)s::jsonb, %(ip_address)s, %(user_agent)s
+        )
+        """,
+        {
+            "actor_user_id": actor_user_id,
+            "action": action,
+            "target_type": target_type,
+            "target_id": target_id,
+            "metadata": json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True),
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+        },
     )
 
 

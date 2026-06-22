@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
-from psycopg import IntegrityError
+from psycopg import errors as psycopg_errors
 from pydantic import BaseModel
 
 from stock_research.dashboard.audit import record_audit_log
@@ -173,7 +173,7 @@ def create_app() -> FastAPI:
                 ip_address=request.client.host if request.client is not None else None,
                 user_agent=request.headers.get("user-agent"),
             )
-        except IntegrityError as exc:
+        except psycopg_errors.UniqueViolation as exc:
             raise HTTPException(status_code=409, detail="user already exists") from exc
 
     @app.post("/api/admin/users/{user_id}/reset-password")

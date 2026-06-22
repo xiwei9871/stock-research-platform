@@ -1,6 +1,8 @@
 import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
+from psycopg import IntegrityError
+from psycopg import errors as psycopg_errors
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import user_admin
@@ -207,6 +209,67 @@ def test_admin_create_user_route_rejects_invalid_role_before_service(monkeypatch
     assert events["create_calls"] == 0
 
 
+def test_admin_create_user_route_returns_409_for_duplicate_conflict(monkeypatch):
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=9, username="root-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_create_user_account(**kwargs):
+        raise psycopg_errors.UniqueViolation("duplicate key value violates unique constraint")
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "create_user_account", fake_create_user_account, raising=False)
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "username": "analyst",
+                "email": "analyst@example.com",
+                "display_name": "Analyst",
+                "password": "secret123",
+                "role": "user",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "user already exists"}
+
+
+def test_admin_create_user_route_does_not_map_other_integrity_errors_to_409(monkeypatch):
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=9, username="root-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_create_user_account(**kwargs):
+        raise IntegrityError("audit insert failed")
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "create_user_account", fake_create_user_account, raising=False)
+
+    with TestClient(dashboard_app.create_app(), raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/admin/users",
+            json={
+                "username": "analyst",
+                "email": "analyst@example.com",
+                "display_name": "Analyst",
+                "password": "secret123",
+                "role": "user",
+            },
+        )
+
+    assert response.status_code == 500
+
+
 def test_admin_disable_route_passes_target_user_id(monkeypatch):
     events: dict[str, object] = {
         "admin_checks": [],
@@ -331,18 +394,55 @@ def test_admin_enable_route_passes_actor_context(monkeypatch):
     ]
 
 
-def test_reset_user_password_revokes_existing_sessions_and_records_audit(monkeypatch):
-    conn = _Connection(rows=[{"id": 21}])
-    audit_events = []
+def test_create_user_account_sets_password_updated_at_and_writes_audit_in_same_cursor(monkeypatch):
+    conn = _Connection(
+        rows=[
+            {
+                "id": 12,
+                "username": "analyst",
+                "email": "analyst@example.com",
+                "display_name": "Analyst",
+                "role": "user",
+                "is_active": True,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "last_login_at": None,
+                "password_updated_at": "2026-01-01T00:00:00Z",
+                "disabled_at": None,
+            }
+        ]
+    )
 
     monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
     monkeypatch.setattr(user_admin, "hash_password", lambda password: f"hashed::{password}")
-    monkeypatch.setattr(
-        user_admin,
-        "record_audit_log",
-        lambda **kwargs: audit_events.append(kwargs),
-        raising=False,
+
+    result = user_admin.create_user_account(
+        username="analyst",
+        email="analyst@example.com",
+        display_name="Analyst",
+        password="secret123",
+        role="user",
+        actor_user_id=5,
+        ip_address="203.0.113.8",
+        user_agent="pytest-agent",
     )
+
+    insert_sql, insert_params = conn.cursor_obj.calls[0]
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
+    assert result["id"] == 12
+    assert "password_updated_at" in insert_sql
+    assert insert_params["password_hash"] == "hashed::secret123"
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["actor_user_id"] == 5
+    assert audit_params["action"] == "admin_create_user"
+    assert audit_params["target_id"] == "12"
+
+
+def test_reset_user_password_revokes_existing_sessions_and_writes_audit_in_same_cursor(monkeypatch):
+    conn = _Connection(rows=[{"id": 21}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(user_admin, "hash_password", lambda password: f"hashed::{password}")
 
     result = user_admin.reset_user_password(
         user_id=21,
@@ -355,35 +455,21 @@ def test_reset_user_password_revokes_existing_sessions_and_records_audit(monkeyp
     assert result is True
     update_sql, update_params = conn.cursor_obj.calls[0]
     revoke_sql, revoke_params = conn.cursor_obj.calls[1]
+    audit_sql, audit_params = conn.cursor_obj.calls[2]
     assert "UPDATE identity.user_account" in update_sql
     assert update_params == {"user_id": 21, "password_hash": "hashed::new-secret"}
     assert "UPDATE identity.user_session" in revoke_sql
     assert revoke_params == {"user_id": 21}
-    assert audit_events == [
-        {
-            "actor_user_id": 5,
-            "action": "admin_reset_password",
-            "target_type": "user_account",
-            "target_id": "21",
-            "metadata": {},
-            "ip_address": "203.0.113.8",
-            "user_agent": "pytest-agent",
-            "service": "stock_research",
-        }
-    ]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["actor_user_id"] == 5
+    assert audit_params["action"] == "admin_reset_password"
+    assert audit_params["target_id"] == "21"
 
 
-def test_disable_user_account_revokes_existing_sessions_and_records_audit(monkeypatch):
+def test_disable_user_account_revokes_existing_sessions_and_writes_audit_in_same_cursor(monkeypatch):
     conn = _Connection(rows=[{"id": 42}])
-    audit_events = []
 
     monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
-    monkeypatch.setattr(
-        user_admin,
-        "record_audit_log",
-        lambda **kwargs: audit_events.append(kwargs),
-        raising=False,
-    )
 
     result = user_admin.disable_user_account(
         user_id=42,
@@ -395,35 +481,21 @@ def test_disable_user_account_revokes_existing_sessions_and_records_audit(monkey
     assert result is True
     update_sql, update_params = conn.cursor_obj.calls[0]
     revoke_sql, revoke_params = conn.cursor_obj.calls[1]
+    audit_sql, audit_params = conn.cursor_obj.calls[2]
     assert "UPDATE identity.user_account" in update_sql
     assert update_params == {"user_id": 42, "is_active": False}
     assert "UPDATE identity.user_session" in revoke_sql
     assert revoke_params == {"user_id": 42}
-    assert audit_events == [
-        {
-            "actor_user_id": 7,
-            "action": "admin_disable_user",
-            "target_type": "user_account",
-            "target_id": "42",
-            "metadata": {},
-            "ip_address": "203.0.113.9",
-            "user_agent": "pytest-agent",
-            "service": "stock_research",
-        }
-    ]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["actor_user_id"] == 7
+    assert audit_params["action"] == "admin_disable_user"
+    assert audit_params["target_id"] == "42"
 
 
 def test_enable_user_account_does_not_revoke_sessions(monkeypatch):
     conn = _Connection(rows=[{"id": 42}])
-    audit_events = []
 
     monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
-    monkeypatch.setattr(
-        user_admin,
-        "record_audit_log",
-        lambda **kwargs: audit_events.append(kwargs),
-        raising=False,
-    )
 
     result = user_admin.enable_user_account(
         user_id=42,
@@ -433,19 +505,12 @@ def test_enable_user_account_does_not_revoke_sessions(monkeypatch):
     )
 
     assert result is True
-    assert len(conn.cursor_obj.calls) == 1
+    assert len(conn.cursor_obj.calls) == 2
     update_sql, update_params = conn.cursor_obj.calls[0]
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
     assert "UPDATE identity.user_account" in update_sql
     assert update_params == {"user_id": 42, "is_active": True}
-    assert audit_events == [
-        {
-            "actor_user_id": 3,
-            "action": "admin_enable_user",
-            "target_type": "user_account",
-            "target_id": "42",
-            "metadata": {},
-            "ip_address": "203.0.113.10",
-            "user_agent": "pytest-agent",
-            "service": "stock_research",
-        }
-    ]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["actor_user_id"] == 3
+    assert audit_params["action"] == "admin_enable_user"
+    assert audit_params["target_id"] == "42"
