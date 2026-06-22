@@ -10,6 +10,7 @@ import { ShadowFollowUpResolutionPanel } from '../src/components/ShadowFollowUpR
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import type {
   BarPoint,
+  CurrentUser,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,

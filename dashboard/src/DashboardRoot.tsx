@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { App } from './App';
 import { fetchCurrentUser, login } from './api/client';
@@ -9,7 +10,7 @@ type ViewDefinition = {
   label: string;
   section: '官方' | '我的' | '管理';
   adminOnly?: boolean;
-  render: () => JSX.Element;
+  render: () => ReactNode;
 };
 
 const VIEW_DEFINITIONS: ViewDefinition[] = [
