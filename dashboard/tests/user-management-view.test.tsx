@@ -4,6 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserManagementView } from '../src/views/UserManagementView';
 import type { AdminUser } from '../src/api/types';
 
+type ImportMetaWithGlob = ImportMeta & {
+  glob: (
+    pattern: string,
+    options: { query: string; import: string; eager: boolean }
+  ) => Record<string, string>;
+};
+
+const userManagementViewSource = (import.meta as ImportMetaWithGlob).glob('../src/views/UserManagementView.tsx', {
+  query: '?raw',
+  import: 'default',
+  eager: true
+})['../src/views/UserManagementView.tsx'] as string;
+
 const apiMocks = vi.hoisted(() => ({
   fetchUsers: vi.fn(),
   createUser: vi.fn(),
@@ -37,6 +50,17 @@ describe('UserManagementView', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('imports user management helpers directly', () => {
+    expect(userManagementViewSource).toContain("from '../api/client'");
+    expect(userManagementViewSource).toContain('fetchUsers');
+    expect(userManagementViewSource).toContain('createUser');
+    expect(userManagementViewSource).toContain('resetUserPassword');
+    expect(userManagementViewSource).toContain('disableUser');
+    expect(userManagementViewSource).toContain('enableUser');
+    expect(userManagementViewSource).not.toContain('import * as client');
+    expect(userManagementViewSource).not.toContain('Record<string, unknown>');
   });
 
   it('creates a new user and refreshes the list', async () => {

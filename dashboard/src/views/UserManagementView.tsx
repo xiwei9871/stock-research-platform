@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import * as client from '../api/client';
+import { createUser, disableUser, enableUser, fetchUsers, resetUserPassword } from '../api/client';
 import type { AdminUser, CreateUserPayload, UserRole } from '../api/types';
 
 function getErrorMessage(error: unknown) {
@@ -21,28 +21,6 @@ const defaultFormState: CreateUserPayload = {
 };
 
 export function UserManagementView() {
-  const api = client as unknown as Record<string, unknown>;
-  const fetchUsers =
-    'fetchUsers' in api && typeof api.fetchUsers === 'function'
-      ? (api.fetchUsers as () => Promise<AdminUser[]>)
-      : async () => [] as AdminUser[];
-  const createUser =
-    'createUser' in api && typeof api.createUser === 'function'
-      ? (api.createUser as typeof client.createUser)
-      : async () => Promise.reject(new Error('User API unavailable'));
-  const resetUserPassword =
-    'resetUserPassword' in api && typeof api.resetUserPassword === 'function'
-      ? (api.resetUserPassword as typeof client.resetUserPassword)
-      : async () => Promise.reject(new Error('User API unavailable'));
-  const disableUser =
-    'disableUser' in api && typeof api.disableUser === 'function'
-      ? (api.disableUser as typeof client.disableUser)
-      : async () => Promise.reject(new Error('User API unavailable'));
-  const enableUser =
-    'enableUser' in api && typeof api.enableUser === 'function'
-      ? (api.enableUser as typeof client.enableUser)
-      : async () => Promise.reject(new Error('User API unavailable'));
-
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [formState, setFormState] = useState<CreateUserPayload>(defaultFormState);
   const [loading, setLoading] = useState(true);

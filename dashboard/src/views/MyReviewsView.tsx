@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import * as client from '../api/client';
+import { createMyReviewSession, fetchMyReviewSessions } from '../api/client';
 import type { UserReviewSession } from '../api/types';
 
 function getDefaultTradeDate() {
@@ -21,16 +21,6 @@ function getErrorMessage(error: unknown) {
 }
 
 export function MyReviewsView() {
-  const api = client as unknown as Record<string, unknown>;
-  const fetchMyReviewSessions =
-    'fetchMyReviewSessions' in api && typeof api.fetchMyReviewSessions === 'function'
-      ? (api.fetchMyReviewSessions as () => Promise<UserReviewSession[]>)
-      : async () => [] as UserReviewSession[];
-  const createMyReviewSession =
-    'createMyReviewSession' in api && typeof api.createMyReviewSession === 'function'
-      ? (api.createMyReviewSession as typeof client.createMyReviewSession)
-      : async () => Promise.reject(new Error('Review API unavailable'));
-
   const [sessions, setSessions] = useState<UserReviewSession[]>([]);
   const [tradeDate, setTradeDate] = useState(getDefaultTradeDate);
   const [loading, setLoading] = useState(true);
@@ -87,7 +77,7 @@ export function MyReviewsView() {
           />
         </label>
         <button className="primary-button" type="button" disabled={creating} onClick={() => void handleCreateSession()}>
-          {creating ? '创建中...' : '新建复盘'}
+          {creating ? '创建中...' : '新建我的复盘'}
         </button>
       </div>
 

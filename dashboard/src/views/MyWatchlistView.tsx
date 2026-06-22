@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import * as client from '../api/client';
+import { createMyWatchlistItem, fetchMyWatchlist, removeMyWatchlistItem } from '../api/client';
 import type { UserWatchlistItem } from '../api/types';
 
 function getErrorMessage(error: unknown) {
@@ -13,20 +13,6 @@ function getErrorMessage(error: unknown) {
 }
 
 export function MyWatchlistView() {
-  const api = client as unknown as Record<string, unknown>;
-  const fetchMyWatchlist =
-    'fetchMyWatchlist' in api && typeof api.fetchMyWatchlist === 'function'
-      ? (api.fetchMyWatchlist as () => Promise<UserWatchlistItem[]>)
-      : async () => [] as UserWatchlistItem[];
-  const createMyWatchlistItem =
-    'createMyWatchlistItem' in api && typeof api.createMyWatchlistItem === 'function'
-      ? (api.createMyWatchlistItem as typeof client.createMyWatchlistItem)
-      : async () => Promise.reject(new Error('Watchlist API unavailable'));
-  const removeMyWatchlistItem =
-    'removeMyWatchlistItem' in api && typeof api.removeMyWatchlistItem === 'function'
-      ? (api.removeMyWatchlistItem as typeof client.removeMyWatchlistItem)
-      : async () => Promise.reject(new Error('Watchlist API unavailable'));
-
   const [items, setItems] = useState<UserWatchlistItem[]>([]);
   const [assetId, setAssetId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -85,7 +71,7 @@ export function MyWatchlistView() {
     <section className="view-shell">
       <header className="view-header">
         <div>
-          <h1>我的自选</h1>
+          <h1>我的观察池</h1>
           <p className="muted">管理个人关注资产。</p>
         </div>
       </header>
@@ -102,7 +88,7 @@ export function MyWatchlistView() {
           />
         </label>
         <button className="primary-button" type="submit" disabled={saving}>
-          {saving ? '提交中...' : '添加到自选'}
+          {saving ? '提交中...' : '添加到观察池'}
         </button>
       </form>
 
@@ -113,9 +99,9 @@ export function MyWatchlistView() {
       ) : null}
 
       {loading ? (
-        <p className="muted">加载自选中...</p>
+        <p className="muted">加载观察池中...</p>
       ) : items.length === 0 ? (
-        <p className="muted">暂无自选资产。</p>
+        <p className="muted">暂无观察资产。</p>
       ) : (
         <div className="entity-list">
           {items.map((item) => (

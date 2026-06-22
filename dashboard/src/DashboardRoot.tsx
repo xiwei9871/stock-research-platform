@@ -30,7 +30,7 @@ const VIEW_DEFINITIONS: ViewDefinition[] = [
   },
   {
     id: 'my-watchlist',
-    label: '我的自选',
+    label: '我的观察池',
     section: '我的',
     render: () => <MyWatchlistView />
   },
