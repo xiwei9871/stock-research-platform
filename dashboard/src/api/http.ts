@@ -1,4 +1,5 @@
-const CSRF_COOKIE_NAME = 'stock_research_csrf';
+const DEFAULT_CSRF_COOKIE_NAME = 'stock_research_csrf';
+let csrfCookieName = DEFAULT_CSRF_COOKIE_NAME;
 
 type JsonRequestOptions = {
   credentials?: RequestCredentials;
@@ -21,18 +22,68 @@ function readCookie(name: string): string | null {
   return null;
 }
 
-function getCsrfCookieName(): string {
-  const override = (
-    globalThis as typeof globalThis & {
-      __STOCK_RESEARCH_CSRF_COOKIE_NAME__?: string;
-    }
-  ).__STOCK_RESEARCH_CSRF_COOKIE_NAME__;
-
-  return override || CSRF_COOKIE_NAME;
+export function setCsrfCookieName(name: string): void {
+  csrfCookieName = name.trim() || DEFAULT_CSRF_COOKIE_NAME;
 }
 
 function readCsrfCookie(): string | null {
-  return readCookie(getCsrfCookieName());
+  return readCookie(csrfCookieName);
+}
+
+async function readResponseText(response: Response): Promise<string> {
+  if (typeof response.text !== 'function') {
+    return '';
+  }
+
+  return await response.text();
+}
+
+function readErrorDetailFromJson(text: string): string {
+  try {
+    const payload = JSON.parse(text) as {
+      detail?: unknown;
+      message?: unknown;
+    };
+
+    if (typeof payload.detail === 'string' && payload.detail.trim()) {
+      return payload.detail.trim();
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message.trim();
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+async function buildErrorMessage(method: string, url: string, response: Response): Promise<string> {
+  const prefix = `${method} ${url} failed with ${response.status}`;
+  const contentType = response.headers?.get?.('content-type') ?? '';
+  const responseText = (await readResponseText(response)).trim();
+  const detail = contentType.includes('application/json')
+    ? readErrorDetailFromJson(responseText) || responseText
+    : responseText;
+
+  return detail ? `${prefix}: ${detail}` : prefix;
+}
+
+async function readSuccessPayload<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const responseText = await readResponseText(response);
+  if (responseText) {
+    return JSON.parse(responseText) as T;
+  }
+
+  if (typeof response.json === 'function') {
+    return response.json() as Promise<T>;
+  }
+
+  return undefined as T;
 }
 
 function buildInit(
@@ -78,10 +129,10 @@ async function requestJson<T>(
   const response = init === undefined ? await fetch(url) : await fetch(url, init);
 
   if (!response.ok) {
-    throw new Error(`${method} ${url} failed with ${response.status}`);
+    throw new Error(await buildErrorMessage(method, url, response));
   }
 
-  return response.json() as Promise<T>;
+  return readSuccessPayload<T>(response);
 }
 
 export function getJson<T>(url: string, options: JsonRequestOptions = {}): Promise<T> {

@@ -26,6 +26,7 @@ import {
   updateMyReviewItem,
   updateMyReviewSession
 } from '../src/api/client';
+import { deleteSessionJson, setCsrfCookieName } from '../src/api/http';
 
 describe('dashboard API client', () => {
   it('fetches overview with query params', async () => {
@@ -410,15 +411,12 @@ describe('dashboard API client', () => {
     expect(reviewHeaders.get('X-CSRF-Token')).toBe('csrf-1');
   });
 
-  it('supports an explicit global csrf cookie-name override for admin mutations', async () => {
+  it('supports an explicit csrf cookie-name override for admin mutations', async () => {
     Object.defineProperty(document, 'cookie', {
       value: 'theme=light; dashboard_csrf=override-1; session=value',
       configurable: true
     });
-    const globalWithOverride = globalThis as typeof globalThis & {
-      __STOCK_RESEARCH_CSRF_COOKIE_NAME__?: string;
-    };
-    globalWithOverride.__STOCK_RESEARCH_CSRF_COOKIE_NAME__ = 'dashboard_csrf';
+    setCsrfCookieName('dashboard_csrf');
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -452,8 +450,45 @@ describe('dashboard API client', () => {
       );
       expect(headers.get('X-CSRF-Token')).toBe('override-1');
     } finally {
-      delete globalWithOverride.__STOCK_RESEARCH_CSRF_COOKIE_NAME__;
+      setCsrfCookieName('stock_research_csrf');
     }
+  });
+
+  it('propagates backend error detail from shared requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      text: async () => JSON.stringify({ detail: 'invalid session' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCurrentUser()).rejects.toThrow('GET /api/auth/me failed with 401: invalid session');
+  });
+
+  it('supports successful empty-body responses in the shared transport layer', async () => {
+    Object.defineProperty(document, 'cookie', {
+      value: 'stock_research_csrf=csrf-1',
+      configurable: true
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      headers: new Headers(),
+      text: async () => ''
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await deleteSessionJson('/api/test-empty', { csrf: true });
+
+    expect(result).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/test-empty',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include'
+      })
+    );
   });
 
   it('fetches a review session from the dedicated session route', async () => {
