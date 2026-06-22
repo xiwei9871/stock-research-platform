@@ -1,5 +1,8 @@
+from typing import Literal
+
 from stock_research.config import SETTINGS
 from stock_research.db import connect
+from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import hash_password
 
 
@@ -37,7 +40,10 @@ def create_user_account(
     email: str | None,
     display_name: str,
     password: str,
-    role: str,
+    role: Literal["admin", "user"],
+    actor_user_id: int,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, object]:
     sql = f"""
@@ -70,13 +76,27 @@ def create_user_account(
             row = cur.fetchone()
     if row is None:
         raise RuntimeError("failed to create user account")
-    return _serialize_user_account(row)
+    user_account = _serialize_user_account(row)
+    record_audit_log(
+        actor_user_id=actor_user_id,
+        action="admin_create_user",
+        target_type="user_account",
+        target_id=str(user_account["id"]),
+        metadata={"username": str(user_account["username"])},
+        ip_address=ip_address,
+        user_agent=user_agent,
+        service=service,
+    )
+    return user_account
 
 
 def reset_user_password(
     *,
     user_id: int,
     password: str,
+    actor_user_id: int,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> bool:
     sql = """
@@ -97,13 +117,29 @@ def reset_user_password(
                 },
             )
             row = cur.fetchone()
-    return row is not None
+            if row is None:
+                return False
+            _revoke_user_sessions(cur, user_id=user_id)
+    record_audit_log(
+        actor_user_id=actor_user_id,
+        action="admin_reset_password",
+        target_type="user_account",
+        target_id=str(user_id),
+        metadata={},
+        ip_address=ip_address,
+        user_agent=user_agent,
+        service=service,
+    )
+    return True
 
 
 def set_user_active_state(
     *,
     user_id: int,
     is_active: bool,
+    actor_user_id: int,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> bool:
     sql = """
@@ -127,15 +163,69 @@ def set_user_active_state(
                 },
             )
             row = cur.fetchone()
-    return row is not None
+            if row is None:
+                return False
+            if not is_active:
+                _revoke_user_sessions(cur, user_id=user_id)
+    record_audit_log(
+        actor_user_id=actor_user_id,
+        action="admin_enable_user" if is_active else "admin_disable_user",
+        target_type="user_account",
+        target_id=str(user_id),
+        metadata={},
+        ip_address=ip_address,
+        user_agent=user_agent,
+        service=service,
+    )
+    return True
 
 
-def disable_user_account(*, user_id: int, service: str = SETTINGS.research_service) -> bool:
-    return set_user_active_state(user_id=user_id, is_active=False, service=service)
+def disable_user_account(
+    *,
+    user_id: int,
+    actor_user_id: int,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> bool:
+    return set_user_active_state(
+        user_id=user_id,
+        is_active=False,
+        actor_user_id=actor_user_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        service=service,
+    )
 
 
-def enable_user_account(*, user_id: int, service: str = SETTINGS.research_service) -> bool:
-    return set_user_active_state(user_id=user_id, is_active=True, service=service)
+def enable_user_account(
+    *,
+    user_id: int,
+    actor_user_id: int,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> bool:
+    return set_user_active_state(
+        user_id=user_id,
+        is_active=True,
+        actor_user_id=actor_user_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        service=service,
+    )
+
+
+def _revoke_user_sessions(cur, *, user_id: int) -> None:
+    cur.execute(
+        """
+        UPDATE identity.user_session
+        SET revoked_at = now()
+        WHERE user_id = %(user_id)s
+          AND revoked_at IS NULL
+        """,
+        {"user_id": user_id},
+    )
 
 
 def _serialize_user_account(row: dict[str, object]) -> dict[str, object]:

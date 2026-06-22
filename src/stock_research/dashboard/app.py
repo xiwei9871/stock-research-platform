@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from psycopg import IntegrityError
 from pydantic import BaseModel
 
 from stock_research.dashboard.audit import record_audit_log
@@ -72,7 +74,7 @@ class AdminCreateUserPayload(BaseModel):
     email: str | None = None
     display_name: str
     password: str
-    role: str
+    role: Literal["admin", "user"]
 
 
 class ResetPasswordPayload(BaseModel):
@@ -160,23 +162,19 @@ def create_app() -> FastAPI:
         current_user: CurrentUser = Depends(require_admin_user),
         _: None = Depends(require_csrf),
     ):
-        user_account = create_user_account(
-            username=payload.username,
-            email=payload.email,
-            display_name=payload.display_name,
-            password=payload.password,
-            role=payload.role,
-        )
-        record_audit_log(
-            actor_user_id=current_user.id,
-            action="admin_create_user",
-            target_type="user_account",
-            target_id=str(user_account["id"]),
-            metadata={"username": str(user_account["username"])},
-            ip_address=request.client.host if request.client is not None else None,
-            user_agent=request.headers.get("user-agent"),
-        )
-        return user_account
+        try:
+            return create_user_account(
+                username=payload.username,
+                email=payload.email,
+                display_name=payload.display_name,
+                password=payload.password,
+                role=payload.role,
+                actor_user_id=current_user.id,
+                ip_address=request.client.host if request.client is not None else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+        except IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="user already exists") from exc
 
     @app.post("/api/admin/users/{user_id}/reset-password")
     def admin_reset_password(
@@ -186,17 +184,14 @@ def create_app() -> FastAPI:
         current_user: CurrentUser = Depends(require_admin_user),
         _: None = Depends(require_csrf),
     ):
-        if not reset_user_password(user_id=user_id, password=payload.password):
-            raise HTTPException(status_code=404, detail="user not found")
-        record_audit_log(
+        if not reset_user_password(
+            user_id=user_id,
+            password=payload.password,
             actor_user_id=current_user.id,
-            action="admin_reset_password",
-            target_type="user_account",
-            target_id=str(user_id),
-            metadata={},
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
-        )
+        ):
+            raise HTTPException(status_code=404, detail="user not found")
         return {"ok": True}
 
     @app.post("/api/admin/users/{user_id}/disable")
@@ -206,17 +201,13 @@ def create_app() -> FastAPI:
         current_user: CurrentUser = Depends(require_admin_user),
         _: None = Depends(require_csrf),
     ):
-        if not disable_user_account(user_id=user_id):
-            raise HTTPException(status_code=404, detail="user not found")
-        record_audit_log(
+        if not disable_user_account(
+            user_id=user_id,
             actor_user_id=current_user.id,
-            action="admin_disable_user",
-            target_type="user_account",
-            target_id=str(user_id),
-            metadata={},
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
-        )
+        ):
+            raise HTTPException(status_code=404, detail="user not found")
         return {"ok": True}
 
     @app.post("/api/admin/users/{user_id}/enable")
@@ -226,17 +217,13 @@ def create_app() -> FastAPI:
         current_user: CurrentUser = Depends(require_admin_user),
         _: None = Depends(require_csrf),
     ):
-        if not enable_user_account(user_id=user_id):
-            raise HTTPException(status_code=404, detail="user not found")
-        record_audit_log(
+        if not enable_user_account(
+            user_id=user_id,
             actor_user_id=current_user.id,
-            action="admin_enable_user",
-            target_type="user_account",
-            target_id=str(user_id),
-            metadata={},
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
-        )
+        ):
+            raise HTTPException(status_code=404, detail="user not found")
         return {"ok": True}
 
     @app.get("/api/dashboard/overview")
