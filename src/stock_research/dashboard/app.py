@@ -1,5 +1,20 @@
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
 
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from psycopg import Error as PsycopgError
+from pydantic import BaseModel
+
+from stock_research.dashboard.audit import record_audit_log
+from stock_research.dashboard.auth import (
+    attach_auth_cookies,
+    authenticate_dashboard_user,
+    clear_auth_cookies,
+    count_recent_login_failures,
+    create_user_session,
+    require_csrf,
+    require_current_user,
+    revoke_user_session,
+)
 from stock_research.dashboard.bars import load_bars, load_minute_bars, normalize_resolution
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
@@ -25,6 +40,8 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.dashboard.user_models import CurrentUser
+from stock_research.dashboard.user_schema import apply_user_platform_schema
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.intraday_pipeline import (
     IntradayConfig,
@@ -37,8 +54,80 @@ from stock_research.public_news.service import (
 )
 
 
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Stock Research Dashboard API")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            apply_user_platform_schema()
+        except PsycopgError:
+            pass
+        yield
+
+    app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
+
+    @app.post("/api/auth/login")
+    def login(payload: LoginPayload, request: Request, response: Response):
+        ip_address = request.client.host if request.client is not None else None
+        if count_recent_login_failures(username=payload.username, ip_address=ip_address) >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="too many login attempts",
+            )
+        current_user = authenticate_dashboard_user(payload.username, payload.password)
+        if current_user is None:
+            record_audit_log(
+                action="login_failed",
+                target_type="user_account",
+                target_id=payload.username,
+                metadata={"username": payload.username},
+                ip_address=ip_address,
+                user_agent=request.headers.get("user-agent"),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid username or password",
+            )
+        session = create_user_session(current_user, request=request)
+        attach_auth_cookies(response, session)
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="login",
+            target_type="user_account",
+            target_id=str(current_user.id),
+            metadata={"username": current_user.username},
+            ip_address=ip_address,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return current_user.to_dict()
+
+    @app.get("/api/auth/me")
+    def auth_me(current_user: CurrentUser = Depends(require_current_user)):
+        return current_user.to_dict()
+
+    @app.post("/api/auth/logout")
+    def logout(
+        request: Request,
+        response: Response,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        revoke_user_session(request=request)
+        clear_auth_cookies(response)
+        record_audit_log(
+            actor_user_id=current_user.id,
+            action="logout",
+            target_type="user_account",
+            target_id=str(current_user.id),
+            metadata={"username": current_user.username},
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return {"ok": True}
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
