@@ -762,6 +762,20 @@ describe('dashboard app shell', () => {
     expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
   });
 
+  it('logs out from the authenticated shell back to the login view', async () => {
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    await waitFor(() => {
+      expect(apiMocks.logout).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
   it('shows a bootstrap error for non-401 auth failures instead of the login form', async () => {
     apiMocks.fetchCurrentUser.mockRejectedValue(
       new Error('GET /api/auth/me failed with 503: Server unavailable')

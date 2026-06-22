@@ -145,6 +145,17 @@ def set_user_active_state(
     user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> bool:
+    load_user_sql = """
+    SELECT role, is_active
+    FROM identity.user_account
+    WHERE id = %(user_id)s
+    """
+    count_active_admins_sql = """
+    SELECT COUNT(*) AS active_admin_count
+    FROM identity.user_account
+    WHERE role = 'admin'
+      AND is_active = TRUE
+    """
     sql = """
     UPDATE identity.user_account
     SET is_active = %(is_active)s,
@@ -158,6 +169,19 @@ def set_user_active_state(
     """
     with connect(service) as conn:
         with conn.cursor() as cur:
+            if not is_active:
+                cur.execute(load_user_sql, {"user_id": user_id})
+                current_account = cur.fetchone()
+                if current_account is None:
+                    return False
+                if current_account["role"] == "admin" and current_account["is_active"]:
+                    if user_id == actor_user_id:
+                        raise ValueError("admin users cannot disable themselves")
+                    cur.execute(count_active_admins_sql)
+                    admin_count_row = cur.fetchone()
+                    active_admin_count = int(admin_count_row["active_admin_count"]) if admin_count_row else 0
+                    if active_admin_count <= 1:
+                        raise ValueError("cannot disable the last active admin")
             cur.execute(
                 sql,
                 {

@@ -20,7 +20,11 @@ const defaultFormState: CreateUserPayload = {
   role: 'user'
 };
 
-export function UserManagementView() {
+type UserManagementViewProps = {
+  currentUserId?: number | null;
+};
+
+export function UserManagementView({ currentUserId = null }: UserManagementViewProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [formState, setFormState] = useState<CreateUserPayload>(defaultFormState);
   const [loading, setLoading] = useState(true);
@@ -201,16 +205,18 @@ export function UserManagementView() {
                 >
                   重置密码
                 </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={actingUserId === user.id}
-                  onClick={() => {
-                    void handleToggleUser(user);
-                  }}
-                >
-                  {user.is_active ? '禁用' : '启用'}
-                </button>
+                {user.is_active && user.id === currentUserId ? null : (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={actingUserId === user.id}
+                    onClick={() => {
+                      void handleToggleUser(user);
+                    }}
+                  >
+                    {user.is_active ? '禁用' : '启用'}
+                  </button>
+                )}
               </div>
             </article>
           ))}

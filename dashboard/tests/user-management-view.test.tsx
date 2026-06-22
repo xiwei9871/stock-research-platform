@@ -39,6 +39,22 @@ describe('UserManagementView', () => {
     vi.clearAllMocks();
   });
 
+  it('hides the self-disable action for the current user row', async () => {
+    apiMocks.fetchUsers.mockResolvedValueOnce([
+      makeUser(1, { username: 'admin', display_name: 'Admin User', role: 'admin' }),
+      makeUser(2, { username: 'analyst' })
+    ]);
+
+    render(<UserManagementView currentUserId={1} />);
+
+    const currentUserRow = await screen.findByTestId('user-row-1');
+    expect(within(currentUserRow).queryByRole('button', { name: '禁用' })).not.toBeInTheDocument();
+    expect(within(currentUserRow).getByRole('button', { name: '重置密码' })).toBeVisible();
+
+    const otherUserRow = await screen.findByTestId('user-row-2');
+    expect(within(otherUserRow).getByRole('button', { name: '禁用' })).toBeVisible();
+  });
+
   it('creates a new user and refreshes the list', async () => {
     apiMocks.fetchUsers
       .mockResolvedValueOnce([makeUser(1)])

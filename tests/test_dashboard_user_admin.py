@@ -209,6 +209,41 @@ def test_admin_create_user_route_rejects_invalid_role_before_service(monkeypatch
     assert events["create_calls"] == 0
 
 
+@pytest.mark.parametrize("field_name", ["username", "display_name", "password"])
+def test_admin_create_user_route_rejects_blank_text_fields_before_service(monkeypatch, field_name):
+    events = {"create_calls": 0}
+
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=9, username="root-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_create_user_account(**kwargs):
+        events["create_calls"] += 1
+        return kwargs
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "create_user_account", fake_create_user_account, raising=False)
+
+    payload = {
+        "username": "analyst",
+        "email": "analyst@example.com",
+        "display_name": "Analyst",
+        "password": "secret123",
+        "role": "user",
+    }
+    payload[field_name] = "   "
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post("/api/admin/users", json=payload)
+
+    assert response.status_code == 422
+    assert events["create_calls"] == 0
+
+
 def test_admin_create_user_route_returns_409_for_duplicate_conflict(monkeypatch):
     def fake_require_admin_user(request: Request):
         return _FakeAdminUser(user_id=9, username="root-admin")
@@ -310,6 +345,50 @@ def test_admin_disable_route_passes_target_user_id(monkeypatch):
     ]
 
 
+def test_admin_disable_route_returns_409_for_self_disable(monkeypatch):
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=7, username="ops-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_disable_user_account(**kwargs):
+        raise ValueError("admin users cannot disable themselves")
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "disable_user_account", fake_disable_user_account, raising=False)
+
+    with TestClient(dashboard_app.create_app(), raise_server_exceptions=False) as client:
+        response = client.post("/api/admin/users/7/disable")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "admin users cannot disable themselves"}
+
+
+def test_admin_disable_route_returns_409_for_last_active_admin(monkeypatch):
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=7, username="ops-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_disable_user_account(**kwargs):
+        raise ValueError("cannot disable the last active admin")
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "disable_user_account", fake_disable_user_account, raising=False)
+
+    with TestClient(dashboard_app.create_app(), raise_server_exceptions=False) as client:
+        response = client.post("/api/admin/users/11/disable")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "cannot disable the last active admin"}
+
+
 def test_admin_reset_password_route_passes_actor_context(monkeypatch):
     events: dict[str, object] = {
         "admin_checks": [],
@@ -352,6 +431,31 @@ def test_admin_reset_password_route_passes_actor_context(monkeypatch):
             "user_agent": "testclient",
         }
     ]
+
+
+def test_admin_reset_password_route_rejects_blank_password_before_service(monkeypatch):
+    events = {"reset_calls": 0}
+
+    def fake_require_admin_user(request: Request):
+        return _FakeAdminUser(user_id=5, username="security-admin")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_reset_user_password(**kwargs):
+        events["reset_calls"] += 1
+        return True
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(dashboard_app, "reset_user_password", fake_reset_user_password, raising=False)
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post("/api/admin/users/21/reset-password", json={"password": "   "})
+
+    assert response.status_code == 422
+    assert events["reset_calls"] == 0
 
 
 def test_admin_enable_route_passes_actor_context(monkeypatch):
@@ -467,7 +571,7 @@ def test_reset_user_password_revokes_existing_sessions_and_writes_audit_in_same_
 
 
 def test_disable_user_account_revokes_existing_sessions_and_writes_audit_in_same_cursor(monkeypatch):
-    conn = _Connection(rows=[{"id": 42}])
+    conn = _Connection(rows=[{"role": "user", "is_active": True}, {"id": 42}])
 
     monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
 
@@ -479,9 +583,12 @@ def test_disable_user_account_revokes_existing_sessions_and_writes_audit_in_same
     )
 
     assert result is True
-    update_sql, update_params = conn.cursor_obj.calls[0]
-    revoke_sql, revoke_params = conn.cursor_obj.calls[1]
-    audit_sql, audit_params = conn.cursor_obj.calls[2]
+    load_sql, load_params = conn.cursor_obj.calls[0]
+    update_sql, update_params = conn.cursor_obj.calls[1]
+    revoke_sql, revoke_params = conn.cursor_obj.calls[2]
+    audit_sql, audit_params = conn.cursor_obj.calls[3]
+    assert "SELECT role, is_active" in load_sql
+    assert load_params == {"user_id": 42}
     assert "UPDATE identity.user_account" in update_sql
     assert update_params == {"user_id": 42, "is_active": False}
     assert "UPDATE identity.user_session" in revoke_sql
@@ -490,6 +597,38 @@ def test_disable_user_account_revokes_existing_sessions_and_writes_audit_in_same
     assert audit_params["actor_user_id"] == 7
     assert audit_params["action"] == "admin_disable_user"
     assert audit_params["target_id"] == "42"
+
+
+def test_disable_user_account_rejects_disabling_own_admin_account(monkeypatch):
+    conn = _Connection(rows=[{"role": "admin", "is_active": True}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+
+    with pytest.raises(ValueError, match="admin users cannot disable themselves"):
+        user_admin.disable_user_account(
+            user_id=7,
+            actor_user_id=7,
+            ip_address="203.0.113.9",
+            user_agent="pytest-agent",
+        )
+
+    assert len(conn.cursor_obj.calls) == 1
+
+
+def test_disable_user_account_rejects_disabling_last_active_admin(monkeypatch):
+    conn = _Connection(rows=[{"role": "admin", "is_active": True}, {"active_admin_count": 1}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+
+    with pytest.raises(ValueError, match="cannot disable the last active admin"):
+        user_admin.disable_user_account(
+            user_id=7,
+            actor_user_id=5,
+            ip_address="203.0.113.9",
+            user_agent="pytest-agent",
+        )
+
+    assert len(conn.cursor_obj.calls) == 2
 
 
 def test_enable_user_account_does_not_revoke_sessions(monkeypatch):

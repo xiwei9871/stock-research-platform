@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { App } from './App';
-import { fetchCurrentUser, login } from './api/client';
+import { fetchCurrentUser, login, logout } from './api/client';
 import type { CurrentUser } from './api/types';
 import { LoginView } from './views/LoginView';
 import { MyReviewsView } from './views/MyReviewsView';
@@ -18,7 +18,7 @@ type ViewDefinition = {
   label: string;
   section: '官方' | '我的' | '管理';
   adminOnly?: boolean;
-  render: () => ReactNode;
+  render: (currentUser: CurrentUser | null) => ReactNode;
 };
 
 const VIEW_DEFINITIONS: ViewDefinition[] = [
@@ -45,7 +45,7 @@ const VIEW_DEFINITIONS: ViewDefinition[] = [
     label: '用户管理',
     section: '管理',
     adminOnly: true,
-    render: () => <UserManagementView />
+    render: (currentUser) => <UserManagementView currentUserId={currentUser?.id ?? null} />
   }
 ];
 
@@ -97,6 +97,8 @@ export function DashboardRoot() {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginPending, setLoginPending] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [shellError, setShellError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,6 +111,7 @@ export function DashboardRoot() {
         setCurrentUser(user);
         setCurrentViewId(pickInitialView(user));
         setBootstrapError(null);
+        setShellError(null);
         setAuthChecked(true);
       })
       .catch((error: unknown) => {
@@ -150,10 +153,28 @@ export function DashboardRoot() {
       setCurrentUser(user);
       setCurrentViewId(pickInitialView(user));
       setBootstrapError(null);
+      setShellError(null);
     } catch (error: unknown) {
       setLoginError(getErrorMessage(error));
     } finally {
       setLoginPending(false);
+      setAuthChecked(true);
+    }
+  }
+
+  async function handleLogout() {
+    setLogoutPending(true);
+    setShellError(null);
+    try {
+      await logout();
+      setCurrentUser(null);
+      setCurrentViewId('official');
+      setBootstrapError(null);
+      setLoginError(null);
+    } catch (error: unknown) {
+      setShellError(getErrorMessage(error));
+    } finally {
+      setLogoutPending(false);
       setAuthChecked(true);
     }
   }
@@ -199,6 +220,17 @@ export function DashboardRoot() {
     <main className="dashboard-shell">
       <aside className="dashboard-sidebar">
         <div className="panel-title">Dashboard</div>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <div className="muted">{currentUser.display_name}</div>
+          <button className="secondary-button" type="button" disabled={logoutPending} onClick={() => void handleLogout()}>
+            {logoutPending ? '退出中...' : '退出登录'}
+          </button>
+          {shellError ? (
+            <p className="error-text" role="alert">
+              {shellError}
+            </p>
+          ) : null}
+        </div>
         {(['官方', '我的', '管理'] as const).map((section) => {
           const items = allowedViews.filter((view) => view.section === section);
           if (items.length === 0) {
@@ -222,7 +254,7 @@ export function DashboardRoot() {
           );
         })}
       </aside>
-      <section className="dashboard-content">{activeView?.render()}</section>
+      <section className="dashboard-content">{activeView?.render(currentUser)}</section>
     </main>
   );
 }

@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from psycopg import errors as psycopg_errors
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import (
@@ -92,9 +92,30 @@ class AdminCreateUserPayload(BaseModel):
     password: str
     role: Literal["admin", "user"]
 
+    @field_validator("username", "display_name")
+    @classmethod
+    def validate_non_blank_identity_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value.strip()
+
+    @field_validator("password")
+    @classmethod
+    def validate_non_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
 
 class ResetPasswordPayload(BaseModel):
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_non_blank_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
 
 class WatchlistItemPayload(BaseModel):
@@ -267,13 +288,16 @@ def create_app() -> FastAPI:
         current_user: CurrentUser = Depends(require_admin_user),
         _: None = Depends(require_csrf),
     ):
-        if not disable_user_account(
-            user_id=user_id,
-            actor_user_id=current_user.id,
-            ip_address=request.client.host if request.client is not None else None,
-            user_agent=request.headers.get("user-agent"),
-        ):
-            raise HTTPException(status_code=404, detail="user not found")
+        try:
+            if not disable_user_account(
+                user_id=user_id,
+                actor_user_id=current_user.id,
+                ip_address=request.client.host if request.client is not None else None,
+                user_agent=request.headers.get("user-agent"),
+            ):
+                raise HTTPException(status_code=404, detail="user not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"ok": True}
 
     @app.post("/api/admin/users/{user_id}/enable")
