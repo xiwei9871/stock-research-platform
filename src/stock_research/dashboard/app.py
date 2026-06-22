@@ -105,13 +105,21 @@ class WatchlistItemUpdatePayload(BaseModel):
     notes: str | None = None
 
 
-class ReviewItemPayload(BaseModel):
-    asset_id: str | None = None
-    decision: str | None = None
-    conviction: str | None = None
+class ReviewItemCreatePayload(BaseModel):
+    asset_id: str
+    decision: str
+    conviction: str
     tags: list[str] | None = None
     notes: str | None = None
     follow_up_required: bool | None = None
+
+
+class ReviewItemPatchPayload(BaseModel):
+    tags: list[str] | None = None
+    notes: str | None = None
+    follow_up_required: bool | None = None
+    decision: str | None = None
+    conviction: str | None = None
 
 
 class ReviewSessionPayload(BaseModel):
@@ -121,7 +129,7 @@ class ReviewSessionPayload(BaseModel):
     market_view: str = ""
     position_view: str = ""
     next_action: str = ""
-    items: list[ReviewItemPayload] = Field(default_factory=list)
+    items: list[ReviewItemCreatePayload] = Field(default_factory=list)
 
 
 def create_app() -> FastAPI:
@@ -360,7 +368,7 @@ def create_app() -> FastAPI:
     def update_my_review_item(
         session_id: int,
         item_id: int,
-        payload: ReviewItemPayload,
+        payload: ReviewItemPatchPayload,
         request: Request,
         current_user: CurrentUser = Depends(require_current_user),
         _: None = Depends(require_csrf),

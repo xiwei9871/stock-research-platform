@@ -92,6 +92,7 @@ def create_user_review_session(
     user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, object]:
+    normalized_items = [_normalize_review_item_for_create(item) for item in items]
     session_sql = f"""
     INSERT INTO journal.user_review_session (
         user_id,
@@ -130,7 +131,7 @@ def create_user_review_session(
             if session_row is None:
                 raise RuntimeError("failed to create review session")
             session_id = int(session_row["id"])
-            for item in items:
+            for item in normalized_items:
                 cur.execute(
                     f"""
                     INSERT INTO journal.user_review_item (
@@ -158,12 +159,12 @@ def create_user_review_session(
                     {
                         "session_id": session_id,
                         "user_id": user_id,
-                        "asset_id": str(item.get("asset_id") or ""),
-                        "decision": str(item.get("decision") or ""),
-                        "conviction": str(item.get("conviction") or ""),
-                        "tags": json.dumps(_normalize_tags(item.get("tags")), ensure_ascii=False),
-                        "notes": str(item.get("notes") or ""),
-                        "follow_up_required": bool(item.get("follow_up_required")),
+                        "asset_id": item["asset_id"],
+                        "decision": item["decision"],
+                        "conviction": item["conviction"],
+                        "tags": json.dumps(item["tags"], ensure_ascii=False),
+                        "notes": item["notes"],
+                        "follow_up_required": item["follow_up_required"],
                     },
                 )
                 item_row = cur.fetchone()
@@ -270,6 +271,19 @@ def soft_delete_user_review_session(
             row = cur.fetchone()
             if row is None:
                 return False
+            cur.execute(
+                """
+                UPDATE journal.user_review_item
+                SET deleted_at = now(),
+                    updated_at = now()
+                WHERE user_id = %(user_id)s
+                  AND session_id = %(session_id)s
+                  AND deleted_at IS NULL
+                RETURNING session_id
+                """,
+                params,
+            )
+            cur.fetchone()
             _insert_audit_log(
                 cur,
                 action="review_delete_session",
@@ -376,6 +390,24 @@ def _normalize_tags(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(tag) for tag in value]
     return [str(value)]
+
+
+def _normalize_review_item_for_create(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "asset_id": _required_text(item, "asset_id"),
+        "decision": _required_text(item, "decision"),
+        "conviction": _required_text(item, "conviction"),
+        "tags": _normalize_tags(item.get("tags")),
+        "notes": str(item.get("notes") or ""),
+        "follow_up_required": bool(item.get("follow_up_required")),
+    }
+
+
+def _required_text(item: dict[str, Any], field_name: str) -> str:
+    value = str(item.get(field_name) or "").strip()
+    if not value:
+        raise ValueError(f"review item requires {field_name}")
+    return value
 
 
 def _serialize_value(value: Any) -> str:
