@@ -330,6 +330,288 @@ def test_create_my_review_session_rejects_blank_required_item_fields(monkeypatch
     assert response.status_code == 422
 
 
+def test_get_my_review_session_returns_nested_items(monkeypatch):
+    events: dict[str, object] = {"auth_checks": [], "get_calls": []}
+
+    def fake_require_current_user(request: Request):
+        events["auth_checks"].append(request.url.path)
+        return _FakeUser(user_id=29, username="close-review")
+
+    def fake_get_user_review_session(**kwargs):
+        events["get_calls"].append(kwargs)
+        return {
+            "id": kwargs["session_id"],
+            "user_id": kwargs["user_id"],
+            "trade_date": "2026-06-21",
+            "title": "Close review",
+            "summary": "Review failed breakouts.",
+            "market_view": "Weak breadth.",
+            "position_view": "Keep gross low.",
+            "next_action": "Rebuild leader list.",
+            "created_at": "2026-06-21T10:00:00+00:00",
+            "updated_at": "2026-06-21T10:30:00+00:00",
+            "items": [
+                {
+                    "id": 8,
+                    "session_id": kwargs["session_id"],
+                    "user_id": kwargs["user_id"],
+                    "asset_id": "CN:SZ:300750",
+                    "decision": "hold",
+                    "conviction": "medium",
+                    "tags": ["gap"],
+                    "notes": "Watch support retest.",
+                    "follow_up_required": True,
+                    "created_at": "2026-06-21T10:05:00+00:00",
+                    "updated_at": "2026-06-21T10:20:00+00:00",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "get_user_review_session",
+        fake_get_user_review_session,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.get("/api/my/reviews/44")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["asset_id"] == "CN:SZ:300750"
+    assert events["auth_checks"] == ["/api/my/reviews/44"]
+    assert events["get_calls"] == [{"user_id": 29, "session_id": 44}]
+
+
+def test_get_my_review_session_returns_404_when_missing(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=29, username="close-review")
+
+    def fake_get_user_review_session(**kwargs):
+        return None
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "get_user_review_session",
+        fake_get_user_review_session,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.get("/api/my/reviews/44")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "review session not found"}
+
+
+def test_patch_my_review_session_passes_actor_context(monkeypatch):
+    events: dict[str, object] = {"auth_checks": [], "csrf_checks": [], "update_calls": []}
+
+    def fake_require_current_user(request: Request):
+        events["auth_checks"].append(request.url.path)
+        return _FakeUser(user_id=31, username="swing-review")
+
+    def fake_require_csrf(request: Request):
+        events["csrf_checks"].append(request.url.path)
+
+    def fake_update_user_review_session(**kwargs):
+        events["update_calls"].append(kwargs)
+        return {
+            "id": kwargs["session_id"],
+            "user_id": kwargs["user_id"],
+            "trade_date": kwargs["trade_date"],
+            "title": kwargs["title"],
+            "summary": kwargs["summary"],
+            "market_view": kwargs["market_view"],
+            "position_view": kwargs["position_view"],
+            "next_action": kwargs["next_action"],
+            "created_at": "2026-06-21T10:00:00+00:00",
+            "updated_at": "2026-06-22T10:00:00+00:00",
+            "items": [],
+        }
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "update_user_review_session",
+        fake_update_user_review_session,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.patch(
+            "/api/my/reviews/52",
+            json={
+                "trade_date": "2026-06-22",
+                "title": "Updated close review",
+                "summary": "Tighten breakouts.",
+                "market_view": "Mixed tape.",
+                "position_view": "Trim laggards.",
+                "next_action": "Review leaders after lunch.",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated close review"
+    assert events["auth_checks"] == ["/api/my/reviews/52"]
+    assert events["csrf_checks"] == ["/api/my/reviews/52"]
+    assert events["update_calls"] == [
+        {
+            "user_id": 31,
+            "session_id": 52,
+            "trade_date": "2026-06-22",
+            "title": "Updated close review",
+            "summary": "Tighten breakouts.",
+            "market_view": "Mixed tape.",
+            "position_view": "Trim laggards.",
+            "next_action": "Review leaders after lunch.",
+            "actor_user_id": 31,
+            "ip_address": "testclient",
+            "user_agent": "testclient",
+        }
+    ]
+
+
+def test_patch_my_review_session_returns_404_when_missing(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=31, username="swing-review")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_update_user_review_session(**kwargs):
+        return None
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "update_user_review_session",
+        fake_update_user_review_session,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.patch(
+            "/api/my/reviews/52",
+            json={"title": "Updated close review"},
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "review session not found"}
+
+
+def test_create_my_review_item_passes_actor_context(monkeypatch):
+    events: dict[str, object] = {"auth_checks": [], "csrf_checks": [], "create_calls": []}
+
+    def fake_require_current_user(request: Request):
+        events["auth_checks"].append(request.url.path)
+        return _FakeUser(user_id=37, username="follow-up")
+
+    def fake_require_csrf(request: Request):
+        events["csrf_checks"].append(request.url.path)
+
+    def fake_create_user_review_item(**kwargs):
+        events["create_calls"].append(kwargs)
+        return {
+            "id": 12,
+            "session_id": kwargs["session_id"],
+            "user_id": kwargs["user_id"],
+            "asset_id": kwargs["asset_id"],
+            "decision": kwargs["decision"],
+            "conviction": kwargs["conviction"],
+            "tags": kwargs["tags"],
+            "notes": kwargs["notes"],
+            "follow_up_required": kwargs["follow_up_required"],
+            "created_at": "2026-06-22T10:00:00+00:00",
+            "updated_at": "2026-06-22T10:00:00+00:00",
+        }
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "create_user_review_item",
+        fake_create_user_review_item,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post(
+            "/api/my/reviews/52/items",
+            json={
+                "asset_id": "CN:SH:600000",
+                "decision": "hold",
+                "conviction": "medium",
+                "tags": ["gap"],
+                "notes": "Watch support retest.",
+                "follow_up_required": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["asset_id"] == "CN:SH:600000"
+    assert events["auth_checks"] == ["/api/my/reviews/52/items"]
+    assert events["csrf_checks"] == ["/api/my/reviews/52/items"]
+    assert events["create_calls"] == [
+        {
+            "user_id": 37,
+            "session_id": 52,
+            "asset_id": "CN:SH:600000",
+            "decision": "hold",
+            "conviction": "medium",
+            "tags": ["gap"],
+            "notes": "Watch support retest.",
+            "follow_up_required": True,
+            "actor_user_id": 37,
+            "ip_address": "testclient",
+            "user_agent": "testclient",
+        }
+    ]
+
+
+def test_create_my_review_item_returns_404_when_parent_missing(monkeypatch):
+    def fake_require_current_user(request: Request):
+        return _FakeUser(user_id=37, username="follow-up")
+
+    def fake_require_csrf(request: Request):
+        return None
+
+    def fake_create_user_review_item(**kwargs):
+        return None
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_current_user", fake_require_current_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_csrf", fake_require_csrf, raising=False)
+    monkeypatch.setattr(
+        dashboard_app,
+        "create_user_review_item",
+        fake_create_user_review_item,
+        raising=False,
+    )
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.post(
+            "/api/my/reviews/52/items",
+            json={
+                "asset_id": "CN:SH:600000",
+                "decision": "hold",
+                "conviction": "medium",
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "review session not found"}
+
+
 def test_patch_review_item_passes_session_id_item_id_and_user_id(monkeypatch):
     events: dict[str, object] = {"auth_checks": [], "csrf_checks": [], "update_calls": []}
 
@@ -723,6 +1005,186 @@ def test_update_user_review_item_enforces_ownership_join_and_inserts_audit(monke
     audit_sql, audit_params = conn.cursor_obj.calls[1]
     assert "INSERT INTO audit.audit_log" in audit_sql
     assert audit_params["action"] == "review_update_item"
+    assert audit_params["target_id"] == "8"
+    assert audit_params["actor_user_id"] == 23
+
+
+def test_get_user_review_session_enforces_ownership_and_loads_items(monkeypatch):
+    from stock_research.dashboard import user_reviews
+
+    conn = _Connection(
+        rows=[
+            {
+                "id": 31,
+                "user_id": 23,
+                "trade_date": "2026-06-22",
+                "title": "Close review",
+                "summary": "Review failed breakouts.",
+                "market_view": "Weak breadth.",
+                "position_view": "Keep gross low.",
+                "next_action": "Rebuild leader list.",
+                "created_at": "2026-06-22T09:30:00+00:00",
+                "updated_at": "2026-06-22T09:30:00+00:00",
+            }
+        ],
+        all_rows=[
+            {
+                "id": 8,
+                "session_id": 31,
+                "user_id": 23,
+                "asset_id": "CN:SH:600000",
+                "decision": "hold",
+                "conviction": "medium",
+                "tags": ["gap"],
+                "notes": "Wait for follow-through.",
+                "follow_up_required": True,
+                "created_at": "2026-06-22T09:31:00+00:00",
+                "updated_at": "2026-06-22T09:31:00+00:00",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(user_reviews, "connect", lambda service: _Context(conn))
+
+    session = user_reviews.get_user_review_session(user_id=23, session_id=31)
+
+    assert session is not None
+    assert session["items"][0]["id"] == 8
+    session_sql, session_params = conn.cursor_obj.calls[0]
+    assert "FROM journal.user_review_session" in session_sql
+    assert "id = %(session_id)s" in session_sql
+    assert "user_id = %(user_id)s" in session_sql
+    assert "deleted_at IS NULL" in session_sql
+    assert session_params == {"user_id": 23, "session_id": 31}
+    item_sql, item_params = conn.cursor_obj.calls[1]
+    assert "FROM journal.user_review_item" in item_sql
+    assert "session_id = %(session_id)s" in item_sql
+    assert "user_id = %(user_id)s" in item_sql
+    assert "deleted_at IS NULL" in item_sql
+    assert item_params == {"user_id": 23, "session_id": 31}
+
+
+def test_update_user_review_session_updates_session_and_inserts_audit(monkeypatch):
+    from stock_research.dashboard import user_reviews
+
+    conn = _Connection(
+        rows=[
+            {
+                "id": 31,
+                "user_id": 23,
+                "trade_date": "2026-06-22",
+                "title": "Close review",
+                "summary": "Review failed breakouts.",
+                "market_view": "Weak breadth.",
+                "position_view": "Keep gross low.",
+                "next_action": "Rebuild leader list.",
+                "created_at": "2026-06-20T09:30:00+00:00",
+                "updated_at": "2026-06-22T09:30:00+00:00",
+            }
+        ],
+        all_rows=[],
+    )
+
+    monkeypatch.setattr(user_reviews, "connect", lambda service: _Context(conn))
+
+    session = user_reviews.update_user_review_session(
+        user_id=23,
+        session_id=31,
+        trade_date="2026-06-22",
+        title="Close review",
+        summary="Review failed breakouts.",
+        market_view="Weak breadth.",
+        position_view="Keep gross low.",
+        next_action="Rebuild leader list.",
+        actor_user_id=23,
+        ip_address="203.0.113.9",
+        user_agent="pytest",
+    )
+
+    assert session is not None
+    update_sql, update_params = conn.cursor_obj.calls[0]
+    assert "UPDATE journal.user_review_session" in update_sql
+    assert "trade_date = COALESCE(%(trade_date)s, trade_date)" in update_sql
+    assert "WHERE id = %(session_id)s" in update_sql
+    assert "AND user_id = %(user_id)s" in update_sql
+    assert "deleted_at IS NULL" in update_sql
+    assert update_params == {
+        "user_id": 23,
+        "session_id": 31,
+        "trade_date": "2026-06-22",
+        "title": "Close review",
+        "summary": "Review failed breakouts.",
+        "market_view": "Weak breadth.",
+        "position_view": "Keep gross low.",
+        "next_action": "Rebuild leader list.",
+    }
+    load_items_sql, load_items_params = conn.cursor_obj.calls[1]
+    assert "FROM journal.user_review_item" in load_items_sql
+    assert load_items_params == {"user_id": 23, "session_id": 31}
+    audit_sql, audit_params = conn.cursor_obj.calls[2]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["action"] == "review_update_session"
+    assert audit_params["target_id"] == "31"
+    assert audit_params["actor_user_id"] == 23
+
+
+def test_create_user_review_item_scopes_parent_session_and_inserts_audit(monkeypatch):
+    from stock_research.dashboard import user_reviews
+
+    conn = _Connection(
+        rows=[
+            {
+                "id": 8,
+                "session_id": 31,
+                "user_id": 23,
+                "asset_id": "CN:SH:600000",
+                "decision": "hold",
+                "conviction": "medium",
+                "tags": ["gap"],
+                "notes": "Wait for follow-through.",
+                "follow_up_required": True,
+                "created_at": "2026-06-22T09:31:00+00:00",
+                "updated_at": "2026-06-22T09:31:00+00:00",
+            }
+        ]
+    )
+
+    monkeypatch.setattr(user_reviews, "connect", lambda service: _Context(conn))
+
+    item = user_reviews.create_user_review_item(
+        user_id=23,
+        session_id=31,
+        asset_id="CN:SH:600000",
+        decision="hold",
+        conviction="medium",
+        tags=["gap"],
+        notes="Wait for follow-through.",
+        follow_up_required=True,
+        actor_user_id=23,
+        ip_address="203.0.113.9",
+        user_agent="pytest",
+    )
+
+    assert item is not None
+    insert_sql, insert_params = conn.cursor_obj.calls[0]
+    assert "INSERT INTO journal.user_review_item" in insert_sql
+    assert "FROM journal.user_review_session AS session" in insert_sql
+    assert "session.id = %(session_id)s" in insert_sql
+    assert "session.user_id = %(user_id)s" in insert_sql
+    assert "session.deleted_at IS NULL" in insert_sql
+    assert insert_params == {
+        "user_id": 23,
+        "session_id": 31,
+        "asset_id": "CN:SH:600000",
+        "decision": "hold",
+        "conviction": "medium",
+        "tags": '["gap"]',
+        "notes": "Wait for follow-through.",
+        "follow_up_required": True,
+    }
+    audit_sql, audit_params = conn.cursor_obj.calls[1]
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["action"] == "review_create_item"
     assert audit_params["target_id"] == "8"
     assert audit_params["actor_user_id"] == 23
 

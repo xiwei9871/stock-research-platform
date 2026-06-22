@@ -58,10 +58,13 @@ from stock_research.dashboard.user_watchlist import (
     update_user_watchlist_item,
 )
 from stock_research.dashboard.user_reviews import (
+    create_user_review_item,
     create_user_review_session,
+    get_user_review_session,
     list_user_review_sessions,
     soft_delete_user_review_item,
     soft_delete_user_review_session,
+    update_user_review_session,
     update_user_review_item,
 )
 from stock_research.dashboard.user_schema import apply_user_platform_schema
@@ -133,6 +136,15 @@ class ReviewSessionPayload(BaseModel):
     position_view: str = ""
     next_action: str = ""
     items: list[ReviewItemPayload] = Field(default_factory=list)
+
+
+class ReviewSessionPatchPayload(BaseModel):
+    trade_date: str | None = None
+    title: str | None = None
+    summary: str | None = None
+    market_view: str | None = None
+    position_view: str | None = None
+    next_action: str | None = None
 
 
 def create_app() -> FastAPI:
@@ -346,6 +358,16 @@ def create_app() -> FastAPI:
     def my_reviews(current_user: CurrentUser = Depends(require_current_user)):
         return {"items": list_user_review_sessions(user_id=current_user.id)}
 
+    @app.get("/api/my/reviews/{session_id}")
+    def my_review_session(
+        session_id: int,
+        current_user: CurrentUser = Depends(require_current_user),
+    ):
+        session = get_user_review_session(user_id=current_user.id, session_id=session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="review session not found")
+        return session
+
     @app.post("/api/my/reviews")
     def create_my_review_session(
         payload: ReviewSessionPayload,
@@ -366,6 +388,56 @@ def create_app() -> FastAPI:
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
         )
+
+    @app.patch("/api/my/reviews/{session_id}")
+    def update_my_review_session(
+        session_id: int,
+        payload: ReviewSessionPatchPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        session = update_user_review_session(
+            user_id=current_user.id,
+            session_id=session_id,
+            trade_date=payload.trade_date,
+            title=payload.title,
+            summary=payload.summary,
+            market_view=payload.market_view,
+            position_view=payload.position_view,
+            next_action=payload.next_action,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        if session is None:
+            raise HTTPException(status_code=404, detail="review session not found")
+        return session
+
+    @app.post("/api/my/reviews/{session_id}/items")
+    def create_my_review_item(
+        session_id: int,
+        payload: ReviewItemPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        item = create_user_review_item(
+            user_id=current_user.id,
+            session_id=session_id,
+            asset_id=payload.asset_id,
+            decision=payload.decision,
+            conviction=payload.conviction,
+            tags=payload.tags,
+            notes=payload.notes,
+            follow_up_required=payload.follow_up_required,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        if item is None:
+            raise HTTPException(status_code=404, detail="review session not found")
+        return item
 
     @app.patch("/api/my/reviews/{session_id}/items/{item_id}")
     def update_my_review_item(
