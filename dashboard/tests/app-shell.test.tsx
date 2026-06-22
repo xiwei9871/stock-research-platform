@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { DashboardRoot } from '../src/DashboardRoot';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
 import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
@@ -29,6 +30,9 @@ import type {
 
 const apiMocks = vi.hoisted(() => ({
   fetchOverview: vi.fn(),
+  fetchCurrentUser: vi.fn(),
+  login: vi.fn(),
+  logout: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
@@ -116,6 +120,19 @@ function makeScore(assetId = '000001.SZ'): ScoreRow {
     score_total: 91.2,
     score_version: 'manual_v1',
     score_components: {}
+  };
+}
+
+function makeCurrentUser(
+  overrides: Partial<CurrentUser> = {}
+): CurrentUser {
+  return {
+    id: 1,
+    username: 'admin',
+    display_name: 'Admin User',
+    role: 'admin',
+    is_active: true,
+    ...overrides
   };
 }
 
@@ -569,6 +586,10 @@ function makeShadowFollowUpResolution(): ShadowFollowUpResolutionRow[] {
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
+    apiMocks.fetchCurrentUser.mockResolvedValue(makeCurrentUser());
+    apiMocks.login.mockResolvedValue(makeCurrentUser());
+    apiMocks.logout.mockResolvedValue({ ok: true });
     apiMocks.fetchOverview.mockResolvedValue(makeOverview());
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
@@ -672,6 +693,38 @@ describe('dashboard app shell', () => {
       watchlistId: 'default',
       topN: 30
     });
+  });
+
+  it('renders the login view when there is no active session', async () => {
+    apiMocks.fetchCurrentUser.mockRejectedValue(new Error('Unauthorized'));
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+    expect(screen.getByLabelText('用户名或邮箱')).toBeVisible();
+    expect(screen.getByLabelText('密码')).toBeVisible();
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
+  it('renders grouped admin navigation and updates the URL when switching views', async () => {
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '官方' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '我的' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '管理' })).toBeVisible();
+    expect(window.location.search).toBe('?view=official');
+
+    fireEvent.click(screen.getByRole('button', { name: '我的复盘' }));
+
+    await screen.findByRole('heading', { name: '我的复盘' });
+    expect(window.location.search).toBe('?view=my-reviews');
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '官方工作台' }));
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(window.location.search).toBe('?view=official');
   });
 
   it('switches the asset chart between daily and intraday resolutions', async () => {
