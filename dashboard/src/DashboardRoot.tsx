@@ -4,6 +4,9 @@ import { App } from './App';
 import { fetchCurrentUser, login } from './api/client';
 import type { CurrentUser } from './api/types';
 import { LoginView } from './views/LoginView';
+import { MyReviewsView } from './views/MyReviewsView';
+import { MyWatchlistView } from './views/MyWatchlistView';
+import { UserManagementView } from './views/UserManagementView';
 
 type ErrorWithStatus = {
   message?: string;
@@ -26,27 +29,23 @@ const VIEW_DEFINITIONS: ViewDefinition[] = [
     render: () => <App />
   },
   {
+    id: 'my-watchlist',
+    label: '我的自选',
+    section: '我的',
+    render: () => <MyWatchlistView />
+  },
+  {
     id: 'my-reviews',
     label: '我的复盘',
     section: '我的',
-    render: () => (
-      <section className="chart-panel">
-        <h1>我的复盘</h1>
-        <p className="muted">个人复盘视图将在后续任务中补充。</p>
-      </section>
-    )
+    render: () => <MyReviewsView />
   },
   {
-    id: 'admin-users',
+    id: 'user-management',
     label: '用户管理',
     section: '管理',
     adminOnly: true,
-    render: () => (
-      <section className="chart-panel">
-        <h1>用户管理</h1>
-        <p className="muted">管理视图将在后续任务中补充。</p>
-      </section>
-    )
+    render: () => <UserManagementView />
   }
 ];
 
@@ -197,27 +196,8 @@ export function DashboardRoot() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'grid',
-        gridTemplateColumns: '220px minmax(0, 1fr)',
-        gap: '24px',
-        padding: '24px',
-        boxSizing: 'border-box'
-      }}
-    >
-      <aside
-        style={{
-          alignSelf: 'start',
-          display: 'grid',
-          gap: '20px',
-          padding: '20px',
-          border: '1px solid rgba(148, 163, 184, 0.35)',
-          borderRadius: '16px',
-          backgroundColor: '#ffffff'
-        }}
-      >
+    <main className="dashboard-shell">
+      <aside className="dashboard-sidebar">
         <div className="panel-title">Dashboard</div>
         {(['官方', '我的', '管理'] as const).map((section) => {
           const items = allowedViews.filter((view) => view.section === section);
@@ -225,7 +205,7 @@ export function DashboardRoot() {
             return null;
           }
           return (
-            <section key={section} style={{ display: 'grid', gap: '10px' }}>
+            <section key={section} className="dashboard-nav-section">
               <h2>{section}</h2>
               {items.map((view) => (
                 <button
@@ -242,7 +222,7 @@ export function DashboardRoot() {
           );
         })}
       </aside>
-      <section style={{ minWidth: 0 }}>{activeView?.render()}</section>
+      <section className="dashboard-content">{activeView?.render()}</section>
     </main>
   );
 }

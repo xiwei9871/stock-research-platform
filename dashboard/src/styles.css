@@ -12,6 +12,33 @@ body {
   margin: 0;
 }
 
+.dashboard-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px;
+}
+
+.dashboard-sidebar {
+  align-self: start;
+  display: grid;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.dashboard-nav-section {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-content {
+  min-width: 0;
+}
+
 .workbench {
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px);
@@ -364,6 +391,121 @@ body {
   font-size: 12px;
 }
 
+.view-shell {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.view-header h1,
+.dashboard-nav-section h2 {
+  margin: 0;
+}
+
+.view-header p {
+  margin: 4px 0 0;
+}
+
+.inline-form,
+.stack-form {
+  display: grid;
+  gap: 12px;
+}
+
+.inline-form {
+  grid-template-columns: minmax(0, 240px) auto;
+  align-items: end;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.field-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-group input,
+.field-group select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #c4cbd6;
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+  color: inherit;
+  background: #ffffff;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 38px;
+  border-radius: 10px;
+  padding: 0 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 0;
+  background: #244d7d;
+  color: #ffffff;
+}
+
+.secondary-button {
+  border: 1px solid #c4cbd6;
+  background: #ffffff;
+  color: #344054;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.entity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.entity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid #e5e8ef;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.entity-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entity-copy strong,
+.entity-copy span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .muted,
 .error-text {
   color: #667085;
@@ -383,13 +525,19 @@ body {
 }
 
 @media (max-width: 900px) {
+  .dashboard-shell,
   .workbench {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-sidebar,
   .sidebar,
   .inspector {
     border: 0;
     border-bottom: 1px solid #d9dee7;
+  }
+
+  .inline-form {
+    grid-template-columns: 1fr;
   }
 }
