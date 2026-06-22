@@ -450,7 +450,38 @@ describe('dashboard API client', () => {
       );
       expect(headers.get('X-CSRF-Token')).toBe('override-1');
     } finally {
-      setCsrfCookieName('stock_research_csrf');
+      setCsrfCookieName('');
+    }
+  });
+
+  it('uses the env-configured csrf cookie name by default', async () => {
+    const env = import.meta.env as ImportMetaEnv & Record<string, string | undefined>;
+    const originalCookieName = env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME;
+    env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME = 'env_csrf';
+    vi.resetModules();
+    Object.defineProperty(document, 'cookie', {
+      value: 'env_csrf=env-1',
+      configurable: true
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { postSessionJson } = await import('../src/api/http');
+      await postSessionJson('/api/env-csrf', { ok: true }, { csrf: true });
+
+      const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+      expect(headers.get('X-CSRF-Token')).toBe('env-1');
+    } finally {
+      if (originalCookieName === undefined) {
+        delete env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME;
+      } else {
+        env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME = originalCookieName;
+      }
+      vi.resetModules();
     }
   });
 

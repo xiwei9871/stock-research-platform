@@ -1,4 +1,5 @@
-const DEFAULT_CSRF_COOKIE_NAME = 'stock_research_csrf';
+const DEFAULT_CSRF_COOKIE_NAME =
+  import.meta.env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME?.trim() || 'stock_research_csrf';
 let csrfCookieName = DEFAULT_CSRF_COOKIE_NAME;
 
 type JsonRequestOptions = {
