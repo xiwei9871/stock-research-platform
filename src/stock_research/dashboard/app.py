@@ -99,7 +99,7 @@ def create_app() -> FastAPI:
             action="login_success",
             target_type="user_account",
             target_id=str(current_user.id),
-            metadata={"identifier": payload.identifier},
+            metadata={"identifier": current_user.username},
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
         )

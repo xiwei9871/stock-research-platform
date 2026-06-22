@@ -1,4 +1,7 @@
+import hashlib
+
 import pytest
+from fastapi import HTTPException
 from fastapi import Request
 from fastapi.testclient import TestClient
 from psycopg import OperationalError
@@ -64,6 +67,34 @@ class _FakeUser:
             "role": self.role,
             "is_active": self.is_active,
         }
+
+
+def _build_request(
+    *,
+    method: str = "GET",
+    path: str = "/",
+    cookies: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+) -> Request:
+    scope_headers = []
+    if cookies:
+        cookie_header = "; ".join(f"{key}={value}" for key, value in cookies.items())
+        scope_headers.append((b"cookie", cookie_header.encode("utf-8")))
+    for key, value in (headers or {}).items():
+        scope_headers.append((key.lower().encode("utf-8"), value.encode("utf-8")))
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": method,
+        "path": path,
+        "raw_path": path.encode("utf-8"),
+        "query_string": b"",
+        "headers": scope_headers,
+        "client": ("203.0.113.8", 50000),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    return Request(scope)
 
 
 def test_current_user_to_dict_includes_is_active():
@@ -148,6 +179,122 @@ def test_authenticate_dashboard_user_supports_username_or_email_lookup(monkeypat
     assert update_params == {"user_id": 9}
 
 
+def test_load_current_user_from_request_returns_user_and_caches_session(monkeypatch):
+    session_token = "session-token"
+    csrf_token = "csrf-token"
+    csrf_hash = hashlib.sha256(csrf_token.encode("utf-8")).hexdigest()
+    conn = _Connection(
+        rows=[
+            {
+                "user_id": 11,
+                "username": "analyst",
+                "display_name": "Analyst",
+                "role": "admin",
+                "is_active": True,
+                "session_id": 21,
+                "csrf_token_hash": csrf_hash,
+            }
+        ]
+    )
+    monkeypatch.setattr(dashboard_auth, "connect", lambda service: _Context(conn))
+    request = _build_request(
+        cookies={
+            SETTINGS.dashboard_session_cookie_name: session_token,
+            SETTINGS.dashboard_csrf_cookie_name: csrf_token,
+        }
+    )
+
+    current_user = dashboard_auth.load_current_user_from_request(request)
+
+    assert current_user.to_dict() == {
+        "id": 11,
+        "username": "analyst",
+        "display_name": "Analyst",
+        "role": "admin",
+        "is_active": True,
+    }
+    assert request.state.auth_session == {
+        "session_id": 21,
+        "csrf_token_hash": csrf_hash,
+    }
+    sql, params = conn.cursor_obj.calls[0]
+    assert "FROM identity.user_session us" in sql
+    assert params["session_token_hash"] == hashlib.sha256(session_token.encode("utf-8")).hexdigest()
+
+    cached_user = dashboard_auth.load_current_user_from_request(request)
+
+    assert cached_user == current_user
+    assert len(conn.cursor_obj.calls) == 1
+
+
+def test_require_csrf_accepts_matching_cookie_header_and_stored_hash(monkeypatch):
+    session_token = "session-token"
+    csrf_token = "csrf-token"
+    csrf_hash = hashlib.sha256(csrf_token.encode("utf-8")).hexdigest()
+    conn = _Connection(
+        rows=[
+            {
+                "user_id": 11,
+                "username": "analyst",
+                "display_name": "Analyst",
+                "role": "admin",
+                "is_active": True,
+                "session_id": 21,
+                "csrf_token_hash": csrf_hash,
+            }
+        ]
+    )
+    monkeypatch.setattr(dashboard_auth, "connect", lambda service: _Context(conn))
+    request = _build_request(
+        method="POST",
+        path="/api/auth/logout",
+        cookies={
+            SETTINGS.dashboard_session_cookie_name: session_token,
+            SETTINGS.dashboard_csrf_cookie_name: csrf_token,
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    dashboard_auth.require_csrf(request)
+
+    assert request.state.auth_session["csrf_token_hash"] == csrf_hash
+    assert request.state.current_user.username == "analyst"
+
+
+def test_require_csrf_rejects_when_stored_hash_does_not_match_header(monkeypatch):
+    session_token = "session-token"
+    csrf_token = "csrf-token"
+    conn = _Connection(
+        rows=[
+            {
+                "user_id": 11,
+                "username": "analyst",
+                "display_name": "Analyst",
+                "role": "admin",
+                "is_active": True,
+                "session_id": 21,
+                "csrf_token_hash": hashlib.sha256(b"other-token").hexdigest(),
+            }
+        ]
+    )
+    monkeypatch.setattr(dashboard_auth, "connect", lambda service: _Context(conn))
+    request = _build_request(
+        method="POST",
+        path="/api/auth/logout",
+        cookies={
+            SETTINGS.dashboard_session_cookie_name: session_token,
+            SETTINGS.dashboard_csrf_cookie_name: csrf_token,
+        },
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        dashboard_auth.require_csrf(request)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "csrf token required"
+
+
 def test_login_me_logout_flow_sets_session_and_csrf_cookies(monkeypatch):
     events = {"audit": [], "revoked": [], "request_cookies": []}
     user = _FakeUser()
@@ -167,7 +314,7 @@ def test_login_me_logout_flow_sets_session_and_csrf_cookies(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,
         "authenticate_dashboard_user",
-        lambda username, password, **kwargs: user,
+        lambda identifier, password, **kwargs: user,
         raising=False,
     )
     monkeypatch.setattr(
@@ -209,7 +356,7 @@ def test_login_me_logout_flow_sets_session_and_csrf_cookies(monkeypatch):
     with TestClient(dashboard_app.create_app()) as client:
         login_response = client.post(
             "/api/auth/login",
-            json={"identifier": "analyst", "password": "secret"},
+            json={"identifier": "analyst@example.com", "password": "secret"},
         )
 
         assert login_response.status_code == 200
@@ -232,6 +379,7 @@ def test_login_me_logout_flow_sets_session_and_csrf_cookies(monkeypatch):
         assert logout_response.status_code == 200
         assert events["revoked"] == ["session-token"]
         assert events["audit"][-1]["action"] == "logout"
+        assert events["audit"][-1]["metadata"] == {"identifier": "analyst"}
         assert client.cookies.get(SETTINGS.dashboard_session_cookie_name) is None
         assert client.cookies.get(SETTINGS.dashboard_csrf_cookie_name) is None
 
