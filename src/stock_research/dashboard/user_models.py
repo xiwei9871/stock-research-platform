@@ -7,6 +7,7 @@ class CurrentUser:
     username: str
     display_name: str
     role: str
+    is_active: bool
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -14,4 +15,5 @@ class CurrentUser:
             "username": self.username,
             "display_name": self.display_name,
             "role": self.role,
+            "is_active": self.is_active,
         }

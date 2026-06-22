@@ -3,6 +3,8 @@ import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Depends, HTTPException, Request, Response, status
 
 from stock_research.config import SETTINGS
@@ -12,40 +14,23 @@ from stock_research.dashboard.user_models import CurrentUser
 
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_FAILURE_LOOKBACK_MINUTES = 15
-PBKDF2_ITERATIONS = 600_000
+PASSWORD_HASHER = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        PBKDF2_ITERATIONS,
-    ).hex()
-    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${digest}"
+    return PASSWORD_HASHER.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        algorithm, iterations_text, salt, expected_digest = password_hash.split("$", 3)
-        iterations = int(iterations_text)
-    except (TypeError, ValueError):
+        return PASSWORD_HASHER.verify(password_hash, password)
+    except (InvalidHashError, VerificationError, TypeError):
         return False
-    if algorithm != "pbkdf2_sha256":
-        return False
-    actual_digest = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode("utf-8"),
-        salt.encode("utf-8"),
-        iterations,
-    ).hex()
-    return hmac.compare_digest(actual_digest, expected_digest)
 
 
 def count_recent_login_failures(
     *,
-    username: str,
+    identifier: str,
     ip_address: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> int:
@@ -53,12 +38,14 @@ def count_recent_login_failures(
     SELECT COUNT(*) AS failure_count
     FROM audit.audit_log
     WHERE action = 'login_failed'
-      AND metadata->>'username' = %(username)s
       AND created_at >= %(since)s
-      AND (%(ip_address)s IS NULL OR ip_address = %(ip_address)s)
+      AND (
+        metadata->>'identifier' = %(identifier)s
+        OR ip_address = %(ip_address)s
+      )
     """
     params = {
-        "username": username,
+        "identifier": identifier,
         "ip_address": ip_address,
         "since": datetime.now(UTC) - timedelta(minutes=LOGIN_FAILURE_LOOKBACK_MINUTES),
     }
@@ -72,24 +59,27 @@ def count_recent_login_failures(
 
 
 def authenticate_dashboard_user(
-    username: str,
+    identifier: str,
     password: str,
     *,
     service: str = SETTINGS.research_service,
 ) -> CurrentUser | None:
     sql = """
-    SELECT id, username, display_name, role, password_hash
+    SELECT id, username, display_name, role, is_active, password_hash
     FROM identity.user_account
-    WHERE username = %(username)s
-      AND is_active IS TRUE
+    WHERE (username = %(identifier)s OR email = %(identifier)s)
       AND disabled_at IS NULL
     LIMIT 1
     """
     with connect(service) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"username": username})
+            cur.execute(sql, {"identifier": identifier})
             row = cur.fetchone()
-            if row is None or not verify_password(password, row["password_hash"]):
+            if (
+                row is None
+                or not bool(row["is_active"])
+                or not verify_password(password, str(row["password_hash"]))
+            ):
                 return None
             cur.execute(
                 """
@@ -104,6 +94,7 @@ def authenticate_dashboard_user(
         username=str(row["username"]),
         display_name=str(row["display_name"]),
         role=str(row["role"]),
+        is_active=bool(row["is_active"]),
     )
 
 
@@ -182,6 +173,7 @@ def load_current_user_from_request(
         ua.username,
         ua.display_name,
         ua.role,
+        ua.is_active,
         us.id AS session_id,
         us.csrf_token_hash
     FROM identity.user_session us
@@ -205,6 +197,7 @@ def load_current_user_from_request(
         username=str(row["username"]),
         display_name=str(row["display_name"]),
         role=str(row["role"]),
+        is_active=bool(row["is_active"]),
     )
     request.state.current_user = current_user
     request.state.auth_session = {

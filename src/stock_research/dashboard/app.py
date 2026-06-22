@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import (
+    LOGIN_FAILURE_LIMIT,
     attach_auth_cookies,
     authenticate_dashboard_user,
     clear_auth_cookies,
@@ -54,7 +55,7 @@ from stock_research.public_news.service import (
 
 
 class LoginPayload(BaseModel):
-    username: str
+    identifier: str
     password: str
 
 
@@ -69,18 +70,21 @@ def create_app() -> FastAPI:
     @app.post("/api/auth/login")
     def login(payload: LoginPayload, request: Request, response: Response):
         ip_address = request.client.host if request.client is not None else None
-        if count_recent_login_failures(username=payload.username, ip_address=ip_address) >= 5:
+        if (
+            count_recent_login_failures(identifier=payload.identifier, ip_address=ip_address)
+            >= LOGIN_FAILURE_LIMIT
+        ):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="too many login attempts",
             )
-        current_user = authenticate_dashboard_user(payload.username, payload.password)
+        current_user = authenticate_dashboard_user(payload.identifier, payload.password)
         if current_user is None:
             record_audit_log(
                 action="login_failed",
                 target_type="user_account",
-                target_id=payload.username,
-                metadata={"username": payload.username},
+                target_id=payload.identifier,
+                metadata={"identifier": payload.identifier},
                 ip_address=ip_address,
                 user_agent=request.headers.get("user-agent"),
             )
@@ -92,10 +96,10 @@ def create_app() -> FastAPI:
         attach_auth_cookies(response, session)
         record_audit_log(
             actor_user_id=current_user.id,
-            action="login",
+            action="login_success",
             target_type="user_account",
             target_id=str(current_user.id),
-            metadata={"username": current_user.username},
+            metadata={"identifier": payload.identifier},
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
         )
@@ -119,7 +123,7 @@ def create_app() -> FastAPI:
             action="logout",
             target_type="user_account",
             target_id=str(current_user.id),
-            metadata={"username": current_user.username},
+            metadata={"identifier": current_user.username},
             ip_address=request.client.host if request.client is not None else None,
             user_agent=request.headers.get("user-agent"),
         )
