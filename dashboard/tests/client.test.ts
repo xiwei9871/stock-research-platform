@@ -455,7 +455,11 @@ describe('dashboard API client', () => {
   });
 
   it('uses the env-configured csrf cookie name by default', async () => {
-    const env = import.meta.env as ImportMetaEnv & Record<string, string | undefined>;
+    // `import.meta.env` is provided by Vite/Vitest at runtime, but this repo does not include ambient Vite env types.
+    // @ts-expect-error Local cast keeps the runtime access shape unchanged.
+    const env = import.meta.env as {
+      VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME?: string;
+    };
     const originalCookieName = env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME;
     env.VITE_STOCK_RESEARCH_CSRF_COOKIE_NAME = 'env_csrf';
     vi.resetModules();
