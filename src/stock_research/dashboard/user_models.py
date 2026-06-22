@@ -33,3 +33,39 @@ class UserWatchlistItem:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class UserReviewItem:
+    id: int
+    session_id: int
+    user_id: int
+    asset_id: str
+    decision: str
+    conviction: str
+    tags: list[str]
+    notes: str
+    follow_up_required: bool
+    created_at: str
+    updated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class UserReviewSession:
+    id: int
+    user_id: int
+    trade_date: str
+    title: str
+    summary: str
+    market_view: str
+    position_view: str
+    next_action: str
+    created_at: str
+    updated_at: str
+    items: list[dict[str, Any]]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)

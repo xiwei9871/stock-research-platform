@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from psycopg import errors as psycopg_errors
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stock_research.dashboard.audit import record_audit_log
 from stock_research.dashboard.auth import (
@@ -57,6 +57,13 @@ from stock_research.dashboard.user_watchlist import (
     soft_delete_user_watchlist_item,
     update_user_watchlist_item,
 )
+from stock_research.dashboard.user_reviews import (
+    create_user_review_session,
+    list_user_review_sessions,
+    soft_delete_user_review_item,
+    soft_delete_user_review_session,
+    update_user_review_item,
+)
 from stock_research.dashboard.user_schema import apply_user_platform_schema
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.intraday_pipeline import (
@@ -96,6 +103,25 @@ class WatchlistItemPayload(BaseModel):
 class WatchlistItemUpdatePayload(BaseModel):
     source: str | None = None
     notes: str | None = None
+
+
+class ReviewItemPayload(BaseModel):
+    asset_id: str | None = None
+    decision: str | None = None
+    conviction: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+    follow_up_required: bool | None = None
+
+
+class ReviewSessionPayload(BaseModel):
+    trade_date: str
+    title: str
+    summary: str = ""
+    market_view: str = ""
+    position_view: str = ""
+    next_action: str = ""
+    items: list[ReviewItemPayload] = Field(default_factory=list)
 
 
 def create_app() -> FastAPI:
@@ -303,6 +329,93 @@ def create_app() -> FastAPI:
             user_agent=request.headers.get("user-agent"),
         ):
             raise HTTPException(status_code=404, detail="watchlist item not found")
+        return {"ok": True}
+
+    @app.get("/api/my/reviews")
+    def my_reviews(current_user: CurrentUser = Depends(require_current_user)):
+        return {"items": list_user_review_sessions(user_id=current_user.id)}
+
+    @app.post("/api/my/reviews")
+    def create_my_review_session(
+        payload: ReviewSessionPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        return create_user_review_session(
+            user_id=current_user.id,
+            trade_date=payload.trade_date,
+            title=payload.title,
+            summary=payload.summary,
+            market_view=payload.market_view,
+            position_view=payload.position_view,
+            next_action=payload.next_action,
+            items=[item.model_dump(exclude_none=True) for item in payload.items],
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+    @app.patch("/api/my/reviews/{session_id}/items/{item_id}")
+    def update_my_review_item(
+        session_id: int,
+        item_id: int,
+        payload: ReviewItemPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        item = update_user_review_item(
+            user_id=current_user.id,
+            session_id=session_id,
+            item_id=item_id,
+            decision=payload.decision,
+            conviction=payload.conviction,
+            tags=payload.tags,
+            notes=payload.notes,
+            follow_up_required=payload.follow_up_required,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        if item is None:
+            raise HTTPException(status_code=404, detail="review item not found")
+        return item
+
+    @app.delete("/api/my/reviews/{session_id}")
+    def delete_my_review_session(
+        session_id: int,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not soft_delete_user_review_session(
+            user_id=current_user.id,
+            session_id=session_id,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        ):
+            raise HTTPException(status_code=404, detail="review session not found")
+        return {"ok": True}
+
+    @app.delete("/api/my/reviews/{session_id}/items/{item_id}")
+    def delete_my_review_item(
+        session_id: int,
+        item_id: int,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not soft_delete_user_review_item(
+            user_id=current_user.id,
+            session_id=session_id,
+            item_id=item_id,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        ):
+            raise HTTPException(status_code=404, detail="review item not found")
         return {"ok": True}
 
     @app.get("/api/dashboard/overview")
