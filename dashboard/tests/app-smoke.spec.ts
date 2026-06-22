@@ -1,6 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockDashboardApi(page: Page) {
+  await page.route('/api/auth/me', async (route) => {
+    await route.fulfill({
+      json: {
+        id: 1,
+        username: 'admin',
+        display_name: 'Admin User',
+        role: 'admin',
+        is_active: true
+      }
+    });
+  });
+
   await page.route('/api/dashboard/overview**', async (route) => {
     await route.fulfill({
       json: {

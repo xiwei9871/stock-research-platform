@@ -1,6 +1,13 @@
 import type {
+  AdminUser,
+  ApiOkResponse,
   BarPoint,
   DailyReviewLiteResponse,
+  CreateMyReviewItemPayload,
+  CreateMyReviewSessionPayload,
+  CreateMyWatchlistItemPayload,
+  CreateUserPayload,
+  CurrentUser,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -17,8 +24,22 @@ import type {
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
+  UpdateMyReviewItemPayload,
+  UpdateMyReviewSessionPayload,
+  UpdateMyWatchlistItemPayload,
+  UserReviewItem,
+  UserReviewSession,
+  UserWatchlistItem,
   WatchlistSignalRow
 } from './types';
+import {
+  deleteSessionJson,
+  getJson,
+  getSessionJson,
+  patchSessionJson,
+  postJson,
+  postSessionJson
+} from './http';
 
 type OverviewParams = {
   tradeDate: string;
@@ -66,6 +87,18 @@ export async function fetchDailyReviewLite(
   searchParams.set('trade_date', tradeDate);
   if (runId) searchParams.set('run_id', runId);
   return getJson(`/api/daily-review-lite?${searchParams.toString()}`);
+}
+
+export async function fetchCurrentUser(): Promise<CurrentUser> {
+  return getSessionJson('/api/auth/me');
+}
+
+export async function login(identifier: string, password: string): Promise<CurrentUser> {
+  return postSessionJson('/api/auth/login', { identifier, password });
+}
+
+export async function logout(): Promise<ApiOkResponse> {
+  return postSessionJson('/api/auth/logout', undefined, { csrf: true });
 }
 
 export async function fetchDailyBars(
@@ -271,18 +304,86 @@ export async function fetchShadowFollowUpResolution(
   return payload.items;
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`GET ${url} failed with ${response.status}`);
-  }
-  return response.json() as Promise<T>;
+export async function fetchMyWatchlist(): Promise<UserWatchlistItem[]> {
+  const payload = await getSessionJson<{ items: UserWatchlistItem[] }>('/api/my/watchlist');
+  return payload.items;
 }
 
-async function postJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { method: 'POST' });
-  if (!response.ok) {
-    throw new Error(`POST ${url} failed with ${response.status}`);
-  }
-  return response.json() as Promise<T>;
+export async function createMyWatchlistItem(
+  payload: CreateMyWatchlistItemPayload
+): Promise<UserWatchlistItem> {
+  return postSessionJson('/api/my/watchlist/items', payload, { csrf: true });
+}
+
+export async function updateMyWatchlistItem(
+  assetId: string,
+  payload: UpdateMyWatchlistItemPayload
+): Promise<UserWatchlistItem> {
+  return patchSessionJson(`/api/my/watchlist/items/${encodeURIComponent(assetId)}`, payload, { csrf: true });
+}
+
+export async function removeMyWatchlistItem(assetId: string): Promise<ApiOkResponse> {
+  return deleteSessionJson(`/api/my/watchlist/items/${encodeURIComponent(assetId)}`, { csrf: true });
+}
+
+export async function fetchMyReviewSessions(): Promise<UserReviewSession[]> {
+  const payload = await getSessionJson<{ items: UserReviewSession[] }>('/api/my/reviews');
+  return payload.items;
+}
+
+export async function fetchMyReviewSession(sessionId: number): Promise<UserReviewSession> {
+  return getSessionJson(`/api/my/reviews/${sessionId}`);
+}
+
+export async function createMyReviewSession(
+  payload: CreateMyReviewSessionPayload
+): Promise<UserReviewSession> {
+  return postSessionJson('/api/my/reviews', payload, { csrf: true });
+}
+
+export async function updateMyReviewSession(
+  sessionId: number,
+  payload: UpdateMyReviewSessionPayload
+): Promise<UserReviewSession> {
+  return patchSessionJson(`/api/my/reviews/${sessionId}`, payload, { csrf: true });
+}
+
+export async function createMyReviewItem(
+  sessionId: number,
+  payload: CreateMyReviewItemPayload
+): Promise<UserReviewItem> {
+  return postSessionJson(`/api/my/reviews/${sessionId}/items`, payload, { csrf: true });
+}
+
+export async function updateMyReviewItem(
+  sessionId: number,
+  itemId: number,
+  payload: UpdateMyReviewItemPayload
+): Promise<UserReviewItem> {
+  return patchSessionJson(`/api/my/reviews/${sessionId}/items/${itemId}`, payload, { csrf: true });
+}
+
+export async function removeMyReviewItem(sessionId: number, itemId: number): Promise<ApiOkResponse> {
+  return deleteSessionJson(`/api/my/reviews/${sessionId}/items/${itemId}`, { csrf: true });
+}
+
+export async function fetchUsers(): Promise<AdminUser[]> {
+  const payload = await getSessionJson<{ items: AdminUser[] }>('/api/admin/users');
+  return payload.items;
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<AdminUser> {
+  return postSessionJson('/api/admin/users', payload, { csrf: true });
+}
+
+export async function resetUserPassword(userId: number, password: string): Promise<ApiOkResponse> {
+  return postSessionJson(`/api/admin/users/${userId}/reset-password`, { password }, { csrf: true });
+}
+
+export async function disableUser(userId: number): Promise<ApiOkResponse> {
+  return postSessionJson(`/api/admin/users/${userId}/disable`, undefined, { csrf: true });
+}
+
+export async function enableUser(userId: number): Promise<ApiOkResponse> {
+  return postSessionJson(`/api/admin/users/${userId}/enable`, undefined, { csrf: true });
 }

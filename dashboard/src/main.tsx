@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { DashboardShell } from './shell/DashboardShell';
+import { DashboardRoot } from './DashboardRoot';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <DashboardShell />
+    <DashboardRoot />
   </React.StrictMode>
 );

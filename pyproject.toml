@@ -5,6 +5,7 @@ description = "AI monitoring and stock-selection research pipeline"
 requires-python = ">=3.11"
 dependencies = [
   "akshare",
+  "argon2-cffi",
   "baostock",
   "pandas",
   "psycopg[binary]",

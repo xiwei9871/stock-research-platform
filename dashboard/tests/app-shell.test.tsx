@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { DashboardRoot } from '../src/DashboardRoot';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
 import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
@@ -9,6 +10,7 @@ import { ShadowFollowUpResolutionPanel } from '../src/components/ShadowFollowUpR
 import { ShadowOutcomeAnalyticsPanel } from '../src/components/ShadowOutcomeAnalyticsPanel';
 import type {
   BarPoint,
+  CurrentUser,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -29,6 +31,9 @@ import type {
 
 const apiMocks = vi.hoisted(() => ({
   fetchOverview: vi.fn(),
+  fetchCurrentUser: vi.fn(),
+  login: vi.fn(),
+  logout: vi.fn(),
   fetchDailyBars: vi.fn(),
   fetchAssetScore: vi.fn(),
   fetchAssetSignals: vi.fn(),
@@ -116,6 +121,19 @@ function makeScore(assetId = '000001.SZ'): ScoreRow {
     score_total: 91.2,
     score_version: 'manual_v1',
     score_components: {}
+  };
+}
+
+function makeCurrentUser(
+  overrides: Partial<CurrentUser> = {}
+): CurrentUser {
+  return {
+    id: 1,
+    username: 'admin',
+    display_name: 'Admin User',
+    role: 'admin',
+    is_active: true,
+    ...overrides
   };
 }
 
@@ -569,6 +587,10 @@ function makeShadowFollowUpResolution(): ShadowFollowUpResolutionRow[] {
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/');
+    apiMocks.fetchCurrentUser.mockResolvedValue(makeCurrentUser());
+    apiMocks.login.mockResolvedValue(makeCurrentUser());
+    apiMocks.logout.mockResolvedValue({ ok: true });
     apiMocks.fetchOverview.mockResolvedValue(makeOverview());
     apiMocks.fetchDailyBars.mockResolvedValue(makeBars(1));
     apiMocks.fetchAssetScore.mockResolvedValue(makeScore());
@@ -672,6 +694,98 @@ describe('dashboard app shell', () => {
       watchlistId: 'default',
       topN: 30
     });
+  });
+
+  it('renders the login view when there is no active session', async () => {
+    apiMocks.fetchCurrentUser.mockRejectedValue(new Error('GET /api/auth/me failed with 401: Unauthorized'));
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+    expect(screen.getByLabelText('用户名或邮箱')).toBeVisible();
+    expect(screen.getByLabelText('密码')).toBeVisible();
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
+  it('renders grouped admin navigation and updates the URL when switching views', async () => {
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+    window.history.replaceState({}, '', '/dashboard-root?foo=1');
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '官方' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '我的' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '管理' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '我的观察池' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '用户管理' })).toBeVisible();
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=official');
+
+    fireEvent.click(screen.getByRole('button', { name: '我的复盘' }));
+
+    await screen.findByRole('heading', { name: '我的复盘' });
+    expect(replaceStateSpy).toHaveBeenLastCalledWith({}, '', '/dashboard-root?foo=1&view=my-reviews');
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=my-reviews');
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '官方工作台' }));
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(replaceStateSpy).toHaveBeenLastCalledWith({}, '', '/dashboard-root?foo=1&view=official');
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=official');
+
+    replaceStateSpy.mockRestore();
+  });
+
+  it('hides the 管理 navigation section for non-admin users', async () => {
+    apiMocks.fetchCurrentUser.mockResolvedValue(makeCurrentUser({ role: 'user' }));
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '官方' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '我的' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '管理' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '用户管理' })).not.toBeInTheDocument();
+  });
+
+  it('uses the requested view from the URL when it is allowed', async () => {
+    window.history.replaceState({}, '', '/?view=my-reviews');
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByRole('heading', { name: '我的复盘' })).toBeVisible();
+    expect(window.location.search).toBe('?view=my-reviews');
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
+  it('logs out from the authenticated shell back to the login view', async () => {
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+
+    await waitFor(() => {
+      expect(apiMocks.logout).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
+  it('shows a bootstrap error for non-401 auth failures instead of the login form', async () => {
+    apiMocks.fetchCurrentUser.mockRejectedValue(
+      new Error('GET /api/auth/me failed with 503: Server unavailable')
+    );
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Unable to load dashboard.')).toBeVisible();
+    expect(screen.getByText('GET /api/auth/me failed with 503: Server unavailable')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '登录' })).not.toBeInTheDocument();
   });
 
   it('switches the asset chart between daily and intraday resolutions', async () => {
