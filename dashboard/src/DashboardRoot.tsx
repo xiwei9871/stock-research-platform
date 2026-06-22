@@ -59,6 +59,15 @@ function getErrorStatus(error: unknown) {
     const status = (error as ErrorWithStatus).status;
     return typeof status === 'number' ? status : null;
   }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as ErrorWithStatus).message;
+    if (typeof message === 'string') {
+      const match = message.match(/\bfailed with (\d{3})\b/);
+      if (match) {
+        return Number(match[1]);
+      }
+    }
+  }
   return null;
 }
 

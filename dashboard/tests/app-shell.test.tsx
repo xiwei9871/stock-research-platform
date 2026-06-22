@@ -697,10 +697,7 @@ describe('dashboard app shell', () => {
   });
 
   it('renders the login view when there is no active session', async () => {
-    apiMocks.fetchCurrentUser.mockRejectedValue({
-      message: 'Unauthorized',
-      status: 401
-    });
+    apiMocks.fetchCurrentUser.mockRejectedValue(new Error('GET /api/auth/me failed with 401: Unauthorized'));
 
     render(<DashboardRoot />);
 
@@ -754,15 +751,14 @@ describe('dashboard app shell', () => {
   });
 
   it('shows a bootstrap error for non-401 auth failures instead of the login form', async () => {
-    apiMocks.fetchCurrentUser.mockRejectedValue({
-      message: 'Server unavailable',
-      status: 503
-    });
+    apiMocks.fetchCurrentUser.mockRejectedValue(
+      new Error('GET /api/auth/me failed with 503: Server unavailable')
+    );
 
     render(<DashboardRoot />);
 
     expect(await screen.findByText('Unable to load dashboard.')).toBeVisible();
-    expect(screen.getByText('Server unavailable')).toBeVisible();
+    expect(screen.getByText('GET /api/auth/me failed with 503: Server unavailable')).toBeVisible();
     expect(screen.queryByRole('heading', { name: '登录' })).not.toBeInTheDocument();
   });
 
