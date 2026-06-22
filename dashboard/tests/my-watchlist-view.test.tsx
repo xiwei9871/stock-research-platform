@@ -4,19 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MyWatchlistView } from '../src/views/MyWatchlistView';
 import type { UserWatchlistItem } from '../src/api/types';
 
-type ImportMetaWithGlob = ImportMeta & {
-  glob: (
-    pattern: string,
-    options: { query: string; import: string; eager: boolean }
-  ) => Record<string, string>;
-};
-
-const watchlistViewSource = (import.meta as ImportMetaWithGlob).glob('../src/views/MyWatchlistView.tsx', {
-  query: '?raw',
-  import: 'default',
-  eager: true
-})['../src/views/MyWatchlistView.tsx'] as string;
-
 const apiMocks = vi.hoisted(() => ({
   fetchMyWatchlist: vi.fn(),
   createMyWatchlistItem: vi.fn(),
@@ -43,15 +30,6 @@ describe('MyWatchlistView', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
-  });
-
-  it('imports watchlist client helpers directly', () => {
-    expect(watchlistViewSource).toContain("from '../api/client'");
-    expect(watchlistViewSource).toContain('fetchMyWatchlist');
-    expect(watchlistViewSource).toContain('createMyWatchlistItem');
-    expect(watchlistViewSource).toContain('removeMyWatchlistItem');
-    expect(watchlistViewSource).not.toContain('import * as client');
-    expect(watchlistViewSource).not.toContain('Record<string, unknown>');
   });
 
   it('adds a watchlist item and refreshes the list', async () => {

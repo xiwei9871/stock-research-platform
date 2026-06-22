@@ -139,7 +139,7 @@ export function DashboardRoot() {
     const searchParams = new URLSearchParams(window.location.search);
     searchParams.set('view', activeView.id);
     const query = searchParams.toString();
-    window.history.replaceState({}, '', query ? `?${query}` : window.location.pathname);
+    window.history.replaceState({}, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
   }, [activeView, currentUser]);
 
   async function handleLogin(identifier: string, password: string) {

@@ -708,24 +708,36 @@ describe('dashboard app shell', () => {
   });
 
   it('renders grouped admin navigation and updates the URL when switching views', async () => {
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+    window.history.replaceState({}, '', '/dashboard-root?foo=1');
+
     render(<DashboardRoot />);
 
     expect(await screen.findByText('Stock Research')).toBeVisible();
     expect(screen.getByRole('heading', { name: '官方' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '我的' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '管理' })).toBeVisible();
-    expect(window.location.search).toBe('?view=official');
+    expect(screen.getByRole('button', { name: '我的观察池' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '用户管理' })).toBeVisible();
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=official');
 
     fireEvent.click(screen.getByRole('button', { name: '我的复盘' }));
 
     await screen.findByRole('heading', { name: '我的复盘' });
-    expect(window.location.search).toBe('?view=my-reviews');
+    expect(replaceStateSpy).toHaveBeenLastCalledWith({}, '', '/dashboard-root?foo=1&view=my-reviews');
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=my-reviews');
     expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '官方工作台' }));
 
     expect(await screen.findByText('Stock Research')).toBeVisible();
-    expect(window.location.search).toBe('?view=official');
+    expect(replaceStateSpy).toHaveBeenLastCalledWith({}, '', '/dashboard-root?foo=1&view=official');
+    expect(window.location.pathname).toBe('/dashboard-root');
+    expect(window.location.search).toBe('?foo=1&view=official');
+
+    replaceStateSpy.mockRestore();
   });
 
   it('hides the 管理 navigation section for non-admin users', async () => {
