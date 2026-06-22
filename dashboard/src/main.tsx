@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { DailyReviewLitePage } from './pages/DailyReviewLitePage';
+import { DashboardShell } from './shell/DashboardShell';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <DailyReviewLitePage />
+    <DashboardShell />
   </React.StrictMode>
 );

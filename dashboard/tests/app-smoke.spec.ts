@@ -518,6 +518,8 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
 
   await page.goto('/');
 
+  await expect(page.getByRole('navigation', { name: 'Dashboard workspaces' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByLabel('asset id')).toHaveValue('000001.SZ');
   await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
@@ -600,6 +602,8 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await page.goto('/');
 
+  await expect(page.getByRole('navigation', { name: 'Dashboard workspaces' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Stock Research')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();

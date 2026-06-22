@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DailyReviewLiteResponse } from '../src/api/types';
 import { DailyReviewLitePage } from '../src/pages/DailyReviewLitePage';
@@ -151,6 +151,59 @@ describe('DailyReviewLitePage', () => {
 
     expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-19', undefined);
     expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
+  });
+
+  it('loads from the trade_date query param when no initial trade date is provided', () => {
+    window.history.replaceState({}, '', '/?trade_date=2026-06-19');
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+
+    render(<DailyReviewLitePage />);
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-19', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-19');
+  });
+
+  it('prefers initialTradeDate over the trade_date query param', () => {
+    window.history.replaceState({}, '', '/?trade_date=2026-06-19');
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+
+    render(<DailyReviewLitePage initialTradeDate="2026-06-22" />);
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-22', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+  });
+
+  it('uses controlled tradeDate input state and notifies the provided callback on change', () => {
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+    const onTradeDateChange = vi.fn();
+
+    const { rerender } = render(
+      <DailyReviewLitePage
+        initialTradeDate="2026-06-18"
+        tradeDate="2026-06-22"
+        onTradeDateChange={onTradeDateChange}
+      />
+    );
+
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenCalledWith('2026-06-22', undefined);
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+
+    fireEvent.change(screen.getByLabelText('Trade Date'), { target: { value: '2026-06-23' } });
+
+    expect(onTradeDateChange).toHaveBeenCalledWith('2026-06-23');
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-22');
+
+    apiMocks.fetchDailyReviewLite.mockReturnValueOnce(createDeferred<DailyReviewLiteResponse>().promise);
+    rerender(
+      <DailyReviewLitePage
+        initialTradeDate="2026-06-18"
+        tradeDate="2026-06-23"
+        onTradeDateChange={onTradeDateChange}
+      />
+    );
+
+    expect(screen.getByLabelText('Trade Date')).toHaveValue('2026-06-23');
+    expect(apiMocks.fetchDailyReviewLite).toHaveBeenLastCalledWith('2026-06-23', undefined);
   });
 
   it('renders an error state when the fetch rejects', async () => {
