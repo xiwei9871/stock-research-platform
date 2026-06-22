@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createMyReviewItem,
+  createMyWatchlistItem,
   fetchDailyBars,
   fetchAssetDecisions,
+  fetchCurrentUser,
   fetchAssetOutcomes,
   fetchExperimentProposals,
   fetchExperimentReplay,
+  login,
+  logout,
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
@@ -293,5 +298,105 @@ describe('dashboard API client', () => {
       '/api/shadow-follow-up-resolution?start_date=2026-06-01&end_date=2026-08-31&limit=20'
     );
     expect(result[0].resolution_status).toBe('stale_unresolved');
+  });
+
+  it('sends credentials on auth requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 1,
+        username: 'xiwei',
+        display_name: 'Xiwei',
+        role: 'admin',
+        is_active: true
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchCurrentUser();
+    await login('xiwei', 'secret123');
+    await logout();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/auth/me', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ identifier: 'xiwei', password: 'secret123' })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include'
+      })
+    );
+  });
+
+  it('adds csrf headers to mutating watchlist and review requests', async () => {
+    Object.defineProperty(document, 'cookie', {
+      value: 'theme=light; stock_research_csrf=csrf-1',
+      configurable: true
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 34 })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createMyWatchlistItem({
+      asset_id: 'CN:SZ:000001',
+      source: 'manual',
+      notes: 'relative strength'
+    });
+    await createMyReviewItem(12, {
+      asset_id: 'CN:SZ:000001',
+      decision: 'watch',
+      conviction: 'medium',
+      tags: [],
+      notes: '',
+      follow_up_required: false
+    });
+
+    const watchlistHeaders = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/my/watchlist/items',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          asset_id: 'CN:SZ:000001',
+          source: 'manual',
+          notes: 'relative strength'
+        })
+      })
+    );
+    expect(watchlistHeaders.get('Content-Type')).toBe('application/json');
+    expect(watchlistHeaders.get('X-CSRF-Token')).toBe('csrf-1');
+
+    const reviewHeaders = new Headers(fetchMock.mock.calls[1][1]?.headers);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/my/reviews/12/items',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({
+          asset_id: 'CN:SZ:000001',
+          decision: 'watch',
+          conviction: 'medium',
+          tags: [],
+          notes: '',
+          follow_up_required: false
+        })
+      })
+    );
+    expect(reviewHeaders.get('Content-Type')).toBe('application/json');
+    expect(reviewHeaders.get('X-CSRF-Token')).toBe('csrf-1');
   });
 });

@@ -392,6 +392,124 @@ export type ShadowFollowUpResolutionRow = {
   production_write_enabled: boolean;
 };
 
+export type UserRole = 'admin' | 'user';
+
+export type ApiOkResponse = {
+  ok: boolean;
+};
+
+export type CurrentUser = {
+  id: number;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  is_active: boolean;
+};
+
+export type AdminUser = {
+  id: number;
+  username: string;
+  email: string | null;
+  display_name: string;
+  role: UserRole;
+  is_active: boolean;
+  disabled_at: string | null;
+};
+
+export type CreateUserPayload = {
+  username: string;
+  email?: string | null;
+  display_name: string;
+  password: string;
+  role: UserRole;
+};
+
+export type UserWatchlistItem = {
+  id: number;
+  user_id: number;
+  asset_id: string;
+  trade_date_added: string;
+  source: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateMyWatchlistItemPayload = {
+  asset_id: string;
+  source?: string;
+  notes?: string;
+};
+
+export type UpdateMyWatchlistItemPayload = {
+  source?: string | null;
+  notes?: string | null;
+};
+
+export type UserReviewItem = {
+  id: number;
+  session_id: number;
+  user_id: number;
+  asset_id: string;
+  decision: string;
+  conviction: string;
+  tags: string[];
+  notes: string;
+  follow_up_required: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateMyReviewItemPayload = {
+  asset_id: string;
+  decision: string;
+  conviction: string;
+  tags?: string[] | null;
+  notes?: string | null;
+  follow_up_required?: boolean | null;
+};
+
+export type UpdateMyReviewItemPayload = {
+  decision?: string | null;
+  conviction?: string | null;
+  tags?: string[] | null;
+  notes?: string | null;
+  follow_up_required?: boolean | null;
+};
+
+export type UserReviewSession = {
+  id: number;
+  user_id: number;
+  trade_date: string;
+  title: string;
+  summary: string;
+  market_view: string;
+  position_view: string;
+  next_action: string;
+  created_at: string;
+  updated_at: string;
+  items: UserReviewItem[];
+};
+
+export type CreateMyReviewSessionPayload = {
+  trade_date: string;
+  title: string;
+  summary?: string;
+  market_view?: string;
+  position_view?: string;
+  next_action?: string;
+  items?: CreateMyReviewItemPayload[];
+};
+
+export type UpdateMyReviewSessionPayload = {
+  trade_date?: string;
+  title?: string;
+  summary?: string;
+  market_view?: string;
+  position_view?: string;
+  next_action?: string;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;
