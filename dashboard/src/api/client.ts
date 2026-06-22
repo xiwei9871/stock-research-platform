@@ -321,7 +321,12 @@ export async function fetchMyReviewSessions(): Promise<UserReviewSession[]> {
 }
 
 export async function fetchMyReviewSession(sessionId: number): Promise<UserReviewSession> {
-  return getSessionJson(`/api/my/reviews/${sessionId}`);
+  const sessions = await fetchMyReviewSessions();
+  const session = sessions.find((item) => item.id === sessionId);
+  if (!session) {
+    throw new Error(`Review session ${sessionId} not found in /api/my/reviews`);
+  }
+  return session;
 }
 
 export async function createMyReviewSession(
@@ -331,17 +336,17 @@ export async function createMyReviewSession(
 }
 
 export async function updateMyReviewSession(
-  sessionId: number,
-  payload: UpdateMyReviewSessionPayload
+  _sessionId: number,
+  _payload: UpdateMyReviewSessionPayload
 ): Promise<UserReviewSession> {
-  return patchSessionJson(`/api/my/reviews/${sessionId}`, payload, { csrf: true });
+  throw new Error('PATCH /api/my/reviews/{sessionId} is not available in this build');
 }
 
 export async function createMyReviewItem(
-  sessionId: number,
-  payload: CreateMyReviewItemPayload
+  _sessionId: number,
+  _payload: CreateMyReviewItemPayload
 ): Promise<UserReviewItem> {
-  return postSessionJson(`/api/my/reviews/${sessionId}/items`, payload, { csrf: true });
+  throw new Error('POST /api/my/reviews/{sessionId}/items is not available in this build');
 }
 
 export async function updateMyReviewItem(

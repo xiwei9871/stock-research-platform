@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createMyReviewItem,
   createMyWatchlistItem,
+  createUser,
   fetchDailyBars,
   fetchAssetDecisions,
   fetchCurrentUser,
+  fetchMyReviewSession,
   fetchAssetOutcomes,
   fetchExperimentProposals,
   fetchExperimentReplay,
@@ -20,7 +22,9 @@ import {
   fetchShadowReviewDecisions,
   fetchShadowOutcomeAnalytics,
   fetchShadowOutcomes,
-  fetchShadowWatchlist
+  fetchShadowWatchlist,
+  updateMyReviewItem,
+  updateMyReviewSession
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
@@ -301,6 +305,10 @@ describe('dashboard API client', () => {
   });
 
   it('sends credentials on auth requests', async () => {
+    Object.defineProperty(document, 'cookie', {
+      value: 'stock_research_csrf=csrf-1',
+      configurable: true
+    });
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -335,9 +343,11 @@ describe('dashboard API client', () => {
         credentials: 'include'
       })
     );
+    const logoutHeaders = new Headers(fetchMock.mock.calls[2][1]?.headers);
+    expect(logoutHeaders.get('X-CSRF-Token')).toBe('csrf-1');
   });
 
-  it('adds csrf headers to mutating watchlist and review requests', async () => {
+  it('adds csrf headers to mutating watchlist and supported review requests', async () => {
     Object.defineProperty(document, 'cookie', {
       value: 'theme=light; stock_research_csrf=csrf-1',
       configurable: true
@@ -353,8 +363,7 @@ describe('dashboard API client', () => {
       source: 'manual',
       notes: 'relative strength'
     });
-    await createMyReviewItem(12, {
-      asset_id: 'CN:SZ:000001',
+    await updateMyReviewItem(12, 34, {
       decision: 'watch',
       conviction: 'medium',
       tags: [],
@@ -382,12 +391,11 @@ describe('dashboard API client', () => {
     const reviewHeaders = new Headers(fetchMock.mock.calls[1][1]?.headers);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/my/reviews/12/items',
+      '/api/my/reviews/12/items/34',
       expect.objectContaining({
-        method: 'POST',
+        method: 'PATCH',
         credentials: 'include',
         body: JSON.stringify({
-          asset_id: 'CN:SZ:000001',
           decision: 'watch',
           conviction: 'medium',
           tags: [],
@@ -398,5 +406,112 @@ describe('dashboard API client', () => {
     );
     expect(reviewHeaders.get('Content-Type')).toBe('application/json');
     expect(reviewHeaders.get('X-CSRF-Token')).toBe('csrf-1');
+  });
+
+  it('falls back to the first csrf-like cookie when the default cookie name is absent', async () => {
+    Object.defineProperty(document, 'cookie', {
+      value: 'theme=light; custom_csrf_cookie=fallback-1; session=value',
+      configurable: true
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 12,
+        username: 'analyst',
+        email: 'analyst@example.com',
+        display_name: 'Analyst',
+        role: 'user',
+        is_active: true,
+        disabled_at: null
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createUser({
+      username: 'analyst',
+      email: 'analyst@example.com',
+      display_name: 'Analyst',
+      password: 'secret123',
+      role: 'user'
+    });
+
+    const headers = new Headers(fetchMock.mock.calls[0][1]?.headers);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/users',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include'
+      })
+    );
+    expect(headers.get('X-CSRF-Token')).toBe('fallback-1');
+  });
+
+  it('fetches a review session from the existing review sessions route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            id: 31,
+            user_id: 7,
+            trade_date: '2026-06-21',
+            title: 'Morning review',
+            summary: '',
+            market_view: '',
+            position_view: '',
+            next_action: '',
+            created_at: '2026-06-21T09:00:00Z',
+            updated_at: '2026-06-21T09:00:00Z',
+            items: []
+          }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchMyReviewSession(31);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/my/reviews', { credentials: 'include' });
+    expect(result.id).toBe(31);
+  });
+
+  it('throws a clear error when a derived review session is missing', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchMyReviewSession(99)).rejects.toThrow('Review session 99 not found in /api/my/reviews');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/my/reviews', { credentials: 'include' });
+  });
+
+  it('fails fast for unsupported review session updates', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateMyReviewSession(31, { title: 'Updated title' })).rejects.toThrow(
+      'PATCH /api/my/reviews/{sessionId} is not available in this build'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails fast for unsupported review item creation', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createMyReviewItem(31, {
+        asset_id: 'CN:SZ:000001',
+        decision: 'watch',
+        conviction: 'medium',
+        tags: [],
+        notes: '',
+        follow_up_required: false
+      })
+    ).rejects.toThrow('POST /api/my/reviews/{sessionId}/items is not available in this build');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
