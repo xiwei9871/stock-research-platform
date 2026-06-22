@@ -5,6 +5,11 @@ import { fetchCurrentUser, login } from './api/client';
 import type { CurrentUser } from './api/types';
 import { LoginView } from './views/LoginView';
 
+type ErrorWithStatus = {
+  message?: string;
+  status?: number;
+};
+
 type ViewDefinition = {
   id: string;
   label: string;
@@ -49,6 +54,24 @@ function getRequestedViewId() {
   return new URLSearchParams(window.location.search).get('view');
 }
 
+function getErrorStatus(error: unknown) {
+  if (typeof error === 'object' && error !== null && 'status' in error) {
+    const status = (error as ErrorWithStatus).status;
+    return typeof status === 'number' ? status : null;
+  }
+  return null;
+}
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as ErrorWithStatus).message;
+    if (typeof message === 'string' && message.length > 0) {
+      return message;
+    }
+  }
+  return 'Unexpected error';
+}
+
 function getAllowedViews(user: CurrentUser | null) {
   return VIEW_DEFINITIONS.filter((view) => !view.adminOnly || user?.role === 'admin');
 }
@@ -63,6 +86,7 @@ export function DashboardRoot() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [currentViewId, setCurrentViewId] = useState('official');
   const [authChecked, setAuthChecked] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginPending, setLoginPending] = useState(false);
 
@@ -76,13 +100,19 @@ export function DashboardRoot() {
         }
         setCurrentUser(user);
         setCurrentViewId(pickInitialView(user));
+        setBootstrapError(null);
         setAuthChecked(true);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) {
           return;
         }
-        setCurrentUser(null);
+        if (getErrorStatus(error) === 401) {
+          setCurrentUser(null);
+          setBootstrapError(null);
+        } else {
+          setBootstrapError(getErrorMessage(error));
+        }
         setAuthChecked(true);
       });
 
@@ -111,8 +141,9 @@ export function DashboardRoot() {
       const user = await login(identifier, password);
       setCurrentUser(user);
       setCurrentViewId(pickInitialView(user));
+      setBootstrapError(null);
     } catch (error: unknown) {
-      setLoginError(error instanceof Error ? error.message : String(error));
+      setLoginError(getErrorMessage(error));
     } finally {
       setLoginPending(false);
       setAuthChecked(true);
@@ -123,13 +154,61 @@ export function DashboardRoot() {
     return <p className="muted">Loading dashboard...</p>;
   }
 
+  if (bootstrapError) {
+    return (
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          boxSizing: 'border-box'
+        }}
+      >
+        <section
+          style={{
+            width: '100%',
+            maxWidth: '560px',
+            padding: '24px',
+            border: '1px solid rgba(248, 113, 113, 0.35)',
+            borderRadius: '16px',
+            backgroundColor: '#ffffff'
+          }}
+        >
+          <h1>Unable to load dashboard.</h1>
+          <p className="error-text">{bootstrapError}</p>
+        </section>
+      </main>
+    );
+  }
+
   if (!currentUser) {
     return <LoginView error={loginError} isSubmitting={loginPending} onSubmit={handleLogin} />;
   }
 
   return (
-    <div className="workbench">
-      <aside className="sidebar">
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        gridTemplateColumns: '220px minmax(0, 1fr)',
+        gap: '24px',
+        padding: '24px',
+        boxSizing: 'border-box'
+      }}
+    >
+      <aside
+        style={{
+          alignSelf: 'start',
+          display: 'grid',
+          gap: '20px',
+          padding: '20px',
+          border: '1px solid rgba(148, 163, 184, 0.35)',
+          borderRadius: '16px',
+          backgroundColor: '#ffffff'
+        }}
+      >
         <div className="panel-title">Dashboard</div>
         {(['官方', '我的', '管理'] as const).map((section) => {
           const items = allowedViews.filter((view) => view.section === section);
@@ -137,7 +216,7 @@ export function DashboardRoot() {
             return null;
           }
           return (
-            <section key={section}>
+            <section key={section} style={{ display: 'grid', gap: '10px' }}>
               <h2>{section}</h2>
               {items.map((view) => (
                 <button
@@ -154,7 +233,7 @@ export function DashboardRoot() {
           );
         })}
       </aside>
-      <section className="workspace">{activeView?.render()}</section>
-    </div>
+      <section style={{ minWidth: 0 }}>{activeView?.render()}</section>
+    </main>
   );
 }

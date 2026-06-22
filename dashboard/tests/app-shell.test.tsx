@@ -697,7 +697,10 @@ describe('dashboard app shell', () => {
   });
 
   it('renders the login view when there is no active session', async () => {
-    apiMocks.fetchCurrentUser.mockRejectedValue(new Error('Unauthorized'));
+    apiMocks.fetchCurrentUser.mockRejectedValue({
+      message: 'Unauthorized',
+      status: 401
+    });
 
     render(<DashboardRoot />);
 
@@ -726,6 +729,41 @@ describe('dashboard app shell', () => {
 
     expect(await screen.findByText('Stock Research')).toBeVisible();
     expect(window.location.search).toBe('?view=official');
+  });
+
+  it('hides the 管理 navigation section for non-admin users', async () => {
+    apiMocks.fetchCurrentUser.mockResolvedValue(makeCurrentUser({ role: 'user' }));
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Stock Research')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '官方' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '我的' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '管理' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '用户管理' })).not.toBeInTheDocument();
+  });
+
+  it('uses the requested view from the URL when it is allowed', async () => {
+    window.history.replaceState({}, '', '/?view=my-reviews');
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByRole('heading', { name: '我的复盘' })).toBeVisible();
+    expect(window.location.search).toBe('?view=my-reviews');
+    expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
+  });
+
+  it('shows a bootstrap error for non-401 auth failures instead of the login form', async () => {
+    apiMocks.fetchCurrentUser.mockRejectedValue({
+      message: 'Server unavailable',
+      status: 503
+    });
+
+    render(<DashboardRoot />);
+
+    expect(await screen.findByText('Unable to load dashboard.')).toBeVisible();
+    expect(screen.getByText('Server unavailable')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: '登录' })).not.toBeInTheDocument();
   });
 
   it('switches the asset chart between daily and intraday resolutions', async () => {
