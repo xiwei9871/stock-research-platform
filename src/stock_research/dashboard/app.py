@@ -51,6 +51,12 @@ from stock_research.dashboard.user_admin import (
     list_user_accounts,
     reset_user_password,
 )
+from stock_research.dashboard.user_watchlist import (
+    create_user_watchlist_item,
+    list_user_watchlist_items,
+    soft_delete_user_watchlist_item,
+    update_user_watchlist_item,
+)
 from stock_research.dashboard.user_schema import apply_user_platform_schema
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.intraday_pipeline import (
@@ -79,6 +85,19 @@ class AdminCreateUserPayload(BaseModel):
 
 class ResetPasswordPayload(BaseModel):
     password: str
+
+
+class WatchlistItemPayload(BaseModel):
+    asset_id: str
+    trade_date_added: str
+    source: str
+    notes: str = ""
+
+
+class WatchlistItemUpdatePayload(BaseModel):
+    trade_date_added: str | None = None
+    source: str | None = None
+    notes: str | None = None
 
 
 def create_app() -> FastAPI:
@@ -224,6 +243,70 @@ def create_app() -> FastAPI:
             user_agent=request.headers.get("user-agent"),
         ):
             raise HTTPException(status_code=404, detail="user not found")
+        return {"ok": True}
+
+    @app.get("/api/my/watchlist")
+    def my_watchlist(current_user: CurrentUser = Depends(require_current_user)):
+        return {"items": list_user_watchlist_items(user_id=current_user.id)}
+
+    @app.post("/api/my/watchlist/items")
+    def create_my_watchlist_item(
+        payload: WatchlistItemPayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        try:
+            return create_user_watchlist_item(
+                user_id=current_user.id,
+                asset_id=payload.asset_id,
+                trade_date_added=payload.trade_date_added,
+                source=payload.source,
+                notes=payload.notes,
+                actor_user_id=current_user.id,
+                ip_address=request.client.host if request.client is not None else None,
+                user_agent=request.headers.get("user-agent"),
+            )
+        except psycopg_errors.UniqueViolation as exc:
+            raise HTTPException(status_code=409, detail="watchlist item already exists") from exc
+
+    @app.patch("/api/my/watchlist/items/{asset_id}")
+    def update_my_watchlist_item(
+        asset_id: str,
+        payload: WatchlistItemUpdatePayload,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        item = update_user_watchlist_item(
+            user_id=current_user.id,
+            asset_id=asset_id,
+            trade_date_added=payload.trade_date_added,
+            source=payload.source,
+            notes=payload.notes,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        if item is None:
+            raise HTTPException(status_code=404, detail="watchlist item not found")
+        return item
+
+    @app.delete("/api/my/watchlist/items/{asset_id}")
+    def delete_my_watchlist_item(
+        asset_id: str,
+        request: Request,
+        current_user: CurrentUser = Depends(require_current_user),
+        _: None = Depends(require_csrf),
+    ):
+        if not soft_delete_user_watchlist_item(
+            user_id=current_user.id,
+            asset_id=asset_id,
+            actor_user_id=current_user.id,
+            ip_address=request.client.host if request.client is not None else None,
+            user_agent=request.headers.get("user-agent"),
+        ):
+            raise HTTPException(status_code=404, detail="watchlist item not found")
         return {"ok": True}
 
     @app.get("/api/dashboard/overview")

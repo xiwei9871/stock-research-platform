@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,3 +18,18 @@ class CurrentUser:
             "role": self.role,
             "is_active": self.is_active,
         }
+
+
+@dataclass(frozen=True)
+class UserWatchlistItem:
+    id: int
+    user_id: int
+    asset_id: str
+    trade_date_added: str
+    source: str
+    notes: str
+    created_at: str
+    updated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
