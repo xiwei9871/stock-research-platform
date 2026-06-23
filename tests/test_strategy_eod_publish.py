@@ -1053,6 +1053,9 @@ def test_publish_strategy_eod_score_audit_double_failure_is_loadable_from_publis
 def test_load_strategy_score_audit_summary_fallback_strips_stale_embedded_paths(tmp_path):
     output_dir = tmp_path / "research" / "strategy_daily_eod" / "2026-06-22"
     output_dir.mkdir(parents=True, exist_ok=True)
+    stale_detail_path = tmp_path / "research" / "strategy_daily_eod" / "2026-06-21" / "live_detail.csv"
+    stale_detail_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_detail_path.write_text("trade_date\n2026-06-21\n", encoding="utf-8")
     live_detail_path = output_dir / "live_detail.csv"
     live_detail_path.write_text("trade_date\n2026-06-22\n", encoding="utf-8")
     (output_dir / "strategy_eod_publish_summary.json").write_text(
@@ -1064,7 +1067,7 @@ def test_load_strategy_score_audit_summary_fallback_strips_stale_embedded_paths(
                     "status": "failed",
                     "error": "primary audit write failed",
                     "summary_path": str(output_dir / "strategy_score_audit_summary.json"),
-                    "detail_path": str(output_dir / "missing_detail.csv"),
+                    "detail_path": str(stale_detail_path),
                 },
             }
         ),
@@ -1106,4 +1109,40 @@ def test_load_strategy_score_audit_summary_fallback_strips_stale_embedded_paths(
         "trade_date": "2026-06-22",
         "status": "success",
         "detail_path": str(live_detail_path),
+    }
+
+
+def test_load_strategy_score_audit_summary_does_not_synthesize_missing_detail_path(tmp_path):
+    output_dir = tmp_path / "research" / "strategy_daily_eod" / "2026-06-22"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "strategy_score_audit_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-06-22",
+                "status": "success",
+                "total_rows": 3,
+                "selected_rows": 3,
+                "anomaly_row_count": 0,
+                "anomaly_counts_by_type": {},
+                "strategies": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = strategy_eod_publish.load_strategy_score_audit_summary(
+        trade_date="2026-06-22",
+        output_root=tmp_path,
+    )
+
+    assert loaded == {
+        "trade_date": "2026-06-22",
+        "status": "success",
+        "summary_path": str(summary_path),
+        "total_rows": 3,
+        "selected_rows": 3,
+        "anomaly_row_count": 0,
+        "anomaly_counts_by_type": {},
+        "strategies": [],
     }

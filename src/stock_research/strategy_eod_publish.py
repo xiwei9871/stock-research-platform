@@ -344,19 +344,31 @@ def load_strategy_score_audit_summary(
         score_audit.setdefault("trade_date", trade_date)
         score_audit.pop("summary_path", None)
         detail_path = _optional_path(score_audit.get("detail_path"))
-        if detail_path is None or not detail_path.exists():
+        if detail_path is None or not detail_path.exists() or not _path_belongs_to_dir(detail_path, output_dir):
             score_audit.pop("detail_path", None)
         return score_audit
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary.setdefault("trade_date", trade_date)
     summary.setdefault("summary_path", str(summary_path))
     if summary.get("status") != "failed":
-        summary.setdefault("detail_path", str(output_dir / "strategy_score_audit_detail.csv"))
+        detail_path = output_dir / "strategy_score_audit_detail.csv"
+        if detail_path.exists():
+            summary.setdefault("detail_path", str(detail_path))
+        else:
+            summary.pop("detail_path", None)
     return summary
 
 
 def _strategy_eod_output_dir(trade_date: str, *, output_root: str | Path | None = None) -> Path:
     return Path(output_root or DEFAULT_OUTPUT_ROOT) / "research" / "strategy_daily_eod" / trade_date
+
+
+def _path_belongs_to_dir(path: Path, directory: Path) -> bool:
+    try:
+        path.resolve().relative_to(directory.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def _latest_market_date() -> str:

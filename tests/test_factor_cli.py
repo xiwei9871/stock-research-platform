@@ -6873,6 +6873,44 @@ def test_strategy_score_audit_cli_surfaces_persisted_double_failure_fallback(mon
     ]
 
 
+def test_strategy_score_audit_cli_existing_summary_without_detail_does_not_print_fake_detail(
+    monkeypatch, capsys, tmp_path
+):
+    output_dir = tmp_path / "research" / "strategy_daily_eod" / "2026-06-22"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "strategy_score_audit_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-06-22",
+                "status": "success",
+                "total_rows": 3,
+                "selected_rows": 3,
+                "anomaly_row_count": 0,
+                "anomaly_counts_by_type": {},
+                "strategies": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        cli,
+        "load_strategy_score_audit_summary",
+        lambda **kwargs: __import__(
+            "stock_research.strategy_eod_publish",
+            fromlist=["load_strategy_score_audit_summary"],
+        ).load_strategy_score_audit_summary(output_root=tmp_path, **kwargs),
+    )
+
+    cli.main_for_args(["strategy-score-audit", "--trade-date", "2026-06-22"])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "strategy_score_audit|trade_date|2026-06-22",
+        f"strategy_score_audit|summary|{summary_path}",
+        "strategy_score_audit|rows|3|selected|3|anomaly_rows|0",
+    ]
+
+
 def test_backfill_control_plane_cli_accepts_commands():
     create_args = build_parser().parse_args(
         [
