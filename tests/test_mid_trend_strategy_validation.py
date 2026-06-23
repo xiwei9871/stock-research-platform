@@ -10,11 +10,11 @@ from stock_research.current_mid_trend_strategy_v1 import (
 from stock_research.mid_trend_shadow_backtest import (
     build_mid_trend_shadow_backtest_from_frames,
 )
+import stock_research.mid_trend_strategy_validation as mid_trend_strategy_validation
 from stock_research.mid_trend_strategy_validation import (
     build_mid_trend_validation_scorecard,
     discover_mid_trend_strategy_candidates,
     filter_complete_mid_trend_candidates,
-    normalize_mid_trend_validation_result,
     rank_mid_trend_validation_scorecard,
 )
 
@@ -105,38 +105,10 @@ def test_filter_complete_mid_trend_candidates_keeps_only_complete_portfolio_vers
     assert [item["strategy_id"] for item in filtered] == ["current_mid_trend_strategy_v1"]
 
 
-def test_normalize_mid_trend_validation_result_supports_known_strategy_outputs() -> None:
-    current_result = build_current_mid_trend_strategy_v1_from_frames(
-        regime=_current_regime_frame(),
-        funnel=_current_funnel_frame(),
-        prices=_current_prices_frame(),
-        asset_names=_current_asset_names_frame(),
-        start_date="2025-01-01",
-        end_date="2025-01-03",
-        top_n=2,
-    )
-    shadow_result = build_mid_trend_shadow_backtest_from_frames(
-        shadow_top10=_shadow_top10_frame(),
-        prices=_shadow_prices_frame(),
-        start_date="2025-01-01",
-        end_date="2025-01-03",
-        top_n=2,
-        transaction_cost_bps=10.0,
-    )
-
-    normalized_current = normalize_mid_trend_validation_result(
-        {"strategy_id": "current_mid_trend_strategy_v1", **current_result}
-    )
-    normalized_shadow = normalize_mid_trend_validation_result(
-        {"strategy_id": "mid_trend_shadow_backtest", **shadow_result}
-    )
-
-    assert list(normalized_current["summary_frame"].columns) == ["metric", "value"]
-    assert "total_return" in set(normalized_current["summary_frame"]["metric"])
-    assert "date" in normalized_current["equity_frame"].columns
-    assert list(normalized_shadow["summary_frame"].columns) == ["metric", "value"]
-    assert "total_return" in set(normalized_shadow["summary_frame"]["metric"])
-    assert "date" in normalized_shadow["equity_frame"].columns
+def test_mid_trend_validation_module_exposes_only_task2_scorecard_api() -> None:
+    assert hasattr(mid_trend_strategy_validation, "build_mid_trend_validation_scorecard")
+    assert hasattr(mid_trend_strategy_validation, "rank_mid_trend_validation_scorecard")
+    assert not hasattr(mid_trend_strategy_validation, "normalize_mid_trend_validation_result")
 
 
 def test_build_mid_trend_validation_scorecard_consumes_real_candidate_outputs() -> None:

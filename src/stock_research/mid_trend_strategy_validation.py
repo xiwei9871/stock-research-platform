@@ -39,7 +39,7 @@ def filter_complete_mid_trend_candidates(
     return complete
 
 
-def normalize_mid_trend_validation_result(item: dict[str, object]) -> dict[str, object]:
+def _normalize_mid_trend_validation_result(item: dict[str, object]) -> dict[str, object]:
     strategy_id = str(item["strategy_id"])
     if "summary_frame" in item and "equity_frame" in item:
         return {
@@ -78,7 +78,7 @@ def normalize_mid_trend_validation_result(item: dict[str, object]) -> dict[str, 
 def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for item in results:
-        normalized = normalize_mid_trend_validation_result(item)
+        normalized = _normalize_mid_trend_validation_result(item)
         summary = normalized["summary_frame"]
         summary_map = _numeric_summary_map(summary)
         equity = normalized["equity_frame"].copy()
