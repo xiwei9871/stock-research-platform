@@ -196,6 +196,131 @@ def test_review_rows_use_lhb_auction_enhanced_score_when_positions_have_no_score
     assert review.iloc[0]["score_source"] == "auction_enhanced_score"
 
 
+def test_review_rows_use_same_day_lhb_candidates_when_positions_are_stale() -> None:
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "positions": [
+                {"trade_date": "2026-06-16", "ts_code": "002080.SZ"},
+                {"trade_date": "2026-06-16", "ts_code": "002436.SZ"},
+            ],
+            "candidates": [
+                {
+                    "trade_date": "2026-06-22",
+                    "ts_code": "000960.SZ",
+                    "phase12a_rule_layer": "pending_intraday",
+                    "auction_enhanced_score": 20.0,
+                },
+                {
+                    "trade_date": "2026-06-22",
+                    "ts_code": "002691.SZ",
+                    "phase12a_rule_layer": "pending_intraday",
+                    "auction_enhanced_score": 18.0,
+                },
+            ],
+        },
+        trade_date="2026-06-22",
+    )
+
+    assert review["asset_id"].tolist() == ["000960.SZ", "002691.SZ"]
+    assert review["score_total"].tolist() == [20.0, 18.0]
+    assert review["trade_date"].tolist() == ["2026-06-22", "2026-06-22"]
+
+
+def test_lhb_same_day_candidate_frame_preserves_lineage_fields_for_audit() -> None:
+    frame = strategy_eod_publish._lhb_same_day_candidate_frame(
+        {
+            "candidates": [
+                {
+                    "trade_date": "2026-06-21",
+                    "ts_code": "002080.SZ",
+                    "phase12a_rule_layer": "follow_pool_core",
+                    "candidate_reason": "stale_row",
+                    "auction_enhanced_score": 12.0,
+                },
+                {
+                    "trade_date": "2026-06-22",
+                    "ts_code": "000960.SZ",
+                    "phase12a_rule_layer": "pending_intraday",
+                    "candidate_reason": "lhb_capital_plus_structure",
+                    "auction_enhanced_score": 20.0,
+                },
+            ]
+        },
+        trade_date="2026-06-22",
+    )
+
+    assert frame["ts_code"].tolist() == ["000960.SZ"]
+    assert frame["trade_date"].tolist() == ["2026-06-22"]
+    assert frame.iloc[0]["phase12a_rule_layer"] == "pending_intraday"
+    assert frame.iloc[0]["candidate_reason"] == "lhb_capital_plus_structure"
+    assert frame.iloc[0]["auction_enhanced_score"] == 20.0
+
+
+def test_review_rows_drop_lhb_delisting_board_candidates_and_sort_by_score() -> None:
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "positions": [
+                {"trade_date": "2026-06-18", "ts_code": "002080.SZ"},
+                {"trade_date": "2026-06-18", "ts_code": "600421.SH"},
+                {"trade_date": "2026-06-18", "ts_code": "002436.SZ"},
+            ],
+            "candidates": [
+                {
+                    "trade_date": "2026-06-18",
+                    "ts_code": "002080.SZ",
+                    "auction_enhanced_score": 70.0,
+                    "reason": "正常龙虎榜",
+                },
+                {
+                    "trade_date": "2026-06-18",
+                    "ts_code": "600421.SH",
+                    "auction_enhanced_score": 80.0,
+                    "reason": "退市整理的证券",
+                },
+                {
+                    "trade_date": "2026-06-18",
+                    "ts_code": "002436.SZ",
+                    "auction_enhanced_score": 75.0,
+                    "reason": "正常龙虎榜",
+                },
+            ],
+        },
+        trade_date="2026-06-18",
+    )
+
+    assert review["asset_id"].tolist() == ["002436.SZ", "002080.SZ"]
+    assert review["score_total"].tolist() == [75.0, 70.0]
+    assert review["rank"].tolist() == [1, 2]
+
+
+def test_review_rows_drop_lhb_db_delisting_assets_when_result_has_no_reason() -> None:
+    review = strategy_eod_publish._review_rows_from_result(
+        {
+            "strategy_id": "lhb_shortline",
+            "strategy_name": "LHB Shortline Combo",
+            "positions": [
+                {"trade_date": "2026-06-18", "ts_code": "002080.SZ"},
+                {"trade_date": "2026-06-18", "ts_code": "600421.SH"},
+                {"trade_date": "2026-06-18", "ts_code": "002436.SZ"},
+            ],
+            "candidates": [
+                {"trade_date": "2026-06-18", "ts_code": "002080.SZ", "auction_enhanced_score": 70.0},
+                {"trade_date": "2026-06-18", "ts_code": "600421.SH", "auction_enhanced_score": 80.0},
+                {"trade_date": "2026-06-18", "ts_code": "002436.SZ", "auction_enhanced_score": 75.0},
+            ],
+        },
+        trade_date="2026-06-18",
+        excluded_lhb_assets={"600421.SH"},
+    )
+
+    assert review["asset_id"].tolist() == ["002436.SZ", "002080.SZ"]
+    assert review["score_total"].tolist() == [75.0, 70.0]
+
+
 def test_review_rows_use_mid_trend_signal_score_when_positions_have_no_score() -> None:
     review = strategy_eod_publish._review_rows_from_result(
         {
