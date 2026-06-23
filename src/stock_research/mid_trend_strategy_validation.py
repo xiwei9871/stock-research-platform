@@ -114,15 +114,17 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
 def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame:
     ranked = scorecard.copy()
     ranked["drawdown_penalty"] = ranked["max_drawdown"].abs()
+    ranked["severe_drawdown"] = ranked["drawdown_penalty"] > 0.20
     return ranked.sort_values(
         [
-            "drawdown_penalty",
+            "severe_drawdown",
             "return_drawdown_ratio",
             "monthly_win_rate",
             "turnover_penalized_stability",
+            "drawdown_penalty",
             "total_return",
         ],
-        ascending=[True, False, False, False, False],
+        ascending=[True, False, False, False, True, False],
     ).reset_index(drop=True)
 
 

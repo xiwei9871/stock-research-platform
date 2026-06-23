@@ -221,26 +221,56 @@ def test_rank_mid_trend_validation_scorecard_prefers_better_drawdown_efficiency_
         pd.DataFrame(
             [
                 {
-                    "strategy_id": "stable",
-                    "total_return": 0.40,
-                    "max_drawdown": -0.08,
-                    "return_drawdown_ratio": 5.0,
-                    "monthly_win_rate": 0.75,
+                    "strategy_id": "low_drawdown_but_weak",
+                    "total_return": 0.08,
+                    "max_drawdown": -0.04,
+                    "return_drawdown_ratio": 2.0,
+                    "monthly_win_rate": 0.45,
+                    "turnover_penalized_stability": 0.30,
+                },
+                {
+                    "strategy_id": "better_ratio",
+                    "total_return": 0.42,
+                    "max_drawdown": -0.14,
+                    "return_drawdown_ratio": 3.0,
+                    "monthly_win_rate": 0.60,
+                    "turnover_penalized_stability": 0.35,
+                },
+                {
+                    "strategy_id": "better_win_rate",
+                    "total_return": 0.48,
+                    "max_drawdown": -0.16,
+                    "return_drawdown_ratio": 3.0,
+                    "monthly_win_rate": 0.80,
+                    "turnover_penalized_stability": 0.25,
+                },
+                {
+                    "strategy_id": "best_stability",
+                    "total_return": 0.44,
+                    "max_drawdown": -0.18,
+                    "return_drawdown_ratio": 3.0,
+                    "monthly_win_rate": 0.80,
                     "turnover_penalized_stability": 0.70,
                 },
                 {
-                    "strategy_id": "wild",
-                    "total_return": 0.45,
-                    "max_drawdown": -0.25,
-                    "return_drawdown_ratio": 1.8,
-                    "monthly_win_rate": 0.50,
-                    "turnover_penalized_stability": 0.20,
+                    "strategy_id": "severe_drawdown",
+                    "total_return": 0.90,
+                    "max_drawdown": -0.35,
+                    "return_drawdown_ratio": 2.57,
+                    "monthly_win_rate": 0.90,
+                    "turnover_penalized_stability": 0.85,
                 },
             ]
         )
     )
 
-    assert ranked.iloc[0]["strategy_id"] == "stable"
+    assert list(ranked["strategy_id"])[:4] == [
+        "best_stability",
+        "better_win_rate",
+        "better_ratio",
+        "low_drawdown_but_weak",
+    ]
+    assert ranked.iloc[-1]["strategy_id"] == "severe_drawdown"
 
 
 def _current_regime_frame() -> pd.DataFrame:
