@@ -79,6 +79,7 @@ stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
 
 Bootstrap the first dashboard admin:
+The CLI prompts for the password and confirmation interactively.
 
 ```bash
 stock-research dashboard-bootstrap-admin \

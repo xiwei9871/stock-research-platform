@@ -174,13 +174,20 @@ def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys
 
 def test_dashboard_bootstrap_admin_cli_prompts_for_password_when_omitted(monkeypatch, capsys):
     captured = {}
+    prompts = []
 
     def fake_bootstrap_admin_account(**kwargs):
         captured["call"] = kwargs
         return {"username": kwargs["username"]}
 
+    passwords = iter(["prompt-secret", "prompt-secret"])
+
+    def fake_getpass(prompt):
+        prompts.append(prompt)
+        return next(passwords)
+
     monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
-    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "prompt-secret")
+    monkeypatch.setattr(cli.getpass, "getpass", fake_getpass)
 
     cli.main_for_args(
         [
@@ -200,7 +207,38 @@ def test_dashboard_bootstrap_admin_cli_prompts_for_password_when_omitted(monkeyp
         "display_name": "Bootstrap Admin",
         "email": "bootstrap@example.com",
     }
+    assert prompts == ["Dashboard admin password: ", "Confirm dashboard admin password: "]
     assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
+
+
+def test_dashboard_bootstrap_admin_cli_exits_when_password_confirmation_mismatches(
+    monkeypatch, capsys
+):
+    bootstrap_calls = []
+    passwords = iter(["prompt-secret", "different-secret"])
+
+    def fake_bootstrap_admin_account(**kwargs):
+        bootstrap_calls.append(kwargs)
+        return {"username": kwargs["username"]}
+
+    monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: next(passwords))
+
+    with pytest.raises(SystemExit, match="dashboard admin passwords did not match"):
+        cli.main_for_args(
+            [
+                "dashboard-bootstrap-admin",
+                "--username",
+                "bootstrap-admin",
+                "--display-name",
+                "Bootstrap Admin",
+                "--email",
+                "bootstrap@example.com",
+            ]
+        )
+
+    assert bootstrap_calls == []
+    assert capsys.readouterr().out == ""
 
 
 def test_dashboard_enable_user_cli_exits_when_username_not_found(monkeypatch, capsys):

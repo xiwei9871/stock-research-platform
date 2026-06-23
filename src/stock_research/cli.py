@@ -4740,7 +4740,13 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "dashboard-api":
         run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "dashboard-bootstrap-admin":
-        password = args.password or getpass.getpass("Dashboard admin password: ")
+        if args.password is not None:
+            password = args.password
+        else:
+            password = getpass.getpass("Dashboard admin password: ")
+            password_confirm = getpass.getpass("Confirm dashboard admin password: ")
+            if password != password_confirm:
+                raise SystemExit("dashboard admin passwords did not match")
         user_account = bootstrap_admin_account(
             username=args.username,
             password=password,
