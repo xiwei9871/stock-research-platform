@@ -7,6 +7,48 @@ from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import shadow_outcomes
 
 
+def test_strategy_score_audit_route_returns_payload(monkeypatch):
+    captured = {}
+
+    def fake_load_strategy_score_audit_payload(*, trade_date: str):
+        captured["trade_date"] = trade_date
+        return {
+            "trade_date": trade_date,
+            "status": "success",
+            "overall_status": "ok",
+            "total_rows": 3,
+            "selected_rows": 3,
+            "anomaly_row_count": 0,
+            "anomaly_counts_by_type": {},
+            "strategies": [],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_strategy_score_audit_payload",
+        fake_load_strategy_score_audit_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/strategy-score-audit?trade_date=2026-06-22")
+
+    assert response.status_code == 200
+    assert captured["trade_date"] == "2026-06-22"
+    assert response.json() == {
+        "trade_date": "2026-06-22",
+        "status": "success",
+        "overall_status": "ok",
+        "total_rows": 3,
+        "selected_rows": 3,
+        "anomaly_row_count": 0,
+        "anomaly_counts_by_type": {},
+        "strategies": [],
+        "warnings": [],
+    }
+
+
 def test_overview_route_returns_payload(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,

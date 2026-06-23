@@ -64,6 +64,7 @@ from stock_research.dashboard.shadow_follow_up_queue import load_shadow_follow_u
 from stock_research.dashboard.shadow_follow_up_resolution import load_shadow_follow_up_resolution_summary
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
+from stock_research.dashboard.strategy_score_audit import load_strategy_score_audit_payload
 from stock_research.dashboard.strategy_validation import (
     build_strategy_validation_replay,
     list_strategy_validation_artifacts,
@@ -183,6 +184,13 @@ def create_app() -> FastAPI:
             trade_date=trade_date,
             lookback_days=lookback_days,
             score_version=score_version,
+        )
+
+    @app.get("/api/strategy-score-audit")
+    def strategy_score_audit_route(trade_date: str):
+        return app.state.eod_response_cache.get_or_set(
+            ("strategy_score_audit", trade_date),
+            lambda: load_strategy_score_audit_payload(trade_date=trade_date),
         )
 
     @app.get("/api/review-queue")
