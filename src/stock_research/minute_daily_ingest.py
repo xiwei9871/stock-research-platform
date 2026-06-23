@@ -143,11 +143,13 @@ def _run_retry_queue(
     freq: str,
     adjust_type: str,
     retry_limit: int,
+    cooldown_seconds: int,
     timeout_seconds: float | None,
     result: dict[str, Any],
 ) -> tuple[list[str], str | None]:
     failed_symbols: list[str] = []
     last_error = result.get("last_error")
+    consecutive_retryable_failures = 0
     for code in retry_queue:
         rows, retry_count, error = _fetch_symbol_with_policy(
             code,
@@ -161,8 +163,19 @@ def _run_retry_queue(
         if error is not None or rows is None:
             failed_symbols.append(code)
             last_error = error
+            if error is not None and is_retryable_baostock_error(error):
+                consecutive_retryable_failures += 1
+                if consecutive_retryable_failures >= RELOGIN_FAILURE_THRESHOLD:
+                    relogin_or_raise()
+                    result["relogin_count"] += 1
+                    consecutive_retryable_failures = 0
+                    if cooldown_seconds > 0:
+                        time.sleep(cooldown_seconds)
+            else:
+                consecutive_retryable_failures = 0
             continue
 
+        consecutive_retryable_failures = 0
         inserted_rows, write_error = _write_symbol_rows(
             code,
             rows,
@@ -194,6 +207,9 @@ def run_baostock_minute_daily(
     timeout_seconds: float | None = None,
     output_dir: str | Path = "outputs/research",
 ) -> dict[str, Any]:
+    if retry_limit < 0:
+        raise ValueError("retry_limit must be >= 0")
+
     freq = "5min"
     adjust_type = "raw"
     target_date = parse_trade_date(trade_date, "Asia/Shanghai")
@@ -216,6 +232,7 @@ def run_baostock_minute_daily(
     result = _result_template(status="success", trade_date=decision.trade_date)
     try:
         retry_queue: list[str] = []
+        write_failed_symbols: list[str] = []
         consecutive_retryable_failures = 0
         codes = load_active_baostock_codes(limit_assets=limit_assets)
         result["symbol_count"] = len(codes)
@@ -253,7 +270,7 @@ def run_baostock_minute_daily(
                     adjust_type=adjust_type,
                 )
                 if write_error is not None or inserted_rows is None:
-                    retry_queue.append(code)
+                    write_failed_symbols.append(code)
                     result["last_error"] = write_error
                 else:
                     if inserted_rows > 0:
@@ -271,12 +288,16 @@ def run_baostock_minute_daily(
                 freq=freq,
                 adjust_type=adjust_type,
                 retry_limit=retry_limit,
+                cooldown_seconds=cooldown_seconds,
                 timeout_seconds=timeout_seconds,
                 result=result,
             )
-            result["failed_symbols"] = failed_symbols
-            result["failed_count"] = len(failed_symbols)
-            result["last_error"] = last_error if failed_symbols else None
+            result["failed_symbols"] = write_failed_symbols + failed_symbols
+            result["failed_count"] = len(result["failed_symbols"])
+            result["last_error"] = last_error if result["failed_symbols"] else None
+        elif write_failed_symbols:
+            result["failed_symbols"] = write_failed_symbols
+            result["failed_count"] = len(write_failed_symbols)
 
         if result["failed_count"] > 0:
             result["status"] = "partial"
