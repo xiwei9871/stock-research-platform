@@ -78,6 +78,22 @@ Start the dashboard API:
 stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
 
+Bootstrap the first dashboard admin:
+
+```bash
+stock-research dashboard-bootstrap-admin \
+  --username admin \
+  --password 'change-me-now' \
+  --display-name 'Platform Admin' \
+  --email admin@example.com
+```
+
+Re-enable a dashboard user by username:
+
+```bash
+stock-research dashboard-enable-user --username analyst
+```
+
 Build a P17 shadow follow-up queue:
 
 ```bash
