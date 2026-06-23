@@ -246,6 +246,7 @@ def _review_rows_from_snapshots(
         "trade_date",
         "asset_id",
         "rank",
+        "bottleneck_score",
         "score_total",
         "score_source",
         "score_explanation",

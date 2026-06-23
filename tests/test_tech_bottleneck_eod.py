@@ -37,6 +37,8 @@ def test_tech_bottleneck_eod_writes_artifacts_and_manifest_entries(tmp_path: Pat
         assert path.exists()
     review = pd.read_csv(expected_paths["review_path"])
     assert set(review["trade_date"]) == {"2025-01-08"}
+    assert "bottleneck_score" in review.columns
+    assert review["bottleneck_score"].notna().all()
 
     assert {entry["module"] for entry in entries} == {"tech_bottleneck_candidates", "strategy_tech_bottleneck"}
     candidate_entry = next(entry for entry in entries if entry["module"] == "tech_bottleneck_candidates")
