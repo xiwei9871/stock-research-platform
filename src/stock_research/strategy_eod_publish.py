@@ -272,11 +272,18 @@ def publish_strategy_eod(
             strategy_results=strategy_results,
         )
     except Exception as exc:
-        score_audit = _write_strategy_score_audit_failure_summary(
-            trade_date=selected_trade_date,
-            output_dir=output_dir,
-            error=str(exc),
-        )
+        try:
+            score_audit = _write_strategy_score_audit_failure_summary(
+                trade_date=selected_trade_date,
+                output_dir=output_dir,
+                error=str(exc),
+            )
+        except Exception:
+            score_audit = {
+                "trade_date": selected_trade_date,
+                "status": "failed",
+                "error": str(exc),
+            }
 
     entries.extend(
         _write_eod_news_artifacts(
@@ -330,8 +337,9 @@ def load_strategy_score_audit_summary(
         raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary.setdefault("trade_date", trade_date)
-    summary.setdefault("detail_path", str(output_dir / "strategy_score_audit_detail.csv"))
     summary.setdefault("summary_path", str(summary_path))
+    if summary.get("status") != "failed":
+        summary.setdefault("detail_path", str(output_dir / "strategy_score_audit_detail.csv"))
     return summary
 
 

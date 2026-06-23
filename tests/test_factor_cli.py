@@ -6821,6 +6821,24 @@ def test_strategy_score_audit_cli_surfaces_failure_status(monkeypatch, capsys, t
     ]
 
 
+def test_strategy_score_audit_cli_failed_summary_does_not_print_fake_detail(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(
+        cli,
+        "load_strategy_score_audit_summary",
+        lambda **kwargs: {
+            "trade_date": "2026-06-22",
+            "summary_path": str(tmp_path / "strategy_score_audit_summary.json"),
+            "status": "failed",
+            "error": "audit summary write failed",
+        },
+    )
+
+    cli.main_for_args(["strategy-score-audit", "--trade-date", "2026-06-22"])
+
+    out = capsys.readouterr().out.splitlines()
+    assert all(not line.startswith("strategy_score_audit|detail|") for line in out)
+
+
 def test_backfill_control_plane_cli_accepts_commands():
     create_args = build_parser().parse_args(
         [
