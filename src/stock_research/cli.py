@@ -4747,10 +4747,12 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         print(f"dashboard_admin_bootstrapped|{user_account['username']}")
     elif args.command == "dashboard-enable-user":
-        enable_user_account_by_username(
+        was_enabled = enable_user_account_by_username(
             username=args.username,
             actor_user_id=None,
         )
+        if not was_enabled:
+            raise SystemExit(f"dashboard user not found: {args.username}")
         print(f"dashboard_user_enabled|{args.username}")
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):

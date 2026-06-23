@@ -166,3 +166,25 @@ def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys
         "email": "bootstrap@example.com",
     }
     assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
+
+
+def test_dashboard_enable_user_cli_exits_when_username_not_found(monkeypatch, capsys):
+    def fake_enable_user_account_by_username(**kwargs):
+        return False
+
+    monkeypatch.setattr(
+        cli,
+        "enable_user_account_by_username",
+        fake_enable_user_account_by_username,
+    )
+
+    with pytest.raises(SystemExit, match="dashboard user not found: missing-user"):
+        cli.main_for_args(
+            [
+                "dashboard-enable-user",
+                "--username",
+                "missing-user",
+            ]
+        )
+
+    assert capsys.readouterr().out == ""
