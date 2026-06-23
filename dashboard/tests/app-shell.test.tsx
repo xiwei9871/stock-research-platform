@@ -698,12 +698,15 @@ describe('dashboard app shell', () => {
 
   it('renders the login view when there is no active session', async () => {
     apiMocks.fetchCurrentUser.mockRejectedValue(new Error('GET /api/auth/me failed with 401: Unauthorized'));
+    window.history.replaceState({}, '', '/');
 
     render(<DashboardRoot />);
 
     expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
     expect(screen.getByLabelText('用户名或邮箱')).toBeVisible();
     expect(screen.getByLabelText('密码')).toBeVisible();
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
     expect(screen.queryByText('Stock Research')).not.toBeInTheDocument();
   });
 

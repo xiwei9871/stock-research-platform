@@ -1,5 +1,5 @@
 import pytest
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from psycopg import IntegrityError
 from psycopg import errors as psycopg_errors
@@ -104,6 +104,28 @@ def test_admin_list_users_route_returns_items(monkeypatch):
     }
     assert events["admin_checks"] == ["/api/admin/users"]
     assert events["items"] == [{}]
+
+
+def test_admin_list_users_route_returns_403_for_non_admin(monkeypatch):
+    events = {"items": 0}
+
+    def fake_require_admin_user(request: Request):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    def fake_list_user_accounts(**kwargs):
+        events["items"] += 1
+        return []
+
+    monkeypatch.setattr(dashboard_app, "apply_user_platform_schema", lambda: None, raising=False)
+    monkeypatch.setattr(dashboard_app, "require_admin_user", fake_require_admin_user, raising=False)
+    monkeypatch.setattr(dashboard_app, "list_user_accounts", fake_list_user_accounts, raising=False)
+
+    with TestClient(dashboard_app.create_app()) as client:
+        response = client.get("/api/admin/users")
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Forbidden"}
+    assert events["items"] == 0
 
 
 def test_admin_create_user_route_returns_created_user(monkeypatch):
