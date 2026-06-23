@@ -2999,6 +2999,7 @@ def build_parser() -> argparse.ArgumentParser:
         DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
         DEFAULT_CURRENT_REGIME_PATH,
         DEFAULT_SHADOW_TOP10_PATH,
+        REPO_ROOT,
     )
 
     mid_trend_validation = subparsers.add_parser("validate-mid-trend-strategies")
@@ -3018,7 +3019,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mid_trend_validation.add_argument(
         "--output-dir",
-        default="outputs/research/mid_trend_validation",
+        default=str(REPO_ROOT / "outputs/research/mid_trend_validation"),
     )
 
     mid_trend_shadow_weekly_optimization = subparsers.add_parser(
@@ -6210,6 +6211,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             current_regime_path=args.current_regime_path,
             funnel_detail_path=args.funnel_detail_path,
             shadow_top10_path=args.shadow_top10_path,
+        )
+        print(
+            "mid_trend_validation|effective_end_date|"
+            f"{result.get('effective_end_date', 'none') or 'none'}"
         )
         print(f"mid_trend_validation|winner|{result['winner'].get('strategy_id', 'none')}")
         print(f"mid_trend_validation|scorecard|{result['paths']['scorecard']}")

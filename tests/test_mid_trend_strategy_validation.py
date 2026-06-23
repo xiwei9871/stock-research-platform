@@ -396,6 +396,7 @@ def test_run_mid_trend_strategy_validation_returns_ranked_winner(
 
     assert result["winner"]["strategy_id"] == "winner"
     assert Path(result["paths"]["scorecard"]).exists()
+    assert result["effective_end_date"] == "2025-01-31"
 
 
 def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_root_paths(
@@ -422,11 +423,12 @@ def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_r
     execute_mid_trend_candidate(
         {
             "strategy_id": "current_mid_trend_strategy_v1",
+            "module_name": "stock_research.current_mid_trend_strategy_v1",
             "runner_name": "run_current_mid_trend_strategy_v1_backtest",
         },
         start_date="2025-01-01",
         end_date="2025-01-31",
-        output_dir=tmp_path / "validation",
+        output_dir="validation",
     )
 
     assert len(calls) == 1
@@ -437,11 +439,134 @@ def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_r
     assert call["adjust_type"] == "hfq"
     assert Path(call["regime_path"]).is_absolute()
     assert Path(call["funnel_detail_path"]).is_absolute()
-    assert Path(call["output_dir"]) == tmp_path / "validation" / "current_mid_trend_strategy_v1"
+    assert Path(call["output_dir"]) == (
+        Path(mid_trend_strategy_validation.__file__).resolve().parents[2]
+        / "validation/current_mid_trend_strategy_v1"
+    )
     assert Path(call["regime_path"]) == (
         Path(mid_trend_strategy_validation.__file__).resolve().parents[2]
         / "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/market_regime_confirmation_daily.csv"
     )
+
+
+def test_execute_mid_trend_candidate_uses_explicit_module_name(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeModule:
+        @staticmethod
+        def run_current_mid_trend_strategy_v1_backtest(**kwargs):
+            return {
+                "summary": pd.DataFrame(),
+                "equity": pd.DataFrame(),
+                "holdings": pd.DataFrame(),
+                "trades": pd.DataFrame(),
+            }
+
+    monkeypatch.setattr(
+        mid_trend_strategy_validation,
+        "import_module",
+        lambda module_name: calls.append(module_name) or FakeModule,
+    )
+
+    execute_mid_trend_candidate(
+        {
+            "strategy_id": "current_mid_trend_strategy_v1",
+            "module_name": "stock_research.explicit_module",
+            "runner_name": "run_current_mid_trend_strategy_v1_backtest",
+        },
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir="validation",
+    )
+
+    assert calls == ["stock_research.explicit_module"]
+
+
+def test_run_mid_trend_strategy_validation_handles_empty_candidates(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.discover_mid_trend_strategy_candidates",
+        lambda: [],
+    )
+
+    result = run_mid_trend_strategy_validation(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+    )
+
+    assert result["candidates"] == []
+    assert result["winner"] == {}
+    assert result["effective_end_date"] is None
+    assert Path(result["paths"]["scorecard"]).exists()
+    assert "none" in Path(result["paths"]["report"]).read_text(encoding="utf-8")
+
+
+def test_run_mid_trend_strategy_validation_uses_shared_effective_end_date(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.discover_mid_trend_strategy_candidates",
+        lambda: [
+            {
+                "strategy_id": "current_mid_trend_strategy_v1",
+                "module_name": "stock_research.current_mid_trend_strategy_v1",
+                "group": "portfolio",
+                "runner_name": "run_current_mid_trend_strategy_v1_backtest",
+                "result_keys": {"holdings", "trades", "equity", "summary"},
+            },
+            {
+                "strategy_id": "mid_trend_shadow_backtest",
+                "module_name": "stock_research.mid_trend_shadow_backtest",
+                "group": "portfolio",
+                "runner_name": "run_mid_trend_shadow_backtest",
+                "result_keys": {"positions", "trades", "equity_curve", "summary"},
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        mid_trend_strategy_validation,
+        "_resolve_validation_effective_end_date",
+        lambda **kwargs: "2025-01-15",
+    )
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.execute_mid_trend_candidate",
+        lambda candidate, start_date, end_date, output_dir, **kwargs: calls.append(
+            {
+                "strategy_id": candidate["strategy_id"],
+                "start_date": start_date,
+                "end_date": end_date,
+                "output_dir": output_dir,
+            }
+        )
+        or {
+            "strategy_id": candidate["strategy_id"],
+            "summary_frame": pd.DataFrame(
+                [
+                    {"metric": "total_return", "value": 0.25},
+                    {"metric": "max_drawdown", "value": -0.05},
+                    {"metric": "average_turnover", "value": 0.10},
+                ]
+            ),
+            "equity_frame": pd.DataFrame(
+                [
+                    {"date": "2025-01-31", "equity": 1.05},
+                    {"date": "2025-02-28", "equity": 1.25},
+                ]
+            ),
+        },
+    )
+
+    result = run_mid_trend_strategy_validation(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+    )
+
+    assert result["effective_end_date"] == "2025-01-15"
+    assert [call["end_date"] for call in calls] == ["2025-01-15", "2025-01-15"]
 
 
 def test_cli_dispatches_mid_trend_strategy_validation(

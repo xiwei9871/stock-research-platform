@@ -32,18 +32,28 @@ DEFAULT_SHADOW_VALIDATION_CONFIG: dict[str, object] = {
     "adjust_type": "hfq",
     "service": SETTINGS.research_service,
 }
+SCORECARD_COLUMNS = [
+    "strategy_id",
+    "total_return",
+    "max_drawdown",
+    "return_drawdown_ratio",
+    "monthly_win_rate",
+    "turnover_penalized_stability",
+]
 
 
 def discover_mid_trend_strategy_candidates() -> list[dict[str, object]]:
     return [
         {
             "strategy_id": "current_mid_trend_strategy_v1",
+            "module_name": "stock_research.current_mid_trend_strategy_v1",
             "group": "portfolio",
             "runner_name": "run_current_mid_trend_strategy_v1_backtest",
             "result_keys": {"holdings", "trades", "equity", "summary"},
         },
         {
             "strategy_id": "mid_trend_shadow_backtest",
+            "module_name": "stock_research.mid_trend_shadow_backtest",
             "group": "portfolio",
             "runner_name": "run_mid_trend_shadow_backtest",
             "result_keys": {"positions", "trades", "equity_curve", "summary"},
@@ -146,6 +156,8 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
 
 
 def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame:
+    if scorecard.empty:
+        return scorecard.reindex(columns=[*SCORECARD_COLUMNS, "drawdown_penalty", "severe_drawdown"])
     ranked = scorecard.copy()
     ranked["drawdown_penalty"] = ranked["max_drawdown"].abs()
     # Treat clearly bad drawdown as a coarse filter, then rank on efficiency and stability.
@@ -174,10 +186,10 @@ def execute_mid_trend_candidate(
     shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
 ) -> dict[str, object]:
     strategy_id = str(candidate["strategy_id"])
+    module_name = str(candidate["module_name"])
     runner_name = str(candidate["runner_name"])
-    module_name = f"stock_research.{strategy_id}"
     runner = getattr(import_module(module_name), runner_name)
-    candidate_output_dir = Path(output_dir) / strategy_id
+    candidate_output_dir = _resolve_output_dir(output_dir) / strategy_id
     current_regime_path = Path(current_regime_path)
     funnel_detail_path = Path(funnel_detail_path)
     shadow_top10_path = Path(shadow_top10_path)
@@ -213,9 +225,16 @@ def run_mid_trend_strategy_validation(
     funnel_detail_path: str | Path = DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
     shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
 ) -> dict[str, object]:
-    output_path = Path(output_dir)
+    output_path = _resolve_output_dir(output_dir)
     candidates = filter_complete_mid_trend_candidates(
         discover_mid_trend_strategy_candidates()
+    )
+    effective_end_date = _resolve_validation_effective_end_date(
+        requested_end_date=end_date,
+        candidates=candidates,
+        current_regime_path=current_regime_path,
+        funnel_detail_path=funnel_detail_path,
+        shadow_top10_path=shadow_top10_path,
     )
     results = [
         {
@@ -223,7 +242,7 @@ def run_mid_trend_strategy_validation(
             **execute_mid_trend_candidate(
                 candidate,
                 start_date=start_date,
-                end_date=end_date,
+                end_date=effective_end_date,
                 output_dir=output_path,
                 current_regime_path=current_regime_path,
                 funnel_detail_path=funnel_detail_path,
@@ -241,6 +260,7 @@ def run_mid_trend_strategy_validation(
     ranked.to_csv(scorecard_path, index=False)
     report_path.write_text(
         "# Mid Trend Validation\n\n"
+        f"Effective end date: {effective_end_date or 'none'}\n\n"
         f"Winner: {winner.get('strategy_id', 'none')}\n",
         encoding="utf-8",
     )
@@ -248,8 +268,76 @@ def run_mid_trend_strategy_validation(
         "candidates": candidates,
         "ranked_scorecard": ranked,
         "winner": winner,
+        "effective_end_date": effective_end_date,
         "paths": {"scorecard": str(scorecard_path), "report": str(report_path)},
     }
+
+
+def _resolve_output_dir(output_dir: str | Path) -> Path:
+    path = Path(output_dir)
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def _resolve_validation_effective_end_date(
+    *,
+    requested_end_date: str,
+    candidates: list[dict[str, object]],
+    current_regime_path: str | Path,
+    funnel_detail_path: str | Path,
+    shadow_top10_path: str | Path,
+) -> str | None:
+    if not candidates:
+        return None
+
+    candidate_coverage_ends: list[pd.Timestamp] = []
+    for candidate in candidates:
+        coverage_end = _candidate_coverage_end_date(
+            candidate,
+            current_regime_path=current_regime_path,
+            funnel_detail_path=funnel_detail_path,
+            shadow_top10_path=shadow_top10_path,
+        )
+        if coverage_end is not None:
+            candidate_coverage_ends.append(coverage_end)
+
+    effective_end = pd.Timestamp(requested_end_date)
+    if candidate_coverage_ends:
+        effective_end = min([effective_end, *candidate_coverage_ends])
+    return effective_end.date().isoformat()
+
+
+def _candidate_coverage_end_date(
+    candidate: dict[str, object],
+    *,
+    current_regime_path: str | Path,
+    funnel_detail_path: str | Path,
+    shadow_top10_path: str | Path,
+) -> pd.Timestamp | None:
+    strategy_id = str(candidate.get("strategy_id", ""))
+    if strategy_id == "current_mid_trend_strategy_v1":
+        return min(
+            _read_input_coverage_end_date(current_regime_path),
+            _read_input_coverage_end_date(funnel_detail_path),
+        )
+    if strategy_id == "mid_trend_shadow_backtest":
+        return _read_input_coverage_end_date(shadow_top10_path)
+    return None
+
+
+def _read_input_coverage_end_date(path: str | Path) -> pd.Timestamp:
+    frame = pd.read_csv(path, usecols=lambda column: column in {"trade_date", "date"})
+    if "trade_date" in frame.columns:
+        series = frame["trade_date"]
+    elif "date" in frame.columns:
+        series = frame["date"]
+    else:
+        raise ValueError(f"Input artifact has no coverage date column: {path}")
+    dates = pd.to_datetime(series, errors="coerce").dropna()
+    if dates.empty:
+        raise ValueError(f"Input artifact has no valid coverage dates: {path}")
+    return dates.max().normalize()
 
 
 def _normalize_summary_frame(summary: object) -> pd.DataFrame:
