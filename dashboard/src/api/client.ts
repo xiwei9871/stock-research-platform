@@ -47,6 +47,7 @@ import type {
   StrategyMetricRow,
   StrategyPositionSnapshot,
   StrategyReplayPayload,
+  StrategyScoreAuditSummary,
   StrategySignal,
   StrategyTrade,
   StrategyValidationRun,
@@ -233,6 +234,10 @@ export async function fetchReviewQueue(params: ReviewQueueParams = {}): Promise<
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   const query = searchParams.toString();
   return getJson(query ? `/api/review-queue?${query}` : '/api/review-queue');
+}
+
+export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {
+  return getJson(`/api/strategy-score-audit?trade_date=${encodeURIComponent(tradeDate)}`);
 }
 
 export async function fetchReviewQueueSnapshots(

@@ -4,7 +4,8 @@ import {
   fetchMarketMonitorEod,
   fetchPlatformReadiness,
   fetchPlatformSummary,
-  fetchPublicNews
+  fetchPublicNews,
+  fetchStrategyScoreAudit
 } from '../api/client';
 import type {
   MarketMonitorPayload,
@@ -13,6 +14,7 @@ import type {
   PlatformReadinessHealthItem,
   PlatformSummary,
   PublicNewsItem,
+  StrategyScoreAuditSummary,
   StrategyCatalogItem
 } from '../api/types';
 
@@ -136,6 +138,28 @@ function formatReadinessWarning(value: string) {
     'TopN preview unavailable': 'TopN 预览不可用'
   };
   return labels[value] ?? value;
+}
+
+function strategyScoreAuditStatusLabel(audit: StrategyScoreAuditSummary | null) {
+  if (!audit) return '-';
+  if (audit.overall_status === 'ok') return '正常';
+  if (audit.overall_status === 'warning') return '需关注';
+  if (audit.overall_status === 'missing') return '待补齐';
+  return audit.overall_status;
+}
+
+function strategyScoreAuditStatusClass(audit: StrategyScoreAuditSummary | null) {
+  if (!audit) return 'partial';
+  if (audit.overall_status === 'ok') return 'ready';
+  if (audit.overall_status === 'warning') return 'partial';
+  if (audit.overall_status === 'missing') return 'blocked';
+  return 'partial';
+}
+
+function strategyScoreAuditSummaryText(audit: StrategyScoreAuditSummary | null) {
+  if (!audit) return '读取中';
+  if (audit.overall_status === 'missing') return '暂无审计产物';
+  return `${audit.anomaly_row_count} 条异常`;
 }
 
 function errorMessage(err: unknown) {
@@ -296,6 +320,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [newsItems, setNewsItems] = useState<PublicNewsItem[]>([]);
   const [readiness, setReadiness] = useState<PlatformReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [scoreAudit, setScoreAudit] = useState<StrategyScoreAuditSummary | null>(null);
   const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +345,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setMarketMonitorLoading(true);
     setReadiness(null);
     setReadinessError(null);
+    setScoreAudit(null);
 
     const addWidgetWarning = (warning: string) => {
       setWidgetWarnings((current) => [...current, warning]);
@@ -399,6 +425,31 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!displayTradeDate || displayTradeDate === '-') {
+      setScoreAudit(null);
+      return;
+    }
+
+    let ignore = false;
+    void fetchStrategyScoreAudit(displayTradeDate).then(
+      (payload) => {
+        if (!ignore) {
+          setScoreAudit(payload);
+        }
+      },
+      () => {
+        if (!ignore) {
+          setScoreAudit(null);
+        }
+      }
+    );
+
+    return () => {
+      ignore = true;
+    };
+  }, [displayTradeDate]);
+
   return (
     <section className="home-cockpit" aria-label="策略指挥中心">
       <header className="workspace-header">
@@ -436,6 +487,13 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         <div>
           <span>风险状态</span>
           <strong className={`readiness-value ${readinessStatusClass(readiness?.status)}`}>{platformRiskStatus(readiness)}</strong>
+        </div>
+        <div className="status-strip-audit-cell">
+          <span>策略打分审计</span>
+          <strong className={`readiness-value ${strategyScoreAuditStatusClass(scoreAudit)}`}>
+            {strategyScoreAuditStatusLabel(scoreAudit)}
+          </strong>
+          <small>{strategyScoreAuditSummaryText(scoreAudit)}</small>
         </div>
       </section>
 

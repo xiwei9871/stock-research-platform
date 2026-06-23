@@ -573,6 +573,37 @@ export type PlatformSummary = {
   topn_preview: ScoreRow[];
 };
 
+export type StrategyScoreAuditStrategySummary = {
+  strategy_id: string;
+  row_count?: number;
+  selected_count?: number;
+  anomaly_count: number;
+};
+
+export type StrategyScoreAuditSampleRow = {
+  asset_id: string;
+  anomaly_flags: string[];
+  stock_name?: string | null;
+  strategy_id?: string | null;
+  published_score?: number | null;
+};
+
+export type StrategyScoreAuditSummary = {
+  trade_date: string;
+  status: string;
+  overall_status: 'ok' | 'warning' | 'missing' | string;
+  summary_path: string;
+  detail_path: string;
+  total_rows: number;
+  selected_rows: number;
+  anomaly_row_count: number;
+  anomaly_counts_by_type: Record<string, number>;
+  strategies: StrategyScoreAuditStrategySummary[];
+  sample_rows: StrategyScoreAuditSampleRow[];
+  warnings?: string[];
+  generated_at?: string;
+};
+
 export type PlatformReadinessStatus = 'OK' | 'PARTIAL' | 'BLOCKED' | 'ready' | 'partial' | 'missing_data';
 
 export type PlatformReadinessCheckStatus = PlatformReadinessStatus | 'unknown';

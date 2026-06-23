@@ -458,6 +458,11 @@ body {
   white-space: nowrap;
 }
 
+.status-strip small {
+  color: #667085;
+  font-size: 12px;
+}
+
 .readiness-strip small {
   display: block;
   margin-top: 4px;
@@ -675,6 +680,24 @@ body {
   color: #475467;
 }
 
+.status-chip.success {
+  border-color: #b7dfc8;
+  background: #eefaf2;
+  color: #146c2e;
+}
+
+.status-chip.warning {
+  border-color: #f2d39a;
+  background: #fff8e6;
+  color: #b45309;
+}
+
+.status-chip.danger {
+  border-color: #efc8c3;
+  background: #fff1f0;
+  color: #b42318;
+}
+
 .status-chip.positive {
   border-color: #b7dfc8;
   background: #eefaf2;
@@ -699,6 +722,14 @@ body {
 
 .command-status-strip {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.status-strip-audit-cell {
+  background: linear-gradient(180deg, #fffaf3 0%, #ffffff 100%) !important;
+}
+
+.audit-summary-panel {
+  align-content: start;
 }
 
 .readiness-value.ready {

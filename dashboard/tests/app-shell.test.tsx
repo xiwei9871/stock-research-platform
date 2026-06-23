@@ -35,6 +35,7 @@ import type {
 const apiMocks = vi.hoisted(() => ({
   fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
+  fetchStrategyScoreAudit: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchOverview: vi.fn(),
   fetchAssetProfile: vi.fn(),
@@ -854,6 +855,25 @@ describe('dashboard app shell', () => {
         }
       ]
     });
+    apiMocks.fetchStrategyScoreAudit.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'success',
+      overall_status: 'warning',
+      summary_path: '/tmp/strategy_score_audit_summary.json',
+      detail_path: '/tmp/strategy_score_audit_detail.csv',
+      total_rows: 15,
+      selected_rows: 15,
+      anomaly_row_count: 2,
+      anomaly_counts_by_type: {
+        mapped_score_without_raw_score: 1,
+        display_score_mismatch: 1
+      },
+      strategies: [
+        { strategy_id: 'lhb_shortline', anomaly_count: 1 },
+        { strategy_id: 'mid_trend', anomaly_count: 1 }
+      ],
+      sample_rows: []
+    });
     apiMocks.fetchStrategyCatalog.mockResolvedValue([
       {
         strategy_id: 'manual_v1_topn_rotation',
@@ -1077,11 +1097,17 @@ describe('dashboard app shell', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
+    const homeStatus = within(screen.getByRole('region', { name: '首页状态' }));
+    const scoreAuditCell = homeStatus.getByText('策略打分审计').closest('div');
+    expect(scoreAuditCell).not.toBeNull();
+    await waitFor(() => expect(within(scoreAuditCell as HTMLDivElement).getByText('需关注')).toBeInTheDocument());
+    expect(within(scoreAuditCell as HTMLDivElement).getByText('2 条异常')).toBeInTheDocument();
     expect(screen.getByText('启用策略表现')).toBeInTheDocument();
     expect(screen.getByText('策略持仓状态')).toBeInTheDocument();
     expect(screen.getByText('市场环境')).toBeInTheDocument();
     expect(screen.getByText('高质量新闻')).toBeInTheDocument();
     expect(screen.getByText('首页新闻')).toBeInTheDocument();
+    expect(apiMocks.fetchStrategyScoreAudit).toHaveBeenCalledWith('2026-06-12');
   });
 
   it('exposes the redesigned research cockpit navigation', async () => {
