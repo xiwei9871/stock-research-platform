@@ -179,6 +179,7 @@ from stock_research.serenity_tight3b_c2_experiment import (
 from stock_research.serenity_source_backed_evidence_fill import (
     run_serenity_source_backed_evidence_fill,
 )
+from stock_research.strategy_eod_publish import load_strategy_score_audit_summary
 from stock_research.topn_news_enrichment import run_topn_news_enrichment
 from stock_research.portfolio_backtest import run_portfolio_backtest
 from stock_research.p2.artifact_rollup import (
@@ -1174,6 +1175,9 @@ def build_parser() -> argparse.ArgumentParser:
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
 
     subparsers.add_parser("finance-audit")
+
+    strategy_score_audit = subparsers.add_parser("strategy-score-audit")
+    strategy_score_audit.add_argument("--trade-date", required=True)
 
     news_source_backfill = subparsers.add_parser("news-source-backfill")
     news_source_backfill.add_argument("--start-date", required=True)
@@ -3892,6 +3896,24 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "strategy-score-audit":
+        summary = load_strategy_score_audit_summary(trade_date=args.trade_date)
+        print(f"strategy_score_audit|trade_date|{summary['trade_date']}")
+        print(f"strategy_score_audit|detail|{summary['detail_path']}")
+        print(f"strategy_score_audit|summary|{summary['summary_path']}")
+        print(
+            "strategy_score_audit|rows|"
+            f"{summary.get('total_rows', 0)}|selected|{summary.get('selected_rows', 0)}|"
+            f"anomaly_rows|{summary.get('anomaly_row_count', 0)}"
+        )
+        for anomaly_type, count in (summary.get("anomaly_counts_by_type") or {}).items():
+            print(f"strategy_score_audit|anomaly|{anomaly_type}|{count}")
+        for strategy in summary.get("strategies", []):
+            print(
+                "strategy_score_audit|strategy|"
+                f"{strategy.get('strategy_id', '')}|rows|{strategy.get('row_count', 0)}|"
+                f"selected|{strategy.get('selected_count', 0)}|anomalies|{strategy.get('anomaly_count', 0)}"
+            )
     elif args.command == "news-source-backfill":
         result = run_news_source_backfill(
             start_date=args.start_date,

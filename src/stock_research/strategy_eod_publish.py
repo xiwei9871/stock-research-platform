@@ -18,6 +18,7 @@ from stock_research.lhb_data import run_lhb_event_features_build
 from stock_research.news_features import NEWS_FEATURE_COLUMNS, build_news_feature_daily
 from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
 from stock_research.strategy_contracts import OFFICIAL_MAX_POSITION_WEIGHT, OFFICIAL_TRANSACTION_COST_BPS
+from stock_research.strategy_score_audit import build_strategy_score_audit, summarize_strategy_score_audit
 from stock_research.tech_bottleneck_eod import run_tech_bottleneck_eod
 from stock_research.tech_bottleneck_v1 import TECH_BOTTLENECK_V1_CANDIDATES_PATH
 from stock_research.topn_news_enrichment import build_topn_news_enrichment
@@ -113,7 +114,7 @@ def publish_strategy_eod(
     if not selected_trade_date:
         raise ValueError("trade_date is required because latest market date is unavailable")
 
-    output_dir = Path(output_root or DEFAULT_OUTPUT_ROOT) / "research" / "strategy_daily_eod" / selected_trade_date
+    output_dir = _strategy_eod_output_dir(selected_trade_date, output_root=output_root)
     output_dir.mkdir(parents=True, exist_ok=True)
     run_id = f"strategy-eod-{selected_trade_date}-local"
     started_at = datetime.now(timezone.utc)
@@ -121,6 +122,7 @@ def publish_strategy_eod(
     _ensure_strategy_dependencies(selected_trade_date, output_dir=output_dir)
 
     entries: list[dict[str, Any]] = []
+    strategy_results: dict[str, dict[str, Any]] = {}
     entries.extend(
         _build_base_manifest_entries(
             run_id=run_id,
@@ -157,6 +159,7 @@ def publish_strategy_eod(
             )
             entries.append(entry)
             review_frames.append(review)
+            strategy_results[strategy_id] = result
     except Exception as exc:
         module = STRATEGY_EOD_MODULES.get(strategy_id, f"strategy_{strategy_id}")
         entries.append(
@@ -235,6 +238,7 @@ def publish_strategy_eod(
     tech_review_path = Path(str(tech_result.get("review_path") or ""))
     if tech_review_path.exists():
         review_frames.append(pd.read_csv(tech_review_path))
+    strategy_results["tech_bottleneck"] = _strategy_score_audit_result(tech_result, tech_review_path=tech_review_path)
 
     review_path, review_rows = _write_review_queue(review_frames, output_dir)
     entries.append(
@@ -258,6 +262,12 @@ def publish_strategy_eod(
                 "review_path": str(review_path),
             },
         )
+    )
+    score_audit = _write_strategy_score_audit_artifacts(
+        trade_date=selected_trade_date,
+        output_dir=output_dir,
+        review_rows=review_rows,
+        strategy_results=strategy_results,
     )
 
     entries.extend(
@@ -295,9 +305,30 @@ def publish_strategy_eod(
         "output_dir": str(output_dir),
         "manifest_modules": [entry["module"] for entry in entries],
         "review_rows": len(review_rows),
+        "score_audit": score_audit,
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
+
+
+def load_strategy_score_audit_summary(
+    *,
+    trade_date: str,
+    output_root: str | Path | None = None,
+) -> dict[str, Any]:
+    output_dir = _strategy_eod_output_dir(trade_date, output_root=output_root)
+    summary_path = output_dir / "strategy_score_audit_summary.json"
+    if not summary_path.exists():
+        raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary.setdefault("trade_date", trade_date)
+    summary.setdefault("detail_path", str(output_dir / "strategy_score_audit_detail.csv"))
+    summary.setdefault("summary_path", str(summary_path))
+    return summary
+
+
+def _strategy_eod_output_dir(trade_date: str, *, output_root: str | Path | None = None) -> Path:
+    return Path(output_root or DEFAULT_OUTPUT_ROOT) / "research" / "strategy_daily_eod" / trade_date
 
 
 def _latest_market_date() -> str:
@@ -395,6 +426,38 @@ def _prepare_tech_bottleneck_base_candidate_source(*, trade_date: str, output_di
     return output
 
 
+def _strategy_score_audit_result(tech_result: dict[str, Any], *, tech_review_path: Path) -> dict[str, Any]:
+    audit_result = dict(tech_result)
+    if "review_rows" in audit_result:
+        return audit_result
+    if tech_review_path.exists():
+        audit_result["review_rows"] = pd.read_csv(tech_review_path)
+    return audit_result
+
+
+def _write_strategy_score_audit_artifacts(
+    *,
+    trade_date: str,
+    output_dir: Path,
+    review_rows: list[dict[str, Any]],
+    strategy_results: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    detail = build_strategy_score_audit(
+        trade_date=trade_date,
+        review_rows=review_rows,
+        strategy_results=strategy_results,
+        display_rows=review_rows,
+    )
+    detail_path = output_dir / "strategy_score_audit_detail.csv"
+    summary_path = output_dir / "strategy_score_audit_summary.json"
+    detail.to_csv(detail_path, index=False)
+    summary = summarize_strategy_score_audit(detail, trade_date=trade_date)
+    summary["detail_path"] = str(detail_path)
+    summary["summary_path"] = str(summary_path)
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return summary
+
+
 def _has_rows(sql: str, trade_date: str) -> bool:
     with connect(SETTINGS.research_service) as conn:
         rows = fetch_all(conn, sql, [trade_date])
@@ -490,7 +553,14 @@ def _write_strategy_artifacts(
     positions = _records_frame(result.get("positions"))
     positions.to_csv(positions_path, index=False)
     _records_frame(result.get("trades")).to_csv(trades_path, index=False)
-    review = _review_rows_from_result(result, trade_date=trade_date)
+    excluded_lhb_assets = (
+        _lhb_delisting_assets_for_trade_date(trade_date) if strategy_id == "lhb_shortline" else set()
+    )
+    review = _review_rows_from_result(
+        result,
+        trade_date=trade_date,
+        excluded_lhb_assets=excluded_lhb_assets,
+    )
     review.to_csv(review_path, index=False)
 
     summary = dict(result.get("summary") or {})
@@ -536,7 +606,12 @@ def _write_strategy_artifacts(
     return entry, review
 
 
-def _review_rows_from_result(result: dict[str, Any], *, trade_date: str) -> pd.DataFrame:
+def _review_rows_from_result(
+    result: dict[str, Any],
+    *,
+    trade_date: str,
+    excluded_lhb_assets: set[str] | None = None,
+) -> pd.DataFrame:
     positions = _records_frame(result.get("positions"))
     strategy_id = str(result.get("strategy_id") or "")
     strategy_name = str(result.get("strategy_name") or STRATEGY_EOD_NAMES.get(strategy_id, strategy_id))
@@ -557,16 +632,30 @@ def _review_rows_from_result(result: dict[str, Any], *, trade_date: str) -> pd.D
         "review_tier",
     ]
     if positions.empty:
-        return pd.DataFrame(columns=columns)
+        if strategy_id != "lhb_shortline":
+            return pd.DataFrame(columns=columns)
+        candidate_frame = _lhb_same_day_candidate_frame(result, trade_date=trade_date)
+        if candidate_frame.empty:
+            return pd.DataFrame(columns=columns)
+        frame = candidate_frame.copy()
+    else:
+        frame = positions.copy()
 
-    frame = positions.copy()
     date_col = _first_existing_column(frame, ["trade_date", "date", "rebalance_date"])
     if date_col:
         frame[date_col] = pd.to_datetime(frame[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
         eligible = frame[frame[date_col].le(trade_date)].copy()
         if not eligible.empty:
             latest_date = str(eligible[date_col].max())
-            frame = eligible[eligible[date_col].eq(latest_date)].copy()
+            if strategy_id == "lhb_shortline" and latest_date < trade_date:
+                candidate_frame = _lhb_same_day_candidate_frame(result, trade_date=trade_date)
+                if not candidate_frame.empty:
+                    frame = candidate_frame.copy()
+                    date_col = _first_existing_column(frame, ["trade_date", "date", "rebalance_date"])
+                else:
+                    frame = eligible[eligible[date_col].eq(latest_date)].copy()
+            else:
+                frame = eligible[eligible[date_col].eq(latest_date)].copy()
     asset_col = _first_existing_column(frame, ["asset_id", "symbol", "ts_code", "stock_code"])
     if not asset_col:
         return pd.DataFrame(columns=columns)
@@ -582,8 +671,15 @@ def _review_rows_from_result(result: dict[str, Any], *, trade_date: str) -> pd.D
         ],
     )
     score_lookup = _strategy_score_lookup_from_result(result)
+    excluded_assets = set(excluded_lhb_assets or set())
+    if strategy_id == "lhb_shortline":
+        excluded_assets.update(_lhb_delisting_assets_from_result(result))
     rows = []
     for index, row in frame.reset_index(drop=True).iterrows():
+        raw_asset_id = str(row.get(asset_col) or "")
+        normalized_asset_id = _asset_id_from_review_code(raw_asset_id)
+        if raw_asset_id in excluded_assets or normalized_asset_id in excluded_assets:
+            continue
         rank = _optional_int(row.get(rank_col)) if rank_col else index + 1
         score = _score_value(row.get(score_col), score_col)
         resolved_score_col = score_col
@@ -598,7 +694,7 @@ def _review_rows_from_result(result: dict[str, Any], *, trade_date: str) -> pd.D
         rows.append(
             {
                 "trade_date": trade_date,
-                "asset_id": str(row.get(asset_col) or ""),
+                "asset_id": raw_asset_id,
                 "rank": rank or index + 1,
                 "score_total": score,
                 "score_source": resolved_score_col or "",
@@ -612,7 +708,81 @@ def _review_rows_from_result(result: dict[str, Any], *, trade_date: str) -> pd.D
                 "review_tier": "top5_focus" if (rank or index + 1) <= 5 else "watch",
             }
         )
-    return pd.DataFrame(rows, columns=columns).sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
+    review = pd.DataFrame(rows, columns=columns)
+    if review.empty:
+        return review
+    if strategy_id == "lhb_shortline" and "score_total" in review.columns:
+        review["_sort_score"] = pd.to_numeric(review["score_total"], errors="coerce")
+        review = review.sort_values(["_sort_score", "asset_id"], ascending=[False, True], kind="stable").drop(columns=["_sort_score"])
+        review["rank"] = range(1, len(review) + 1)
+        review["source_rank"] = review["rank"]
+        review["review_tier"] = review["rank"].map(lambda rank: "top5_focus" if int(rank) <= 5 else "watch")
+        return review.reset_index(drop=True).reindex(columns=columns)
+    return review.sort_values(["rank", "asset_id"], kind="stable").reset_index(drop=True)
+
+
+def _lhb_same_day_candidate_frame(result: dict[str, Any], *, trade_date: str) -> pd.DataFrame:
+    candidates = _records_frame(result.get("candidates"))
+    if candidates.empty:
+        return pd.DataFrame()
+    if "trade_date" not in candidates.columns:
+        return pd.DataFrame()
+    frame = candidates.copy()
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame = frame[frame["trade_date"].eq(trade_date)].copy()
+    if frame.empty:
+        return pd.DataFrame()
+    if "auction_enhanced_score" in frame.columns:
+        scored = pd.to_numeric(frame["auction_enhanced_score"], errors="coerce")
+        frame = frame[scored.notna()].copy()
+    return frame
+
+
+def _lhb_delisting_assets_for_trade_date(trade_date: str) -> set[str]:
+    sql = """
+        SELECT ts_code, lhb_reason
+        FROM factor.lhb_event_features_daily
+        WHERE trade_date = %s
+          AND lhb_reason LIKE '%%退市%%'
+    """
+    with connect(SETTINGS.research_service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    excluded: set[str] = set()
+    for row in rows:
+        raw_asset_id = str(row.get("ts_code") or "")
+        if raw_asset_id:
+            excluded.add(raw_asset_id)
+        normalized_asset_id = _asset_id_from_review_code(raw_asset_id)
+        if normalized_asset_id:
+            excluded.add(normalized_asset_id)
+    return excluded
+
+
+def _lhb_delisting_assets_from_result(result: dict[str, Any]) -> set[str]:
+    frames = [
+        _records_frame(result.get("signals")),
+        _records_frame(result.get("candidates")),
+    ]
+    excluded: set[str] = set()
+    reason_columns = ["reason", "list_reason", "lhb_reason", "abnormal_reason", "title", "security_name", "stock_name", "name"]
+    delisting_terms = ("退市", "退市整理")
+    for frame in frames:
+        if frame.empty:
+            continue
+        asset_col = _first_existing_column(frame, ["asset_id", "ts_code", "symbol", "stock_code"])
+        if not asset_col:
+            continue
+        for row in frame.to_dict("records"):
+            reason_text = " ".join(str(row.get(column) or "") for column in reason_columns if column in row)
+            if not any(term in reason_text for term in delisting_terms):
+                continue
+            raw_asset_id = str(row.get(asset_col) or "")
+            if raw_asset_id:
+                excluded.add(raw_asset_id)
+            normalized_asset_id = _asset_id_from_review_code(raw_asset_id)
+            if normalized_asset_id:
+                excluded.add(normalized_asset_id)
+    return excluded
 
 
 def _strategy_score_lookup_from_result(result: dict[str, Any]) -> dict[tuple[str, str], tuple[float, str]]:

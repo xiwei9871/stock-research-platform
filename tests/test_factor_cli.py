@@ -336,6 +336,19 @@ def test_cli_accepts_technical_feature_performance_review_command():
     assert args.output_dir == "outputs/technical_performance"
 
 
+def test_cli_accepts_strategy_score_audit_command():
+    args = build_parser().parse_args(
+        [
+            "strategy-score-audit",
+            "--trade-date",
+            "2026-06-22",
+        ]
+    )
+
+    assert args.command == "strategy-score-audit"
+    assert args.trade_date == "2026-06-22"
+
+
 def test_cli_accepts_p2_artifact_rollup_command():
     args = build_parser().parse_args(
         [
@@ -6750,6 +6763,40 @@ def test_data_audit_cli_prints_lines(monkeypatch, capsys):
         "data_audit|market_daily_bar|short_history|rows|10|dates|2|"
         "min|2024-01-01|max|2024-01-02"
     )
+
+
+def test_strategy_score_audit_cli_prints_summary_lines(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(
+        cli,
+        "load_strategy_score_audit_summary",
+        lambda **kwargs: {
+            "trade_date": "2026-06-22",
+            "detail_path": str(tmp_path / "strategy_score_audit_detail.csv"),
+            "summary_path": str(tmp_path / "strategy_score_audit_summary.json"),
+            "total_rows": 3,
+            "selected_rows": 3,
+            "anomaly_row_count": 1,
+            "anomaly_counts_by_type": {"mapped_score_without_raw_score": 1},
+            "strategies": [
+                {"strategy_id": "lhb_shortline", "row_count": 1, "selected_count": 1, "anomaly_count": 1},
+                {"strategy_id": "mid_trend", "row_count": 1, "selected_count": 1, "anomaly_count": 0},
+                {"strategy_id": "tech_bottleneck", "row_count": 1, "selected_count": 1, "anomaly_count": 0},
+            ],
+        },
+    )
+
+    cli.main_for_args(["strategy-score-audit", "--trade-date", "2026-06-22"])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "strategy_score_audit|trade_date|2026-06-22",
+        f"strategy_score_audit|detail|{tmp_path / 'strategy_score_audit_detail.csv'}",
+        f"strategy_score_audit|summary|{tmp_path / 'strategy_score_audit_summary.json'}",
+        "strategy_score_audit|rows|3|selected|3|anomaly_rows|1",
+        "strategy_score_audit|anomaly|mapped_score_without_raw_score|1",
+        "strategy_score_audit|strategy|lhb_shortline|rows|1|selected|1|anomalies|1",
+        "strategy_score_audit|strategy|mid_trend|rows|1|selected|1|anomalies|0",
+        "strategy_score_audit|strategy|tech_bottleneck|rows|1|selected|1|anomalies|0",
+    ]
 
 
 def test_backfill_control_plane_cli_accepts_commands():
