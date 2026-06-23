@@ -153,19 +153,26 @@ def build_mid_trend_replay_audit(
     trades: pd.DataFrame,
     prices: pd.DataFrame,
 ) -> dict[str, pd.DataFrame]:
-    daily_target_snapshot = holdings.copy()
-    daily_rebalance_actions = trades.copy()
-    trade_audit_detail = trades.copy()
-    trade_audit_detail["audit_label"] = trade_audit_detail["side"].map(
-        {"buy": "bad_buy", "sell": "bad_sell"}
-    ).fillna("")
-    trade_audit_detail["strategy_id"] = strategy_id
+    daily_target_snapshot, daily_rebalance_actions, normalized_prices = (
+        _normalize_mid_trend_replay_inputs(
+            strategy_id=strategy_id,
+            holdings=holdings,
+            trades=trades,
+            prices=prices,
+        )
+    )
+    trade_audit_detail = _build_mid_trend_trade_audit_detail(
+        strategy_id=strategy_id,
+        trades=daily_rebalance_actions,
+        prices=normalized_prices,
+    )
     monthly_issue_summary = (
         trade_audit_detail.assign(
             month=pd.to_datetime(trade_audit_detail["trade_date"])
             .dt.to_period("M")
             .astype(str)
         )
+        .loc[lambda frame: frame["audit_label"].astype(str).ne("")]
         .groupby(["month", "audit_label"], as_index=False)
         .size()
         .rename(columns={"size": "issue_count"})
@@ -176,6 +183,209 @@ def build_mid_trend_replay_audit(
         "trade_audit_detail": trade_audit_detail,
         "monthly_issue_summary": monthly_issue_summary,
     }
+
+
+def _normalize_mid_trend_replay_inputs(
+    *,
+    strategy_id: str,
+    holdings: pd.DataFrame,
+    trades: pd.DataFrame,
+    prices: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    normalized_prices = _normalize_mid_trend_replay_prices(prices)
+    if strategy_id == "current_mid_trend_strategy_v1":
+        return (
+            _normalize_current_replay_holdings(holdings),
+            _normalize_current_replay_trades(trades),
+            normalized_prices,
+        )
+    if strategy_id == "mid_trend_shadow_backtest":
+        return (
+            _normalize_shadow_replay_positions(holdings),
+            _normalize_shadow_replay_trades(trades),
+            normalized_prices,
+        )
+    raise ValueError(f"Unsupported replay audit strategy family: {strategy_id}")
+
+
+def _normalize_current_replay_holdings(holdings: pd.DataFrame) -> pd.DataFrame:
+    _require_replay_columns(
+        holdings,
+        required={"trade_date", "asset_id", "target_weight"},
+        label="current holdings",
+    )
+    frame = holdings.copy()
+    frame["trade_date"] = _normalize_date_series(frame["trade_date"], "current holdings trade_date")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["target_weight"] = pd.to_numeric(frame["target_weight"], errors="coerce").fillna(0.0)
+    return frame.sort_values(["trade_date", "asset_id"]).reset_index(drop=True)
+
+
+def _normalize_shadow_replay_positions(positions: pd.DataFrame) -> pd.DataFrame:
+    _require_replay_columns(
+        positions,
+        required={"rebalance_date", "asset_id", "weight"},
+        label="shadow positions",
+    )
+    frame = positions.copy().rename(
+        columns={"rebalance_date": "trade_date", "weight": "target_weight"}
+    )
+    frame["trade_date"] = _normalize_date_series(frame["trade_date"], "shadow positions rebalance_date")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["target_weight"] = pd.to_numeric(frame["target_weight"], errors="coerce").fillna(0.0)
+    return frame.sort_values(["trade_date", "asset_id"]).reset_index(drop=True)
+
+
+def _normalize_current_replay_trades(trades: pd.DataFrame) -> pd.DataFrame:
+    _require_replay_columns(
+        trades,
+        required={"trade_date", "asset_id", "action"},
+        label="current trades",
+    )
+    frame = trades.copy()
+    frame["trade_date"] = _normalize_date_series(frame["trade_date"], "current trades trade_date")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["side"] = _map_replay_trade_side(frame["action"], label="current trades action")
+    return frame.sort_values(["trade_date", "asset_id"]).reset_index(drop=True)
+
+
+def _normalize_shadow_replay_trades(trades: pd.DataFrame) -> pd.DataFrame:
+    trade_date_column = _first_present_column(
+        trades,
+        ["execution_date", "rebalance_date", "signal_date"],
+        label="shadow trades",
+    )
+    side_column = _first_present_column(
+        trades,
+        ["side", "action"],
+        label="shadow trades",
+    )
+    _require_replay_columns(
+        trades,
+        required={"asset_id", trade_date_column, side_column},
+        label="shadow trades",
+    )
+    frame = trades.copy().rename(columns={trade_date_column: "trade_date"})
+    frame["trade_date"] = _normalize_date_series(frame["trade_date"], "shadow trades trade date")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["side"] = _map_replay_trade_side(frame[side_column], label="shadow trades side")
+    return frame.sort_values(["trade_date", "asset_id"]).reset_index(drop=True)
+
+
+def _normalize_mid_trend_replay_prices(prices: pd.DataFrame) -> pd.DataFrame:
+    date_column = _first_present_column(prices, ["trade_date", "date"], label="replay prices")
+    _require_replay_columns(
+        prices,
+        required={"asset_id", "close", date_column},
+        label="replay prices",
+    )
+    frame = prices.copy().rename(columns={date_column: "trade_date"})
+    frame["trade_date"] = _normalize_date_series(frame["trade_date"], "replay prices trade date")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+    frame = frame.dropna(subset=["close"])
+    if frame.empty:
+        raise ValueError("replay prices contain no valid close rows")
+    return frame.sort_values(["asset_id", "trade_date"]).reset_index(drop=True)
+
+
+def _build_mid_trend_trade_audit_detail(
+    *,
+    strategy_id: str,
+    trades: pd.DataFrame,
+    prices: pd.DataFrame,
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for trade in trades.to_dict("records"):
+        forward_return, entry_date, exit_date = _compute_replay_forward_return(
+            prices=prices,
+            asset_id=str(trade["asset_id"]),
+            trade_date=str(trade["trade_date"]),
+        )
+        side = str(trade["side"])
+        audit_label = ""
+        if pd.notna(forward_return):
+            if side == "buy" and float(forward_return) < 0.0:
+                audit_label = "bad_buy"
+            elif side == "sell" and float(forward_return) > 0.02:
+                audit_label = "bad_sell"
+        row = dict(trade)
+        row["strategy_id"] = strategy_id
+        row["forward_return"] = forward_return
+        row["replay_entry_date"] = entry_date
+        row["replay_exit_date"] = exit_date
+        row["audit_label"] = audit_label
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _compute_replay_forward_return(
+    *,
+    prices: pd.DataFrame,
+    asset_id: str,
+    trade_date: str,
+) -> tuple[float, str | None, str | None]:
+    asset_prices = prices[prices["asset_id"].astype(str) == asset_id].copy()
+    if asset_prices.empty:
+        return float("nan"), None, None
+    trade_ts = pd.Timestamp(trade_date)
+    asset_prices["trade_date_ts"] = pd.to_datetime(asset_prices["trade_date"], errors="coerce")
+    future = asset_prices[asset_prices["trade_date_ts"] >= trade_ts].sort_values("trade_date_ts")
+    if len(future) < 2:
+        return float("nan"), None, None
+    entry = future.iloc[0]
+    exit_row = future.iloc[-1]
+    entry_close = float(entry["close"])
+    exit_close = float(exit_row["close"])
+    if entry_close == 0:
+        return float("nan"), None, None
+    return (
+        exit_close / entry_close - 1.0,
+        str(entry["trade_date_ts"].date()),
+        str(exit_row["trade_date_ts"].date()),
+    )
+
+
+def _require_replay_columns(
+    frame: pd.DataFrame,
+    *,
+    required: set[str],
+    label: str,
+) -> None:
+    missing = sorted(column for column in required if column not in frame.columns)
+    if missing:
+        raise ValueError(f"{label} missing required columns: {', '.join(missing)}")
+
+
+def _first_present_column(frame: pd.DataFrame, candidates: list[str], *, label: str) -> str:
+    for column in candidates:
+        if column in frame.columns:
+            return column
+    raise ValueError(f"{label} missing any of expected columns: {', '.join(candidates)}")
+
+
+def _normalize_date_series(series: pd.Series, label: str) -> pd.Series:
+    dates = pd.to_datetime(series, errors="coerce")
+    if dates.isna().any():
+        raise ValueError(f"{label} contains invalid dates")
+    return dates.dt.strftime("%Y-%m-%d")
+
+
+def _map_replay_trade_side(series: pd.Series, *, label: str) -> pd.Series:
+    normalized = series.astype(str).str.lower().map(
+        {
+            "buy": "buy",
+            "increase": "buy",
+            "enter": "buy",
+            "sell": "sell",
+            "decrease": "sell",
+            "exit": "sell",
+        }
+    )
+    if normalized.isna().any():
+        unsupported = sorted(series[normalized.isna()].astype(str).unique().tolist())
+        raise ValueError(f"{label} contains unsupported trade actions: {', '.join(unsupported)}")
+    return normalized
 
 
 def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame:

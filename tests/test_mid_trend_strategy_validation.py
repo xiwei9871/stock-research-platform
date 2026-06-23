@@ -352,31 +352,34 @@ def test_rank_mid_trend_validation_scorecard_prefers_zero_drawdown_when_other_me
     assert ranked.iloc[0]["strategy_id"] == "zero_drawdown"
 
 
-def test_build_mid_trend_replay_audit_outputs_core_artifacts() -> None:
-    holdings = pd.DataFrame(
-        [
-            {"trade_date": "2025-01-02", "asset_id": "A", "target_weight": 0.5},
-            {"trade_date": "2025-01-03", "asset_id": "B", "target_weight": 0.5},
-        ]
+def test_build_mid_trend_replay_audit_outputs_core_artifacts_for_current_strategy() -> None:
+    current_result = build_current_mid_trend_strategy_v1_from_frames(
+        regime=_current_regime_frame(),
+        funnel=_current_funnel_frame(),
+        prices=_current_prices_frame(),
+        asset_names=_current_asset_names_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
     )
-    trades = pd.DataFrame(
+    prices = pd.concat(
         [
-            {"trade_date": "2025-01-03", "asset_id": "A", "side": "sell"},
-            {"trade_date": "2025-01-03", "asset_id": "B", "side": "buy"},
-        ]
-    )
-    prices = pd.DataFrame(
-        [
-            {"trade_date": "2025-01-03", "asset_id": "B", "close": 10},
-            {"trade_date": "2025-01-10", "asset_id": "B", "close": 9},
-            {"trade_date": "2025-01-17", "asset_id": "B", "close": 8},
-        ]
+            _current_prices_frame(),
+            pd.DataFrame(
+                [
+                    {"trade_date": "2025-01-10", "asset_id": "A", "high": 15.5, "low": 14.5, "close": 15.0},
+                    {"trade_date": "2025-01-10", "asset_id": "C", "high": 30.5, "low": 29.5, "close": 30.0},
+                    {"trade_date": "2025-01-10", "asset_id": "D", "high": 38.5, "low": 37.5, "close": 38.0},
+                ]
+            ),
+        ],
+        ignore_index=True,
     )
 
     result = build_mid_trend_replay_audit(
-        strategy_id="winner",
-        holdings=holdings,
-        trades=trades,
+        strategy_id="current_mid_trend_strategy_v1",
+        holdings=current_result["holdings"],
+        trades=current_result["trades"],
         prices=prices,
     )
 
@@ -386,7 +389,66 @@ def test_build_mid_trend_replay_audit_outputs_core_artifacts() -> None:
         "trade_audit_detail",
         "monthly_issue_summary",
     }
+    assert {"trade_date", "side", "forward_return", "audit_label"} <= set(
+        result["trade_audit_detail"].columns
+    )
     assert "bad_buy" in set(result["trade_audit_detail"]["audit_label"])
+    assert "bad_sell" in set(result["trade_audit_detail"]["audit_label"])
+
+
+def test_build_mid_trend_replay_audit_normalizes_shadow_strategy_outputs() -> None:
+    shadow_result = build_mid_trend_shadow_backtest_from_frames(
+        shadow_top10=_shadow_top10_frame(),
+        prices=_shadow_prices_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
+        transaction_cost_bps=10.0,
+    )
+    prices = pd.concat(
+        [
+            _shadow_prices_frame(),
+            pd.DataFrame(
+                [
+                    {"trade_date": "2025-01-10", "asset_id": "A", "close": 13.0},
+                    {"trade_date": "2025-01-10", "asset_id": "C", "close": 28.0},
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    result = build_mid_trend_replay_audit(
+        strategy_id="mid_trend_shadow_backtest",
+        holdings=shadow_result["positions"],
+        trades=shadow_result["trades"],
+        prices=prices,
+    )
+
+    assert {"trade_date", "target_weight"} <= set(result["daily_target_snapshot"].columns)
+    assert {"trade_date", "side", "forward_return"} <= set(result["trade_audit_detail"].columns)
+    assert set(result["trade_audit_detail"]["side"]) <= {"buy", "sell"}
+
+
+def test_build_mid_trend_replay_audit_rejects_malformed_trade_inputs() -> None:
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-03", "asset_id": "B", "close": 10},
+            {"trade_date": "2025-01-10", "asset_id": "B", "close": 9},
+        ]
+    )
+
+    try:
+        build_mid_trend_replay_audit(
+            strategy_id="current_mid_trend_strategy_v1",
+            holdings=pd.DataFrame([{"trade_date": "2025-01-03", "asset_id": "B", "target_weight": 1.0}]),
+            trades=pd.DataFrame([{"asset_id": "B"}]),
+            prices=prices,
+        )
+    except ValueError as exc:
+        assert "trade" in str(exc).lower()
+    else:
+        raise AssertionError("Expected malformed replay trade inputs to raise ValueError")
 
 
 def test_run_mid_trend_strategy_validation_returns_ranked_winner(
