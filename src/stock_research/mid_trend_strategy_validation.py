@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+SEVERE_DRAWDOWN_THRESHOLD = 0.20
+
 
 def discover_mid_trend_strategy_candidates() -> list[dict[str, object]]:
     return [
@@ -99,6 +101,8 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
                 "return_drawdown_ratio": (
                     total_return / abs(max_drawdown)
                     if max_drawdown < 0
+                    else float("inf")
+                    if max_drawdown == 0 and total_return > 0
                     else float("nan")
                 ),
                 "monthly_win_rate": monthly_win_rate,
@@ -114,7 +118,8 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
 def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame:
     ranked = scorecard.copy()
     ranked["drawdown_penalty"] = ranked["max_drawdown"].abs()
-    ranked["severe_drawdown"] = ranked["drawdown_penalty"] > 0.20
+    # Treat clearly bad drawdown as a coarse filter, then rank on efficiency and stability.
+    ranked["severe_drawdown"] = ranked["drawdown_penalty"] > SEVERE_DRAWDOWN_THRESHOLD
     return ranked.sort_values(
         [
             "severe_drawdown",

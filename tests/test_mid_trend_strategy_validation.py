@@ -273,6 +273,51 @@ def test_rank_mid_trend_validation_scorecard_prefers_better_drawdown_efficiency_
     assert ranked.iloc[-1]["strategy_id"] == "severe_drawdown"
 
 
+def test_rank_mid_trend_validation_scorecard_prefers_zero_drawdown_when_other_metrics_are_strong() -> None:
+    scorecard = build_mid_trend_validation_scorecard(
+        [
+            {
+                "strategy_id": "zero_drawdown",
+                "summary_frame": pd.DataFrame(
+                    [
+                        {"metric": "total_return", "value": 0.30},
+                        {"metric": "max_drawdown", "value": 0.0},
+                        {"metric": "average_turnover", "value": 0.10},
+                    ]
+                ),
+                "equity_frame": pd.DataFrame(
+                    [
+                        {"date": "2025-01-31", "equity": 1.05},
+                        {"date": "2025-02-28", "equity": 1.08},
+                    ]
+                ),
+            },
+            {
+                "strategy_id": "solid_but_lower",
+                "summary_frame": pd.DataFrame(
+                    [
+                        {"metric": "total_return", "value": 0.24},
+                        {"metric": "max_drawdown", "value": -0.10},
+                        {"metric": "average_turnover", "value": 0.30},
+                    ]
+                ),
+                "equity_frame": pd.DataFrame(
+                    [
+                        {"date": "2025-01-31", "equity": 1.04},
+                        {"date": "2025-02-28", "equity": 1.06},
+                    ]
+                ),
+            },
+        ]
+    )
+    zero_drawdown_row = scorecard.loc[scorecard["strategy_id"] == "zero_drawdown"].iloc[0]
+    assert zero_drawdown_row["return_drawdown_ratio"] == float("inf")
+
+    ranked = rank_mid_trend_validation_scorecard(scorecard)
+
+    assert ranked.iloc[0]["strategy_id"] == "zero_drawdown"
+
+
 def _current_regime_frame() -> pd.DataFrame:
     return pd.DataFrame(
         [
