@@ -2995,9 +2995,27 @@ def build_parser() -> argparse.ArgumentParser:
     mid_trend_shadow_backtest.add_argument("--adjust-type", default="hfq")
     mid_trend_shadow_backtest.add_argument("--output-dir", default="outputs/research")
 
+    from stock_research.mid_trend_strategy_validation import (
+        DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
+        DEFAULT_CURRENT_REGIME_PATH,
+        DEFAULT_SHADOW_TOP10_PATH,
+    )
+
     mid_trend_validation = subparsers.add_parser("validate-mid-trend-strategies")
     mid_trend_validation.add_argument("--start-date", required=True)
     mid_trend_validation.add_argument("--end-date", required=True)
+    mid_trend_validation.add_argument(
+        "--current-regime-path",
+        default=str(DEFAULT_CURRENT_REGIME_PATH),
+    )
+    mid_trend_validation.add_argument(
+        "--funnel-detail-path",
+        default=str(DEFAULT_CURRENT_FUNNEL_DETAIL_PATH),
+    )
+    mid_trend_validation.add_argument(
+        "--shadow-top10-path",
+        default=str(DEFAULT_SHADOW_TOP10_PATH),
+    )
     mid_trend_validation.add_argument(
         "--output-dir",
         default="outputs/research/mid_trend_validation",
@@ -6189,6 +6207,9 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             start_date=args.start_date,
             end_date=args.end_date,
             output_dir=args.output_dir,
+            current_regime_path=args.current_regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            shadow_top10_path=args.shadow_top10_path,
         )
         print(f"mid_trend_validation|winner|{result['winner'].get('strategy_id', 'none')}")
         print(f"mid_trend_validation|scorecard|{result['paths']['scorecard']}")

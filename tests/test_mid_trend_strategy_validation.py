@@ -16,6 +16,7 @@ import stock_research.mid_trend_strategy_validation as mid_trend_strategy_valida
 from stock_research.mid_trend_strategy_validation import (
     build_mid_trend_validation_scorecard,
     discover_mid_trend_strategy_candidates,
+    execute_mid_trend_candidate,
     filter_complete_mid_trend_candidates,
     rank_mid_trend_validation_scorecard,
     run_mid_trend_strategy_validation,
@@ -367,7 +368,7 @@ def test_run_mid_trend_strategy_validation_returns_ranked_winner(
     )
     monkeypatch.setattr(
         "stock_research.mid_trend_strategy_validation.execute_mid_trend_candidate",
-        lambda candidate, start_date, end_date, output_dir: {
+        lambda candidate, start_date, end_date, output_dir, **kwargs: {
             "strategy_id": candidate["strategy_id"],
             "summary_frame": pd.DataFrame(
                 [
@@ -397,14 +398,62 @@ def test_run_mid_trend_strategy_validation_returns_ranked_winner(
     assert Path(result["paths"]["scorecard"]).exists()
 
 
+def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_root_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(**kwargs):
+        calls.append(kwargs)
+        return {
+            "summary": pd.DataFrame(),
+            "equity": pd.DataFrame(),
+            "holdings": pd.DataFrame(),
+            "trades": pd.DataFrame(),
+        }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "stock_research.current_mid_trend_strategy_v1.run_current_mid_trend_strategy_v1_backtest",
+        fake_runner,
+    )
+
+    execute_mid_trend_candidate(
+        {
+            "strategy_id": "current_mid_trend_strategy_v1",
+            "runner_name": "run_current_mid_trend_strategy_v1_backtest",
+        },
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path / "validation",
+    )
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["start_date"] == "2025-01-01"
+    assert call["end_date"] == "2025-01-31"
+    assert call["top_n"] == 5
+    assert call["adjust_type"] == "hfq"
+    assert Path(call["regime_path"]).is_absolute()
+    assert Path(call["funnel_detail_path"]).is_absolute()
+    assert Path(call["output_dir"]) == tmp_path / "validation" / "current_mid_trend_strategy_v1"
+    assert Path(call["regime_path"]) == (
+        Path(mid_trend_strategy_validation.__file__).resolve().parents[2]
+        / "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/market_regime_confirmation_daily.csv"
+    )
+
+
 def test_cli_dispatches_mid_trend_strategy_validation(
     monkeypatch,
     capsys,
     tmp_path: Path,
 ) -> None:
+    calls: list[dict[str, object]] = []
+
     monkeypatch.setattr(
         "stock_research.mid_trend_strategy_validation.run_mid_trend_strategy_validation",
-        lambda **kwargs: {
+        lambda **kwargs: calls.append(kwargs) or {
             "winner": {"strategy_id": "winner"},
             "paths": {
                 "scorecard": str(tmp_path / "scorecard.csv"),
@@ -422,6 +471,12 @@ def test_cli_dispatches_mid_trend_strategy_validation(
             "2025-01-31",
             "--output-dir",
             str(tmp_path),
+            "--current-regime-path",
+            str(tmp_path / "regime.csv"),
+            "--funnel-detail-path",
+            str(tmp_path / "funnel.csv"),
+            "--shadow-top10-path",
+            str(tmp_path / "shadow.csv"),
         ]
     )
 
@@ -436,9 +491,25 @@ def test_cli_dispatches_mid_trend_strategy_validation(
             "2025-01-31",
             "--output-dir",
             str(tmp_path),
+            "--current-regime-path",
+            str(tmp_path / "regime.csv"),
+            "--funnel-detail-path",
+            str(tmp_path / "funnel.csv"),
+            "--shadow-top10-path",
+            str(tmp_path / "shadow.csv"),
         ]
     )
     out = capsys.readouterr().out
+    assert calls == [
+        {
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-31",
+            "output_dir": str(tmp_path),
+            "current_regime_path": str(tmp_path / "regime.csv"),
+            "funnel_detail_path": str(tmp_path / "funnel.csv"),
+            "shadow_top10_path": str(tmp_path / "shadow.csv"),
+        }
+    ]
     assert "mid_trend_validation|winner|winner" in out
 
 

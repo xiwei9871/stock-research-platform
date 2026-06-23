@@ -4,18 +4,34 @@ from importlib import import_module
 from pathlib import Path
 
 import pandas as pd
+from stock_research.config import SETTINGS
 
 SEVERE_DRAWDOWN_THRESHOLD = 0.20
 
-DEFAULT_CURRENT_REGIME_PATH = (
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+DEFAULT_CURRENT_REGIME_PATH = REPO_ROOT / (
     "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/"
     "market_regime_confirmation_daily.csv"
 )
-DEFAULT_CURRENT_FUNNEL_DETAIL_PATH = (
+DEFAULT_CURRENT_FUNNEL_DETAIL_PATH = REPO_ROOT / (
     "outputs/research/mid_trend_watch_funnel_20230103_20260605_aligned/"
     "mid_trend_watch_funnel_detail.csv"
 )
-DEFAULT_SHADOW_TOP10_PATH = "outputs/research/mid_trend_shadow_top10.csv"
+DEFAULT_SHADOW_TOP10_PATH = REPO_ROOT / "outputs/research/mid_trend_shadow_top10.csv"
+
+DEFAULT_CURRENT_VALIDATION_CONFIG: dict[str, object] = {
+    "top_n": 5,
+    "adjust_type": "hfq",
+    "service": SETTINGS.research_service,
+}
+DEFAULT_SHADOW_VALIDATION_CONFIG: dict[str, object] = {
+    "top_n": 10,
+    "rebalance_frequency": "daily",
+    "transaction_cost_bps": 20.0,
+    "adjust_type": "hfq",
+    "service": SETTINGS.research_service,
+}
 
 
 def discover_mid_trend_strategy_candidates() -> list[dict[str, object]]:
@@ -153,28 +169,36 @@ def execute_mid_trend_candidate(
     start_date: str,
     end_date: str,
     output_dir: str | Path,
+    current_regime_path: str | Path = DEFAULT_CURRENT_REGIME_PATH,
+    funnel_detail_path: str | Path = DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
+    shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
 ) -> dict[str, object]:
     strategy_id = str(candidate["strategy_id"])
     runner_name = str(candidate["runner_name"])
     module_name = f"stock_research.{strategy_id}"
     runner = getattr(import_module(module_name), runner_name)
     candidate_output_dir = Path(output_dir) / strategy_id
+    current_regime_path = Path(current_regime_path)
+    funnel_detail_path = Path(funnel_detail_path)
+    shadow_top10_path = Path(shadow_top10_path)
 
     if strategy_id == "current_mid_trend_strategy_v1":
         return runner(
             start_date=start_date,
             end_date=end_date,
-            regime_path=DEFAULT_CURRENT_REGIME_PATH,
-            funnel_detail_path=DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
+            regime_path=current_regime_path,
+            funnel_detail_path=funnel_detail_path,
             output_dir=candidate_output_dir,
+            **DEFAULT_CURRENT_VALIDATION_CONFIG,
         )
 
     if strategy_id == "mid_trend_shadow_backtest":
         return runner(
-            shadow_top10_path=DEFAULT_SHADOW_TOP10_PATH,
+            shadow_top10_path=shadow_top10_path,
             start_date=start_date,
             end_date=end_date,
             output_dir=candidate_output_dir,
+            **DEFAULT_SHADOW_VALIDATION_CONFIG,
         )
 
     raise ValueError(f"Unsupported mid-trend validation candidate: {strategy_id}")
@@ -185,6 +209,9 @@ def run_mid_trend_strategy_validation(
     start_date: str,
     end_date: str,
     output_dir: str | Path,
+    current_regime_path: str | Path = DEFAULT_CURRENT_REGIME_PATH,
+    funnel_detail_path: str | Path = DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
+    shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
 ) -> dict[str, object]:
     output_path = Path(output_dir)
     candidates = filter_complete_mid_trend_candidates(
@@ -198,6 +225,9 @@ def run_mid_trend_strategy_validation(
                 start_date=start_date,
                 end_date=end_date,
                 output_dir=output_path,
+                current_regime_path=current_regime_path,
+                funnel_detail_path=funnel_detail_path,
+                shadow_top10_path=shadow_top10_path,
             ),
         }
         for candidate in candidates
