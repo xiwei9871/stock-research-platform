@@ -161,9 +161,7 @@ def query_baostock_minute_rows_once(
     end_date: dt.date,
     freq: str,
     adjust_type: str,
-    timeout_seconds: float | None = None,
 ) -> list[dict[str, str]]:
-    del timeout_seconds
     rs = bs.query_history_k_data_plus(
         code,
         ",".join(MINUTE_FIELDS),
