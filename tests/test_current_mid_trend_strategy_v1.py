@@ -7,6 +7,9 @@ from pathlib import Path
 from stock_research.current_mid_trend_strategy_v1 import (
     build_current_mid_trend_strategy_v1_from_frames,
 )
+from stock_research.mid_trend_strategy_validation import (
+    discover_mid_trend_strategy_candidates,
+)
 
 
 def test_current_mid_trend_strategy_v1_outputs_holdings_trades_and_summary(tmp_path: Path) -> None:
@@ -86,9 +89,15 @@ def test_current_mid_trend_strategy_v1_outputs_holdings_trades_and_summary(tmp_p
         top_n=2,
         output_dir=tmp_path,
     )
+    strategy_candidate = next(
+        item
+        for item in discover_mid_trend_strategy_candidates()
+        if item["strategy_id"] == "current_mid_trend_strategy_v1"
+    )
 
     assert not result["summary"].empty
     assert not result["equity"].empty
+    assert strategy_candidate["result_keys"] <= result.keys()
     day1 = result["holdings"][result["holdings"]["trade_date"] == "2025-01-01"]
     assert day1["target_weight"].tolist() == [0.1, 0.1]
     day2_assets = set(result["holdings"][result["holdings"]["trade_date"] == "2025-01-02"]["asset_id"])

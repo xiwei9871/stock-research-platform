@@ -22,6 +22,11 @@ def test_filter_complete_mid_trend_candidates_keeps_only_complete_portfolio_vers
             "result_keys": {"holdings", "trades", "equity", "summary"},
         },
         {
+            "strategy_id": "mid_trend_incomplete_portfolio",
+            "group": "portfolio",
+            "result_keys": {"holdings", "trades", "equity"},
+        },
+        {
             "strategy_id": "mid_trend_portfolio_review",
             "group": "review",
             "result_keys": {"review_rows", "portfolio_summary"},
