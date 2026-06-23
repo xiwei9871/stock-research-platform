@@ -11,8 +11,10 @@ from stock_research.mid_trend_shadow_backtest import (
     build_mid_trend_shadow_backtest_from_frames,
 )
 from stock_research.mid_trend_strategy_validation import (
+    build_mid_trend_validation_scorecard,
     discover_mid_trend_strategy_candidates,
     filter_complete_mid_trend_candidates,
+    rank_mid_trend_validation_scorecard,
 )
 
 
@@ -100,6 +102,64 @@ def test_filter_complete_mid_trend_candidates_keeps_only_complete_portfolio_vers
     filtered = filter_complete_mid_trend_candidates(candidates)
 
     assert [item["strategy_id"] for item in filtered] == ["current_mid_trend_strategy_v1"]
+
+
+def test_build_mid_trend_validation_scorecard_extracts_five_metrics() -> None:
+    scorecard = build_mid_trend_validation_scorecard(
+        [
+            {
+                "strategy_id": "a",
+                "summary_frame": pd.DataFrame(
+                    [
+                        {"metric": "total_return", "value": 0.50},
+                        {"metric": "max_drawdown", "value": -0.10},
+                        {"metric": "average_turnover", "value": 0.15},
+                    ]
+                ),
+                "equity_frame": pd.DataFrame(
+                    [
+                        {"date": "2025-01-31", "equity": 1.02},
+                        {"date": "2025-02-28", "equity": 1.05},
+                    ]
+                ),
+            }
+        ]
+    )
+
+    row = scorecard.iloc[0]
+    assert row["strategy_id"] == "a"
+    assert row["total_return"] == 0.50
+    assert row["max_drawdown"] == -0.10
+    assert row["return_drawdown_ratio"] == 5.0
+    assert row["monthly_win_rate"] == 1.0
+    assert row["turnover_penalized_stability"] > 0
+
+
+def test_rank_mid_trend_validation_scorecard_prefers_better_drawdown_efficiency_and_stability() -> None:
+    ranked = rank_mid_trend_validation_scorecard(
+        pd.DataFrame(
+            [
+                {
+                    "strategy_id": "stable",
+                    "total_return": 0.40,
+                    "max_drawdown": -0.08,
+                    "return_drawdown_ratio": 5.0,
+                    "monthly_win_rate": 0.75,
+                    "turnover_penalized_stability": 0.70,
+                },
+                {
+                    "strategy_id": "wild",
+                    "total_return": 0.45,
+                    "max_drawdown": -0.25,
+                    "return_drawdown_ratio": 1.8,
+                    "monthly_win_rate": 0.50,
+                    "turnover_penalized_stability": 0.20,
+                },
+            ]
+        )
+    )
+
+    assert ranked.iloc[0]["strategy_id"] == "stable"
 
 
 def _current_regime_frame() -> pd.DataFrame:
