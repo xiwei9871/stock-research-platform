@@ -26,6 +26,10 @@ This version keeps the current scope deliberately narrow:
 
 The product entry is the dashboard itself.
 
+This v1 should be treated as:
+
+> removing the outer infrastructure gate from the production dashboard root and letting the platform's own login system become the only product login layer.
+
 ## Current Baseline
 
 `main` already contains the multi-user platform layer and the auth-aware dashboard shell:
@@ -57,6 +61,43 @@ Use the current dashboard root entry directly:
 
 This avoids introducing a second outer shell or landing page.
 
+### Basic Auth Cutover
+
+The production external root must no longer be protected by Nginx Basic Auth.
+
+Current pre-launch or internal environments may still use:
+
+```text
+HTTPS
+-> Nginx Basic Auth
+-> dashboard
+```
+
+But the production external platform v1 must use:
+
+```text
+HTTPS
+-> Nginx
+-> dashboard LoginView
+-> platform session login
+```
+
+Reason:
+
+- unauthenticated visitors must reach the frontend app
+- `DashboardRoot` and `LoginView` are the intended product entry
+- browser-level Basic Auth would create a second login prompt and block the intended unauthenticated product experience
+
+Allowed Basic Auth usage after this cutover:
+
+- staging domain
+- internal-only smoke or review environment
+- temporary pre-launch validation endpoint
+
+Disallowed after production launch:
+
+- protecting the production root domain with Nginx Basic Auth
+
 ### Deployment Model
 
 Use a same-origin deployment:
@@ -65,6 +106,13 @@ Use a same-origin deployment:
 - `https://your-domain/api/*` serves the FastAPI dashboard API
 
 This is the recommended v1 model because it preserves the existing cookie/session/CSRF design with minimal change and avoids cross-origin cookie complexity.
+
+For the intended production shape, the external product root should behave like:
+
+- `https://stock.manqiaotechnology.com/` -> dashboard frontend root
+- `https://stock.manqiaotechnology.com/api/*` -> dashboard FastAPI API
+
+The exact host can still vary by environment, but the root-path and same-origin behavior are required.
 
 ### Runtime Topology
 
@@ -81,6 +129,54 @@ Two acceptable frontend serving patterns:
 - acceptable: reverse proxy forwards `/` to a frontend process if the deployment environment already uses that pattern
 
 The design should support either, but the deployment documentation should recommend static asset serving first.
+
+Recommended Nginx responsibility split:
+
+- serve dashboard static assets at `/`
+- proxy `/api/*` to the internal FastAPI service
+- own HTTPS/TLS termination
+
+Representative configuration direction:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name stock.manqiaotechnology.com;
+
+    root /opt/stock-research/dashboard/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+The implementation does not need to hardcode this exact config file, but the runbook and deployment materials should follow this structure.
+
+### Backend Exposure Model
+
+FastAPI must listen on an internal interface only.
+
+Required production posture:
+
+- FastAPI bind host is internal-only, e.g. `127.0.0.1`
+- public traffic reaches FastAPI only through Nginx
+
+Disallowed production posture:
+
+- exposing FastAPI directly on a public `0.0.0.0` listener for the product entry
+
+The implementation plan may choose the final internal port, but it must stay internal-only.
 
 ## URL And Navigation Model
 
@@ -125,6 +221,20 @@ The external deployment must satisfy:
 - CSRF protection remains enabled
 - FastAPI should not be exposed directly to the internet without the reverse proxy
 
+Cookie/security implementation requirements should be written concretely in the deployment/runbook work:
+
+- session cookie `Secure=true`
+- session cookie `HttpOnly=true`
+- session cookie `SameSite=Lax` or stricter
+- CSRF cookie/session behavior remains enabled
+
+The implementation should not introduce a split-origin pattern like:
+
+- `frontend.example.com`
+- `api.example.com`
+
+for v1. Same-origin remains the required default.
+
 ### Admin Safety
 
 The current admin safety requirements stay in force:
@@ -148,6 +258,36 @@ Supported operations in v1:
 
 No additional admin console is needed outside the dashboard.
 
+## Initial Admin Bootstrap
+
+The implementation must provide a deterministic way to create the first admin account without manual database editing.
+
+Acceptable mechanisms:
+
+- dedicated CLI command
+- explicit bootstrap script
+- one-time seed flow with clear safeguards
+
+Preferred mechanism:
+
+- a CLI/bootstrap script that creates the first admin account intentionally
+
+Representative target shape:
+
+```bash
+python -m stock_research.dashboard.create_admin \
+  --username admin \
+  --password 'initial-password'
+```
+
+or an equivalent project-local script.
+
+Bootstrap requirements:
+
+- if an admin account already exists, repeated bootstrap must fail by default
+- any override mode must be explicit, e.g. `--force`
+- the runbook must describe the expected first-run behavior
+
 ## Operational Closure Requirements
 
 The external integration is not complete until operators can answer:
@@ -160,6 +300,21 @@ The external integration is not complete until operators can answer:
 - where do audit logs and service logs live?
 
 That means the implementation must include a minimal operator runbook alongside the code changes.
+
+The runbook should be organized as explicit operator procedures:
+
+1. first deployment
+2. create the first admin
+3. admin login
+4. create a standard user
+5. reset password
+6. disable/enable user
+7. recover from accidental lockout or disabled account
+8. inspect audit logs
+9. inspect service logs
+10. roll back deployment
+
+Even though the product blocks self-disable and last-admin disable, the operator runbook should still define a recovery path if an account state becomes invalid through operator error, environment drift, or direct database intervention.
 
 ## Implementation Scope
 
@@ -177,6 +332,7 @@ Add or update deployment-facing configuration and documentation for:
 - `/api/*` reverse proxying
 - internal API bind host/port
 - production environment assumptions for cookies and CSRF
+- production root without Basic Auth
 
 ### 3. Admin Lifecycle Runbook
 
@@ -186,6 +342,8 @@ Document the operator flow for:
 - user creation
 - reset password
 - enable/disable users
+- account recovery
+- log inspection
 
 ### 4. External Readiness Verification
 
@@ -196,6 +354,7 @@ Add or tighten verification so the external-root login behavior is proven:
 - admin sees management entry
 - non-admin does not see management entry
 - official and private views remain reachable after login
+- logout returns the user to the login view
 
 ## Out Of Scope
 
@@ -252,6 +411,19 @@ Minimum validation target:
 
 Additional external-entry checks should specifically validate root-path unauthenticated and authenticated behavior.
 
+Minimum external readiness smoke should cover:
+
+- `GET /` returns dashboard HTML
+- unauthenticated `GET /` renders `LoginView`
+- unauthenticated `GET /api/auth/me` returns unauthenticated
+- admin login succeeds and `/api/auth/me` resolves with `role=admin`
+- admin sees the `管理` entry
+- standard users do not see the `管理` entry
+- standard users can open `我的观察池`
+- standard users can open `我的复盘`
+- standard users cannot access `/api/admin/users`
+- logout returns the session to the login view
+
 ## Recommended Implementation Sequence
 
 1. Start from `main`
@@ -260,6 +432,30 @@ Additional external-entry checks should specifically validate root-path unauthen
 4. Add deployment/runbook materials
 5. Add external-entry verification
 6. Run full regression
+
+## Delivery Priority
+
+### P0
+
+- production root Basic Auth cutover
+- same-origin Nginx production shape
+- HTTPS and secure cookie alignment
+- initial admin bootstrap
+- admin/user login smoke
+- standard-user denial of admin API access
+
+### P1
+
+- complete operator runbook
+- audit-log access instructions
+- service-log access instructions
+- rollback instructions
+
+### P2
+
+- broader Playwright coverage
+- dedicated recovery CLI helpers if needed
+- deployment health-check polish
 
 ## Final Positioning
 
