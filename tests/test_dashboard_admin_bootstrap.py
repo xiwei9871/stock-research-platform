@@ -99,6 +99,43 @@ def test_bootstrap_admin_account_creates_first_admin_and_writes_audit(monkeypatc
     assert audit_params["metadata"] == '{"username": "bootstrap-admin"}'
 
 
+def test_bootstrap_admin_account_normalizes_identity_inputs(monkeypatch):
+    conn = _Connection(
+        rows=[
+            {"active_admin_count": 0},
+            {
+                "id": 7,
+                "username": "bootstrap-admin",
+                "email": None,
+                "display_name": "Bootstrap Admin",
+                "role": "admin",
+                "is_active": True,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "last_login_at": None,
+                "password_updated_at": "2026-01-01T00:00:00Z",
+                "disabled_at": None,
+            },
+        ]
+    )
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(user_admin, "hash_password", lambda password: f"hashed::{password}")
+
+    user_admin.bootstrap_admin_account(
+        username="  bootstrap-admin  ",
+        password="secret123",
+        display_name="  Bootstrap Admin  ",
+        email="   ",
+    )
+
+    insert_sql, insert_params = conn.cursor_obj.calls[2]
+    assert "INSERT INTO identity.user_account" in insert_sql
+    assert insert_params["username"] == "bootstrap-admin"
+    assert insert_params["display_name"] == "Bootstrap Admin"
+    assert insert_params["email"] is None
+
+
 def test_bootstrap_admin_account_rejects_when_active_admin_exists(monkeypatch):
     conn = _Connection(rows=[{"active_admin_count": 1}])
 
@@ -114,6 +151,53 @@ def test_bootstrap_admin_account_rejects_when_active_admin_exists(monkeypatch):
 
     assert len(conn.cursor_obj.calls) == 2
     assert "LOCK TABLE identity.user_account" in conn.cursor_obj.calls[0][0]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "field"),
+    [
+        (
+            {
+                "username": "   ",
+                "password": "secret123",
+                "display_name": "Bootstrap Admin",
+                "email": "bootstrap@example.com",
+            },
+            "username",
+        ),
+        (
+            {
+                "username": "bootstrap-admin",
+                "password": "   ",
+                "display_name": "Bootstrap Admin",
+                "email": "bootstrap@example.com",
+            },
+            "password",
+        ),
+        (
+            {
+                "username": "bootstrap-admin",
+                "password": "secret123",
+                "display_name": "   ",
+                "email": "bootstrap@example.com",
+            },
+            "display_name",
+        ),
+    ],
+)
+def test_bootstrap_admin_account_rejects_blank_required_inputs(monkeypatch, kwargs, field):
+    connect_calls = []
+
+    def fake_connect(service):
+        connect_calls.append(service)
+        raise AssertionError("connect should not be called for invalid input")
+
+    monkeypatch.setattr(user_admin, "connect", fake_connect)
+
+    with pytest.raises(ValueError, match=f"{field} must not be blank"):
+        user_admin.bootstrap_admin_account(**kwargs)
+
+    assert connect_calls == []
 
 
 def test_enable_user_account_by_username_reenables_disabled_user(monkeypatch):
@@ -138,6 +222,40 @@ def test_enable_user_account_by_username_reenables_disabled_user(monkeypatch):
     assert audit_params["actor_user_id"] == 5
     assert audit_params["action"] == "admin_enable_user"
     assert audit_params["target_id"] == "22"
+
+
+def test_enable_user_account_by_username_trims_username_before_lookup(monkeypatch):
+    conn = _Connection(rows=[{"id": 22}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+
+    result = user_admin.enable_user_account_by_username(
+        username="  disabled-user  ",
+        actor_user_id=5,
+    )
+
+    assert result is True
+    update_sql, update_params = conn.cursor_obj.calls[0]
+    assert "WHERE username = %(username)s" in update_sql
+    assert update_params == {"username": "disabled-user"}
+
+
+def test_enable_user_account_by_username_rejects_blank_username(monkeypatch):
+    connect_calls = []
+
+    def fake_connect(service):
+        connect_calls.append(service)
+        raise AssertionError("connect should not be called for invalid input")
+
+    monkeypatch.setattr(user_admin, "connect", fake_connect)
+
+    with pytest.raises(ValueError, match="username must not be blank"):
+        user_admin.enable_user_account_by_username(
+            username="   ",
+            actor_user_id=5,
+        )
+
+    assert connect_calls == []
 
 
 def test_reset_user_password_by_username_updates_password_revokes_sessions_and_writes_audit(
@@ -174,6 +292,52 @@ def test_reset_user_password_by_username_updates_password_revokes_sessions_and_w
     assert audit_params["target_id"] == "22"
 
 
+def test_reset_user_password_by_username_trims_username_before_lookup(monkeypatch):
+    conn = _Connection(rows=[{"id": 22}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(user_admin, "hash_password", lambda password: f"hashed::{password}")
+
+    result = user_admin.reset_user_password_by_username(
+        username="  disabled-user  ",
+        password="next-secret",
+        actor_user_id=None,
+    )
+
+    assert result is True
+    update_sql, update_params = conn.cursor_obj.calls[0]
+    assert "WHERE username = %(username)s" in update_sql
+    assert update_params["username"] == "disabled-user"
+
+
+@pytest.mark.parametrize(
+    ("username", "password", "field"),
+    [
+        ("   ", "next-secret", "username"),
+        ("disabled-user", "   ", "password"),
+    ],
+)
+def test_reset_user_password_by_username_rejects_blank_inputs(
+    monkeypatch, username, password, field
+):
+    connect_calls = []
+
+    def fake_connect(service):
+        connect_calls.append(service)
+        raise AssertionError("connect should not be called for invalid input")
+
+    monkeypatch.setattr(user_admin, "connect", fake_connect)
+
+    with pytest.raises(ValueError, match=f"{field} must not be blank"):
+        user_admin.reset_user_password_by_username(
+            username=username,
+            password=password,
+            actor_user_id=None,
+        )
+
+    assert connect_calls == []
+
+
 def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys):
     captured = {}
 
@@ -202,6 +366,38 @@ def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys
         "password": "secret123",
         "display_name": "Bootstrap Admin",
         "email": "bootstrap@example.com",
+    }
+    assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
+
+
+def test_dashboard_bootstrap_admin_cli_normalizes_inputs_before_dispatch(monkeypatch, capsys):
+    captured = {}
+
+    def fake_bootstrap_admin_account(**kwargs):
+        captured["call"] = kwargs
+        return {"username": kwargs["username"]}
+
+    monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
+
+    cli.main_for_args(
+        [
+            "dashboard-bootstrap-admin",
+            "--username",
+            "  bootstrap-admin  ",
+            "--password",
+            "secret123",
+            "--display-name",
+            "  Bootstrap Admin  ",
+            "--email",
+            "   ",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "bootstrap-admin",
+        "password": "secret123",
+        "display_name": "Bootstrap Admin",
+        "email": None,
     }
     assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
 
@@ -243,6 +439,62 @@ def test_dashboard_bootstrap_admin_cli_prompts_for_password_when_omitted(monkeyp
     }
     assert prompts == ["Dashboard admin password: ", "Confirm dashboard admin password: "]
     assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
+
+
+def test_dashboard_bootstrap_admin_cli_exits_for_blank_password(monkeypatch, capsys):
+    bootstrap_calls = []
+
+    def fake_bootstrap_admin_account(**kwargs):
+        bootstrap_calls.append(kwargs)
+        return {"username": kwargs["username"]}
+
+    monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
+
+    with pytest.raises(SystemExit, match="password must not be blank"):
+        cli.main_for_args(
+            [
+                "dashboard-bootstrap-admin",
+                "--username",
+                "bootstrap-admin",
+                "--password",
+                "   ",
+                "--display-name",
+                "Bootstrap Admin",
+                "--email",
+                "bootstrap@example.com",
+            ]
+        )
+
+    assert bootstrap_calls == []
+    assert capsys.readouterr().out == ""
+
+
+def test_dashboard_bootstrap_admin_cli_exits_for_blank_prompted_password(monkeypatch, capsys):
+    bootstrap_calls = []
+    passwords = iter(["   ", "   "])
+
+    def fake_bootstrap_admin_account(**kwargs):
+        bootstrap_calls.append(kwargs)
+        return {"username": kwargs["username"]}
+
+    monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: next(passwords))
+
+    with pytest.raises(SystemExit, match="password must not be blank"):
+        cli.main_for_args(
+            [
+                "dashboard-bootstrap-admin",
+                "--username",
+                "bootstrap-admin",
+                "--display-name",
+                "Bootstrap Admin",
+                "--email",
+                "bootstrap@example.com",
+            ]
+        )
+
+    assert bootstrap_calls == []
+    assert capsys.readouterr().out == ""
 
 
 def test_dashboard_bootstrap_admin_cli_exits_when_password_confirmation_mismatches(
@@ -336,6 +588,81 @@ def test_dashboard_reset_password_cli_prompts_for_password_when_omitted(monkeypa
     assert capsys.readouterr().out.strip() == "dashboard_password_reset|disabled-user"
 
 
+def test_dashboard_reset_password_cli_trims_username_before_dispatch(monkeypatch, capsys):
+    captured = {}
+
+    def fake_reset_user_password_by_username(**kwargs):
+        captured["call"] = kwargs
+        return True
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+
+    cli.main_for_args(
+        [
+            "dashboard-reset-password",
+            "--username",
+            "  disabled-user  ",
+            "--password",
+            "next-secret",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "disabled-user",
+        "password": "next-secret",
+        "actor_user_id": None,
+    }
+    assert capsys.readouterr().out.strip() == "dashboard_password_reset|disabled-user"
+
+
+def test_dashboard_reset_password_cli_exits_for_blank_password(monkeypatch, capsys):
+    reset_calls = []
+
+    def fake_reset_user_password_by_username(**kwargs):
+        reset_calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+
+    with pytest.raises(SystemExit, match="password must not be blank"):
+        cli.main_for_args(
+            [
+                "dashboard-reset-password",
+                "--username",
+                "disabled-user",
+                "--password",
+                "   ",
+            ]
+        )
+
+    assert reset_calls == []
+    assert capsys.readouterr().out == ""
+
+
+def test_dashboard_reset_password_cli_exits_for_blank_prompted_password(monkeypatch, capsys):
+    reset_calls = []
+    passwords = iter(["   ", "   "])
+
+    def fake_reset_user_password_by_username(**kwargs):
+        reset_calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: next(passwords))
+
+    with pytest.raises(SystemExit, match="password must not be blank"):
+        cli.main_for_args(
+            [
+                "dashboard-reset-password",
+                "--username",
+                "disabled-user",
+            ]
+        )
+
+    assert reset_calls == []
+    assert capsys.readouterr().out == ""
+
+
 def test_dashboard_reset_password_cli_exits_when_password_confirmation_mismatches(monkeypatch, capsys):
     reset_calls = []
     passwords = iter(["prompt-secret", "different-secret"])
@@ -404,3 +731,31 @@ def test_dashboard_enable_user_cli_exits_when_username_not_found(monkeypatch, ca
         )
 
     assert capsys.readouterr().out == ""
+
+
+def test_dashboard_enable_user_cli_trims_username_before_dispatch(monkeypatch, capsys):
+    captured = {}
+
+    def fake_enable_user_account_by_username(**kwargs):
+        captured["call"] = kwargs
+        return True
+
+    monkeypatch.setattr(
+        cli,
+        "enable_user_account_by_username",
+        fake_enable_user_account_by_username,
+    )
+
+    cli.main_for_args(
+        [
+            "dashboard-enable-user",
+            "--username",
+            "  disabled-user  ",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "disabled-user",
+        "actor_user_id": None,
+    }
+    assert capsys.readouterr().out.strip() == "dashboard_user_enabled|disabled-user"

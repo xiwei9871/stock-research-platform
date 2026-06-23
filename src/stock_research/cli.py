@@ -66,7 +66,10 @@ from stock_research.dashboard.api import run_dashboard_api
 from stock_research.dashboard.user_admin import (
     bootstrap_admin_account,
     enable_user_account_by_username,
+    normalize_optional_user_account_email,
+    normalize_required_user_account_text,
     reset_user_password_by_username,
+    validate_non_blank_user_account_password,
 )
 from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
@@ -1411,12 +1414,28 @@ def _resolve_prompted_password(
     mismatch_error: str,
 ) -> str:
     if provided_password is not None:
-        return provided_password
+        try:
+            return validate_non_blank_user_account_password(provided_password)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     password = getpass.getpass(prompt)
     password_confirm = getpass.getpass(confirm_prompt)
     if password != password_confirm:
         raise SystemExit(mismatch_error)
-    return password
+    try:
+        return validate_non_blank_user_account_password(password)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def _normalize_dashboard_required_text(*, value: str, field_name: str) -> str:
+    try:
+        return normalize_required_user_account_text(
+            value=value,
+            field_name=field_name,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -4767,21 +4786,33 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             confirm_prompt="Confirm dashboard admin password: ",
             mismatch_error="dashboard admin passwords did not match",
         )
+        username = _normalize_dashboard_required_text(
+            value=args.username,
+            field_name="username",
+        )
+        display_name = _normalize_dashboard_required_text(
+            value=args.display_name,
+            field_name="display_name",
+        )
         user_account = bootstrap_admin_account(
-            username=args.username,
+            username=username,
             password=password,
-            display_name=args.display_name,
-            email=args.email,
+            display_name=display_name,
+            email=normalize_optional_user_account_email(args.email),
         )
         print(f"dashboard_admin_bootstrapped|{user_account['username']}")
     elif args.command == "dashboard-enable-user":
+        username = _normalize_dashboard_required_text(
+            value=args.username,
+            field_name="username",
+        )
         was_enabled = enable_user_account_by_username(
-            username=args.username,
+            username=username,
             actor_user_id=None,
         )
         if not was_enabled:
-            raise SystemExit(f"dashboard user not found: {args.username}")
-        print(f"dashboard_user_enabled|{args.username}")
+            raise SystemExit(f"dashboard user not found: {username}")
+        print(f"dashboard_user_enabled|{username}")
     elif args.command == "dashboard-reset-password":
         password = _resolve_prompted_password(
             provided_password=args.password,
@@ -4789,14 +4820,18 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             confirm_prompt="Confirm dashboard user password: ",
             mismatch_error="dashboard user passwords did not match",
         )
+        username = _normalize_dashboard_required_text(
+            value=args.username,
+            field_name="username",
+        )
         was_reset = reset_user_password_by_username(
-            username=args.username,
+            username=username,
             password=password,
             actor_user_id=None,
         )
         if not was_reset:
-            raise SystemExit(f"dashboard user not found: {args.username}")
-        print(f"dashboard_password_reset|{args.username}")
+            raise SystemExit(f"dashboard user not found: {username}")
+        print(f"dashboard_password_reset|{username}")
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))

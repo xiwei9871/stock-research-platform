@@ -22,6 +22,26 @@ USER_ACCOUNT_COLUMNS = """
 """
 
 
+def normalize_required_user_account_text(*, value: str, field_name: str) -> str:
+    normalized_value = value.strip()
+    if not normalized_value:
+        raise ValueError(f"{field_name} must not be blank")
+    return normalized_value
+
+
+def normalize_optional_user_account_email(email: str | None) -> str | None:
+    if email is None:
+        return None
+    normalized_email = email.strip()
+    return normalized_email or None
+
+
+def validate_non_blank_user_account_password(password: str) -> str:
+    if not password.strip():
+        raise ValueError("password must not be blank")
+    return password
+
+
 def list_user_accounts(*, service: str = SETTINGS.research_service) -> list[dict[str, object]]:
     sql = f"""
     SELECT {USER_ACCOUNT_COLUMNS}
@@ -101,6 +121,16 @@ def bootstrap_admin_account(
     email: str | None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, object]:
+    normalized_username = normalize_required_user_account_text(
+        value=username,
+        field_name="username",
+    )
+    normalized_password = validate_non_blank_user_account_password(password)
+    normalized_display_name = normalize_required_user_account_text(
+        value=display_name,
+        field_name="display_name",
+    )
+    normalized_email = normalize_optional_user_account_email(email)
     lock_user_account_sql = """
     LOCK TABLE identity.user_account IN EXCLUSIVE MODE
     """
@@ -130,10 +160,10 @@ def bootstrap_admin_account(
     RETURNING {USER_ACCOUNT_COLUMNS}
     """
     params = {
-        "username": username,
-        "email": email,
-        "password_hash": hash_password(password),
-        "display_name": display_name,
+        "username": normalized_username,
+        "email": normalized_email,
+        "password_hash": hash_password(normalized_password),
+        "display_name": normalized_display_name,
     }
     with connect(service) as conn:
         with conn.cursor() as cur:
@@ -211,6 +241,11 @@ def reset_user_password_by_username(
     user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> bool:
+    normalized_username = normalize_required_user_account_text(
+        value=username,
+        field_name="username",
+    )
+    normalized_password = validate_non_blank_user_account_password(password)
     sql = """
     UPDATE identity.user_account
     SET password_hash = %(password_hash)s,
@@ -224,8 +259,8 @@ def reset_user_password_by_username(
             cur.execute(
                 sql,
                 {
-                    "username": username,
-                    "password_hash": hash_password(password),
+                    "username": normalized_username,
+                    "password_hash": hash_password(normalized_password),
                 },
             )
             row = cur.fetchone()
@@ -239,7 +274,7 @@ def reset_user_password_by_username(
                 action="admin_reset_password",
                 target_type="user_account",
                 target_id=str(user_id),
-                metadata={"username": username},
+                metadata={"username": normalized_username},
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
@@ -361,6 +396,10 @@ def enable_user_account_by_username(
     user_agent: str | None = None,
     service: str = SETTINGS.research_service,
 ) -> bool:
+    normalized_username = normalize_required_user_account_text(
+        value=username,
+        field_name="username",
+    )
     sql = """
     UPDATE identity.user_account
     SET is_active = TRUE,
@@ -371,7 +410,7 @@ def enable_user_account_by_username(
     """
     with connect(service) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, {"username": username})
+            cur.execute(sql, {"username": normalized_username})
             row = cur.fetchone()
             if row is None:
                 return False
