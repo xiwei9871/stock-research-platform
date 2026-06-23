@@ -42,6 +42,15 @@ def test_dashboard_release_check_script_covers_live_endpoints() -> None:
     assert "TOPN" in script
 
 
+def test_dashboard_release_check_script_covers_strategy_score_audit_endpoint() -> None:
+    script = read_repo_file("deploy/check_dashboard_release.sh")
+
+    assert "/api/strategy-score-audit" in script
+    assert '\\"status\\"' in script
+    assert '\\"summary_path\\"' in script
+    assert '\\"trade_date\\"' in script
+
+
 def test_fast_dashboard_sync_script_uses_mounted_source_restart_path() -> None:
     script = read_repo_file("deploy/sync_dashboard_fast.sh")
 

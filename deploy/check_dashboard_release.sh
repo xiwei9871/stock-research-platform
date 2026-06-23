@@ -70,6 +70,12 @@ require_body_contains "$strategies_body" "lhb_shortline" "strategy catalog"
 require_body_contains "$strategies_body" "mid_trend" "strategy catalog"
 require_body_contains "$strategies_body" "tech_bottleneck" "strategy catalog"
 
+echo "Checking /api/strategy-score-audit endpoint"
+strategy_score_audit_body="$(fetch "${API_BASE%/}/strategy-score-audit?trade_date=${TRADE_DATE}")"
+require_body_contains "$strategy_score_audit_body" "\"trade_date\"" "strategy score audit"
+require_body_contains "$strategy_score_audit_body" "\"status\"" "strategy score audit"
+require_body_contains "$strategy_score_audit_body" "\"summary_path\"" "strategy score audit"
+
 echo "Checking /api/assets/000001.SZ/profile endpoint"
 fetch "${API_BASE%/}/assets/000001.SZ/profile?trade_date=${TRADE_DATE}&start_date=${START_DATE}&end_date=${END_DATE}&score_version=manual_v1&adjust_type=qfq" >/dev/null
 
