@@ -1,0 +1,16 @@
+[Unit]
+Description=Stock Research Dashboard API
+After=network.target
+
+[Service]
+Type=simple
+User=stock
+Group=stock
+WorkingDirectory=/opt/stock-research
+Environment=STOCK_RESEARCH_SECURE_COOKIES=1
+ExecStart=/opt/stock-research/.venv/bin/stock-research dashboard-api --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
