@@ -263,12 +263,19 @@ def publish_strategy_eod(
             },
         )
     )
-    score_audit = _write_strategy_score_audit_artifacts(
-        trade_date=selected_trade_date,
-        output_dir=output_dir,
-        review_rows=review_rows,
-        strategy_results=strategy_results,
-    )
+    score_audit: dict[str, Any]
+    try:
+        score_audit = _write_strategy_score_audit_artifacts(
+            trade_date=selected_trade_date,
+            output_dir=output_dir,
+            review_rows=review_rows,
+            strategy_results=strategy_results,
+        )
+    except Exception as exc:
+        score_audit = {
+            "status": "failed",
+            "error": str(exc),
+        }
 
     entries.extend(
         _write_eod_news_artifacts(
@@ -428,7 +435,8 @@ def _prepare_tech_bottleneck_base_candidate_source(*, trade_date: str, output_di
 
 def _strategy_score_audit_result(tech_result: dict[str, Any], *, tech_review_path: Path) -> dict[str, Any]:
     audit_result = dict(tech_result)
-    if "review_rows" in audit_result:
+    review_rows = audit_result.get("review_rows")
+    if _is_row_data(review_rows):
         return audit_result
     if tech_review_path.exists():
         audit_result["review_rows"] = pd.read_csv(tech_review_path)
@@ -452,10 +460,19 @@ def _write_strategy_score_audit_artifacts(
     summary_path = output_dir / "strategy_score_audit_summary.json"
     detail.to_csv(detail_path, index=False)
     summary = summarize_strategy_score_audit(detail, trade_date=trade_date)
+    summary["status"] = "success"
     summary["detail_path"] = str(detail_path)
     summary["summary_path"] = str(summary_path)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
+
+
+def _is_row_data(value: Any) -> bool:
+    if isinstance(value, pd.DataFrame):
+        return True
+    if isinstance(value, list):
+        return not value or isinstance(value[0], dict)
+    return False
 
 
 def _has_rows(sql: str, trade_date: str) -> bool:

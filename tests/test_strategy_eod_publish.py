@@ -502,3 +502,205 @@ def test_publish_strategy_eod_writes_score_audit_artifacts_and_summary_paths(mon
     detail = strategy_eod_publish.pd.read_csv(detail_path)
     assert sorted(detail["strategy_id"].tolist()) == ["lhb_shortline", "mid_trend", "tech_bottleneck"]
     assert len(manifest_entries) >= 2
+
+
+def test_publish_strategy_eod_score_audit_uses_csv_backed_tech_lineage_when_review_rows_is_count(monkeypatch, tmp_path):
+    monkeypatch.setattr(strategy_eod_publish, "_ensure_strategy_dependencies", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_build_base_manifest_entries",
+        lambda **kwargs: [{"module": "daily_bars", "status": "success"}],
+    )
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_prepare_tech_bottleneck_base_candidate_source",
+        lambda **kwargs: tmp_path / "tech_seed.csv",
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_write_eod_news_artifacts", lambda **kwargs: [])
+    monkeypatch.setattr(strategy_eod_publish, "_write_report_content_manifest_entries", lambda **kwargs: [])
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_write_review_evidence_snapshot_entry",
+        lambda **kwargs: {"module": "review_evidence_snapshots", "status": "success"},
+    )
+
+    tech_review_path = tmp_path / "tech_review.csv"
+    strategy_eod_publish.pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Discovery",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_tech_bottleneck",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+                "stock_name": "三环集团",
+                "bottleneck_score": 0.6346,
+            }
+        ]
+    ).to_csv(tech_review_path, index=False)
+
+    def fake_runner(payload):
+        if payload["strategy_id"] == "lhb_shortline":
+            return {
+                "strategy_id": "lhb_shortline",
+                "strategy_name": "LHB Shortline Combo",
+                "positions": [{"trade_date": "2026-06-20", "ts_code": "002080.SZ"}],
+                "candidates": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "ts_code": "000960.SZ",
+                        "rank": 1,
+                        "phase12a_rule_layer": "pending_intraday",
+                        "candidate_reason": "lhb_capital_plus_structure",
+                        "auction_enhanced_score": 20.0,
+                    }
+                ],
+            }
+        if payload["strategy_id"] == "mid_trend":
+            return {
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "positions": [{"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002080", "weight": 0.2}],
+                "signals": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "asset_id": "CN:SZ:002080",
+                        "mid_trend_funnel_score": 87.6,
+                        "selection_reason": "trend_support",
+                    }
+                ],
+            }
+        raise AssertionError(f"unexpected strategy: {payload['strategy_id']}")
+
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "run_tech_bottleneck_eod",
+        lambda **kwargs: {
+            "review_path": str(tech_review_path),
+            "review_rows": 1,
+        },
+    )
+
+    summary = strategy_eod_publish.publish_strategy_eod(
+        trade_date="2026-06-22",
+        output_root=tmp_path,
+        runner=fake_runner,
+        manifest_upsert=lambda entry: None,
+    )
+
+    detail = strategy_eod_publish.pd.read_csv(summary["score_audit"]["detail_path"])
+    tech_row = detail.loc[detail["strategy_id"].eq("tech_bottleneck")].iloc[0].to_dict()
+    assert tech_row["raw_candidate_score"] == 0.6346
+    assert tech_row["raw_candidate_score_source"] == "bottleneck_score"
+    assert tech_row["stock_name"] == "三环集团"
+    assert "missing_candidate_source" not in (tech_row["anomaly_flags"] or "")
+
+
+def test_publish_strategy_eod_score_audit_failure_is_non_blocking(monkeypatch, tmp_path):
+    monkeypatch.setattr(strategy_eod_publish, "_ensure_strategy_dependencies", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_build_base_manifest_entries",
+        lambda **kwargs: [{"module": "daily_bars", "status": "success"}],
+    )
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_prepare_tech_bottleneck_base_candidate_source",
+        lambda **kwargs: tmp_path / "tech_seed.csv",
+    )
+    monkeypatch.setattr(strategy_eod_publish, "_write_eod_news_artifacts", lambda **kwargs: [])
+    monkeypatch.setattr(strategy_eod_publish, "_write_report_content_manifest_entries", lambda **kwargs: [])
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_write_review_evidence_snapshot_entry",
+        lambda **kwargs: {"module": "review_evidence_snapshots", "status": "success"},
+    )
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "_write_strategy_score_audit_artifacts",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("audit disk full")),
+    )
+
+    tech_review_path = tmp_path / "tech_review.csv"
+    strategy_eod_publish.pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Discovery",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_tech_bottleneck",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+            }
+        ]
+    ).to_csv(tech_review_path, index=False)
+
+    def fake_runner(payload):
+        if payload["strategy_id"] == "lhb_shortline":
+            return {
+                "strategy_id": "lhb_shortline",
+                "strategy_name": "LHB Shortline Combo",
+                "positions": [{"trade_date": "2026-06-20", "ts_code": "002080.SZ"}],
+                "candidates": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "ts_code": "000960.SZ",
+                        "rank": 1,
+                        "phase12a_rule_layer": "pending_intraday",
+                        "candidate_reason": "lhb_capital_plus_structure",
+                        "auction_enhanced_score": 20.0,
+                    }
+                ],
+            }
+        if payload["strategy_id"] == "mid_trend":
+            return {
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend Combo",
+                "positions": [{"rebalance_date": "2026-06-22", "asset_id": "CN:SZ:002080", "weight": 0.2}],
+                "signals": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "asset_id": "CN:SZ:002080",
+                        "mid_trend_funnel_score": 87.6,
+                        "selection_reason": "trend_support",
+                    }
+                ],
+            }
+        raise AssertionError(f"unexpected strategy: {payload['strategy_id']}")
+
+    monkeypatch.setattr(
+        strategy_eod_publish,
+        "run_tech_bottleneck_eod",
+        lambda **kwargs: {
+            "review_path": str(tech_review_path),
+            "review_rows": 1,
+        },
+    )
+
+    summary = strategy_eod_publish.publish_strategy_eod(
+        trade_date="2026-06-22",
+        output_root=tmp_path,
+        runner=fake_runner,
+        manifest_upsert=lambda entry: None,
+    )
+
+    assert summary["score_audit"]["status"] == "failed"
+    assert summary["score_audit"]["error"] == "audit disk full"
+    assert summary["review_rows"] == 3
+    publish_summary = strategy_eod_publish.json.loads(
+        (tmp_path / "research" / "strategy_daily_eod" / "2026-06-22" / "strategy_eod_publish_summary.json").read_text(encoding="utf-8")
+    )
+    assert publish_summary["score_audit"]["status"] == "failed"
