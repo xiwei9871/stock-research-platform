@@ -174,4 +174,16 @@ describe('HomeCockpit strategy score audit summary', () => {
     await waitFor(() => expect(within(scoreAuditCell as HTMLDivElement).getByText('待补齐')).toBeVisible());
     expect(within(scoreAuditCell as HTMLDivElement).getByText('暂无审计产物')).toBeVisible();
   });
+
+  it('shows an unavailable audit state when the audit request fails', async () => {
+    apiMocks.fetchStrategyScoreAudit.mockRejectedValue(new Error('score audit unavailable'));
+
+    render(<HomeCockpit onNavigate={() => undefined} />);
+
+    const statusRegion = await screen.findByRole('region', { name: '首页状态' });
+    const scoreAuditCell = within(statusRegion).getByText('策略打分审计').closest('div');
+    expect(scoreAuditCell).not.toBeNull();
+    await waitFor(() => expect(within(scoreAuditCell as HTMLDivElement).getByText('不可用')).toBeVisible());
+    expect(within(scoreAuditCell as HTMLDivElement).getByText('加载失败')).toBeVisible();
+  });
 });

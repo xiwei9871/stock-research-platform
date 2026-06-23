@@ -140,7 +140,8 @@ function formatReadinessWarning(value: string) {
   return labels[value] ?? value;
 }
 
-function strategyScoreAuditStatusLabel(audit: StrategyScoreAuditSummary | null) {
+function strategyScoreAuditStatusLabel(audit: StrategyScoreAuditSummary | null, error: string | null) {
+  if (error) return '不可用';
   if (!audit) return '-';
   if (audit.overall_status === 'ok') return '正常';
   if (audit.overall_status === 'warning') return '需关注';
@@ -148,7 +149,8 @@ function strategyScoreAuditStatusLabel(audit: StrategyScoreAuditSummary | null) 
   return audit.overall_status;
 }
 
-function strategyScoreAuditStatusClass(audit: StrategyScoreAuditSummary | null) {
+function strategyScoreAuditStatusClass(audit: StrategyScoreAuditSummary | null, error: string | null) {
+  if (error) return 'blocked';
   if (!audit) return 'partial';
   if (audit.overall_status === 'ok') return 'ready';
   if (audit.overall_status === 'warning') return 'partial';
@@ -156,7 +158,8 @@ function strategyScoreAuditStatusClass(audit: StrategyScoreAuditSummary | null) 
   return 'partial';
 }
 
-function strategyScoreAuditSummaryText(audit: StrategyScoreAuditSummary | null) {
+function strategyScoreAuditSummaryText(audit: StrategyScoreAuditSummary | null, error: string | null) {
+  if (error) return '加载失败';
   if (!audit) return '读取中';
   if (audit.overall_status === 'missing') return '暂无审计产物';
   return `${audit.anomaly_row_count} 条异常`;
@@ -321,6 +324,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [readiness, setReadiness] = useState<PlatformReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [scoreAudit, setScoreAudit] = useState<StrategyScoreAuditSummary | null>(null);
+  const [scoreAuditError, setScoreAuditError] = useState<string | null>(null);
   const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +350,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     setReadiness(null);
     setReadinessError(null);
     setScoreAudit(null);
+    setScoreAuditError(null);
 
     const addWidgetWarning = (warning: string) => {
       setWidgetWarnings((current) => [...current, warning]);
@@ -428,6 +433,7 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   useEffect(() => {
     if (!displayTradeDate || displayTradeDate === '-') {
       setScoreAudit(null);
+      setScoreAuditError(null);
       return;
     }
 
@@ -436,11 +442,13 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       (payload) => {
         if (!ignore) {
           setScoreAudit(payload);
+          setScoreAuditError(null);
         }
       },
-      () => {
+      (err: unknown) => {
         if (!ignore) {
           setScoreAudit(null);
+          setScoreAuditError(errorMessage(err));
         }
       }
     );
@@ -490,10 +498,10 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         </div>
         <div className="status-strip-audit-cell">
           <span>策略打分审计</span>
-          <strong className={`readiness-value ${strategyScoreAuditStatusClass(scoreAudit)}`}>
-            {strategyScoreAuditStatusLabel(scoreAudit)}
+          <strong className={`readiness-value ${strategyScoreAuditStatusClass(scoreAudit, scoreAuditError)}`}>
+            {strategyScoreAuditStatusLabel(scoreAudit, scoreAuditError)}
           </strong>
-          <small>{strategyScoreAuditSummaryText(scoreAudit)}</small>
+          <small>{strategyScoreAuditSummaryText(scoreAudit, scoreAuditError)}</small>
         </div>
       </section>
 
