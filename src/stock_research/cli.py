@@ -3899,8 +3899,14 @@ def main_for_args(argv: list[str] | None = None) -> None:
     elif args.command == "strategy-score-audit":
         summary = load_strategy_score_audit_summary(trade_date=args.trade_date)
         print(f"strategy_score_audit|trade_date|{summary['trade_date']}")
-        print(f"strategy_score_audit|detail|{summary['detail_path']}")
-        print(f"strategy_score_audit|summary|{summary['summary_path']}")
+        if summary.get("detail_path"):
+            print(f"strategy_score_audit|detail|{summary['detail_path']}")
+        if summary.get("summary_path"):
+            print(f"strategy_score_audit|summary|{summary['summary_path']}")
+        if summary.get("status") == "failed":
+            print("strategy_score_audit|status|failed")
+            print(f"strategy_score_audit|error|{summary.get('error', '')}")
+            return
         print(
             "strategy_score_audit|rows|"
             f"{summary.get('total_rows', 0)}|selected|{summary.get('selected_rows', 0)}|"

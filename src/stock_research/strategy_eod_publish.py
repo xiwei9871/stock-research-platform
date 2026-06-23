@@ -235,8 +235,8 @@ def publish_strategy_eod(
             manifest_upsert(entry)
         raise
     entries.extend(tech_entries)
-    tech_review_path = Path(str(tech_result.get("review_path") or ""))
-    if tech_review_path.exists():
+    tech_review_path = _optional_path(tech_result.get("review_path"))
+    if tech_review_path is not None and tech_review_path.exists():
         review_frames.append(pd.read_csv(tech_review_path))
     strategy_results["tech_bottleneck"] = _strategy_score_audit_result(tech_result, tech_review_path=tech_review_path)
 
@@ -272,10 +272,11 @@ def publish_strategy_eod(
             strategy_results=strategy_results,
         )
     except Exception as exc:
-        score_audit = {
-            "status": "failed",
-            "error": str(exc),
-        }
+        score_audit = _write_strategy_score_audit_failure_summary(
+            trade_date=selected_trade_date,
+            output_dir=output_dir,
+            error=str(exc),
+        )
 
     entries.extend(
         _write_eod_news_artifacts(
@@ -433,12 +434,12 @@ def _prepare_tech_bottleneck_base_candidate_source(*, trade_date: str, output_di
     return output
 
 
-def _strategy_score_audit_result(tech_result: dict[str, Any], *, tech_review_path: Path) -> dict[str, Any]:
+def _strategy_score_audit_result(tech_result: dict[str, Any], *, tech_review_path: Path | None) -> dict[str, Any]:
     audit_result = dict(tech_result)
     review_rows = audit_result.get("review_rows")
     if _is_row_data(review_rows):
         return audit_result
-    if tech_review_path.exists():
+    if tech_review_path is not None and tech_review_path.exists():
         audit_result["review_rows"] = pd.read_csv(tech_review_path)
     return audit_result
 
@@ -467,12 +468,36 @@ def _write_strategy_score_audit_artifacts(
     return summary
 
 
+def _write_strategy_score_audit_failure_summary(
+    *,
+    trade_date: str,
+    output_dir: Path,
+    error: str,
+) -> dict[str, Any]:
+    summary_path = output_dir / "strategy_score_audit_summary.json"
+    summary = {
+        "trade_date": trade_date,
+        "status": "failed",
+        "error": error,
+        "summary_path": str(summary_path),
+    }
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return summary
+
+
 def _is_row_data(value: Any) -> bool:
     if isinstance(value, pd.DataFrame):
         return True
     if isinstance(value, list):
         return not value or isinstance(value[0], dict)
     return False
+
+
+def _optional_path(value: Any) -> Path | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return Path(text)
 
 
 def _has_rows(sql: str, trade_date: str) -> bool:
