@@ -171,6 +171,7 @@ matrix and expected evidence.
 | Release readiness audit | `docs/quant_system/66_p19_release_readiness_audit.md` |
 | Final smoke matrix | `docs/quant_system/67_p19_final_smoke_matrix.md` |
 | Final release runbook | `docs/quant_system/68_p19_final_release_runbook.md` |
+| External user platform | `docs/external-user-platform-runbook.md` |
 | Final platform completion | `docs/quant_system/69_p19_final_platform_closure_completion.md` |
 | Dashboard workbench | `docs/dashboard-workbench-runbook.md` |
 | Daily factor pipeline | `docs/daily-factor-pipeline-runbook.md` |
