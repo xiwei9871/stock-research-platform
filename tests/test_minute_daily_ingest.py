@@ -209,7 +209,7 @@ def test_run_baostock_minute_daily_queries_one_trade_date_per_symbol(monkeypatch
         ("logout", None),
         ("unlock", "lock-handle"),
     ]
-    assert sleep_calls == [0.25, 0.25]
+    assert sleep_calls == [0.25]
     assert result == {
         "status": "success",
         "trade_date": "2024-01-08",

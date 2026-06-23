@@ -71,9 +71,9 @@ def run_baostock_minute_daily(
     limit_assets: int | None = None,
     sleep_seconds: float = 0.0,
     lock_path: Path = DEFAULT_MINUTE_DAILY_LOCK,
-    freq: str = "5min",
-    adjust_type: str = "raw",
 ) -> dict[str, Any]:
+    freq = "5min"
+    adjust_type = "raw"
     target_date = parse_trade_date(trade_date, "Asia/Shanghai")
     decision = decide_stock_cron_run(
         service=SETTINGS.research_service,
@@ -92,7 +92,7 @@ def run_baostock_minute_daily(
         codes = load_active_baostock_codes(limit_assets=limit_assets)
         result["symbol_count"] = len(codes)
         login_or_raise()
-        for code in codes:
+        for index, code in enumerate(codes):
             try:
                 params = request_params(code, target_date, target_date, freq, adjust_type)
                 rows = query_baostock_minute_rows_once(
@@ -117,7 +117,7 @@ def run_baostock_minute_daily(
                     result["rows_written"] += inserted_rows
                 else:
                     result["empty_count"] += 1
-            if sleep_seconds:
+            if sleep_seconds and index + 1 < len(codes):
                 time.sleep(sleep_seconds)
         if result["failed_count"] > 0:
             result["status"] = "partial_success"
