@@ -119,10 +119,6 @@ def _build_audit_row(
     strategy_id = str(review_row.get("strategy_id") or "")
     published_score = _optional_float(review_row.get("score_total"))
     published_score_source = _text(review_row.get("score_source"))
-    display_score = _optional_float((display_row or {}).get("score_total"))
-    if display_score is None:
-        display_score = published_score
-    display_score_source = _text((display_row or {}).get("score_source")) or published_score_source
 
     raw_candidate_score, raw_candidate_score_source = _raw_score_for_strategy(
         strategy_id=strategy_id,
@@ -134,10 +130,22 @@ def _build_audit_row(
         review_source=published_score_source,
         raw_candidate_score=raw_candidate_score,
     )
+    display_score = _optional_float((display_row or {}).get("score_total"))
+    if display_score is None:
+        display_score = published_score
+    display_score_source = _text((display_row or {}).get("score_source"))
+    if display_score_source:
+        display_score_source = _published_source_for_strategy(
+            strategy_id=strategy_id,
+            review_source=display_score_source,
+            raw_candidate_score=raw_candidate_score,
+        )
+    elif display_score == published_score:
+        display_score_source = normalized_published_source
     stock_name = _text((lineage_row or {}).get("stock_name") or (lineage_row or {}).get("name"))
     selection_reason = _selection_reason(lineage_row)
     eligibility_layer = _text((lineage_row or {}).get("phase12a_rule_layer") or (lineage_row or {}).get("eligibility_layer"))
-    data_date_used = _text((lineage_row or {}).get("trade_date") or review_row.get("trade_date") or trade_date)[:10]
+    data_date_used = _lineage_trade_date(lineage_row) or _text(review_row.get("trade_date") or trade_date)[:10]
 
     row = {
         "trade_date": trade_date,
@@ -181,18 +189,15 @@ def _resolve_lineage_row(
     review_row: dict[str, Any],
     strategy_result: dict[str, Any],
 ) -> dict[str, Any] | None:
-    keys = [
-        _row_key(trade_date, review_row.get("asset_id")),
-        _row_key(_text(review_row.get("trade_date"))[:10] or trade_date, review_row.get("asset_id")),
-    ]
+    requested_asset_key = _row_key(trade_date, review_row.get("asset_id"))[1]
+    audit_date = _text(review_row.get("trade_date"))[:10] or trade_date
     for frame_name in _candidate_frame_order(strategy_id):
         rows = strategy_result.get(frame_name)
         if not isinstance(rows, list):
             continue
-        lookup = _rows_by_key(rows, trade_date=trade_date)
-        for key in keys:
-            if key in lookup:
-                return lookup[key]
+        matched = _latest_eligible_row(rows, asset_key=requested_asset_key, trade_date=audit_date)
+        if matched is not None:
+            return matched
     return None
 
 
@@ -223,10 +228,39 @@ def _rows_by_key(rows: list[dict[str, Any]], *, trade_date: str) -> dict[tuple[s
     return lookup
 
 
+def _latest_eligible_row(rows: list[dict[str, Any]], *, asset_key: str, trade_date: str) -> dict[str, Any] | None:
+    matched: dict[str, Any] | None = None
+    matched_date = ""
+    for row in rows:
+        row_asset_key = _row_asset_key(row)
+        row_date = _lineage_trade_date(row)
+        if not row_asset_key or row_asset_key != asset_key or not row_date:
+            continue
+        if row_date > trade_date:
+            continue
+        if matched is None or row_date > matched_date:
+            matched = row
+            matched_date = row_date
+    return matched
+
+
 def _row_key(trade_date: str, asset_id: Any) -> tuple[str, str]:
     text = _text(asset_id)
     normalized = _normalize_asset_id(text)
     return trade_date[:10], normalized or text
+
+
+def _row_asset_key(row: dict[str, Any]) -> str:
+    for asset_value in (row.get("asset_id"), row.get("ts_code"), row.get("symbol"), row.get("stock_code")):
+        key = _row_key("", asset_value)[1]
+        if key:
+            return key
+    return ""
+
+
+def _lineage_trade_date(row: dict[str, Any] | None) -> str:
+    source_row = row or {}
+    return _text(source_row.get("trade_date") or source_row.get("date") or source_row.get("rebalance_date"))[:10]
 
 
 def _normalize_asset_id(value: str) -> str:
@@ -335,7 +369,8 @@ def _anomaly_flags(
         flags.append("published_display_score_mismatch")
     if lineage_row is None and not audit_row["selection_reason"] and not audit_row["eligibility_layer"]:
         flags.append("unknown_selection_reason")
-    if _text((lineage_row or {}).get("trade_date"))[:10] and _text((lineage_row or {}).get("trade_date"))[:10] < audit_row["trade_date"]:
+    lineage_trade_date = _lineage_trade_date(lineage_row)
+    if lineage_trade_date and lineage_trade_date < audit_row["trade_date"]:
         flags.append("stale_source")
     return flags
 

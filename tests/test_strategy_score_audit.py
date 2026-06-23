@@ -93,7 +93,104 @@ def test_tech_audit_tracks_raw_and_scaled_published_scores() -> None:
     assert row["raw_candidate_score_source"] == "bottleneck_score"
     assert row["published_score"] == 63.46
     assert row["published_score_source"] == "bottleneck_score_x100"
+    assert row["display_score_source"] == "bottleneck_score_x100"
     assert row["anomaly_flags"] == []
+
+
+def test_mid_trend_audit_resolves_latest_eligible_stale_lineage_row() -> None:
+    review_rows = [
+        {
+            "trade_date": "2026-06-22",
+            "asset_id": "CN:SZ:002080",
+            "rank": 1,
+            "score_total": 87.6,
+            "score_source": "mid_trend_funnel_score",
+            "strategy_id": "mid_trend",
+            "strategy_name": "Mid Trend",
+            "strategy_run_id": "strategy-eod-2026-06-22-local",
+            "source_type": "strategy_manifest",
+            "source_name": "strategy_mid_trend",
+            "source_rank": 1,
+            "review_tier": "top5_focus",
+        }
+    ]
+    strategy_results = {
+        "mid_trend": {
+            "signals": [
+                {
+                    "rebalance_date": "2026-06-20",
+                    "asset_id": "CN:SZ:002080",
+                    "mid_trend_funnel_score": 87.6,
+                    "selection_reason": "trend_support",
+                },
+                {
+                    "rebalance_date": "2026-06-24",
+                    "asset_id": "CN:SZ:002080",
+                    "mid_trend_funnel_score": 91.2,
+                    "selection_reason": "future_row",
+                },
+            ]
+        }
+    }
+
+    detail = build_strategy_score_audit(
+        trade_date="2026-06-22",
+        review_rows=review_rows,
+        strategy_results=strategy_results,
+        display_rows=[],
+    )
+
+    row = detail.iloc[0].to_dict()
+    assert row["raw_candidate_score"] == 87.6
+    assert row["raw_candidate_score_source"] == "mid_trend_funnel_score"
+    assert row["data_date_used"] == "2026-06-20"
+    assert "stale_source" in row["anomaly_flags"]
+    assert "missing_candidate_source" not in row["anomaly_flags"]
+
+
+def test_tech_display_score_fallback_uses_normalized_published_provenance() -> None:
+    detail = build_strategy_score_audit(
+        trade_date="2026-06-22",
+        review_rows=[
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Discovery",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_tech_bottleneck",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+            }
+        ],
+        strategy_results={
+            "tech_bottleneck": {
+                "review_rows": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "asset_id": "CN:SZ:300408",
+                        "bottleneck_score": 0.6346,
+                    }
+                ]
+            }
+        },
+        display_rows=[
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "strategy_id": "tech_bottleneck",
+            }
+        ],
+    )
+
+    row = detail.iloc[0].to_dict()
+    assert row["display_score"] == 63.46
+    assert row["published_score_source"] == "bottleneck_score_x100"
+    assert row["display_score_source"] == "bottleneck_score_x100"
 
 
 def test_strategy_score_audit_summary_counts_anomalies_by_type() -> None:
