@@ -79,10 +79,13 @@ def test_bootstrap_admin_account_creates_first_admin_and_writes_audit(monkeypatc
         email="bootstrap@example.com",
     )
 
-    check_sql, check_params = conn.cursor_obj.calls[0]
-    insert_sql, insert_params = conn.cursor_obj.calls[1]
-    audit_sql, audit_params = conn.cursor_obj.calls[2]
+    lock_sql, lock_params = conn.cursor_obj.calls[0]
+    check_sql, check_params = conn.cursor_obj.calls[1]
+    insert_sql, insert_params = conn.cursor_obj.calls[2]
+    audit_sql, audit_params = conn.cursor_obj.calls[3]
     assert result["id"] == 7
+    assert "LOCK TABLE identity.user_account" in lock_sql
+    assert lock_params is None
     assert "COUNT(*) AS active_admin_count" in check_sql
     assert check_params is None
     assert "INSERT INTO identity.user_account" in insert_sql
@@ -90,7 +93,7 @@ def test_bootstrap_admin_account_creates_first_admin_and_writes_audit(monkeypatc
     assert insert_params["password_hash"] == "hashed::secret123"
     assert "'admin'" in insert_sql
     assert "INSERT INTO audit.audit_log" in audit_sql
-    assert audit_params["actor_user_id"] == 7
+    assert audit_params["actor_user_id"] is None
     assert audit_params["action"] == "bootstrap_admin_account"
     assert audit_params["target_id"] == "7"
     assert audit_params["metadata"] == '{"username": "bootstrap-admin"}'
@@ -109,7 +112,8 @@ def test_bootstrap_admin_account_rejects_when_active_admin_exists(monkeypatch):
             email="bootstrap@example.com",
         )
 
-    assert len(conn.cursor_obj.calls) == 1
+    assert len(conn.cursor_obj.calls) == 2
+    assert "LOCK TABLE identity.user_account" in conn.cursor_obj.calls[0][0]
 
 
 def test_enable_user_account_by_username_reenables_disabled_user(monkeypatch):
@@ -162,6 +166,37 @@ def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys
     assert captured["call"] == {
         "username": "bootstrap-admin",
         "password": "secret123",
+        "display_name": "Bootstrap Admin",
+        "email": "bootstrap@example.com",
+    }
+    assert capsys.readouterr().out.strip() == "dashboard_admin_bootstrapped|bootstrap-admin"
+
+
+def test_dashboard_bootstrap_admin_cli_prompts_for_password_when_omitted(monkeypatch, capsys):
+    captured = {}
+
+    def fake_bootstrap_admin_account(**kwargs):
+        captured["call"] = kwargs
+        return {"username": kwargs["username"]}
+
+    monkeypatch.setattr(cli, "bootstrap_admin_account", fake_bootstrap_admin_account)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "prompt-secret")
+
+    cli.main_for_args(
+        [
+            "dashboard-bootstrap-admin",
+            "--username",
+            "bootstrap-admin",
+            "--display-name",
+            "Bootstrap Admin",
+            "--email",
+            "bootstrap@example.com",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "bootstrap-admin",
+        "password": "prompt-secret",
         "display_name": "Bootstrap Admin",
         "email": "bootstrap@example.com",
     }

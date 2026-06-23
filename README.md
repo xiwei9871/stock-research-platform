@@ -83,6 +83,15 @@ Bootstrap the first dashboard admin:
 ```bash
 stock-research dashboard-bootstrap-admin \
   --username admin \
+  --display-name 'Platform Admin' \
+  --email admin@example.com
+```
+
+Optional non-interactive password entry:
+
+```bash
+stock-research dashboard-bootstrap-admin \
+  --username admin \
   --password 'change-me-now' \
   --display-name 'Platform Admin' \
   --email admin@example.com

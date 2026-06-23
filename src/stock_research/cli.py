@@ -1,5 +1,6 @@
 import argparse
 import datetime as dt
+import getpass
 import json
 import math
 import os
@@ -1417,7 +1418,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dashboard_bootstrap_admin = subparsers.add_parser("dashboard-bootstrap-admin")
     dashboard_bootstrap_admin.add_argument("--username", required=True)
-    dashboard_bootstrap_admin.add_argument("--password", required=True)
+    dashboard_bootstrap_admin.add_argument("--password")
     dashboard_bootstrap_admin.add_argument("--display-name", required=True)
     dashboard_bootstrap_admin.add_argument("--email", required=True)
 
@@ -4739,9 +4740,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "dashboard-api":
         run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "dashboard-bootstrap-admin":
+        password = args.password or getpass.getpass("Dashboard admin password: ")
         user_account = bootstrap_admin_account(
             username=args.username,
-            password=args.password,
+            password=password,
             display_name=args.display_name,
             email=args.email,
         )

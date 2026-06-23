@@ -101,6 +101,9 @@ def bootstrap_admin_account(
     email: str | None,
     service: str = SETTINGS.research_service,
 ) -> dict[str, object]:
+    lock_user_account_sql = """
+    LOCK TABLE identity.user_account IN EXCLUSIVE MODE
+    """
     count_active_admins_sql = """
     SELECT COUNT(*) AS active_admin_count
     FROM identity.user_account
@@ -134,6 +137,7 @@ def bootstrap_admin_account(
     }
     with connect(service) as conn:
         with conn.cursor() as cur:
+            cur.execute(lock_user_account_sql)
             cur.execute(count_active_admins_sql)
             admin_count_row = cur.fetchone()
             active_admin_count = int(admin_count_row["active_admin_count"]) if admin_count_row else 0
@@ -146,7 +150,7 @@ def bootstrap_admin_account(
             user_account = _serialize_user_account(row)
             _insert_audit_log(
                 cur,
-                actor_user_id=int(user_account["id"]),
+                actor_user_id=None,
                 action="bootstrap_admin_account",
                 target_type="user_account",
                 target_id=str(user_account["id"]),
