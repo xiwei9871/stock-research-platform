@@ -41,7 +41,7 @@ def build_strategy_score_audit(
     display_rows: list[dict[str, Any]],
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
-    display_lookup = _rows_by_key(display_rows, trade_date=trade_date)
+    display_lookup = _display_rows_by_key(display_rows, trade_date=trade_date)
     for review_row in review_rows:
         strategy_id = str(review_row.get("strategy_id") or "")
         strategy_result = strategy_results.get(strategy_id) or {}
@@ -51,7 +51,7 @@ def build_strategy_score_audit(
             review_row=review_row,
             strategy_result=strategy_result,
         )
-        display_row = display_lookup.get(_row_key(trade_date, review_row.get("asset_id")))
+        display_row = display_lookup.get(_display_row_key(trade_date, review_row))
         rows.append(
             _build_audit_row(
                 trade_date=trade_date,
@@ -192,8 +192,8 @@ def _resolve_lineage_row(
     requested_asset_key = _row_key(trade_date, review_row.get("asset_id"))[1]
     audit_date = _text(review_row.get("trade_date"))[:10] or trade_date
     for frame_name in _candidate_frame_order(strategy_id):
-        rows = strategy_result.get(frame_name)
-        if not isinstance(rows, list):
+        rows = _records_list(strategy_result.get(frame_name))
+        if not rows:
             continue
         matched = _latest_eligible_row(rows, asset_key=requested_asset_key, trade_date=audit_date)
         if matched is not None:
@@ -228,6 +228,15 @@ def _rows_by_key(rows: list[dict[str, Any]], *, trade_date: str) -> dict[tuple[s
     return lookup
 
 
+def _display_rows_by_key(rows: list[dict[str, Any]], *, trade_date: str) -> dict[tuple[str, str, str], dict[str, Any]]:
+    lookup: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = _display_row_key(trade_date, row)
+        if key[1]:
+            lookup[key] = row
+    return lookup
+
+
 def _latest_eligible_row(rows: list[dict[str, Any]], *, asset_key: str, trade_date: str) -> dict[str, Any] | None:
     matched: dict[str, Any] | None = None
     matched_date = ""
@@ -250,6 +259,13 @@ def _row_key(trade_date: str, asset_id: Any) -> tuple[str, str]:
     return trade_date[:10], normalized or text
 
 
+def _display_row_key(trade_date: str, row: dict[str, Any]) -> tuple[str, str, str]:
+    row_trade_date = _text(row.get("trade_date") or row.get("date") or row.get("rebalance_date"))[:10] or trade_date[:10]
+    asset_key = _row_key(row_trade_date, row.get("asset_id") or row.get("ts_code") or row.get("symbol") or row.get("stock_code"))[1]
+    strategy_id = _text(row.get("strategy_id"))
+    return row_trade_date, asset_key, strategy_id
+
+
 def _row_asset_key(row: dict[str, Any]) -> str:
     for asset_value in (row.get("asset_id"), row.get("ts_code"), row.get("symbol"), row.get("stock_code")):
         key = _row_key("", asset_value)[1]
@@ -261,6 +277,16 @@ def _row_asset_key(row: dict[str, Any]) -> str:
 def _lineage_trade_date(row: dict[str, Any] | None) -> str:
     source_row = row or {}
     return _text(source_row.get("trade_date") or source_row.get("date") or source_row.get("rebalance_date"))[:10]
+
+
+def _records_list(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if isinstance(value, pd.DataFrame):
+        return value.to_dict("records")
+    if isinstance(value, list):
+        return [dict(row) for row in value]
+    return []
 
 
 def _normalize_asset_id(value: str) -> str:

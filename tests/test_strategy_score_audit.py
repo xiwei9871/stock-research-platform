@@ -1,3 +1,5 @@
+import pandas as pd
+
 from stock_research.strategy_score_audit import (
     build_strategy_score_audit,
     summarize_strategy_score_audit,
@@ -191,6 +193,127 @@ def test_tech_display_score_fallback_uses_normalized_published_provenance() -> N
     assert row["display_score"] == 63.46
     assert row["published_score_source"] == "bottleneck_score_x100"
     assert row["display_score_source"] == "bottleneck_score_x100"
+
+
+def test_display_rows_are_scoped_by_strategy_id_for_same_asset_same_date() -> None:
+    detail = build_strategy_score_audit(
+        trade_date="2026-06-22",
+        review_rows=[
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Discovery",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_tech_bottleneck",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+            },
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 91.2,
+                "score_source": "mid_trend_funnel_score",
+                "strategy_id": "mid_trend",
+                "strategy_name": "Mid Trend",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_mid_trend",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+            },
+        ],
+        strategy_results={
+            "tech_bottleneck": {
+                "review_rows": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "asset_id": "CN:SZ:300408",
+                        "bottleneck_score": 0.6346,
+                    }
+                ]
+            },
+            "mid_trend": {
+                "signals": [
+                    {
+                        "trade_date": "2026-06-22",
+                        "asset_id": "CN:SZ:300408",
+                        "mid_trend_funnel_score": 91.2,
+                        "selection_reason": "trend_support",
+                    }
+                ]
+            },
+        },
+        display_rows=[
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "strategy_id": "mid_trend",
+                "score_total": 88.8,
+                "score_source": "mid_trend_dashboard_score",
+            },
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "strategy_id": "tech_bottleneck",
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+            },
+        ],
+    )
+
+    by_strategy = {row["strategy_id"]: row for row in detail.to_dict("records")}
+    assert by_strategy["tech_bottleneck"]["display_score"] == 63.46
+    assert by_strategy["tech_bottleneck"]["display_score_source"] == "bottleneck_score_x100"
+    assert by_strategy["mid_trend"]["display_score"] == 88.8
+    assert by_strategy["mid_trend"]["display_score_source"] == "mid_trend_dashboard_score"
+
+
+def test_lineage_resolution_accepts_dataframe_backed_strategy_results() -> None:
+    detail = build_strategy_score_audit(
+        trade_date="2026-06-22",
+        review_rows=[
+            {
+                "trade_date": "2026-06-22",
+                "asset_id": "CN:SZ:300408",
+                "rank": 1,
+                "score_total": 63.46,
+                "score_source": "bottleneck_score",
+                "strategy_id": "tech_bottleneck",
+                "strategy_name": "Tech Bottleneck Discovery",
+                "strategy_run_id": "strategy-eod-2026-06-22-local",
+                "source_type": "strategy_manifest",
+                "source_name": "strategy_tech_bottleneck",
+                "source_rank": 1,
+                "review_tier": "top5_focus",
+            }
+        ],
+        strategy_results={
+            "tech_bottleneck": {
+                "review_rows": pd.DataFrame(
+                    [
+                        {
+                            "trade_date": "2026-06-22",
+                            "asset_id": "CN:SZ:300408",
+                            "bottleneck_score": 0.6346,
+                            "stock_name": "三环集团",
+                        }
+                    ]
+                )
+            }
+        },
+        display_rows=[],
+    )
+
+    row = detail.iloc[0].to_dict()
+    assert row["raw_candidate_score"] == 0.6346
+    assert row["stock_name"] == "三环集团"
+    assert "missing_candidate_source" not in row["anomaly_flags"]
 
 
 def test_strategy_score_audit_summary_counts_anomalies_by_type() -> None:
