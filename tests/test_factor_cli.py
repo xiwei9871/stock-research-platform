@@ -6855,7 +6855,14 @@ def test_strategy_score_audit_cli_surfaces_persisted_double_failure_fallback(mon
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(cli, "load_strategy_score_audit_summary", lambda **kwargs: __import__("stock_research.strategy_eod_publish", fromlist=["load_strategy_score_audit_summary"]).load_strategy_score_audit_summary(trade_date="2026-06-22", output_root=tmp_path))
+    monkeypatch.setattr(
+        cli,
+        "load_strategy_score_audit_summary",
+        lambda **kwargs: __import__(
+            "stock_research.strategy_eod_publish",
+            fromlist=["load_strategy_score_audit_summary"],
+        ).load_strategy_score_audit_summary(output_root=tmp_path, **kwargs),
+    )
 
     cli.main_for_args(["strategy-score-audit", "--trade-date", "2026-06-22"])
 

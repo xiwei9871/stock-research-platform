@@ -342,6 +342,10 @@ def load_strategy_score_audit_summary(
         if not score_audit:
             raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
         score_audit.setdefault("trade_date", trade_date)
+        score_audit.pop("summary_path", None)
+        detail_path = _optional_path(score_audit.get("detail_path"))
+        if detail_path is None or not detail_path.exists():
+            score_audit.pop("detail_path", None)
         return score_audit
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary.setdefault("trade_date", trade_date)

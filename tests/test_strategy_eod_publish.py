@@ -1,3 +1,5 @@
+import json
+
 from stock_research import strategy_eod_publish
 
 
@@ -1045,4 +1047,63 @@ def test_publish_strategy_eod_score_audit_double_failure_is_loadable_from_publis
         "trade_date": "2026-06-22",
         "status": "failed",
         "error": "primary audit write failed",
+    }
+
+
+def test_load_strategy_score_audit_summary_fallback_strips_stale_embedded_paths(tmp_path):
+    output_dir = tmp_path / "research" / "strategy_daily_eod" / "2026-06-22"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    live_detail_path = output_dir / "live_detail.csv"
+    live_detail_path.write_text("trade_date\n2026-06-22\n", encoding="utf-8")
+    (output_dir / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-06-22",
+                "score_audit": {
+                    "trade_date": "2026-06-22",
+                    "status": "failed",
+                    "error": "primary audit write failed",
+                    "summary_path": str(output_dir / "strategy_score_audit_summary.json"),
+                    "detail_path": str(output_dir / "missing_detail.csv"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = strategy_eod_publish.load_strategy_score_audit_summary(
+        trade_date="2026-06-22",
+        output_root=tmp_path,
+    )
+
+    assert loaded == {
+        "trade_date": "2026-06-22",
+        "status": "failed",
+        "error": "primary audit write failed",
+    }
+
+    (output_dir / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-06-22",
+                "score_audit": {
+                    "trade_date": "2026-06-22",
+                    "status": "success",
+                    "detail_path": str(live_detail_path),
+                    "summary_path": str(output_dir / "strategy_score_audit_summary.json"),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded_with_live_detail = strategy_eod_publish.load_strategy_score_audit_summary(
+        trade_date="2026-06-22",
+        output_root=tmp_path,
+    )
+
+    assert loaded_with_live_detail == {
+        "trade_date": "2026-06-22",
+        "status": "success",
+        "detail_path": str(live_detail_path),
     }
