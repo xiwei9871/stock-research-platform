@@ -2995,6 +2995,14 @@ def build_parser() -> argparse.ArgumentParser:
     mid_trend_shadow_backtest.add_argument("--adjust-type", default="hfq")
     mid_trend_shadow_backtest.add_argument("--output-dir", default="outputs/research")
 
+    mid_trend_validation = subparsers.add_parser("validate-mid-trend-strategies")
+    mid_trend_validation.add_argument("--start-date", required=True)
+    mid_trend_validation.add_argument("--end-date", required=True)
+    mid_trend_validation.add_argument(
+        "--output-dir",
+        default="outputs/research/mid_trend_validation",
+    )
+
     mid_trend_shadow_weekly_optimization = subparsers.add_parser(
         "optimize-mid-trend-shadow-weekly"
     )
@@ -6172,6 +6180,19 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"mid_trend_shadow_backtest|summary|{result['paths']['summary']}")
         print(f"mid_trend_shadow_backtest|report|{result['paths']['report']}")
         print(f"mid_trend_shadow_backtest|rows|{len(result.get('equity_curve', []))}")
+    elif args.command == "validate-mid-trend-strategies":
+        from stock_research.mid_trend_strategy_validation import (
+            run_mid_trend_strategy_validation,
+        )
+
+        result = run_mid_trend_strategy_validation(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_validation|winner|{result['winner'].get('strategy_id', 'none')}")
+        print(f"mid_trend_validation|scorecard|{result['paths']['scorecard']}")
+        print(f"mid_trend_validation|report|{result['paths']['report']}")
     elif args.command == "optimize-mid-trend-shadow-weekly":
         top_n_values = (
             parse_int_list(args.top_n_values, "--top-n-values")

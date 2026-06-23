@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from importlib import import_module
+from pathlib import Path
 
 import pandas as pd
 
+from stock_research import cli
 from stock_research.current_mid_trend_strategy_v1 import (
     build_current_mid_trend_strategy_v1_from_frames,
 )
@@ -16,6 +18,7 @@ from stock_research.mid_trend_strategy_validation import (
     discover_mid_trend_strategy_candidates,
     filter_complete_mid_trend_candidates,
     rank_mid_trend_validation_scorecard,
+    run_mid_trend_strategy_validation,
 )
 
 
@@ -345,6 +348,98 @@ def test_rank_mid_trend_validation_scorecard_prefers_zero_drawdown_when_other_me
     ranked = rank_mid_trend_validation_scorecard(scorecard)
 
     assert ranked.iloc[0]["strategy_id"] == "zero_drawdown"
+
+
+def test_run_mid_trend_strategy_validation_returns_ranked_winner(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.discover_mid_trend_strategy_candidates",
+        lambda: [
+            {
+                "strategy_id": "winner",
+                "group": "portfolio",
+                "runner_name": "unused",
+                "result_keys": {"holdings", "trades", "equity", "summary"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.execute_mid_trend_candidate",
+        lambda candidate, start_date, end_date, output_dir: {
+            "strategy_id": candidate["strategy_id"],
+            "summary_frame": pd.DataFrame(
+                [
+                    {"metric": "total_return", "value": 0.25},
+                    {"metric": "max_drawdown", "value": -0.05},
+                    {"metric": "average_turnover", "value": 0.10},
+                ]
+            ),
+            "equity_frame": pd.DataFrame(
+                [
+                    {"date": "2025-01-31", "equity": 1.05},
+                    {"date": "2025-02-28", "equity": 1.25},
+                ]
+            ),
+            "holdings_frame": pd.DataFrame(),
+            "trades_frame": pd.DataFrame(),
+        },
+    )
+
+    result = run_mid_trend_strategy_validation(
+        start_date="2025-01-01",
+        end_date="2025-01-31",
+        output_dir=tmp_path,
+    )
+
+    assert result["winner"]["strategy_id"] == "winner"
+    assert Path(result["paths"]["scorecard"]).exists()
+
+
+def test_cli_dispatches_mid_trend_strategy_validation(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.run_mid_trend_strategy_validation",
+        lambda **kwargs: {
+            "winner": {"strategy_id": "winner"},
+            "paths": {
+                "scorecard": str(tmp_path / "scorecard.csv"),
+                "report": str(tmp_path / "report.md"),
+            },
+        },
+    )
+
+    args = cli.build_parser().parse_args(
+        [
+            "validate-mid-trend-strategies",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-01-31",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert args.command == "validate-mid-trend-strategies"
+
+    cli.main_for_args(
+        [
+            "validate-mid-trend-strategies",
+            "--start-date",
+            "2025-01-01",
+            "--end-date",
+            "2025-01-31",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "mid_trend_validation|winner|winner" in out
 
 
 def _current_regime_frame() -> pd.DataFrame:

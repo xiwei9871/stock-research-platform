@@ -1,8 +1,21 @@
 from __future__ import annotations
 
+from importlib import import_module
+from pathlib import Path
+
 import pandas as pd
 
 SEVERE_DRAWDOWN_THRESHOLD = 0.20
+
+DEFAULT_CURRENT_REGIME_PATH = (
+    "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/"
+    "market_regime_confirmation_daily.csv"
+)
+DEFAULT_CURRENT_FUNNEL_DETAIL_PATH = (
+    "outputs/research/mid_trend_watch_funnel_20230103_20260605_aligned/"
+    "mid_trend_watch_funnel_detail.csv"
+)
+DEFAULT_SHADOW_TOP10_PATH = "outputs/research/mid_trend_shadow_top10.csv"
 
 
 def discover_mid_trend_strategy_candidates() -> list[dict[str, object]]:
@@ -132,6 +145,81 @@ def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame
         ],
         ascending=[True, False, False, False, True, False],
     ).reset_index(drop=True)
+
+
+def execute_mid_trend_candidate(
+    candidate: dict[str, object],
+    *,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+) -> dict[str, object]:
+    strategy_id = str(candidate["strategy_id"])
+    runner_name = str(candidate["runner_name"])
+    module_name = f"stock_research.{strategy_id}"
+    runner = getattr(import_module(module_name), runner_name)
+    candidate_output_dir = Path(output_dir) / strategy_id
+
+    if strategy_id == "current_mid_trend_strategy_v1":
+        return runner(
+            start_date=start_date,
+            end_date=end_date,
+            regime_path=DEFAULT_CURRENT_REGIME_PATH,
+            funnel_detail_path=DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
+            output_dir=candidate_output_dir,
+        )
+
+    if strategy_id == "mid_trend_shadow_backtest":
+        return runner(
+            shadow_top10_path=DEFAULT_SHADOW_TOP10_PATH,
+            start_date=start_date,
+            end_date=end_date,
+            output_dir=candidate_output_dir,
+        )
+
+    raise ValueError(f"Unsupported mid-trend validation candidate: {strategy_id}")
+
+
+def run_mid_trend_strategy_validation(
+    *,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path,
+) -> dict[str, object]:
+    output_path = Path(output_dir)
+    candidates = filter_complete_mid_trend_candidates(
+        discover_mid_trend_strategy_candidates()
+    )
+    results = [
+        {
+            "strategy_id": str(candidate["strategy_id"]),
+            **execute_mid_trend_candidate(
+                candidate,
+                start_date=start_date,
+                end_date=end_date,
+                output_dir=output_path,
+            ),
+        }
+        for candidate in candidates
+    ]
+    scorecard = build_mid_trend_validation_scorecard(results)
+    ranked = rank_mid_trend_validation_scorecard(scorecard)
+    winner = ranked.iloc[0].to_dict() if not ranked.empty else {}
+    scorecard_path = output_path / "mid_trend_validation_scorecard.csv"
+    report_path = output_path / "mid_trend_validation_report.md"
+    scorecard_path.parent.mkdir(parents=True, exist_ok=True)
+    ranked.to_csv(scorecard_path, index=False)
+    report_path.write_text(
+        "# Mid Trend Validation\n\n"
+        f"Winner: {winner.get('strategy_id', 'none')}\n",
+        encoding="utf-8",
+    )
+    return {
+        "candidates": candidates,
+        "ranked_scorecard": ranked,
+        "winner": winner,
+        "paths": {"scorecard": str(scorecard_path), "report": str(report_path)},
+    }
 
 
 def _normalize_summary_frame(summary: object) -> pd.DataFrame:
