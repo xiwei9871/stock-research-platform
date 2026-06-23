@@ -14,6 +14,7 @@ from stock_research.mid_trend_shadow_backtest import (
 )
 import stock_research.mid_trend_strategy_validation as mid_trend_strategy_validation
 from stock_research.mid_trend_strategy_validation import (
+    build_mid_trend_replay_audit,
     build_mid_trend_validation_scorecard,
     discover_mid_trend_strategy_candidates,
     execute_mid_trend_candidate,
@@ -349,6 +350,43 @@ def test_rank_mid_trend_validation_scorecard_prefers_zero_drawdown_when_other_me
     ranked = rank_mid_trend_validation_scorecard(scorecard)
 
     assert ranked.iloc[0]["strategy_id"] == "zero_drawdown"
+
+
+def test_build_mid_trend_replay_audit_outputs_core_artifacts() -> None:
+    holdings = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-02", "asset_id": "A", "target_weight": 0.5},
+            {"trade_date": "2025-01-03", "asset_id": "B", "target_weight": 0.5},
+        ]
+    )
+    trades = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-03", "asset_id": "A", "side": "sell"},
+            {"trade_date": "2025-01-03", "asset_id": "B", "side": "buy"},
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {"trade_date": "2025-01-03", "asset_id": "B", "close": 10},
+            {"trade_date": "2025-01-10", "asset_id": "B", "close": 9},
+            {"trade_date": "2025-01-17", "asset_id": "B", "close": 8},
+        ]
+    )
+
+    result = build_mid_trend_replay_audit(
+        strategy_id="winner",
+        holdings=holdings,
+        trades=trades,
+        prices=prices,
+    )
+
+    assert set(result.keys()) >= {
+        "daily_target_snapshot",
+        "daily_rebalance_actions",
+        "trade_audit_detail",
+        "monthly_issue_summary",
+    }
+    assert "bad_buy" in set(result["trade_audit_detail"]["audit_label"])
 
 
 def test_run_mid_trend_strategy_validation_returns_ranked_winner(

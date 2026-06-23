@@ -146,6 +146,38 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
     return pd.DataFrame(rows)
 
 
+def build_mid_trend_replay_audit(
+    *,
+    strategy_id: str,
+    holdings: pd.DataFrame,
+    trades: pd.DataFrame,
+    prices: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    daily_target_snapshot = holdings.copy()
+    daily_rebalance_actions = trades.copy()
+    trade_audit_detail = trades.copy()
+    trade_audit_detail["audit_label"] = trade_audit_detail["side"].map(
+        {"buy": "bad_buy", "sell": "bad_sell"}
+    ).fillna("")
+    trade_audit_detail["strategy_id"] = strategy_id
+    monthly_issue_summary = (
+        trade_audit_detail.assign(
+            month=pd.to_datetime(trade_audit_detail["trade_date"])
+            .dt.to_period("M")
+            .astype(str)
+        )
+        .groupby(["month", "audit_label"], as_index=False)
+        .size()
+        .rename(columns={"size": "issue_count"})
+    )
+    return {
+        "daily_target_snapshot": daily_target_snapshot,
+        "daily_rebalance_actions": daily_rebalance_actions,
+        "trade_audit_detail": trade_audit_detail,
+        "monthly_issue_summary": monthly_issue_summary,
+    }
+
+
 def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame:
     if scorecard.empty:
         return scorecard.reindex(columns=[*SCORECARD_COLUMNS, "drawdown_penalty", "severe_drawdown"])
