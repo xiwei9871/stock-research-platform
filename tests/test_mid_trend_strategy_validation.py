@@ -14,6 +14,7 @@ from stock_research.mid_trend_strategy_validation import (
     build_mid_trend_validation_scorecard,
     discover_mid_trend_strategy_candidates,
     filter_complete_mid_trend_candidates,
+    normalize_mid_trend_validation_result,
     rank_mid_trend_validation_scorecard,
 )
 
@@ -104,6 +105,83 @@ def test_filter_complete_mid_trend_candidates_keeps_only_complete_portfolio_vers
     assert [item["strategy_id"] for item in filtered] == ["current_mid_trend_strategy_v1"]
 
 
+def test_normalize_mid_trend_validation_result_supports_known_strategy_outputs() -> None:
+    current_result = build_current_mid_trend_strategy_v1_from_frames(
+        regime=_current_regime_frame(),
+        funnel=_current_funnel_frame(),
+        prices=_current_prices_frame(),
+        asset_names=_current_asset_names_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
+    )
+    shadow_result = build_mid_trend_shadow_backtest_from_frames(
+        shadow_top10=_shadow_top10_frame(),
+        prices=_shadow_prices_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
+        transaction_cost_bps=10.0,
+    )
+
+    normalized_current = normalize_mid_trend_validation_result(
+        {"strategy_id": "current_mid_trend_strategy_v1", **current_result}
+    )
+    normalized_shadow = normalize_mid_trend_validation_result(
+        {"strategy_id": "mid_trend_shadow_backtest", **shadow_result}
+    )
+
+    assert list(normalized_current["summary_frame"].columns) == ["metric", "value"]
+    assert "total_return" in set(normalized_current["summary_frame"]["metric"])
+    assert "date" in normalized_current["equity_frame"].columns
+    assert list(normalized_shadow["summary_frame"].columns) == ["metric", "value"]
+    assert "total_return" in set(normalized_shadow["summary_frame"]["metric"])
+    assert "date" in normalized_shadow["equity_frame"].columns
+
+
+def test_build_mid_trend_validation_scorecard_consumes_real_candidate_outputs() -> None:
+    current_result = build_current_mid_trend_strategy_v1_from_frames(
+        regime=_current_regime_frame(),
+        funnel=_current_funnel_frame(),
+        prices=_current_prices_frame(),
+        asset_names=_current_asset_names_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
+    )
+    shadow_result = build_mid_trend_shadow_backtest_from_frames(
+        shadow_top10=_shadow_top10_frame(),
+        prices=_shadow_prices_frame(),
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        top_n=2,
+        transaction_cost_bps=10.0,
+    )
+
+    scorecard = build_mid_trend_validation_scorecard(
+        [
+            {"strategy_id": "current_mid_trend_strategy_v1", **current_result},
+            {"strategy_id": "mid_trend_shadow_backtest", **shadow_result},
+        ]
+    )
+
+    assert set(scorecard["strategy_id"]) == {
+        "current_mid_trend_strategy_v1",
+        "mid_trend_shadow_backtest",
+    }
+    current_row = scorecard.loc[
+        scorecard["strategy_id"] == "current_mid_trend_strategy_v1"
+    ].iloc[0]
+    shadow_row = scorecard.loc[
+        scorecard["strategy_id"] == "mid_trend_shadow_backtest"
+    ].iloc[0]
+    assert current_row["total_return"] > 0
+    assert current_row["max_drawdown"] == 0.0
+    assert pd.isna(current_row["turnover_penalized_stability"])
+    assert shadow_row["total_return"] > 0
+    assert shadow_row["max_drawdown"] == 0.0
+
+
 def test_build_mid_trend_validation_scorecard_extracts_five_metrics() -> None:
     scorecard = build_mid_trend_validation_scorecard(
         [
@@ -133,6 +211,37 @@ def test_build_mid_trend_validation_scorecard_extracts_five_metrics() -> None:
     assert row["return_drawdown_ratio"] == 5.0
     assert row["monthly_win_rate"] == 1.0
     assert row["turnover_penalized_stability"] > 0
+
+
+def test_build_mid_trend_validation_scorecard_does_not_default_missing_turnover_to_zero() -> None:
+    scorecard = build_mid_trend_validation_scorecard(
+        [
+            {
+                "strategy_id": "current_mid_trend_strategy_v1",
+                "summary": pd.DataFrame(
+                    [
+                        {
+                            "strategy_family": "current_mid_trend_strategy_v1",
+                            "total_return": 0.50,
+                            "annualized_return": 0.40,
+                            "max_drawdown": -0.10,
+                            "days": 40,
+                        }
+                    ]
+                ),
+                "equity": pd.DataFrame(
+                    [
+                        {"trade_date": "2025-01-31", "equity": 1.02},
+                        {"trade_date": "2025-02-28", "equity": 1.05},
+                    ]
+                ),
+            }
+        ]
+    )
+
+    row = scorecard.iloc[0]
+    assert row["monthly_win_rate"] == 1.0
+    assert pd.isna(row["turnover_penalized_stability"])
 
 
 def test_rank_mid_trend_validation_scorecard_prefers_better_drawdown_efficiency_and_stability() -> None:
