@@ -85,6 +85,7 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
         summary_map = _numeric_summary_map(summary)
         equity = normalized["equity_frame"].copy()
         equity["date"] = pd.to_datetime(equity["date"])
+        equity = equity.sort_values("date").reset_index(drop=True)
         equity["month"] = equity["date"].dt.to_period("M")
         monthly_equity = equity.groupby("month")["equity"].last().pct_change().dropna()
         total_return = summary_map.get("total_return", float("nan"))

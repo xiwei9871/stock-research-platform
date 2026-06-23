@@ -216,6 +216,35 @@ def test_build_mid_trend_validation_scorecard_does_not_default_missing_turnover_
     assert pd.isna(row["turnover_penalized_stability"])
 
 
+def test_build_mid_trend_validation_scorecard_sorts_equity_before_monthly_aggregation() -> None:
+    scorecard = build_mid_trend_validation_scorecard(
+        [
+            {
+                "strategy_id": "unsorted_equity",
+                "summary_frame": pd.DataFrame(
+                    [
+                        {"metric": "total_return", "value": 0.20},
+                        {"metric": "max_drawdown", "value": -0.10},
+                        {"metric": "average_turnover", "value": 0.25},
+                    ]
+                ),
+                "equity_frame": pd.DataFrame(
+                    [
+                        {"date": "2025-02-28", "equity": 1.20},
+                        {"date": "2025-01-31", "equity": 1.00},
+                        {"date": "2025-01-15", "equity": 0.90},
+                        {"date": "2025-02-15", "equity": 0.80},
+                    ]
+                ),
+            }
+        ]
+    )
+
+    row = scorecard.iloc[0]
+    assert row["monthly_win_rate"] == 1.0
+    assert row["turnover_penalized_stability"] == 0.75
+
+
 def test_rank_mid_trend_validation_scorecard_prefers_better_drawdown_efficiency_and_stability() -> None:
     ranked = rank_mid_trend_validation_scorecard(
         pd.DataFrame(
