@@ -293,6 +293,7 @@ def test_run_baostock_minute_daily_retries_same_session_before_relogin(monkeypat
     target_date = dt.date(2024, 1, 8)
     events = []
     attempts = {"sh.600000": 0}
+    sleep_calls = []
     rows = [
         {"code": "sh.600000", "date": "2024-01-08", "time": "20240108093500000"},
     ]
@@ -339,6 +340,7 @@ def test_run_baostock_minute_daily_retries_same_session_before_relogin(monkeypat
         "upsert_stock_minute_bars",
         lambda queried_rows, *, freq, adjust_type, params: len(queried_rows),
     )
+    monkeypatch.setattr(minute_daily_ingest.time, "sleep", lambda seconds: sleep_calls.append(seconds))
     monkeypatch.setattr(minute_daily_ingest.bs, "logout", lambda: events.append(("logout", None)))
 
     result = minute_daily_ingest.run_baostock_minute_daily(
@@ -355,6 +357,7 @@ def test_run_baostock_minute_daily_retries_same_session_before_relogin(monkeypat
     assert result["relogin_count"] == 0
     assert result["rows_written"] == 1
     assert result["last_error"] is None
+    assert sleep_calls == [1.0, 1.0]
 
 
 def test_run_baostock_minute_daily_retries_failed_symbols_only_in_retry_queue(monkeypatch):
@@ -589,6 +592,81 @@ def test_run_baostock_minute_daily_writes_summary_and_failed_symbols(monkeypatch
     assert summary["failed_symbols"] == ["sz.000001"]
     assert summary["last_error"] == "10002007 retry me"
     assert failed_symbols == "sz.000001\n"
+
+
+def test_run_baostock_minute_daily_continues_after_upsert_failure(monkeypatch):
+    target_date = dt.date(2024, 1, 8)
+    events = []
+
+    rows_by_code = {
+        "sh.600000": [{"code": "sh.600000", "date": "2024-01-08", "time": "20240108093500000"}],
+        "sz.000001": [{"code": "sz.000001", "date": "2024-01-08", "time": "20240108093500000"}],
+    }
+
+    monkeypatch.setattr(minute_daily_ingest, "parse_trade_date", lambda value, timezone: target_date)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(minute_daily_ingest, "_try_acquire_daily_lock", lambda path: "lock-handle")
+    monkeypatch.setattr(minute_daily_ingest, "_release_daily_lock", lambda handle: None)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000", "sz.000001"],
+    )
+    monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: events.append(("login", None)))
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "query_baostock_minute_rows_once",
+        lambda code, start_date, end_date, *, freq, adjust_type: events.append(("query", code))
+        or rows_by_code[code],
+    )
+
+    def fake_upsert(queried_rows, *, freq, adjust_type, params):
+        code = queried_rows[0]["code"]
+        events.append(("upsert", code))
+        if code == "sh.600000":
+            raise RuntimeError("db write failed")
+        return len(queried_rows)
+
+    monkeypatch.setattr(minute_daily_ingest, "upsert_stock_minute_bars", fake_upsert)
+    monkeypatch.setattr(minute_daily_ingest.bs, "logout", lambda: events.append(("logout", None)))
+
+    result = minute_daily_ingest.run_baostock_minute_daily(
+        trade_date="2024-01-08",
+        retry_limit=0,
+    )
+
+    assert result == {
+        "status": "partial",
+        "trade_date": "2024-01-08",
+        "symbol_count": 2,
+        "success_count": 1,
+        "empty_count": 0,
+        "failed_count": 1,
+        "retry_count": 0,
+        "relogin_count": 0,
+        "rows_written": 1,
+        "failed_symbols": ["sh.600000"],
+        "last_error": "db write failed",
+    }
+    assert events == [
+        ("login", None),
+        ("query", "sh.600000"),
+        ("upsert", "sh.600000"),
+        ("query", "sz.000001"),
+        ("upsert", "sz.000001"),
+        ("query", "sh.600000"),
+        ("upsert", "sh.600000"),
+        ("logout", None),
+    ]
 
 
 def test_run_baostock_minute_daily_releases_lock_and_logs_out_when_login_fails(monkeypatch):

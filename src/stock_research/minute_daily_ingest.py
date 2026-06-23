@@ -12,6 +12,7 @@ import baostock as bs
 from stock_research.config import SETTINGS
 from stock_research.daily_close_pipeline import parse_trade_date
 from stock_research.minute_data import (
+    BAOSTOCK_RETRY_SLEEP_SECONDS,
     MINUTE_FIELDS,
     is_retryable_baostock_error,
     load_active_baostock_codes,
@@ -110,7 +111,29 @@ def _fetch_symbol_with_policy(
             last_error = str(exc)
             if attempt >= retry_limit or not is_retryable_baostock_error(last_error):
                 return None, attempt, last_error
+            time.sleep(BAOSTOCK_RETRY_SLEEP_SECONDS)
     return None, retry_limit, last_error
+
+
+def _write_symbol_rows(
+    code: str,
+    rows: list[dict[str, str]],
+    target_date: date,
+    *,
+    freq: str,
+    adjust_type: str,
+) -> tuple[int | None, str | None]:
+    try:
+        params = request_params(code, target_date, target_date, freq, adjust_type)
+        inserted_rows = upsert_stock_minute_bars(
+            rows,
+            freq=freq,
+            adjust_type=adjust_type,
+            params=params,
+        )
+    except Exception as exc:  # noqa: BLE001 - symbol-local write failures belong in partial results.
+        return None, str(exc)
+    return inserted_rows, None
 
 
 def _run_retry_queue(
@@ -140,13 +163,18 @@ def _run_retry_queue(
             last_error = error
             continue
 
-        params = request_params(code, target_date, target_date, freq, adjust_type)
-        inserted_rows = upsert_stock_minute_bars(
+        inserted_rows, write_error = _write_symbol_rows(
+            code,
             rows,
+            target_date,
             freq=freq,
             adjust_type=adjust_type,
-            params=params,
         )
+        if write_error is not None or inserted_rows is None:
+            failed_symbols.append(code)
+            last_error = write_error
+            continue
+
         if inserted_rows > 0:
             result["success_count"] += 1
             result["rows_written"] += inserted_rows
@@ -217,24 +245,22 @@ def run_baostock_minute_daily(
                     consecutive_retryable_failures = 0
             else:
                 consecutive_retryable_failures = 0
-                params = request_params(
+                inserted_rows, write_error = _write_symbol_rows(
                     code,
-                    decision.trade_date,
-                    decision.trade_date,
-                    freq,
-                    adjust_type,
-                )
-                inserted_rows = upsert_stock_minute_bars(
                     rows,
+                    decision.trade_date,
                     freq=freq,
                     adjust_type=adjust_type,
-                    params=params,
                 )
-                if inserted_rows > 0:
-                    result["success_count"] += 1
-                    result["rows_written"] += inserted_rows
+                if write_error is not None or inserted_rows is None:
+                    retry_queue.append(code)
+                    result["last_error"] = write_error
                 else:
-                    result["empty_count"] += 1
+                    if inserted_rows > 0:
+                        result["success_count"] += 1
+                        result["rows_written"] += inserted_rows
+                    else:
+                        result["empty_count"] += 1
             if sleep_seconds and index + 1 < len(codes):
                 time.sleep(sleep_seconds)
 
