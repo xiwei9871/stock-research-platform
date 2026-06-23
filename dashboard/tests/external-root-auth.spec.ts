@@ -99,15 +99,16 @@ async function mockStandardUserSession(page: Page) {
 test('unauthenticated root path shows LoginView and admin can login then logout back to LoginView', async ({ page }) => {
   await mockAdminSession(page);
 
-  await page.goto('/?view=user-management');
+  await page.goto('/');
 
-  await expect(page).toHaveURL(/\/\?view=user-management$/);
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
 
   await page.getByLabel('用户名或邮箱').fill('admin');
   await page.getByLabel('密码').fill('secret123');
   await page.getByRole('button', { name: '登录' }).click();
 
+  await page.getByRole('button', { name: '用户管理' }).click();
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
   await expect(page.getByRole('button', { name: '用户管理' })).toBeVisible();
 
@@ -120,15 +121,16 @@ test('unauthenticated root path shows LoginView and admin can login then logout 
 test('standard user login hides 用户管理 and can open 我的观察池 and 我的复盘 from the external root', async ({ page }) => {
   await mockStandardUserSession(page);
 
-  await page.goto('/?view=my-watchlist');
+  await page.goto('/');
 
-  await expect(page).toHaveURL(/\/\?view=my-watchlist$/);
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
 
   await page.getByLabel('用户名或邮箱').fill('analyst');
   await page.getByLabel('密码').fill('secret123');
   await page.getByRole('button', { name: '登录' }).click();
 
+  await page.getByRole('button', { name: '我的观察池' }).click();
   await expect(page.getByRole('heading', { name: '我的观察池' })).toBeVisible();
   await expect(page.getByText('暂无观察资产。')).toBeVisible();
   await expect(page.getByRole('button', { name: '用户管理' })).toHaveCount(0);
