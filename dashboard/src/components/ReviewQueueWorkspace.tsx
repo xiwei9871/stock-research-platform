@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchPlatformSummary, fetchReviewQueue, fetchStrategyScoreAudit } from '../api/client';
-import type {
-  EvidenceDigestAction,
-  PlatformSummary,
-  ReviewQueueGroup,
-  ReviewQueueResponse,
-  StrategyScoreAuditSummary
-} from '../api/types';
+import { fetchPlatformSummary, fetchReviewQueue } from '../api/client';
+import type { EvidenceDigestAction, PlatformSummary, ReviewQueueGroup, ReviewQueueResponse } from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
 
 type ReviewQueueWorkspaceProps = {
@@ -74,34 +68,6 @@ function sourceKindLabel(sourceKind: string) {
   return labels[sourceKind] ?? sourceKind;
 }
 
-function scoreAuditStatusLabel(audit: StrategyScoreAuditSummary | null) {
-  if (!audit) return '读取中';
-  if (audit.overall_status === 'ok') return '正常';
-  if (audit.overall_status === 'warning') return '需关注';
-  if (audit.overall_status === 'missing') return '待补齐';
-  return audit.overall_status;
-}
-
-function scoreAuditStatusClass(audit: StrategyScoreAuditSummary | null) {
-  if (!audit) return 'neutral';
-  if (audit.overall_status === 'ok') return 'success';
-  if (audit.overall_status === 'warning') return 'warning';
-  if (audit.overall_status === 'missing') return 'danger';
-  return 'neutral';
-}
-
-function topAuditAnomaly(audit: StrategyScoreAuditSummary | null) {
-  if (!audit) return '';
-  const entries = Object.entries(audit.anomaly_counts_by_type);
-  if (!entries.length) return '';
-  const [key, count] = entries.sort((left, right) => right[1] - left[1])[0];
-  const labels: Record<string, string> = {
-    mapped_score_without_raw_score: '映射分缺少原始分',
-    display_score_mismatch: '展示分不一致'
-  };
-  return `${labels[key] ?? key} ${count}`;
-}
-
 function collectGroupFreshness(groups: ReviewQueueGroup[]) {
   return groups.map((group) => {
     const latestDates = group.items
@@ -145,7 +111,6 @@ export function ReviewQueueWorkspace({
   const [platformSummary, setPlatformSummary] = useState<PlatformSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scoreAudit, setScoreAudit] = useState<StrategyScoreAuditSummary | null>(null);
   const [selectedBucket, setSelectedBucket] = useState<string>('strong');
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -163,17 +128,6 @@ export function ReviewQueueWorkspace({
       setQueue(nextQueue);
       setSelectedBucket(selection.selectedBucket);
       setSelectedQueueId(selection.selectedQueueId);
-      fetchStrategyScoreAudit(nextQueue.trade_date)
-        .then((audit) => {
-          if (requestIdRef.current === requestId) {
-            setScoreAudit(audit);
-          }
-        })
-        .catch(() => {
-          if (requestIdRef.current === requestId) {
-            setScoreAudit(null);
-          }
-        });
       fetchPlatformSummary()
         .then((summary) => {
           if (requestIdRef.current === requestId) {
@@ -317,25 +271,6 @@ export function ReviewQueueWorkspace({
                     </span>
                   ))}
                 </div>
-              </div>
-
-              <div className="workspace-panel audit-summary-panel" aria-label="策略打分审计摘要">
-                <div className="section-heading">
-                  <h2>策略打分审计</h2>
-                  <span className={`status-chip ${scoreAuditStatusClass(scoreAudit)}`}>{scoreAuditStatusLabel(scoreAudit)}</span>
-                </div>
-                <p className="muted">
-                  {scoreAudit?.overall_status === 'missing'
-                    ? '当前复盘日期暂无审计产物，请检查策略 EOD 产物链路。'
-                    : scoreAudit
-                      ? `已审计 ${scoreAudit.selected_rows}/${scoreAudit.total_rows} 条，异常 ${scoreAudit.anomaly_row_count} 条。`
-                      : '正在读取当前复盘日期的打分审计摘要。'}
-                </p>
-                {scoreAudit?.overall_status === 'warning' && topAuditAnomaly(scoreAudit) ? (
-                  <div className="tag-stack">
-                    <span className="status-chip warning">{topAuditAnomaly(scoreAudit)}</span>
-                  </div>
-                ) : null}
               </div>
 
               <div className="compact-toolbar">

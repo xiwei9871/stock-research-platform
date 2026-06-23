@@ -728,10 +728,6 @@ body {
   background: linear-gradient(180deg, #fffaf3 0%, #ffffff 100%) !important;
 }
 
-.audit-summary-panel {
-  align-content: start;
-}
-
 .readiness-value.ready {
   color: #146c2e;
 }
