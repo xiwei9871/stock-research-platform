@@ -202,6 +202,50 @@ def reset_user_password(
     return True
 
 
+def reset_user_password_by_username(
+    *,
+    username: str,
+    password: str,
+    actor_user_id: int | None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    service: str = SETTINGS.research_service,
+) -> bool:
+    sql = """
+    UPDATE identity.user_account
+    SET password_hash = %(password_hash)s,
+        password_updated_at = now(),
+        updated_at = now()
+    WHERE username = %(username)s
+    RETURNING id
+    """
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                {
+                    "username": username,
+                    "password_hash": hash_password(password),
+                },
+            )
+            row = cur.fetchone()
+            if row is None:
+                return False
+            user_id = int(row["id"])
+            _revoke_user_sessions(cur, user_id=user_id)
+            _insert_audit_log(
+                cur,
+                actor_user_id=actor_user_id,
+                action="admin_reset_password",
+                target_type="user_account",
+                target_id=str(user_id),
+                metadata={"username": username},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+    return True
+
+
 def set_user_active_state(
     *,
     user_id: int,

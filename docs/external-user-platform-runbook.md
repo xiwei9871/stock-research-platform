@@ -13,9 +13,13 @@ This runbook covers the externally deployed dashboard user platform at the produ
 ```bash
 cd /opt/stock-research
 git fetch --all
-git checkout external-user-platform-integration
+git checkout main
+# or: git checkout <release-tag>
+# or: git checkout <release-commit>
 /opt/stock-research/.venv/bin/pip install -e .
 ```
+
+Use a durable release ref on the host. Do not deploy from an ephemeral feature branch name.
 
 2. Build the frontend bundle that Nginx serves from the root:
 
@@ -165,6 +169,23 @@ Behavior:
 - This path is intended for operator recovery when the user cannot self-recover through the login screen.
 - The command writes the same `admin_enable_user` audit action with a null actor when no admin user is attached.
 
+If the account is enabled but the password is lost or incorrect, reset it from the host:
+
+```bash
+cd /opt/stock-research
+/opt/stock-research/.venv/bin/stock-research dashboard-reset-password --username admin
+```
+
+The command prompts for the new password twice. For controlled automation, `--password` is also available.
+
+Success output:
+
+```text
+dashboard_password_reset|admin
+```
+
+This recovery path revokes active sessions for that username and writes `admin_reset_password` to `audit.audit_log`.
+
 ## Inspect Audit Logs
 
 The platform writes authentication and user-management events to `audit.audit_log`.
@@ -172,7 +193,7 @@ The platform writes authentication and user-management events to `audit.audit_lo
 Useful queries:
 
 ```bash
-psql "$DATABASE_URL" -c "
+psql \"service=stock_research\" -c "
 SELECT created_at, actor_user_id, action, target_type, target_id, metadata
 FROM audit.audit_log
 WHERE action IN (
@@ -193,16 +214,18 @@ LIMIT 50;
 Inspect one user by username:
 
 ```bash
-psql "$DATABASE_URL" -c "
-SELECT al.created_at, al.action, al.metadata
+psql \"service=stock_research\" -c "
+SELECT al.created_at, al.action, al.target_id, al.metadata
 FROM audit.audit_log al
-WHERE al.target_type = 'user_account'
-  AND (
+LEFT JOIN identity.user_account ua
+  ON ua.id::text = al.target_id
+WHERE (
     al.metadata->>'username' = 'analyst'
-    OR al.target_id = (
-      SELECT id::text FROM identity.user_account WHERE username = 'analyst'
-    )
-  )
+    OR al.metadata->>'identifier' = 'analyst'
+    OR al.metadata->>'identifier' = 'analyst@example.com'
+    OR ua.username = 'analyst'
+    OR ua.email = 'analyst@example.com'
+)
 ORDER BY al.created_at DESC;
 "
 ```

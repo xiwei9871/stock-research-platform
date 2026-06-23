@@ -140,6 +140,40 @@ def test_enable_user_account_by_username_reenables_disabled_user(monkeypatch):
     assert audit_params["target_id"] == "22"
 
 
+def test_reset_user_password_by_username_updates_password_revokes_sessions_and_writes_audit(
+    monkeypatch,
+):
+    conn = _Connection(rows=[{"id": 22}])
+
+    monkeypatch.setattr(user_admin, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(user_admin, "hash_password", lambda password: f"hashed::{password}")
+
+    result = user_admin.reset_user_password_by_username(
+        username="disabled-user",
+        password="next-secret",
+        actor_user_id=None,
+        ip_address="203.0.113.10",
+        user_agent="pytest-agent",
+    )
+
+    assert result is True
+    assert len(conn.cursor_obj.calls) == 3
+    update_sql, update_params = conn.cursor_obj.calls[0]
+    revoke_sql, revoke_params = conn.cursor_obj.calls[1]
+    audit_sql, audit_params = conn.cursor_obj.calls[2]
+    assert "WHERE username = %(username)s" in update_sql
+    assert update_params == {
+        "username": "disabled-user",
+        "password_hash": "hashed::next-secret",
+    }
+    assert "UPDATE identity.user_session" in revoke_sql
+    assert revoke_params == {"user_id": 22}
+    assert "INSERT INTO audit.audit_log" in audit_sql
+    assert audit_params["actor_user_id"] is None
+    assert audit_params["action"] == "admin_reset_password"
+    assert audit_params["target_id"] == "22"
+
+
 def test_dashboard_bootstrap_admin_cli_dispatches_and_prints(monkeypatch, capsys):
     captured = {}
 
@@ -238,6 +272,115 @@ def test_dashboard_bootstrap_admin_cli_exits_when_password_confirmation_mismatch
         )
 
     assert bootstrap_calls == []
+    assert capsys.readouterr().out == ""
+
+
+def test_dashboard_reset_password_cli_dispatches_and_prints(monkeypatch, capsys):
+    captured = {}
+
+    def fake_reset_user_password_by_username(**kwargs):
+        captured["call"] = kwargs
+        return True
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+
+    cli.main_for_args(
+        [
+            "dashboard-reset-password",
+            "--username",
+            "disabled-user",
+            "--password",
+            "next-secret",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "disabled-user",
+        "password": "next-secret",
+        "actor_user_id": None,
+    }
+    assert capsys.readouterr().out.strip() == "dashboard_password_reset|disabled-user"
+
+
+def test_dashboard_reset_password_cli_prompts_for_password_when_omitted(monkeypatch, capsys):
+    captured = {}
+    prompts = []
+
+    def fake_reset_user_password_by_username(**kwargs):
+        captured["call"] = kwargs
+        return True
+
+    passwords = iter(["prompt-secret", "prompt-secret"])
+
+    def fake_getpass(prompt):
+        prompts.append(prompt)
+        return next(passwords)
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+    monkeypatch.setattr(cli.getpass, "getpass", fake_getpass)
+
+    cli.main_for_args(
+        [
+            "dashboard-reset-password",
+            "--username",
+            "disabled-user",
+        ]
+    )
+
+    assert captured["call"] == {
+        "username": "disabled-user",
+        "password": "prompt-secret",
+        "actor_user_id": None,
+    }
+    assert prompts == ["Dashboard user password: ", "Confirm dashboard user password: "]
+    assert capsys.readouterr().out.strip() == "dashboard_password_reset|disabled-user"
+
+
+def test_dashboard_reset_password_cli_exits_when_password_confirmation_mismatches(monkeypatch, capsys):
+    reset_calls = []
+    passwords = iter(["prompt-secret", "different-secret"])
+
+    def fake_reset_user_password_by_username(**kwargs):
+        reset_calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(cli, "reset_user_password_by_username", fake_reset_user_password_by_username)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: next(passwords))
+
+    with pytest.raises(SystemExit, match="dashboard user passwords did not match"):
+        cli.main_for_args(
+            [
+                "dashboard-reset-password",
+                "--username",
+                "disabled-user",
+            ]
+        )
+
+    assert reset_calls == []
+    assert capsys.readouterr().out == ""
+
+
+def test_dashboard_reset_password_cli_exits_when_username_not_found(monkeypatch, capsys):
+    def fake_reset_user_password_by_username(**kwargs):
+        return False
+
+    monkeypatch.setattr(
+        cli,
+        "reset_user_password_by_username",
+        fake_reset_user_password_by_username,
+    )
+
+    with pytest.raises(SystemExit, match="dashboard user not found: missing-user"):
+        cli.main_for_args(
+            [
+                "dashboard-reset-password",
+                "--username",
+                "missing-user",
+                "--password",
+                "next-secret",
+            ]
+        )
+
     assert capsys.readouterr().out == ""
 
 

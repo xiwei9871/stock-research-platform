@@ -66,6 +66,7 @@ from stock_research.dashboard.api import run_dashboard_api
 from stock_research.dashboard.user_admin import (
     bootstrap_admin_account,
     enable_user_account_by_username,
+    reset_user_password_by_username,
 )
 from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
@@ -1402,6 +1403,22 @@ def _parse_json_cell(value):
         return value
 
 
+def _resolve_prompted_password(
+    *,
+    provided_password: str | None,
+    prompt: str,
+    confirm_prompt: str,
+    mismatch_error: str,
+) -> str:
+    if provided_password is not None:
+        return provided_password
+    password = getpass.getpass(prompt)
+    password_confirm = getpass.getpass(confirm_prompt)
+    if password != password_confirm:
+        raise SystemExit(mismatch_error)
+    return password
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="stock-research")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1424,6 +1441,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     dashboard_enable_user = subparsers.add_parser("dashboard-enable-user")
     dashboard_enable_user.add_argument("--username", required=True)
+
+    dashboard_reset_password = subparsers.add_parser("dashboard-reset-password")
+    dashboard_reset_password.add_argument("--username", required=True)
+    dashboard_reset_password.add_argument("--password")
 
     data_audit = subparsers.add_parser("data-audit")
     data_audit.add_argument("--expected-start-date", default="1990-12-01")
@@ -4740,13 +4761,12 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "dashboard-api":
         run_dashboard_api(host=args.host, port=args.port)
     elif args.command == "dashboard-bootstrap-admin":
-        if args.password is not None:
-            password = args.password
-        else:
-            password = getpass.getpass("Dashboard admin password: ")
-            password_confirm = getpass.getpass("Confirm dashboard admin password: ")
-            if password != password_confirm:
-                raise SystemExit("dashboard admin passwords did not match")
+        password = _resolve_prompted_password(
+            provided_password=args.password,
+            prompt="Dashboard admin password: ",
+            confirm_prompt="Confirm dashboard admin password: ",
+            mismatch_error="dashboard admin passwords did not match",
+        )
         user_account = bootstrap_admin_account(
             username=args.username,
             password=password,
@@ -4762,6 +4782,21 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         if not was_enabled:
             raise SystemExit(f"dashboard user not found: {args.username}")
         print(f"dashboard_user_enabled|{args.username}")
+    elif args.command == "dashboard-reset-password":
+        password = _resolve_prompted_password(
+            provided_password=args.password,
+            prompt="Dashboard user password: ",
+            confirm_prompt="Confirm dashboard user password: ",
+            mismatch_error="dashboard user passwords did not match",
+        )
+        was_reset = reset_user_password_by_username(
+            username=args.username,
+            password=password,
+            actor_user_id=None,
+        )
+        if not was_reset:
+            raise SystemExit(f"dashboard user not found: {args.username}")
+        print(f"dashboard_password_reset|{args.username}")
     elif args.command == "data-audit":
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
