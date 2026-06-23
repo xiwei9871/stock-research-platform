@@ -334,7 +334,15 @@ def load_strategy_score_audit_summary(
     output_dir = _strategy_eod_output_dir(trade_date, output_root=output_root)
     summary_path = output_dir / "strategy_score_audit_summary.json"
     if not summary_path.exists():
-        raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
+        publish_summary_path = output_dir / "strategy_eod_publish_summary.json"
+        if not publish_summary_path.exists():
+            raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
+        publish_summary = json.loads(publish_summary_path.read_text(encoding="utf-8"))
+        score_audit = dict(publish_summary.get("score_audit") or {})
+        if not score_audit:
+            raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
+        score_audit.setdefault("trade_date", trade_date)
+        return score_audit
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary.setdefault("trade_date", trade_date)
     summary.setdefault("summary_path", str(summary_path))

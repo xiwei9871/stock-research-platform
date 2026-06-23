@@ -6839,6 +6839,33 @@ def test_strategy_score_audit_cli_failed_summary_does_not_print_fake_detail(monk
     assert all(not line.startswith("strategy_score_audit|detail|") for line in out)
 
 
+def test_strategy_score_audit_cli_surfaces_persisted_double_failure_fallback(monkeypatch, capsys, tmp_path):
+    output_dir = tmp_path / "research" / "strategy_daily_eod" / "2026-06-22"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "strategy_eod_publish_summary.json").write_text(
+        json.dumps(
+            {
+                "trade_date": "2026-06-22",
+                "score_audit": {
+                    "trade_date": "2026-06-22",
+                    "status": "failed",
+                    "error": "primary audit write failed",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "load_strategy_score_audit_summary", lambda **kwargs: __import__("stock_research.strategy_eod_publish", fromlist=["load_strategy_score_audit_summary"]).load_strategy_score_audit_summary(trade_date="2026-06-22", output_root=tmp_path))
+
+    cli.main_for_args(["strategy-score-audit", "--trade-date", "2026-06-22"])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "strategy_score_audit|trade_date|2026-06-22",
+        "strategy_score_audit|status|failed",
+        "strategy_score_audit|error|primary audit write failed",
+    ]
+
+
 def test_backfill_control_plane_cli_accepts_commands():
     create_args = build_parser().parse_args(
         [
