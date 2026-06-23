@@ -443,10 +443,7 @@ def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_r
         Path(mid_trend_strategy_validation.__file__).resolve().parents[2]
         / "validation/current_mid_trend_strategy_v1"
     )
-    assert Path(call["regime_path"]) == (
-        Path(mid_trend_strategy_validation.__file__).resolve().parents[2]
-        / "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/market_regime_confirmation_daily.csv"
-    )
+    assert Path(call["regime_path"]) == mid_trend_strategy_validation.resolve_default_current_regime_path()
 
 
 def test_execute_mid_trend_candidate_uses_explicit_module_name(monkeypatch) -> None:
@@ -567,6 +564,34 @@ def test_run_mid_trend_strategy_validation_uses_shared_effective_end_date(
 
     assert result["effective_end_date"] == "2025-01-15"
     assert [call["end_date"] for call in calls] == ["2025-01-15", "2025-01-15"]
+
+
+def test_select_latest_artifact_path_prefers_newest_coverage_end(tmp_path: Path) -> None:
+    research_dir = tmp_path / "outputs/research"
+    older_dir = research_dir / "market_regime_confirmation_v1_old"
+    newer_dir = research_dir / "market_regime_confirmation_v1_new"
+    older_dir.mkdir(parents=True)
+    newer_dir.mkdir(parents=True)
+
+    pd.DataFrame(
+        [
+            {"trade_date": "2025-01-01", "value": 1},
+            {"trade_date": "2025-01-15", "value": 2},
+        ]
+    ).to_csv(older_dir / "market_regime_confirmation_daily.csv", index=False)
+    pd.DataFrame(
+        [
+            {"trade_date": "2025-01-01", "value": 1},
+            {"trade_date": "2025-02-20", "value": 2},
+        ]
+    ).to_csv(newer_dir / "market_regime_confirmation_daily.csv", index=False)
+
+    selected = mid_trend_strategy_validation._select_latest_artifact_path(
+        "market_regime_confirmation_daily.csv",
+        base_dir=research_dir,
+    )
+
+    assert selected == newer_dir / "market_regime_confirmation_daily.csv"
 
 
 def test_cli_dispatches_mid_trend_strategy_validation(

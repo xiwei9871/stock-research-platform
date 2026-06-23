@@ -2996,10 +2996,10 @@ def build_parser() -> argparse.ArgumentParser:
     mid_trend_shadow_backtest.add_argument("--output-dir", default="outputs/research")
 
     from stock_research.mid_trend_strategy_validation import (
-        DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
-        DEFAULT_CURRENT_REGIME_PATH,
-        DEFAULT_SHADOW_TOP10_PATH,
         REPO_ROOT,
+        resolve_default_current_regime_path,
+        resolve_default_funnel_detail_path,
+        resolve_default_shadow_top10_path,
     )
 
     mid_trend_validation = subparsers.add_parser("validate-mid-trend-strategies")
@@ -3007,15 +3007,15 @@ def build_parser() -> argparse.ArgumentParser:
     mid_trend_validation.add_argument("--end-date", required=True)
     mid_trend_validation.add_argument(
         "--current-regime-path",
-        default=str(DEFAULT_CURRENT_REGIME_PATH),
+        default=str(resolve_default_current_regime_path()),
     )
     mid_trend_validation.add_argument(
         "--funnel-detail-path",
-        default=str(DEFAULT_CURRENT_FUNNEL_DETAIL_PATH),
+        default=str(resolve_default_funnel_detail_path()),
     )
     mid_trend_validation.add_argument(
         "--shadow-top10-path",
-        default=str(DEFAULT_SHADOW_TOP10_PATH),
+        default=str(resolve_default_shadow_top10_path()),
     )
     mid_trend_validation.add_argument(
         "--output-dir",

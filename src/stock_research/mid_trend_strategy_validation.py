@@ -9,16 +9,7 @@ from stock_research.config import SETTINGS
 SEVERE_DRAWDOWN_THRESHOLD = 0.20
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-DEFAULT_CURRENT_REGIME_PATH = REPO_ROOT / (
-    "outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260605/"
-    "market_regime_confirmation_daily.csv"
-)
-DEFAULT_CURRENT_FUNNEL_DETAIL_PATH = REPO_ROOT / (
-    "outputs/research/mid_trend_watch_funnel_20230103_20260605_aligned/"
-    "mid_trend_watch_funnel_detail.csv"
-)
-DEFAULT_SHADOW_TOP10_PATH = REPO_ROOT / "outputs/research/mid_trend_shadow_top10.csv"
+RESEARCH_OUTPUT_ROOT = REPO_ROOT / "outputs/research"
 
 DEFAULT_CURRENT_VALIDATION_CONFIG: dict[str, object] = {
     "top_n": 5,
@@ -181,18 +172,18 @@ def execute_mid_trend_candidate(
     start_date: str,
     end_date: str,
     output_dir: str | Path,
-    current_regime_path: str | Path = DEFAULT_CURRENT_REGIME_PATH,
-    funnel_detail_path: str | Path = DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
-    shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
+    current_regime_path: str | Path | None = None,
+    funnel_detail_path: str | Path | None = None,
+    shadow_top10_path: str | Path | None = None,
 ) -> dict[str, object]:
     strategy_id = str(candidate["strategy_id"])
     module_name = str(candidate["module_name"])
     runner_name = str(candidate["runner_name"])
     runner = getattr(import_module(module_name), runner_name)
     candidate_output_dir = _resolve_output_dir(output_dir) / strategy_id
-    current_regime_path = Path(current_regime_path)
-    funnel_detail_path = Path(funnel_detail_path)
-    shadow_top10_path = Path(shadow_top10_path)
+    current_regime_path = resolve_default_current_regime_path(current_regime_path)
+    funnel_detail_path = resolve_default_funnel_detail_path(funnel_detail_path)
+    shadow_top10_path = resolve_default_shadow_top10_path(shadow_top10_path)
 
     if strategy_id == "current_mid_trend_strategy_v1":
         return runner(
@@ -221,11 +212,14 @@ def run_mid_trend_strategy_validation(
     start_date: str,
     end_date: str,
     output_dir: str | Path,
-    current_regime_path: str | Path = DEFAULT_CURRENT_REGIME_PATH,
-    funnel_detail_path: str | Path = DEFAULT_CURRENT_FUNNEL_DETAIL_PATH,
-    shadow_top10_path: str | Path = DEFAULT_SHADOW_TOP10_PATH,
+    current_regime_path: str | Path | None = None,
+    funnel_detail_path: str | Path | None = None,
+    shadow_top10_path: str | Path | None = None,
 ) -> dict[str, object]:
     output_path = _resolve_output_dir(output_dir)
+    current_regime_path = resolve_default_current_regime_path(current_regime_path)
+    funnel_detail_path = resolve_default_funnel_detail_path(funnel_detail_path)
+    shadow_top10_path = resolve_default_shadow_top10_path(shadow_top10_path)
     candidates = filter_complete_mid_trend_candidates(
         discover_mid_trend_strategy_candidates()
     )
@@ -278,6 +272,46 @@ def _resolve_output_dir(output_dir: str | Path) -> Path:
     if path.is_absolute():
         return path
     return REPO_ROOT / path
+
+
+def resolve_default_current_regime_path(path: str | Path | None = None) -> Path:
+    if path is not None:
+        return Path(path)
+    return _select_latest_artifact_path("market_regime_confirmation_daily.csv")
+
+
+def resolve_default_funnel_detail_path(path: str | Path | None = None) -> Path:
+    if path is not None:
+        return Path(path)
+    return _select_latest_artifact_path("mid_trend_watch_funnel_detail.csv")
+
+
+def resolve_default_shadow_top10_path(path: str | Path | None = None) -> Path:
+    if path is not None:
+        return Path(path)
+    return _select_latest_artifact_path("mid_trend_shadow_top10.csv")
+
+
+def _select_latest_artifact_path(
+    artifact_name: str,
+    *,
+    base_dir: str | Path = RESEARCH_OUTPUT_ROOT,
+) -> Path:
+    base_path = Path(base_dir)
+    candidates = sorted(base_path.rglob(artifact_name))
+    if not candidates:
+        raise FileNotFoundError(f"No validation artifact found for {artifact_name} under {base_path}")
+
+    ranked_candidates = [
+        (
+            _read_input_coverage_end_date(candidate),
+            candidate.stat().st_mtime,
+            str(candidate),
+            candidate,
+        )
+        for candidate in candidates
+    ]
+    return max(ranked_candidates)[-1]
 
 
 def _resolve_validation_effective_end_date(
