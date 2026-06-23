@@ -1,5 +1,7 @@
 import datetime as dt
 
+import pytest
+
 import stock_research.minute_daily_ingest as minute_daily_ingest
 
 
@@ -222,3 +224,194 @@ def test_run_baostock_minute_daily_queries_one_trade_date_per_symbol(monkeypatch
         "rows_written": 1,
         "failed_symbols": [],
     }
+
+
+def test_run_baostock_minute_daily_counts_success_by_symbol_not_rows(monkeypatch):
+    target_date = dt.date(2024, 1, 8)
+    rows = [
+        {"code": "sh.600000", "date": "2024-01-08", "time": "20240108093500000"},
+        {"code": "sh.600000", "date": "2024-01-08", "time": "20240108094000000"},
+    ]
+
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "parse_trade_date",
+        lambda value, timezone: target_date,
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(minute_daily_ingest, "_try_acquire_daily_lock", lambda path: "lock-handle")
+    monkeypatch.setattr(minute_daily_ingest, "_release_daily_lock", lambda handle: None)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000"],
+    )
+    monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: None)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "query_baostock_minute_rows_once",
+        lambda code, start_date, end_date, *, freq, adjust_type: rows,
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "upsert_stock_minute_bars",
+        lambda queried_rows, *, freq, adjust_type, params: len(queried_rows),
+    )
+    monkeypatch.setattr(minute_daily_ingest.bs, "logout", lambda: None)
+
+    result = minute_daily_ingest.run_baostock_minute_daily(trade_date="2024-01-08")
+
+    assert result == {
+        "status": "success",
+        "trade_date": "2024-01-08",
+        "symbol_count": 1,
+        "success_count": 1,
+        "empty_count": 0,
+        "failed_count": 0,
+        "retry_count": 0,
+        "relogin_count": 0,
+        "rows_written": 2,
+        "failed_symbols": [],
+    }
+
+
+def test_run_baostock_minute_daily_releases_lock_and_logs_out_when_login_fails(monkeypatch):
+    target_date = dt.date(2024, 1, 8)
+    events = []
+
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "parse_trade_date",
+        lambda value, timezone: target_date,
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "_try_acquire_daily_lock",
+        lambda path: events.append(("lock", path)) or "lock-handle",
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "_release_daily_lock",
+        lambda handle: events.append(("unlock", handle)),
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000"],
+    )
+
+    def raise_login():
+        raise RuntimeError("login failed")
+
+    monkeypatch.setattr(minute_daily_ingest, "login_or_raise", raise_login)
+    monkeypatch.setattr(
+        minute_daily_ingest.bs,
+        "logout",
+        lambda: events.append(("logout", None)),
+    )
+
+    with pytest.raises(RuntimeError, match="login failed"):
+        minute_daily_ingest.run_baostock_minute_daily(trade_date="2024-01-08")
+
+    assert events == [
+        ("lock", minute_daily_ingest.DEFAULT_MINUTE_DAILY_LOCK),
+        ("logout", None),
+        ("unlock", "lock-handle"),
+    ]
+
+
+def test_run_baostock_minute_daily_releases_lock_and_logs_out_after_query_failure(monkeypatch):
+    target_date = dt.date(2024, 1, 8)
+    events = []
+
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "parse_trade_date",
+        lambda value, timezone: target_date,
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "_try_acquire_daily_lock",
+        lambda path: events.append(("lock", path)) or "lock-handle",
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "_release_daily_lock",
+        lambda handle: events.append(("unlock", handle)),
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000"],
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "login_or_raise",
+        lambda: events.append(("login", None)),
+    )
+
+    def raise_query(code, start_date, end_date, *, freq, adjust_type):
+        events.append(("query", code))
+        raise RuntimeError("query failed")
+
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "query_baostock_minute_rows_once",
+        raise_query,
+    )
+    monkeypatch.setattr(
+        minute_daily_ingest.bs,
+        "logout",
+        lambda: events.append(("logout", None)),
+    )
+
+    result = minute_daily_ingest.run_baostock_minute_daily(trade_date="2024-01-08")
+
+    assert result == {
+        "status": "partial_success",
+        "trade_date": "2024-01-08",
+        "symbol_count": 1,
+        "success_count": 0,
+        "empty_count": 0,
+        "failed_count": 1,
+        "retry_count": 0,
+        "relogin_count": 0,
+        "rows_written": 0,
+        "failed_symbols": ["sh.600000"],
+    }
+    assert events == [
+        ("lock", minute_daily_ingest.DEFAULT_MINUTE_DAILY_LOCK),
+        ("login", None),
+        ("query", "sh.600000"),
+        ("logout", None),
+        ("unlock", "lock-handle"),
+    ]

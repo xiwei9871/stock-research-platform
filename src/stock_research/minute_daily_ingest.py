@@ -113,7 +113,7 @@ def run_baostock_minute_daily(
                 result["failed_symbols"].append(code)
             else:
                 if inserted_rows > 0:
-                    result["success_count"] += inserted_rows
+                    result["success_count"] += 1
                     result["rows_written"] += inserted_rows
                 else:
                     result["empty_count"] += 1
