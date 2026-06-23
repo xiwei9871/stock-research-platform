@@ -144,26 +144,43 @@ def query_baostock_minute_rows(
     freq: str,
     adjust_type: str,
 ) -> list[dict[str, str]]:
-    def operation() -> list[dict[str, str]]:
-        rs = bs.query_history_k_data_plus(
+    return run_with_baostock_retry(
+        lambda: query_baostock_minute_rows_once(
             code,
-            ",".join(MINUTE_FIELDS),
-            start_date=start_date.isoformat(),
-            end_date=end_date.isoformat(),
-            frequency=baostock_frequency(freq),
-            adjustflag=adjustflag_for_adjust_type(adjust_type),
+            start_date,
+            end_date,
+            freq=freq,
+            adjust_type=adjust_type,
         )
-        if rs.error_code != "0":
-            raise RuntimeError(
-                f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
-            )
+    )
 
-        rows: list[dict[str, str]] = []
-        while rs.next():
-            rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
-        return rows
 
-    return run_with_baostock_retry(operation)
+def query_baostock_minute_rows_once(
+    code: str,
+    start_date: dt.date,
+    end_date: dt.date,
+    freq: str,
+    adjust_type: str,
+    timeout_seconds: float | None = None,
+) -> list[dict[str, str]]:
+    del timeout_seconds
+    rs = bs.query_history_k_data_plus(
+        code,
+        ",".join(MINUTE_FIELDS),
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+        frequency=baostock_frequency(freq),
+        adjustflag=adjustflag_for_adjust_type(adjust_type),
+    )
+    if rs.error_code != "0":
+        raise RuntimeError(
+            f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
+        )
+
+    rows: list[dict[str, str]] = []
+    while rs.next():
+        rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
+    return rows
 
 
 def is_retryable_baostock_error(message: str) -> bool:
