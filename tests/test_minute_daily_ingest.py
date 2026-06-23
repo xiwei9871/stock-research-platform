@@ -392,7 +392,7 @@ def test_run_baostock_minute_daily_retries_failed_symbols_only_in_retry_queue(mo
     monkeypatch.setattr(
         minute_daily_ingest,
         "load_active_baostock_codes",
-        lambda limit_assets=None: ["sh.600000", "sz.000001", "bj.430001"],
+        lambda limit_assets=None: ["bj.430001", "sz.000001", "sh.600000"],
     )
     monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: None)
 
@@ -483,10 +483,10 @@ def test_run_baostock_minute_daily_relogins_after_three_consecutive_failed_symbo
         ("relogin", None),
     ]
     assert events[5] == ("query", "sh.600004")
-    assert events[-2:] == [("relogin", None), ("logout", None)]
-    assert sleep_calls == [7, 7]
+    assert events[-1] == ("logout", None)
+    assert sleep_calls == [7]
     assert result["status"] == "partial"
-    assert result["relogin_count"] == 2
+    assert result["relogin_count"] == 1
     assert result["failed_count"] == 3
     assert result["failed_symbols"] == ["sh.600000", "sz.000001", "bj.430001"]
     assert result["last_error"] == "10002007 retryable failure"
@@ -538,7 +538,7 @@ def test_run_baostock_minute_daily_enters_cooldown_after_failure_burst(monkeypat
         cooldown_seconds=9,
     )
 
-    assert sleep_calls == [0.25, 0.25, 9, 0.25, 9]
+    assert sleep_calls == [0.25, 0.25, 9, 0.25]
 
 
 def test_run_baostock_minute_daily_writes_summary_and_failed_symbols(monkeypatch, tmp_path):
@@ -678,6 +678,7 @@ def test_run_baostock_minute_daily_applies_relogin_policy_in_retry_queue(monkeyp
         "bj.430001": 0,
         "sh.600004": 0,
         "sz.000005": 0,
+        "bj.430006": 0,
     }
 
     monkeypatch.setattr(minute_daily_ingest, "parse_trade_date", lambda value, timezone: target_date)
@@ -702,6 +703,7 @@ def test_run_baostock_minute_daily_applies_relogin_policy_in_retry_queue(monkeyp
             "bj.430001",
             "sh.600004",
             "sz.000005",
+            "bj.430006",
         ],
     )
     monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: events.append(("login", None)))
@@ -711,10 +713,10 @@ def test_run_baostock_minute_daily_applies_relogin_policy_in_retry_queue(monkeyp
         attempts[code] += 1
         events.append(("query", code, attempts[code]))
         if attempts[code] == 1:
-            if code in {"sh.600000", "bj.430001", "sz.000005"}:
+            if code in {"sh.600000", "bj.430001", "sz.000005", "bj.430006"}:
                 raise RuntimeError("10002007 retryable failure")
             return [{"code": code, "date": "2024-01-08", "time": "20240108093500000"}]
-        if code in {"sh.600000", "bj.430001", "sz.000005"}:
+        if code in {"sh.600000", "bj.430001", "sz.000005", "bj.430006"}:
             raise RuntimeError("10002007 retryable failure")
         return [{"code": code, "date": "2024-01-08", "time": "20240108093500000"}]
 
@@ -740,18 +742,144 @@ def test_run_baostock_minute_daily_applies_relogin_policy_in_retry_queue(monkeyp
         ("query", "bj.430001", 1),
         ("query", "sh.600004", 1),
         ("query", "sz.000005", 1),
+        ("query", "bj.430006", 1),
         ("query", "sh.600000", 2),
         ("query", "bj.430001", 2),
         ("query", "sz.000005", 2),
         ("relogin", None),
+        ("query", "bj.430006", 2),
         ("logout", None),
     ]
     assert sleep_calls == [11]
     assert result["status"] == "partial"
     assert result["relogin_count"] == 1
-    assert result["failed_count"] == 3
-    assert result["failed_symbols"] == ["sh.600000", "bj.430001", "sz.000005"]
+    assert result["failed_count"] == 4
+    assert result["failed_symbols"] == ["sh.600000", "bj.430001", "sz.000005", "bj.430006"]
     assert result["last_error"] == "10002007 retryable failure"
+
+
+def test_run_baostock_minute_daily_skips_final_retry_queue_cooldown_when_no_work_remains(monkeypatch):
+    target_date = dt.date(2024, 1, 8)
+    events = []
+    sleep_calls = []
+    attempts = {"sh.600000": 0, "sz.000001": 0, "bj.430001": 0, "sh.600004": 0}
+
+    monkeypatch.setattr(minute_daily_ingest, "parse_trade_date", lambda value, timezone: target_date)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(minute_daily_ingest, "_try_acquire_daily_lock", lambda path: "lock-handle")
+    monkeypatch.setattr(minute_daily_ingest, "_release_daily_lock", lambda handle: None)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000", "sz.000001", "bj.430001", "sh.600004"],
+    )
+    monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: events.append(("login", None)))
+    monkeypatch.setattr(minute_daily_ingest, "relogin_or_raise", lambda: events.append(("relogin", None)))
+
+    def fake_query(code, start_date, end_date, *, freq, adjust_type):
+        attempts[code] += 1
+        events.append(("query", code, attempts[code]))
+        if code == "sz.000001":
+            return [{"code": code, "date": "2024-01-08", "time": "20240108093500000"}]
+        raise RuntimeError("10002007 retryable failure")
+
+    monkeypatch.setattr(minute_daily_ingest, "query_baostock_minute_rows_once", fake_query)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "upsert_stock_minute_bars",
+        lambda queried_rows, *, freq, adjust_type, params: len(queried_rows),
+    )
+    monkeypatch.setattr(minute_daily_ingest.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(minute_daily_ingest.bs, "logout", lambda: events.append(("logout", None)))
+
+    result = minute_daily_ingest.run_baostock_minute_daily(
+        trade_date="2024-01-08",
+        retry_limit=0,
+        cooldown_seconds=13,
+    )
+
+    assert events == [
+        ("login", None),
+        ("query", "sh.600000", 1),
+        ("query", "sz.000001", 1),
+        ("query", "bj.430001", 1),
+        ("query", "sh.600004", 1),
+        ("query", "sh.600000", 2),
+        ("query", "bj.430001", 2),
+        ("query", "sh.600004", 2),
+        ("logout", None),
+    ]
+    assert sleep_calls == []
+    assert result["relogin_count"] == 0
+    assert result["failed_symbols"] == ["sh.600000", "bj.430001", "sh.600004"]
+    assert result["last_error"] == "10002007 retryable failure"
+
+
+def test_run_baostock_minute_daily_keeps_last_error_for_final_unresolved_symbol(monkeypatch, tmp_path):
+    target_date = dt.date(2024, 1, 8)
+    attempts = {"sz.000001": 0}
+
+    monkeypatch.setattr(minute_daily_ingest, "parse_trade_date", lambda value, timezone: target_date)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "decide_stock_cron_run",
+        lambda **kwargs: minute_daily_ingest.StockCronGuardDecision(
+            trade_date=target_date,
+            calendar_status="open",
+            should_run=True,
+            reason="trading_day",
+        ),
+    )
+    monkeypatch.setattr(minute_daily_ingest, "_try_acquire_daily_lock", lambda path: "lock-handle")
+    monkeypatch.setattr(minute_daily_ingest, "_release_daily_lock", lambda handle: None)
+    monkeypatch.setattr(
+        minute_daily_ingest,
+        "load_active_baostock_codes",
+        lambda limit_assets=None: ["sh.600000", "sz.000001", "bj.430001"],
+    )
+    monkeypatch.setattr(minute_daily_ingest, "login_or_raise", lambda: None)
+
+    def fake_query(code, start_date, end_date, *, freq, adjust_type):
+        if code == "sz.000001":
+            attempts[code] += 1
+            if attempts[code] == 1:
+                raise RuntimeError("10002007 transient fetch failure")
+        return [{"code": code, "date": "2024-01-08", "time": "20240108093500000"}]
+
+    monkeypatch.setattr(minute_daily_ingest, "query_baostock_minute_rows_once", fake_query)
+
+    def fake_upsert(queried_rows, *, freq, adjust_type, params):
+        code = queried_rows[0]["code"]
+        if code == "bj.430001":
+            raise RuntimeError("db write failed for final symbol")
+        return len(queried_rows)
+
+    monkeypatch.setattr(minute_daily_ingest, "upsert_stock_minute_bars", fake_upsert)
+    monkeypatch.setattr(minute_daily_ingest.bs, "logout", lambda: None)
+
+    result = minute_daily_ingest.run_baostock_minute_daily(
+        trade_date="2024-01-08",
+        retry_limit=0,
+        output_dir=tmp_path,
+    )
+
+    artifact_dir = tmp_path / "baostock_minute_daily" / "2024-01-08"
+    summary = json.loads((artifact_dir / "summary.json").read_text(encoding="utf-8"))
+
+    assert result["status"] == "partial"
+    assert result["failed_symbols"] == ["bj.430001"]
+    assert result["last_error"] == "db write failed for final symbol"
+    assert summary["failed_symbols"] == ["bj.430001"]
+    assert summary["last_error"] == "db write failed for final symbol"
 
 
 def test_run_baostock_minute_daily_rejects_negative_retry_limit(monkeypatch):

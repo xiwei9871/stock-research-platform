@@ -146,11 +146,11 @@ def _run_retry_queue(
     cooldown_seconds: int,
     timeout_seconds: float | None,
     result: dict[str, Any],
-) -> tuple[list[str], str | None]:
+) -> tuple[list[str], dict[str, str]]:
     failed_symbols: list[str] = []
-    last_error = result.get("last_error")
+    failed_errors: dict[str, str] = {}
     consecutive_retryable_failures = 0
-    for code in retry_queue:
+    for index, code in enumerate(retry_queue):
         rows, retry_count, error = _fetch_symbol_with_policy(
             code,
             target_date,
@@ -162,10 +162,12 @@ def _run_retry_queue(
         result["retry_count"] += retry_count
         if error is not None or rows is None:
             failed_symbols.append(code)
-            last_error = error
+            if error is not None:
+                failed_errors[code] = error
             if error is not None and is_retryable_baostock_error(error):
                 consecutive_retryable_failures += 1
-                if consecutive_retryable_failures >= RELOGIN_FAILURE_THRESHOLD:
+                has_remaining_work = index + 1 < len(retry_queue)
+                if consecutive_retryable_failures >= RELOGIN_FAILURE_THRESHOLD and has_remaining_work:
                     relogin_or_raise()
                     result["relogin_count"] += 1
                     consecutive_retryable_failures = 0
@@ -185,7 +187,8 @@ def _run_retry_queue(
         )
         if write_error is not None or inserted_rows is None:
             failed_symbols.append(code)
-            last_error = write_error
+            if write_error is not None:
+                failed_errors[code] = write_error
             continue
 
         if inserted_rows > 0:
@@ -193,7 +196,7 @@ def _run_retry_queue(
             result["rows_written"] += inserted_rows
         else:
             result["empty_count"] += 1
-    return failed_symbols, last_error
+    return failed_symbols, failed_errors
 
 
 def run_baostock_minute_daily(
@@ -233,6 +236,7 @@ def run_baostock_minute_daily(
     try:
         retry_queue: list[str] = []
         write_failed_symbols: list[str] = []
+        write_failed_errors: dict[str, str] = {}
         consecutive_retryable_failures = 0
         codes = load_active_baostock_codes(limit_assets=limit_assets)
         result["symbol_count"] = len(codes)
@@ -271,7 +275,9 @@ def run_baostock_minute_daily(
                 )
                 if write_error is not None or inserted_rows is None:
                     write_failed_symbols.append(code)
-                    result["last_error"] = write_error
+                    if write_error is not None:
+                        write_failed_errors[code] = write_error
+                        result["last_error"] = write_error
                 else:
                     if inserted_rows > 0:
                         result["success_count"] += 1
@@ -282,7 +288,7 @@ def run_baostock_minute_daily(
                 time.sleep(sleep_seconds)
 
         if retry_queue:
-            failed_symbols, last_error = _run_retry_queue(
+            failed_symbols, retry_failed_errors = _run_retry_queue(
                 retry_queue,
                 target_date=decision.trade_date,
                 freq=freq,
@@ -294,10 +300,15 @@ def run_baostock_minute_daily(
             )
             result["failed_symbols"] = write_failed_symbols + failed_symbols
             result["failed_count"] = len(result["failed_symbols"])
-            result["last_error"] = last_error if result["failed_symbols"] else None
+            unresolved_errors = {**write_failed_errors, **retry_failed_errors}
+            if result["failed_symbols"]:
+                result["last_error"] = unresolved_errors.get(result["failed_symbols"][-1])
+            else:
+                result["last_error"] = None
         elif write_failed_symbols:
             result["failed_symbols"] = write_failed_symbols
             result["failed_count"] = len(write_failed_symbols)
+            result["last_error"] = write_failed_errors.get(write_failed_symbols[-1])
 
         if result["failed_count"] > 0:
             result["status"] = "partial"
