@@ -17,6 +17,7 @@ function deferred<T>() {
 vi.mock('../src/api/client', () => ({
   fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
+  fetchStrategyScoreAudit: vi.fn(),
   fetchStrategyCatalog: vi.fn(),
   fetchBacktestStrategies: vi.fn(),
   fetchOverview: vi.fn(),
@@ -90,6 +91,19 @@ describe('AppShell and HomeCockpit', () => {
           score_components: {}
         }
       ]
+    });
+    vi.mocked(api.fetchStrategyScoreAudit).mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'success',
+      overall_status: 'ok',
+      summary_path: '/tmp/strategy_score_audit_summary.json',
+      detail_path: '/tmp/strategy_score_audit_detail.csv',
+      total_rows: 12,
+      selected_rows: 12,
+      anomaly_row_count: 0,
+      anomaly_counts_by_type: {},
+      strategies: [],
+      sample_rows: []
     });
     vi.mocked(api.fetchStrategyCatalog).mockResolvedValue([
       {
