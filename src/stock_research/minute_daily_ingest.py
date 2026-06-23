@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import json
 import time
 from datetime import date
 from pathlib import Path
@@ -12,9 +13,11 @@ from stock_research.config import SETTINGS
 from stock_research.daily_close_pipeline import parse_trade_date
 from stock_research.minute_data import (
     MINUTE_FIELDS,
+    is_retryable_baostock_error,
     load_active_baostock_codes,
     login_or_raise,
     query_baostock_minute_rows_once,
+    relogin_or_raise,
     request_params,
     upsert_stock_minute_bars,
 )
@@ -22,6 +25,7 @@ from stock_research.stock_cron_guard import StockCronGuardDecision, decide_stock
 
 
 DEFAULT_MINUTE_DAILY_LOCK = Path("/tmp/stock_research_baostock_minute_daily.lock")
+RELOGIN_FAILURE_THRESHOLD = 3
 
 
 def _result_template(*, status: str, trade_date: date) -> dict[str, Any]:
@@ -36,6 +40,7 @@ def _result_template(*, status: str, trade_date: date) -> dict[str, Any]:
         "relogin_count": 0,
         "rows_written": 0,
         "failed_symbols": [],
+        "last_error": None,
     }
 
 
@@ -65,12 +70,101 @@ def _release_daily_lock(handle: TextIO | None) -> None:
         handle.close()
 
 
+def _write_daily_artifacts(result: dict[str, Any], output_dir: str | Path) -> None:
+    artifact_dir = Path(output_dir) / "baostock_minute_daily" / str(result["trade_date"])
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "summary.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    failed_symbols = result.get("failed_symbols") or []
+    failed_text = "\n".join(failed_symbols)
+    if failed_text:
+        failed_text += "\n"
+    (artifact_dir / "failed_symbols.txt").write_text(failed_text, encoding="utf-8")
+
+
+def _fetch_symbol_with_policy(
+    code: str,
+    target_date: date,
+    *,
+    freq: str,
+    adjust_type: str,
+    retry_limit: int,
+    timeout_seconds: float | None = None,
+) -> tuple[list[dict[str, str]] | None, int, str | None]:
+    del timeout_seconds
+
+    last_error = None
+    for attempt in range(retry_limit + 1):
+        try:
+            rows = query_baostock_minute_rows_once(
+                code,
+                target_date,
+                target_date,
+                freq=freq,
+                adjust_type=adjust_type,
+            )
+            return rows, attempt, None
+        except Exception as exc:  # noqa: BLE001 - per-symbol errors become retry queue entries.
+            last_error = str(exc)
+            if attempt >= retry_limit or not is_retryable_baostock_error(last_error):
+                return None, attempt, last_error
+    return None, retry_limit, last_error
+
+
+def _run_retry_queue(
+    retry_queue: list[str],
+    *,
+    target_date: date,
+    freq: str,
+    adjust_type: str,
+    retry_limit: int,
+    timeout_seconds: float | None,
+    result: dict[str, Any],
+) -> tuple[list[str], str | None]:
+    failed_symbols: list[str] = []
+    last_error = result.get("last_error")
+    for code in retry_queue:
+        rows, retry_count, error = _fetch_symbol_with_policy(
+            code,
+            target_date,
+            freq=freq,
+            adjust_type=adjust_type,
+            retry_limit=retry_limit,
+            timeout_seconds=timeout_seconds,
+        )
+        result["retry_count"] += retry_count
+        if error is not None or rows is None:
+            failed_symbols.append(code)
+            last_error = error
+            continue
+
+        params = request_params(code, target_date, target_date, freq, adjust_type)
+        inserted_rows = upsert_stock_minute_bars(
+            rows,
+            freq=freq,
+            adjust_type=adjust_type,
+            params=params,
+        )
+        if inserted_rows > 0:
+            result["success_count"] += 1
+            result["rows_written"] += inserted_rows
+        else:
+            result["empty_count"] += 1
+    return failed_symbols, last_error
+
+
 def run_baostock_minute_daily(
     *,
     trade_date: str | date | None = None,
     limit_assets: int | None = None,
     sleep_seconds: float = 0.0,
     lock_path: Path = DEFAULT_MINUTE_DAILY_LOCK,
+    retry_limit: int = 2,
+    cooldown_seconds: int = 600,
+    timeout_seconds: float | None = None,
+    output_dir: str | Path = "outputs/research",
 ) -> dict[str, Any]:
     freq = "5min"
     adjust_type = "raw"
@@ -81,26 +175,54 @@ def run_baostock_minute_daily(
         exchanges=("SH", "SZ", "BJ"),
     )
     if not decision.should_run:
-        return _result_template(status="skipped_non_trading_day", trade_date=decision.trade_date)
+        result = _result_template(status="skipped_non_trading_day", trade_date=decision.trade_date)
+        _write_daily_artifacts(result, output_dir)
+        return result
 
     lock_handle = _try_acquire_daily_lock(lock_path)
     if lock_handle is None:
-        return _result_template(status="skipped_locked", trade_date=decision.trade_date)
+        result = _result_template(status="skipped_locked", trade_date=decision.trade_date)
+        _write_daily_artifacts(result, output_dir)
+        return result
 
     result = _result_template(status="success", trade_date=decision.trade_date)
     try:
+        retry_queue: list[str] = []
+        consecutive_retryable_failures = 0
         codes = load_active_baostock_codes(limit_assets=limit_assets)
         result["symbol_count"] = len(codes)
         login_or_raise()
         for index, code in enumerate(codes):
-            try:
-                params = request_params(code, target_date, target_date, freq, adjust_type)
-                rows = query_baostock_minute_rows_once(
+            rows, retry_count, error = _fetch_symbol_with_policy(
+                code,
+                decision.trade_date,
+                freq=freq,
+                adjust_type=adjust_type,
+                retry_limit=retry_limit,
+                timeout_seconds=timeout_seconds,
+            )
+            result["retry_count"] += retry_count
+            if error is not None or rows is None:
+                retry_queue.append(code)
+                result["last_error"] = error
+                if error is not None and is_retryable_baostock_error(error):
+                    consecutive_retryable_failures += 1
+                    if consecutive_retryable_failures >= RELOGIN_FAILURE_THRESHOLD:
+                        relogin_or_raise()
+                        result["relogin_count"] += 1
+                        consecutive_retryable_failures = 0
+                        if cooldown_seconds > 0:
+                            time.sleep(cooldown_seconds)
+                else:
+                    consecutive_retryable_failures = 0
+            else:
+                consecutive_retryable_failures = 0
+                params = request_params(
                     code,
-                    target_date,
-                    target_date,
-                    freq=freq,
-                    adjust_type=adjust_type,
+                    decision.trade_date,
+                    decision.trade_date,
+                    freq,
+                    adjust_type,
                 )
                 inserted_rows = upsert_stock_minute_bars(
                     rows,
@@ -108,10 +230,6 @@ def run_baostock_minute_daily(
                     adjust_type=adjust_type,
                     params=params,
                 )
-            except Exception:
-                result["failed_count"] += 1
-                result["failed_symbols"].append(code)
-            else:
                 if inserted_rows > 0:
                     result["success_count"] += 1
                     result["rows_written"] += inserted_rows
@@ -119,12 +237,34 @@ def run_baostock_minute_daily(
                     result["empty_count"] += 1
             if sleep_seconds and index + 1 < len(codes):
                 time.sleep(sleep_seconds)
+
+        if retry_queue:
+            failed_symbols, last_error = _run_retry_queue(
+                retry_queue,
+                target_date=decision.trade_date,
+                freq=freq,
+                adjust_type=adjust_type,
+                retry_limit=retry_limit,
+                timeout_seconds=timeout_seconds,
+                result=result,
+            )
+            result["failed_symbols"] = failed_symbols
+            result["failed_count"] = len(failed_symbols)
+            result["last_error"] = last_error if failed_symbols else None
+
         if result["failed_count"] > 0:
-            result["status"] = "partial_success"
+            result["status"] = "partial"
+        else:
+            result["last_error"] = None
         return result
+    except Exception as exc:
+        result["status"] = "failed"
+        result["last_error"] = str(exc)
+        raise
     finally:
         try:
             bs.logout()
         except Exception:
             pass
         _release_daily_lock(lock_handle)
+        _write_daily_artifacts(result, output_dir)
