@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+clear_stock_proxy_env() {
+  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
+  unset http_proxy https_proxy all_proxy no_proxy
+}
+
 stock_cron_guard_or_exit() {
   local python_bin="$1"
   local trade_date="${2:-}"
