@@ -135,6 +135,48 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
     assert response.json()["counts_by_category"] == {"live": 2}
 
 
+def test_ops_snapshot_route_returns_aggregated_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        lambda: {"intervention": {"needs_intervention": False}, "pipeline": {"overall_status": "running"}},
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline"]["overall_status"] == "running"
+
+
+def test_ops_stages_route_returns_stage_list(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        lambda service=None, trade_date=None: [{"stage": "daily", "status": "success"}],
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/stages")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [{"stage": "daily", "status": "success"}]
+
+
+def test_public_snapshot_route_returns_public_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_public_snapshot",
+        lambda: {"status": "ready", "latest_ready_trade_date": "2026-06-24"},
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/public/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
 def test_asset_detail_route_returns_404_for_missing_asset(monkeypatch):
     monkeypatch.setattr(dashboard_app, "load_asset_detail", lambda asset_id: None)
     client = TestClient(dashboard_app.create_app())

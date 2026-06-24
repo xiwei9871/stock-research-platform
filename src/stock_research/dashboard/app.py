@@ -7,6 +7,11 @@ from stock_research.dashboard.experiment_replay import load_experiment_replay_su
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
+from stock_research.dashboard.ops_snapshot import (
+    build_internal_ops_snapshot,
+    build_public_snapshot,
+    load_ops_stage_details,
+)
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.scores import (
     load_asset_detail,
@@ -52,6 +57,18 @@ def create_app() -> FastAPI:
     @app.get("/api/data/status")
     def data_status():
         return load_data_status_for_dashboard()
+
+    @app.get("/api/ops/snapshot")
+    def ops_snapshot():
+        return build_internal_ops_snapshot()
+
+    @app.get("/api/ops/stages")
+    def ops_stages():
+        return {"items": load_ops_stage_details()}
+
+    @app.get("/api/public/snapshot")
+    def public_snapshot():
+        return build_public_snapshot()
 
     @app.get("/api/intraday/status")
     def intraday_status(date: str | None = None):
