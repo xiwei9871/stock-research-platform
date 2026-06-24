@@ -3,6 +3,7 @@ from datetime import date
 from stock_research.dashboard.ops_snapshot import (
     build_internal_ops_snapshot,
     build_public_snapshot,
+    _load_pipeline_status_context,
     load_ops_stage_details,
 )
 
@@ -182,6 +183,60 @@ def test_load_ops_stage_details_defaults_to_latest_trade_date_when_missing(monke
     ]
     assert captured[0][1] is None
     assert captured[1][1] == [date(2026, 6, 23)]
+
+
+def test_load_pipeline_status_context_prefers_requested_row_when_present(monkeypatch):
+    class _Context:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    calls = []
+
+    def fake_fetch_all(conn, sql, params=None):
+        calls.append((sql.strip(), params))
+        if "WHERE trade_date = %s" in sql:
+            return [
+                {
+                    "trade_date": date(2026, 6, 24),
+                    "pipeline_status": "READY",
+                    "daily_status": "success",
+                    "minute5_status": "success",
+                    "deps_status": "success",
+                    "latest_ready_trade_date": date(2026, 6, 24),
+                    "warnings": [],
+                    "failed_jobs": [],
+                    "updated_at": date(2026, 6, 24),
+                }
+            ]
+        if "ORDER BY trade_date DESC, updated_at DESC" in sql:
+            return [
+                {
+                    "trade_date": date(2026, 6, 24),
+                    "pipeline_status": "READY",
+                    "daily_status": "success",
+                    "minute5_status": "success",
+                    "deps_status": "success",
+                    "latest_ready_trade_date": date(2026, 6, 24),
+                    "warnings": [],
+                    "failed_jobs": [],
+                    "updated_at": date(2026, 6, 24),
+                }
+            ]
+        raise AssertionError(sql)
+
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.connect", lambda service: _Context())
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.fetch_all", fake_fetch_all)
+
+    context = _load_pipeline_status_context("stock_research", date(2026, 6, 24))
+
+    assert context["matches_requested_trade_date"] is True
+    assert context["status_trade_date"] == "2026-06-24"
+    assert context["latest_available_trade_date"] == "2026-06-24"
+    assert context["data_status"]["pipeline_status"] == "READY"
+    assert calls[0][1] == [date(2026, 6, 24)]
 
 
 def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(monkeypatch):

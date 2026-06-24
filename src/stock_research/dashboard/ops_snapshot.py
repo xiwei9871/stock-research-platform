@@ -118,7 +118,10 @@ def _load_pipeline_status_context(service: str, trade_date: date) -> dict[str, A
     }
 
 
-def load_ops_stage_details(service: str, trade_date: date | None = None) -> list[dict[str, Any]]:
+def load_ops_stage_details(
+    service: str = SETTINGS.research_service,
+    trade_date: date | None = None,
+) -> list[dict[str, Any]]:
     resolved_trade_date = trade_date or _latest_ops_stage_trade_date(service)
     if resolved_trade_date is None:
         return []
