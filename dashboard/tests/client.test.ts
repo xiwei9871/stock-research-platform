@@ -12,9 +12,12 @@ import {
   fetchGlobalSearch,
   fetchMarketMonitorEod,
   fetchOutcomeAnalytics,
+  fetchOpsSnapshot,
+  fetchOpsStages,
   fetchOverview,
   fetchPlatformDisplayDate,
   fetchPlatformReadiness,
+  fetchPublicSnapshot,
   fetchPublicNews,
   fetchPublicNewsStatus,
   fetchResearchReportSummary,
@@ -969,5 +972,59 @@ describe('dashboard API client', () => {
       '/api/strategy-validation/runs/run-1/assets/000001.SZ/replay?start_date=2026-06-01&end_date=2026-06-08&adjust_type=qfq'
     );
     expect(result.asset_id).toBe('000001.SZ');
+  });
+
+  it('fetches ops snapshot from the internal ops endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ pipeline: { overall_status: 'ready' }, readiness: { ready_status: 'ready' } }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOpsSnapshot();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/ops/snapshot');
+    expect(result.pipeline.overall_status).toBe('ready');
+  });
+
+  it('fetches ops stages rows from the internal ops endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [{ stage: 'daily', status: 'success' }] }), { status: 200 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOpsStages();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/ops/stages');
+    expect(result[0].stage).toBe('daily');
+  });
+
+  it('fetches public snapshot from the release-safe endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          trade_date: '2026-06-23',
+          status: 'ready',
+          status_text: 'ready',
+          latest_ready_trade_date: '2026-06-23',
+          published_at: null,
+          market_state: {},
+          topn_preview: [],
+          coverage_summary: { core: { covered_assets: 5, eligible_assets: 6 } },
+          factor_gate_summary: {},
+          notes: []
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPublicSnapshot();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/public/snapshot');
+    expect(result.trade_date).toBe('2026-06-23');
+    expect(result.coverage_summary.core).toEqual({ covered_assets: 5, eligible_assets: 6 });
   });
 });

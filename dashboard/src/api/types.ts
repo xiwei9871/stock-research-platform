@@ -1342,3 +1342,71 @@ export type ReviewQueueResponse = {
   groups: ReviewQueueGroup[];
   warnings: string[];
 };
+
+export type OpsStageRow = {
+  stage: string;
+  status: string;
+  started_at: string | null;
+  updated_at: string | null;
+  error_summary: string | null;
+};
+
+export type OpsSnapshot = {
+  run_window: {
+    requested_trade_date: string;
+    trade_date: string;
+    status_trade_date: string | null;
+    latest_available_trade_date: string | null;
+    status_matches_requested_trade_date: boolean;
+    current_trade_date: string | null;
+    latest_ready_trade_date: string | null;
+    last_updated_at: string | null;
+    now: string;
+    stage_count: number;
+  };
+  pipeline: {
+    overall_status: string;
+    pipeline_status: string;
+    daily_status: string | null;
+    minute5_status: string | null;
+    deps_status: string | null;
+    latest_ready_trade_date: string | null;
+    last_updated_at: string | null;
+    evaluated_at: string;
+    stage_statuses: string[];
+  };
+  health: Record<string, unknown>;
+  intervention: {
+    severity: string;
+    needs_intervention: boolean;
+    reason_text: string;
+    suggested_action?: string | null;
+  };
+  readiness: {
+    ready_status: string;
+    latest_ready_trade_date: string | null;
+    ready_for_dashboard: boolean;
+    ready_for_publication: boolean;
+    blocking_issue_count: number;
+  };
+  snapshot_preview: {
+    market_state: Record<string, unknown>;
+    topn_preview: Array<Record<string, unknown>>;
+    coverage_summary: Record<string, unknown>;
+    factor_gate_summary: Record<string, unknown>;
+    published_at: string | null;
+  };
+};
+
+export type PublicSnapshot = {
+  trade_date: string;
+  published_at: string | null;
+  latest_ready_trade_date: string | null;
+  status: string;
+  status_text: string;
+  market_state: Record<string, unknown>;
+  topn_preview: Array<Record<string, unknown>>;
+  coverage_summary: Record<string, unknown>;
+  factor_gate_summary: Record<string, unknown>;
+  notes: string[];
+};

@@ -23,9 +23,12 @@ import type {
   GlobalSearchResponse,
   MarketMonitorPayload,
   OutcomeAnalyticsRow,
+  OpsSnapshot,
+  OpsStageRow,
   PlatformDisplayDate,
   PlatformReadiness,
   PlatformSummary,
+  PublicSnapshot,
   PublicNewsCollectorStatus,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
@@ -592,6 +595,19 @@ export async function fetchPlatformReadiness(): Promise<PlatformReadiness> {
 
 export async function fetchPlatformDisplayDate(): Promise<PlatformDisplayDate> {
   return getJson<PlatformDisplayDate>('/api/platform/display-date');
+}
+
+export async function fetchPublicSnapshot(): Promise<PublicSnapshot> {
+  return getJson('/api/public/snapshot');
+}
+
+export async function fetchOpsSnapshot(): Promise<OpsSnapshot> {
+  return getJson('/api/ops/snapshot');
+}
+
+export async function fetchOpsStages(): Promise<OpsStageRow[]> {
+  const payload = await getJson<{ items: OpsStageRow[] }>('/api/ops/stages');
+  return payload.items;
 }
 
 export async function fetchStrategyCatalog(): Promise<StrategyCatalogItem[]> {
