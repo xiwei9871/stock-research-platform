@@ -9,10 +9,8 @@ TRADE_DATE="${TRADE_DATE:-}"
 LOG_DIR="${LOG_DIR:-$ROOT/logs/minute_daily}"
 RUN_LOG="${RUN_LOG:-$LOG_DIR/baostock_minute_daily_cron.log}"
 
-unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
-unset http_proxy https_proxy all_proxy no_proxy
-
 source "$ROOT/scripts/stock_cron_guard.sh"
+clear_stock_proxy_env
 stock_cron_guard_or_exit "$PYTHON_BIN" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
 
 mkdir -p "$LOG_DIR" "$(dirname "$RUN_LOG")"
