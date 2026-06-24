@@ -279,6 +279,7 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
                     "pipeline_status": "READY",
                     "failed_jobs": 4,
                     "warnings": ["source timeout"],
+                    "experimental_internal_metric": "do not publish",
                 },
                 "factor_gate_summary": {
                     "approved_count": 12,
@@ -309,6 +310,7 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
     assert "pipeline_status" not in str(snapshot["coverage_summary"])
     assert "failed_jobs" not in str(snapshot["coverage_summary"])
     assert "warnings" not in str(snapshot["coverage_summary"])
+    assert "experimental_internal_metric" not in str(snapshot["coverage_summary"])
     assert "internal_confidence" not in str(snapshot["market_state"])
     assert "operator_note" not in str(snapshot["topn_preview"])
     assert "internal_rules" not in str(snapshot["factor_gate_summary"])

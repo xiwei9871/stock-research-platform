@@ -139,7 +139,7 @@ it('renders the public page from main.tsx when the route is /public', async () =
   vi.doUnmock('../src/components/PublicSnapshotPage');
 });
 
-it('renders the public page from main.tsx when public-only mode is enabled on a non-public path', async () => {
+it('renders the internal app from main.tsx on a non-public path even if a public-only flag is set', async () => {
   vi.resetModules();
   vi.stubEnv('VITE_PUBLIC_SNAPSHOT_ONLY', 'true');
   window.history.pushState({}, '', '/ops');
@@ -153,6 +153,27 @@ it('renders the public page from main.tsx when public-only mode is enabled on a 
   }));
 
   await import('../src/main');
+
+  await waitFor(() => {
+    expect(screen.getByText('internal app shell')).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText('public snapshot route')).not.toBeInTheDocument();
+});
+
+it('renders the public page from public-main.tsx on a non-public path', async () => {
+  vi.resetModules();
+  window.history.pushState({}, '', '/ops');
+  document.body.innerHTML = '<div id="root"></div>';
+
+  vi.doMock('../src/App', () => ({
+    App: () => <div>internal app shell</div>
+  }));
+  vi.doMock('../src/components/PublicSnapshotPage', () => ({
+    PublicSnapshotPage: () => <div>public snapshot route</div>
+  }));
+
+  await import('../src/public-main');
 
   await waitFor(() => {
     expect(screen.getByText('public snapshot route')).toBeInTheDocument();

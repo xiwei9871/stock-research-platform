@@ -90,10 +90,18 @@ curl http://127.0.0.1:8765/api/public/snapshot
 Public-only frontend deployment:
 
 ```bash
+cd /Users/xiwei/stock_research/dashboard
 VITE_PUBLIC_SNAPSHOT_ONLY=true pnpm build
 ```
 
-When that Vite env switch is enabled, the built dashboard renders the public snapshot page on every route and does not expose the internal dashboard shell.
+That build path switches Vite to `dashboard/public.html`, which bootstraps
+`dashboard/src/public-main.tsx`. The resulting artifact imports only
+`PublicSnapshotPage` plus shared styles, so it is a true public-only bundle
+rather than a runtime branch inside the internal app shell bundle.
+
+Normal builds still use `dashboard/index.html` with `dashboard/src/main.tsx`.
+Those mixed-mode builds keep local and shared `/public` route support while the
+rest of the routes continue to render the internal dashboard shell.
 
 Start the dashboard API:
 

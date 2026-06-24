@@ -12,7 +12,7 @@ from stock_research.intraday_pipeline import load_intraday_status
 
 _PENDING_STATUSES = {"pending", "skipped", "not_started"}
 _ACTIVE_STATUSES = {"running", "success", "partial_success", "failed"}
-_FORBIDDEN_PUBLIC_COVERAGE_KEYS = {"pipeline_status", "failed_jobs", "warnings"}
+_PUBLIC_COVERAGE_SUMMARY_KEYS = ("core",)
 _PUBLIC_MARKET_STATE_KEYS = ("state", "score")
 _PUBLIC_TOPN_PREVIEW_KEYS = ("asset_id", "stock_name", "score_total")
 _PUBLIC_FACTOR_GATE_SUMMARY_KEYS = ("approved_count",)
@@ -364,9 +364,9 @@ def _public_status_text(status: str, latest_ready_trade_date: str | None) -> str
 
 def _public_coverage_summary(coverage_summary: dict[str, Any]) -> dict[str, Any]:
     return {
-        key: value
-        for key, value in coverage_summary.items()
-        if key not in _FORBIDDEN_PUBLIC_COVERAGE_KEYS
+        key: coverage_summary.get(key)
+        for key in _PUBLIC_COVERAGE_SUMMARY_KEYS
+        if key in coverage_summary
     }
 
 
