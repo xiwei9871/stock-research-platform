@@ -1,3 +1,5 @@
+import json
+
 from stock_research import strategy_daily_eod_store
 
 
@@ -138,6 +140,113 @@ def test_run_strategy_daily_eod_returns_failed_when_one_strategy_runner_fails(tm
         "mid_trend": {"status": "failed", "reason": "runner boom"},
         "tech_bottleneck": {"status": "success", "review_rows": 3},
     }
+
+
+def test_run_strategy_daily_eod_uses_default_stub_runners_and_writes_summary_json(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: None,
+    )
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
+    )
+
+    summary_path = tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json"
+    assert result["status"] == "failed"
+    assert result["strategy_status"] == {
+        "lhb_shortline": {"status": "failed", "reason": "lhb_shortline runner not configured"},
+        "mid_trend": {"status": "failed", "reason": "mid_trend runner not configured"},
+        "tech_bottleneck": {"status": "failed", "reason": "tech_bottleneck runner not configured"},
+    }
+    assert summary_path.exists()
+    assert json.loads(summary_path.read_text(encoding="utf-8")) == result
+
+
+def test_run_strategy_daily_eod_returns_structured_failure_when_dependency_checker_raises(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: None,
+    )
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("deps boom")),
+    )
+
+    assert result["status"] == "failed"
+    assert result["dependency_check"] == {
+        "status": "failed",
+        "reason": "dependency_checker_exception: deps boom",
+    }
+    assert result["strategy_status"] == {
+        "lhb_shortline": {"status": "skipped", "reason": "dependency_check_failed"},
+        "mid_trend": {"status": "skipped", "reason": "dependency_check_failed"},
+        "tech_bottleneck": {"status": "skipped", "reason": "dependency_check_failed"},
+    }
+
+
+def test_run_strategy_daily_eod_returns_structured_failure_when_strategy_runner_raises(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: None,
+    )
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
+        lhb_shortline_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 1},
+        mid_trend_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("runner boom")),
+        tech_bottleneck_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 4},
+    )
+
+    assert result["status"] == "failed"
+    assert result["strategy_status"] == {
+        "lhb_shortline": {"status": "success", "review_rows": 1},
+        "mid_trend": {"status": "failed", "reason": "strategy_runner_exception: runner boom"},
+        "tech_bottleneck": {"status": "success", "review_rows": 4},
+    }
+
+
+def test_run_strategy_daily_eod_returns_structured_failure_when_summary_write_raises(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: None,
+    )
+
+    def fake_write_text(self, data, encoding):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(strategy_daily_eod.Path, "write_text", fake_write_text)
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
+        lhb_shortline_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 1},
+        mid_trend_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 2},
+        tech_bottleneck_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 3},
+    )
+
+    assert result["status"] == "failed"
+    assert result["reason"] == "summary_write_exception: disk full"
+    assert result["summary_path"] == str(tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json")
 
 
 def test_check_strategy_daily_eod_dependencies_fails_when_status_row_missing(monkeypatch):

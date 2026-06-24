@@ -13,6 +13,7 @@ DependencyChecker = Callable[..., dict[str, Any]]
 StrategyRunner = Callable[..., dict[str, Any]]
 
 _SUCCESS_DEPENDENCY_STATUSES = {"success", "partial_success"}
+DEFAULT_STRATEGY_NAMES = ("lhb_shortline", "mid_trend", "tech_bottleneck")
 
 _DEPENDENCY_SQL = """
 SELECT daily_status, minute5_status, deps_status
@@ -27,10 +28,10 @@ def run_strategy_daily_eod(
     trade_date: str,
     *,
     output_root: str | Path,
-    dependency_checker: DependencyChecker = None,
-    lhb_shortline_runner: StrategyRunner = None,
-    mid_trend_runner: StrategyRunner = None,
-    tech_bottleneck_runner: StrategyRunner = None,
+    dependency_checker: DependencyChecker | None = None,
+    lhb_shortline_runner: StrategyRunner | None = None,
+    mid_trend_runner: StrategyRunner | None = None,
+    tech_bottleneck_runner: StrategyRunner | None = None,
 ) -> dict[str, Any]:
     apply_strategy_daily_eod_status_schema()
 
@@ -38,23 +39,36 @@ def run_strategy_daily_eod(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    strategy_runners = {
-        "lhb_shortline": lhb_shortline_runner or _missing_runner,
-        "mid_trend": mid_trend_runner or _missing_runner,
-        "tech_bottleneck": tech_bottleneck_runner or _missing_runner,
-    }
+    strategy_runners = _resolve_strategy_runners(
+        lhb_shortline_runner=lhb_shortline_runner,
+        mid_trend_runner=mid_trend_runner,
+        tech_bottleneck_runner=tech_bottleneck_runner,
+    )
 
-    dependency_check = dependency_checker(trade_date=trade_date)
+    try:
+        dependency_check = dependency_checker(trade_date=trade_date)
+    except Exception as exc:
+        dependency_check = {
+            "status": "failed",
+            "reason": f"dependency_checker_exception: {exc}",
+        }
+
     if dependency_check.get("status") != "success":
-        strategy_status = {
-            name: {"status": "skipped", "reason": "dependency_check_failed"}
-            for name in strategy_runners
-        }
+        strategy_status = _skipped_strategy_status()
     else:
-        strategy_status = {
-            name: runner(trade_date=trade_date, output_dir=output_dir, strategy_name=name)
-            for name, runner in strategy_runners.items()
-        }
+        strategy_status = {}
+        for name, runner in strategy_runners.items():
+            try:
+                strategy_status[name] = runner(
+                    trade_date=trade_date,
+                    output_dir=output_dir,
+                    strategy_name=name,
+                )
+            except Exception as exc:
+                strategy_status[name] = {
+                    "status": "failed",
+                    "reason": f"strategy_runner_exception: {exc}",
+                }
 
     overall_status = (
         "success"
@@ -64,6 +78,7 @@ def run_strategy_daily_eod(
     )
     review_rows = sum(int(result.get("review_rows") or 0) for result in strategy_status.values())
 
+    summary_path = output_dir / "strategy_eod_publish_summary.json"
     summary = {
         "trade_date": trade_date,
         "status": overall_status,
@@ -71,11 +86,14 @@ def run_strategy_daily_eod(
         "strategy_status": strategy_status,
         "review_rows": review_rows,
         "output_dir": str(output_dir),
+        "summary_path": str(summary_path),
     }
 
-    summary_path = output_dir / "strategy_eod_publish_summary.json"
-    summary["summary_path"] = str(summary_path)
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        _write_summary(summary_path=summary_path, summary=summary)
+    except Exception as exc:
+        summary["status"] = "failed"
+        summary["reason"] = f"summary_write_exception: {exc}"
     return summary
 
 
@@ -123,3 +141,27 @@ def check_strategy_daily_eod_dependencies(
 
 def _missing_runner(*, strategy_name: str = "unknown", **_kwargs: Any) -> dict[str, Any]:
     return {"status": "failed", "reason": f"{strategy_name} runner not configured"}
+
+
+def _resolve_strategy_runners(
+    *,
+    lhb_shortline_runner: StrategyRunner | None,
+    mid_trend_runner: StrategyRunner | None,
+    tech_bottleneck_runner: StrategyRunner | None,
+) -> dict[str, StrategyRunner]:
+    return {
+        "lhb_shortline": lhb_shortline_runner or _missing_runner,
+        "mid_trend": mid_trend_runner or _missing_runner,
+        "tech_bottleneck": tech_bottleneck_runner or _missing_runner,
+    }
+
+
+def _skipped_strategy_status() -> dict[str, dict[str, str]]:
+    return {
+        name: {"status": "skipped", "reason": "dependency_check_failed"}
+        for name in DEFAULT_STRATEGY_NAMES
+    }
+
+
+def _write_summary(*, summary_path: Path, summary: dict[str, Any]) -> None:
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
