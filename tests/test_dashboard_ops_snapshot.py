@@ -6,19 +6,25 @@ from stock_research.dashboard.ops_snapshot import (
 )
 
 
-def test_build_internal_ops_snapshot_marks_not_started_as_critical(monkeypatch):
+def test_build_internal_ops_snapshot_distinguishes_requested_date_from_latest_status_row(monkeypatch):
     monkeypatch.setattr(
-        "stock_research.dashboard.ops_snapshot.load_data_status_for_dashboard",
-        lambda service, current_trade_date=None: {
-            "latest_ready_trade_date": "2026-06-23",
-            "current_trade_date": "2026-06-24",
-            "pipeline_status": "NOT_READY",
-            "daily_status": "pending",
-            "minute5_status": "pending",
-            "deps_status": "pending",
-            "failed_jobs": [],
-            "warnings": [],
-            "last_updated_at": "2026-06-24T03:40:00+08:00",
+        "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",
+        lambda service, trade_date: {
+            "data_status": {
+                "latest_ready_trade_date": "2026-06-23",
+                "current_trade_date": "2026-06-24",
+                "pipeline_status": "READY",
+                "daily_status": "success",
+                "minute5_status": "success",
+                "deps_status": "success",
+                "failed_jobs": [],
+                "warnings": [],
+                "last_updated_at": "2026-06-23T20:00:00+08:00",
+            },
+            "requested_trade_date": "2026-06-24",
+            "status_trade_date": "2026-06-23",
+            "latest_available_trade_date": "2026-06-23",
+            "matches_requested_trade_date": False,
         },
     )
     monkeypatch.setattr(
@@ -55,24 +61,34 @@ def test_build_internal_ops_snapshot_marks_not_started_as_critical(monkeypatch):
 
     snapshot = build_internal_ops_snapshot("stock_research", trade_date=date(2026, 6, 24))
 
-    assert snapshot["intervention"]["needs_intervention"] is True
-    assert snapshot["intervention"]["severity"] == "critical"
+    assert snapshot["run_window"]["requested_trade_date"] == "2026-06-24"
+    assert snapshot["run_window"]["status_trade_date"] == "2026-06-23"
+    assert snapshot["run_window"]["latest_available_trade_date"] == "2026-06-23"
+    assert snapshot["run_window"]["status_matches_requested_trade_date"] is False
+    assert snapshot["pipeline"]["overall_status"] == "not_started"
+    assert snapshot["readiness"]["ready_for_publication"] is False
     assert snapshot["intervention"]["reason_code"] == "not_started"
 
 
-def test_build_internal_ops_snapshot_marks_delayed_but_progressing_as_warning(monkeypatch):
+def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch):
     monkeypatch.setattr(
-        "stock_research.dashboard.ops_snapshot.load_data_status_for_dashboard",
-        lambda service, current_trade_date=None: {
-            "latest_ready_trade_date": "2026-06-23",
-            "current_trade_date": "2026-06-24",
-            "pipeline_status": "NOT_READY",
-            "daily_status": "running",
-            "minute5_status": "running",
-            "deps_status": "pending",
-            "failed_jobs": [],
-            "warnings": [],
-            "last_updated_at": "2026-06-24T08:06:00+08:00",
+        "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",
+        lambda service, trade_date: {
+            "data_status": {
+                "latest_ready_trade_date": "2026-06-24",
+                "current_trade_date": "2026-06-24",
+                "pipeline_status": "NOT_READY",
+                "daily_status": "running",
+                "minute5_status": "running",
+                "deps_status": "pending",
+                "failed_jobs": [],
+                "warnings": [],
+                "last_updated_at": "2026-06-24T08:06:00+08:00",
+            },
+            "requested_trade_date": "2026-06-24",
+            "status_trade_date": "2026-06-24",
+            "latest_available_trade_date": "2026-06-24",
+            "matches_requested_trade_date": True,
         },
     )
     monkeypatch.setattr(
@@ -89,8 +105,8 @@ def test_build_internal_ops_snapshot_marks_delayed_but_progressing_as_warning(mo
         "stock_research.dashboard.ops_snapshot.summarize_operational_health",
         lambda **kwargs: {
             "trade_date": "2026-06-24",
-            "status": "ok",
-            "alert_count": 0,
+            "status": "alert",
+            "alert_count": 2,
             "ingest": {},
             "stale_ingest": {},
             "backfill": {},
@@ -118,9 +134,10 @@ def test_build_internal_ops_snapshot_marks_delayed_but_progressing_as_warning(mo
     snapshot = build_internal_ops_snapshot("stock_research", trade_date=date(2026, 6, 24))
 
     assert snapshot["pipeline"]["overall_status"] == "delayed"
-    assert snapshot["intervention"]["needs_intervention"] is True
+    assert snapshot["health"]["has_alerts"] is True
+    assert snapshot["readiness"]["blocking_issue_count"] == 2
+    assert snapshot["readiness"]["ready_for_publication"] is False
     assert snapshot["intervention"]["severity"] == "warning"
-    assert snapshot["health"]["stalled"] is False
 
 
 def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(monkeypatch):
@@ -147,7 +164,12 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
             "snapshot_preview": {
                 "market_state": {"state": "neutral"},
                 "topn_preview": [{"asset_id": "000001.SZ", "stock_name": "Ping An Bank"}],
-                "coverage_summary": {"core": "97.8%"},
+                "coverage_summary": {
+                    "core": "97.8%",
+                    "pipeline_status": "READY",
+                    "failed_jobs": 4,
+                    "warnings": ["source timeout"],
+                },
                 "factor_gate_summary": {"approved_count": 12},
                 "published_at": "2026-06-24T08:12:00+08:00",
             },
@@ -156,7 +178,11 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
 
     snapshot = build_public_snapshot("stock_research", trade_date=date(2026, 6, 24))
 
-    assert snapshot["status"] == "degraded_ready"
+    assert snapshot["status"] == "delayed"
     assert snapshot["latest_ready_trade_date"] == "2026-06-23"
+    assert snapshot["coverage_summary"] == {"core": "97.8%"}
     assert "source timeout" not in str(snapshot)
     assert "suggested_action" not in str(snapshot)
+    assert "pipeline_status" not in str(snapshot["coverage_summary"])
+    assert "failed_jobs" not in str(snapshot["coverage_summary"])
+    assert "warnings" not in str(snapshot["coverage_summary"])

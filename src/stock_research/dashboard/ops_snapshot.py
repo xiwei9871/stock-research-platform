@@ -5,7 +5,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
-from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.daily_health import summarize_operational_health
 from stock_research.db import connect, fetch_all
 from stock_research.intraday_pipeline import load_intraday_status
@@ -13,7 +12,7 @@ from stock_research.intraday_pipeline import load_intraday_status
 
 _PENDING_STATUSES = {"pending", "skipped", "not_started"}
 _ACTIVE_STATUSES = {"running", "success", "partial_success", "failed"}
-_READY_PIPELINE_STATUSES = {"READY", "DEGRADED_READY"}
+_FORBIDDEN_PUBLIC_COVERAGE_KEYS = {"pipeline_status", "failed_jobs", "warnings"}
 
 
 def build_internal_ops_snapshot(
@@ -21,17 +20,18 @@ def build_internal_ops_snapshot(
     trade_date: date | None = None,
 ) -> dict[str, Any]:
     target_date = trade_date or date.today()
-    data_status = load_data_status_for_dashboard(service, current_trade_date=target_date)
+    status_context = _load_pipeline_status_context(service, target_date)
+    data_status = status_context["data_status"]
     intraday = load_intraday_status(service, target_date)
     health = summarize_operational_health(trade_date=target_date.isoformat(), service=service)
     stages = load_ops_stage_details(service, target_date)
     now_text = _now_in_timezone("Asia/Shanghai")
 
-    run_window = _build_run_window(target_date, data_status, stages, now_text)
-    pipeline = _build_pipeline_summary(data_status, stages, now_text)
+    run_window = _build_run_window(target_date, status_context, stages, now_text)
+    pipeline = _build_pipeline_summary(data_status, stages, now_text, status_context)
     health_block = _build_health_summary(health, data_status, stages, now_text)
-    readiness = _build_readiness(data_status, health_block, pipeline)
-    intervention = _build_intervention(run_window, pipeline, health_block, readiness)
+    readiness = _build_readiness(data_status, health_block, pipeline, status_context)
+    intervention = _build_intervention(pipeline, health_block, readiness)
 
     return {
         "run_window": run_window,
@@ -42,11 +42,7 @@ def build_internal_ops_snapshot(
         "snapshot_preview": {
             "market_state": _market_state_preview(intraday),
             "topn_preview": [],
-            "coverage_summary": {
-                "pipeline_status": data_status.get("pipeline_status"),
-                "failed_jobs": len(data_status.get("failed_jobs") or []),
-                "warnings": data_status.get("warnings") or [],
-            },
+            "coverage_summary": _internal_coverage_summary(data_status),
             "factor_gate_summary": {},
             "published_at": data_status.get("last_updated_at"),
         },
@@ -60,19 +56,65 @@ def build_public_snapshot(
     internal = build_internal_ops_snapshot(service=service, trade_date=trade_date)
     readiness = internal["readiness"]
     preview = internal["snapshot_preview"]
-    status = _public_status_from_readiness(readiness)
+    target_date = trade_date or date.today()
+    status = _public_status_from_readiness(readiness, target_date, preview)
     latest_ready_trade_date = readiness.get("latest_ready_trade_date")
     return {
-        "trade_date": (trade_date or date.today()).isoformat(),
+        "trade_date": target_date.isoformat(),
         "published_at": preview.get("published_at"),
         "latest_ready_trade_date": latest_ready_trade_date,
         "status": status,
         "status_text": _public_status_text(status, latest_ready_trade_date),
         "market_state": preview.get("market_state"),
         "topn_preview": preview.get("topn_preview"),
-        "coverage_summary": preview.get("coverage_summary"),
+        "coverage_summary": _public_coverage_summary(preview.get("coverage_summary") or {}),
         "factor_gate_summary": preview.get("factor_gate_summary"),
         "notes": [],
+    }
+
+
+def _load_pipeline_status_context(service: str, trade_date: date) -> dict[str, Any]:
+    requested_row = _fetch_pipeline_status_row(service, trade_date)
+    latest_row = _fetch_latest_pipeline_status_row(service)
+    active_row = requested_row or latest_row
+    if active_row is None:
+        data_status = {
+            "latest_ready_trade_date": None,
+            "current_trade_date": trade_date.isoformat(),
+            "pipeline_status": "NOT_READY",
+            "daily_status": "skipped",
+            "minute5_status": "skipped",
+            "deps_status": "skipped",
+            "failed_jobs": [],
+            "warnings": ["pipeline_status_not_initialized"],
+            "last_updated_at": None,
+        }
+        return {
+            "data_status": data_status,
+            "requested_trade_date": trade_date.isoformat(),
+            "status_trade_date": None,
+            "latest_available_trade_date": None,
+            "matches_requested_trade_date": False,
+        }
+    data_status = {
+        "latest_ready_trade_date": active_row["latest_ready_trade_date"].isoformat()
+        if active_row.get("latest_ready_trade_date")
+        else None,
+        "current_trade_date": trade_date.isoformat(),
+        "pipeline_status": active_row["pipeline_status"],
+        "daily_status": active_row["daily_status"],
+        "minute5_status": active_row["minute5_status"],
+        "deps_status": active_row["deps_status"],
+        "failed_jobs": active_row["failed_jobs"] or [],
+        "warnings": active_row["warnings"] or [],
+        "last_updated_at": active_row["updated_at"].isoformat() if active_row.get("updated_at") else None,
+    }
+    return {
+        "data_status": data_status,
+        "requested_trade_date": trade_date.isoformat(),
+        "status_trade_date": active_row["trade_date"].isoformat(),
+        "latest_available_trade_date": latest_row["trade_date"].isoformat() if latest_row else active_row["trade_date"].isoformat(),
+        "matches_requested_trade_date": requested_row is not None,
     }
 
 
@@ -80,11 +122,11 @@ def load_ops_stage_details(service: str, trade_date: date | None = None) -> list
     sql = """
     SELECT stage, status, started_at, updated_at, error_summary
     FROM ops.daily_pipeline_job
-    WHERE (%s IS NULL OR trade_date = %s)
+    WHERE trade_date = %s
     ORDER BY stage, job_name, source
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [trade_date, trade_date])
+        rows = fetch_all(conn, sql, [trade_date])
     return [
         {
             "stage": row.get("stage"),
@@ -99,13 +141,18 @@ def load_ops_stage_details(service: str, trade_date: date | None = None) -> list
 
 def _build_run_window(
     trade_date: date,
-    data_status: dict[str, Any],
+    status_context: dict[str, Any],
     stages: list[dict[str, Any]],
     now_text: str,
 ) -> dict[str, Any]:
+    data_status = status_context["data_status"]
     latest_update = data_status.get("last_updated_at")
     return {
+        "requested_trade_date": status_context["requested_trade_date"],
         "trade_date": trade_date.isoformat(),
+        "status_trade_date": status_context["status_trade_date"],
+        "latest_available_trade_date": status_context["latest_available_trade_date"],
+        "status_matches_requested_trade_date": status_context["matches_requested_trade_date"],
         "current_trade_date": data_status.get("current_trade_date"),
         "latest_ready_trade_date": data_status.get("latest_ready_trade_date"),
         "last_updated_at": latest_update,
@@ -118,6 +165,7 @@ def _build_pipeline_summary(
     data_status: dict[str, Any],
     stages: list[dict[str, Any]],
     now_text: str,
+    status_context: dict[str, Any],
 ) -> dict[str, Any]:
     pipeline_status = str(data_status.get("pipeline_status") or "NOT_READY")
     stage_statuses = [str(item.get("status") or "") for item in stages]
@@ -127,8 +175,10 @@ def _build_pipeline_summary(
         str(data_status.get("deps_status") or ""),
         *stage_statuses,
     ]
-    if pipeline_status in _READY_PIPELINE_STATUSES:
-        overall_status = "ready" if pipeline_status == "READY" else "degraded"
+    if not status_context.get("matches_requested_trade_date"):
+        overall_status = "not_started" if not any(
+            _normalize_status(status) in {"running", "failed", "partial_success"} for status in pipeline_inputs
+        ) else "delayed"
     elif all(_normalize_status(status) in _PENDING_STATUSES for status in pipeline_inputs):
         overall_status = "not_started"
     elif any(_normalize_status(status) == "failed" for status in pipeline_inputs):
@@ -161,10 +211,13 @@ def _build_health_summary(
     last_error_summary = health.get("last_error_summary")
     if not last_error_summary:
         last_error_summary = _latest_error_summary(stages) or _latest_failed_job_summary(data_status)
+    alert_count = int(health.get("alert_count") or 0)
     return {
         **health,
         "stalled": stalled,
         "last_error_summary": last_error_summary,
+        "alert_count": alert_count,
+        "has_alerts": str(health.get("status") or "").lower() == "alert" or alert_count > 0,
     }
 
 
@@ -172,6 +225,7 @@ def _build_readiness(
     data_status: dict[str, Any],
     health_block: dict[str, Any],
     pipeline: dict[str, Any],
+    status_context: dict[str, Any],
 ) -> dict[str, Any]:
     pipeline_status = str(data_status.get("pipeline_status") or "NOT_READY")
     latest_ready_trade_date = data_status.get("latest_ready_trade_date")
@@ -179,13 +233,15 @@ def _build_readiness(
     blocking_issue_count = len(failed_jobs)
     if health_block.get("stalled"):
         blocking_issue_count += 1
+    if health_block.get("has_alerts"):
+        blocking_issue_count += max(1, int(health_block.get("alert_count") or 0))
     if pipeline.get("overall_status") in {"blocked", "not_started"}:
         blocking_issue_count += 1
-    ready_for_dashboard = pipeline_status in _READY_PIPELINE_STATUSES
-    ready_for_publication = ready_for_dashboard and blocking_issue_count == 0
-    if pipeline_status == "READY":
+    ready_for_dashboard = status_context.get("matches_requested_trade_date") and pipeline_status in {"READY", "DEGRADED_READY"}
+    ready_for_publication = ready_for_dashboard and blocking_issue_count == 0 and not health_block.get("has_alerts")
+    if pipeline_status == "READY" and status_context.get("matches_requested_trade_date"):
         ready_status = "ready"
-    elif pipeline_status == "DEGRADED_READY":
+    elif pipeline_status == "DEGRADED_READY" and status_context.get("matches_requested_trade_date"):
         ready_status = "degraded_ready"
     elif ready_for_dashboard:
         ready_status = "degraded_ready" if blocking_issue_count else "ready"
@@ -201,7 +257,6 @@ def _build_readiness(
 
 
 def _build_intervention(
-    run_window: dict[str, Any],
     pipeline: dict[str, Any],
     health_block: dict[str, Any],
     readiness: dict[str, Any],
@@ -239,6 +294,15 @@ def _build_intervention(
             "reason_text": "the pipeline is progressing but still behind schedule",
             "suggested_action": "check watchdog",
         }
+    if health_block.get("has_alerts"):
+        severity = "critical" if health_block.get("stalled") or int(health_block.get("alert_count") or 0) >= 3 else "warning"
+        return {
+            "needs_intervention": True,
+            "severity": severity,
+            "reason_code": "health_alerts",
+            "reason_text": "operational health alerts require review",
+            "suggested_action": "inspect health alerts and clear blockers",
+        }
     if readiness.get("ready_for_publication"):
         return {
             "needs_intervention": False,
@@ -266,24 +330,76 @@ def _market_state_preview(intraday: dict[str, Any]) -> dict[str, Any]:
     return {"state": None, "score": None}
 
 
-def _public_status_from_internal(internal: dict[str, Any]) -> str:
-    readiness = internal.get("readiness") or {}
-    return _public_status_from_readiness(readiness)
-
-
-def _public_status_from_readiness(readiness: dict[str, Any]) -> str:
-    ready_status = str(readiness.get("ready_status") or "not_ready")
-    if readiness.get("ready_for_publication"):
-        return ready_status
-    if readiness.get("ready_for_dashboard"):
-        return ready_status
-    return "not_ready"
+def _public_status_from_readiness(
+    readiness: dict[str, Any],
+    trade_date: date,
+    preview: dict[str, Any],
+) -> str:
+    latest_ready_trade_date = readiness.get("latest_ready_trade_date")
+    if not latest_ready_trade_date:
+        return "unavailable"
+    if readiness.get("ready_for_publication") and latest_ready_trade_date == trade_date.isoformat():
+        return "ready"
+    if latest_ready_trade_date < trade_date.isoformat():
+        return "delayed" if _public_has_release_payload(preview) else "unavailable"
+    return "partial" if _public_has_release_payload(preview) else "unavailable"
 
 
 def _public_status_text(status: str, latest_ready_trade_date: str | None) -> str:
     if latest_ready_trade_date:
         return f"{status} (latest ready: {latest_ready_trade_date})"
     return status
+
+
+def _public_coverage_summary(coverage_summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in coverage_summary.items()
+        if key not in _FORBIDDEN_PUBLIC_COVERAGE_KEYS
+    }
+
+
+def _public_has_release_payload(preview: dict[str, Any]) -> bool:
+    market_state = preview.get("market_state") or {}
+    topn_preview = preview.get("topn_preview") or []
+    coverage_summary = preview.get("coverage_summary") or {}
+    factor_gate_summary = preview.get("factor_gate_summary") or {}
+    return bool(market_state or topn_preview or coverage_summary or factor_gate_summary)
+
+
+def _internal_coverage_summary(data_status: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "pipeline_status": data_status.get("pipeline_status"),
+        "failed_jobs": len(data_status.get("failed_jobs") or []),
+        "warnings": data_status.get("warnings") or [],
+    }
+
+
+def _fetch_pipeline_status_row(service: str, trade_date: date) -> dict[str, Any] | None:
+    sql = """
+    SELECT trade_date, pipeline_status, daily_status, minute5_status, deps_status,
+           latest_ready_trade_date, warnings, failed_jobs, updated_at
+    FROM ops.daily_pipeline_status
+    WHERE trade_date = %s
+    ORDER BY updated_at DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    return rows[0] if rows else None
+
+
+def _fetch_latest_pipeline_status_row(service: str) -> dict[str, Any] | None:
+    sql = """
+    SELECT trade_date, pipeline_status, daily_status, minute5_status, deps_status,
+           latest_ready_trade_date, warnings, failed_jobs, updated_at
+    FROM ops.daily_pipeline_status
+    ORDER BY trade_date DESC, updated_at DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql)
+    return rows[0] if rows else None
 
 
 def _latest_error_summary(stages: list[dict[str, Any]]) -> str | None:
