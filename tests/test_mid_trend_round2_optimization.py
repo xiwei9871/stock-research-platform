@@ -47,6 +47,31 @@ def test_build_mid_trend_round2_baseline_artifacts_respects_fixed_train_test_spl
     assert (tmp_path / "mid_trend_round2_baseline_test_summary.csv").exists()
 
 
+@pytest.mark.parametrize(
+    ("start_date", "train_end_date", "end_date"),
+    [
+        ("2025-01-02", "2026-02-01", "2026-06-02"),
+        ("2025-01-01", "2026-02-02", "2026-06-02"),
+        ("2025-01-01", "2026-02-01", "2026-01-31"),
+    ],
+)
+def test_build_mid_trend_round2_baseline_artifacts_rejects_off_spec_dates(
+    tmp_path: Path,
+    _baseline_payload: dict[str, pd.DataFrame],
+    start_date: str,
+    train_end_date: str,
+    end_date: str,
+) -> None:
+    with pytest.raises(ValueError, match="fixed split"):
+        build_mid_trend_round2_baseline_artifacts(
+            start_date=start_date,
+            train_end_date=train_end_date,
+            end_date=end_date,
+            output_dir=tmp_path,
+            baseline_payload=_baseline_payload,
+        )
+
+
 def test_default_round2_config_uses_required_optimization_goal_hierarchy() -> None:
     assert DEFAULT_MID_TREND_ROUND2_CONFIG.primary_goal == "hold_winners_longer"
     assert DEFAULT_MID_TREND_ROUND2_CONFIG.secondary_goal == "reduce_low_value_turnover"

@@ -19,6 +19,8 @@ class MidTrendRound2Config:
 
 
 DEFAULT_MID_TREND_ROUND2_CONFIG = MidTrendRound2Config()
+_ROUND2_REQUIRED_START_DATE = "2025-01-01"
+_ROUND2_REQUIRED_TRAIN_END_DATE = "2026-02-01"
 
 
 def build_mid_trend_round2_baseline_artifacts(
@@ -29,6 +31,11 @@ def build_mid_trend_round2_baseline_artifacts(
     output_dir: str | Path,
     baseline_payload: dict[str, pd.DataFrame],
 ) -> dict[str, Any]:
+    if start_date != _ROUND2_REQUIRED_START_DATE or train_end_date != _ROUND2_REQUIRED_TRAIN_END_DATE:
+        raise ValueError("Round 2 baseline artifacts must use the fixed split 2025-01-01 -> 2026-02-01.")
+    if pd.Timestamp(end_date) < pd.Timestamp(train_end_date):
+        raise ValueError("Round 2 baseline artifacts must use the fixed split 2025-01-01 -> 2026-02-01.")
+
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
 
