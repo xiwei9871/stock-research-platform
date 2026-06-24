@@ -10,7 +10,6 @@ from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.lhb_data import run_lhb_shortline_daily_pipeline_v1
 from stock_research.mid_trend_shadow_weekly_control import run_mid_trend_shadow_weekly_control_review
-from stock_research.mid_trend_strategy_validation import RESEARCH_OUTPUT_ROOT, resolve_default_funnel_detail_path
 from stock_research.strategy_daily_eod_store import apply_strategy_daily_eod_status_schema
 
 
@@ -23,10 +22,6 @@ DEFAULT_STRATEGY_RUN_ID_TEMPLATE = "strategy-eod-{trade_date}-local"
 DEFAULT_SOURCE_TYPE = "strategy_manifest"
 DEFAULT_REVIEW_TIER = "top5_focus"
 MID_TREND_VARIANT = "top5_weekly_max2_selective_trend_holding_protection_v1"
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_LHB_CASE_PATH = REPO_ROOT / "outputs/research/dragon_case_curated_library_failure_v2_1.csv"
-DEFAULT_LHB_FEATURES_PATH = REPO_ROOT / "outputs/research/lhb_risk_feature_case_detail_v2_1.csv"
-DEFAULT_LHB_ALIGNMENT_PATH = REPO_ROOT / "outputs/research/dragon_case_lhb_alignment_audit_2024_2026.csv"
 LHB_REVIEW_COLUMNS = [
     "trade_date",
     "asset_id",
@@ -189,15 +184,23 @@ def build_lhb_shortline_strategy_eod(
     output_dir: str | Path,
     strategy_name: str = "lhb_shortline",
     pipeline_runner: StrategyRunner = run_lhb_shortline_daily_pipeline_v1,
-    case_path: str | Path = DEFAULT_LHB_CASE_PATH,
-    lhb_features_path: str | Path = DEFAULT_LHB_FEATURES_PATH,
-    alignment_path: str | Path = DEFAULT_LHB_ALIGNMENT_PATH,
+    case_path: str | Path | None = None,
+    lhb_features_path: str | Path | None = None,
+    alignment_path: str | Path | None = None,
 ) -> dict[str, Any]:
+    resolved_case_path = Path(case_path) if case_path is not None else _default_lhb_case_path()
+    resolved_lhb_features_path = (
+        Path(lhb_features_path) if lhb_features_path is not None else _default_lhb_features_path()
+    )
+    resolved_alignment_path = (
+        Path(alignment_path) if alignment_path is not None else _default_lhb_alignment_path()
+    )
+
     try:
         run_result = pipeline_runner(
-            case_path=case_path,
-            lhb_features_path=lhb_features_path,
-            alignment_path=alignment_path,
+            case_path=resolved_case_path,
+            lhb_features_path=resolved_lhb_features_path,
+            alignment_path=resolved_alignment_path,
             trade_date=trade_date,
             output_dir=output_dir,
         )
@@ -256,7 +259,11 @@ def build_mid_trend_strategy_eod(
     funnel_detail_path: str | Path | None = None,
 ) -> dict[str, Any]:
     try:
-        resolved_funnel_detail_path = Path(resolve_default_funnel_detail_path(funnel_detail_path))
+        resolved_funnel_detail_path = (
+            Path(funnel_detail_path)
+            if funnel_detail_path is not None
+            else _resolve_default_mid_trend_funnel_detail_path()
+        )
     except FileNotFoundError as exc:
         return {"status": "failed", "reason": f"funnel_detail_path_resolution_failed: {exc}"}
 
@@ -441,11 +448,70 @@ def _extract_required_path(result: dict[str, Any], key: str) -> Path | None:
 def _resolve_tech_bottleneck_candidate_path(path: str | Path | None = None) -> Path:
     if path is not None:
         return Path(path)
+    return _select_latest_artifact_path("tech_bottleneck_evidence_adjusted_candidates.csv")
 
-    candidates = sorted(RESEARCH_OUTPUT_ROOT.rglob("tech_bottleneck_evidence_adjusted_candidates.csv"))
+
+def _repo_root() -> Path:
+    return _main_repo_root_from(Path(__file__))
+
+
+def _main_repo_root_from(path: str | Path) -> Path:
+    resolved = Path(path).resolve()
+    parts = resolved.parts
+    if ".worktrees" in parts:
+        idx = parts.index(".worktrees")
+        return Path(*parts[:idx])
+    return resolved.parents[2]
+
+
+def _research_output_root() -> Path:
+    return _repo_root() / "outputs" / "research"
+
+
+def _default_lhb_case_path() -> Path:
+    return _research_output_root() / "dragon_case_curated_library_failure_v2_1.csv"
+
+
+def _default_lhb_features_path() -> Path:
+    return _research_output_root() / "lhb_risk_feature_case_detail_v2_1.csv"
+
+
+def _default_lhb_alignment_path() -> Path:
+    return _research_output_root() / "dragon_case_lhb_alignment_audit_2024_2026.csv"
+
+
+def _resolve_default_mid_trend_funnel_detail_path() -> Path:
+    return _select_latest_artifact_path("mid_trend_watch_funnel_detail.csv")
+
+
+def _select_latest_artifact_path(artifact_name: str, *, base_dir: str | Path | None = None) -> Path:
+    search_root = Path(base_dir) if base_dir is not None else _research_output_root()
+    candidates = sorted(search_root.rglob(artifact_name))
     if not candidates:
-        raise FileNotFoundError(
-            f"no tech bottleneck candidate artifact under {RESEARCH_OUTPUT_ROOT}"
+        raise FileNotFoundError(f"no artifact found for {artifact_name} under {search_root}")
+
+    ranked_candidates = [
+        (
+            _artifact_coverage_end_date(candidate),
+            candidate.stat().st_mtime,
+            str(candidate),
+            candidate,
         )
-    ranked = [(candidate.stat().st_mtime, str(candidate), candidate) for candidate in candidates]
-    return max(ranked)[-1]
+        for candidate in candidates
+    ]
+    return max(ranked_candidates)[-1]
+
+
+def _artifact_coverage_end_date(path: str | Path, *, date_column: str = "trade_date") -> str:
+    candidate = Path(path)
+    try:
+        frame = pd.read_csv(candidate, usecols=[date_column], low_memory=False)
+    except ValueError:
+        return ""
+    if frame.empty:
+        return ""
+
+    parsed = pd.to_datetime(frame[date_column], errors="coerce")
+    if parsed.empty or parsed.isna().all():
+        return ""
+    return parsed.max().date().isoformat()

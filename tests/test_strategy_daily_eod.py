@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -397,6 +398,26 @@ def test_build_lhb_shortline_strategy_eod_fails_when_runner_does_not_produce_wat
     }
 
 
+def test_default_lhb_paths_use_main_repo_output_root_from_worktree(monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    fake_file = Path("/Users/xiwei/stock_research/.worktrees/strategy-daily-eod-20260624/src/stock_research/strategy_daily_eod.py")
+    monkeypatch.setattr(strategy_daily_eod, "__file__", str(fake_file))
+
+    output_root = strategy_daily_eod._research_output_root()
+
+    assert output_root == Path("/Users/xiwei/stock_research/outputs/research")
+    assert str(strategy_daily_eod._default_lhb_case_path()).endswith(
+        "outputs/research/dragon_case_curated_library_failure_v2_1.csv"
+    )
+    assert str(strategy_daily_eod._default_lhb_features_path()).endswith(
+        "outputs/research/lhb_risk_feature_case_detail_v2_1.csv"
+    )
+    assert str(strategy_daily_eod._default_lhb_alignment_path()).endswith(
+        "outputs/research/dragon_case_lhb_alignment_audit_2024_2026.csv"
+    )
+
+
 def test_build_mid_trend_strategy_eod_uses_latest_selected_variant_slice(tmp_path):
     from stock_research import strategy_daily_eod
 
@@ -479,7 +500,7 @@ def test_build_mid_trend_strategy_eod_fails_when_default_funnel_detail_resolutio
 
     monkeypatch.setattr(
         strategy_daily_eod,
-        "resolve_default_funnel_detail_path",
+        "_resolve_default_mid_trend_funnel_detail_path",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError("no funnel detail artifact")),
     )
 
@@ -493,6 +514,47 @@ def test_build_mid_trend_strategy_eod_fails_when_default_funnel_detail_resolutio
         "status": "failed",
         "reason": "funnel_detail_path_resolution_failed: no funnel detail artifact",
     }
+
+
+def test_mid_default_funnel_detail_resolution_uses_main_repo_output_root_from_worktree(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    fake_file = Path("/Users/xiwei/stock_research/.worktrees/strategy-daily-eod-20260624/src/stock_research/strategy_daily_eod.py")
+    fake_repo_root = tmp_path / "stock_research"
+    funnel_path = fake_repo_root / "outputs/research/mid_trend_refresh_20260624/mid_trend_watch_funnel_detail.csv"
+    funnel_path.parent.mkdir(parents=True)
+    pd.DataFrame(columns=["trade_date", "asset_id", "mid_trend_funnel_score"]).to_csv(funnel_path, index=False)
+
+    monkeypatch.setattr(strategy_daily_eod, "__file__", str(fake_file))
+    monkeypatch.setattr(strategy_daily_eod, "_main_repo_root_from", lambda _path: fake_repo_root)
+
+    resolved = strategy_daily_eod._resolve_default_mid_trend_funnel_detail_path()
+
+    assert resolved == funnel_path
+
+
+def test_build_mid_trend_strategy_eod_writes_empty_review_when_funnel_source_has_no_rows(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    funnel_detail_path = tmp_path / "mid_trend_watch_funnel_detail.csv"
+    pd.DataFrame(columns=["trade_date", "asset_id", "mid_trend_funnel_score"]).to_csv(funnel_detail_path, index=False)
+
+    result = strategy_daily_eod.build_mid_trend_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        funnel_detail_path=funnel_detail_path,
+    )
+
+    review_path = tmp_path / "strategy_mid_trend_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert result == {
+        "status": "success",
+        "review_rows": 0,
+        "paths": {"review": str(review_path)},
+    }
+    assert review.empty
+    assert list(review.columns) == LHB_REVIEW_COLUMNS
 
 
 def test_build_tech_bottleneck_strategy_eod_scales_bottleneck_score(tmp_path):
@@ -565,6 +627,56 @@ def test_build_tech_bottleneck_strategy_eod_fails_when_candidate_file_is_missing
         "status": "failed",
         "reason": f"source_artifact_missing: {missing_candidate_path}",
     }
+
+
+def test_resolve_tech_bottleneck_candidate_path_prefers_later_trade_date_coverage_over_newer_mtime(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    early_dir = tmp_path / "workflow_early"
+    late_dir = tmp_path / "workflow_late"
+    early_dir.mkdir()
+    late_dir.mkdir()
+
+    newer_mtime_path = early_dir / "tech_bottleneck_evidence_adjusted_candidates.csv"
+    later_coverage_path = late_dir / "tech_bottleneck_evidence_adjusted_candidates.csv"
+
+    pd.DataFrame(
+        [{"trade_date": "2026-06-23", "asset_id": "CN:SZ:300001", "bottleneck_score": 0.4}]
+    ).to_csv(newer_mtime_path, index=False)
+    pd.DataFrame(
+        [{"trade_date": "2026-06-24", "asset_id": "CN:SZ:300002", "bottleneck_score": 0.5}]
+    ).to_csv(later_coverage_path, index=False)
+
+    monkeypatch.setattr(strategy_daily_eod, "_research_output_root", lambda: tmp_path)
+    newer_mtime_path.touch()
+
+    resolved = strategy_daily_eod._resolve_tech_bottleneck_candidate_path()
+
+    assert resolved == later_coverage_path
+
+
+def test_build_tech_bottleneck_strategy_eod_writes_empty_review_when_candidate_source_has_no_rows(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    candidate_path = tmp_path / "tech_bottleneck_evidence_adjusted_candidates.csv"
+    pd.DataFrame(columns=["trade_date", "asset_id", "bottleneck_score"]).to_csv(candidate_path, index=False)
+
+    result = strategy_daily_eod.build_tech_bottleneck_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        candidate_path=candidate_path,
+    )
+
+    review_path = tmp_path / "strategy_tech_bottleneck_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert result == {
+        "status": "success",
+        "review_rows": 0,
+        "paths": {"review": str(review_path)},
+    }
+    assert review.empty
+    assert list(review.columns) == TECH_REVIEW_COLUMNS
 
 
 def test_run_strategy_daily_eod_uses_default_adapter_runners_when_not_injected(tmp_path, monkeypatch):
