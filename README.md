@@ -162,6 +162,7 @@ matrix and expected evidence.
 | Final release runbook | `docs/quant_system/68_p19_final_release_runbook.md` |
 | Final platform completion | `docs/quant_system/69_p19_final_platform_closure_completion.md` |
 | Dashboard workbench | `docs/dashboard-workbench-runbook.md` |
+| Dashboard ops snapshot runbook | `docs/dashboard-ops-snapshot-runbook.md` |
 | Daily factor pipeline | `docs/daily-factor-pipeline-runbook.md` |
 | P2 daily runbook and smoke report | `docs/quant_system/17_p2_daily_runbook_and_smoke_report.md` |
 | P4 scheduler runbook | `docs/quant_system/21_p4_scheduler_runbook.md` |

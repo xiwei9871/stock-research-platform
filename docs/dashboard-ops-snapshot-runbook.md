@@ -12,7 +12,7 @@
 - Is intervention required?
 - What is the current stage?
 - What is the latest ready trade date?
-- Check `intervention.needs_intervention` when deciding whether escalation is needed.
+- If `intervention.needs_intervention` is true, escalate the workflow and inspect the stage details before clearing the page.
 
 ## Public Page Rules
 

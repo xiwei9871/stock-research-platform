@@ -1,6 +1,7 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
-from pathlib import Path
 
 from stock_research import cli
 from stock_research.dashboard import app as dashboard_app
@@ -137,7 +138,7 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
 
 
 def test_dashboard_ops_snapshot_runbook_exists():
-    path = Path("/Users/xiwei/stock_research/docs/dashboard-ops-snapshot-runbook.md")
+    path = Path(__file__).resolve().parents[1] / "docs/dashboard-ops-snapshot-runbook.md"
     assert path.exists()
     text = path.read_text(encoding="utf-8")
     assert "/api/ops/snapshot" in text
