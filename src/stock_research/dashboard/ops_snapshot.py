@@ -10,7 +10,10 @@ from stock_research.db import connect, fetch_all
 
 try:
     from stock_research.intraday_pipeline import load_intraday_status
-except ImportError:
+except ModuleNotFoundError as exc:
+    if exc.name != "stock_research.intraday_pipeline":
+        raise
+
     def load_intraday_status(service: str, run_date: date) -> dict[str, Any]:
         return {}
 
@@ -27,7 +30,7 @@ def build_internal_ops_snapshot(
     service: str = SETTINGS.research_service,
     trade_date: date | None = None,
 ) -> dict[str, Any]:
-    target_date = trade_date or date.today()
+    target_date = trade_date or _today_in_timezone("Asia/Shanghai")
     status_context = _load_pipeline_status_context(service, target_date)
     data_status = status_context["data_status"]
     intraday = load_intraday_status(service, target_date)
@@ -61,10 +64,10 @@ def build_public_snapshot(
     service: str = SETTINGS.research_service,
     trade_date: date | None = None,
 ) -> dict[str, Any]:
-    internal = build_internal_ops_snapshot(service=service, trade_date=trade_date)
+    target_date = trade_date or _today_in_timezone("Asia/Shanghai")
+    internal = build_internal_ops_snapshot(service=service, trade_date=target_date)
     readiness = internal["readiness"]
     preview = internal["snapshot_preview"]
-    target_date = trade_date or date.today()
     status = _public_status_from_readiness(readiness, target_date, preview)
     latest_ready_trade_date = readiness.get("latest_ready_trade_date")
     return {
@@ -427,11 +430,29 @@ def _public_has_release_payload(preview: dict[str, Any]) -> bool:
 
 
 def _internal_coverage_summary(data_status: dict[str, Any]) -> dict[str, Any]:
+    core = _build_public_core_coverage_summary(data_status)
     return {
+        "core": core,
         "pipeline_status": data_status.get("pipeline_status"),
         "failed_jobs": len(data_status.get("failed_jobs") or []),
         "warnings": data_status.get("warnings") or [],
     }
+
+
+def _build_public_core_coverage_summary(data_status: dict[str, Any]) -> str:
+    parts = []
+    for label, key in (
+        ("daily", "daily_status"),
+        ("minute5", "minute5_status"),
+        ("deps", "deps_status"),
+    ):
+        status = _normalize_status(data_status.get(key))
+        if status:
+            parts.append(f"{label} {status}")
+    pipeline_status = _normalize_status(data_status.get("pipeline_status"))
+    if pipeline_status and pipeline_status not in {"ready", "degraded_ready"} and not parts:
+        return f"pipeline {pipeline_status}"
+    return ", ".join(parts)
 
 
 def _fetch_pipeline_status_row(service: str, trade_date: date) -> dict[str, Any] | None:
@@ -530,6 +551,10 @@ def _normalize_status(value: Any) -> str:
 
 def _now_in_timezone(tz_name: str) -> str:
     return datetime.now(ZoneInfo(tz_name)).isoformat(timespec="seconds")
+
+
+def _today_in_timezone(tz_name: str) -> date:
+    return datetime.now(ZoneInfo(tz_name)).date()
 
 
 def _market_state_has_signal(market_state: Any) -> bool:

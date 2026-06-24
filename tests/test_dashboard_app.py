@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 from psycopg import errors as psycopg_errors
 import pytest
@@ -1458,6 +1460,45 @@ def test_ops_snapshot_route_returns_aggregated_payload(monkeypatch):
     assert response.json()["pipeline"]["overall_status"] == "ready"
 
 
+def test_ops_snapshot_and_public_snapshot_routes_share_default_target_date(monkeypatch):
+    captured = {}
+
+    class _Config:
+        timezone = "Asia/Shanghai"
+
+    def fake_build_internal_ops_snapshot(trade_date=None):
+        captured["ops_date"] = trade_date
+        return {"pipeline": {"overall_status": "ready"}}
+
+    def fake_build_public_snapshot(trade_date=None):
+        captured["public_date"] = trade_date
+        return {"trade_date": "2026-06-24", "status": "ready", "status_text": "ready"}
+
+    monkeypatch.setattr(dashboard_app, "parse_trade_date", lambda value, timezone: date(2026, 6, 24))
+    monkeypatch.setattr(dashboard_app.IntradayConfig, "from_env", lambda: _Config())
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        fake_build_internal_ops_snapshot,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_public_snapshot",
+        fake_build_public_snapshot,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    ops_response = client.get("/api/ops/snapshot")
+    public_response = client.get("/api/public/snapshot")
+
+    assert ops_response.status_code == 200
+    assert public_response.status_code == 200
+    assert captured["ops_date"] == date(2026, 6, 24)
+    assert captured["public_date"] == date(2026, 6, 24)
+
+
 def test_ops_stages_route_returns_stage_list(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,
@@ -1474,10 +1515,21 @@ def test_ops_stages_route_returns_stage_list(monkeypatch):
 
 
 def test_public_snapshot_route_returns_public_payload(monkeypatch):
+    captured = {}
+
+    class _Config:
+        timezone = "Asia/Shanghai"
+
+    def fake_build_public_snapshot(trade_date=None):
+        captured["trade_date"] = trade_date
+        return {"trade_date": "2026-06-23", "status": "ready", "status_text": "ready"}
+
+    monkeypatch.setattr(dashboard_app, "parse_trade_date", lambda value, timezone: date(2026, 6, 23))
+    monkeypatch.setattr(dashboard_app.IntradayConfig, "from_env", lambda: _Config())
     monkeypatch.setattr(
         dashboard_app,
         "build_public_snapshot",
-        lambda: {"trade_date": "2026-06-23", "status": "ready", "status_text": "ready"},
+        fake_build_public_snapshot,
         raising=False,
     )
     client = TestClient(dashboard_app.create_app())
@@ -1485,4 +1537,5 @@ def test_public_snapshot_route_returns_public_payload(monkeypatch):
     response = client.get("/api/public/snapshot")
 
     assert response.status_code == 200
+    assert captured["trade_date"] == date(2026, 6, 23)
     assert response.json()["status"] == "ready"

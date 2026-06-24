@@ -90,7 +90,10 @@ from stock_research.operator_decision.write_service import create_operator_decis
 
 try:
     from stock_research.intraday_pipeline import IntradayConfig, parse_trade_date
-except ImportError:
+except ModuleNotFoundError as exc:
+    if exc.name != "stock_research.intraday_pipeline":
+        raise
+
     class IntradayConfig:
         def __init__(self, timezone: str = "Asia/Shanghai"):
             self.timezone = timezone
@@ -198,7 +201,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/public/snapshot")
     def public_snapshot():
-        return build_public_snapshot()
+        return build_public_snapshot(trade_date=_resolve_dashboard_trade_date(None))
 
     @app.get("/api/market-monitor/eod")
     def market_monitor_eod(
