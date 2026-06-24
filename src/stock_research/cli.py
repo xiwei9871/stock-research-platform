@@ -225,6 +225,7 @@ from stock_research.market_data import (
 )
 from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
+from stock_research.minute_daily_ingest import run_baostock_minute_daily
 from stock_research.minute_backfill import (
     benchmark_baostock_minute_backfill_workers,
     load_backfill_status,
@@ -1920,6 +1921,15 @@ def build_parser() -> argparse.ArgumentParser:
     run_minute_backfill.add_argument("--retry-failed", action="store_true")
     run_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.5)
     run_minute_backfill.add_argument("--workers", type=int, default=1)
+
+    run_minute_daily = subparsers.add_parser("run-baostock-minute-daily")
+    run_minute_daily.add_argument("--trade-date")
+    run_minute_daily.add_argument("--sleep-seconds", type=float, default=1.0)
+    run_minute_daily.add_argument("--retry-limit", type=int, default=2)
+    run_minute_daily.add_argument("--cooldown-seconds", type=int, default=600)
+    run_minute_daily.add_argument("--timeout-seconds", type=float)
+    run_minute_daily.add_argument("--output-dir", default="outputs/research")
+    run_minute_daily.add_argument("--limit-assets", type=int)
 
     benchmark_minute_backfill = subparsers.add_parser("benchmark-baostock-minute-backfill")
     benchmark_minute_backfill.add_argument("--start-date")
@@ -8430,6 +8440,20 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for key, value in result.items():
             print(f"minute_backfill_run|{key}|{value}")
+    elif args.command == "run-baostock-minute-daily":
+        result = run_baostock_minute_daily(
+            trade_date=args.trade_date,
+            sleep_seconds=args.sleep_seconds,
+            retry_limit=args.retry_limit,
+            cooldown_seconds=args.cooldown_seconds,
+            timeout_seconds=args.timeout_seconds,
+            output_dir=args.output_dir,
+            limit_assets=args.limit_assets,
+        )
+        for key, value in result.items():
+            if key == "failed_symbols":
+                value = ",".join(value)
+            print(f"minute_daily|{key}|{value}")
     elif args.command == "benchmark-baostock-minute-backfill":
         result = benchmark_baostock_minute_backfill_workers(
             worker_counts=args.worker_counts,
@@ -9299,6 +9323,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
                 sort_keys=True,
             )
         )
+
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int | None:
