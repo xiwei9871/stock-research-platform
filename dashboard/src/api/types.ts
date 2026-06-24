@@ -145,6 +145,19 @@ export type PublicNewsRefreshResponse = {
   warnings: string[];
 };
 
+export type PublicSnapshot = {
+  trade_date: string;
+  published_at: string | null;
+  latest_ready_trade_date: string | null;
+  status: string;
+  status_text: string;
+  market_state: Record<string, unknown> | null;
+  topn_preview: Array<Record<string, unknown>>;
+  coverage_summary: Record<string, unknown> | null;
+  factor_gate_summary: Record<string, unknown> | null;
+  notes: string[];
+};
+
 export type ExperimentProposalRow = {
   proposal_id: string;
   run_id: string;

@@ -10,6 +10,7 @@ import type {
   OutcomeAnalyticsRow,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
+  PublicSnapshot,
   ScoreRow,
   ShadowAnalyticsReviewRow,
   ShadowFollowUpRow,
@@ -53,6 +54,10 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
   searchParams.set('limit', String(params.limit ?? 100));
   searchParams.set('offset', String(params.offset ?? 0));
   return getJson(`/api/public-news?${searchParams.toString()}`);
+}
+
+export async function fetchPublicSnapshot(): Promise<PublicSnapshot> {
+  return getJson('/api/public/snapshot');
 }
 
 export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {

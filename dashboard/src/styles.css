@@ -280,6 +280,178 @@ body {
   background: #fff7ed;
 }
 
+.public-shell {
+  min-height: 100vh;
+  padding: 48px 20px 64px;
+  background:
+    radial-gradient(circle at top, rgba(205, 226, 255, 0.9), transparent 36%),
+    linear-gradient(180deg, #f4f8fc 0%, #eef3f8 100%);
+  color: #152331;
+}
+
+.public-layout {
+  display: grid;
+  gap: 24px;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.public-hero,
+.public-card {
+  border: 1px solid rgba(35, 61, 89, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 48px rgba(25, 50, 79, 0.08);
+}
+
+.public-hero {
+  display: grid;
+  gap: 12px;
+  padding: 28px;
+}
+
+.public-hero h1,
+.public-card h2,
+.public-card h3,
+.public-card p {
+  margin: 0;
+}
+
+.public-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #51606f;
+}
+
+.public-hero h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.public-hero p {
+  max-width: 60ch;
+  font-size: 1rem;
+  color: #475467;
+}
+
+.public-badge {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-badge--ready {
+  background: #e7f8ee;
+  color: #0f7a43;
+}
+
+.public-badge--delayed {
+  background: #fff3dd;
+  color: #9a4d00;
+}
+
+.public-badge--blocked {
+  background: #feeceb;
+  color: #b42318;
+}
+
+.public-badge--neutral {
+  background: #edf2f7;
+  color: #344054;
+}
+
+.public-meta-grid,
+.public-summary-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.public-meta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.public-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.public-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.public-card dl,
+.public-card ul {
+  margin: 0;
+}
+
+.public-card dl {
+  display: grid;
+  gap: 12px;
+}
+
+.public-card dt {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+.public-card dd {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.public-preview-list,
+.public-notes-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.public-preview-item {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #e7edf4;
+  padding-top: 12px;
+}
+
+.public-preview-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.public-preview-item strong {
+  font-size: 1rem;
+}
+
+.public-preview-item span,
+.public-notes-empty {
+  color: #475467;
+}
+
+@media (max-width: 768px) {
+  .public-shell {
+    padding: 28px 14px 40px;
+  }
+
+  .public-hero,
+  .public-card {
+    border-radius: 18px;
+    padding: 18px;
+  }
+}
+
 .ops-card--success {
   border-left-color: #12b76a;
   background: #ecfdf3;

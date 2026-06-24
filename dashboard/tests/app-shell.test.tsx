@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { PublicSnapshotPage } from '../src/components/PublicSnapshotPage';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
 import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
@@ -40,6 +41,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchExperimentReplay: vi.fn(),
   fetchOpsSnapshot: vi.fn(),
   fetchOpsStages: vi.fn(),
+  fetchPublicSnapshot: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
   fetchPublicNews: vi.fn(),
   refreshPublicNews: vi.fn(),
@@ -57,6 +59,31 @@ vi.mock('../src/api/client', () => apiMocks);
 vi.mock('../src/charts/AssetChart', () => ({
   AssetChart: ({ bars }: { bars: unknown[] }) => <div data-testid="asset-chart">{bars.length} bars</div>
 }));
+
+it('renders release-safe public snapshot fields only', async () => {
+  apiMocks.fetchPublicSnapshot.mockResolvedValue({
+    trade_date: '2026-06-24',
+    published_at: '2026-06-24T08:15:00+08:00',
+    latest_ready_trade_date: '2026-06-23',
+    status: 'delayed',
+    status_text: 'Showing the most recent ready release while today is still processing.',
+    market_state: { state: 'neutral' },
+    topn_preview: [{ asset_id: '000001.SZ', stock_name: 'Ping An Bank', score_total: 93.1 }],
+    coverage_summary: { core: '97.8%' },
+    factor_gate_summary: { approved_count: 12 },
+    notes: []
+  });
+
+  render(<PublicSnapshotPage />);
+
+  await waitFor(() => {
+    expect(screen.getByText('delayed')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-23')).toBeInTheDocument();
+    expect(screen.getByText('Ping An Bank')).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText(/suggested action/i)).not.toBeInTheDocument();
+});
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
