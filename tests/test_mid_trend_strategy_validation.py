@@ -451,6 +451,48 @@ def test_build_mid_trend_replay_audit_rejects_malformed_trade_inputs() -> None:
         raise AssertionError("Expected malformed replay trade inputs to raise ValueError")
 
 
+def test_build_mid_trend_replay_audit_handles_empty_normalized_trades_with_stable_schemas() -> None:
+    result = build_mid_trend_replay_audit(
+        strategy_id="current_mid_trend_strategy_v1",
+        holdings=pd.DataFrame(
+            [{"trade_date": "2025-01-03", "asset_id": "B", "target_weight": 1.0}]
+        ),
+        trades=pd.DataFrame(columns=["trade_date", "asset_id", "action"]),
+        prices=pd.DataFrame(
+            [
+                {"trade_date": "2025-01-03", "asset_id": "B", "close": 10.0},
+                {"trade_date": "2025-01-10", "asset_id": "B", "close": 11.0},
+            ]
+        ),
+    )
+
+    assert list(result["daily_rebalance_actions"].columns) == [
+        "trade_date",
+        "asset_id",
+        "action",
+        "side",
+    ]
+    assert result["daily_rebalance_actions"].empty
+    assert list(result["trade_audit_detail"].columns) == [
+        "trade_date",
+        "asset_id",
+        "action",
+        "side",
+        "strategy_id",
+        "forward_return",
+        "replay_entry_date",
+        "replay_exit_date",
+        "audit_label",
+    ]
+    assert result["trade_audit_detail"].empty
+    assert list(result["monthly_issue_summary"].columns) == [
+        "month",
+        "audit_label",
+        "issue_count",
+    ]
+    assert result["monthly_issue_summary"].empty
+
+
 def test_run_mid_trend_strategy_validation_returns_ranked_winner(
     tmp_path: Path,
     monkeypatch,

@@ -31,6 +31,18 @@ SCORECARD_COLUMNS = [
     "monthly_win_rate",
     "turnover_penalized_stability",
 ]
+REPLAY_TRADE_AUDIT_DETAIL_EXTRA_COLUMNS = [
+    "strategy_id",
+    "forward_return",
+    "replay_entry_date",
+    "replay_exit_date",
+    "audit_label",
+]
+MONTHLY_REPLAY_ISSUE_SUMMARY_COLUMNS = [
+    "month",
+    "audit_label",
+    "issue_count",
+]
 
 
 def discover_mid_trend_strategy_candidates() -> list[dict[str, object]]:
@@ -166,17 +178,7 @@ def build_mid_trend_replay_audit(
         trades=daily_rebalance_actions,
         prices=normalized_prices,
     )
-    monthly_issue_summary = (
-        trade_audit_detail.assign(
-            month=pd.to_datetime(trade_audit_detail["trade_date"])
-            .dt.to_period("M")
-            .astype(str)
-        )
-        .loc[lambda frame: frame["audit_label"].astype(str).ne("")]
-        .groupby(["month", "audit_label"], as_index=False)
-        .size()
-        .rename(columns={"size": "issue_count"})
-    )
+    monthly_issue_summary = _build_mid_trend_monthly_issue_summary(trade_audit_detail)
     return {
         "daily_target_snapshot": daily_target_snapshot,
         "daily_rebalance_actions": daily_rebalance_actions,
@@ -295,6 +297,7 @@ def _build_mid_trend_trade_audit_detail(
     trades: pd.DataFrame,
     prices: pd.DataFrame,
 ) -> pd.DataFrame:
+    detail_columns = list(trades.columns) + REPLAY_TRADE_AUDIT_DETAIL_EXTRA_COLUMNS
     rows: list[dict[str, object]] = []
     for trade in trades.to_dict("records"):
         forward_return, entry_date, exit_date = _compute_replay_forward_return(
@@ -316,7 +319,22 @@ def _build_mid_trend_trade_audit_detail(
         row["replay_exit_date"] = exit_date
         row["audit_label"] = audit_label
         rows.append(row)
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=detail_columns)
+
+
+def _build_mid_trend_monthly_issue_summary(trade_audit_detail: pd.DataFrame) -> pd.DataFrame:
+    if trade_audit_detail.empty:
+        return pd.DataFrame(columns=MONTHLY_REPLAY_ISSUE_SUMMARY_COLUMNS)
+    return (
+        trade_audit_detail.assign(
+            month=pd.to_datetime(trade_audit_detail["trade_date"]).dt.to_period("M").astype(str)
+        )
+        .loc[lambda frame: frame["audit_label"].astype(str).ne("")]
+        .groupby(["month", "audit_label"], as_index=False)
+        .size()
+        .rename(columns={"size": "issue_count"})
+        .reindex(columns=MONTHLY_REPLAY_ISSUE_SUMMARY_COLUMNS)
+    )
 
 
 def _compute_replay_forward_return(
