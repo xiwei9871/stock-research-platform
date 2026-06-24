@@ -128,6 +128,7 @@ from stock_research.daily_close_pipeline import (
     run_pipeline_stage as run_daily_close_pipeline_stage,
 )
 from stock_research.stock_cron_guard import sync_trading_calendar_range_from_tushare
+from stock_research.strategy_daily_eod import run_strategy_daily_eod
 from stock_research.intraday_pipeline import (
     IntradayConfig,
     parse_trade_date as parse_intraday_trade_date,
@@ -2503,6 +2504,13 @@ def build_parser() -> argparse.ArgumentParser:
     stock_daily_data_pipeline.add_argument("--feishu-account", default="jarvis")
     stock_daily_data_pipeline.add_argument("--openclaw-bin", default="openclaw")
     stock_daily_data_pipeline.add_argument("--no-feishu", action="store_true")
+
+    strategy_daily_eod = subparsers.add_parser("run-strategy-daily-eod")
+    strategy_daily_eod.add_argument("--trade-date", required=True)
+    strategy_daily_eod.add_argument(
+        "--output-root",
+        default="/Users/xiwei/stock_research/outputs/research/strategy_daily_eod",
+    )
 
     technical_features_daily = subparsers.add_parser("build-technical-features-daily")
     technical_features_daily.add_argument("--trade-date", required=True)
@@ -5458,6 +5466,17 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"stock_daily_data_pipeline|summary|{args.output_dir}/run_summary.json")
         if result["status"] != "success":
             raise SystemExit(1)
+    elif args.command == "run-strategy-daily-eod":
+        result = run_strategy_daily_eod(
+            trade_date=args.trade_date,
+            output_root=args.output_root,
+        )
+        for key in ("trade_date", "status", "review_rows", "output_dir", "summary_path", "reason"):
+            value = result.get(key)
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                if value is not None:
+                    print(f"strategy_daily_eod|{key}|{value}")
+        return 0 if result.get("status") == "success" else 1
     elif args.command == "build-technical-features-daily":
         count = build_and_store_stock_technical_features_daily(
             trade_date=args.trade_date,
