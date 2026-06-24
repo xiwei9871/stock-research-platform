@@ -80,3 +80,103 @@ def test_apply_strategy_daily_eod_status_schema_executes_schema_sql(monkeypatch)
     strategy_daily_eod_store.apply_strategy_daily_eod_status_schema()
 
     assert calls == [(conn, strategy_daily_eod_store.STRATEGY_DAILY_EOD_STATUS_SQL)]
+
+
+def test_run_strategy_daily_eod_returns_failed_when_dependency_check_fails(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    apply_calls: list[str] = []
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: apply_calls.append("called"),
+    )
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {
+            "status": "failed",
+            "reason": "deps missing",
+        },
+    )
+
+    assert apply_calls == ["called"]
+    assert result["status"] == "failed"
+    assert result["dependency_check"] == {"status": "failed", "reason": "deps missing"}
+    assert result["strategy_status"] == {
+        "lhb_shortline": {"status": "skipped", "reason": "dependency_check_failed"},
+        "mid_trend": {"status": "skipped", "reason": "dependency_check_failed"},
+        "tech_bottleneck": {"status": "skipped", "reason": "dependency_check_failed"},
+    }
+
+
+def test_run_strategy_daily_eod_returns_failed_when_one_strategy_runner_fails(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    apply_calls: list[str] = []
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "apply_strategy_daily_eod_status_schema",
+        lambda: apply_calls.append("called"),
+    )
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
+        lhb_shortline_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 2},
+        mid_trend_runner=lambda *_args, **_kwargs: {"status": "failed", "reason": "runner boom"},
+        tech_bottleneck_runner=lambda *_args, **_kwargs: {"status": "success", "review_rows": 3},
+    )
+
+    assert apply_calls == ["called"]
+    assert result["status"] == "failed"
+    assert result["dependency_check"] == {"status": "success"}
+    assert result["strategy_status"] == {
+        "lhb_shortline": {"status": "success", "review_rows": 2},
+        "mid_trend": {"status": "failed", "reason": "runner boom"},
+        "tech_bottleneck": {"status": "success", "review_rows": 3},
+    }
+
+
+def test_check_strategy_daily_eod_dependencies_fails_when_status_row_missing(monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    conn = _Connection()
+    monkeypatch.setattr(strategy_daily_eod, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(strategy_daily_eod, "fetch_all", lambda passed_conn, sql, params: [])
+
+    result = strategy_daily_eod.check_strategy_daily_eod_dependencies("2026-06-24")
+
+    assert result == {
+        "status": "failed",
+        "reason": "daily_pipeline_status missing",
+    }
+
+
+def test_check_strategy_daily_eod_dependencies_accepts_partial_success(monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    conn = _Connection()
+    monkeypatch.setattr(strategy_daily_eod, "connect", lambda service: _Context(conn))
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "fetch_all",
+        lambda passed_conn, sql, params: [
+            {
+                "daily_status": "partial_success",
+                "minute5_status": "success",
+                "deps_status": "success",
+            }
+        ],
+    )
+
+    result = strategy_daily_eod.check_strategy_daily_eod_dependencies("2026-06-24")
+
+    assert result == {
+        "status": "success",
+        "daily_status": "partial_success",
+        "minute5_status": "success",
+        "deps_status": "success",
+    }
