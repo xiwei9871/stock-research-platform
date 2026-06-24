@@ -60,7 +60,7 @@ def build_public_snapshot(
     internal = build_internal_ops_snapshot(service=service, trade_date=trade_date)
     readiness = internal["readiness"]
     preview = internal["snapshot_preview"]
-    status = _public_status_from_internal(internal)
+    status = _public_status_from_readiness(readiness)
     latest_ready_trade_date = readiness.get("latest_ready_trade_date")
     return {
         "trade_date": (trade_date or date.today()).isoformat(),
@@ -267,8 +267,17 @@ def _market_state_preview(intraday: dict[str, Any]) -> dict[str, Any]:
 
 
 def _public_status_from_internal(internal: dict[str, Any]) -> str:
-    pipeline_status = str(internal.get("pipeline", {}).get("overall_status") or "unknown")
-    return pipeline_status
+    readiness = internal.get("readiness") or {}
+    return _public_status_from_readiness(readiness)
+
+
+def _public_status_from_readiness(readiness: dict[str, Any]) -> str:
+    ready_status = str(readiness.get("ready_status") or "not_ready")
+    if readiness.get("ready_for_publication"):
+        return ready_status
+    if readiness.get("ready_for_dashboard"):
+        return ready_status
+    return "not_ready"
 
 
 def _public_status_text(status: str, latest_ready_trade_date: str | None) -> str:

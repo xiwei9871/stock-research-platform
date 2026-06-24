@@ -156,7 +156,7 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
 
     snapshot = build_public_snapshot("stock_research", trade_date=date(2026, 6, 24))
 
-    assert snapshot["status"] == "delayed"
+    assert snapshot["status"] == "degraded_ready"
     assert snapshot["latest_ready_trade_date"] == "2026-06-23"
     assert "source timeout" not in str(snapshot)
     assert "suggested_action" not in str(snapshot)
