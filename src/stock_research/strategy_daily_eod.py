@@ -262,7 +262,7 @@ def build_mid_trend_strategy_eod(
         resolved_funnel_detail_path = (
             Path(funnel_detail_path)
             if funnel_detail_path is not None
-            else _resolve_default_mid_trend_funnel_detail_path()
+            else _resolve_default_mid_trend_funnel_detail_path(trade_date=trade_date)
         )
     except FileNotFoundError as exc:
         return {"status": "failed", "reason": f"funnel_detail_path_resolution_failed: {exc}"}
@@ -350,7 +350,7 @@ def build_tech_bottleneck_strategy_eod(
     candidate_path: str | Path | None = None,
 ) -> dict[str, Any]:
     try:
-        resolved_candidate_path = _resolve_tech_bottleneck_candidate_path(candidate_path)
+        resolved_candidate_path = _resolve_tech_bottleneck_candidate_path(candidate_path, trade_date=trade_date)
     except FileNotFoundError as exc:
         return {"status": "failed", "reason": f"candidate_path_resolution_failed: {exc}"}
 
@@ -445,10 +445,13 @@ def _extract_required_path(result: dict[str, Any], key: str) -> Path | None:
     return Path(value)
 
 
-def _resolve_tech_bottleneck_candidate_path(path: str | Path | None = None) -> Path:
+def _resolve_tech_bottleneck_candidate_path(path: str | Path | None = None, *, trade_date: str | None = None) -> Path:
     if path is not None:
         return Path(path)
-    return _select_latest_artifact_path("tech_bottleneck_evidence_adjusted_candidates.csv")
+    return _select_latest_artifact_path(
+        "tech_bottleneck_evidence_adjusted_candidates.csv",
+        required_trade_date=trade_date,
+    )
 
 
 def _repo_root() -> Path:
@@ -480,15 +483,32 @@ def _default_lhb_alignment_path() -> Path:
     return _research_output_root() / "dragon_case_lhb_alignment_audit_2024_2026.csv"
 
 
-def _resolve_default_mid_trend_funnel_detail_path() -> Path:
-    return _select_latest_artifact_path("mid_trend_watch_funnel_detail.csv")
+def _resolve_default_mid_trend_funnel_detail_path(*, trade_date: str | None = None) -> Path:
+    return _select_latest_artifact_path(
+        "mid_trend_watch_funnel_detail.csv",
+        required_trade_date=trade_date,
+    )
 
 
-def _select_latest_artifact_path(artifact_name: str, *, base_dir: str | Path | None = None) -> Path:
+def _select_latest_artifact_path(
+    artifact_name: str,
+    *,
+    base_dir: str | Path | None = None,
+    required_trade_date: str | None = None,
+) -> Path:
     search_root = Path(base_dir) if base_dir is not None else _research_output_root()
     candidates = sorted(search_root.rglob(artifact_name))
     if not candidates:
         raise FileNotFoundError(f"no artifact found for {artifact_name} under {search_root}")
+
+    if required_trade_date is not None:
+        candidates = [
+            candidate for candidate in candidates if _artifact_contains_trade_date(candidate, required_trade_date)
+        ]
+        if not candidates:
+            raise FileNotFoundError(
+                f"no artifact found for {artifact_name} under {search_root} containing trade_date={required_trade_date}"
+            )
 
     ranked_candidates = [
         (
@@ -515,3 +535,16 @@ def _artifact_coverage_end_date(path: str | Path, *, date_column: str = "trade_d
     if parsed.empty or parsed.isna().all():
         return ""
     return parsed.max().date().isoformat()
+
+
+def _artifact_contains_trade_date(path: str | Path, trade_date: str, *, date_column: str = "trade_date") -> bool:
+    candidate = Path(path)
+    try:
+        frame = pd.read_csv(candidate, usecols=[date_column], low_memory=False)
+    except ValueError:
+        return False
+    if frame.empty:
+        return False
+
+    normalized = pd.to_datetime(frame[date_column], errors="coerce").dt.date.astype(str)
+    return normalized.eq(trade_date).any()

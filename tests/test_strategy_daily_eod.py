@@ -557,6 +557,33 @@ def test_build_mid_trend_strategy_eod_writes_empty_review_when_funnel_source_has
     assert list(review.columns) == LHB_REVIEW_COLUMNS
 
 
+def test_build_mid_trend_strategy_eod_fails_when_default_resolved_artifact_is_stale(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    stale_path = tmp_path / "mid_trend_refresh_20260623" / "mid_trend_watch_funnel_detail.csv"
+    stale_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [{"trade_date": "2026-06-23", "asset_id": "CN:SZ:000001", "mid_trend_funnel_score": 88.0}]
+    ).to_csv(stale_path, index=False)
+
+    monkeypatch.setattr(strategy_daily_eod, "_research_output_root", lambda: tmp_path)
+
+    result = strategy_daily_eod.build_mid_trend_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        weekly_control_runner=lambda **_kwargs: {"paths": {}},
+    )
+
+    assert result == {
+        "status": "failed",
+        "reason": (
+            "funnel_detail_path_resolution_failed: "
+            "no artifact found for mid_trend_watch_funnel_detail.csv under "
+            f"{tmp_path} containing trade_date=2026-06-24"
+        ),
+    }
+
+
 def test_build_tech_bottleneck_strategy_eod_scales_bottleneck_score(tmp_path):
     from stock_research import strategy_daily_eod
 
@@ -677,6 +704,32 @@ def test_build_tech_bottleneck_strategy_eod_writes_empty_review_when_candidate_s
     }
     assert review.empty
     assert list(review.columns) == TECH_REVIEW_COLUMNS
+
+
+def test_build_tech_bottleneck_strategy_eod_fails_when_default_resolved_artifact_is_stale(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    stale_path = tmp_path / "workflow_20260623" / "tech_bottleneck_evidence_adjusted_candidates.csv"
+    stale_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [{"trade_date": "2026-06-23", "asset_id": "CN:SZ:300001", "bottleneck_score": 0.4}]
+    ).to_csv(stale_path, index=False)
+
+    monkeypatch.setattr(strategy_daily_eod, "_research_output_root", lambda: tmp_path)
+
+    result = strategy_daily_eod.build_tech_bottleneck_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+    )
+
+    assert result == {
+        "status": "failed",
+        "reason": (
+            "candidate_path_resolution_failed: "
+            "no artifact found for tech_bottleneck_evidence_adjusted_candidates.csv under "
+            f"{tmp_path} containing trade_date=2026-06-24"
+        ),
+    }
 
 
 def test_run_strategy_daily_eod_uses_default_adapter_runners_when_not_injected(tmp_path, monkeypatch):
