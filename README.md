@@ -72,6 +72,21 @@ Run the daily research script:
 /Users/xiwei/stock_research/scripts/run_daily_research.sh
 ```
 
+## Ops Snapshot Pages
+
+Internal ops status:
+
+```bash
+curl http://127.0.0.1:8765/api/ops/snapshot
+curl http://127.0.0.1:8765/api/ops/stages
+```
+
+Public snapshot:
+
+```bash
+curl http://127.0.0.1:8765/api/public/snapshot
+```
+
 Start the dashboard API:
 
 ```bash
