@@ -1,5 +1,7 @@
 import json
 
+import pandas as pd
+
 from stock_research import strategy_daily_eod_store
 
 
@@ -142,32 +144,6 @@ def test_run_strategy_daily_eod_returns_failed_when_one_strategy_runner_fails(tm
     }
 
 
-def test_run_strategy_daily_eod_uses_default_stub_runners_and_writes_summary_json(tmp_path, monkeypatch):
-    from stock_research import strategy_daily_eod
-
-    monkeypatch.setattr(
-        strategy_daily_eod,
-        "apply_strategy_daily_eod_status_schema",
-        lambda: None,
-    )
-
-    result = strategy_daily_eod.run_strategy_daily_eod(
-        trade_date="2026-06-24",
-        output_root=tmp_path,
-        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
-    )
-
-    summary_path = tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json"
-    assert result["status"] == "failed"
-    assert result["strategy_status"] == {
-        "lhb_shortline": {"status": "failed", "reason": "lhb_shortline runner not configured"},
-        "mid_trend": {"status": "failed", "reason": "mid_trend runner not configured"},
-        "tech_bottleneck": {"status": "failed", "reason": "tech_bottleneck runner not configured"},
-    }
-    assert summary_path.exists()
-    assert json.loads(summary_path.read_text(encoding="utf-8")) == result
-
-
 def test_run_strategy_daily_eod_returns_structured_failure_when_dependency_checker_raises(tmp_path, monkeypatch):
     from stock_research import strategy_daily_eod
 
@@ -288,4 +264,346 @@ def test_check_strategy_daily_eod_dependencies_accepts_partial_success(monkeypat
         "daily_status": "partial_success",
         "minute5_status": "success",
         "deps_status": "success",
+    }
+
+
+LHB_REVIEW_COLUMNS = [
+    "trade_date",
+    "asset_id",
+    "rank",
+    "score_total",
+    "score_source",
+    "score_explanation",
+    "strategy_id",
+    "strategy_name",
+    "strategy_run_id",
+    "source_type",
+    "source_name",
+    "source_rank",
+    "review_tier",
+]
+
+TECH_REVIEW_COLUMNS = [
+    "trade_date",
+    "asset_id",
+    "rank",
+    "bottleneck_score",
+    "score_total",
+    "score_source",
+    "score_explanation",
+    "strategy_id",
+    "strategy_name",
+    "strategy_run_id",
+    "source_type",
+    "source_name",
+    "source_rank",
+    "review_tier",
+]
+
+
+def test_build_lhb_shortline_strategy_eod_writes_review_csv_from_pipeline_output(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(**kwargs):
+        calls.append(kwargs)
+        watchlist_path = tmp_path / "lhb_watchlist.csv"
+        pd.DataFrame(
+            [
+                {
+                    "trade_date": "2026-06-24",
+                    "ts_code": "000002.SZ",
+                    "auction_enhanced_score": 81.5,
+                },
+                {
+                    "trade_date": "2026-06-24",
+                    "ts_code": "000001.SZ",
+                    "auction_enhanced_score": 96.0,
+                },
+            ]
+        ).to_csv(watchlist_path, index=False)
+        return {"paths": {"daily_watchlist": str(watchlist_path)}}
+
+    result = strategy_daily_eod.build_lhb_shortline_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        pipeline_runner=fake_runner,
+    )
+
+    review_path = tmp_path / "strategy_lhb_shortline_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert calls and calls[0]["trade_date"] == "2026-06-24"
+    assert result == {
+        "status": "success",
+        "review_rows": 2,
+        "paths": {"review": str(review_path)},
+    }
+    assert list(review.columns) == LHB_REVIEW_COLUMNS
+    assert review[["asset_id", "rank", "score_total", "source_rank"]].to_dict(orient="records") == [
+        {"asset_id": "000001.SZ", "rank": 1, "score_total": 96.0, "source_rank": 1},
+        {"asset_id": "000002.SZ", "rank": 2, "score_total": 81.5, "source_rank": 2},
+    ]
+    assert set(review["score_source"]) == {"auction_enhanced_score"}
+    assert set(review["strategy_run_id"]) == {"strategy-eod-2026-06-24-local"}
+
+
+def test_build_lhb_shortline_strategy_eod_writes_empty_review_when_watchlist_has_no_rows(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    def fake_runner(**kwargs):
+        watchlist_path = tmp_path / "lhb_watchlist_empty.csv"
+        pd.DataFrame(
+            columns=[
+                "trade_date",
+                "ts_code",
+                "stock_name",
+                "watch_group",
+            ]
+        ).to_csv(watchlist_path, index=False)
+        return {"paths": {"daily_watchlist": str(watchlist_path)}}
+
+    result = strategy_daily_eod.build_lhb_shortline_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        pipeline_runner=fake_runner,
+    )
+
+    review_path = tmp_path / "strategy_lhb_shortline_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert result == {
+        "status": "success",
+        "review_rows": 0,
+        "paths": {"review": str(review_path)},
+    }
+    assert review.empty
+    assert list(review.columns) == LHB_REVIEW_COLUMNS
+
+
+def test_build_lhb_shortline_strategy_eod_fails_when_runner_does_not_produce_watchlist(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    result = strategy_daily_eod.build_lhb_shortline_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        pipeline_runner=lambda **_kwargs: {"paths": {}},
+    )
+
+    assert result == {
+        "status": "failed",
+        "reason": "required_generated_file_missing: daily_watchlist",
+    }
+
+
+def test_build_mid_trend_strategy_eod_uses_latest_selected_variant_slice(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    funnel_detail_path = tmp_path / "mid_trend_watch_funnel_detail.csv"
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-24",
+                "asset_id": "CN:SZ:000001",
+                "rank": 20,
+                "score_total": 72.2,
+                "mid_trend_funnel_score": 91.0,
+            },
+            {
+                "trade_date": "2026-06-24",
+                "asset_id": "CN:SZ:000002",
+                "rank": 10,
+                "score_total": 65.5,
+                "mid_trend_funnel_score": 88.5,
+            },
+        ]
+    ).to_csv(funnel_detail_path, index=False)
+
+    def fake_runner(**kwargs):
+        positions_path = tmp_path / "mid_trend_shadow_weekly_control_positions.csv"
+        pd.DataFrame(
+            [
+                {
+                    "variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1",
+                    "rebalance_date": "2026-06-16",
+                    "asset_id": "CN:SZ:999999",
+                    "weight": 0.2,
+                },
+                {
+                    "variant_name": "baseline_top5_weekly",
+                    "rebalance_date": "2026-06-23",
+                    "asset_id": "CN:SZ:777777",
+                    "weight": 0.2,
+                },
+                {
+                    "variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1",
+                    "rebalance_date": "2026-06-23",
+                    "asset_id": "CN:SZ:000002",
+                    "weight": 0.2,
+                },
+                {
+                    "variant_name": "top5_weekly_max2_selective_trend_holding_protection_v1",
+                    "rebalance_date": "2026-06-23",
+                    "asset_id": "CN:SZ:000001",
+                    "weight": 0.2,
+                },
+            ]
+        ).to_csv(positions_path, index=False)
+        return {"paths": {"positions": str(positions_path)}}
+
+    result = strategy_daily_eod.build_mid_trend_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        weekly_control_runner=fake_runner,
+        funnel_detail_path=funnel_detail_path,
+    )
+
+    review_path = tmp_path / "strategy_mid_trend_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert result == {
+        "status": "success",
+        "review_rows": 2,
+        "paths": {"review": str(review_path)},
+    }
+    assert list(review.columns) == LHB_REVIEW_COLUMNS
+    assert review["asset_id"].tolist() == ["CN:SZ:000002", "CN:SZ:000001"]
+    assert review["rank"].tolist() == [1, 2]
+    assert review["score_total"].tolist() == [88.5, 91.0]
+    assert set(review["score_source"]) == {"mid_trend_funnel_score"}
+
+
+def test_build_mid_trend_strategy_eod_fails_when_default_funnel_detail_resolution_fails(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(
+        strategy_daily_eod,
+        "resolve_default_funnel_detail_path",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError("no funnel detail artifact")),
+    )
+
+    result = strategy_daily_eod.build_mid_trend_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        weekly_control_runner=lambda **_kwargs: {"paths": {}},
+    )
+
+    assert result == {
+        "status": "failed",
+        "reason": "funnel_detail_path_resolution_failed: no funnel detail artifact",
+    }
+
+
+def test_build_tech_bottleneck_strategy_eod_scales_bottleneck_score(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    candidate_path = tmp_path / "tech_bottleneck_evidence_adjusted_candidates.csv"
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2026-06-24",
+                "asset_id": "CN:SZ:300002",
+                "bottleneck_score": 0.52,
+            },
+            {
+                "trade_date": "2026-06-24",
+                "asset_id": "CN:SZ:300001",
+                "bottleneck_score": 0.75,
+            },
+            {
+                "trade_date": "2026-06-23",
+                "asset_id": "CN:SZ:399999",
+                "bottleneck_score": 0.99,
+            },
+        ]
+    ).to_csv(candidate_path, index=False)
+
+    result = strategy_daily_eod.build_tech_bottleneck_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        candidate_path=candidate_path,
+    )
+
+    review_path = tmp_path / "strategy_tech_bottleneck_review.csv"
+    review = pd.read_csv(review_path)
+
+    assert result == {
+        "status": "success",
+        "review_rows": 2,
+        "paths": {"review": str(review_path)},
+    }
+    assert list(review.columns) == TECH_REVIEW_COLUMNS
+    assert review[["asset_id", "bottleneck_score", "score_total", "rank"]].to_dict(orient="records") == [
+        {
+            "asset_id": "CN:SZ:300001",
+            "bottleneck_score": 0.75,
+            "score_total": 75.0,
+            "rank": 1,
+        },
+        {
+            "asset_id": "CN:SZ:300002",
+            "bottleneck_score": 0.52,
+            "score_total": 52.0,
+            "rank": 2,
+        },
+    ]
+
+
+def test_build_tech_bottleneck_strategy_eod_fails_when_candidate_file_is_missing(tmp_path):
+    from stock_research import strategy_daily_eod
+
+    missing_candidate_path = tmp_path / "missing_candidates.csv"
+
+    result = strategy_daily_eod.build_tech_bottleneck_strategy_eod(
+        trade_date="2026-06-24",
+        output_dir=tmp_path,
+        candidate_path=missing_candidate_path,
+    )
+
+    assert result == {
+        "status": "failed",
+        "reason": f"source_artifact_missing: {missing_candidate_path}",
+    }
+
+
+def test_run_strategy_daily_eod_uses_default_adapter_runners_when_not_injected(tmp_path, monkeypatch):
+    from stock_research import strategy_daily_eod
+
+    monkeypatch.setattr(strategy_daily_eod, "apply_strategy_daily_eod_status_schema", lambda: None)
+
+    def make_runner(review_rows):
+        def _runner(**kwargs):
+            return {"status": "success", "review_rows": review_rows, "paths": {"review": str(kwargs["output_dir"])}}
+
+        return _runner
+
+    monkeypatch.setattr(strategy_daily_eod, "build_lhb_shortline_strategy_eod", make_runner(1))
+    monkeypatch.setattr(strategy_daily_eod, "build_mid_trend_strategy_eod", make_runner(2))
+    monkeypatch.setattr(strategy_daily_eod, "build_tech_bottleneck_strategy_eod", make_runner(3))
+
+    result = strategy_daily_eod.run_strategy_daily_eod(
+        trade_date="2026-06-24",
+        output_root=tmp_path,
+        dependency_checker=lambda *_args, **_kwargs: {"status": "success"},
+    )
+
+    assert result["status"] == "success"
+    assert result["review_rows"] == 6
+    assert result["strategy_status"] == {
+        "lhb_shortline": {
+            "status": "success",
+            "review_rows": 1,
+            "paths": {"review": str(tmp_path / "2026-06-24")},
+        },
+        "mid_trend": {
+            "status": "success",
+            "review_rows": 2,
+            "paths": {"review": str(tmp_path / "2026-06-24")},
+        },
+        "tech_bottleneck": {
+            "status": "success",
+            "review_rows": 3,
+            "paths": {"review": str(tmp_path / "2026-06-24")},
+        },
     }
