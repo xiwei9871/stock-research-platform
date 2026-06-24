@@ -119,6 +119,9 @@ def _load_pipeline_status_context(service: str, trade_date: date) -> dict[str, A
 
 
 def load_ops_stage_details(service: str, trade_date: date | None = None) -> list[dict[str, Any]]:
+    resolved_trade_date = trade_date or _latest_ops_stage_trade_date(service)
+    if resolved_trade_date is None:
+        return []
     sql = """
     SELECT stage, status, started_at, updated_at, error_summary
     FROM ops.daily_pipeline_job
@@ -126,7 +129,7 @@ def load_ops_stage_details(service: str, trade_date: date | None = None) -> list
     ORDER BY stage, job_name, source
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [trade_date])
+        rows = fetch_all(conn, sql, [resolved_trade_date])
     return [
         {
             "stage": row.get("stage"),
@@ -175,7 +178,9 @@ def _build_pipeline_summary(
         str(data_status.get("deps_status") or ""),
         *stage_statuses,
     ]
-    if not status_context.get("matches_requested_trade_date"):
+    if status_context.get("matches_requested_trade_date") and pipeline_status in {"READY", "DEGRADED_READY"}:
+        overall_status = "ready" if pipeline_status == "READY" else "degraded"
+    elif not status_context.get("matches_requested_trade_date"):
         overall_status = "not_started" if not any(
             _normalize_status(status) in {"running", "failed", "partial_success"} for status in pipeline_inputs
         ) else "delayed"
@@ -278,6 +283,15 @@ def _build_intervention(
             "reason_text": "the pipeline hit a blocking failure",
             "suggested_action": "investigate failed jobs",
         }
+    if health_block.get("has_alerts"):
+        severity = "critical" if health_block.get("stalled") or int(health_block.get("alert_count") or 0) >= 3 else "warning"
+        return {
+            "needs_intervention": True,
+            "severity": severity,
+            "reason_code": "health_alerts",
+            "reason_text": "operational health alerts require review",
+            "suggested_action": "inspect health alerts and clear blockers",
+        }
     if pipeline_status == "delayed":
         if health_block.get("stalled"):
             return {
@@ -293,15 +307,6 @@ def _build_intervention(
             "reason_code": "deadline_risk",
             "reason_text": "the pipeline is progressing but still behind schedule",
             "suggested_action": "check watchdog",
-        }
-    if health_block.get("has_alerts"):
-        severity = "critical" if health_block.get("stalled") or int(health_block.get("alert_count") or 0) >= 3 else "warning"
-        return {
-            "needs_intervention": True,
-            "severity": severity,
-            "reason_code": "health_alerts",
-            "reason_text": "operational health alerts require review",
-            "suggested_action": "inspect health alerts and clear blockers",
         }
     if readiness.get("ready_for_publication"):
         return {
@@ -362,9 +367,9 @@ def _public_coverage_summary(coverage_summary: dict[str, Any]) -> dict[str, Any]
 def _public_has_release_payload(preview: dict[str, Any]) -> bool:
     market_state = preview.get("market_state") or {}
     topn_preview = preview.get("topn_preview") or []
-    coverage_summary = preview.get("coverage_summary") or {}
+    coverage_summary = _public_coverage_summary(preview.get("coverage_summary") or {})
     factor_gate_summary = preview.get("factor_gate_summary") or {}
-    return bool(market_state or topn_preview or coverage_summary or factor_gate_summary)
+    return bool(_market_state_has_signal(market_state) or topn_preview or coverage_summary or factor_gate_summary)
 
 
 def _internal_coverage_summary(data_status: dict[str, Any]) -> dict[str, Any]:
@@ -400,6 +405,21 @@ def _fetch_latest_pipeline_status_row(service: str) -> dict[str, Any] | None:
     with connect(service) as conn:
         rows = fetch_all(conn, sql)
     return rows[0] if rows else None
+
+
+def _latest_ops_stage_trade_date(service: str) -> date | None:
+    sql = """
+    SELECT trade_date
+    FROM ops.daily_pipeline_job
+    ORDER BY trade_date DESC, updated_at DESC
+    LIMIT 1
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql)
+    if not rows:
+        return None
+    trade_date = rows[0].get("trade_date")
+    return trade_date if isinstance(trade_date, date) else None
 
 
 def _latest_error_summary(stages: list[dict[str, Any]]) -> str | None:
@@ -456,3 +476,19 @@ def _normalize_status(value: Any) -> str:
 
 def _now_in_timezone(tz_name: str) -> str:
     return datetime.now(ZoneInfo(tz_name)).isoformat(timespec="seconds")
+
+
+def _market_state_has_signal(market_state: Any) -> bool:
+    if not isinstance(market_state, dict):
+        return False
+    for value in market_state.values():
+        if value is None:
+            continue
+        if value == "":
+            continue
+        if value == []:
+            continue
+        if value == {}:
+            continue
+        return True
+    return False

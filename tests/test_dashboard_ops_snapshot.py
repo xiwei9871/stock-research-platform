@@ -3,15 +3,16 @@ from datetime import date
 from stock_research.dashboard.ops_snapshot import (
     build_internal_ops_snapshot,
     build_public_snapshot,
+    load_ops_stage_details,
 )
 
 
-def test_build_internal_ops_snapshot_distinguishes_requested_date_from_latest_status_row(monkeypatch):
+def test_build_internal_ops_snapshot_keeps_ready_requested_date_ready(monkeypatch):
     monkeypatch.setattr(
         "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",
         lambda service, trade_date: {
             "data_status": {
-                "latest_ready_trade_date": "2026-06-23",
+                "latest_ready_trade_date": "2026-06-24",
                 "current_trade_date": "2026-06-24",
                 "pipeline_status": "READY",
                 "daily_status": "success",
@@ -19,12 +20,12 @@ def test_build_internal_ops_snapshot_distinguishes_requested_date_from_latest_st
                 "deps_status": "success",
                 "failed_jobs": [],
                 "warnings": [],
-                "last_updated_at": "2026-06-23T20:00:00+08:00",
+                "last_updated_at": "2026-06-24T20:00:00+08:00",
             },
             "requested_trade_date": "2026-06-24",
-            "status_trade_date": "2026-06-23",
-            "latest_available_trade_date": "2026-06-23",
-            "matches_requested_trade_date": False,
+            "status_trade_date": "2026-06-24",
+            "latest_available_trade_date": "2026-06-24",
+            "matches_requested_trade_date": True,
         },
     )
     monkeypatch.setattr(
@@ -62,12 +63,11 @@ def test_build_internal_ops_snapshot_distinguishes_requested_date_from_latest_st
     snapshot = build_internal_ops_snapshot("stock_research", trade_date=date(2026, 6, 24))
 
     assert snapshot["run_window"]["requested_trade_date"] == "2026-06-24"
-    assert snapshot["run_window"]["status_trade_date"] == "2026-06-23"
-    assert snapshot["run_window"]["latest_available_trade_date"] == "2026-06-23"
-    assert snapshot["run_window"]["status_matches_requested_trade_date"] is False
-    assert snapshot["pipeline"]["overall_status"] == "not_started"
-    assert snapshot["readiness"]["ready_for_publication"] is False
-    assert snapshot["intervention"]["reason_code"] == "not_started"
+    assert snapshot["run_window"]["status_trade_date"] == "2026-06-24"
+    assert snapshot["run_window"]["status_matches_requested_trade_date"] is True
+    assert snapshot["pipeline"]["overall_status"] == "ready"
+    assert snapshot["readiness"]["ready_for_publication"] is True
+    assert snapshot["intervention"]["reason_code"] == "ready"
 
 
 def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch):
@@ -140,6 +140,50 @@ def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch
     assert snapshot["intervention"]["severity"] == "warning"
 
 
+def test_load_ops_stage_details_defaults_to_latest_trade_date_when_missing(monkeypatch):
+    captured = []
+
+    class _Context:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_fetch_all(conn, sql, params=None):
+        captured.append((sql.strip(), params))
+        if "SELECT trade_date" in sql:
+            return [{"trade_date": date(2026, 6, 23)}]
+        if "SELECT stage, status" in sql:
+            return [
+                {
+                    "stage": "daily",
+                    "status": "success",
+                    "started_at": None,
+                    "updated_at": None,
+                    "error_summary": None,
+                }
+            ]
+        raise AssertionError(sql)
+
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.connect", lambda service: _Context())
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.fetch_all", fake_fetch_all)
+
+    rows = load_ops_stage_details("stock_research")
+
+    assert rows == [
+        {
+            "stage": "daily",
+            "status": "success",
+            "started_at": None,
+            "updated_at": None,
+            "error_summary": None,
+        }
+    ]
+    assert captured[0][1] is None
+    assert captured[1][1] == [date(2026, 6, 23)]
+
+
 def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(monkeypatch):
     monkeypatch.setattr(
         "stock_research.dashboard.ops_snapshot.build_internal_ops_snapshot",
@@ -186,3 +230,40 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
     assert "pipeline_status" not in str(snapshot["coverage_summary"])
     assert "failed_jobs" not in str(snapshot["coverage_summary"])
     assert "warnings" not in str(snapshot["coverage_summary"])
+
+
+def test_build_public_snapshot_ignores_placeholder_market_state(monkeypatch):
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot.build_internal_ops_snapshot",
+        lambda service, trade_date=None: {
+            "run_window": {},
+            "pipeline": {"overall_status": "not_started"},
+            "health": {"last_error_summary": None},
+            "intervention": {
+                "needs_intervention": False,
+                "severity": "info",
+                "reason_code": "monitor",
+                "reason_text": "monitor",
+                "suggested_action": None,
+            },
+            "readiness": {
+                "latest_ready_trade_date": "2026-06-23",
+                "ready_status": "not_ready",
+                "ready_for_dashboard": False,
+                "ready_for_publication": False,
+                "blocking_issue_count": 0,
+            },
+            "snapshot_preview": {
+                "market_state": {"state": None, "score": None},
+                "topn_preview": [],
+                "coverage_summary": {},
+                "factor_gate_summary": {},
+                "published_at": "2026-06-24T08:12:00+08:00",
+            },
+        },
+    )
+
+    snapshot = build_public_snapshot("stock_research", trade_date=date(2026, 6, 24))
+
+    assert snapshot["status"] == "unavailable"
+    assert snapshot["market_state"] == {"state": None, "score": None}
