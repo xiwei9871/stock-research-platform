@@ -54,7 +54,7 @@ def build_status_payload(
     lhb_shortline_status: StrategyDailyEodStatus,
     mid_trend_status: StrategyDailyEodStatus,
     tech_bottleneck_status: StrategyDailyEodStatus,
-    review_rows: int | str,
+    review_rows: int,
     output_dir: str | None,
     summary_path: str | None,
     error_summary: str | None,
