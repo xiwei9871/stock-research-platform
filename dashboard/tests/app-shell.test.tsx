@@ -269,32 +269,34 @@ function makePublicNews(): PublicNewsItem[] {
 function makeOpsSnapshot(overrides: Partial<OpsSnapshot> = {}): OpsSnapshot {
   return {
     run_window: {
+      requested_trade_date: '2026-06-24',
       trade_date: '2026-06-24',
-      expected_start_at: '2026-06-24T07:30:00+08:00',
-      expected_done_by: '2026-06-24T08:30:00+08:00',
-      started: true,
-      started_at: '2026-06-24T07:35:00+08:00',
-      completed: false,
-      completed_at: null,
-      on_time: null,
-      lateness_minutes: 0
+      status_trade_date: '2026-06-24',
+      latest_available_trade_date: '2026-06-24',
+      status_matches_requested_trade_date: true,
+      current_trade_date: '2026-06-24',
+      latest_ready_trade_date: '2026-06-23',
+      last_updated_at: '2026-06-24T08:08:00+08:00',
+      now: '2026-06-24T08:09:00+08:00',
+      stage_count: 2
     },
     pipeline: {
-      overall_status: 'running',
-      current_stage: 'minute5',
-      stage_started_at: '2026-06-24T08:00:00+08:00',
-      stage_elapsed_minutes: 8,
-      completed_stage_count: 3,
-      total_stage_count: 5,
-      progress_pct: 72,
-      latest_heartbeat_at: '2026-06-24T08:08:00+08:00'
+      overall_status: 'delayed',
+      pipeline_status: 'NOT_READY',
+      daily_status: 'success',
+      minute5_status: 'running',
+      deps_status: 'success',
+      latest_ready_trade_date: '2026-06-23',
+      last_updated_at: '2026-06-24T08:08:00+08:00',
+      evaluated_at: '2026-06-24T08:09:00+08:00',
+      stage_statuses: ['success', 'running']
     },
     intervention: {
       needs_intervention: true,
       severity: 'warning',
       reason_code: 'deadline_risk',
-      reason_text: 'Deadline risk',
-      suggested_action: 'Watch heartbeat'
+      reason_text: 'the pipeline is progressing but still behind schedule',
+      suggested_action: 'check watchdog'
     },
     readiness: {
       latest_ready_trade_date: '2026-06-23',
@@ -312,7 +314,10 @@ function makeOpsSnapshot(overrides: Partial<OpsSnapshot> = {}): OpsSnapshot {
 }
 
 function makeOpsStages(): OpsStageRow[] {
-  return [{ stage: 'daily', status: 'success', started_at: '2026-06-24T07:35:00+08:00' }];
+  return [
+    { stage: 'daily', status: 'success', started_at: '2026-06-24T07:35:00+08:00' },
+    { stage: 'minute5', status: 'running', updated_at: '2026-06-24T08:08:00+08:00' }
+  ];
 }
 
 function makeExperimentProposals(): ExperimentProposalRow[] {
@@ -684,13 +689,19 @@ describe('dashboard app shell', () => {
     const opsSnapshotPanel = screen.getByText('Ops Snapshot').closest('section');
     expect(opsSnapshotPanel).not.toBeNull();
     expect(within(opsSnapshotPanel as HTMLElement).getByText('Workflow')).toBeVisible();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('running')).toBeVisible();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('Deadline risk')).toBeVisible();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('Watch heartbeat')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('delayed')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText(/Current stage:\s*minute5/)).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Pipeline: NOT_READY')).toBeVisible();
+    expect(
+      within(opsSnapshotPanel as HTMLElement).getByText('the pipeline is progressing but still behind schedule')
+    ).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('check watchdog')).toBeVisible();
     expect(within(opsSnapshotPanel as HTMLElement).getByText('Ping An Bank')).toBeVisible();
     const opsStagesPanel = screen.getByText('Stage Status').closest('section');
     expect(opsStagesPanel).not.toBeNull();
     expect(within(opsStagesPanel as HTMLElement).getByText('success')).toBeVisible();
+    expect(within(opsStagesPanel as HTMLElement).getByText('minute5')).toBeVisible();
+    expect(within(opsStagesPanel as HTMLElement).getByText('running')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
     const shadowWatchlistPanel = screen.getByText('Shadow Watchlist').closest('section');
     expect(shadowWatchlistPanel).not.toBeNull();
@@ -900,9 +911,9 @@ describe('dashboard app shell', () => {
 
     const opsSnapshotPanel = screen.getByText('Ops Snapshot').closest('section');
     expect(opsSnapshotPanel).not.toBeNull();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('running')).toBeVisible();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('Deadline risk')).toBeVisible();
-    expect(within(opsSnapshotPanel as HTMLElement).getByText('Watch heartbeat')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('delayed')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText(/Current stage:\s*minute5/)).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('check watchdog')).toBeVisible();
 
     const opsStagesPanel = screen.getByText('Stage Status').closest('section');
     expect(opsStagesPanel).not.toBeNull();
@@ -953,6 +964,21 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('No shadow follow-up queue items for selected range.')).toBeVisible();
     expect(screen.getByText('No shadow follow-up resolution items for selected range.')).toBeVisible();
     expect(screen.getByText('No chart bars for selected range.')).toBeVisible();
+  });
+
+  it('keeps the snapshot visible when stage details fail', async () => {
+    apiMocks.fetchOpsSnapshot.mockResolvedValueOnce(makeOpsSnapshot());
+    apiMocks.fetchOpsStages.mockRejectedValueOnce(new Error('GET /api/ops/stages failed with 500'));
+
+    render(<App />);
+
+    const opsSnapshotHeading = await screen.findByText('Ops Snapshot');
+    const opsSnapshotPanel = opsSnapshotHeading.closest('section');
+    expect(opsSnapshotPanel).not.toBeNull();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('delayed')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText(/Current stage:\s*minute5/)).toBeVisible();
+    expect(screen.getByText('No stage rows available.')).toBeVisible();
+    expect(screen.getByText('GET /api/ops/stages failed with 500')).toBeVisible();
   });
 
   it('renders invalid shadow analytics review metrics as n/a instead of NaN%', async () => {

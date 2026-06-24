@@ -79,12 +79,35 @@ describe('dashboard API client', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        pipeline: { overall_status: 'running', current_stage: 'minute5', progress_pct: 72 },
+        run_window: {
+          requested_trade_date: '2026-06-24',
+          trade_date: '2026-06-24',
+          status_trade_date: '2026-06-24',
+          latest_available_trade_date: '2026-06-24',
+          status_matches_requested_trade_date: true,
+          current_trade_date: '2026-06-24',
+          latest_ready_trade_date: '2026-06-23',
+          last_updated_at: '2026-06-24T08:08:00+08:00',
+          now: '2026-06-24T08:09:00+08:00',
+          stage_count: 2
+        },
+        pipeline: {
+          overall_status: 'delayed',
+          pipeline_status: 'NOT_READY',
+          daily_status: 'success',
+          minute5_status: 'running',
+          deps_status: 'success',
+          latest_ready_trade_date: '2026-06-23',
+          last_updated_at: '2026-06-24T08:08:00+08:00',
+          evaluated_at: '2026-06-24T08:09:00+08:00',
+          stage_statuses: ['success', 'running']
+        },
         intervention: {
           needs_intervention: true,
+          reason_code: 'deadline_risk',
           severity: 'warning',
-          reason_text: 'Deadline risk',
-          suggested_action: 'Watch heartbeat'
+          reason_text: 'the pipeline is progressing but still behind schedule',
+          suggested_action: 'check watchdog'
         },
         readiness: {
           latest_ready_trade_date: '2026-06-23',
@@ -104,7 +127,8 @@ describe('dashboard API client', () => {
     const result = await fetchOpsSnapshot();
 
     expect(fetchMock).toHaveBeenCalledWith('/api/ops/snapshot');
-    expect(result.pipeline.overall_status).toBe('running');
+    expect(result.pipeline.overall_status).toBe('delayed');
+    expect(result.pipeline.minute5_status).toBe('running');
   });
 
   it('fetches ops stages rows from the internal ops endpoint', async () => {

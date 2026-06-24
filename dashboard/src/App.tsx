@@ -113,7 +113,8 @@ export function App() {
   const [assetLoading, setAssetLoading] = useState(false);
   const [publicNewsLoading, setPublicNewsLoading] = useState(false);
   const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
-  const [opsLoading, setOpsLoading] = useState(false);
+  const [opsSnapshotLoading, setOpsSnapshotLoading] = useState(false);
+  const [opsStagesLoading, setOpsStagesLoading] = useState(false);
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
   const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
   const [shadowOutcomeAnalyticsLoading, setShadowOutcomeAnalyticsLoading] = useState(false);
@@ -200,21 +201,43 @@ export function App() {
   useEffect(() => {
     let ignore = false;
     setError(null);
-    setOpsLoading(true);
-    Promise.all([fetchOpsSnapshot(), fetchOpsStages()])
-      .then(([snapshot, stages]) => {
+    setOpsSnapshotLoading(true);
+    fetchOpsSnapshot()
+      .then((snapshot) => {
         if (!ignore) {
           setOpsSnapshot(snapshot);
-          setOpsStages(stages);
-          setOpsLoading(false);
+          setOpsSnapshotLoading(false);
         }
       })
       .catch((err: unknown) => {
         if (!ignore) {
           setError(err instanceof Error ? err.message : String(err));
           setOpsSnapshot(null);
+          setOpsSnapshotLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    setOpsStagesLoading(true);
+    fetchOpsStages()
+      .then((stages) => {
+        if (!ignore) {
+          setOpsStages(stages);
+          setOpsStagesLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
           setOpsStages([]);
-          setOpsLoading(false);
+          setOpsStagesLoading(false);
         }
       });
 
@@ -536,8 +559,8 @@ export function App() {
         </section>
       </section>
       <aside className="inspector">
-        <OpsSnapshotPanel snapshot={opsSnapshot} isLoading={opsLoading} />
-        <OpsStagesPanel rows={opsStages} isLoading={opsLoading} />
+        <OpsSnapshotPanel snapshot={opsSnapshot} stages={opsStages} isLoading={opsSnapshotLoading} />
+        <OpsStagesPanel rows={opsStages} isLoading={opsStagesLoading} />
         <ScorePanel score={score} signals={signals} />
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />

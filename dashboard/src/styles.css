@@ -255,6 +255,31 @@ body {
   background: #eef4ff;
 }
 
+.ops-card--ready {
+  border-left-color: #12b76a;
+  background: #ecfdf3;
+}
+
+.ops-card--degraded {
+  border-left-color: #f79009;
+  background: #fffaeb;
+}
+
+.ops-card--not_started {
+  border-left-color: #98a2b3;
+  background: #f8fafc;
+}
+
+.ops-card--blocked {
+  border-left-color: #d92d20;
+  background: #fef3f2;
+}
+
+.ops-card--delayed {
+  border-left-color: #f79009;
+  background: #fff7ed;
+}
+
 .ops-card--success {
   border-left-color: #12b76a;
   background: #ecfdf3;
@@ -266,9 +291,15 @@ body {
 }
 
 .ops-card--error,
-.ops-card--failed {
+.ops-card--failed,
+.ops-card--critical {
   border-left-color: #d92d20;
   background: #fef3f2;
+}
+
+.ops-card--info {
+  border-left-color: #1570ef;
+  background: #eef4ff;
 }
 
 .ops-meta-grid {
@@ -290,6 +321,33 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   color: #667085;
+}
+
+.ops-stage-row {
+  border-left: 4px solid #d9dee7;
+  padding-left: 8px;
+}
+
+.ops-stage-row--running {
+  border-left-color: #1570ef;
+}
+
+.ops-stage-row--success {
+  border-left-color: #12b76a;
+}
+
+.ops-stage-row--failed {
+  border-left-color: #d92d20;
+}
+
+.ops-stage-row--partial_success {
+  border-left-color: #f79009;
+}
+
+.ops-stage-row--pending,
+.ops-stage-row--not_started,
+.ops-stage-row--skipped {
+  border-left-color: #98a2b3;
 }
 
 .outcome-metrics {

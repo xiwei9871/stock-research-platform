@@ -394,25 +394,34 @@ export type ShadowFollowUpResolutionRow = {
 
 export type OpsSnapshot = {
   run_window: {
+    requested_trade_date: string;
     trade_date: string;
-    expected_start_at: string | null;
-    expected_done_by: string | null;
-    started: boolean;
-    started_at: string | null;
-    completed: boolean;
-    completed_at: string | null;
-    on_time: boolean | null;
-    lateness_minutes: number | null;
+    status_trade_date: string | null;
+    latest_available_trade_date: string | null;
+    status_matches_requested_trade_date: boolean;
+    current_trade_date: string | null;
+    latest_ready_trade_date: string | null;
+    last_updated_at: string | null;
+    now: string;
+    stage_count: number;
   };
   pipeline: {
     overall_status: string;
-    current_stage: string | null;
-    stage_started_at: string | null;
-    stage_elapsed_minutes: number | null;
-    completed_stage_count: number;
-    total_stage_count: number;
-    progress_pct: number;
-    latest_heartbeat_at: string | null;
+    pipeline_status: string;
+    daily_status: string | null;
+    minute5_status: string | null;
+    deps_status: string | null;
+    latest_ready_trade_date: string | null;
+    last_updated_at: string | null;
+    evaluated_at: string;
+    stage_statuses: string[];
+  };
+  health?: {
+    status?: string | null;
+    stalled?: boolean;
+    last_error_summary?: string | null;
+    alert_count?: number | null;
+    has_alerts?: boolean;
   };
   intervention: {
     needs_intervention: boolean;
@@ -424,6 +433,9 @@ export type OpsSnapshot = {
   readiness: {
     latest_ready_trade_date: string | null;
     ready_status: string;
+    ready_for_dashboard?: boolean;
+    ready_for_publication?: boolean;
+    blocking_issue_count?: number;
   };
   snapshot_preview: {
     market_state: Record<string, unknown> | null;

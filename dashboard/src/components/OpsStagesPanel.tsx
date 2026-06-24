@@ -16,7 +16,10 @@ export function OpsStagesPanel({ rows, isLoading = false }: OpsStagesPanelProps)
       ) : (
         <div className="decision-list">
           {rows.map((row) => (
-            <article className="decision-row ops-stage-row" key={`${row.stage}:${row.started_at ?? row.updated_at ?? row.status}`}>
+            <article
+              className={`decision-row ops-stage-row ops-stage-row--${normalizeStatus(row.status)}`}
+              key={`${row.stage}:${row.started_at ?? row.updated_at ?? row.status}`}
+            >
               <div>
                 <strong>{row.stage}</strong>
                 <span>{row.status}</span>
@@ -28,4 +31,8 @@ export function OpsStagesPanel({ rows, isLoading = false }: OpsStagesPanelProps)
       )}
     </section>
   );
+}
+
+function normalizeStatus(status: string | null | undefined) {
+  return String(status ?? '').trim().toLowerCase();
 }
