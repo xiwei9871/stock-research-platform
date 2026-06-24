@@ -131,6 +131,92 @@ def test_query_baostock_minute_rows_uses_frequency_and_adjustflag(monkeypatch):
     assert calls[0][2]["adjustflag"] == "2"
 
 
+def test_query_baostock_minute_rows_once_returns_rows_without_retry(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self):
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    calls = []
+
+    def fake_query(code, fields, **kwargs):
+        calls.append((code, fields, kwargs))
+        return Result()
+
+    monkeypatch.setattr(minute_data.bs, "query_history_k_data_plus", fake_query)
+
+    rows = minute_data.query_baostock_minute_rows_once(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="qfq",
+    )
+
+    assert len(rows) == 1
+    assert len(calls) == 1
+    assert calls[0][0] == "sh.600000"
+    assert calls[0][2]["frequency"] == "5"
+    assert calls[0][2]["adjustflag"] == "2"
+
+
+def test_query_baostock_minute_rows_once_raises_without_triggering_relogin(monkeypatch):
+    class Result:
+        error_code = "10002007"
+        error_msg = "网络接收错误"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def next(self):
+            return False
+
+        def get_row_data(self):
+            raise AssertionError("get_row_data should not be called on failed query")
+
+    calls = {"query": 0, "login": 0, "logout": 0}
+
+    def fake_query(*args, **kwargs):
+        calls["query"] += 1
+        return Result()
+
+    monkeypatch.setattr(minute_data.bs, "query_history_k_data_plus", fake_query)
+    monkeypatch.setattr(
+        minute_data.bs,
+        "login",
+        lambda: calls.__setitem__("login", calls["login"] + 1),
+    )
+    monkeypatch.setattr(
+        minute_data.bs,
+        "logout",
+        lambda: calls.__setitem__("logout", calls["logout"] + 1),
+    )
+
+    try:
+        minute_data.query_baostock_minute_rows_once(
+            "sh.600000",
+            dt.date(2024, 1, 2),
+            dt.date(2024, 1, 2),
+            freq="5min",
+            adjust_type="raw",
+        )
+    except RuntimeError as exc:
+        assert "10002007" in str(exc)
+    else:
+        raise AssertionError("Expected RuntimeError")
+
+    assert calls == {"query": 1, "login": 0, "logout": 0}
+
+
 def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     class Result:
         fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
