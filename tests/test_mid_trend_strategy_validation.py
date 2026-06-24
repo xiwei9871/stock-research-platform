@@ -525,8 +525,12 @@ def test_run_mid_trend_strategy_validation_returns_ranked_winner(
                     {"date": "2025-02-28", "equity": 1.25},
                 ]
             ),
-            "holdings_frame": pd.DataFrame(),
-            "trades_frame": pd.DataFrame(),
+            "holdings_frame": pd.DataFrame(
+                [{"trade_date": "2025-01-31", "asset_id": "A", "target_weight": 1.0}]
+            ),
+            "trades_frame": pd.DataFrame(
+                [{"trade_date": "2025-01-31", "asset_id": "A", "action": "buy"}]
+            ),
         },
     )
 
@@ -539,6 +543,98 @@ def test_run_mid_trend_strategy_validation_returns_ranked_winner(
     assert result["winner"]["strategy_id"] == "winner"
     assert Path(result["paths"]["scorecard"]).exists()
     assert result["effective_end_date"] == "2025-01-31"
+
+
+def test_run_mid_trend_strategy_validation_excludes_inactive_candidates_from_winner_selection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.discover_mid_trend_strategy_candidates",
+        lambda: [
+            {
+                "strategy_id": "inactive_flat_strategy",
+                "group": "portfolio",
+                "runner_name": "unused",
+                "result_keys": {"holdings", "trades", "equity", "summary"},
+            },
+            {
+                "strategy_id": "active_live_strategy",
+                "group": "portfolio",
+                "runner_name": "unused",
+                "result_keys": {"holdings", "trades", "equity", "summary"},
+            },
+        ],
+    )
+
+    def fake_execute(candidate, start_date, end_date, output_dir, **kwargs):
+        if candidate["strategy_id"] == "inactive_flat_strategy":
+            return {
+                "strategy_id": candidate["strategy_id"],
+                "summary_frame": pd.DataFrame(
+                    [
+                        {"metric": "total_return", "value": 0.30},
+                        {"metric": "max_drawdown", "value": 0.0},
+                        {"metric": "average_turnover", "value": 0.0},
+                    ]
+                ),
+                "equity_frame": pd.DataFrame(
+                    [
+                        {"date": "2025-01-31", "equity": 1.0},
+                        {"date": "2025-02-28", "equity": 1.0},
+                        {"date": "2025-03-31", "equity": 1.0},
+                    ]
+                ),
+                "holdings_frame": pd.DataFrame(),
+                "trades_frame": pd.DataFrame(),
+            }
+        return {
+            "strategy_id": candidate["strategy_id"],
+            "summary_frame": pd.DataFrame(
+                [
+                    {"metric": "total_return", "value": 0.20},
+                    {"metric": "max_drawdown", "value": -0.05},
+                    {"metric": "average_turnover", "value": 0.10},
+                ]
+            ),
+            "equity_frame": pd.DataFrame(
+                [
+                    {"date": "2025-01-31", "equity": 1.0},
+                    {"date": "2025-02-28", "equity": 1.1},
+                    {"date": "2025-03-31", "equity": 1.2},
+                ]
+            ),
+            "holdings_frame": pd.DataFrame(
+                [{"trade_date": "2025-01-31", "asset_id": "A", "target_weight": 1.0}]
+            ),
+            "trades_frame": pd.DataFrame(
+                [{"trade_date": "2025-01-31", "asset_id": "A", "action": "buy"}]
+            ),
+        }
+
+    monkeypatch.setattr(
+        "stock_research.mid_trend_strategy_validation.execute_mid_trend_candidate",
+        fake_execute,
+    )
+
+    result = run_mid_trend_strategy_validation(
+        start_date="2025-01-01",
+        end_date="2025-03-31",
+        output_dir=tmp_path,
+    )
+
+    assert list(result["ranked_scorecard"]["strategy_id"]) == [
+        "active_live_strategy",
+        "inactive_flat_strategy",
+    ]
+    assert result["winner"]["strategy_id"] == "active_live_strategy"
+    inactive_row = result["ranked_scorecard"].loc[
+        result["ranked_scorecard"]["strategy_id"] == "inactive_flat_strategy"
+    ].iloc[0]
+    assert inactive_row["positions_rows"] == 0
+    assert inactive_row["trades_rows"] == 0
+    assert inactive_row["activity_state"] == "inactive_no_positions_or_trades"
+    assert inactive_row["winner_eligible"] == False
 
 
 def test_execute_mid_trend_candidate_forwards_current_strategy_config_and_repo_root_paths(

@@ -25,6 +25,10 @@ DEFAULT_SHADOW_VALIDATION_CONFIG: dict[str, object] = {
 }
 SCORECARD_COLUMNS = [
     "strategy_id",
+    "positions_rows",
+    "trades_rows",
+    "activity_state",
+    "winner_eligible",
     "total_return",
     "max_drawdown",
     "return_drawdown_ratio",
@@ -86,10 +90,13 @@ def filter_complete_mid_trend_candidates(
 def _normalize_mid_trend_validation_result(item: dict[str, object]) -> dict[str, object]:
     strategy_id = str(item["strategy_id"])
     if "summary_frame" in item and "equity_frame" in item:
+        positions_rows, trades_rows = _extract_validation_activity_counts(item)
         return {
             "strategy_id": strategy_id,
             "summary_frame": _normalize_summary_frame(item["summary_frame"]),
             "equity_frame": _normalize_equity_frame(item["equity_frame"]),
+            "positions_rows": positions_rows,
+            "trades_rows": trades_rows,
         }
 
     summary = item.get("summary")
@@ -100,23 +107,64 @@ def _normalize_mid_trend_validation_result(item: dict[str, object]) -> dict[str,
         equity = item.get("equity")
         if not isinstance(equity, pd.DataFrame):
             raise ValueError(f"{strategy_id} is missing a DataFrame equity payload")
+        positions_rows, trades_rows = _extract_validation_activity_counts(item)
         return {
             "strategy_id": strategy_id,
             "summary_frame": _wide_summary_to_metric_frame(summary, strategy_id),
             "equity_frame": _normalize_equity_frame(equity),
+            "positions_rows": positions_rows,
+            "trades_rows": trades_rows,
         }
 
     if strategy_id == "mid_trend_shadow_backtest":
         equity_curve = item.get("equity_curve")
         if not isinstance(equity_curve, pd.DataFrame):
             raise ValueError(f"{strategy_id} is missing a DataFrame equity_curve payload")
+        positions_rows, trades_rows = _extract_validation_activity_counts(item)
         return {
             "strategy_id": strategy_id,
             "summary_frame": _normalize_summary_frame(summary),
             "equity_frame": _normalize_equity_frame(equity_curve),
+            "positions_rows": positions_rows,
+            "trades_rows": trades_rows,
         }
 
     raise ValueError(f"Unsupported mid-trend validation strategy output: {strategy_id}")
+
+
+def _extract_validation_activity_counts(item: dict[str, object]) -> tuple[object, object]:
+    positions = _first_dataframe(item, ["holdings_frame", "positions_frame", "holdings", "positions"])
+    trades = _first_dataframe(item, ["trades_frame", "trades"])
+    return _validation_frame_row_count(positions), _validation_frame_row_count(trades)
+
+
+def _first_dataframe(
+    item: dict[str, object],
+    candidate_keys: list[str],
+) -> pd.DataFrame | None:
+    for key in candidate_keys:
+        value = item.get(key)
+        if isinstance(value, pd.DataFrame):
+            return value
+    return None
+
+
+def _validation_frame_row_count(frame: pd.DataFrame | None) -> object:
+    if frame is None:
+        return pd.NA
+    return int(len(frame))
+
+
+def _classify_validation_activity(
+    *,
+    positions_rows: object,
+    trades_rows: object,
+) -> tuple[str, bool]:
+    if pd.isna(positions_rows) or pd.isna(trades_rows):
+        return "activity_unreported", True
+    if int(positions_rows) == 0 and int(trades_rows) == 0:
+        return "inactive_no_positions_or_trades", False
+    return "active", True
 
 
 def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd.DataFrame:
@@ -133,12 +181,22 @@ def build_mid_trend_validation_scorecard(results: list[dict[str, object]]) -> pd
         total_return = summary_map.get("total_return", float("nan"))
         max_drawdown = summary_map.get("max_drawdown", float("nan"))
         average_turnover = summary_map.get("average_turnover", float("nan"))
+        positions_rows = normalized["positions_rows"]
+        trades_rows = normalized["trades_rows"]
+        activity_state, winner_eligible = _classify_validation_activity(
+            positions_rows=positions_rows,
+            trades_rows=trades_rows,
+        )
         monthly_win_rate = (
             float((monthly_equity > 0).mean()) if len(monthly_equity) else float("nan")
         )
         rows.append(
             {
                 "strategy_id": normalized["strategy_id"],
+                "positions_rows": positions_rows,
+                "trades_rows": trades_rows,
+                "activity_state": activity_state,
+                "winner_eligible": winner_eligible,
                 "total_return": total_return,
                 "max_drawdown": max_drawdown,
                 "return_drawdown_ratio": (
@@ -410,11 +468,21 @@ def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame
     if scorecard.empty:
         return scorecard.reindex(columns=[*SCORECARD_COLUMNS, "drawdown_penalty", "severe_drawdown"])
     ranked = scorecard.copy()
+    if "positions_rows" not in ranked.columns:
+        ranked["positions_rows"] = pd.NA
+    if "trades_rows" not in ranked.columns:
+        ranked["trades_rows"] = pd.NA
+    if "activity_state" not in ranked.columns:
+        ranked["activity_state"] = "activity_unreported"
+    if "winner_eligible" not in ranked.columns:
+        ranked["winner_eligible"] = True
+    ranked["winner_eligible"] = ranked["winner_eligible"].fillna(True).astype(bool)
     ranked["drawdown_penalty"] = ranked["max_drawdown"].abs()
     # Treat clearly bad drawdown as a coarse filter, then rank on efficiency and stability.
     ranked["severe_drawdown"] = ranked["drawdown_penalty"] > SEVERE_DRAWDOWN_THRESHOLD
     return ranked.sort_values(
         [
+            "winner_eligible",
             "severe_drawdown",
             "return_drawdown_ratio",
             "monthly_win_rate",
@@ -422,7 +490,7 @@ def rank_mid_trend_validation_scorecard(scorecard: pd.DataFrame) -> pd.DataFrame
             "drawdown_penalty",
             "total_return",
         ],
-        ascending=[True, False, False, False, True, False],
+        ascending=[False, True, False, False, False, True, False],
     ).reset_index(drop=True)
 
 
@@ -507,7 +575,8 @@ def run_mid_trend_strategy_validation(
     ]
     scorecard = build_mid_trend_validation_scorecard(results)
     ranked = rank_mid_trend_validation_scorecard(scorecard)
-    winner = ranked.iloc[0].to_dict() if not ranked.empty else {}
+    eligible_ranked = ranked[ranked["winner_eligible"]]
+    winner = eligible_ranked.iloc[0].to_dict() if not eligible_ranked.empty else {}
     scorecard_path = output_path / "mid_trend_validation_scorecard.csv"
     report_path = output_path / "mid_trend_validation_report.md"
     scorecard_path.parent.mkdir(parents=True, exist_ok=True)
