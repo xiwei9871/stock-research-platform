@@ -5,6 +5,8 @@ import type {
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  OpsSnapshot,
+  OpsStageRow,
   OutcomeAnalyticsRow,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
@@ -55,6 +57,15 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
 
 export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
   return postJson('/api/public-news/refresh');
+}
+
+export async function fetchOpsSnapshot(): Promise<OpsSnapshot> {
+  return getJson('/api/ops/snapshot');
+}
+
+export async function fetchOpsStages(): Promise<OpsStageRow[]> {
+  const payload = await getJson<{ items: OpsStageRow[] }>('/api/ops/stages');
+  return payload.items;
 }
 
 export async function fetchDailyBars(

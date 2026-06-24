@@ -210,6 +210,88 @@ body {
   overflow-wrap: anywhere;
 }
 
+.ops-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.ops-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ops-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #d9dee7;
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.ops-card h3 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+.ops-card strong {
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.ops-card p,
+.ops-stage-row p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ops-card--running {
+  border-left-color: #1570ef;
+  background: #eef4ff;
+}
+
+.ops-card--success {
+  border-left-color: #12b76a;
+  background: #ecfdf3;
+}
+
+.ops-card--warning {
+  border-left-color: #f79009;
+  background: #fffaeb;
+}
+
+.ops-card--error,
+.ops-card--failed {
+  border-left-color: #d92d20;
+  background: #fef3f2;
+}
+
+.ops-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ops-meta-grid div {
+  display: grid;
+  gap: 2px;
+  border: 1px solid #e5e8ef;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.ops-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #667085;
+}
+
 .outcome-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -391,5 +473,10 @@ body {
   .inspector {
     border: 0;
     border-bottom: 1px solid #d9dee7;
+  }
+
+  .ops-hero-grid,
+  .ops-meta-grid {
+    grid-template-columns: 1fr;
   }
 }

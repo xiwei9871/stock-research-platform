@@ -7,6 +7,8 @@ import {
   fetchDailyBars,
   fetchExperimentProposals,
   fetchExperimentReplay,
+  fetchOpsSnapshot,
+  fetchOpsStages,
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
@@ -26,6 +28,8 @@ import type {
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  OpsSnapshot,
+  OpsStageRow,
   OutcomeAnalyticsRow,
   PublicNewsItem,
   ScoreRow,
@@ -44,6 +48,8 @@ import { ExperimentProposalsPanel } from './components/ExperimentProposalsPanel'
 import { ExperimentReplayPanel } from './components/ExperimentReplayPanel';
 import { OutcomeAnalyticsPanel } from './components/OutcomeAnalyticsPanel';
 import { OutcomeHistoryPanel } from './components/OutcomeHistoryPanel';
+import { OpsSnapshotPanel } from './components/OpsSnapshotPanel';
+import { OpsStagesPanel } from './components/OpsStagesPanel';
 import { PublicNewsPanel } from './components/PublicNewsPanel';
 import { ReportPanel } from './components/ReportPanel';
 import { ScorePanel } from './components/ScorePanel';
@@ -93,6 +99,8 @@ export function App() {
   const [publicNewsWarnings, setPublicNewsWarnings] = useState<string[]>([]);
   const [experimentProposals, setExperimentProposals] = useState<ExperimentProposalRow[]>([]);
   const [experimentReplay, setExperimentReplay] = useState<ExperimentReplayRow[]>([]);
+  const [opsSnapshot, setOpsSnapshot] = useState<OpsSnapshot | null>(null);
+  const [opsStages, setOpsStages] = useState<OpsStageRow[]>([]);
   const [shadowWatchlist, setShadowWatchlist] = useState<ShadowWatchlistRow[]>([]);
   const [shadowOutcomes, setShadowOutcomes] = useState<ShadowOutcomeRow[]>([]);
   const [shadowOutcomeAnalytics, setShadowOutcomeAnalytics] = useState<ShadowOutcomeAnalyticsRow[]>([]);
@@ -105,6 +113,7 @@ export function App() {
   const [assetLoading, setAssetLoading] = useState(false);
   const [publicNewsLoading, setPublicNewsLoading] = useState(false);
   const [experimentReplayLoading, setExperimentReplayLoading] = useState(false);
+  const [opsLoading, setOpsLoading] = useState(false);
   const [shadowWatchlistLoading, setShadowWatchlistLoading] = useState(false);
   const [shadowOutcomesLoading, setShadowOutcomesLoading] = useState(false);
   const [shadowOutcomeAnalyticsLoading, setShadowOutcomeAnalyticsLoading] = useState(false);
@@ -180,6 +189,32 @@ export function App() {
           setPublicNews([]);
           setPublicNewsWarnings([err instanceof Error ? err.message : String(err)]);
           setPublicNewsLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    setOpsLoading(true);
+    Promise.all([fetchOpsSnapshot(), fetchOpsStages()])
+      .then(([snapshot, stages]) => {
+        if (!ignore) {
+          setOpsSnapshot(snapshot);
+          setOpsStages(stages);
+          setOpsLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : String(err));
+          setOpsSnapshot(null);
+          setOpsStages([]);
+          setOpsLoading(false);
         }
       });
 
@@ -501,6 +536,8 @@ export function App() {
         </section>
       </section>
       <aside className="inspector">
+        <OpsSnapshotPanel snapshot={opsSnapshot} isLoading={opsLoading} />
+        <OpsStagesPanel rows={opsStages} isLoading={opsLoading} />
         <ScorePanel score={score} signals={signals} />
         <DecisionHistoryPanel decisions={decisions} />
         <OutcomeHistoryPanel outcomes={outcomes} />

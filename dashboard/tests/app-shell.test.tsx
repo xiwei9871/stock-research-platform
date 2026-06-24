@@ -14,6 +14,8 @@ import type {
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  OpsSnapshot,
+  OpsStageRow,
   OutcomeAnalyticsRow,
   PublicNewsItem,
   ScoreRow,
@@ -36,6 +38,8 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetOutcomes: vi.fn(),
   fetchExperimentProposals: vi.fn(),
   fetchExperimentReplay: vi.fn(),
+  fetchOpsSnapshot: vi.fn(),
+  fetchOpsStages: vi.fn(),
   fetchOutcomeAnalytics: vi.fn(),
   fetchPublicNews: vi.fn(),
   refreshPublicNews: vi.fn(),
@@ -260,6 +264,55 @@ function makePublicNews(): PublicNewsItem[] {
       status: 'available'
     }
   ];
+}
+
+function makeOpsSnapshot(overrides: Partial<OpsSnapshot> = {}): OpsSnapshot {
+  return {
+    run_window: {
+      trade_date: '2026-06-24',
+      expected_start_at: '2026-06-24T07:30:00+08:00',
+      expected_done_by: '2026-06-24T08:30:00+08:00',
+      started: true,
+      started_at: '2026-06-24T07:35:00+08:00',
+      completed: false,
+      completed_at: null,
+      on_time: null,
+      lateness_minutes: 0
+    },
+    pipeline: {
+      overall_status: 'running',
+      current_stage: 'minute5',
+      stage_started_at: '2026-06-24T08:00:00+08:00',
+      stage_elapsed_minutes: 8,
+      completed_stage_count: 3,
+      total_stage_count: 5,
+      progress_pct: 72,
+      latest_heartbeat_at: '2026-06-24T08:08:00+08:00'
+    },
+    intervention: {
+      needs_intervention: true,
+      severity: 'warning',
+      reason_code: 'deadline_risk',
+      reason_text: 'Deadline risk',
+      suggested_action: 'Watch heartbeat'
+    },
+    readiness: {
+      latest_ready_trade_date: '2026-06-23',
+      ready_status: 'degraded_ready'
+    },
+    snapshot_preview: {
+      market_state: { state: 'neutral' },
+      topn_preview: [{ asset_id: '000001.SZ', stock_name: 'Ping An Bank', score_total: 93.1 }],
+      coverage_summary: { pipeline_status: 'NOT_READY' },
+      factor_gate_summary: {},
+      published_at: '2026-06-24T08:08:00+08:00'
+    },
+    ...overrides
+  };
+}
+
+function makeOpsStages(): OpsStageRow[] {
+  return [{ stage: 'daily', status: 'success', started_at: '2026-06-24T07:35:00+08:00' }];
 }
 
 function makeExperimentProposals(): ExperimentProposalRow[] {
@@ -586,6 +639,8 @@ describe('dashboard app shell', () => {
     });
     apiMocks.fetchExperimentProposals.mockResolvedValue(makeExperimentProposals());
     apiMocks.fetchExperimentReplay.mockResolvedValue(makeExperimentReplay());
+    apiMocks.fetchOpsSnapshot.mockResolvedValue(makeOpsSnapshot());
+    apiMocks.fetchOpsStages.mockResolvedValue(makeOpsStages());
     apiMocks.fetchShadowWatchlist.mockResolvedValue(makeShadowWatchlist());
     apiMocks.fetchShadowOutcomes.mockResolvedValue(makeShadowOutcomes());
     apiMocks.fetchShadowOutcomeAnalytics.mockResolvedValue(makeShadowOutcomeAnalytics());
@@ -626,6 +681,16 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Replay dashboard top-N')).toBeVisible();
     expect(screen.getByText('Experiment Replay')).toBeVisible();
     expect(screen.getByText('passed_offline_replay')).toBeVisible();
+    const opsSnapshotPanel = screen.getByText('Ops Snapshot').closest('section');
+    expect(opsSnapshotPanel).not.toBeNull();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Workflow')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('running')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Deadline risk')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Watch heartbeat')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Ping An Bank')).toBeVisible();
+    const opsStagesPanel = screen.getByText('Stage Status').closest('section');
+    expect(opsStagesPanel).not.toBeNull();
+    expect(within(opsStagesPanel as HTMLElement).getByText('success')).toBeVisible();
     expect(screen.getByText('Shadow Watchlist')).toBeVisible();
     const shadowWatchlistPanel = screen.getByText('Shadow Watchlist').closest('section');
     expect(shadowWatchlistPanel).not.toBeNull();
@@ -672,6 +737,8 @@ describe('dashboard app shell', () => {
       watchlistId: 'default',
       topN: 30
     });
+    expect(apiMocks.fetchOpsSnapshot).toHaveBeenCalled();
+    expect(apiMocks.fetchOpsStages).toHaveBeenCalled();
   });
 
   it('switches the asset chart between daily and intraday resolutions', async () => {

@@ -392,6 +392,56 @@ export type ShadowFollowUpResolutionRow = {
   production_write_enabled: boolean;
 };
 
+export type OpsSnapshot = {
+  run_window: {
+    trade_date: string;
+    expected_start_at: string | null;
+    expected_done_by: string | null;
+    started: boolean;
+    started_at: string | null;
+    completed: boolean;
+    completed_at: string | null;
+    on_time: boolean | null;
+    lateness_minutes: number | null;
+  };
+  pipeline: {
+    overall_status: string;
+    current_stage: string | null;
+    stage_started_at: string | null;
+    stage_elapsed_minutes: number | null;
+    completed_stage_count: number;
+    total_stage_count: number;
+    progress_pct: number;
+    latest_heartbeat_at: string | null;
+  };
+  intervention: {
+    needs_intervention: boolean;
+    severity: string;
+    reason_code: string | null;
+    reason_text: string;
+    suggested_action: string | null;
+  };
+  readiness: {
+    latest_ready_trade_date: string | null;
+    ready_status: string;
+  };
+  snapshot_preview: {
+    market_state: Record<string, unknown> | null;
+    topn_preview: Array<Record<string, unknown>>;
+    coverage_summary: Record<string, unknown> | null;
+    factor_gate_summary: Record<string, unknown> | null;
+    published_at: string | null;
+  };
+};
+
+export type OpsStageRow = {
+  stage: string;
+  status: string;
+  started_at?: string | null;
+  updated_at?: string | null;
+  error_summary?: string | null;
+};
+
 export type DashboardOverview = {
   trade_date: string;
   score_version: string;

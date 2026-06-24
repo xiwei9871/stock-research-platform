@@ -5,6 +5,8 @@ import {
   fetchAssetOutcomes,
   fetchExperimentProposals,
   fetchExperimentReplay,
+  fetchOpsSnapshot,
+  fetchOpsStages,
   fetchOutcomeAnalytics,
   fetchOverview,
   fetchPublicNews,
@@ -71,6 +73,51 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/public-news/refresh', { method: 'POST' });
     expect(result.counts_by_category.live).toBe(2);
+  });
+
+  it('fetches ops snapshot from the internal ops endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        pipeline: { overall_status: 'running', current_stage: 'minute5', progress_pct: 72 },
+        intervention: {
+          needs_intervention: true,
+          severity: 'warning',
+          reason_text: 'Deadline risk',
+          suggested_action: 'Watch heartbeat'
+        },
+        readiness: {
+          latest_ready_trade_date: '2026-06-23',
+          ready_status: 'degraded_ready'
+        },
+        snapshot_preview: {
+          market_state: { state: 'neutral' },
+          topn_preview: [{ asset_id: '000001.SZ', stock_name: 'Ping An Bank', score_total: 93.1 }],
+          coverage_summary: { pipeline_status: 'NOT_READY' },
+          factor_gate_summary: {},
+          published_at: '2026-06-24T08:08:00+08:00'
+        }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOpsSnapshot();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/ops/snapshot');
+    expect(result.pipeline.overall_status).toBe('running');
+  });
+
+  it('fetches ops stages rows from the internal ops endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ stage: 'daily', status: 'success' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchOpsStages();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/ops/stages');
+    expect(result).toEqual([{ stage: 'daily', status: 'success' }]);
   });
 
   it('fetches asset bars with an explicit resolution', async () => {
