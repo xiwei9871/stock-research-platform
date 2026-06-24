@@ -62,6 +62,7 @@ vi.mock('../src/charts/AssetChart', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   vi.doUnmock('../src/App');
   vi.doUnmock('../src/components/PublicSnapshotPage');
 });
@@ -136,6 +137,28 @@ it('renders the public page from main.tsx when the route is /public', async () =
 
   vi.doUnmock('../src/App');
   vi.doUnmock('../src/components/PublicSnapshotPage');
+});
+
+it('renders the public page from main.tsx when public-only mode is enabled on a non-public path', async () => {
+  vi.resetModules();
+  vi.stubEnv('VITE_PUBLIC_SNAPSHOT_ONLY', 'true');
+  window.history.pushState({}, '', '/ops');
+  document.body.innerHTML = '<div id="root"></div>';
+
+  vi.doMock('../src/App', () => ({
+    App: () => <div>internal app shell</div>
+  }));
+  vi.doMock('../src/components/PublicSnapshotPage', () => ({
+    PublicSnapshotPage: () => <div>public snapshot route</div>
+  }));
+
+  await import('../src/main');
+
+  await waitFor(() => {
+    expect(screen.getByText('public snapshot route')).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText('internal app shell')).not.toBeInTheDocument();
 });
 
 function createDeferred<T>() {

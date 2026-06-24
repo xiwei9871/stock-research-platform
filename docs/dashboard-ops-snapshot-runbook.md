@@ -18,3 +18,4 @@
 
 - Public page never exposes raw source failures.
 - Public page reads only release-safe fields from the public snapshot.
+- Public-only deployments can set `VITE_PUBLIC_SNAPSHOT_ONLY=true` so every frontend route renders the public snapshot page instead of the internal dashboard shell.

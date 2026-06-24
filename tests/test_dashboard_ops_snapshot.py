@@ -261,15 +261,30 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
                 "blocking_issue_count": 0,
             },
             "snapshot_preview": {
-                "market_state": {"state": "neutral"},
-                "topn_preview": [{"asset_id": "000001.SZ", "stock_name": "Ping An Bank"}],
+                "market_state": {
+                    "state": "neutral",
+                    "score": 0.11,
+                    "internal_confidence": 0.92,
+                },
+                "topn_preview": [
+                    {
+                        "asset_id": "000001.SZ",
+                        "stock_name": "Ping An Bank",
+                        "score_total": 93.1,
+                        "operator_note": "do not release",
+                    }
+                ],
                 "coverage_summary": {
                     "core": "97.8%",
                     "pipeline_status": "READY",
                     "failed_jobs": 4,
                     "warnings": ["source timeout"],
                 },
-                "factor_gate_summary": {"approved_count": 12},
+                "factor_gate_summary": {
+                    "approved_count": 12,
+                    "rejected_count": 2,
+                    "internal_rules": ["no release"],
+                },
                 "published_at": "2026-06-24T08:12:00+08:00",
             },
         },
@@ -279,12 +294,24 @@ def test_build_public_snapshot_hides_internal_errors_and_uses_release_status(mon
 
     assert snapshot["status"] == "delayed"
     assert snapshot["latest_ready_trade_date"] == "2026-06-23"
+    assert snapshot["market_state"] == {"state": "neutral", "score": 0.11}
+    assert snapshot["topn_preview"] == [
+        {
+            "asset_id": "000001.SZ",
+            "stock_name": "Ping An Bank",
+            "score_total": 93.1,
+        }
+    ]
     assert snapshot["coverage_summary"] == {"core": "97.8%"}
+    assert snapshot["factor_gate_summary"] == {"approved_count": 12}
     assert "source timeout" not in str(snapshot)
     assert "suggested_action" not in str(snapshot)
     assert "pipeline_status" not in str(snapshot["coverage_summary"])
     assert "failed_jobs" not in str(snapshot["coverage_summary"])
     assert "warnings" not in str(snapshot["coverage_summary"])
+    assert "internal_confidence" not in str(snapshot["market_state"])
+    assert "operator_note" not in str(snapshot["topn_preview"])
+    assert "internal_rules" not in str(snapshot["factor_gate_summary"])
 
 
 def test_build_public_snapshot_ignores_placeholder_market_state(monkeypatch):

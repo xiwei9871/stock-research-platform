@@ -42,6 +42,11 @@ from stock_research.public_news.service import (
 )
 
 
+def _resolve_dashboard_trade_date(raw_date: str | None):
+    config = IntradayConfig.from_env()
+    return parse_trade_date(raw_date, config.timezone)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Stock Research Dashboard API")
 
@@ -59,12 +64,12 @@ def create_app() -> FastAPI:
         return load_data_status_for_dashboard()
 
     @app.get("/api/ops/snapshot")
-    def ops_snapshot():
-        return build_internal_ops_snapshot()
+    def ops_snapshot(date: str | None = None):
+        return build_internal_ops_snapshot(trade_date=_resolve_dashboard_trade_date(date))
 
     @app.get("/api/ops/stages")
-    def ops_stages():
-        return {"items": load_ops_stage_details()}
+    def ops_stages(date: str | None = None):
+        return {"items": load_ops_stage_details(trade_date=_resolve_dashboard_trade_date(date))}
 
     @app.get("/api/public/snapshot")
     def public_snapshot():

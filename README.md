@@ -87,6 +87,14 @@ Public snapshot:
 curl http://127.0.0.1:8765/api/public/snapshot
 ```
 
+Public-only frontend deployment:
+
+```bash
+VITE_PUBLIC_SNAPSHOT_ONLY=true pnpm build
+```
+
+When that Vite env switch is enabled, the built dashboard renders the public snapshot page on every route and does not expose the internal dashboard shell.
+
 Start the dashboard API:
 
 ```bash

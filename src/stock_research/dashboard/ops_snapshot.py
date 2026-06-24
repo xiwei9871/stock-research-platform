@@ -13,6 +13,9 @@ from stock_research.intraday_pipeline import load_intraday_status
 _PENDING_STATUSES = {"pending", "skipped", "not_started"}
 _ACTIVE_STATUSES = {"running", "success", "partial_success", "failed"}
 _FORBIDDEN_PUBLIC_COVERAGE_KEYS = {"pipeline_status", "failed_jobs", "warnings"}
+_PUBLIC_MARKET_STATE_KEYS = ("state", "score")
+_PUBLIC_TOPN_PREVIEW_KEYS = ("asset_id", "stock_name", "score_total")
+_PUBLIC_FACTOR_GATE_SUMMARY_KEYS = ("approved_count",)
 
 
 def build_internal_ops_snapshot(
@@ -65,10 +68,10 @@ def build_public_snapshot(
         "latest_ready_trade_date": latest_ready_trade_date,
         "status": status,
         "status_text": _public_status_text(status, latest_ready_trade_date),
-        "market_state": preview.get("market_state"),
-        "topn_preview": preview.get("topn_preview"),
+        "market_state": _public_market_state(preview.get("market_state")),
+        "topn_preview": _public_topn_preview(preview.get("topn_preview")),
         "coverage_summary": _public_coverage_summary(preview.get("coverage_summary") or {}),
-        "factor_gate_summary": preview.get("factor_gate_summary"),
+        "factor_gate_summary": _public_factor_gate_summary(preview.get("factor_gate_summary")),
         "notes": [],
     }
 
@@ -367,11 +370,48 @@ def _public_coverage_summary(coverage_summary: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _public_market_state(market_state: Any) -> dict[str, Any] | None:
+    if not isinstance(market_state, dict):
+        return None
+    return {
+        key: market_state.get(key)
+        for key in _PUBLIC_MARKET_STATE_KEYS
+        if key in market_state
+    }
+
+
+def _public_topn_preview(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    public_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        shaped_row = {
+            key: row.get(key)
+            for key in _PUBLIC_TOPN_PREVIEW_KEYS
+            if key in row
+        }
+        if shaped_row:
+            public_rows.append(shaped_row)
+    return public_rows
+
+
+def _public_factor_gate_summary(summary: Any) -> dict[str, Any] | None:
+    if not isinstance(summary, dict):
+        return None
+    return {
+        key: summary.get(key)
+        for key in _PUBLIC_FACTOR_GATE_SUMMARY_KEYS
+        if key in summary
+    }
+
+
 def _public_has_release_payload(preview: dict[str, Any]) -> bool:
-    market_state = preview.get("market_state") or {}
-    topn_preview = preview.get("topn_preview") or []
+    market_state = _public_market_state(preview.get("market_state")) or {}
+    topn_preview = _public_topn_preview(preview.get("topn_preview"))
     coverage_summary = _public_coverage_summary(preview.get("coverage_summary") or {})
-    factor_gate_summary = preview.get("factor_gate_summary") or {}
+    factor_gate_summary = _public_factor_gate_summary(preview.get("factor_gate_summary")) or {}
     return bool(_market_state_has_signal(market_state) or topn_preview or coverage_summary or factor_gate_summary)
 
 

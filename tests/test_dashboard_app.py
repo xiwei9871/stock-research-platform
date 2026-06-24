@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -150,7 +151,10 @@ def test_ops_snapshot_route_returns_aggregated_payload(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,
         "build_internal_ops_snapshot",
-        lambda: {"intervention": {"needs_intervention": False}, "pipeline": {"overall_status": "running"}},
+        lambda trade_date=None: {
+            "intervention": {"needs_intervention": False},
+            "pipeline": {"overall_status": "running"},
+        },
     )
     client = TestClient(dashboard_app.create_app())
 
@@ -172,6 +176,83 @@ def test_ops_stages_route_returns_stage_list(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["items"] == [{"stage": "daily", "status": "success"}]
+
+
+def test_ops_snapshot_and_stages_routes_share_default_target_date(monkeypatch):
+    captured: dict[str, date | None] = {}
+
+    def fake_build_internal_ops_snapshot(service=None, trade_date=None):
+        captured["snapshot_date"] = trade_date
+        return {"pipeline": {}}
+
+    def fake_load_ops_stage_details(service=None, trade_date=None):
+        captured["stages_date"] = trade_date
+        return []
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "parse_trade_date",
+        lambda value, timezone: date(2026, 6, 24),
+    )
+    monkeypatch.setattr(
+        dashboard_app.IntradayConfig,
+        "from_env",
+        lambda: dashboard_app.IntradayConfig(service="test", timezone="Asia/Shanghai"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        fake_build_internal_ops_snapshot,
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        fake_load_ops_stage_details,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    snapshot_response = client.get("/api/ops/snapshot")
+    stages_response = client.get("/api/ops/stages")
+
+    assert snapshot_response.status_code == 200
+    assert stages_response.status_code == 200
+    assert captured["snapshot_date"] == date(2026, 6, 24)
+    assert captured["stages_date"] == date(2026, 6, 24)
+
+
+def test_ops_stages_route_accepts_explicit_date_query(monkeypatch):
+    captured = {}
+
+    def fake_parse_trade_date(value, timezone):
+        captured["parsed"] = (value, timezone)
+        return date(2026, 6, 23)
+
+    def fake_load_ops_stage_details(service=None, trade_date=None):
+        captured["trade_date"] = trade_date
+        return []
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "parse_trade_date",
+        fake_parse_trade_date,
+    )
+    monkeypatch.setattr(
+        dashboard_app.IntradayConfig,
+        "from_env",
+        lambda: dashboard_app.IntradayConfig(service="test", timezone="Asia/Shanghai"),
+    )
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        fake_load_ops_stage_details,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/stages?date=20260623")
+
+    assert response.status_code == 200
+    assert captured["parsed"] == ("20260623", "Asia/Shanghai")
+    assert captured["trade_date"] == date(2026, 6, 23)
 
 
 def test_public_snapshot_route_returns_public_payload(monkeypatch):
