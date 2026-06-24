@@ -33,6 +33,14 @@ def test_strategy_daily_eod_status_schema_contains_expected_columns():
     sql = strategy_daily_eod_store.STRATEGY_DAILY_EOD_STATUS_SQL.lower()
 
     assert "create table if not exists ops.strategy_daily_eod_status" in sql
+    assert "trade_date date primary key" in sql
+    assert "status text not null check (status in ('success', 'failed', 'running', 'skipped'))" in sql
+    assert "dependency_check_status text not null check (dependency_check_status in ('success', 'failed', 'running', 'skipped'))" in sql
+    assert "review_rows integer not null default 0" in sql
+    assert "updated_at timestamptz not null default now()" in sql
     assert "lhb_shortline_status text not null" in sql
+    assert "lhb_shortline_status in ('success', 'failed', 'running', 'skipped')" in sql
     assert "mid_trend_status text not null" in sql
+    assert "mid_trend_status in ('success', 'failed', 'running', 'skipped')" in sql
     assert "tech_bottleneck_status text not null" in sql
+    assert "tech_bottleneck_status in ('success', 'failed', 'running', 'skipped')" in sql
