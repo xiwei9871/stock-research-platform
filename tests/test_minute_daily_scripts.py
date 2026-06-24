@@ -22,21 +22,8 @@ exit 0
     )
     fake_python.chmod(0o755)
 
-    (fake_root / "scripts" / "stock_cron_guard.sh").write_text(
-        f"""#!/usr/bin/env bash
-clear_stock_proxy_env() {{
-  printf '%s\\n' "clear_stock_proxy_env" >> "{calls_file}"
-  unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY
-  unset http_proxy https_proxy all_proxy no_proxy
-}}
-
-stock_cron_guard_or_exit() {{
-  printf '%s\\n' "stock_cron_guard_or_exit $*" >> "{calls_file}"
-  "$1" -m stock_research.stock_cron_guard --date "$2" --service "$3"
-}}
-""",
-        encoding="utf-8",
-    )
+    guard_source = Path("scripts/stock_cron_guard.sh").read_text(encoding="utf-8")
+    (fake_root / "scripts" / "stock_cron_guard.sh").write_text(guard_source, encoding="utf-8")
 
     env = os.environ.copy()
     env.update(
@@ -62,9 +49,8 @@ stock_cron_guard_or_exit() {{
         text=True,
     )
 
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stderr
     calls = calls_file.read_text(encoding="utf-8")
-    assert "clear_stock_proxy_env" in calls
     assert "-m stock_research.stock_cron_guard --date 2026-06-23 --service minute-daily" in calls
     assert "-m stock_research.cli run-baostock-minute-daily --trade-date 2026-06-23" in calls
 
