@@ -1438,3 +1438,51 @@ def test_market_monitor_eod_route_returns_payload(monkeypatch):
         "limit_down": [],
         "auction_status": "pending_source",
     }
+
+
+def test_ops_snapshot_route_returns_aggregated_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_internal_ops_snapshot",
+        lambda trade_date=None: {
+            "pipeline": {"overall_status": "ready"},
+            "readiness": {"ready_status": "ready"},
+        },
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["pipeline"]["overall_status"] == "ready"
+
+
+def test_ops_stages_route_returns_stage_list(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_ops_stage_details",
+        lambda trade_date=None: [{"stage": "daily", "status": "success"}],
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/ops/stages")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["stage"] == "daily"
+
+
+def test_public_snapshot_route_returns_public_payload(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_public_snapshot",
+        lambda: {"trade_date": "2026-06-23", "status": "ready", "status_text": "ready"},
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/public/snapshot")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"

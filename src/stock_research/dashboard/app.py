@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
 
@@ -34,6 +36,11 @@ from stock_research.dashboard.news_scheduler import (
 from stock_research.dashboard.overview import build_dashboard_overview
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
+from stock_research.dashboard.ops_snapshot import (
+    build_internal_ops_snapshot,
+    build_public_snapshot,
+    load_ops_stage_details,
+)
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.readiness import build_platform_readiness
 from stock_research.dashboard.response_cache import DashboardResponseCache, dashboard_eod_cache_ttl_seconds
@@ -80,6 +87,30 @@ from stock_research.dashboard.watchlist import (
     load_watchlist_signals_for_dashboard,
 )
 from stock_research.operator_decision.write_service import create_operator_decision
+
+try:
+    from stock_research.intraday_pipeline import IntradayConfig, parse_trade_date
+except ImportError:
+    class IntradayConfig:
+        def __init__(self, timezone: str = "Asia/Shanghai"):
+            self.timezone = timezone
+
+        @classmethod
+        def from_env(cls) -> "IntradayConfig":
+            return cls()
+
+    def parse_trade_date(value: str | date | None, timezone: str = "Asia/Shanghai") -> date:
+        if isinstance(value, date):
+            return value
+        if value:
+            normalized = value.replace("-", "")
+            return datetime.strptime(normalized, "%Y%m%d").date()
+        return datetime.now(ZoneInfo(timezone)).date()
+
+
+def _resolve_dashboard_trade_date(raw_date: str | None):
+    config = IntradayConfig.from_env()
+    return parse_trade_date(raw_date, config.timezone)
 
 def create_app() -> FastAPI:
     @asynccontextmanager
@@ -156,6 +187,18 @@ def create_app() -> FastAPI:
             ("platform_display_date", score_version),
             build_payload,
         )
+
+    @app.get("/api/ops/snapshot")
+    def ops_snapshot(date: str | None = None):
+        return build_internal_ops_snapshot(trade_date=_resolve_dashboard_trade_date(date))
+
+    @app.get("/api/ops/stages")
+    def ops_stages(date: str | None = None):
+        return {"items": load_ops_stage_details(trade_date=_resolve_dashboard_trade_date(date))}
+
+    @app.get("/api/public/snapshot")
+    def public_snapshot():
+        return build_public_snapshot()
 
     @app.get("/api/market-monitor/eod")
     def market_monitor_eod(
