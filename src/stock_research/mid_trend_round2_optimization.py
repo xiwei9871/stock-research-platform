@@ -33,9 +33,7 @@ def build_mid_trend_round2_baseline_artifacts(
     output.mkdir(parents=True, exist_ok=True)
 
     train_summary = baseline_payload["train_summary"].copy()
-    train_summary["split_name"] = "train"
     test_summary = baseline_payload["test_summary"].copy()
-    test_summary["split_name"] = "test"
 
     train_path = output / "mid_trend_round2_baseline_train_summary.csv"
     test_path = output / "mid_trend_round2_baseline_test_summary.csv"
@@ -49,6 +47,7 @@ def build_mid_trend_round2_baseline_artifacts(
             "end_date": end_date,
             "primary_goal": DEFAULT_MID_TREND_ROUND2_CONFIG.primary_goal,
             "secondary_goal": DEFAULT_MID_TREND_ROUND2_CONFIG.secondary_goal,
+            "hard_constraints": DEFAULT_MID_TREND_ROUND2_CONFIG.hard_constraints,
         },
         "baseline_train_summary": train_summary,
         "baseline_test_summary": test_summary,
