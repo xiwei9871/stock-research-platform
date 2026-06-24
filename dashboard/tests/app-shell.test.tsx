@@ -814,6 +814,8 @@ describe('dashboard app shell', () => {
     const analytics = createDeferred<OutcomeAnalyticsRow[]>();
     const proposals = createDeferred<ExperimentProposalRow[]>();
     const replay = createDeferred<ExperimentReplayRow[]>();
+    const opsSnapshot = createDeferred<OpsSnapshot>();
+    const opsStages = createDeferred<OpsStageRow[]>();
     const shadow = createDeferred<ShadowWatchlistRow[]>();
     const shadowOutcomes = createDeferred<ShadowOutcomeRow[]>();
     const shadowOutcomeAnalytics = createDeferred<ShadowOutcomeAnalyticsRow[]>();
@@ -831,6 +833,8 @@ describe('dashboard app shell', () => {
     apiMocks.fetchOutcomeAnalytics.mockReturnValueOnce(analytics.promise);
     apiMocks.fetchExperimentProposals.mockReturnValueOnce(proposals.promise);
     apiMocks.fetchExperimentReplay.mockReturnValueOnce(replay.promise);
+    apiMocks.fetchOpsSnapshot.mockReturnValueOnce(opsSnapshot.promise);
+    apiMocks.fetchOpsStages.mockReturnValueOnce(opsStages.promise);
     apiMocks.fetchShadowWatchlist.mockReturnValueOnce(shadow.promise);
     apiMocks.fetchShadowOutcomes.mockReturnValueOnce(shadowOutcomes.promise);
     apiMocks.fetchShadowOutcomeAnalytics.mockReturnValueOnce(shadowOutcomeAnalytics.promise);
@@ -846,6 +850,8 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('Loading reports...')).toBeVisible();
     expect(screen.getByText('Loading asset review...')).toBeVisible();
     expect(screen.getByText('Loading experiment replay...')).toBeVisible();
+    expect(screen.getByText('Loading ops snapshot...')).toBeVisible();
+    expect(screen.getByText('Loading stage status...')).toBeVisible();
     expect(screen.getByText('Loading shadow watchlist...')).toBeVisible();
     expect(screen.getByText('Loading shadow outcomes...')).toBeVisible();
     expect(screen.getByText('Loading shadow outcome analytics...')).toBeVisible();
@@ -864,6 +870,8 @@ describe('dashboard app shell', () => {
       analytics.resolve(makeOutcomeAnalytics());
       proposals.resolve(makeExperimentProposals());
       replay.resolve(makeExperimentReplay());
+      opsSnapshot.resolve(makeOpsSnapshot());
+      opsStages.resolve(makeOpsStages());
       shadow.resolve(makeShadowWatchlist());
       shadowOutcomes.resolve(makeShadowOutcomes());
       shadowOutcomeAnalytics.resolve(makeShadowOutcomeAnalytics());
@@ -879,6 +887,8 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading reports...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading asset review...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading experiment replay...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading ops snapshot...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading stage status...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow watchlist...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow outcomes...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow outcome analytics...')).not.toBeInTheDocument();
@@ -887,6 +897,17 @@ describe('dashboard app shell', () => {
       expect(screen.queryByText('Loading shadow follow-up queue...')).not.toBeInTheDocument();
       expect(screen.queryByText('Loading shadow follow-up resolution...')).not.toBeInTheDocument();
     });
+
+    const opsSnapshotPanel = screen.getByText('Ops Snapshot').closest('section');
+    expect(opsSnapshotPanel).not.toBeNull();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('running')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Deadline risk')).toBeVisible();
+    expect(within(opsSnapshotPanel as HTMLElement).getByText('Watch heartbeat')).toBeVisible();
+
+    const opsStagesPanel = screen.getByText('Stage Status').closest('section');
+    expect(opsStagesPanel).not.toBeNull();
+    expect(within(opsStagesPanel as HTMLElement).getByText('daily')).toBeVisible();
+    expect(within(opsStagesPanel as HTMLElement).getByText('success')).toBeVisible();
   });
 
   it('shows empty states for dashboard lists and reports', async () => {
