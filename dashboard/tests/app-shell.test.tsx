@@ -60,8 +60,14 @@ vi.mock('../src/charts/AssetChart', () => ({
   AssetChart: ({ bars }: { bars: unknown[] }) => <div data-testid="asset-chart">{bars.length} bars</div>
 }));
 
-it('renders release-safe public snapshot fields only', async () => {
-  apiMocks.fetchPublicSnapshot.mockResolvedValue({
+afterEach(() => {
+  cleanup();
+  vi.doUnmock('../src/App');
+  vi.doUnmock('../src/components/PublicSnapshotPage');
+});
+
+function makePublicSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
     trade_date: '2026-06-24',
     published_at: '2026-06-24T08:15:00+08:00',
     latest_ready_trade_date: '2026-06-23',
@@ -71,8 +77,18 @@ it('renders release-safe public snapshot fields only', async () => {
     topn_preview: [{ asset_id: '000001.SZ', stock_name: 'Ping An Bank', score_total: 93.1 }],
     coverage_summary: { core: '97.8%' },
     factor_gate_summary: { approved_count: 12 },
-    notes: []
-  });
+    notes: [],
+    intervention: {
+      suggested_action: 'check watchdog',
+      reason_text: 'internal only'
+    },
+    suggested_action: 'check watchdog',
+    ...overrides
+  };
+}
+
+it('renders release-safe public snapshot fields only', async () => {
+  apiMocks.fetchPublicSnapshot.mockResolvedValue(makePublicSnapshot());
 
   render(<PublicSnapshotPage />);
 
@@ -83,6 +99,43 @@ it('renders release-safe public snapshot fields only', async () => {
   });
 
   expect(screen.queryByText(/suggested action/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/check watchdog/i)).not.toBeInTheDocument();
+});
+
+it('renders a safe unavailable state when the public snapshot request fails', async () => {
+  apiMocks.fetchPublicSnapshot.mockRejectedValue(new Error('snapshot failed'));
+
+  render(<PublicSnapshotPage />);
+
+  await waitFor(() => {
+    expect(screen.getByText(/public snapshot unavailable/i)).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText(/loading public snapshot/i)).not.toBeInTheDocument();
+});
+
+it('renders the public page from main.tsx when the route is /public', async () => {
+  vi.resetModules();
+  window.history.pushState({}, '', '/public');
+  document.body.innerHTML = '<div id="root"></div>';
+
+  vi.doMock('../src/App', () => ({
+    App: () => <div>internal app shell</div>
+  }));
+  vi.doMock('../src/components/PublicSnapshotPage', () => ({
+    PublicSnapshotPage: () => <div>public snapshot route</div>
+  }));
+
+  await import('../src/main');
+
+  await waitFor(() => {
+    expect(screen.getByText('public snapshot route')).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText('internal app shell')).not.toBeInTheDocument();
+
+  vi.doUnmock('../src/App');
+  vi.doUnmock('../src/components/PublicSnapshotPage');
 });
 
 function createDeferred<T>() {
@@ -680,10 +733,6 @@ describe('dashboard app shell', () => {
     apiMocks.fetchShadowReviewDecisions.mockResolvedValue(makeShadowReviewDecisions());
     apiMocks.fetchShadowFollowUpQueue.mockResolvedValue(makeShadowFollowUpQueue());
     apiMocks.fetchShadowFollowUpResolution.mockResolvedValue(makeShadowFollowUpResolution());
-  });
-
-  afterEach(() => {
-    cleanup();
   });
 
   it('renders the stock research shell title', async () => {

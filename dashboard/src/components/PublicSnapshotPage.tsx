@@ -15,20 +15,43 @@ function formatValue(value: unknown): string {
 
 export function PublicSnapshotPage() {
   const [snapshot, setSnapshot] = useState<PublicSnapshot | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    fetchPublicSnapshot().then((nextSnapshot) => {
-      if (!cancelled) {
-        setSnapshot(nextSnapshot);
-      }
-    });
+    fetchPublicSnapshot()
+      .then((nextSnapshot) => {
+        if (!cancelled) {
+          setSnapshot(nextSnapshot);
+          setLoadFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadFailed(true);
+        }
+      });
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  if (loadFailed) {
+    return (
+      <main className="public-shell">
+        <div className="public-layout">
+          <section className="public-hero">
+            <span className="public-badge public-badge--unavailable">unavailable</span>
+            <span className="public-kicker">Release-safe daily market view</span>
+            <h1>Public snapshot unavailable</h1>
+            <p>The latest public release could not be loaded. Please check back shortly.</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   if (!snapshot) {
     return <main className="public-shell">Loading public snapshot...</main>;

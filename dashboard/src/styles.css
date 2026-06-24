@@ -362,6 +362,16 @@ body {
   color: #b42318;
 }
 
+.public-badge--partial {
+  background: #e6f4ff;
+  color: #175cd3;
+}
+
+.public-badge--unavailable {
+  background: #f2f4f7;
+  color: #344054;
+}
+
 .public-badge--neutral {
   background: #edf2f7;
   color: #344054;
