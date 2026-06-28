@@ -1,166 +1,168 @@
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { fetchMarketMonitorEod } from '../api/client';
-import type { EmotionStockListRow, MarketMonitorPayload } from '../api/types';
+import type { MarketMonitorPayload } from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
+import { MarketEmotionMiniPanel } from './market-monitor/MarketEmotionMiniPanel';
+import { MarketOverviewCards } from './market-monitor/MarketOverviewCards';
+import { SectorDetailPanel } from './market-monitor/SectorDetailPanel';
+import { SectorFundRankingPanel } from './market-monitor/SectorFundRankingPanel';
+import { SectorHeatmapPanel } from './market-monitor/SectorHeatmapPanel';
+import {
+  buildMarketMonitorMockData,
+  mockMarketOverview,
+  type MarketMonitorMockData,
+  type MarketOverview,
+  type SectorDetail,
+  type SectorFundFlowSet,
+  type SectorHeatmapItem,
+  type SectorType
+} from './market-monitor/mockData';
 
-function formatCount(value: number | null | undefined) {
-  return typeof value === 'number' ? value.toLocaleString() : '-';
-}
-
-function formatScore(value: number | null | undefined) {
-  return typeof value === 'number' ? value.toFixed(1) : '-';
-}
-
-function formatPercent(value: number | null | undefined, digits = 2) {
-  return typeof value === 'number' ? `${(value * 100).toFixed(digits)}%` : '-';
-}
-
-function formatPercentPoints(value: number | null | undefined, digits = 2) {
-  return typeof value === 'number' ? `${value.toFixed(digits)}%` : '-';
-}
-
-function formatAmountYi(value: number | null | undefined) {
-  return typeof value === 'number' ? `${(value / 100000000).toFixed(2)}亿` : '-';
-}
-
-function formatRatio(value: number | null | undefined) {
-  return typeof value === 'number' ? `${value.toFixed(2)}x` : '-';
-}
-
-type StockTabKey = 'auction' | 'limit_up' | 'broken_limit_up' | 'limit_down';
+type MarketMonitorMockDataOverride = {
+  marketOverview?: Partial<MarketOverview>;
+  industryHeatmap?: SectorHeatmapItem[];
+  conceptHeatmap?: SectorHeatmapItem[];
+  sectorFundFlow?: Partial<Record<SectorType, Partial<SectorFundFlowSet>>>;
+  sectorDetails?: Record<string, SectorDetail>;
+};
 
 type MarketMonitorWorkspaceProps = {
   initialTradeDate?: string;
-  initialMonitorTab?: StockTabKey;
+  initialMonitorTab?: string;
   initialAssetId?: string;
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
+  mockDataOverride?: MarketMonitorMockDataOverride;
 };
 
-const STOCK_TABS: Array<{ key: StockTabKey; label: string }> = [
-  { key: 'auction', label: '竞价' },
-  { key: 'limit_up', label: '涨停' },
-  { key: 'broken_limit_up', label: '炸板' },
-  { key: 'limit_down', label: '跌停' }
-];
+const DEFAULT_TRADE_DATE = mockMarketOverview.tradeDate;
 
-function stockListEmptyMessage(tab: StockTabKey, stockLists: MarketMonitorPayload['emotion_stock_lists'] | undefined) {
-  if (!stockLists) {
-    return '股票名单源未接入。';
-  }
-  if (tab === 'auction' && stockLists.auction_status !== 'available') {
-    return '竞价数据源未接入。';
-  }
-  const label = STOCK_TABS.find((item) => item.key === tab)?.label ?? '当前';
-  return `当前日期暂无${label}股票。`;
+function mergeMockData(baseData: MarketMonitorMockData, override?: MarketMonitorMockDataOverride): MarketMonitorMockData {
+  return {
+    marketOverview: {
+      ...baseData.marketOverview,
+      ...(override?.marketOverview ?? {})
+    },
+    industryHeatmap: override?.industryHeatmap ?? baseData.industryHeatmap,
+    conceptHeatmap: override?.conceptHeatmap ?? baseData.conceptHeatmap,
+    sectorFundFlow: {
+      industry: {
+        inflow: override?.sectorFundFlow?.industry?.inflow ?? baseData.sectorFundFlow.industry.inflow,
+        outflow: override?.sectorFundFlow?.industry?.outflow ?? baseData.sectorFundFlow.industry.outflow
+      },
+      concept: {
+        inflow: override?.sectorFundFlow?.concept?.inflow ?? baseData.sectorFundFlow.concept.inflow,
+        outflow: override?.sectorFundFlow?.concept?.outflow ?? baseData.sectorFundFlow.concept.outflow
+      }
+    },
+    sectorDetails: override?.sectorDetails ?? baseData.sectorDetails
+  };
+}
+
+function createFallbackDetail(item: SectorHeatmapItem, tradeDate: string): SectorDetail {
+  return {
+    ...item,
+    updatedAt: `${tradeDate} 15:10`,
+    summary: '该板块详情仍处于 mock-first 阶段，后续会补齐成分股与更细的资金解释。',
+    leadingStocks: []
+  };
+}
+
+function resolveSelectedDetail(
+  selectedSectorId: string | null,
+  sectorType: SectorType,
+  tradeDate: string,
+  data: MarketMonitorMockData
+) {
+  if (!selectedSectorId) return null;
+  const activeHeatmap = sectorType === 'industry' ? data.industryHeatmap : data.conceptHeatmap;
+  const fallback = activeHeatmap.find((item) => item.sectorId === selectedSectorId);
+  return data.sectorDetails[selectedSectorId] ?? (fallback ? createFallbackDetail(fallback, tradeDate) : null);
 }
 
 export function MarketMonitorWorkspace({
   initialTradeDate,
-  initialMonitorTab = 'limit_up',
+  initialMonitorTab,
   initialAssetId,
-  onOpenAsset
+  onOpenAsset,
+  mockDataOverride
 }: MarketMonitorWorkspaceProps = {}) {
-  const [payload, setPayload] = useState<MarketMonitorPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tradeDateInput, setTradeDateInput] = useState(initialTradeDate ?? '');
-  const [loadingTradeDate, setLoadingTradeDate] = useState<string | null>(null);
-  const [activeStockTab, setActiveStockTab] = useState<StockTabKey>(initialMonitorTab);
-  const isMountedRef = useRef(false);
-  const requestIdRef = useRef(0);
-  const stockTabRefs = useRef<Record<StockTabKey, HTMLButtonElement | null>>({
-    auction: null,
-    limit_up: null,
-    broken_limit_up: null,
-    limit_down: null
-  });
-
-  const loadMarketMonitor = useCallback(async (tradeDate?: string) => {
-    const requestedTradeDate = tradeDate?.trim();
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setIsLoading(true);
-    setLoadingTradeDate(requestedTradeDate || null);
-    setError(null);
-    try {
-      const latestPayload = await fetchMarketMonitorEod(
-        requestedTradeDate ? { topN: 5, tradeDate: requestedTradeDate } : { topN: 5 }
-      );
-      if (isMountedRef.current && requestId === requestIdRef.current) {
-        setPayload(latestPayload);
-        setTradeDateInput(latestPayload.trade_date || requestedTradeDate || '');
-      }
-    } catch (err: unknown) {
-      if (isMountedRef.current && requestId === requestIdRef.current) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      if (isMountedRef.current && requestId === requestIdRef.current) {
-        setIsLoading(false);
-        setLoadingTradeDate(null);
-      }
-    }
-  }, []);
-
-  const loadLatest = useCallback(async () => {
-    await loadMarketMonitor();
-  }, [loadMarketMonitor]);
+  const initialDate = initialTradeDate ?? DEFAULT_TRADE_DATE;
+  const [tradeDate, setTradeDate] = useState(initialTradeDate ?? '');
+  const [tradeDateInput, setTradeDateInput] = useState(initialDate);
+  const [resolvedTradeDate, setResolvedTradeDate] = useState(initialDate);
+  const [latestAvailableTradeDate, setLatestAvailableTradeDate] = useState(initialDate);
+  const [sectorType, setSectorType] = useState<SectorType>(initialMonitorTab === 'concept' ? 'concept' : 'industry');
+  const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+  const [emotionPayload, setEmotionPayload] = useState<MarketMonitorPayload | null>(null);
+  const [emotionLoading, setEmotionLoading] = useState(false);
+  const [emotionError, setEmotionError] = useState<string | null>(null);
+  const [emotionWarnings, setEmotionWarnings] = useState<string[]>([]);
+  const [emotionRequestVersion, setEmotionRequestVersion] = useState(0);
+  const activeTradeDate = tradeDate || resolvedTradeDate || DEFAULT_TRADE_DATE;
 
   useEffect(() => {
-    isMountedRef.current = true;
-    void loadMarketMonitor(initialTradeDate);
+    setSelectedSectorId(null);
+  }, [activeTradeDate, sectorType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEmotionLoading(true);
+    setEmotionError(null);
+
+    void fetchMarketMonitorEod(tradeDate ? { topN: 5, tradeDate } : { topN: 5 })
+      .then((payload) => {
+        if (cancelled) return;
+        const latestMarketDate =
+          payload.freshness?.latest_market_date?.trim() || payload.trade_date?.trim() || DEFAULT_TRADE_DATE;
+        const nextTradeDate = payload.trade_date?.trim() || latestMarketDate;
+        setEmotionPayload(payload);
+        setEmotionWarnings(payload.warnings ?? []);
+        setLatestAvailableTradeDate(latestMarketDate);
+        setResolvedTradeDate(nextTradeDate);
+        setTradeDateInput(nextTradeDate);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setEmotionError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setEmotionLoading(false);
+        }
+      });
 
     return () => {
-      isMountedRef.current = false;
-      requestIdRef.current += 1;
+      cancelled = true;
     };
-  }, [loadMarketMonitor, initialTradeDate]);
+  }, [emotionRequestVersion, tradeDate]);
 
-  const emotion = payload?.market_emotion;
-  const summary = emotion?.summary;
-  const breadth = emotion?.breadth;
-  const liquidity = emotion?.liquidity;
-  const limitPerformance = emotion?.limit_performance;
-  const profitEffect = emotion?.profit_effect;
-  const drawdownPressure = emotion?.drawdown_pressure;
-  const weightPerformance = emotion?.weight_performance;
-  const emotionComponents = emotion?.components ?? [];
-  const stockLists = payload?.emotion_stock_lists;
-  const stockCount = (tab: StockTabKey) => stockLists?.[tab]?.length ?? 0;
-  const allStockListsEmpty = !stockLists || STOCK_TABS.every((tab) => stockCount(tab.key) === 0);
-  const dataModeLabel = payload?.freshness?.label?.toLowerCase().includes('historical')
-    ? 'Historical EOD Snapshot'
-    : 'EOD Snapshot';
-  const topnPreview = payload?.strategy_signal_summary?.topn_preview ?? [];
-  const generatedReports = payload?.generated_reports ?? [];
-  const activeStockTabIndex = STOCK_TABS.findIndex((tab) => tab.key === activeStockTab);
+  const workspaceData = useMemo(
+    () => mergeMockData(buildMarketMonitorMockData(activeTradeDate), mockDataOverride),
+    [activeTradeDate, mockDataOverride]
+  );
+
+  const activeHeatmap = sectorType === 'industry' ? workspaceData.industryHeatmap : workspaceData.conceptHeatmap;
+  const activeRanking = workspaceData.sectorFundFlow[sectorType];
+  const selectedDetail = useMemo(
+    () => resolveSelectedDetail(selectedSectorId, sectorType, activeTradeDate, workspaceData),
+    [activeTradeDate, selectedSectorId, sectorType, workspaceData]
+  );
+
   const handleTradeDateSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const tradeDateField = event.currentTarget.elements.namedItem('market-monitor-trade-date');
-    const selectedTradeDate = tradeDateField instanceof HTMLInputElement ? tradeDateField.value : tradeDateInput;
-    void loadMarketMonitor(selectedTradeDate);
+    const nextTradeDate = tradeDateInput.trim() || DEFAULT_TRADE_DATE;
+    setTradeDate(nextTradeDate);
+    setResolvedTradeDate(nextTradeDate);
+    setTradeDateInput(nextTradeDate);
+    setEmotionRequestVersion((current) => current + 1);
   };
-  const selectStockTab = (nextTab: StockTabKey) => {
-    setActiveStockTab(nextTab);
-    stockTabRefs.current[nextTab]?.focus();
-  };
-  const handleStockTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-      event.preventDefault();
-      const direction = event.key === 'ArrowRight' ? 1 : -1;
-      const nextIndex = (activeStockTabIndex + direction + STOCK_TABS.length) % STOCK_TABS.length;
-      selectStockTab(STOCK_TABS[nextIndex].key);
-      return;
-    }
-    if (event.key === 'Home') {
-      event.preventDefault();
-      selectStockTab(STOCK_TABS[0].key);
-      return;
-    }
-    if (event.key === 'End') {
-      event.preventDefault();
-      selectStockTab(STOCK_TABS[STOCK_TABS.length - 1].key);
-    }
+
+  const handleLoadLatest = () => {
+    const nextTradeDate = latestAvailableTradeDate || DEFAULT_TRADE_DATE;
+    setTradeDate('');
+    setResolvedTradeDate(nextTradeDate);
+    setTradeDateInput(nextTradeDate);
+    setEmotionRequestVersion((current) => current + 1);
   };
 
   return (
@@ -168,16 +170,12 @@ export function MarketMonitorWorkspace({
       <header className="workspace-header workspace-header-row">
         <div>
           <h1>Market Monitor</h1>
-          <p className="muted">EOD market state for the latest completed trading day.</p>
+          <p className="muted">mock-first 的板块与资金复盘工作区，主舞台聚焦板块强弱、资金方向和可操作细节。</p>
         </div>
-        <button type="button" onClick={loadLatest} aria-label="Load Latest EOD">
-          {isLoading ? 'Loading...' : 'Load Latest EOD'}
+        <button type="button" aria-label="Load Latest EOD" onClick={handleLoadLatest}>
+          最新收盘日
         </button>
       </header>
-
-      {error ? <p className="error-text">{error}</p> : null}
-      {isLoading && loadingTradeDate ? <p className="pending-note">Loading {loadingTradeDate}...</p> : null}
-      {(payload?.warnings ?? []).map((warning) => <p className="warning-text" key={warning}>{warning}</p>)}
 
       <form className="market-date-controls" aria-label="Market monitor date controls" onSubmit={handleTradeDateSubmit}>
         <label>
@@ -190,241 +188,59 @@ export function MarketMonitorWorkspace({
             onChange={(event) => setTradeDateInput(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={isLoading || !tradeDateInput}>
-          {isLoading ? 'Loading...' : 'Load Date'}
+        <button type="submit" aria-label="Load Date">
+          载入日期
         </button>
       </form>
 
-      <section className="status-strip" aria-label="Market monitor freshness">
-        <div>
-          <span>Mode</span>
-          <strong>{payload?.freshness?.label ?? 'Last Completed Trading Day'}</strong>
-        </div>
-        <div>
-          <span>Trade Date</span>
-          <strong>{payload?.trade_date || '-'}</strong>
-        </div>
-        <div>
-          <span>Data Mode</span>
-          <strong>{dataModeLabel}</strong>
-        </div>
+      <div className="market-monitor-toggle-bar" role="toolbar" aria-label="板块类型切换">
+        <button
+          type="button"
+          aria-pressed={sectorType === 'industry'}
+          className={sectorType === 'industry' ? 'active' : ''}
+          onClick={() => setSectorType('industry')}
+        >
+          行业
+        </button>
+        <button
+          type="button"
+          aria-pressed={sectorType === 'concept'}
+          className={sectorType === 'concept' ? 'active' : ''}
+          onClick={() => setSectorType('concept')}
+        >
+          概念
+        </button>
+      </div>
+
+      <MarketOverviewCards overview={workspaceData.marketOverview} />
+
+      <section className="market-monitor-main-grid">
+        <SectorHeatmapPanel
+          items={activeHeatmap}
+          selectedSectorId={selectedSectorId}
+          onSelectSector={setSelectedSectorId}
+        />
+        <SectorFundRankingPanel
+          ranking={activeRanking}
+          selectedSectorId={selectedSectorId}
+          onSelectSector={setSelectedSectorId}
+        />
       </section>
 
-      <section className="market-emotion-summary" aria-label="EOD market emotion summary">
-        <div className="emotion-score-panel">
-          <span>综合强度</span>
-          <strong>{formatScore(summary?.score)}</strong>
-          <em>{summary?.state || '-'}</em>
-        </div>
-        <div className="emotion-card">
-          <span>涨跌家数</span>
-          <strong>{formatCount(breadth?.up_count)}</strong>
-          <small>上涨 / 下跌 {formatCount(breadth?.up_count)} / {formatCount(breadth?.down_count)}</small>
-        </div>
-        <div className="emotion-card">
-          <span>市场量能</span>
-          <strong>{formatRatio(liquidity?.amount_ratio_5_20)}</strong>
-          <small>成交额 {formatAmountYi(liquidity?.total_amount)}</small>
-        </div>
-        <div className="emotion-card">
-          <span>涨停表现</span>
-          <strong>最高 {formatCount(limitPerformance?.high_board_height)} 板</strong>
-          <small>涨停 {formatCount(limitPerformance?.limit_up_count)} / 炸板 {formatCount(limitPerformance?.broken_limit_up_count)}</small>
-        </div>
-        <div className="emotion-card">
-          <span>大幅回撤</span>
-          <strong>{formatCount(drawdownPressure?.strong_down_count)}</strong>
-          <small>跌停 {formatCount(drawdownPressure?.limit_down_count)} / 炸板率 {formatPercent(drawdownPressure?.broken_limit_up_rate)}</small>
-        </div>
-        <div className="emotion-card pending">
-          <span>权重表现</span>
-          <strong>权重表现待接入</strong>
-          <small>{weightPerformance?.status || 'pending_source'}</small>
-        </div>
-      </section>
-
-      <section className="emotion-dashboard-grid">
-        <section className="workspace-panel">
-          <div className="section-heading">
-            <h2>赚钱效应</h2>
-            <span className="status-chip neutral">{profitEffect?.status || 'pending_source'}</span>
-          </div>
-          <div className="emotion-metric-grid">
-            <div>
-              <span>昨日涨停成功</span>
-              <strong>{formatPercent(profitEffect?.limit_up_success_rate)}</strong>
-            </div>
-            <div>
-              <span>昨日涨停收益</span>
-              <strong>{formatPercent(profitEffect?.limit_up_profit_rate)}</strong>
-            </div>
-            <div>
-              <span>接力成功</span>
-              <strong>{formatPercent(profitEffect?.relay_success_rate)}</strong>
-            </div>
-            <div>
-              <span>接力收益</span>
-              <strong>{formatPercent(profitEffect?.relay_profit_rate)}</strong>
-            </div>
-            <div>
-              <span>炸板修复</span>
-              <strong>{formatPercent(profitEffect?.broken_success_rate)}</strong>
-            </div>
-            <div>
-              <span>炸板收益</span>
-              <strong>{formatPercent(profitEffect?.broken_profit_rate)}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="workspace-panel">
-          <div className="section-heading">
-            <h2>情绪拆解</h2>
-            <span className="status-chip neutral">components</span>
-          </div>
-          <div className="emotion-component-list">
-            {emotionComponents.map((component) => (
-              <div key={component.key}>
-                <span>{component.label}</span>
-                <strong>{formatScore(component.score)}</strong>
-              </div>
-            ))}
-            {emotionComponents.length ? null : <p className="pending-note">情绪拆解待接入</p>}
-          </div>
-        </section>
-      </section>
-
-      <section className="workspace-panel">
-        <div className="section-heading">
-          <h2>股票列表</h2>
-          <span className="status-chip neutral">EOD</span>
-        </div>
-        {allStockListsEmpty ? (
-          <p className="pending-note">股票名单源未接入或当日未产出；上方市场情绪指标仍可用于判断市场热度。</p>
-        ) : null}
-        <div className="stock-tabs" role="tablist" aria-label="Market emotion stock lists" onKeyDown={handleStockTabKeyDown}>
-          {STOCK_TABS.map((tab) => (
-            <button
-              ref={(node) => {
-                stockTabRefs.current[tab.key] = node;
-              }}
-              aria-controls={`stock-panel-${tab.key}`}
-              aria-selected={activeStockTab === tab.key}
-              id={`stock-tab-${tab.key}`}
-              key={tab.key}
-              onClick={() => selectStockTab(tab.key)}
-              role="tab"
-              tabIndex={activeStockTab === tab.key ? 0 : -1}
-              type="button"
-            >
-              {tab.label} {stockCount(tab.key)}
-            </button>
-          ))}
-        </div>
-        {STOCK_TABS.map((tab) => {
-          const isActivePanel = activeStockTab === tab.key;
-          const tabRows: EmotionStockListRow[] = stockLists?.[tab.key] ?? [];
-          return (
-            <div
-              aria-labelledby={`stock-tab-${tab.key}`}
-              className="stock-table-wrap"
-              hidden={!isActivePanel}
-              id={`stock-panel-${tab.key}`}
-              key={tab.key}
-              role="tabpanel"
-            >
-              {isActivePanel ? (
-                tabRows.length === 0 ? (
-                  <p className="pending-note">{stockListEmptyMessage(tab.key, stockLists)}</p>
-                ) : (
-                  <table className="emotion-stock-table">
-                    <thead>
-                      <tr>
-                        <th>股票名称</th>
-                        <th>成交额</th>
-                        <th>涨幅</th>
-                        <th>板块</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tabRows.map((row) => (
-                        <tr key={`${row.tab}-${row.asset_id}`}>
-                          <td>
-                            {row.asset_id ? (
-                              <button
-                                type="button"
-                                className={row.asset_id === initialAssetId ? 'link-chip active' : 'link-chip'}
-                                aria-label={`Open Stock Detail for ${row.name || row.symbol} from ${tab.label}`}
-                                onClick={() =>
-                                  onOpenAsset?.(row.asset_id, {
-                                    sourceWorkspace: 'market',
-                                    assetId: row.asset_id,
-                                    tradeDate: payload?.trade_date,
-                                    monitorTab: tab.key,
-                                    query: row.name || row.symbol || row.asset_id
-                                  })
-                                }
-                              >
-                                {row.name || row.symbol}
-                              </button>
-                            ) : (
-                              <strong>{row.name || row.symbol}</strong>
-                            )}
-                            <span>{row.symbol}</span>
-                          </td>
-                          <td>{formatAmountYi(row.amount)}</td>
-                          <td>{formatPercentPoints(row.pct_chg)}</td>
-                          <td>{row.board || '-'}</td>
-                        </tr>
-                      ))}
-                      {tabRows.length === 0 ? (
-                        <tr>
-                          <td colSpan={4}>暂无股票</td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                )
-              ) : null}
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="workspace-panel">
-        <div className="section-heading">
-          <h2>Strategy Signal Summary</h2>
-          <span className="status-chip neutral">EOD</span>
-        </div>
-        <div className="data-table">
-          <div className="data-table-header three-col">
-            <span>Rank</span>
-            <span>Asset</span>
-            <span>Score</span>
-          </div>
-          {topnPreview.map((row) => (
-            <div className="data-table-row three-col" key={`${row.trade_date}-${row.asset_id}`}>
-              <span>{row.rank}</span>
-              <strong>{row.asset_id}</strong>
-              <span>{formatScore(row.score_total)}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="workspace-panel">
-        <div className="section-heading">
-          <h2>Generated Reports</h2>
-          <span className="status-chip neutral">local artifacts</span>
-        </div>
-        <div className="report-list compact">
-          {generatedReports.map((report) => (
-            <a href={report.path} key={report.path}>
-              <span>{report.report_type}</span>
-              <strong>{report.title}</strong>
-            </a>
-          ))}
-        </div>
+      <section className="market-monitor-bottom-grid">
+        <SectorDetailPanel
+          detail={selectedDetail}
+          tradeDate={activeTradeDate}
+          initialAssetId={initialAssetId}
+          onOpenAsset={onOpenAsset}
+        />
+        <MarketEmotionMiniPanel
+          error={emotionError}
+          isLoading={emotionLoading}
+          payload={emotionPayload}
+          requestedTradeDate={tradeDate || latestAvailableTradeDate}
+          warnings={emotionWarnings}
+        />
       </section>
     </section>
   );
