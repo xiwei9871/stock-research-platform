@@ -102,42 +102,6 @@ export type ReportLink = {
   trade_date: string | null;
 };
 
-export type DailyReviewLiteItem = {
-  label: string;
-  value: string;
-};
-
-export type DailyReviewLiteSection = {
-  key: string;
-  title: string;
-  status: 'ready' | 'partial' | 'empty' | 'failed' | string;
-  items: DailyReviewLiteItem[];
-};
-
-export type DailyReviewLiteArtifact = {
-  key: string;
-  label: string;
-  url?: string;
-  path?: string;
-  format?: string;
-};
-
-export type DailyReviewLitePayload = {
-  trade_date: string;
-  status: 'ready' | 'partial' | 'empty' | 'failed' | string;
-  run: {
-    run_id: string;
-    source: string;
-    report_type: string;
-    status: string;
-    updated_at?: string;
-  };
-  fallback: boolean;
-  sections: DailyReviewLiteSection[];
-  artifacts: DailyReviewLiteArtifact[];
-  warnings: string[];
-};
-
 export type DecisionEventRow = {
   review_date: string;
   review_session_id: string;
@@ -1275,18 +1239,6 @@ export type ResearchReportItem = {
   industry_view: string;
   risk_summary: string;
   metadata: Record<string, unknown>;
-};
-
-export type ResearchReportDocument = {
-  report_id: string;
-  report_title: string;
-  has_pdf: boolean;
-  pdf_url: string;
-  source_url: string;
-  file_name: string;
-  public_access: boolean;
-  copyright_note: string;
-  warnings: string[];
 };
 
 export type ResearchReportResponse = {
