@@ -9,7 +9,6 @@ import type {
   BacktestRunResult,
   CreateOperatorDecisionRequest,
   CreateOperatorDecisionResponse,
-  DailyReviewLitePayload,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -39,7 +38,6 @@ import type {
   PublicNewsCollectorStatus,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
-  ResearchReportDocument,
   ResearchReportResponse,
   ResearchReportSummary,
   ReviewItemSnapshot,
@@ -125,10 +123,6 @@ type ReviewQueueParams = {
   scoreVersion?: string;
   limit?: number;
   lookbackDays?: number;
-};
-
-type DailyReviewLiteParams = {
-  tradeDate?: string;
 };
 
 type SnapshotFilters = {
@@ -262,10 +256,6 @@ export async function fetchResearchReports(params: ResearchReportParams = {}): P
   return getJson(`/api/research-reports?${searchParams.toString()}`);
 }
 
-export async function fetchResearchReportDocument(reportId: string): Promise<ResearchReportDocument> {
-  return getJson(`/api/research-reports/${encodeURIComponent(reportId)}/document`);
-}
-
 export async function fetchAssetResearchReports(
   assetId: string,
   options: { limit?: number; lookbackDays?: number } = {}
@@ -296,13 +286,6 @@ export async function fetchReviewQueue(params: ReviewQueueParams = {}): Promise<
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   const query = searchParams.toString();
   return getJson(query ? `/api/review-queue?${query}` : '/api/review-queue');
-}
-
-export async function fetchDailyReviewLite(params: DailyReviewLiteParams = {}): Promise<DailyReviewLitePayload> {
-  const searchParams = new URLSearchParams();
-  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
-  const query = searchParams.toString();
-  return getJson(query ? `/api/daily-review-lite?${query}` : '/api/daily-review-lite');
 }
 
 export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {
