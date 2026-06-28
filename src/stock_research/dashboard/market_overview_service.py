@@ -16,16 +16,16 @@ MARKET_OVERVIEW_INDEX_IDS = (
     "SSE_COMPOSITE",
     "SZSE_COMPONENT",
     "CHINEXT",
-    "CSI_300",
-    "CSI_500",
+    "STAR_50",
+    "BSE_50",
 )
 
 INDEX_NAME_MAP = {
     "SSE_COMPOSITE": "上证指数",
     "SZSE_COMPONENT": "深证成指",
     "CHINEXT": "创业板指",
-    "CSI_300": "沪深300",
-    "CSI_500": "中证500",
+    "STAR_50": "科创50",
+    "BSE_50": "北证50",
 }
 
 
@@ -52,7 +52,10 @@ def build_market_overview_payload(
             + ", ".join(INDEX_NAME_MAP.get(index_id, index_id) for index_id in missing_index_ids)
         )
 
-    data_status = _data_status(bool(overview_row), bool(indices))
+    data_status = _data_status(
+        has_overview=bool(overview_row),
+        available_index_ids=available_index_ids,
+    )
     return {
         "trade_date": trade_date,
         "updated_at": _latest_updated_at([overview_row, *index_rows]),
@@ -117,10 +120,14 @@ def _normalize_index_row(row: dict[str, Any]) -> MarketOverviewIndex:
     )
 
 
-def _data_status(has_overview: bool, has_indices: bool) -> str:
-    if has_overview and has_indices:
+def _data_status(*, has_overview: bool, available_index_ids: set[str]) -> str:
+    has_any_required_indices = bool(available_index_ids.intersection(MARKET_OVERVIEW_INDEX_IDS))
+    has_all_required_indices = all(
+        index_id in available_index_ids for index_id in MARKET_OVERVIEW_INDEX_IDS
+    )
+    if has_overview and has_all_required_indices:
         return "completed"
-    if has_overview or has_indices:
+    if has_overview or has_any_required_indices:
         return "partial"
     return "missing"
 

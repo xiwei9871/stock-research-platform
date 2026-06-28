@@ -34,20 +34,51 @@ def test_build_market_overview_payload_returns_trade_date_status_and_indices(mon
                 "preclose": 3099.01,
                 "source": "baostock",
                 "updated_at": "2026-06-26T15:31:00+08:00",
-            }
+            },
+            {
+                "index_id": "SZSE_COMPONENT",
+                "index_name": "深证成指",
+                "close": 9988.76,
+                "preclose": 9900.0,
+                "source": "baostock",
+                "updated_at": "2026-06-26T15:31:00+08:00",
+            },
+            {
+                "index_id": "CHINEXT",
+                "index_name": "创业板指",
+                "close": 2012.34,
+                "preclose": 2000.0,
+                "source": "baostock",
+                "updated_at": "2026-06-26T15:31:00+08:00",
+            },
         ],
     )
 
     payload = market_overview_service.build_market_overview_payload("2026-06-26")
 
     assert payload["trade_date"] == "2026-06-26"
-    assert payload["data_status"] == "completed"
+    assert payload["data_status"] == "partial"
+    assert payload["warnings"] == [
+        "market overview is missing index rows for: 科创50, 北证50"
+    ]
     assert payload["indices"] == [
         {
             "code": "SSE_COMPOSITE",
             "name": "上证指数",
             "close": 3123.45,
             "change_pct": 3123.45 / 3099.01 - 1.0,
+        },
+        {
+            "code": "SZSE_COMPONENT",
+            "name": "深证成指",
+            "close": 9988.76,
+            "change_pct": 9988.76 / 9900.0 - 1.0,
+        },
+        {
+            "code": "CHINEXT",
+            "name": "创业板指",
+            "close": 2012.34,
+            "change_pct": 2012.34 / 2000.0 - 1.0,
         }
     ]
 
