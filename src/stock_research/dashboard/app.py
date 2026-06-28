@@ -255,13 +255,17 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/market-monitor/sectors/{sector_id}")
-    def market_monitor_sector_detail(sector_id: str, trade_date: str):
+    def market_monitor_sector_detail(
+        sector_id: str,
+        trade_date: str,
+        type: str = "industry",
+    ):
         return app.state.eod_response_cache.get_or_set(
-            ("market_monitor_sector_detail", trade_date, sector_id),
+            ("market_monitor_sector_detail", trade_date, sector_id, type),
             lambda: build_sector_detail_payload(
                 trade_date,
                 sector_id,
-                sector_type="industry",
+                sector_type=type,
             ),
         )
 

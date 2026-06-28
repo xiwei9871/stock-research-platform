@@ -295,7 +295,7 @@ def test_market_monitor_sectors_detail_route_returns_payload(monkeypatch):
     )
     client = TestClient(dashboard_app.create_app())
 
-    response = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26")
+    response = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26&type=industry")
 
     assert response.status_code == 200
     assert captured == {
@@ -328,6 +328,73 @@ def test_market_monitor_sectors_detail_route_returns_payload(monkeypatch):
                 "change_pct": 0.125,
             }
         ],
+    }
+
+
+def test_market_monitor_sectors_detail_route_passes_concept_type(monkeypatch):
+    captured = {}
+
+    def fake_build_sector_detail_payload(
+        trade_date: str,
+        sector_id: str,
+        *,
+        sector_type: str = "industry",
+    ):
+        captured["trade_date"] = trade_date
+        captured["sector_id"] = sector_id
+        captured["sector_type"] = sector_type
+        return {
+            "trade_date": trade_date,
+            "updated_at": None,
+            "source": "concept_sector_source",
+            "data_status": "missing",
+            "warnings": ["concept sector detail source is unavailable; returning empty payload"],
+            "sector_id": sector_id,
+            "sector_name": sector_id,
+            "sector_type": sector_type,
+            "change_pct": None,
+            "amount": None,
+            "up_count": None,
+            "down_count": None,
+            "main_net_inflow": None,
+            "main_net_inflow_ratio": None,
+            "stock_count": None,
+            "leading_stocks": [],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_detail_payload",
+        fake_build_sector_detail_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/market-monitor/sectors/GN1234?trade_date=2026-06-26&type=concept")
+
+    assert response.status_code == 200
+    assert captured == {
+        "trade_date": "2026-06-26",
+        "sector_id": "GN1234",
+        "sector_type": "concept",
+    }
+    assert response.json() == {
+        "trade_date": "2026-06-26",
+        "updated_at": None,
+        "source": "concept_sector_source",
+        "data_status": "missing",
+        "warnings": ["concept sector detail source is unavailable; returning empty payload"],
+        "sector_id": "GN1234",
+        "sector_name": "GN1234",
+        "sector_type": "concept",
+        "change_pct": None,
+        "amount": None,
+        "up_count": None,
+        "down_count": None,
+        "main_net_inflow": None,
+        "main_net_inflow_ratio": None,
+        "stock_count": None,
+        "leading_stocks": [],
     }
 
 
