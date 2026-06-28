@@ -55,12 +55,21 @@ def build_sector_detail_payload(
         )
 
     leading_stocks = [_normalize_leading_stock(row) for row in leading_rows]
+    warnings: list[str] = []
+    data_status = "completed"
+    if _number(detail_row.get("main_net_inflow")) is None or _number(
+        detail_row.get("main_net_inflow_ratio")
+    ) is None:
+        data_status = "partial"
+        warnings.append(
+            "fund flow fields are unavailable for sector detail; returning partial payload"
+        )
     return {
         "trade_date": trade_date,
         "updated_at": _latest_updated_at([detail_row, *leading_rows]),
         "source": _combine_sources([detail_row, *leading_rows], default="market.industry_daily_bar"),
-        "data_status": "completed",
-        "warnings": [],
+        "data_status": data_status,
+        "warnings": warnings,
         "sector_id": str(detail_row.get("sector_id") or detail_row.get("industry_code") or sector_id),
         "sector_name": str(detail_row.get("sector_name") or detail_row.get("industry_name") or sector_id),
         "sector_type": sector_type,
@@ -145,7 +154,7 @@ def _normalize_leading_stock(row: dict[str, Any]) -> SectorLeadingStock:
     return SectorLeadingStock(
         asset_id=asset_id,
         name=str(row.get("name") or asset_id),
-        change_pct=_number(row.get("pct_chg")),
+        change_pct=_pct_chg_points_to_ratio(row.get("pct_chg")),
     )
 
 
@@ -201,6 +210,13 @@ def _change_pct(change_pct: Any, close: Any, preclose: Any) -> float | None:
 def _int_or_none(value: Any) -> int | None:
     normalized = _number(value)
     return int(normalized) if normalized is not None else None
+
+
+def _pct_chg_points_to_ratio(value: Any) -> float | None:
+    normalized = _number(value)
+    if normalized is None:
+        return None
+    return normalized / 100.0
 
 
 def _number(value: Any) -> float | None:
