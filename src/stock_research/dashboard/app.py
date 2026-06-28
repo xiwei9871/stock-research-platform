@@ -67,6 +67,7 @@ from stock_research.dashboard.search import load_global_search
 from stock_research.dashboard.sector_detail_service import build_sector_detail_payload
 from stock_research.dashboard.sector_fund_flow_service import build_sector_fund_flow_payload
 from stock_research.dashboard.sector_heatmap_service import build_sector_heatmap_payload
+from stock_research.dashboard.schemas import SectorType
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
 from stock_research.dashboard.shadow_analytics_review import load_shadow_analytics_review_summary
 from stock_research.dashboard.shadow_outcome_analytics import load_shadow_outcome_analytics_summary
@@ -230,7 +231,7 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/market-monitor/sectors/heatmap")
-    def market_monitor_sector_heatmap(trade_date: str, type: str = "industry"):
+    def market_monitor_sector_heatmap(trade_date: str, type: SectorType = "industry"):
         return app.state.eod_response_cache.get_or_set(
             ("market_monitor_sector_heatmap", trade_date, type),
             lambda: build_sector_heatmap_payload(
@@ -242,7 +243,7 @@ def create_app() -> FastAPI:
     @app.get("/api/market-monitor/sectors/fund-flow")
     def market_monitor_sector_fund_flow(
         trade_date: str,
-        type: str = "industry",
+        type: SectorType = "industry",
         period: str = "1d",
     ):
         return app.state.eod_response_cache.get_or_set(
@@ -258,7 +259,7 @@ def create_app() -> FastAPI:
     def market_monitor_sector_detail(
         sector_id: str,
         trade_date: str,
-        type: str = "industry",
+        type: SectorType = "industry",
     ):
         return app.state.eod_response_cache.get_or_set(
             ("market_monitor_sector_detail", trade_date, sector_id, type),

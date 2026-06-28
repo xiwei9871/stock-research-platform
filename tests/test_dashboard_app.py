@@ -401,6 +401,33 @@ def test_market_monitor_sectors_detail_route_passes_concept_type(monkeypatch):
 @pytest.mark.parametrize(
     ("route", "builder_name"),
     [
+        ("/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=foo", "build_sector_heatmap_payload"),
+        (
+            "/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=foo&period=1d",
+            "build_sector_fund_flow_payload",
+        ),
+        ("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26&type=foo", "build_sector_detail_payload"),
+    ],
+)
+def test_market_monitor_sectors_routes_reject_invalid_type_before_builder(monkeypatch, route, builder_name):
+    calls = []
+
+    def fake_builder(*args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return {"unexpected": True}
+
+    monkeypatch.setattr(dashboard_app, builder_name, fake_builder, raising=False)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(route)
+
+    assert response.status_code == 422
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("route", "builder_name"),
+    [
         ("/api/platform/summary?score_version=manual_v1&top_n=5", "load_platform_summary"),
         ("/api/market-monitor/eod?trade_date=2026-06-12&score_version=manual_v1&top_n=5", "build_market_monitor_eod"),
         ("/api/review-queue?trade_date=2026-06-12&score_version=manual_v1&limit=10&lookback_days=90", "build_review_queue"),
@@ -438,6 +465,111 @@ def test_dashboard_eod_route_cache_keys_include_query_parameters(monkeypatch):
     first = client.get("/api/platform/summary?score_version=manual_v1&top_n=5")
     second = client.get("/api/platform/summary?score_version=manual_v1&top_n=10")
     third = client.get("/api/platform/summary?score_version=manual_v1&top_n=5")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+    assert len(calls) == 2
+    assert first.json() == third.json()
+    assert first.json() != second.json()
+
+
+def test_market_monitor_sectors_heatmap_route_reuses_cache_for_identical_requests(monkeypatch):
+    calls = []
+
+    def fake_heatmap_builder(trade_date: str, *, sector_type: str = "industry"):
+        calls.append({"trade_date": trade_date, "sector_type": sector_type})
+        return {"calls": len(calls), "trade_date": trade_date, "sector_type": sector_type}
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_heatmap_payload",
+        fake_heatmap_builder,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get("/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=industry")
+    second = client.get("/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=industry")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(calls) == 1
+    assert first.json() == second.json()
+
+
+def test_market_monitor_sectors_fund_flow_route_separates_cache_by_period(monkeypatch):
+    calls = []
+
+    def fake_fund_flow_builder(
+        trade_date: str,
+        *,
+        sector_type: str = "industry",
+        period: str = "1d",
+    ):
+        calls.append(
+            {
+                "trade_date": trade_date,
+                "sector_type": sector_type,
+                "period": period,
+            }
+        )
+        return {"calls": len(calls), "trade_date": trade_date, "sector_type": sector_type, "period": period}
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_fund_flow_payload",
+        fake_fund_flow_builder,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get("/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=industry&period=1d")
+    second = client.get("/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=industry&period=5d")
+    third = client.get("/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=industry&period=1d")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+    assert len(calls) == 2
+    assert first.json() == third.json()
+    assert first.json() != second.json()
+
+
+def test_market_monitor_sectors_detail_route_separates_cache_by_type(monkeypatch):
+    calls = []
+
+    def fake_detail_builder(
+        trade_date: str,
+        sector_id: str,
+        *,
+        sector_type: str = "industry",
+    ):
+        calls.append(
+            {
+                "trade_date": trade_date,
+                "sector_id": sector_id,
+                "sector_type": sector_type,
+            }
+        )
+        return {
+            "calls": len(calls),
+            "trade_date": trade_date,
+            "sector_id": sector_id,
+            "sector_type": sector_type,
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_detail_payload",
+        fake_detail_builder,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    first = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26&type=industry")
+    second = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26&type=concept")
+    third = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26&type=industry")
 
     assert first.status_code == 200
     assert second.status_code == 200
