@@ -23,6 +23,7 @@ from stock_research.dashboard.factors import (
     parse_factor_selection,
 )
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
+from stock_research.dashboard.market_overview_service import build_market_overview_payload
 from stock_research.dashboard.news import (
     load_asset_news,
     load_public_news_for_dashboard,
@@ -63,6 +64,9 @@ from stock_research.dashboard.scores import (
     search_assets,
 )
 from stock_research.dashboard.search import load_global_search
+from stock_research.dashboard.sector_detail_service import build_sector_detail_payload
+from stock_research.dashboard.sector_fund_flow_service import build_sector_fund_flow_payload
+from stock_research.dashboard.sector_heatmap_service import build_sector_heatmap_payload
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
 from stock_research.dashboard.shadow_analytics_review import load_shadow_analytics_review_summary
 from stock_research.dashboard.shadow_outcome_analytics import load_shadow_outcome_analytics_summary
@@ -215,6 +219,49 @@ def create_app() -> FastAPI:
                 trade_date=trade_date,
                 score_version=score_version,
                 top_n=top_n,
+            ),
+        )
+
+    @app.get("/api/market-monitor/overview")
+    def market_monitor_overview(trade_date: str):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_overview", trade_date),
+            lambda: build_market_overview_payload(trade_date),
+        )
+
+    @app.get("/api/market-monitor/sectors/heatmap")
+    def market_monitor_sector_heatmap(trade_date: str, type: str = "industry"):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_sector_heatmap", trade_date, type),
+            lambda: build_sector_heatmap_payload(
+                trade_date,
+                sector_type=type,
+            ),
+        )
+
+    @app.get("/api/market-monitor/sectors/fund-flow")
+    def market_monitor_sector_fund_flow(
+        trade_date: str,
+        type: str = "industry",
+        period: str = "1d",
+    ):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_sector_fund_flow", trade_date, type, period),
+            lambda: build_sector_fund_flow_payload(
+                trade_date,
+                sector_type=type,
+                period=period,
+            ),
+        )
+
+    @app.get("/api/market-monitor/sectors/{sector_id}")
+    def market_monitor_sector_detail(sector_id: str, trade_date: str):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_sector_detail", trade_date, sector_id),
+            lambda: build_sector_detail_payload(
+                trade_date,
+                sector_id,
+                sector_type="industry",
             ),
         )
 

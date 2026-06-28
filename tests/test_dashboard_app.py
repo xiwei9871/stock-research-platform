@@ -72,6 +72,265 @@ def test_overview_route_returns_payload(monkeypatch):
     assert response.json()["trade_date"] == "2026-05-29"
 
 
+def test_market_monitor_overview_route_returns_payload(monkeypatch):
+    captured = {}
+
+    def fake_build_market_overview_payload(trade_date: str):
+        captured["trade_date"] = trade_date
+        return {
+            "trade_date": trade_date,
+            "updated_at": "2026-06-26T15:31:00+08:00",
+            "source": "market_overview",
+            "data_status": "completed",
+            "warnings": [],
+            "indices": [
+                {
+                    "code": "SSE_COMPOSITE",
+                    "name": "上证指数",
+                    "close": 3123.45,
+                    "change_pct": 0.0079,
+                }
+            ],
+            "total_amount": 1280000000000.0,
+            "up_count": 3210,
+            "down_count": 1765,
+            "limit_up_count": 82,
+            "limit_down_count": 9,
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_market_overview_payload",
+        fake_build_market_overview_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/market-monitor/overview?trade_date=2026-06-26")
+
+    assert response.status_code == 200
+    assert captured == {"trade_date": "2026-06-26"}
+    assert response.json() == {
+        "trade_date": "2026-06-26",
+        "updated_at": "2026-06-26T15:31:00+08:00",
+        "source": "market_overview",
+        "data_status": "completed",
+        "warnings": [],
+        "indices": [
+            {
+                "code": "SSE_COMPOSITE",
+                "name": "上证指数",
+                "close": 3123.45,
+                "change_pct": 0.0079,
+            }
+        ],
+        "total_amount": 1280000000000.0,
+        "up_count": 3210,
+        "down_count": 1765,
+        "limit_up_count": 82,
+        "limit_down_count": 9,
+    }
+
+
+def test_market_monitor_sectors_heatmap_route_returns_payload(monkeypatch):
+    captured = {}
+
+    def fake_build_sector_heatmap_payload(trade_date: str, *, sector_type: str = "industry"):
+        captured["trade_date"] = trade_date
+        captured["sector_type"] = sector_type
+        return {
+            "trade_date": trade_date,
+            "updated_at": "2026-06-26T15:35:00+08:00",
+            "source": "market.industry_daily_bar",
+            "data_status": "completed",
+            "warnings": [],
+            "items": [
+                {
+                    "sector_id": "BK0428",
+                    "sector_name": "半导体",
+                    "sector_type": sector_type,
+                    "change_pct": 0.05,
+                    "amount": 88000000000.0,
+                    "up_count": 41,
+                    "down_count": 9,
+                    "main_net_inflow": None,
+                    "stock_count": 52,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_heatmap_payload",
+        fake_build_sector_heatmap_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=industry")
+
+    assert response.status_code == 200
+    assert captured == {"trade_date": "2026-06-26", "sector_type": "industry"}
+    assert response.json() == {
+        "trade_date": "2026-06-26",
+        "updated_at": "2026-06-26T15:35:00+08:00",
+        "source": "market.industry_daily_bar",
+        "data_status": "completed",
+        "warnings": [],
+        "items": [
+            {
+                "sector_id": "BK0428",
+                "sector_name": "半导体",
+                "sector_type": "industry",
+                "change_pct": 0.05,
+                "amount": 88000000000.0,
+                "up_count": 41,
+                "down_count": 9,
+                "main_net_inflow": None,
+                "stock_count": 52,
+            }
+        ],
+    }
+
+
+def test_market_monitor_sectors_fund_flow_route_returns_payload(monkeypatch):
+    captured = {}
+
+    def fake_build_sector_fund_flow_payload(
+        trade_date: str,
+        *,
+        sector_type: str = "industry",
+        period: str = "1d",
+    ):
+        captured["trade_date"] = trade_date
+        captured["sector_type"] = sector_type
+        captured["period"] = period
+        return {
+            "trade_date": trade_date,
+            "updated_at": None,
+            "source": "third_party_fund_flow_signal",
+            "data_status": "missing",
+            "warnings": [
+                "fund flow source is unavailable; returning empty directional signal payload"
+            ],
+            "inflow": [],
+            "outflow": [],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_fund_flow_payload",
+        fake_build_sector_fund_flow_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=industry&period=1d"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "trade_date": "2026-06-26",
+        "sector_type": "industry",
+        "period": "1d",
+    }
+    assert response.json() == {
+        "trade_date": "2026-06-26",
+        "updated_at": None,
+        "source": "third_party_fund_flow_signal",
+        "data_status": "missing",
+        "warnings": [
+            "fund flow source is unavailable; returning empty directional signal payload"
+        ],
+        "inflow": [],
+        "outflow": [],
+    }
+
+
+def test_market_monitor_sectors_detail_route_returns_payload(monkeypatch):
+    captured = {}
+
+    def fake_build_sector_detail_payload(
+        trade_date: str,
+        sector_id: str,
+        *,
+        sector_type: str = "industry",
+    ):
+        captured["trade_date"] = trade_date
+        captured["sector_id"] = sector_id
+        captured["sector_type"] = sector_type
+        return {
+            "trade_date": trade_date,
+            "updated_at": "2026-06-26T15:36:00+08:00",
+            "source": "market.industry_daily_bar",
+            "data_status": "partial",
+            "warnings": [
+                "fund flow fields are unavailable for sector detail; returning partial payload"
+            ],
+            "sector_id": sector_id,
+            "sector_name": "半导体",
+            "sector_type": sector_type,
+            "change_pct": 0.05,
+            "amount": 88000000000.0,
+            "up_count": 41,
+            "down_count": 9,
+            "main_net_inflow": None,
+            "main_net_inflow_ratio": None,
+            "stock_count": 52,
+            "leading_stocks": [
+                {
+                    "asset_id": "688256.SH",
+                    "name": "寒武纪",
+                    "change_pct": 0.125,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_sector_detail_payload",
+        fake_build_sector_detail_payload,
+        raising=False,
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/market-monitor/sectors/BK0428?trade_date=2026-06-26")
+
+    assert response.status_code == 200
+    assert captured == {
+        "trade_date": "2026-06-26",
+        "sector_id": "BK0428",
+        "sector_type": "industry",
+    }
+    assert response.json() == {
+        "trade_date": "2026-06-26",
+        "updated_at": "2026-06-26T15:36:00+08:00",
+        "source": "market.industry_daily_bar",
+        "data_status": "partial",
+        "warnings": [
+            "fund flow fields are unavailable for sector detail; returning partial payload"
+        ],
+        "sector_id": "BK0428",
+        "sector_name": "半导体",
+        "sector_type": "industry",
+        "change_pct": 0.05,
+        "amount": 88000000000.0,
+        "up_count": 41,
+        "down_count": 9,
+        "main_net_inflow": None,
+        "main_net_inflow_ratio": None,
+        "stock_count": 52,
+        "leading_stocks": [
+            {
+                "asset_id": "688256.SH",
+                "name": "寒武纪",
+                "change_pct": 0.125,
+            }
+        ],
+    }
+
+
 @pytest.mark.parametrize(
     ("route", "builder_name"),
     [
