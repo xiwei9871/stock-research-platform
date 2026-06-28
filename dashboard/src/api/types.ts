@@ -102,6 +102,42 @@ export type ReportLink = {
   trade_date: string | null;
 };
 
+export type DailyReviewLiteItem = {
+  label: string;
+  value: string;
+};
+
+export type DailyReviewLiteSection = {
+  key: string;
+  title: string;
+  status: 'ready' | 'partial' | 'empty' | 'failed' | string;
+  items: DailyReviewLiteItem[];
+};
+
+export type DailyReviewLiteArtifact = {
+  key: string;
+  label: string;
+  url?: string;
+  path?: string;
+  format?: string;
+};
+
+export type DailyReviewLitePayload = {
+  trade_date: string;
+  status: 'ready' | 'partial' | 'empty' | 'failed' | string;
+  run: {
+    run_id: string;
+    source: string;
+    report_type: string;
+    status: string;
+    updated_at?: string;
+  };
+  fallback: boolean;
+  sections: DailyReviewLiteSection[];
+  artifacts: DailyReviewLiteArtifact[];
+  warnings: string[];
+};
+
 export type DecisionEventRow = {
   review_date: string;
   review_session_id: string;
@@ -571,6 +607,73 @@ export type PlatformSummary = {
   factor_count: number;
   score_versions: string[];
   topn_preview: ScoreRow[];
+};
+
+export type MarketDataStatus = 'completed' | 'partial' | 'missing' | 'stale' | string;
+
+export type SectorType = 'industry' | 'concept';
+
+export type MarketOverviewIndex = {
+  code: string;
+  name: string;
+  close: number | null;
+  change_pct: number | null;
+};
+
+export type MarketOverview = {
+  trade_date: string;
+  updated_at: string | null;
+  source: string;
+  data_status: MarketDataStatus;
+  warnings: string[];
+  indices: MarketOverviewIndex[];
+  total_amount: number | null;
+  up_count: number | null;
+  down_count: number | null;
+  limit_up_count: number | null;
+  limit_down_count: number | null;
+};
+
+export type SectorHeatmapItem = {
+  sector_id: string;
+  sector_name: string;
+  sector_type: SectorType;
+  change_pct: number | null;
+  amount: number | null;
+  up_count: number | null;
+  down_count: number | null;
+  main_net_inflow: number | null;
+  stock_count: number | null;
+};
+
+export type SectorFundFlowItem = {
+  rank: number;
+  sector_id: string;
+  sector_name: string;
+  sector_type: SectorType;
+  change_pct: number | null;
+  amount: number | null;
+  main_net_inflow: number | null;
+  main_net_inflow_ratio: number | null;
+  leading_stock_name: string | null;
+};
+
+export type SectorDetail = {
+  trade_date: string;
+  updated_at: string | null;
+  source: string;
+  data_status: MarketDataStatus;
+  warnings: string[];
+  sector_id: string;
+  sector_name: string;
+  sector_type: SectorType;
+  change_pct: number | null;
+  amount: number | null;
+  up_count: number | null;
+  down_count: number | null;
+  main_net_inflow: number | null;
+  main_net_inflow_ratio: number | null;
+  leading_stocks: Array<{ asset_id: string; name: string; change_pct: number | null }> | [];
 };
 
 export type StrategyScoreAuditStrategySummary = {
@@ -1172,6 +1275,18 @@ export type ResearchReportItem = {
   industry_view: string;
   risk_summary: string;
   metadata: Record<string, unknown>;
+};
+
+export type ResearchReportDocument = {
+  report_id: string;
+  report_title: string;
+  has_pdf: boolean;
+  pdf_url: string;
+  source_url: string;
+  file_name: string;
+  public_access: boolean;
+  copyright_note: string;
+  warnings: string[];
 };
 
 export type ResearchReportResponse = {

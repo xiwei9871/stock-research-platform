@@ -9,6 +9,7 @@ import type {
   BacktestRunResult,
   CreateOperatorDecisionRequest,
   CreateOperatorDecisionResponse,
+  DailyReviewLitePayload,
   DashboardOverview,
   DecisionEventRow,
   DecisionOutcomeRow,
@@ -22,6 +23,12 @@ import type {
   FactorSelection,
   GlobalSearchResponse,
   MarketMonitorPayload,
+  MarketDataStatus,
+  MarketOverview,
+  SectorDetail,
+  SectorFundFlowItem,
+  SectorHeatmapItem,
+  SectorType,
   OutcomeAnalyticsRow,
   OpsSnapshot,
   OpsStageRow,
@@ -32,6 +39,7 @@ import type {
   PublicNewsCollectorStatus,
   PublicNewsRefreshResponse,
   PublicNewsResponse,
+  ResearchReportDocument,
   ResearchReportResponse,
   ResearchReportSummary,
   ReviewItemSnapshot,
@@ -119,6 +127,10 @@ type ReviewQueueParams = {
   lookbackDays?: number;
 };
 
+type DailyReviewLiteParams = {
+  tradeDate?: string;
+};
+
 type SnapshotFilters = {
   runId?: string;
   tradeDate?: string;
@@ -152,6 +164,49 @@ export async function fetchMarketMonitorEod(params: MarketMonitorParams = {}): P
   if (params.scoreVersion) searchParams.set('score_version', params.scoreVersion);
   searchParams.set('top_n', String(params.topN ?? 5));
   return getJson(`/api/market-monitor/eod?${searchParams.toString()}`);
+}
+
+export async function fetchMarketOverview(tradeDate: string): Promise<MarketOverview> {
+  return getJson(`/api/market-monitor/overview?trade_date=${encodeURIComponent(tradeDate)}`);
+}
+
+export async function fetchSectorHeatmap(
+  tradeDate: string,
+  sectorType: SectorType
+): Promise<{
+  trade_date: string;
+  updated_at: string | null;
+  source: string;
+  data_status: MarketDataStatus;
+  warnings: string[];
+  items: SectorHeatmapItem[];
+}> {
+  return getJson(
+    `/api/market-monitor/sectors/heatmap?trade_date=${encodeURIComponent(tradeDate)}&type=${encodeURIComponent(sectorType)}`
+  );
+}
+
+export async function fetchSectorFundFlow(
+  tradeDate: string,
+  sectorType: SectorType
+): Promise<{
+  trade_date: string;
+  updated_at: string | null;
+  source: string;
+  data_status: MarketDataStatus;
+  warnings: string[];
+  inflow: SectorFundFlowItem[];
+  outflow: SectorFundFlowItem[];
+}> {
+  return getJson(
+    `/api/market-monitor/sectors/fund-flow?trade_date=${encodeURIComponent(tradeDate)}&type=${encodeURIComponent(sectorType)}&period=1d`
+  );
+}
+
+export async function fetchSectorDetail(tradeDate: string, sectorId: string): Promise<SectorDetail> {
+  return getJson(
+    `/api/market-monitor/sectors/${encodeURIComponent(sectorId)}?trade_date=${encodeURIComponent(tradeDate)}`
+  );
 }
 
 export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<PublicNewsResponse> {
@@ -207,6 +262,10 @@ export async function fetchResearchReports(params: ResearchReportParams = {}): P
   return getJson(`/api/research-reports?${searchParams.toString()}`);
 }
 
+export async function fetchResearchReportDocument(reportId: string): Promise<ResearchReportDocument> {
+  return getJson(`/api/research-reports/${encodeURIComponent(reportId)}/document`);
+}
+
 export async function fetchAssetResearchReports(
   assetId: string,
   options: { limit?: number; lookbackDays?: number } = {}
@@ -237,6 +296,13 @@ export async function fetchReviewQueue(params: ReviewQueueParams = {}): Promise<
   if (params.lookbackDays !== undefined) searchParams.set('lookback_days', String(params.lookbackDays));
   const query = searchParams.toString();
   return getJson(query ? `/api/review-queue?${query}` : '/api/review-queue');
+}
+
+export async function fetchDailyReviewLite(params: DailyReviewLiteParams = {}): Promise<DailyReviewLitePayload> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  const query = searchParams.toString();
+  return getJson(query ? `/api/daily-review-lite?${query}` : '/api/daily-review-lite');
 }
 
 export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {

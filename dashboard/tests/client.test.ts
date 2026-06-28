@@ -11,6 +11,7 @@ import {
   fetchExperimentReplay,
   fetchGlobalSearch,
   fetchMarketMonitorEod,
+  fetchMarketOverview,
   fetchOutcomeAnalytics,
   fetchOpsSnapshot,
   fetchOpsStages,
@@ -22,6 +23,9 @@ import {
   fetchPublicNewsStatus,
   fetchResearchReportSummary,
   fetchResearchReports,
+  fetchSectorDetail,
+  fetchSectorFundFlow,
+  fetchSectorHeatmap,
   fetchEvidenceDigestSnapshot,
   fetchEvidenceDigestSnapshots,
   fetchReviewQueue,
@@ -219,6 +223,105 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/eod?trade_date=2026-06-10&top_n=3');
     expect(result.freshness.is_realtime).toBe(false);
+  });
+
+  it('fetches market overview for a trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-26',
+        updated_at: '2026-06-26T15:30:00+08:00',
+        source: 'mock',
+        data_status: 'completed',
+        warnings: [],
+        indices: [],
+        total_amount: 1,
+        up_count: 2,
+        down_count: 3,
+        limit_up_count: 4,
+        limit_down_count: 5
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchMarketOverview('2026-06-26');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/overview?trade_date=2026-06-26');
+    expect(result.data_status).toBe('completed');
+  });
+
+  it('fetches sector heatmap for a trade date and sector type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-26',
+        updated_at: '2026-06-26T15:30:00+08:00',
+        source: 'mock',
+        data_status: 'completed',
+        warnings: [],
+        items: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchSectorHeatmap('2026-06-26', 'industry');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=industry'
+    );
+    expect(result.items).toEqual([]);
+  });
+
+  it('fetches sector fund flow with the default 1d period', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-26',
+        updated_at: '2026-06-26T15:30:00+08:00',
+        source: 'mock',
+        data_status: 'completed',
+        warnings: [],
+        inflow: [],
+        outflow: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchSectorFundFlow('2026-06-26', 'concept');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/market-monitor/sectors/fund-flow?trade_date=2026-06-26&type=concept&period=1d'
+    );
+    expect(result.outflow).toEqual([]);
+  });
+
+  it('fetches sector detail for a selected sector', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-06-26',
+        updated_at: '2026-06-26T15:30:00+08:00',
+        source: 'mock',
+        data_status: 'completed',
+        warnings: [],
+        sector_id: 'BK0428',
+        sector_name: '银行',
+        sector_type: 'industry',
+        change_pct: 1.2,
+        amount: 12345,
+        up_count: 12,
+        down_count: 4,
+        main_net_inflow: 100,
+        main_net_inflow_ratio: 0.5,
+        leading_stocks: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchSectorDetail('2026-06-26', 'BK0428');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/sectors/BK0428?trade_date=2026-06-26');
+    expect(result.sector_id).toBe('BK0428');
   });
 
   it('fetches public news with db filters', async () => {
