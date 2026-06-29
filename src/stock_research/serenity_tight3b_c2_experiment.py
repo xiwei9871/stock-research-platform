@@ -197,6 +197,102 @@ def build_serenity_tight3b_c2_experiment_from_frames(
     return result
 
 
+def build_serenity_tight3b_c2_experiment_from_rank_frames(
+    *,
+    ranks: pd.DataFrame,
+    prices: pd.DataFrame,
+    market_exposure: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+    output_dir: str | Path | None = None,
+    universe_name: str = "strict_153",
+    top_n_values: list[int] | None = None,
+    rebalance_frequencies: list[str] | None = None,
+    protection_configs: list[dict[str, Any]] | None = None,
+    transaction_cost_bps: float = 20.0,
+    adjust_type: str = "hfq",
+) -> dict[str, Any]:
+    top_ns = _clean_top_n_values(top_n_values)
+    frequencies = _clean_frequencies(rebalance_frequencies)
+    protections = _clean_protection_configs(protection_configs)
+    normalized_prices = _normalize_prices(prices, start_date=start_date, end_date=end_date)
+    normalized_ranks = _normalize_rank_snapshots(ranks, start_date=start_date, end_date=end_date)
+    normalized_exposure = _normalize_market_exposure(market_exposure)
+
+    all_summary: list[pd.DataFrame] = []
+    all_equity: list[pd.DataFrame] = []
+    all_positions: list[pd.DataFrame] = []
+    all_trades: list[pd.DataFrame] = []
+    runs: dict[tuple[str, int, str], dict[str, pd.DataFrame]] = {}
+
+    for frequency in frequencies:
+        for top_n in top_ns:
+            for protection in protections:
+                run = _simulate_one_config(
+                    ranks=normalized_ranks,
+                    prices=normalized_prices,
+                    market_exposure=normalized_exposure,
+                    start_date=start_date,
+                    end_date=end_date,
+                    universe_name=universe_name,
+                    frequency=frequency,
+                    top_n=top_n,
+                    protection=protection,
+                    transaction_cost_bps=transaction_cost_bps,
+                )
+                all_summary.append(run["summary"])
+                all_equity.append(run["equity"])
+                all_positions.append(run["positions"])
+                all_trades.append(run["trades"])
+                runs[(frequency, top_n, protection.name)] = run
+
+    summary = _rank_summary(_concat(all_summary, SUMMARY_COLUMNS))
+    equity = _concat(all_equity)
+    positions = _concat(all_positions)
+    trades = _concat(all_trades)
+    report = _render_report(summary)
+    best = _best_run(summary, runs)
+    universe = _render_universe_definitions(pd.DataFrame())
+
+    result: dict[str, Any] = {
+        "summary": summary,
+        "equity": equity,
+        "positions": positions,
+        "trades": trades,
+        "best_equity": best.get("equity", pd.DataFrame()),
+        "best_positions": best.get("positions", pd.DataFrame()),
+        "best_trades": best.get("trades", pd.DataFrame()),
+        "universe_definitions": universe,
+        "report": report,
+        "paths": {},
+    }
+    if output_dir is not None:
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        paths = {
+            "summary": output / "serenity_tight3b_c2_matrix_summary.csv",
+            "equity": output / "serenity_tight3b_c2_equity.csv",
+            "positions": output / "serenity_tight3b_c2_positions.csv",
+            "trades": output / "serenity_tight3b_c2_trades.csv",
+            "best_equity": output / "serenity_tight3b_c2_best_equity.csv",
+            "best_positions": output / "serenity_tight3b_c2_best_positions.csv",
+            "best_trades": output / "serenity_tight3b_c2_best_trades.csv",
+            "universe_definitions": output / "serenity_universe_definitions.csv",
+            "report": output / "summary.md",
+        }
+        summary.to_csv(paths["summary"], index=False)
+        equity.to_csv(paths["equity"], index=False)
+        positions.to_csv(paths["positions"], index=False)
+        trades.to_csv(paths["trades"], index=False)
+        result["best_equity"].to_csv(paths["best_equity"], index=False)
+        result["best_positions"].to_csv(paths["best_positions"], index=False)
+        result["best_trades"].to_csv(paths["best_trades"], index=False)
+        universe.to_csv(paths["universe_definitions"], index=False)
+        paths["report"].write_text(report, encoding="utf-8")
+        result["paths"] = {key: str(value) for key, value in paths.items()}
+    return result
+
+
 def _simulate_one_config(
     *,
     ranks: pd.DataFrame,
@@ -379,6 +475,20 @@ def _normalize_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         if column not in frame.columns:
             frame[column] = ""
     return frame.dropna(subset=["asset_id", "first_hit_date"])
+
+
+def _normalize_rank_snapshots(ranks: pd.DataFrame, *, start_date: str, end_date: str) -> pd.DataFrame:
+    if ranks.empty:
+        return pd.DataFrame(columns=["trade_date", "asset_id", "bottleneck_rank", "bottleneck_score"])
+    frame = ranks.copy()
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    frame["asset_id"] = frame["asset_id"].astype(str)
+    frame["bottleneck_rank"] = pd.to_numeric(frame["bottleneck_rank"], errors="coerce")
+    frame["bottleneck_score"] = pd.to_numeric(frame["bottleneck_score"], errors="coerce")
+    frame = frame[frame["trade_date"].between(start_date, end_date)].copy()
+    frame = frame.dropna(subset=["trade_date", "asset_id", "bottleneck_rank", "bottleneck_score"])
+    frame["bottleneck_rank"] = frame["bottleneck_rank"].astype(int)
+    return frame.sort_values(["trade_date", "bottleneck_rank", "asset_id"]).reset_index(drop=True)
 
 
 def _normalize_prices(prices: pd.DataFrame, *, start_date: str, end_date: str) -> pd.DataFrame:

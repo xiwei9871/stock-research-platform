@@ -67,7 +67,7 @@ export function toVolumeData(points: BarPoint[]): VolumePoint[] {
       return {
         time,
         value: point.volume,
-        color: point.close >= point.open ? '#1f9d55' : '#d64545'
+        color: point.close >= point.open ? '#d64545' : '#1f9d55'
       };
     })
     .filter((point): point is VolumePoint => point !== null);

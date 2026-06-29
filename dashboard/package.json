@@ -5,23 +5,22 @@
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port ${PLAYWRIGHT_PORT:-5174}",
+    "dev": "vite --host 127.0.0.1 --port 5174",
     "build": "tsc && vite build",
     "test": "vitest run --exclude \"**/*.spec.ts\"",
-    "test:e2e": "CI=1 PLAYWRIGHT_PORT=4074 playwright test tests/app-smoke.spec.ts tests/multi-user-smoke.spec.ts tests/external-root-auth.spec.ts",
-    "test:e2e:lite": "CI=1 PLAYWRIGHT_PORT=4174 playwright test tests/daily-review-lite.spec.ts",
-    "test:e2e:dashboard-lite": "CI=1 PLAYWRIGHT_PORT=4274 playwright test tests/dashboard-lite-workspace.spec.ts"
+    "test:e2e": "playwright test tests/*.spec.ts"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "echarts": "^6.1.0",
     "lightweight-charts": "^5.0.0",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.0",
-    "@testing-library/react": "^16.0.0",
     "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",

@@ -1,18 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockDashboardApi(page: Page) {
-  await page.route('/api/auth/me', async (route) => {
-    await route.fulfill({
-      json: {
-        id: 1,
-        username: 'admin',
-        display_name: 'Admin User',
-        role: 'admin',
-        is_active: true
-      }
-    });
-  });
-
   await page.route('/api/dashboard/overview**', async (route) => {
     await route.fulfill({
       json: {
@@ -52,6 +40,254 @@ async function mockDashboardApi(page: Page) {
             path: '/reports/daily.html',
             format: 'html',
             trade_date: '2026-05-29'
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/platform/summary**', async (route) => {
+    await route.fulfill({
+      json: {
+        latest_market_date: '2026-06-08',
+        latest_score_date: '2026-06-08',
+        latest_factor_date: '2026-06-08',
+        market_asset_count: 5207,
+        score_asset_count: 5207,
+        factor_count: 43,
+        score_versions: ['manual_v1'],
+        topn_preview: [
+          {
+            trade_date: '2026-06-08',
+            asset_id: 'CN:SZ:300951',
+            rank: 1,
+            score_total: 89.9,
+            score_version: 'manual_v1',
+            score_components: {}
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/market-monitor/eod**', async (route) => {
+    await route.fulfill({
+      json: {
+        trade_date: '2026-06-10',
+        freshness: {
+          mode: 'eod',
+          label: 'Last completed trading day',
+          is_realtime: false,
+          latest_market_date: '2026-06-10',
+          latest_factor_date: '2026-06-08',
+          latest_score_date: '2026-06-08'
+        },
+        coverage: {
+          market_assets: 5195,
+          score_assets: 231,
+          factor_count: 41
+        },
+        market_breadth: {
+          advancers: 2400,
+          decliners: 2100,
+          limit_up: 42,
+          limit_down: 8,
+          advancing_ratio: 0.53,
+          turnover_change_pct: 0.04,
+          status: 'ok'
+        },
+        index_snapshot: [],
+        sector_strength: { strongest: [], weakest: [], status: 'ok' },
+        unusual_moves: [],
+        watchlist_alerts: [],
+        strategy_signal_summary: {
+          topn_preview_count: 1,
+          topn_preview: [],
+          risk_filter_counts: {}
+        },
+        generated_reports: [],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/public-news**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            news_id: 'news-1',
+            source: 'sina_finance',
+            source_channel: 'market',
+            category: 'market',
+            title: '600000 浦发银行公告',
+            summary: 'fixture news',
+            url: 'https://example.com/news/1',
+            published_at: '2026-06-10T09:30:00',
+            collected_at: '2026-06-10T09:31:00',
+            raw_id: 'news-1',
+            raw_payload: {},
+            status: 'active'
+          }
+        ],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/search?**', async (route) => {
+    await route.fulfill({
+      json: {
+        query: '600519',
+        groups: [
+          {
+            key: 'assets',
+            label: 'Stocks',
+            items: [
+              {
+                type: 'asset',
+                id: 'CN:SH:600519',
+                title: '贵州茅台',
+                subtitle: '600519 SH',
+                score: 95,
+                match_reason: 'Exact code match',
+                match_fields: ['symbol'],
+                metadata: { symbol: '600519', exchange: 'SH' },
+                target: { workspace: 'stock', asset_id: 'CN:SH:600519' }
+              }
+            ]
+          }
+        ],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/assets/search?**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            asset_id: 'CN:SH:600519',
+            symbol: '600519',
+            name: '贵州茅台',
+            exchange: 'SH',
+            board: null,
+            is_active: true
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/profile**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        canonical_asset_id: 'CN:SH:600519',
+        asset: {
+          asset_id: 'CN:SH:600519',
+          symbol: '600519',
+          name: '贵州茅台',
+          exchange: 'SH',
+          board: null,
+          is_active: true
+        },
+        bars: [{ time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }],
+        score: {
+          trade_date: '2026-05-29',
+          asset_id: 'CN:SH:600519',
+          rank: 1,
+          score_total: 91.2,
+          score_version: 'manual_v1',
+          score_components: {}
+        },
+        signals: [],
+        decisions: [],
+        outcomes: [],
+        factor_values: [],
+        coverage: {}
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/news**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        items: [],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/assets/*/research-reports**', async (route) => {
+    await route.fulfill({
+      json: {
+        asset_id: 'CN:SH:600519',
+        summary: { report_count_90d: 0 },
+        items: [],
+        warnings: []
+      }
+    });
+  });
+
+  await page.route('/api/strategies/catalog**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            strategy_id: 'manual_v1_topn_rotation',
+            strategy_name: 'Manual V1 TopN Rotation',
+            status: 'runnable',
+            description: 'TopN rotation',
+            factor_groups: ['momentum'],
+            signal_inputs: ['factor.stock_score_daily'],
+            default_parameters: { top_n: 20 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('/api/backtests/strategies**', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            strategy_id: 'lhb_shortline',
+            strategy_name: 'LHB Shortline Combo',
+            status: 'runnable',
+            description: 'LHB combo',
+            factor_groups: ['资金行为'],
+            signal_inputs: ['龙虎榜'],
+            default_parameters: { top_n: 20 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          },
+          {
+            strategy_id: 'mid_trend',
+            strategy_name: 'Mid Trend Combo',
+            status: 'runnable',
+            description: 'Mid trend combo',
+            factor_groups: ['趋势强度'],
+            signal_inputs: ['趋势'],
+            default_parameters: { top_n: 5 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
+          },
+          {
+            strategy_id: 'tech_bottleneck',
+            strategy_name: 'Tech Bottleneck Combo',
+            status: 'runnable',
+            description: 'Tech bottleneck combo',
+            factor_groups: ['技术形态'],
+            signal_inputs: ['技术'],
+            default_parameters: { top_n: 5 },
+            latest_evidence: '',
+            primary_action: 'Run backtest'
           }
         ]
       }
@@ -523,6 +759,50 @@ async function mockDashboardApi(page: Page) {
       }
     });
   });
+
+  await page.route('**/api/strategy-validation/runs', async (route) => {
+    await route.fulfill({
+      json: {
+        items: [
+          {
+            run_id: 'lhb_shortline:fixture:phase16',
+            strategy_id: 'lhb_shortline',
+            strategy_name: 'LHB Shortline',
+            strategy_version: 'phase16',
+            run_type: 'replay',
+            start_date: '2026-06-01',
+            end_date: '2026-06-08',
+            created_at: '2026-06-08T20:30:00+08:00',
+            benchmark: '000300.SH',
+            universe: 'a_share',
+            data_window: {},
+            cost_config: {},
+            slippage_config: {},
+            risk_config: {},
+            position_config: {},
+            source_artifact_paths: [],
+            summary_metrics: {},
+            warnings: ['fixture-backed run']
+          }
+        ]
+      }
+    });
+  });
+
+  await page.route('**/api/strategy-validation/runs/*/assets/*/replay?*', async (route) => {
+    await route.fulfill({
+      json: {
+        run: null,
+        asset_id: '000001.SZ',
+        bars: [{ time: '2026-06-03', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 }],
+        signals: [],
+        trades: [],
+        positions: [],
+        metrics: [],
+        artifacts: []
+      }
+    });
+  });
 }
 
 test('dashboard shell renders with mocked API responses', async ({ page }) => {
@@ -530,79 +810,31 @@ test('dashboard shell renders with mocked API responses', async ({ page }) => {
 
   await page.goto('/');
 
-  await expect(page.getByRole('navigation', { name: 'Dashboard workspaces' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByLabel('asset id')).toHaveValue('000001.SZ');
-  await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
-  await expect(
-    page
-      .locator('.inspector-section')
-      .filter({ has: page.getByRole('heading', { name: 'Asset Review' }) })
-      .getByText('Score')
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Decision History' })).toBeVisible();
-  await expect(
-    page
-      .locator('.inspector-section')
-      .filter({ has: page.getByRole('heading', { name: 'Decision History' }) })
-      .getByText('candidate')
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outcome History' })).toBeVisible();
-  await expect(page.getByText(/5D\s+\+20.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Outcome Analytics', exact: true })).toBeVisible();
-  await expect(page.getByText(/5D\s+\+15.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Experiment Proposals' })).toBeVisible();
-  await expect(page.getByText('Replay dashboard top-N')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Experiment Replay' })).toBeVisible();
-  await expect(page.getByText('passed_offline_replay')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Watchlist' })).toBeVisible();
-  const shadowWatchlistPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Watchlist' }) });
-  await expect(shadowWatchlistPanel.getByText('shadow_ready')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcomes' })).toBeVisible();
-  const shadowOutcomesPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcomes' }) });
-  await expect(shadowOutcomesPanel.getByText('complete', { exact: true })).toBeVisible();
-  await expect(shadowOutcomesPanel.getByText(/5D\s+\+50.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
-  const shadowOutcomeAnalyticsPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Outcome Analytics' }) });
-  await expect(shadowOutcomeAnalyticsPanel.getByText('trend_shadow')).toBeVisible();
-  await expect(shadowOutcomeAnalyticsPanel.getByText(/20D\s+\+12.0%/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
-  const shadowAnalyticsReviewPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Analytics Review' }) });
-  await expect(shadowAnalyticsReviewPanel.getByText('research_follow_up_candidate')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
-  const shadowReviewDecisionsPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Review Decisions' }) });
-  await expect(shadowReviewDecisionsPanel.getByText('open_research_follow_up')).toBeVisible();
-  await expect(shadowReviewDecisionsPanel.getByText('Create a separately scoped research follow-up.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Queue' })).toBeVisible();
-  const shadowFollowUpPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Follow-up Queue' }) });
-  await expect(shadowFollowUpPanel.getByText('collect_more_evidence')).toBeVisible();
-  await expect(shadowFollowUpPanel.getByText('Additional outcome or data-quality evidence')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Resolution' })).toBeVisible();
-  const shadowFollowUpResolutionPanel = page
-    .locator('.inspector-section')
-    .filter({ has: page.getByRole('heading', { name: 'Shadow Follow-up Resolution' }) });
-  await expect(shadowFollowUpResolutionPanel.getByText('stale_unresolved')).toBeVisible();
-  await expect(
-    shadowFollowUpResolutionPanel.getByText('Review whether requested evidence has been collected.')
-  ).toBeVisible();
+  await expect(page.getByText('A股策略研究')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  await expect(page.getByText('市场日期')).toBeVisible();
+  await expect(page.getByText('市场情绪日期')).toBeVisible();
+  const activeStrategies = page.getByRole('region', { name: '启用策略表现' });
+  await expect(activeStrategies.getByText('LHB Shortline Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Mid Trend Combo', { exact: true })).toBeVisible();
+  await expect(activeStrategies.getByText('Tech Bottleneck Combo', { exact: true })).toBeVisible();
+  await expect(page.getByText('Manual V1 TopN Rotation')).toHaveCount(0);
+  const strategySignals = page.getByRole('region', { name: '策略持仓状态' });
+  await expect(strategySignals).toBeVisible();
+  await expect(strategySignals.getByText(/最新持仓|持仓明细暂无/)).toHaveCount(3);
+  await expect(page.getByText('CN:SZ:300951')).toHaveCount(0);
   await expect(page.getByText(/promote/i)).toHaveCount(0);
   await expect(page.getByText(/trade/i)).toHaveCount(0);
   await expect(page.getByText(/write/i)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Daily Market Review/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
+  await page.getByRole('tab', { name: 'Validation Replay' }).click();
+  await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
+  await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
+
+  await page.getByLabel('Global search').fill('600519');
+  await page.getByRole('option', { name: /贵州茅台/ }).click();
+  await expect(page.getByRole('heading', { name: /Stock Workspace|贵州茅台/ })).toBeVisible();
 
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
@@ -614,15 +846,14 @@ test('dashboard shell stacks without horizontal overflow on mobile viewport', as
 
   await page.goto('/');
 
-  await expect(page.getByRole('navigation', { name: 'Dashboard workspaces' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '复盘队列' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Stock Research')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'TopN' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Asset Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Outcome Analytics' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Analytics Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Review Decisions' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Shadow Follow-up Resolution' })).toBeVisible();
+  await expect(page.getByText('A股策略研究')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+  await expect(page.getByText('启用策略表现')).toBeVisible();
+  await expect(page.getByText('策略持仓状态')).toBeVisible();
+  await page.getByRole('button', { name: 'Open Strategy Lab workspace' }).click();
+  await page.getByRole('tab', { name: 'Validation Replay' }).click();
+  await expect(page.getByRole('combobox', { name: 'strategy validation run' })).toContainText('LHB Shortline');
+  await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible();
   const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(horizontalOverflow).toBe(false);
 });

@@ -1,690 +1,347 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from stock_research.config import SETTINGS
-from stock_research.db import connect
+from stock_research.dashboard.daily_review_artifacts import (
+    load_daily_review_payload,
+    write_daily_review_artifacts,
+)
+from stock_research.dashboard.market_monitor import build_market_monitor_eod
+from stock_research.dashboard.platform import load_platform_summary
+from stock_research.dashboard.reports import load_report_links
+from stock_research.dashboard.review_queue import build_review_queue
+from stock_research.db import connect, fetch_all
+from stock_research.report_run_store import apply_report_run_schema, record_report_run
 
 
-REPORT_TYPE = "daily_review_v1"
-DEFAULT_FALLBACK_ROOT = Path("/Users/xiwei/stock_research/reports/daily_review")
-
-_ARTIFACT_REGISTRY: dict[str, dict[str, Any]] = {
-    "daily_review_json": {
-        "label": "Daily Review JSON",
-        "format": "json",
-        "content_type": "application/json",
-        "required": True,
-        "path": ("json_path",),
-    },
-    "daily_review_markdown": {
-        "label": "Daily Review Markdown",
-        "format": "md",
-        "content_type": "text/markdown",
-        "required": False,
-        "path": ("markdown_path",),
-    },
-    "manifest_json": {
-        "label": "Package Manifest",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("manifest_path",),
-    },
-    "operator_plan_template_json": {
-        "label": "Operator Plan Template",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("operator_plan_template_path",),
-    },
-    "market_state_json": {
-        "label": "Market State Evidence",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("evidence_paths", "market_state"),
-    },
-    "lhb_review_json": {
-        "label": "LHB Review Evidence",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("evidence_paths", "lhb_review"),
-    },
-    "mid_trend_review_json": {
-        "label": "Mid Trend Review Evidence",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("evidence_paths", "mid_trend_review"),
-    },
-    "technical_bottleneck_review_json": {
-        "label": "Technical Bottleneck Evidence",
-        "format": "json",
-        "content_type": "application/json",
-        "required": False,
-        "path": ("evidence_paths", "technical_bottleneck_review"),
-    },
-}
+SECTION_ORDER = [
+    ("data_readiness", "Data Readiness"),
+    ("market_review", "Market Review"),
+    ("strategy_summaries", "Strategy Summaries"),
+    ("holding_review", "Holding Review"),
+    ("operator_plan", "Operator Plan"),
+    ("next_day_checklist", "Next-day Checklist"),
+    ("artifacts", "Artifacts"),
+]
+DAILY_REVIEW_OUTPUT_ROOT = Path(SETTINGS.reports_root) / "daily_review_lite"
 
 
-def load_daily_review_lite(
-    trade_date: str,
+def build_daily_review_lite(
+    trade_date: str | None = None,
     *,
-    run_id: str | None = None,
-    reports_root: str | Path = DEFAULT_FALLBACK_ROOT,
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
-    selected_package = _resolve_package(
-        trade_date,
-        run_id=run_id,
-        reports_root=reports_root,
-        service=service,
-    )
-    if selected_package is None:
-        return {
-            "trade_date": trade_date,
-            "state": "empty",
-            "selected_run": None,
-            "summary": None,
-            "warnings": [],
-            "artifacts": [],
-            "missing_sources": [],
-            "sections": _empty_sections(),
-        }
+    summary = _safe_call(lambda: load_platform_summary(service=service), default={})
+    selected_trade_date = str(trade_date or summary.get("latest_market_date") or "")[:10]
+    if not selected_trade_date:
+        return _payload(
+            trade_date="",
+            status="empty",
+            run=_run_payload(None, source="no run selected"),
+            fallback=True,
+            sections=_empty_sections(),
+            artifacts=[],
+            warnings=["no display trade date available"],
+        )
 
-    artifact_detail, artifact_files = _artifact_health(selected_package["report_paths"])
-    selected_run = {
-        "run_id": selected_package["run_id"],
-        "report_type": REPORT_TYPE,
-        "status": selected_package["status"],
-        "updated_at": selected_package.get("updated_at"),
-        "source": selected_package["source"],
-        "artifact_health": _artifact_health_state(artifact_detail),
-        "artifact_health_detail": artifact_detail,
-    }
-
-    artifacts = [
-        {
-            "key": key,
-            "label": spec["label"],
-            "kind": spec["format"],
-            "required": spec["required"],
-            "available": artifact_detail[key] == "healthy",
-            "filename": artifact_files[key].name if artifact_files[key] is not None else None,
-            "content_type": spec["content_type"],
-            "url": _artifact_url(trade_date, key, selected_package["run_id"]),
-        }
-        for key, spec in _ARTIFACT_REGISTRY.items()
-    ]
-
-    core_artifact = artifact_files["daily_review_json"]
-    if artifact_detail["daily_review_json"] != "healthy" or core_artifact is None:
-        return {
-            "trade_date": trade_date,
-            "state": "failed",
-            "selected_run": selected_run,
-            "summary": None,
-            "warnings": [],
-            "artifacts": artifacts,
-            "missing_sources": [],
-            "sections": _empty_sections(),
-        }
-
-    try:
-        review = json.loads(core_artifact.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {
-            "trade_date": trade_date,
-            "state": "failed",
-            "selected_run": selected_run,
-            "summary": None,
-            "warnings": [],
-            "artifacts": artifacts,
-            "missing_sources": [],
-            "sections": _empty_sections(),
-        }
-    return _map_daily_review_lite(
-        trade_date=trade_date,
-        review=review,
-        selected_run=selected_run,
-        artifacts=artifacts,
-        metadata=selected_package.get("metadata") or {},
-    )
-
-
-def resolve_daily_review_lite_artifact(
-    trade_date: str,
-    key: str,
-    *,
-    run_id: str | None = None,
-    reports_root: str | Path = DEFAULT_FALLBACK_ROOT,
-    service: str = SETTINGS.research_service,
-) -> dict[str, Any] | None:
-    if key not in _ARTIFACT_REGISTRY:
-        raise ValueError(f"unknown artifact key: {key}")
-    selected_package = _resolve_package(
-        trade_date,
-        run_id=run_id,
-        reports_root=reports_root,
-        service=service,
-    )
-    if selected_package is None:
-        return None
-    artifact_path = _artifact_path(selected_package["report_paths"], key)
-    if artifact_path is None or not artifact_path.exists() or not artifact_path.is_file():
-        return None
-    spec = _ARTIFACT_REGISTRY[key]
-    return {
-        "key": key,
-        "label": spec["label"],
-        "kind": spec["format"],
-        "content_type": spec["content_type"],
-        "required": spec["required"],
-        "path": str(artifact_path),
-        "filename": artifact_path.name,
-        "trade_date": trade_date,
-        "run_id": selected_package["run_id"],
-        "source": selected_package["source"],
-    }
-
-
-def _select_latest_daily_review_run(
-    trade_date: str,
-    *,
-    service: str = SETTINGS.research_service,
-) -> dict[str, Any] | None:
-    sql = """
-    SELECT run_id, trade_date, report_type, status, report_paths, metadata, updated_at
-    FROM report.report_run
-    WHERE trade_date = %(trade_date)s
-      AND report_type = %(report_type)s
-      AND status IN ('success', 'partial', 'failed')
-    ORDER BY updated_at DESC
-    LIMIT 1
-    """
-    params = {"trade_date": trade_date, "report_type": REPORT_TYPE}
-    with connect(service) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchone()
-
-
-def _select_daily_review_run_by_id(
-    run_id: str,
-    *,
-    service: str = SETTINGS.research_service,
-) -> dict[str, Any] | None:
-    sql = """
-    SELECT run_id, trade_date, report_type, status, report_paths, metadata, updated_at
-    FROM report.report_run
-    WHERE run_id = %(run_id)s
-      AND report_type = %(report_type)s
-      AND status IN ('success', 'partial', 'failed')
-    LIMIT 1
-    """
-    params = {"run_id": run_id, "report_type": REPORT_TYPE}
-    with connect(service) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchone()
-
-
-def _resolve_package(
-    trade_date: str,
-    *,
-    run_id: str | None,
-    reports_root: str | Path,
-    service: str,
-) -> dict[str, Any] | None:
-    row = (
-        _select_daily_review_run_by_id(run_id, service=service)
-        if run_id
-        else _select_latest_daily_review_run(trade_date, service=service)
-    )
-    if row is not None:
-        if str(row.get("trade_date"))[:10] != trade_date:
-            row = None
-    if row is not None:
-        return {
-            "run_id": str(row["run_id"]),
-            "status": str(row.get("status") or "partial"),
-            "updated_at": _stringify_timestamp(row.get("updated_at")),
-            "report_paths": _normalize_report_paths(row.get("report_paths") or {}),
-            "metadata": row.get("metadata") or {},
-            "source": "report_run",
-        }
-    return _scan_fallback_package(trade_date, reports_root=reports_root)
-
-
-def _scan_fallback_package(trade_date: str, *, reports_root: str | Path) -> dict[str, Any] | None:
-    package_root = Path(reports_root) / trade_date
-    known_paths = {
-        "package_root": str(package_root),
-        "json_path": str(package_root / "daily_review.json"),
-        "markdown_path": str(package_root / "daily_review.md"),
-        "manifest_path": str(package_root / "manifest.json"),
-        "operator_plan_template_path": str(package_root / "operator_plan_template.json"),
-        "evidence_paths": {
-            "market_state": str(package_root / "evidence" / "market_state.json"),
-            "lhb_review": str(package_root / "evidence" / "lhb_review.json"),
-            "mid_trend_review": str(package_root / "evidence" / "mid_trend_review.json"),
-            "technical_bottleneck_review": str(
-                package_root / "evidence" / "technical_bottleneck_review.json"
-            ),
-        },
-    }
-    if not package_root.exists():
-        return None
-
-    status = "partial"
-    json_path = Path(known_paths["json_path"])
-    if json_path.exists():
+    run = _latest_registered_run(selected_trade_date, service=service)
+    if run is None:
         try:
-            payload = json.loads(json_path.read_text(encoding="utf-8"))
-            status = str(payload.get("status") or "partial")
-        except (OSError, json.JSONDecodeError):
-            status = "partial"
+            run = _generate_and_register_run(selected_trade_date, service=service)
+        except OSError:
+            run = None
+    if run is not None:
+        loaded_payload = _load_payload_from_run(run, selected_trade_date=selected_trade_date)
+        if loaded_payload is not None:
+            return loaded_payload
 
-    return {
-        "run_id": f"fallback:{trade_date}",
-        "status": status,
-        "updated_at": None,
-        "report_paths": known_paths,
-        "metadata": {},
-        "source": "fallback",
-    }
+    fallback_payload = _build_live_daily_review_payload(selected_trade_date, service=service)
+    fallback_payload["run"] = _run_payload(None, source="fallback")
+    fallback_payload["fallback"] = True
+    fallback_payload["status"] = _overall_status(sections=fallback_payload["sections"], fallback=True)
+    fallback_payload["warnings"] = ["no registered daily review run selected"]
+    return fallback_payload
 
 
-def _map_daily_review_lite(
+def _build_live_daily_review_payload(
+    selected_trade_date: str,
     *,
-    trade_date: str,
-    review: dict[str, Any],
-    selected_run: dict[str, Any],
-    artifacts: list[dict[str, Any]],
-    metadata: dict[str, Any],
+    service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
-    return {
-        "trade_date": trade_date,
-        "state": _top_level_state(selected_run["status"]),
-        "selected_run": selected_run,
-        "summary": _build_summary(review, selected_run),
-        "warnings": list(review.get("warnings") or []),
-        "sections": _map_sections(review),
-        "artifacts": artifacts,
-        "missing_sources": _map_missing_sources(review, metadata),
-    }
-
-
-def _map_sections(review: dict[str, Any]) -> dict[str, Any]:
-    warnings = list(review.get("warnings") or [])
-    next_day_plan = review.get("next_day_plan") or {}
-    market_review = review.get("market_review") or {}
-    holding_reviews = review.get("holding_reviews") or []
-    operator_plan = review.get("operator_plan") or {}
-    next_day_payload = _map_next_day_checklist(review)
-    return {
-        "data_readiness": {
-            "status": _section_status(review.get("status") or "partial"),
-            "warnings": warnings,
-            "sources": review.get("data_readiness") or {},
-        },
-        "market_review": {
-            "status": _payload_status(market_review),
-            "warnings": [],
-            "payload": market_review,
-        },
-        "strategy_summaries": {
-            "lhb": _map_strategy_section(review, "lhb", review.get("lhb_review") or {}),
-            "mid_trend": _map_strategy_section(
-                review,
-                "mid_trend",
-                review.get("mid_trend_review") or {},
-            ),
-            "technical_bottleneck": _map_strategy_section(
-                review,
-                "technical_bottleneck",
-                review.get("technical_bottleneck_review") or {},
-            ),
-        },
-        "holding_review": {
-            "status": _payload_status(holding_reviews),
-            "warnings": [],
-            "items": holding_reviews,
-        },
-        "operator_plan": {
-            "status": _payload_status(operator_plan),
-            "warnings": [],
-            "payload": operator_plan,
-        },
-        "next_day_checklist": {
-            "status": (
-                "partial"
-                if next_day_plan.get("data_warnings")
-                else _payload_status(next_day_payload.get("must_review_items") or [])
-            ),
-            "warnings": list(next_day_plan.get("data_warnings") or []),
-            **next_day_payload,
-        },
-    }
-
-
-def _map_strategy_section(
-    review: dict[str, Any],
-    strategy_id: str,
-    summary: dict[str, Any],
-) -> dict[str, Any]:
-    strategy_summary = (review.get("strategy_summaries") or {}).get(strategy_id) or {}
-    top_items = [
-        _map_strategy_item(item)
-        for item in (review.get("strategy_items") or [])
-        if item.get("strategy_id") == strategy_id
-    ]
-    warnings = _strategy_warnings(review, strategy_id)
-    base_status = _payload_status(strategy_summary or summary or top_items)
-    return {
-        "strategy_id": strategy_id,
-        "status": "partial" if warnings else base_status,
-        "warnings": warnings,
-        "summary": strategy_summary or summary,
-        "top_items": top_items,
-    }
-
-
-def _map_strategy_item(item: dict[str, Any]) -> dict[str, Any]:
-    mapped = {
-        "asset_id": item.get("asset_id"),
-        "ts_code": item.get("ts_code"),
-        "stock_name": item.get("stock_name"),
-        "item_type": item.get("item_type"),
-        "state": item.get("state"),
-        "action": item.get("action"),
-        "review_priority": item.get("review_priority"),
-    }
-    if item.get("reason"):
-        mapped["reason"] = _normalize_reason_detail(item["reason"])
-    return mapped
-
-
-def _map_next_day_checklist(review: dict[str, Any]) -> dict[str, Any]:
-    strategy_items = review.get("strategy_items") or []
-    must_review_items = []
-    for item in (review.get("next_day_plan") or {}).get("must_review_items") or []:
-        actions = _collect_actions(strategy_items, item.get("asset_id"), item.get("strategy_ids") or [])
-        review_priority = _derive_review_priority(
-            strategy_items,
-            item.get("asset_id"),
-            item.get("strategy_ids") or [],
-        )
-        must_review_items.append(
-            {
-                "asset_id": item.get("asset_id"),
-                "ts_code": item.get("ts_code"),
-                "stock_name": item.get("stock_name"),
-                "strategy_ids": list(item.get("strategy_ids") or []),
-                "reasons": [
-                    {
-                        "strategy_id": reason.get("strategy_id"),
-                        **_normalize_reason_entry(reason.get("reason")),
-                    }
-                    for reason in (item.get("reasons") or [])
-                ],
-                "actions": actions,
-                "review_priority": review_priority,
-            }
-        )
-    next_day_plan = review.get("next_day_plan") or {}
-    return {
-        "must_review_items": must_review_items,
-        "forbidden_actions": list(next_day_plan.get("forbidden_actions") or []),
-        "data_warnings": list(next_day_plan.get("data_warnings") or []),
-    }
-
-
-def _collect_actions(
-    strategy_items: list[dict[str, Any]],
-    asset_id: str | None,
-    strategy_ids: list[str],
-) -> list[str]:
-    actions: list[str] = []
-    for row in strategy_items:
-        if row.get("asset_id") != asset_id:
-            continue
-        if strategy_ids and row.get("strategy_id") not in strategy_ids:
-            continue
-        action = row.get("action")
-        if isinstance(action, str) and action and action not in actions:
-            actions.append(action)
-    return actions
-
-
-def _derive_review_priority(
-    strategy_items: list[dict[str, Any]],
-    asset_id: str | None,
-    strategy_ids: list[str],
-) -> str | None:
-    order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
-    priorities = []
-    for row in strategy_items:
-        if row.get("asset_id") != asset_id:
-            continue
-        if strategy_ids and row.get("strategy_id") not in strategy_ids:
-            continue
-        priority = row.get("review_priority")
-        if priority in order:
-            priorities.append(priority)
-    if not priorities:
-        return None
-    return min(priorities, key=lambda item: order[item])
-
-
-def _map_missing_sources(review: dict[str, Any], metadata: dict[str, Any]) -> list[dict[str, Any]]:
-    missing_sources = metadata.get("missing_sources")
-    if isinstance(missing_sources, list):
-        return [
-            {
-                "source_key": item.get("source_key") or item.get("source"),
-                "summary": item.get("summary"),
-                "affected_sections": list(item.get("affected_sections") or []),
-                "confidence_impact": item.get("confidence_impact"),
-            }
-            for item in missing_sources
-            if isinstance(item, dict)
-        ]
-    mapped = []
-    for source, details in (review.get("data_readiness") or {}).items():
-        status = str((details or {}).get("status") or "").lower()
-        if status == "missing":
-            blocking_modules = list((details or {}).get("blocking_modules") or [])
-            mapped.append(
-                {
-                    "source_key": source,
-                    "summary": (details or {}).get("summary"),
-                    "affected_sections": blocking_modules,
-                    "confidence_impact": (details or {}).get("confidence_impact"),
-                }
-            )
-    return mapped
-
-
-def _artifact_health(report_paths: dict[str, Any]) -> tuple[dict[str, str], dict[str, Path | None]]:
-    detail: dict[str, str] = {}
-    files: dict[str, Path | None] = {}
-    for key in _ARTIFACT_REGISTRY:
-        path = _artifact_path(report_paths, key)
-        files[key] = path
-        detail[key] = "healthy" if path and path.exists() and path.is_file() else "missing"
-    return detail, files
-
-
-def _artifact_health_state(detail: dict[str, str]) -> str:
-    if detail.get("daily_review_json") != "healthy":
-        return "missing"
-    if any(value != "healthy" for value in detail.values()):
-        return "invalid"
-    return "healthy"
-
-
-def _artifact_path(report_paths: dict[str, Any], key: str) -> Path | None:
-    current: Any = report_paths
-    for part in _ARTIFACT_REGISTRY[key]["path"]:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(part)
-    if not isinstance(current, str) or not current:
-        return None
-    return Path(current)
-
-
-def _normalize_report_paths(report_paths: dict[str, Any]) -> dict[str, Any]:
-    return json.loads(json.dumps(report_paths))
-
-
-def _stringify_timestamp(value: Any) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
-def _top_level_state(status: str) -> str:
-    normalized = str(status or "").lower()
-    if normalized == "success":
-        return "ready"
-    if normalized == "partial":
-        return "partial"
-    if normalized == "failed":
-        return "failed"
-    return "empty"
-
-
-def _section_status(status: str) -> str:
-    normalized = str(status or "").lower()
-    if normalized == "success":
-        return "success"
-    if normalized == "partial":
-        return "partial"
-    return "empty"
-
-
-def _empty_sections() -> dict[str, Any]:
-    return {
-        "data_readiness": {"status": "empty", "warnings": [], "sources": {}},
-        "market_review": {"status": "empty", "warnings": [], "payload": {}},
-        "strategy_summaries": {
-            "lhb": {
-                "strategy_id": "lhb",
-                "status": "empty",
-                "warnings": [],
-                "summary": {},
-                "top_items": [],
-            },
-            "mid_trend": {
-                "strategy_id": "mid_trend",
-                "status": "empty",
-                "warnings": [],
-                "summary": {},
-                "top_items": [],
-            },
-            "technical_bottleneck": {
-                "strategy_id": "technical_bottleneck",
-                "status": "empty",
-                "warnings": [],
-                "summary": {},
-                "top_items": [],
-            },
-        },
-        "holding_review": {"status": "empty", "warnings": [], "items": []},
-        "operator_plan": {"status": "empty", "warnings": [], "payload": {}},
-        "next_day_checklist": {
-            "status": "empty",
-            "warnings": [],
-            "must_review_items": [],
-            "forbidden_actions": [],
-            "data_warnings": [],
-        },
-    }
-
-
-def _build_summary(review: dict[str, Any], selected_run: dict[str, Any]) -> dict[str, Any]:
-    strategy_summaries = review.get("strategy_summaries") or {}
-    next_day_plan = review.get("next_day_plan") or {}
-    return {
-        "market_status": (review.get("market_review") or {}).get("emotion_state"),
-        "overall_position_bias": (review.get("operator_plan") or {}).get("overall_position_bias"),
-        "lhb_conclusion": (strategy_summaries.get("lhb") or {}).get("conclusion"),
-        "mid_trend_conclusion": (strategy_summaries.get("mid_trend") or {}).get("conclusion"),
-        "technical_bottleneck_conclusion": (
-            strategy_summaries.get("technical_bottleneck") or {}
-        ).get("conclusion"),
-        "must_review_asset_ids": [
-            item.get("asset_id")
-            for item in (next_day_plan.get("must_review_items") or [])
-            if item.get("asset_id")
-        ],
-        "warning_count": len(review.get("warnings") or []),
-    }
-
-
-def _strategy_warnings(review: dict[str, Any], strategy_id: str) -> list[str]:
-    mapping = {
-        "lhb": {"lhb_review", "next_day_plan"},
-        "mid_trend": {"mid_trend_review"},
-        "technical_bottleneck": {"technical_bottleneck_review"},
-    }
-    targets = mapping.get(strategy_id) or set()
-    warnings: list[str] = []
-    for item in _map_missing_sources(review, {}):
-        affected = set(item.get("affected_sections") or [])
-        if affected & targets:
-            summary = item.get("summary")
-            if isinstance(summary, str) and summary:
-                warnings.append(f"source_missing:{item['source_key']}")
-    return warnings
-
-
-def _artifact_url(trade_date: str, key: str, run_id: str) -> str:
-    return (
-        f"/api/daily-review-lite/artifacts/{trade_date}/{key}"
-        f"?run_id={quote(run_id, safe='')}"
+    summary = _safe_call(lambda: load_platform_summary(service=service), default={})
+    market = _safe_call(lambda: build_market_monitor_eod(trade_date=selected_trade_date), default={})
+    queue = _safe_call(lambda: build_review_queue(trade_date=selected_trade_date, limit=10), default={})
+    reports = _safe_call(lambda: load_report_links(selected_trade_date), default=[])
+    artifacts = _artifact_payloads(None, reports)
+    sections = _sections(
+        selected_trade_date=selected_trade_date,
+        summary=summary,
+        market=market,
+        queue=queue,
+        artifacts=artifacts,
+        run={},
+    )
+    return _payload(
+        trade_date=selected_trade_date,
+        status=_overall_status(sections=sections, fallback=False),
+        run=_run_payload(None, source="generated"),
+        fallback=False,
+        sections=sections,
+        artifacts=artifacts,
+        warnings=[],
     )
 
 
-def _payload_status(payload: Any) -> str:
-    if isinstance(payload, dict):
-        return "success" if payload else "empty"
-    if isinstance(payload, list):
-        return "success" if payload else "empty"
-    return "success" if payload not in (None, "") else "empty"
+def _generate_and_register_run(
+    trade_date: str,
+    *,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any] | None:
+    payload = _build_live_daily_review_payload(trade_date, service=service)
+    output_dir = DAILY_REVIEW_OUTPUT_ROOT / trade_date
+    paths = write_daily_review_artifacts(payload, output_dir)
+    apply_report_run_schema(service=service)
+    run_id = record_report_run(
+        trade_date=trade_date,
+        report_type="daily_review_lite",
+        report_paths=paths,
+        metadata={"status": payload.get("status", ""), "fallback": False},
+        service=service,
+    )
+    return {
+        "run_id": run_id,
+        "trade_date": trade_date,
+        "report_type": "daily_review_lite",
+        "status": "completed",
+        "report_paths": paths,
+        "metadata": {"status": payload.get("status", ""), "fallback": False},
+        "updated_at": "",
+    }
 
 
-def _normalize_reason_entry(reason: Any) -> dict[str, Any]:
-    if isinstance(reason, dict):
-        return {
-            "summary": _reason_summary(reason),
-            "detail": reason.get("detail"),
-        }
-    if reason is None:
-        return {"summary": None, "detail": None}
-    return {"summary": str(reason), "detail": None}
+def _load_payload_from_run(run: dict[str, Any], *, selected_trade_date: str) -> dict[str, Any] | None:
+    report_paths = run.get("report_paths") if isinstance(run.get("report_paths"), dict) else {}
+    json_path = _resolve_report_path(_json_report_path(report_paths), selected_trade_date=selected_trade_date)
+    if not json_path:
+        return None
+    try:
+        payload = load_daily_review_payload(json_path)
+    except Exception:
+        return None
+    reports = _safe_call(lambda: load_report_links(selected_trade_date), default=[])
+    payload["trade_date"] = str(payload.get("trade_date") or selected_trade_date)
+    payload["run"] = _run_payload(run, source="report_run")
+    payload["fallback"] = False
+    payload["artifacts"] = _artifact_payloads(run, reports)
+    payload["warnings"] = list(payload.get("warnings") or [])
+    return payload
 
 
-def _normalize_reason_detail(reason: Any) -> dict[str, Any]:
-    entry = _normalize_reason_entry(reason)
-    return {key: value for key, value in entry.items() if value is not None}
+def _latest_registered_run(trade_date: str, *, service: str) -> dict[str, Any] | None:
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(
+                conn,
+                """
+                SELECT
+                    run_id,
+                    trade_date::text AS trade_date,
+                    report_type,
+                    status,
+                    report_paths,
+                    metadata,
+                    updated_at::text AS updated_at
+                FROM report.report_run
+                WHERE trade_date = %s
+                  AND report_type IN ('daily_review_lite', 'daily_review', 'daily')
+                ORDER BY
+                    CASE report_type
+                        WHEN 'daily_review_lite' THEN 1
+                        WHEN 'daily_review' THEN 2
+                        ELSE 3
+                    END,
+                    updated_at DESC
+                LIMIT 1
+                """,
+                [trade_date],
+            )
+    except Exception:
+        return None
+    return dict(rows[0]) if rows else None
 
 
-def _reason_summary(reason: dict[str, Any]) -> str | None:
-    summary = reason.get("summary")
-    if isinstance(summary, str) and summary:
-        return summary
-    setup = reason.get("setup")
-    if isinstance(setup, str) and setup:
-        return setup
-    for value in reason.values():
+def _sections(
+    *,
+    selected_trade_date: str,
+    summary: dict[str, Any],
+    market: dict[str, Any],
+    queue: dict[str, Any],
+    artifacts: list[dict[str, Any]],
+    run: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    market_items = [
+        _item("复盘日", selected_trade_date),
+        _item("市场日期", summary.get("latest_market_date")),
+        _item("因子日期", summary.get("latest_factor_date")),
+        _item("评分日期", summary.get("latest_score_date")),
+    ]
+    breadth = market.get("market_breadth") if isinstance(market.get("market_breadth"), dict) else {}
+    market_emotion = market.get("market_emotion") if isinstance(market.get("market_emotion"), dict) else {}
+    emotion_summary = market_emotion.get("summary") if isinstance(market_emotion.get("summary"), dict) else {}
+    limit_performance = (
+        market_emotion.get("limit_performance")
+        if isinstance(market_emotion.get("limit_performance"), dict)
+        else {}
+    )
+    market_review_items = [
+        _item("市场情绪日期", market.get("trade_date") or selected_trade_date),
+        _item("上涨/下跌", _join_counts(breadth.get("advancers"), breadth.get("decliners"))),
+        _item(
+            "涨停/跌停",
+            _join_counts(limit_performance.get("limit_up_count"), limit_performance.get("limit_down_count")),
+        ),
+        _item("综合强度", _format_score(emotion_summary.get("score"))),
+    ]
+    groups = queue.get("groups") if isinstance(queue.get("groups"), list) else []
+    strategy_items = [
+        _item(str(group.get("label") or group.get("bucket") or "策略"), f"{group.get('count', 0)} 只")
+        for group in groups
+    ]
+    artifact_items = [_item(artifact["label"], artifact.get("url") or artifact.get("path")) for artifact in artifacts]
+    return [
+        _section("data_readiness", "Data Readiness", "ready" if summary else "partial", market_items),
+        _section("market_review", "Market Review", "ready" if market else "partial", market_review_items),
+        _section("strategy_summaries", "Strategy Summaries", "ready" if strategy_items else "empty", strategy_items),
+        _section("holding_review", "Holding Review", "partial" if groups else "empty", []),
+        _section("operator_plan", "Operator Plan", "ready" if run else "empty", []),
+        _section("next_day_checklist", "Next-day Checklist", "ready" if run else "empty", []),
+        _section("artifacts", "Artifacts", "ready" if artifact_items else "empty", artifact_items),
+    ]
+
+
+def _artifact_payloads(run: dict[str, Any] | None, reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    artifacts: list[dict[str, Any]] = []
+    report_paths = run.get("report_paths") if run and isinstance(run.get("report_paths"), dict) else {}
+    for key, value in report_paths.items():
+        if not value:
+            continue
+        resolved = _resolve_report_path(str(value), selected_trade_date=str(run.get("trade_date") or ""))
+        path_text = str(resolved or value)
+        artifacts.append({"key": str(key), "label": str(key).replace("_", " "), "url": path_text, "path": path_text})
+    for report in reports:
+        path = str(report.get("path") or "")
+        if not path:
+            continue
+        key = f"report:{path}"
+        if any(artifact["key"] == key or artifact.get("path") == path for artifact in artifacts):
+            continue
+        artifacts.append(
+            {
+                "key": key,
+                "label": str(report.get("title") or path),
+                "url": path,
+                "path": path,
+                "format": str(report.get("format") or ""),
+            }
+        )
+    return artifacts
+
+
+def _json_report_path(report_paths: dict[str, Any]) -> str:
+    for key in ("json_path", "daily_review_json_path"):
+        value = report_paths.get(key)
         if isinstance(value, str) and value:
             return value
-    return None
+    return ""
+
+
+def _resolve_report_path(path_text: str, *, selected_trade_date: str) -> str:
+    if not path_text:
+        return ""
+    path = Path(path_text)
+    if path.exists():
+        return str(path)
+    candidate = DAILY_REVIEW_OUTPUT_ROOT / selected_trade_date / path.name
+    if candidate.exists():
+        return str(candidate)
+    return path_text
+
+
+def _overall_status(*, sections: list[dict[str, Any]], fallback: bool) -> str:
+    if not sections:
+        return "empty"
+    statuses = {str(section.get("status") or "") for section in sections}
+    if "failed" in statuses:
+        return "failed"
+    if statuses == {"empty"}:
+        return "empty"
+    if fallback or "partial" in statuses or "empty" in statuses:
+        return "partial"
+    return "ready"
+
+
+def _run_payload(run: dict[str, Any] | None, *, source: str) -> dict[str, Any]:
+    if not run:
+        return {"run_id": "", "source": source, "report_type": "daily_review_lite", "status": ""}
+    return {
+        "run_id": str(run.get("run_id") or ""),
+        "source": source,
+        "report_type": str(run.get("report_type") or ""),
+        "status": str(run.get("status") or ""),
+        "updated_at": str(run.get("updated_at") or ""),
+    }
+
+
+def _empty_sections() -> list[dict[str, Any]]:
+    return [_section(key, title, "empty", []) for key, title in SECTION_ORDER]
+
+
+def _section(key: str, title: str, status: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"key": key, "title": title, "status": status, "items": items}
+
+
+def _item(label: str, value: Any) -> dict[str, Any]:
+    return {"label": label, "value": "" if value is None else str(value)}
+
+
+def _join_counts(left: Any, right: Any) -> str:
+    if left is None and right is None:
+        return ""
+    return f"{left or 0} / {right or 0}"
+
+
+def _format_score(value: Any) -> str:
+    try:
+        return f"{float(value):.1f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _payload(
+    *,
+    trade_date: str,
+    status: str,
+    run: dict[str, Any],
+    fallback: bool,
+    sections: list[dict[str, Any]],
+    artifacts: list[dict[str, Any]],
+    warnings: list[str],
+) -> dict[str, Any]:
+    return {
+        "trade_date": trade_date,
+        "status": status,
+        "run": run,
+        "fallback": fallback,
+        "sections": sections,
+        "artifacts": artifacts,
+        "warnings": warnings,
+    }
+
+
+def _safe_call(callable_obj, *, default):
+    try:
+        return callable_obj()
+    except Exception:
+        return default

@@ -11,14 +11,14 @@ describe('chart data conversion', () => {
     expect(result).toEqual([{ time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5 }]);
   });
 
-  it('maps volume color from close versus open', () => {
+  it('maps volume color from close versus open using A-share red-up green-down colors', () => {
     const result = toVolumeData([
       { time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 },
       { time: '2026-05-29', open: 10, high: 10.5, low: 9, close: 9.5, volume: 200, amount: 1000 }
     ]);
 
-    expect(result[0].color).toBe('#1f9d55');
-    expect(result[1].color).toBe('#d64545');
+    expect(result[0].color).toBe('#d64545');
+    expect(result[1].color).toBe('#1f9d55');
   });
 
   it('converts intraday timestamps to Unix seconds', () => {
@@ -41,6 +41,6 @@ describe('chart data conversion', () => {
     ]);
 
     expect(candles).toEqual([{ time: '2026-05-29', open: 11, high: 12, low: 10, close: 11.5 }]);
-    expect(volumes).toEqual([{ time: '2026-05-29', value: 200, color: '#1f9d55' }]);
+    expect(volumes).toEqual([{ time: '2026-05-29', value: 200, color: '#d64545' }]);
   });
 });

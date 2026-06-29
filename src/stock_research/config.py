@@ -1,5 +1,28 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _candidate_roots() -> list[Path]:
+    repo_root = _repo_root()
+    if repo_root.parent.name == ".worktrees":
+        return [repo_root.parent.parent, repo_root]
+    return [repo_root]
+
+
+def _path_from_env(env_name: str, default_name: str) -> Path:
+    raw = os.environ.get(env_name, "").strip()
+    if raw:
+        return Path(raw)
+    for root in _candidate_roots():
+        candidate = root / default_name
+        if candidate.exists():
+            return candidate
+    return _candidate_roots()[0] / default_name
 
 
 @dataclass(frozen=True)
@@ -10,20 +33,9 @@ class Settings:
     default_market: str = "CN_A"
     default_currency: str = "CNY"
     selection_top_n: int = 20
-    dashboard_session_cookie_name: str = os.getenv(
-        "STOCK_RESEARCH_SESSION_COOKIE",
-        "stock_research_session",
-    )
-    dashboard_csrf_cookie_name: str = os.getenv(
-        "STOCK_RESEARCH_CSRF_COOKIE",
-        "stock_research_csrf",
-    )
-    dashboard_session_ttl_hours: int = int(
-        os.getenv("STOCK_RESEARCH_SESSION_TTL_HOURS", "168")
-    )
-    dashboard_secure_cookies: bool = (
-        os.getenv("STOCK_RESEARCH_SECURE_COOKIES", "0") == "1"
-    )
+    repo_root: Path = field(default_factory=_repo_root)
+    output_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_OUTPUT_ROOT", "outputs"))
+    reports_root: Path = field(default_factory=lambda: _path_from_env("STOCK_RESEARCH_REPORTS_ROOT", "reports"))
 
 
 SETTINGS = Settings()
