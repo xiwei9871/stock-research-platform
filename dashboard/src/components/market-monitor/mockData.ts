@@ -73,6 +73,8 @@ export type MarketMonitorMockData = {
   sectorDetails: Record<string, SectorDetail>;
 };
 
+export const DEFAULT_MARKET_MONITOR_TRADE_DATE = '2026-06-12';
+
 function fallbackUpdatedAt(tradeDate: string, updatedAt?: string | null) {
   return updatedAt?.trim() || `${tradeDate} 15:10`;
 }
@@ -94,7 +96,7 @@ function inferSymbol(assetId: string) {
 }
 
 export const mockMarketOverview: MarketOverview = {
-  tradeDate: '2026-06-12',
+  tradeDate: DEFAULT_MARKET_MONITOR_TRADE_DATE,
   updatedAt: '2026-06-12 15:10',
   dataStatus: 'completed',
   totalAmount: 1526000000000,
@@ -111,7 +113,7 @@ export const mockMarketOverview: MarketOverview = {
   ]
 };
 
-export function createEmptyMarketOverview(tradeDate = mockMarketOverview.tradeDate): MarketOverview {
+export function createEmptyMarketOverview(tradeDate = DEFAULT_MARKET_MONITOR_TRADE_DATE): MarketOverview {
   return {
     tradeDate,
     updatedAt: fallbackUpdatedAt(tradeDate),
@@ -154,7 +156,7 @@ export function hasSectorFundFlowContent(ranking: SectorFundFlowSet | null | und
 }
 
 export function mapApiMarketOverview(overview: ApiMarketOverview): MarketOverview {
-  const tradeDate = overview.trade_date?.trim() || mockMarketOverview.tradeDate;
+  const tradeDate = overview.trade_date?.trim() || DEFAULT_MARKET_MONITOR_TRADE_DATE;
   return {
     tradeDate,
     updatedAt: fallbackUpdatedAt(tradeDate, overview.updated_at),
@@ -214,7 +216,7 @@ export function mapApiSectorFundFlow(items: {
 }
 
 export function mapApiSectorDetail(detail: ApiSectorDetail): SectorDetail {
-  const tradeDate = detail.trade_date?.trim() || mockMarketOverview.tradeDate;
+  const tradeDate = detail.trade_date?.trim() || DEFAULT_MARKET_MONITOR_TRADE_DATE;
   return {
     ...mapApiSectorSnapshot(detail),
     updatedAt: fallbackUpdatedAt(tradeDate, detail.updated_at),

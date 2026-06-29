@@ -429,7 +429,7 @@ describe('MarketMonitorWorkspace', () => {
     expect(screen.queryByRole('button', { name: '查看板块详情 API半导体' })).not.toBeInTheDocument();
   });
 
-  it('keeps the compact emotion panel visible even when main overview, heatmap, and ranking requests are empty or failing', async () => {
+  it('keeps the compact emotion panel visible without showing mock market data when main requests are empty or failing', async () => {
     apiMocks.fetchMarketOverview.mockRejectedValueOnce(new Error('overview failed'));
     apiMocks.fetchSectorHeatmap.mockResolvedValueOnce(
       makeHeatmapResponse('industry', {
@@ -439,28 +439,7 @@ describe('MarketMonitorWorkspace', () => {
     );
     apiMocks.fetchSectorFundFlow.mockRejectedValueOnce(new Error('fund flow failed'));
 
-    renderWorkspace({
-      mockDataOverride: {
-        marketOverview: {
-          tradeDate: '2026-06-12',
-          updatedAt: '2026-06-12 15:10',
-          dataStatus: 'missing',
-          totalAmount: null,
-          upCount: null,
-          downCount: null,
-          limitUpCount: null,
-          limitDownCount: null,
-          indices: []
-        },
-        industryHeatmap: [],
-        conceptHeatmap: [],
-        sectorFundFlow: {
-          industry: { inflow: [], outflow: [] },
-          concept: { inflow: [], outflow: [] }
-        },
-        sectorDetails: {}
-      }
-    });
+    renderWorkspace();
 
     expect(screen.getByText('暂无板块热力图数据')).toBeInTheDocument();
     expect(screen.getByText('暂无板块资金排行数据')).toBeInTheDocument();
@@ -471,6 +450,10 @@ describe('MarketMonitorWorkspace', () => {
       expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-12', 'industry');
       expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 });
     });
+    expect(screen.getByText('暂无市场总览数据')).toBeInTheDocument();
+    expect(screen.queryByText('3168.44')).not.toBeInTheDocument();
+    expect(screen.queryByText('15260.00亿')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '从热力图摘要查看 半导体' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '市场情绪摘要' })).toBeInTheDocument();
     expect(screen.getByText('综合强度')).toBeInTheDocument();
   });
@@ -497,8 +480,8 @@ describe('MarketMonitorWorkspace', () => {
       expect(treemapSeries?.data).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            sectorId: 'industry-semiconductor',
-            sectorName: '半导体'
+            sectorId: 'industry-api-chip',
+            sectorName: 'API半导体'
           })
         ])
       );
@@ -514,7 +497,7 @@ describe('MarketMonitorWorkspace', () => {
       renderWorkspace();
 
       expect(echartsMocks.init).not.toHaveBeenCalled();
-      expect(resizeObserverMocks.instances).toHaveLength(1);
+      await waitFor(() => expect(resizeObserverMocks.instances).toHaveLength(1));
 
       chartSize.setSize(960, 360);
       resizeObserverMocks.instances[0]?.callback([], {} as ResizeObserver);

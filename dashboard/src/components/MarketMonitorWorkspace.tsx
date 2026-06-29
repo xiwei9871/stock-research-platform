@@ -14,12 +14,9 @@ import { SectorDetailPanel } from './market-monitor/SectorDetailPanel';
 import { SectorFundRankingPanel } from './market-monitor/SectorFundRankingPanel';
 import { SectorHeatmapPanel } from './market-monitor/SectorHeatmapPanel';
 import {
-  buildMarketMonitorMockData,
+  DEFAULT_MARKET_MONITOR_TRADE_DATE,
+  createEmptyMarketOverview,
   createEmptySectorFundFlow,
-  mockMarketOverview,
-  hasMarketOverviewContent,
-  hasSectorFundFlowContent,
-  hasSectorHeatmapContent,
   mapApiMarketOverview,
   mapApiSectorDetail,
   mapApiSectorFundFlow,
@@ -32,51 +29,20 @@ import {
   type SectorType
 } from './market-monitor/mockData';
 
-type MarketMonitorMockDataOverride = {
-  marketOverview?: Partial<MarketOverview>;
-  industryHeatmap?: SectorHeatmapItem[];
-  conceptHeatmap?: SectorHeatmapItem[];
-  sectorFundFlow?: Partial<Record<SectorType, Partial<SectorFundFlowSet>>>;
-  sectorDetails?: Record<string, SectorDetail>;
-};
-
 type MarketMonitorWorkspaceProps = {
   initialTradeDate?: string;
   initialMonitorTab?: SectorType;
   initialAssetId?: string;
   onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
-  mockDataOverride?: MarketMonitorMockDataOverride;
 };
 
-const DEFAULT_TRADE_DATE = mockMarketOverview.tradeDate;
-
-function mergeMockData(baseData: MarketMonitorMockData, override?: MarketMonitorMockDataOverride): MarketMonitorMockData {
-  return {
-    marketOverview: {
-      ...baseData.marketOverview,
-      ...(override?.marketOverview ?? {})
-    },
-    industryHeatmap: override?.industryHeatmap ?? baseData.industryHeatmap,
-    conceptHeatmap: override?.conceptHeatmap ?? baseData.conceptHeatmap,
-    sectorFundFlow: {
-      industry: {
-        inflow: override?.sectorFundFlow?.industry?.inflow ?? baseData.sectorFundFlow.industry.inflow,
-        outflow: override?.sectorFundFlow?.industry?.outflow ?? baseData.sectorFundFlow.industry.outflow
-      },
-      concept: {
-        inflow: override?.sectorFundFlow?.concept?.inflow ?? baseData.sectorFundFlow.concept.inflow,
-        outflow: override?.sectorFundFlow?.concept?.outflow ?? baseData.sectorFundFlow.concept.outflow
-      }
-    },
-    sectorDetails: override?.sectorDetails ?? baseData.sectorDetails
-  };
-}
+const DEFAULT_TRADE_DATE = DEFAULT_MARKET_MONITOR_TRADE_DATE;
 
 function createFallbackDetail(item: SectorHeatmapItem, tradeDate: string): SectorDetail {
   return {
     ...item,
     updatedAt: `${tradeDate} 15:10`,
-    summary: '该板块详情仍处于 mock-first 阶段，后续会补齐成分股与更细的资金解释。',
+    summary: '该板块详情暂未返回完整成分股数据，后续会补齐更细的资金解释。',
     leadingStocks: []
   };
 }
@@ -97,8 +63,7 @@ export function MarketMonitorWorkspace({
   initialTradeDate,
   initialMonitorTab,
   initialAssetId,
-  onOpenAsset,
-  mockDataOverride
+  onOpenAsset
 }: MarketMonitorWorkspaceProps = {}) {
   const initialDate = initialTradeDate ?? DEFAULT_TRADE_DATE;
   const [tradeDate, setTradeDate] = useState(initialTradeDate ?? '');
@@ -237,14 +202,23 @@ export function MarketMonitorWorkspace({
   }, [emotionRequestVersion, tradeDate]);
 
   const workspaceData = useMemo(
-    () => mergeMockData(buildMarketMonitorMockData(activeTradeDate), mockDataOverride),
-    [activeTradeDate, mockDataOverride]
+    () => ({
+      marketOverview: createEmptyMarketOverview(activeTradeDate),
+      industryHeatmap: [],
+      conceptHeatmap: [],
+      sectorFundFlow: {
+        industry: createEmptySectorFundFlow(),
+        concept: createEmptySectorFundFlow()
+      },
+      sectorDetails: {}
+    }),
+    [activeTradeDate]
   );
   const fallbackHeatmap = sectorType === 'industry' ? workspaceData.industryHeatmap : workspaceData.conceptHeatmap;
   const fallbackRanking = workspaceData.sectorFundFlow[sectorType] ?? createEmptySectorFundFlow();
-  const activeOverview = overviewData && hasMarketOverviewContent(overviewData) ? overviewData : workspaceData.marketOverview;
-  const activeHeatmap = heatmapData && hasSectorHeatmapContent(heatmapData) ? heatmapData : fallbackHeatmap;
-  const activeRanking = rankingData && hasSectorFundFlowContent(rankingData) ? rankingData : fallbackRanking;
+  const activeOverview = overviewData ?? workspaceData.marketOverview;
+  const activeHeatmap = heatmapData ?? fallbackHeatmap;
+  const activeRanking = rankingData ?? fallbackRanking;
   const detailFallbackData = useMemo(
     () => ({
       ...workspaceData,
@@ -280,7 +254,7 @@ export function MarketMonitorWorkspace({
       <header className="workspace-header workspace-header-row">
         <div>
           <h1>Market Monitor</h1>
-          <p className="muted">mock-first 的板块与资金复盘工作区，主舞台聚焦板块强弱、资金方向和可操作细节。</p>
+          <p className="muted">盘后板块与资金复盘工作区，主舞台聚焦板块强弱、资金方向和可操作细节。</p>
         </div>
         <button type="button" aria-label="Load Latest EOD" onClick={handleLoadLatest}>
           最新收盘日
