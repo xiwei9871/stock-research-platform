@@ -35,10 +35,12 @@ function normalizeTime(input: string): Time | null {
   return Math.floor(milliseconds / 1000) as UTCTimestamp;
 }
 
-export function toCandlestickData(points: BarPoint[]): CandlePoint[] {
+type TimeResolver = (point: BarPoint, index: number) => Time | null;
+
+export function toCandlestickData(points: BarPoint[], resolveTime: TimeResolver = (point) => normalizeTime(point.time)): CandlePoint[] {
   return points
-    .map((point) => {
-      const time = normalizeTime(point.time);
+    .map((point, index) => {
+      const time = resolveTime(point, index);
 
       if (time === null || point.open === null || point.high === null || point.low === null || point.close === null) {
         return null;
@@ -55,10 +57,10 @@ export function toCandlestickData(points: BarPoint[]): CandlePoint[] {
     .filter((point): point is CandlePoint => point !== null);
 }
 
-export function toVolumeData(points: BarPoint[]): VolumePoint[] {
+export function toVolumeData(points: BarPoint[], resolveTime: TimeResolver = (point) => normalizeTime(point.time)): VolumePoint[] {
   return points
-    .map((point) => {
-      const time = normalizeTime(point.time);
+    .map((point, index) => {
+      const time = resolveTime(point, index);
 
       if (time === null || point.volume === null || point.open === null || point.close === null) {
         return null;
@@ -67,7 +69,7 @@ export function toVolumeData(points: BarPoint[]): VolumePoint[] {
       return {
         time,
         value: point.volume,
-        color: point.close >= point.open ? '#1f9d55' : '#d64545'
+        color: point.close >= point.open ? '#d64545' : '#1f9d55'
       };
     })
     .filter((point): point is VolumePoint => point !== null);

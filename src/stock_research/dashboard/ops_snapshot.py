@@ -7,7 +7,15 @@ from zoneinfo import ZoneInfo
 from stock_research.config import SETTINGS
 from stock_research.daily_health import summarize_operational_health
 from stock_research.db import connect, fetch_all
-from stock_research.intraday_pipeline import load_intraday_status
+
+try:
+    from stock_research.intraday_pipeline import load_intraday_status
+except ModuleNotFoundError as exc:
+    if exc.name != "stock_research.intraday_pipeline":
+        raise
+
+    def load_intraday_status(service: str, run_date: date) -> dict[str, Any]:
+        return {}
 
 
 _PENDING_STATUSES = {"pending", "skipped", "not_started"}
@@ -22,7 +30,7 @@ def build_internal_ops_snapshot(
     service: str = SETTINGS.research_service,
     trade_date: date | None = None,
 ) -> dict[str, Any]:
-    target_date = trade_date or date.today()
+    target_date = trade_date or _default_ops_snapshot_trade_date(service)
     status_context = _load_pipeline_status_context(service, target_date)
     data_status = status_context["data_status"]
     intraday = load_intraday_status(service, target_date)
@@ -56,10 +64,10 @@ def build_public_snapshot(
     service: str = SETTINGS.research_service,
     trade_date: date | None = None,
 ) -> dict[str, Any]:
-    internal = build_internal_ops_snapshot(service=service, trade_date=trade_date)
+    target_date = trade_date or _default_ops_snapshot_trade_date(service)
+    internal = build_internal_ops_snapshot(service=service, trade_date=target_date)
     readiness = internal["readiness"]
     preview = internal["snapshot_preview"]
-    target_date = trade_date or date.today()
     status = _public_status_from_readiness(readiness, target_date, preview)
     latest_ready_trade_date = readiness.get("latest_ready_trade_date")
     return {
@@ -74,6 +82,33 @@ def build_public_snapshot(
         "factor_gate_summary": _public_factor_gate_summary(preview.get("factor_gate_summary")),
         "notes": [],
     }
+
+
+def load_ops_stage_details(
+    service: str = SETTINGS.research_service,
+    trade_date: date | None = None,
+) -> list[dict[str, Any]]:
+    resolved_trade_date = trade_date or _latest_ops_stage_trade_date(service)
+    if resolved_trade_date is None:
+        return []
+    sql = """
+    SELECT stage, status, started_at, updated_at, error_summary
+    FROM ops.daily_pipeline_job
+    WHERE trade_date = %s
+    ORDER BY stage, job_name, source
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [resolved_trade_date])
+    return [
+        {
+            "stage": row.get("stage"),
+            "status": row.get("status"),
+            "started_at": row.get("started_at").isoformat() if row.get("started_at") else None,
+            "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
+            "error_summary": row.get("error_summary"),
+        }
+        for row in rows
+    ]
 
 
 def _load_pipeline_status_context(service: str, trade_date: date) -> dict[str, Any]:
@@ -119,33 +154,6 @@ def _load_pipeline_status_context(service: str, trade_date: date) -> dict[str, A
         "latest_available_trade_date": latest_row["trade_date"].isoformat() if latest_row else active_row["trade_date"].isoformat(),
         "matches_requested_trade_date": requested_row is not None,
     }
-
-
-def load_ops_stage_details(
-    service: str = SETTINGS.research_service,
-    trade_date: date | None = None,
-) -> list[dict[str, Any]]:
-    resolved_trade_date = trade_date or _latest_ops_stage_trade_date(service)
-    if resolved_trade_date is None:
-        return []
-    sql = """
-    SELECT stage, status, started_at, updated_at, error_summary
-    FROM ops.daily_pipeline_job
-    WHERE trade_date = %s
-    ORDER BY stage, job_name, source
-    """
-    with connect(service) as conn:
-        rows = fetch_all(conn, sql, [resolved_trade_date])
-    return [
-        {
-            "stage": row.get("stage"),
-            "status": row.get("status"),
-            "started_at": row.get("started_at").isoformat() if row.get("started_at") else None,
-            "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
-            "error_summary": row.get("error_summary"),
-        }
-        for row in rows
-    ]
 
 
 def _build_run_window(
@@ -241,14 +249,14 @@ def _build_readiness(
     pipeline_status = str(data_status.get("pipeline_status") or "NOT_READY")
     latest_ready_trade_date = data_status.get("latest_ready_trade_date")
     failed_jobs = data_status.get("failed_jobs") or []
-    blocking_issue_count = len(failed_jobs)
-    if health_block.get("stalled"):
+    ready_for_dashboard = status_context.get("matches_requested_trade_date") and pipeline_status in {"READY", "DEGRADED_READY"}
+    blocking_issue_count = 0 if ready_for_dashboard else len(failed_jobs)
+    if health_block.get("stalled") and not ready_for_dashboard:
         blocking_issue_count += 1
     if health_block.get("has_alerts"):
         blocking_issue_count += max(1, int(health_block.get("alert_count") or 0))
     if pipeline.get("overall_status") in {"blocked", "not_started"}:
         blocking_issue_count += 1
-    ready_for_dashboard = status_context.get("matches_requested_trade_date") and pipeline_status in {"READY", "DEGRADED_READY"}
     ready_for_publication = ready_for_dashboard and blocking_issue_count == 0 and not health_block.get("has_alerts")
     if pipeline_status == "READY" and status_context.get("matches_requested_trade_date"):
         ready_status = "ready"
@@ -332,6 +340,12 @@ def _build_intervention(
 
 
 def _market_state_preview(intraday: dict[str, Any]) -> dict[str, Any]:
+    market_state = intraday.get("market_state")
+    if isinstance(market_state, dict):
+        return {
+            "state": market_state.get("state"),
+            "score": market_state.get("score"),
+        }
     market_sentiment = intraday.get("market_sentiment") or {}
     if isinstance(market_sentiment, dict):
         return {
@@ -416,11 +430,29 @@ def _public_has_release_payload(preview: dict[str, Any]) -> bool:
 
 
 def _internal_coverage_summary(data_status: dict[str, Any]) -> dict[str, Any]:
+    core = _build_public_core_coverage_summary(data_status)
     return {
+        "core": core,
         "pipeline_status": data_status.get("pipeline_status"),
         "failed_jobs": len(data_status.get("failed_jobs") or []),
         "warnings": data_status.get("warnings") or [],
     }
+
+
+def _build_public_core_coverage_summary(data_status: dict[str, Any]) -> str:
+    parts = []
+    for label, key in (
+        ("daily", "daily_status"),
+        ("minute5", "minute5_status"),
+        ("deps", "deps_status"),
+    ):
+        status = _normalize_status(data_status.get(key))
+        if status:
+            parts.append(f"{label} {status}")
+    pipeline_status = _normalize_status(data_status.get("pipeline_status"))
+    if pipeline_status and pipeline_status not in {"ready", "degraded_ready"} and not parts:
+        return f"pipeline {pipeline_status}"
+    return ", ".join(parts)
 
 
 def _fetch_pipeline_status_row(service: str, trade_date: date) -> dict[str, Any] | None:
@@ -448,6 +480,14 @@ def _fetch_latest_pipeline_status_row(service: str) -> dict[str, Any] | None:
     with connect(service) as conn:
         rows = fetch_all(conn, sql)
     return rows[0] if rows else None
+
+
+def _default_ops_snapshot_trade_date(service: str) -> date:
+    latest_row = _fetch_latest_pipeline_status_row(service)
+    latest_trade_date = latest_row.get("trade_date") if latest_row else None
+    if isinstance(latest_trade_date, date):
+        return latest_trade_date
+    return _today_in_timezone("Asia/Shanghai")
 
 
 def _latest_ops_stage_trade_date(service: str) -> date | None:
@@ -521,17 +561,15 @@ def _now_in_timezone(tz_name: str) -> str:
     return datetime.now(ZoneInfo(tz_name)).isoformat(timespec="seconds")
 
 
+def _today_in_timezone(tz_name: str) -> date:
+    return datetime.now(ZoneInfo(tz_name)).date()
+
+
 def _market_state_has_signal(market_state: Any) -> bool:
     if not isinstance(market_state, dict):
         return False
     for value in market_state.values():
-        if value is None:
-            continue
-        if value == "":
-            continue
-        if value == []:
-            continue
-        if value == {}:
+        if value in (None, "", [], {}):
             continue
         return True
     return False

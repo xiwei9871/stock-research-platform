@@ -251,6 +251,10 @@ from stock_research.serenity_tight3b_c2_experiment import (
 from stock_research.serenity_source_backed_evidence_fill import (
     run_serenity_source_backed_evidence_fill,
 )
+from stock_research.strategy_daily_eod import (
+    check_strategy_daily_eod_dependencies,
+    run_strategy_daily_eod,
+)
 from stock_research.tech_bottleneck_evidence_workflow import (
     run_tech_bottleneck_evidence_workflow,
 )
@@ -3276,7 +3280,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=lambda value: parse_int_list(value, "--max-replacement-values"),
         default="1,2",
     )
-    mid_trend_drawdown_throttle_scan.add_argument("--top-n", type=int, default=5)
+    mid_trend_drawdown_throttle_scan.add_argument("--top-n", type=int, default=10)
     mid_trend_drawdown_throttle_scan.add_argument("--buffer-rank", type=int, default=10)
     mid_trend_drawdown_throttle_scan.add_argument("--max-weekly-replacements", type=int, default=2)
     mid_trend_drawdown_throttle_scan.add_argument("--transaction-cost-bps", type=float, default=20.0)
@@ -3611,6 +3615,140 @@ def build_parser() -> argparse.ArgumentParser:
     daily_review_report.add_argument("--apply-report-run-schema", action="store_true")
     daily_review_report.add_argument("--record-run", action="store_true")
 
+    mid_trend_round2 = subparsers.add_parser("mid-trend-round2-optimize")
+    mid_trend_round2.add_argument("--start-date", required=True)
+    mid_trend_round2.add_argument("--train-end-date", required=True)
+    mid_trend_round2.add_argument("--end-date", required=True)
+    mid_trend_round2.add_argument(
+        "--output-dir",
+        default="/Users/xiwei/stock_research/outputs/research/mid_trend_round2",
+    )
+
+    mid_trend_soft_ownership = subparsers.add_parser("mid-trend-soft-ownership-optimize")
+    mid_trend_soft_ownership.add_argument("--start-date", default="2025-01-01")
+    mid_trend_soft_ownership.add_argument("--end-date", default="2026-06-12")
+    mid_trend_soft_ownership.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    mid_trend_soft_ownership.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    mid_trend_soft_ownership.add_argument(
+        "--baseline-reference-dir",
+        default="outputs/research/current_mid_trend_strategy_v1_20250101_20260612_retest",
+    )
+    mid_trend_soft_ownership.add_argument("--output-dir", required=True)
+    mid_trend_soft_ownership.add_argument(
+        "--variants",
+        nargs="*",
+        default=[
+            "baseline",
+            "entry_soft_weight_v1",
+            "ownership_hold_v1",
+            "partial_exit_v1",
+            "combined_soft_ownership_v1",
+        ],
+    )
+
+    midtrend_quality_confirmed = subparsers.add_parser("midtrend-quality-confirmed-experiment")
+    midtrend_quality_confirmed.add_argument("--start-date", default="2025-01-01")
+    midtrend_quality_confirmed.add_argument("--end-date", default="2026-06-12")
+    midtrend_quality_confirmed.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    midtrend_quality_confirmed.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    midtrend_quality_confirmed.add_argument("--output-dir", required=True)
+
+    midtrend_topn_pool_reentry = subparsers.add_parser("midtrend-topn-pool-reentry-sweep")
+    midtrend_topn_pool_reentry.add_argument("--start-date", default="2025-01-01")
+    midtrend_topn_pool_reentry.add_argument("--end-date", default="2026-06-12")
+    midtrend_topn_pool_reentry.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    midtrend_topn_pool_reentry.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    midtrend_topn_pool_reentry.add_argument("--output-dir", required=True)
+
+    midtrend_top10_reentry = subparsers.add_parser("midtrend-top10-reentry-experiment")
+    midtrend_top10_reentry.add_argument("--start-date", default="2025-01-01")
+    midtrend_top10_reentry.add_argument("--end-date", default="2026-06-12")
+    midtrend_top10_reentry.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    midtrend_top10_reentry.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    midtrend_top10_reentry.add_argument("--output-dir", required=True)
+    midtrend_top10_reentry_gating = subparsers.add_parser("midtrend-top10-reentry-gating-experiment")
+    midtrend_top10_reentry_gating.add_argument("--start-date", default="2025-01-01")
+    midtrend_top10_reentry_gating.add_argument("--end-date", default="2026-06-12")
+    midtrend_top10_reentry_gating.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    midtrend_top10_reentry_gating.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    midtrend_top10_reentry_gating.add_argument("--output-dir", required=True)
+    midtrend_post_exit_fundamental_attribution = subparsers.add_parser(
+        "midtrend-post-exit-fundamental-attribution"
+    )
+    midtrend_post_exit_fundamental_attribution.add_argument("--start-date", default="2025-01-01")
+    midtrend_post_exit_fundamental_attribution.add_argument("--end-date", default="2026-06-12")
+    midtrend_post_exit_fundamental_attribution.add_argument("--output-dir", required=True)
+    midtrend_pit_fundamental_attribution = subparsers.add_parser("midtrend-pit-fundamental-attribution")
+    midtrend_pit_fundamental_attribution.add_argument("--output-dir", required=True)
+    midtrend_pit_attribution_canonical = subparsers.add_parser(
+        "midtrend-pit-attribution-canonical-and-daily-review-lite"
+    )
+    midtrend_pit_attribution_canonical.add_argument("--output-dir", required=True)
+    midtrend_badbuy_unknown_and_review_priority = subparsers.add_parser(
+        "midtrend-badbuy-unknown-and-review-priority"
+    )
+    midtrend_badbuy_unknown_and_review_priority.add_argument("--output-dir", required=True)
+    midtrend_daily_review_lite_and_badbuy_denominator = subparsers.add_parser(
+        "midtrend-daily-review-lite-and-badbuy-denominator"
+    )
+    midtrend_daily_review_lite_and_badbuy_denominator.add_argument("--output-dir", required=True)
+    midtrend_fundamental_interaction_badbuy = subparsers.add_parser(
+        "midtrend-fundamental-interaction-badbuy-research"
+    )
+    midtrend_fundamental_interaction_badbuy.add_argument("--output-dir", required=True)
+    midtrend_top10_stability_validation = subparsers.add_parser(
+        "midtrend-top10-stability-validation"
+    )
+    midtrend_top10_stability_validation.add_argument("--output-dir", required=True)
+    midtrend_position_sizing_industry_research = subparsers.add_parser(
+        "midtrend-position-sizing-industry-research"
+    )
+    midtrend_position_sizing_industry_research.add_argument("--output-dir", required=True)
+    midtrend_post_exit_daily_review = subparsers.add_parser("midtrend-post-exit-daily-review")
+    midtrend_post_exit_daily_review.add_argument("--trade-date", required=True)
+    midtrend_post_exit_daily_review.add_argument("--output-dir", required=True)
+    midtrend_build_pit_fundamental_features = subparsers.add_parser("midtrend-build-pit-fundamental-features")
+    midtrend_build_pit_fundamental_features.add_argument("--start-date", required=True)
+    midtrend_build_pit_fundamental_features.add_argument("--end-date", required=True)
+    midtrend_build_pit_fundamental_features.add_argument("--output-dir", required=True)
+
+    strategy_daily_eod = subparsers.add_parser("run-strategy-daily-eod")
+    strategy_daily_eod.add_argument("--trade-date", required=True)
+    strategy_daily_eod.add_argument(
+        "--output-root",
+        default="/Users/xiwei/stock_research/outputs/research/strategy_daily_eod",
+    )
+
     trend_lifecycle_v1 = subparsers.add_parser("trend-lifecycle-v1")
     trend_lifecycle_v1.add_argument("--start-date", required=True)
     trend_lifecycle_v1.add_argument("--end-date", required=True)
@@ -3723,6 +3861,24 @@ def build_parser() -> argparse.ArgumentParser:
     current_mid_trend_strategy_v1.add_argument(
         "--output-dir",
         default="outputs/research/current_mid_trend_strategy_v1",
+    )
+    current_mid_trend_strategy_v2_top10_candidate = subparsers.add_parser(
+        "current-mid-trend-strategy-v2-top10-candidate-backtest"
+    )
+    current_mid_trend_strategy_v2_top10_candidate.add_argument("--start-date", required=True)
+    current_mid_trend_strategy_v2_top10_candidate.add_argument("--end-date", required=True)
+    current_mid_trend_strategy_v2_top10_candidate.add_argument(
+        "--regime-path",
+        default="outputs/research/market_regime_confirmation_v1_tight3b_bt100_20230103_20260612_retest/market_regime_confirmation_daily.csv",
+    )
+    current_mid_trend_strategy_v2_top10_candidate.add_argument(
+        "--funnel-detail-path",
+        default="outputs/research/mid_trend_watch_funnel_20250101_20260612_retest/mid_trend_watch_funnel_detail.csv",
+    )
+    current_mid_trend_strategy_v2_top10_candidate.add_argument("--adjust-type", default="hfq")
+    current_mid_trend_strategy_v2_top10_candidate.add_argument(
+        "--output-dir",
+        default="outputs/research/current_mid_trend_strategy_v2_top10_candidate",
     )
 
     industry_focus_backtest = subparsers.add_parser("industry-focus-backtest")
@@ -4926,6 +5082,25 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         print(f"current_mid_trend_strategy_v1|equity_rows|{len(result['equity'])}")
         print(f"current_mid_trend_strategy_v1|trade_rows|{len(result['trades'])}")
         print(f"current_mid_trend_strategy_v1|protection_events|{len(result['protection_events'])}")
+        return 0
+    elif args.command == "current-mid-trend-strategy-v2-top10-candidate-backtest":
+        from stock_research.current_mid_trend_strategy_v2_top10_candidate import (
+            run_current_mid_trend_strategy_v2_top10_candidate_backtest,
+        )
+
+        result = run_current_mid_trend_strategy_v2_top10_candidate_backtest(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+            adjust_type=args.adjust_type,
+        )
+        print(f"current_mid_trend_strategy_v2_top10_candidate|summary|{result['paths'].get('summary')}")
+        print(f"current_mid_trend_strategy_v2_top10_candidate|equity|{result['paths'].get('equity')}")
+        print(f"current_mid_trend_strategy_v2_top10_candidate|holdings|{result['paths'].get('holdings')}")
+        print(f"current_mid_trend_strategy_v2_top10_candidate|trades|{result['paths'].get('trades')}")
+        print(f"current_mid_trend_strategy_v2_top10_candidate|report|{result['paths'].get('report')}")
         return 0
     elif args.command == "news-feature-backfill":
         result = run_news_feature_backfill(
@@ -6960,6 +7135,218 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for line in iter_daily_review_report_path_lines(result["report_paths"]):
             print(line)
+    elif args.command == "mid-trend-round2-optimize":
+        from stock_research.mid_trend_round2_optimization import run_mid_trend_round2_optimization
+
+        result = run_mid_trend_round2_optimization(
+            start_date=args.start_date,
+            train_end_date=args.train_end_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"mid_trend_round2|baseline_train_summary|{result['paths']['baseline_train_summary']}")
+        print(f"mid_trend_round2|candidate_audit|{result['paths']['candidate_audit']}")
+        print(f"mid_trend_round2|report|{result['paths']['report']}")
+    elif args.command == "mid-trend-soft-ownership-optimize":
+        from stock_research.mid_trend_soft_ownership_v1 import run_mid_trend_soft_ownership_cli
+
+        result = run_mid_trend_soft_ownership_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+            variants=args.variants,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            baseline_reference_dir=args.baseline_reference_dir,
+        )
+        print(
+            f"mid_trend_soft_ownership|baseline_vs_variants|{result['paths']['baseline_vs_variants_csv']}"
+        )
+    elif args.command == "midtrend-quality-confirmed-experiment":
+        from stock_research.midtrend_quality_confirmed_v1 import (
+            run_midtrend_quality_confirmed_experiment_cli,
+        )
+
+        result = run_midtrend_quality_confirmed_experiment_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_quality_confirmed|baseline_vs_quality_variants|{result['paths']['summary_csv']}"
+        )
+    elif args.command == "midtrend-topn-pool-reentry-sweep":
+        from stock_research.midtrend_topn_pool_reentry_sweep import (
+            run_midtrend_topn_pool_reentry_sweep_cli,
+        )
+
+        result = run_midtrend_topn_pool_reentry_sweep_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_topn_pool_reentry|baseline_vs_topn_pool_variants|{result['paths']['summary_csv']}"
+        )
+    elif args.command == "midtrend-top10-reentry-experiment":
+        from stock_research.midtrend_top10_reentry_experiment import (
+            run_midtrend_top10_reentry_experiment_cli,
+        )
+
+        result = run_midtrend_top10_reentry_experiment_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_top10_reentry|baseline_vs_top10_reentry_variants|{result['paths']['summary_csv']}"
+        )
+    elif args.command == "midtrend-top10-reentry-gating-experiment":
+        from stock_research.midtrend_top10_reentry_gating_experiment import (
+            run_midtrend_top10_reentry_gating_experiment_cli,
+        )
+
+        result = run_midtrend_top10_reentry_gating_experiment_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            regime_path=args.regime_path,
+            funnel_detail_path=args.funnel_detail_path,
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_top10_reentry_gating|baseline_vs_reentry_gating_variants|{result['paths']['summary_csv']}"
+        )
+    elif args.command == "midtrend-post-exit-fundamental-attribution":
+        from stock_research.midtrend_post_exit_fundamental_attribution_v1 import (
+            run_midtrend_post_exit_fundamental_attribution_cli,
+        )
+
+        result = run_midtrend_post_exit_fundamental_attribution_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_post_exit_fundamental_attribution|output_dir|{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-pit-fundamental-attribution":
+        from stock_research.midtrend_pit_fundamental_attribution_v1 import (
+            run_midtrend_pit_fundamental_attribution_cli,
+        )
+
+        result = run_midtrend_pit_fundamental_attribution_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            f"midtrend_pit_fundamental_attribution|output_dir|{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-pit-attribution-canonical-and-daily-review-lite":
+        from stock_research.midtrend_pit_attribution_canonical_and_daily_review_lite_v1 import (
+            run_midtrend_pit_attribution_canonical_cli,
+        )
+
+        result = run_midtrend_pit_attribution_canonical_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_pit_attribution_canonical_and_daily_review_lite|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-badbuy-unknown-and-review-priority":
+        from stock_research.midtrend_badbuy_unknown_and_review_priority_v1 import (
+            run_midtrend_badbuy_unknown_and_review_priority_cli,
+        )
+
+        result = run_midtrend_badbuy_unknown_and_review_priority_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_badbuy_unknown_and_review_priority|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-daily-review-lite-and-badbuy-denominator":
+        from stock_research.midtrend_daily_review_lite_and_badbuy_denominator_v1 import (
+            run_midtrend_daily_review_lite_and_badbuy_denominator_cli,
+        )
+
+        result = run_midtrend_daily_review_lite_and_badbuy_denominator_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_daily_review_lite_and_badbuy_denominator|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-fundamental-interaction-badbuy-research":
+        from stock_research.midtrend_fundamental_interaction_badbuy_research_v1 import (
+            run_midtrend_fundamental_interaction_badbuy_research_cli,
+        )
+
+        result = run_midtrend_fundamental_interaction_badbuy_research_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_fundamental_interaction_badbuy_research|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-top10-stability-validation":
+        from stock_research.midtrend_top10_stability_validation_v1 import (
+            run_midtrend_top10_stability_validation_cli,
+        )
+
+        result = run_midtrend_top10_stability_validation_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_top10_stability_validation|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-position-sizing-industry-research":
+        from stock_research.midtrend_position_sizing_industry_research_v1 import (
+            run_midtrend_position_sizing_industry_research_cli,
+        )
+
+        result = run_midtrend_position_sizing_industry_research_cli(
+            output_dir=args.output_dir,
+        )
+        print(
+            "midtrend_position_sizing_industry_research|output_dir|"
+            f"{result['paths']['output_dir']}"
+        )
+    elif args.command == "midtrend-post-exit-daily-review":
+        from stock_research.midtrend_post_exit_daily_review import (
+            run_midtrend_post_exit_daily_review_cli,
+        )
+
+        result = run_midtrend_post_exit_daily_review_cli(
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(f"midtrend_post_exit_daily_review|output_dir|{result['paths']['output_dir']}")
+    elif args.command == "midtrend-build-pit-fundamental-features":
+        from stock_research.midtrend_pit_fundamental_features import (
+            run_midtrend_build_pit_fundamental_features_cli,
+        )
+
+        result = run_midtrend_build_pit_fundamental_features_cli(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            output_dir=args.output_dir,
+        )
+        print(f"midtrend_pit_fundamental_features|output_dir|{result['paths']['output_dir']}")
+    elif args.command == "run-strategy-daily-eod":
+        result = run_strategy_daily_eod(
+            trade_date=args.trade_date,
+            output_root=args.output_root,
+            dependency_checker=check_strategy_daily_eod_dependencies,
+        )
+        for key in ("status", "trade_date", "output_dir", "review_rows", "summary_path"):
+            print(f"strategy_daily_eod|{key}|{result.get(key)}")
     elif args.command == "trend-lifecycle-v1":
         result = run_trend_lifecycle_v1_report(
             start_date=args.start_date,

@@ -7,6 +7,7 @@ dependencies = [
   "akshare",
   "baostock",
   "pandas",
+  "PySocks",
   "psycopg[binary]",
   "pypdf",
   "requests",

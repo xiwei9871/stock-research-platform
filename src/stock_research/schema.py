@@ -481,6 +481,28 @@ CREATE TABLE IF NOT EXISTS core.industry_membership (
     PRIMARY KEY (asset_id, industry_system, industry_code, level, start_date)
 );
 
+CREATE TABLE IF NOT EXISTS core.concept_board (
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    source text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (concept_system, concept_code)
+);
+
+CREATE TABLE IF NOT EXISTS core.concept_membership (
+    asset_id text NOT NULL,
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    source text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (asset_id, concept_system, concept_code, start_date)
+);
+
 CREATE TABLE IF NOT EXISTS market.index_daily_bar (
     index_id text NOT NULL,
     trade_date date NOT NULL,
@@ -559,6 +581,26 @@ CREATE TABLE IF NOT EXISTS market.industry_daily_bar (
     source text NOT NULL,
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (industry_system, industry_code, trade_date)
+);
+
+CREATE TABLE IF NOT EXISTS market.concept_daily_bar (
+    concept_system text NOT NULL,
+    concept_code text NOT NULL,
+    concept_name text NOT NULL,
+    trade_date date NOT NULL,
+    open numeric,
+    high numeric,
+    low numeric,
+    close numeric,
+    preclose numeric,
+    volume numeric,
+    amount numeric,
+    stock_count integer,
+    up_count integer,
+    down_count integer,
+    source text NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (concept_system, concept_code, trade_date)
 );
 
 CREATE TABLE IF NOT EXISTS staging.baostock_stock_minute_bar (
@@ -2110,6 +2152,18 @@ CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_date
 
 CREATE INDEX IF NOT EXISTS idx_market_industry_daily_bar_system_date_desc
     ON market.industry_daily_bar (industry_system, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_core_concept_membership_asset_date
+    ON core.concept_membership (asset_id, concept_system, start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_core_concept_membership_concept_date
+    ON core.concept_membership (concept_system, concept_code, start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_market_concept_daily_bar_date
+    ON market.concept_daily_bar (trade_date, concept_system, concept_code);
+
+CREATE INDEX IF NOT EXISTS idx_market_concept_daily_bar_system_date_desc
+    ON market.concept_daily_bar (concept_system, trade_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_staging_baostock_stock_minute_bar_date
     ON staging.baostock_stock_minute_bar (trade_date, freq, adjust_type);

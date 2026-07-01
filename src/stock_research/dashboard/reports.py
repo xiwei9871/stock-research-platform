@@ -1,12 +1,12 @@
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
+from stock_research.config import SETTINGS
 from stock_research.dashboard.schemas import ReportLink
 from stock_research.report_delivery import LocalDeliveryAdapter, ReportArtifact, detect_report_type
 
-
-DEFAULT_REPORTS_DIR = Path("/Users/xiwei/stock_research/reports")
+DEFAULT_REPORTS_DIR = Path(SETTINGS.reports_root)
 
 
 def load_report_links(

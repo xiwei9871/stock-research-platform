@@ -17,6 +17,7 @@ venv/
 env/
 
 # Local generated artifacts
+*.log
 /build/
 /dist/
 /cache/
@@ -27,6 +28,7 @@ env/
 /outputs/
 /.worktrees/
 /.superpowers/
+/.codex/
 /dashboard/node_modules/
 /dashboard/dist/
 /dashboard/test-results/

@@ -12,6 +12,9 @@ MAX_RETRIES="${TRADING_CALENDAR_SYNC_MAX_RETRIES:-2}"
 RETRY_SLEEP_SECONDS="${TRADING_CALENDAR_SYNC_RETRY_SLEEP_SECONDS:-3700}"
 SERVICE="${RESEARCH_SERVICE:-}"
 
+source "$ROOT/scripts/stock_cron_guard.sh"
+clear_stock_proxy_env
+
 START_DATE="${TRADING_CALENDAR_SYNC_START_DATE:-$("$PYTHON" - <<'PY'
 from datetime import date
 print(date.today().isoformat())

@@ -8,6 +8,7 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
+from stock_research.strategy_daily_eod_store import load_strategy_daily_eod_status
 
 
 DEFAULT_REPORTS_DIR = Path("/Users/xiwei/stock_research/reports")
@@ -87,7 +88,50 @@ CHECK_SQL = {
         WHERE trade_date = %s
           AND watchlist_id = 'diagnostics'
     """,
+    "market_monitor_sources": """
+        SELECT
+            (
+                SELECT count(*)::int
+                FROM research.market_emotion_state_daily
+                WHERE trade_date = %s
+                  AND total_amount IS NOT NULL
+                  AND up_count IS NOT NULL
+                  AND down_count IS NOT NULL
+                  AND limit_up_count IS NOT NULL
+                  AND limit_down_count IS NOT NULL
+            ) AS emotion_rows,
+            (
+                SELECT count(*)::int
+                FROM market.index_daily_bar
+                WHERE trade_date = %s
+                  AND index_id = ANY(%s)
+            ) AS index_rows,
+            (
+                SELECT count(*)::int
+                FROM market.industry_daily_bar
+                WHERE trade_date = %s
+                  AND industry_system = 'csrc'
+            ) AS industry_rows,
+            (
+                SELECT count(*)::int
+                FROM market.industry_daily_bar
+                WHERE trade_date = %s
+                  AND industry_system = 'csrc'
+                  AND amount IS NOT NULL
+                  AND close IS NOT NULL
+                  AND preclose IS NOT NULL
+            ) AS fund_flow_rows
+    """,
 }
+
+
+MARKET_MONITOR_INDEX_IDS = (
+    "SSE_COMPOSITE",
+    "SZSE_COMPONENT",
+    "CHINEXT",
+    "STAR_50",
+    "BSE_50",
+)
 
 
 def run_platform_ready_check(
@@ -118,11 +162,13 @@ def run_platform_ready_check(
         _check_daily_quality(service, trade_date, min_daily_rows, max_daily_missing, daily_gap_ratio),
         _check_minute5(service, trade_date, min_minute_rows, max_gap_ratio=minute5_gap_ratio),
         _check_deps(service, trade_date),
+        _check_strategy_daily_eod(service, trade_date),
         _check_health(service, trade_date, allow_degraded=allow_degraded_minute5),
         _check_scores(service, trade_date, score_version, min_score_rows),
         _check_nonzero_scores(service, trade_date, score_version, min_score_rows),
         _check_watchlist(service, trade_date, watchlist_id, min_watchlist_rows),
         _check_diagnostics(service, trade_date, min_watchlist_rows),
+        _check_market_monitor(service, trade_date),
         _check_reports(trade_date, reports_dirs or [DEFAULT_REPORTS_DIR], min_reports),
     ]
     status = "ready" if all(item["status"] == "pass" for item in checks) else "not_ready"
@@ -221,6 +267,32 @@ def _check_health(service: str, trade_date: str, *, allow_degraded: bool = False
     return _pass("health", detail) if ok else _fail("health", detail)
 
 
+def _check_strategy_daily_eod(service: str, trade_date: str) -> dict[str, Any]:
+    row = load_strategy_daily_eod_status(trade_date, service=service)
+    if not row:
+        return _fail("strategy_daily_eod", "missing strategy_daily_eod_status row")
+    summary_path = Path(str(row.get("summary_path") or ""))
+    review_paths = [
+        Path(str(row.get("output_dir") or "")) / "strategy_lhb_shortline_review.csv",
+        Path(str(row.get("output_dir") or "")) / "strategy_mid_trend_review.csv",
+        Path(str(row.get("output_dir") or "")) / "strategy_tech_bottleneck_review.csv",
+    ]
+    ok = (
+        str(row.get("status") or "") == "success"
+        and str(row.get("lhb_shortline_status") or "") == "success"
+        and str(row.get("mid_trend_status") or "") == "success"
+        and str(row.get("tech_bottleneck_status") or "") == "success"
+        and summary_path.exists()
+        and all(path.exists() and path.stat().st_size > 0 for path in review_paths)
+    )
+    detail = (
+        f"status={row.get('status')} lhb={row.get('lhb_shortline_status')} "
+        f"mid={row.get('mid_trend_status')} tech={row.get('tech_bottleneck_status')} "
+        f"summary_path={summary_path}"
+    )
+    return _pass("strategy_daily_eod", detail) if ok else _fail("strategy_daily_eod", detail)
+
+
 def _check_scores(service: str, trade_date: str, score_version: str, min_rows: int) -> dict[str, str]:
     rows = _fetch_check_rows(service, "score_count", trade_date, score_version=score_version)
     count = int(rows[0].get("count") or 0) if rows else 0
@@ -260,10 +332,37 @@ def _check_reports(trade_date: str, reports_dirs: list[str | Path], min_reports:
     return _pass("reports", detail) if count >= min_reports else _fail("reports", detail)
 
 
+def _check_market_monitor(service: str, trade_date: str) -> dict[str, str]:
+    rows = _fetch_check_rows(service, "market_monitor_sources", trade_date)
+    row = rows[0] if rows else {}
+    emotion_rows = int(row.get("emotion_rows") or 0)
+    index_rows = int(row.get("index_rows") or 0)
+    industry_rows = int(row.get("industry_rows") or 0)
+    fund_flow_rows = int(row.get("fund_flow_rows") or 0)
+    detail = (
+        f"emotion_rows={emotion_rows} index_rows={index_rows} "
+        f"industry_rows={industry_rows} fund_flow_rows={fund_flow_rows}"
+    )
+    missing = []
+    if emotion_rows <= 0:
+        missing.append("market_emotion_state_daily")
+    if index_rows < len(MARKET_MONITOR_INDEX_IDS):
+        missing.append(f"index_daily_bar>={len(MARKET_MONITOR_INDEX_IDS)}")
+    if industry_rows <= 0:
+        missing.append("industry_daily_bar")
+    if fund_flow_rows <= 0:
+        missing.append("fund_flow_proxy")
+    if missing:
+        return _fail("market_monitor", "missing " + ",".join(missing))
+    return _pass("market_monitor", detail)
+
+
 def _fetch_check_rows(service: str, check_name: str, trade_date: str, **kwargs: Any) -> list[dict[str, Any]]:
     sql = CHECK_SQL[check_name]
     params: list[Any] | dict[str, Any]
-    if "%(" in sql:
+    if check_name == "market_monitor_sources":
+        params = [trade_date, trade_date, list(MARKET_MONITOR_INDEX_IDS), trade_date, trade_date]
+    elif "%(" in sql:
         params = {"score_version": kwargs.get("score_version"), "watchlist_id": kwargs.get("watchlist_id")}
         sql = sql.replace("%s", "%(trade_date)s")
         params["trade_date"] = trade_date

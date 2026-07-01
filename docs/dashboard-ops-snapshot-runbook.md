@@ -20,17 +20,16 @@
 - Public page reads only release-safe fields from the public snapshot.
 - Public `coverage_summary` is an explicit allow-list. Only approved keys are
   published; today that means `coverage_summary.core` when present.
-- Normal dashboard builds use `dashboard/index.html` with
-  `dashboard/src/main.tsx`. Those builds keep `/public` route support for local
-  or shared deployments.
-- Public-only deployments must build with:
+- Dashboard builds use the canonical AppShell frontend from
+  `dashboard/index.html` and `dashboard/src/main.tsx`.
+- Public-only frontend deployments are deprecated. Local intranet validation and
+  external publication must use the same canonical bundle:
 
   ```bash
   cd /Users/xiwei/stock_research/dashboard
-  VITE_PUBLIC_SNAPSHOT_ONLY=true pnpm build
+  pnpm build
   ```
 
-- That mode switches Vite to `dashboard/public.html`, which bootstraps
-  `dashboard/src/public-main.tsx`. The resulting artifact imports only
-  `PublicSnapshotPage` and shared styles, so it does not rely on a runtime
-  branch inside a bundle that also imports `App`.
+- Do not reintroduce `dashboard/public-snapshot.html`,
+  `dashboard/src/public-main.tsx`, `PublicSnapshotPage`, or a second frontend.
+  See `docs/canonical-frontend.md`.

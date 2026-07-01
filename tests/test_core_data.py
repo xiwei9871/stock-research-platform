@@ -116,6 +116,9 @@ def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatc
     assert "INSERT INTO market.industry_daily_bar" in sql
     assert "FROM market_daily_bar b" in sql
     assert "JOIN core.industry_membership m" in sql
+    assert "GROUP BY" in sql
+    assert "m.asset_id" in sql
+    assert "m.level = 1" in sql
     assert "m.start_date <= b.trade_date" in sql
     assert "(m.end_date IS NULL OR b.trade_date < m.end_date)" in sql
     assert "m.industry_system = %s" in sql
@@ -124,3 +127,73 @@ def test_build_industry_daily_bars_uses_historical_membership_windows(monkeypatc
     assert "b.trade_date <= %s" in sql
     assert "ON CONFLICT (industry_system, industry_code, trade_date) DO UPDATE" in sql
     assert params == ["csrc", "hfq", "2026-05-01", "2026-05-08"]
+
+
+def test_build_concept_daily_bars_uses_point_in_time_memberships(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    core_data.build_concept_daily_bars(
+        conn,
+        start_date="2026-06-26",
+        end_date="2026-06-26",
+        concept_system="ths",
+        adjust_type="qfq",
+    )
+
+    sql, params = conn.executed[0]
+    assert "INSERT INTO market.concept_daily_bar" in sql
+    assert "FROM market_daily_bar b" in sql
+    assert "JOIN core.concept_membership m" in sql
+    assert "m.start_date <= b.trade_date" in sql
+    assert "(m.end_date IS NULL OR b.trade_date < m.end_date)" in sql
+    assert "m.concept_system = %s" in sql
+    assert "b.adjust_type = %s" in sql
+    assert "b.trade_date >= %s" in sql
+    assert "b.trade_date <= %s" in sql
+    assert "ON CONFLICT (concept_system, concept_code, trade_date) DO UPDATE" in sql
+    assert params == ["ths", "qfq", "2026-06-26", "2026-06-26"]
+
+
+def test_sync_concept_memberships_from_akshare_upserts_boards_and_members(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    def fake_board_fetcher():
+        return pd.DataFrame(
+            [
+                {"name": "人工智能", "code": "309135"},
+                {"name": "机器人概念", "code": "300024"},
+            ]
+        )
+
+    def fake_constituent_fetcher(concept_name):
+        if concept_name == "人工智能":
+            return pd.DataFrame(
+                [
+                    {"代码": "688256", "名称": "寒武纪"},
+                    {"代码": "000063", "名称": "中兴通讯"},
+                ]
+            )
+        return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-06-30",
+        board_fetcher=fake_board_fetcher,
+        constituent_fetcher=fake_constituent_fetcher,
+    )
+
+    assert result == {"boards": 2, "memberships": 3, "failed_concepts": []}
+    board_sql, board_rows = conn.executed_many[0]
+    membership_sql, membership_rows = conn.executed_many[1]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert "INSERT INTO core.concept_membership" in membership_sql
+    assert board_rows[0] == ("ths", "309135", "人工智能", "akshare:stock_board_concept_name_ths", True)
+    assert ("688256.SH", "ths", "309135", "人工智能", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert ("000063.SZ", "ths", "309135", "人工智能", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert ("300024.SZ", "ths", "300024", "机器人概念", "2026-06-30", "akshare:concept_constituents") in membership_rows
+    assert any("UPDATE core.concept_membership" in sql for sql, _params in conn.executed)

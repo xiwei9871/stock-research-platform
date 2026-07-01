@@ -10,17 +10,30 @@ from stock_research.dashboard import shadow_outcomes
 
 
 def test_overview_route_returns_payload(monkeypatch):
-    monkeypatch.setattr(
-        dashboard_app,
-        "build_dashboard_overview",
-        lambda trade_date, score_version, watchlist_id, top_n: {
+    captured = {}
+
+    def fake_build_dashboard_overview(trade_date, score_version, watchlist_id, top_n):
+        captured.update(
+            {
+                "trade_date": trade_date,
+                "score_version": score_version,
+                "watchlist_id": watchlist_id,
+                "top_n": top_n,
+            }
+        )
+        return {
             "trade_date": trade_date,
             "score_version": score_version,
             "watchlist_id": watchlist_id,
             "top_scores": [],
             "watchlist_signals": [],
             "reports": [],
-        },
+        }
+
+    monkeypatch.setattr(
+        dashboard_app,
+        "build_dashboard_overview",
+        fake_build_dashboard_overview,
     )
     client = TestClient(dashboard_app.create_app())
 
@@ -28,6 +41,23 @@ def test_overview_route_returns_payload(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["trade_date"] == "2026-05-29"
+    assert captured["top_n"] == 10
+
+
+def test_topn_route_defaults_to_midtrend_top10(monkeypatch):
+    captured = {}
+
+    def fake_load_top_scores_for_dashboard(trade_date, score_version, top_n):
+        captured.update({"trade_date": trade_date, "score_version": score_version, "top_n": top_n})
+        return []
+
+    monkeypatch.setattr(dashboard_app, "load_top_scores_for_dashboard", fake_load_top_scores_for_dashboard)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/topn?trade_date=2026-05-29")
+
+    assert response.status_code == 200
+    assert captured["top_n"] == 10
 
 
 def test_data_status_route_returns_pipeline_status(monkeypatch):
@@ -136,6 +166,56 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["counts_by_category"] == {"live": 2}
+
+
+def test_midtrend_post_exit_review_lite_route_returns_artifact(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_midtrend_post_exit_review_lite",
+        lambda: {
+            "schema_version": "midtrend_post_exit_watch_daily_review_lite_v1",
+            "sections": {
+                "HIGH_FUNDAMENTAL": {
+                    "label_zh": "基本面增强观察",
+                    "count": 1,
+                    "items": [
+                        {
+                            "asset_id": "CN:SZ:000001",
+                            "stock_name": "测试股票",
+                            "suggested_review_action": "review_strong_improving_post_exit_name",
+                        }
+                    ],
+                }
+            },
+            "artifact_health": {"exists": True, "warning": ""},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/midtrend/post-exit-review-lite")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sections"]["HIGH_FUNDAMENTAL"]["count"] == 1
+    assert payload["artifact_health"]["exists"] is True
+
+
+def test_midtrend_post_exit_review_lite_route_returns_safe_missing_state(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_midtrend_post_exit_review_lite",
+        lambda: {
+            "schema_version": "midtrend_post_exit_watch_daily_review_lite_v1",
+            "sections": {},
+            "artifact_health": {"exists": False, "warning": "artifact_missing"},
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/midtrend/post-exit-review-lite")
+
+    assert response.status_code == 200
+    assert response.json()["artifact_health"]["exists"] is False
 
 
 def test_dashboard_ops_snapshot_runbook_exists():

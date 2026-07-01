@@ -7,7 +7,6 @@ import pytest
 
 from stock_research import daily_close_pipeline as dcp
 from stock_research import selection
-from stock_research.cli import build_parser
 
 
 @contextmanager
@@ -21,10 +20,55 @@ def _no_db(monkeypatch):
     monkeypatch.setattr(dcp, "execute_many", lambda *args, **kwargs: None)
 
 
-def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch):
+def test_daily_close_schema_migrates_market_monitor_status_column():
+    assert "market_monitor_status text NOT NULL DEFAULT 'skipped'" in dcp.DAILY_CLOSE_PIPELINE_SQL
+    assert "ALTER TABLE ops.daily_pipeline_status" in dcp.DAILY_CLOSE_PIPELINE_SQL
+
+
+def test_load_data_status_for_dashboard_includes_market_monitor_status(monkeypatch):
+    _no_db(monkeypatch)
+
+    def fake_fetch_all(_conn, _sql, _params=None):
+        return [
+            {
+                "trade_date": date(2026, 6, 26),
+                "pipeline_status": "DEGRADED_READY",
+                "daily_status": "partial_success",
+                "minute5_status": "partial_success",
+                "market_monitor_status": "success",
+                "deps_status": "success",
+                "latest_ready_trade_date": date(2026, 6, 26),
+                "using_fallback_trade_date": False,
+                "warnings": [],
+                "failed_jobs": [],
+                "updated_at": datetime(2026, 6, 26, 20, 0),
+            }
+        ]
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+
+    result = dcp.load_data_status_for_dashboard("test", date(2026, 6, 26))
+
+    assert result["market_monitor_status"] == "success"
+
+
+def test_market_emotion_schema_adds_missing_columns(monkeypatch):
+    captured = []
+    monkeypatch.setattr(dcp, "connect", _fake_connect)
+    monkeypatch.setattr(dcp, "execute", lambda _conn, sql, params=None: captured.append(sql))
+
+    dcp.ensure_market_emotion_state_daily_table("test")
+
+    sql = "\n".join(captured)
+    assert "ALTER TABLE research.market_emotion_state_daily" in sql
+    assert "ADD COLUMN IF NOT EXISTS total_amount numeric" in sql
+    assert "ADD COLUMN IF NOT EXISTS emotion_state text" in sql
+
+
+def test_daily_stage_does_not_fallback_to_akshare_when_tushare_has_missing_symbols(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
-    captured = {"akshare_ts_codes": None, "upserted": []}
+    captured = {"upserted": []}
     trade_date = date(2026, 6, 5)
     config = dcp.PipelineConfig(
         service="test",
@@ -64,39 +108,6 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
             }
         ]
 
-    def fake_akshare_fetcher(trade_date, ts_codes, timeout_seconds, adjust_types=None):
-        captured["akshare_ts_codes"] = ts_codes
-        assert tuple(adjust_types) == ("hfq", "qfq", "raw")
-        return [
-            {
-                "ts_code": "600000.SH",
-                "trade_date": trade_date,
-                "adjust_type": "raw",
-                "open": 20,
-                "high": 21,
-                "low": 19,
-                "close": 20.5,
-            },
-            {
-                "ts_code": "600000.SH",
-                "trade_date": trade_date,
-                "adjust_type": "qfq",
-                "open": 20,
-                "high": 21,
-                "low": 19,
-                "close": 20.5,
-            },
-            {
-                "ts_code": "600000.SH",
-                "trade_date": trade_date,
-                "adjust_type": "hfq",
-                "open": 20,
-                "high": 21,
-                "low": 19,
-                "close": 20.5,
-            }
-        ]
-
     def fake_upsert(_service, rows):
         captured["upserted"] = rows
         return len(rows)
@@ -108,16 +119,12 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
         tushare_fetcher=fake_tushare_fetcher,
         derived_adjusted_fetcher=lambda *args, **kwargs: [],
         tushare_adjusted_fetcher=lambda *args, **kwargs: [],
-        akshare_fetcher=fake_akshare_fetcher,
+        akshare_fetcher=lambda *args, **kwargs: pytest.fail("akshare fallback should not run"),
         daily_upserter=fake_upsert,
     )
 
-    assert result["status"] == "success"
-    assert captured["akshare_ts_codes"] == ["600000.SH"]
+    assert result["status"] == "partial_success"
     assert [row["adjust_type"] for row in captured["upserted"]] == [
-        "raw",
-        "qfq",
-        "hfq",
         "raw",
         "qfq",
         "hfq",
@@ -126,18 +133,20 @@ def test_daily_stage_uses_tushare_first_and_akshare_only_for_missing(monkeypatch
         "tushare",
         "tushare",
         "tushare",
-        "akshare",
-        "akshare",
-        "akshare",
     ]
     assert result["quality"]["expected_count"] == 6
-    assert result["quality"]["actual_count"] == 6
+    assert result["quality"]["actual_count"] == 3
+    assert result["quality"]["missing_symbols"] == [
+        "600000.SH:hfq",
+        "600000.SH:qfq",
+        "600000.SH:raw",
+    ]
 
 
-def test_daily_stage_uses_tushare_adjusted_before_akshare(monkeypatch):
+def test_daily_stage_does_not_fallback_to_akshare_for_remaining_adjusted_gaps(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
-    captured = {"akshare_ts_codes": None, "akshare_adjust_types": None, "upserted": []}
+    captured = {"upserted": []}
     trade_date = date(2026, 6, 5)
     config = dcp.PipelineConfig(
         service="test",
@@ -185,22 +194,6 @@ def test_daily_stage_uses_tushare_adjusted_before_akshare(monkeypatch):
             },
         ]
 
-    def fake_akshare_fetcher(trade_date, ts_codes, timeout_seconds, adjust_types=None):
-        captured["akshare_ts_codes"] = ts_codes
-        captured["akshare_adjust_types"] = tuple(adjust_types)
-        return [
-            {
-                "ts_code": "600000.SH",
-                "trade_date": trade_date,
-                "adjust_type": adjust_type,
-                "open": 20,
-                "high": 21,
-                "low": 19,
-                "close": 20.5,
-            }
-            for adjust_type in adjust_types
-        ]
-
     result = dcp.run_daily_stage(
         trade_date,
         config=config,
@@ -208,15 +201,18 @@ def test_daily_stage_uses_tushare_adjusted_before_akshare(monkeypatch):
         tushare_fetcher=fake_tushare_fetcher,
         derived_adjusted_fetcher=lambda *args, **kwargs: [],
         tushare_adjusted_fetcher=fake_tushare_adjusted_fetcher,
-        akshare_fetcher=fake_akshare_fetcher,
+        akshare_fetcher=lambda *args, **kwargs: pytest.fail("akshare fallback should not run"),
         daily_upserter=lambda _service, rows: captured.update(upserted=rows) or len(rows),
     )
 
-    assert result["status"] == "success"
-    assert captured["akshare_ts_codes"] == ["600000.SH"]
-    assert captured["akshare_adjust_types"] == ("hfq", "qfq", "raw")
+    assert result["status"] == "partial_success"
     assert result["quality"]["expected_count"] == 6
-    assert result["quality"]["actual_count"] == 6
+    assert result["quality"]["actual_count"] == 3
+    assert result["quality"]["missing_symbols"] == [
+        "600000.SH:hfq",
+        "600000.SH:qfq",
+        "600000.SH:raw",
+    ]
 
 
 def test_derive_adjusted_daily_rows_uses_latest_local_factors(monkeypatch):
@@ -410,6 +406,7 @@ def test_tushare_adjusted_daily_rows_use_batch_adj_factor(monkeypatch):
 def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monkeypatch):
     _no_db(monkeypatch)
     monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
     failed_symbols = []
     config = dcp.PipelineConfig(
         service="test",
@@ -442,7 +439,7 @@ def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monke
                         "close": 1,
                         "volume": 1,
                         "amount": 1,
-                        "source": "akshare",
+                        "source": "baostock",
                     }
                 )
         return rows
@@ -452,7 +449,7 @@ def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monke
         date(2026, 6, 5),
         config=config,
         ts_codes=["600001.SH", "600000.SH"],
-        fetcher=fake_fetcher,
+        baostock_fetcher=fake_fetcher,
         upserter=lambda _service, rows: len(rows),
     )
 
@@ -461,13 +458,185 @@ def test_minute5_stage_records_single_symbol_failure_without_failing_batch(monke
     assert failed_symbols == ["600000.SH"]
 
 
-def test_split_minute5_sources_routes_sh_to_akshare_sz_to_baostock_and_ignores_bj():
+def test_split_minute5_sources_routes_sh_and_sz_to_separate_baostock_workers_and_ignores_bj():
     result = dcp.split_minute5_sources(["600000.SH", "000001.SZ", "920000.BJ"])
 
     assert result == {
-        "akshare": ["600000.SH"],
-        "baostock": ["000001.SZ"],
+        "baostock_sh": ["600000.SH"],
+        "baostock_sz": ["000001.SZ"],
     }
+
+
+def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
+    calls = {}
+
+    def fake_query(code, start_date, end_date, freq, adjust_type, timeout_seconds=None):
+        calls["query"] = {
+            "code": code,
+            "start_date": start_date,
+            "end_date": end_date,
+            "freq": freq,
+            "adjust_type": adjust_type,
+            "timeout_seconds": timeout_seconds,
+        }
+        return [{"ts_code": "600000.SH"}]
+
+    def fake_timeout(func, timeout_value, *args, **kwargs):
+        calls["timeout_seconds"] = timeout_value
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(dcp, "query_baostock_minute_rows", fake_query)
+    monkeypatch.setattr(
+        dcp,
+        "baostock_minute_market_row",
+        lambda row, freq, adjust_type: {
+            "asset_id": "CN:SH:600000",
+            "ts_code": "600000.SH",
+            "trade_time": datetime(2026, 6, 5, 9, 35),
+            "trade_date": date(2026, 6, 5),
+            "freq": freq,
+            "adjust_type": adjust_type,
+            "open": 1,
+            "high": 1,
+            "low": 1,
+            "close": 1,
+            "volume": 1,
+            "amount": 1,
+            "source": "baostock",
+        },
+    )
+    monkeypatch.setattr(dcp, "call_with_timeout", fake_timeout)
+
+    rows = dcp.fetch_baostock_minute5_rows(
+        "600000.SH",
+        start_date=date(2026, 6, 1),
+        end_date=date(2026, 6, 5),
+        timeout_seconds=7,
+    )
+
+    assert calls["timeout_seconds"] == 7
+    assert calls["query"]["code"] == "sh.600000"
+    assert calls["query"]["timeout_seconds"] == 7
+    assert rows[0]["source"] == "baostock"
+
+
+def test_call_with_timeout_shuts_down_executor_without_waiting_on_timeout(monkeypatch):
+    calls = {}
+
+    class FakeFuture:
+        def result(self, timeout):
+            calls["timeout"] = timeout
+            raise TimeoutError("timed out")
+
+        def cancel(self):
+            calls["cancelled"] = True
+            return True
+
+    class FakeExecutor:
+        def submit(self, func, *args, **kwargs):
+            calls["submitted"] = (func, args, kwargs)
+            return FakeFuture()
+
+        def shutdown(self, wait=True, cancel_futures=False):
+            calls["shutdown"] = (wait, cancel_futures)
+
+    monkeypatch.setattr(
+        dcp.concurrent.futures,
+        "ThreadPoolExecutor",
+        lambda max_workers=1: FakeExecutor(),
+    )
+
+    with pytest.raises(TimeoutError):
+        dcp.call_with_timeout(lambda: None, 7)
+
+    assert calls["timeout"] == 7
+    assert calls["cancelled"] is True
+    assert calls["shutdown"] == (False, True)
+
+
+def test_retry_failed_source_plan_uses_baostock_for_all_missing_symbols():
+    config = dcp.PipelineConfig(
+        max_workers_akshare_minute5=2,
+        max_workers_baostock_minute5=2,
+    )
+
+    plan = dcp.build_retry_failed_source_plan(
+        ["600000.SH", "000001.SZ"],
+        config=config,
+    )
+
+    assert plan == [
+        ("baostock_sh", ["600000.SH"], 1),
+        ("baostock_sz", ["000001.SZ"], 1),
+    ]
+
+
+def test_retry_failed_stage_runs_baostock_exchange_rescue_inline(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        dcp,
+        "load_latest_minute5_missing_symbols",
+        lambda _service, _trade_date: ["600000.SH", "000001.SZ"],
+    )
+    calls = []
+    monkeypatch.setattr(
+        dcp,
+        "fetch_baostock_minute5_rows",
+        lambda ts_code, start_date, end_date, timeout_seconds: calls.append(ts_code) or [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        dcp,
+        "inspect_minute5_quality_from_db",
+        lambda _service, expected_ts_codes, _trade_date: {
+            "status": "pass",
+            "expected_count": len(expected_ts_codes),
+            "actual_count": len(expected_ts_codes),
+            "missing_symbols": [],
+            "abnormal_symbols": [],
+            "check_summary": "minute5 covered",
+        },
+    )
+    monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "mark_failed_symbol_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(dcp, "load_active_ts_codes", lambda _service, _trade_date: ["600000.SH", "000001.SZ"])
+
+    class RaisingExecutor:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("thread pool should not be used for single-worker exchange rescue")
+
+    monkeypatch.setattr(dcp.concurrent.futures, "ThreadPoolExecutor", RaisingExecutor)
+
+    result = dcp.run_retry_failed_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(
+            service="test",
+            max_retries=1,
+            max_workers_baostock_minute5=2,
+        ),
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    assert result["status"] == "success"
+    assert result["rows"] == 2
+    assert calls == ["600000.SH", "000001.SZ"]
 
 
 def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
@@ -480,7 +649,6 @@ def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
     config = dcp.PipelineConfig(
         service="test",
         max_retries=1,
-        max_workers_akshare_minute5=2,
         max_workers_baostock_minute5=2,
         minute5_min_coverage_ratio=0.5,
         force_non_trading_day=True,
@@ -509,9 +677,6 @@ def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
                 )
         return rows
 
-    def fake_akshare(ts_code, start_date, end_date, timeout_seconds):
-        return rows_for(ts_code, "akshare")
-
     def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
         return rows_for(ts_code, "baostock")
 
@@ -519,15 +684,86 @@ def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
         date(2026, 6, 5),
         config=config,
         ts_codes=["600000.SH", "000001.SZ"],
-        fetcher=fake_akshare,
         baostock_fetcher=fake_baostock,
         upserter=lambda _service, rows: len(rows),
     )
 
     finished = [job for job in recorded_jobs if job["status"] == "success"]
     assert result["status"] == "success"
-    assert result["source_symbols"] == {"akshare": 1, "baostock": 1}
-    assert {job["source"] for job in finished} == {"akshare", "baostock"}
+    assert result["source_symbols"] == {"baostock_sh": 1, "baostock_sz": 1}
+    assert {job["source"] for job in finished} == {"baostock_sh", "baostock_sz"}
+
+
+def test_minute5_stage_runs_baostock_globally_serial_without_parallel_source_executors(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "baostock_login_or_raise", lambda: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+
+    class RaisingProcessPool:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("process pool should not be used for global serial baostock minute5")
+
+    class SelectiveThreadPool:
+        def __init__(self, max_workers=1, *args, **kwargs):
+            if max_workers != 1:
+                raise AssertionError("thread pool >1 should not be used for global serial baostock minute5")
+            self.max_workers = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            class ImmediateFuture:
+                def result(self_inner):
+                    return fn(*args, **kwargs)
+
+            return ImmediateFuture()
+
+    monkeypatch.setattr(dcp.concurrent.futures, "ProcessPoolExecutor", RaisingProcessPool)
+    monkeypatch.setattr(dcp.concurrent.futures, "ThreadPoolExecutor", SelectiveThreadPool)
+    monkeypatch.setattr(
+        dcp.concurrent.futures,
+        "as_completed",
+        lambda futures: futures,
+    )
+
+    seen = []
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        seen.append(ts_code)
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+        ts_codes=["600000.SH", "000001.SZ"],
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    assert result["status"] == "success"
+    assert seen == ["600000.SH", "000001.SZ"]
 
 
 def test_finalize_pipeline_status_degrades_for_partial_core(monkeypatch):
@@ -606,6 +842,172 @@ def test_finalize_pipeline_status_uses_quality_threshold_over_old_failed_jobs(mo
     assert result["daily_status"] == "partial_success"
     assert result["minute5_status"] == "partial_success"
     assert result["latest_ready_trade_date"] == date(2026, 6, 18)
+
+
+def test_finalize_pipeline_status_blocks_ready_when_market_monitor_failed(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {"stage": "daily", "job_name": "daily_bar", "source": "mixed", "status": "success"},
+        {"stage": "minute5", "job_name": "minute5_bar", "source": "baostock_sh", "status": "success"},
+        {"stage": "minute5", "job_name": "minute5_bar", "source": "baostock_sz", "status": "success"},
+        {"stage": "market_monitor", "job_name": "market_monitor_eod", "source": "internal", "status": "failed"},
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return []
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 6, 25))
+
+    result = dcp.finalize_pipeline_status(
+        date(2026, 6, 26),
+        config=dcp.PipelineConfig(service="test"),
+    )
+
+    assert result["pipeline_status"] == "NOT_READY"
+    assert result["latest_ready_trade_date"] == date(2026, 6, 25)
+    assert result["using_fallback_trade_date"] is True
+    assert result["failed_jobs"][0]["stage"] == "market_monitor"
+
+
+def test_upsert_market_emotion_state_daily_persists_computed_row(monkeypatch):
+    captured = []
+    monkeypatch.setattr(dcp, "connect", _fake_connect)
+    monkeypatch.setattr(dcp, "execute", lambda _conn, sql, params=None: captured.append((sql, params)))
+
+    from stock_research.dashboard import market_monitor
+
+    def fake_compute_market_emotion_row(trade_date, service):
+        assert trade_date == "2026-06-26"
+        assert service == "test"
+        row = {}
+        for column in dcp.DAILY_OUTPUT_COLUMNS:
+            if column == "trade_date":
+                row[column] = trade_date
+            elif column in {"emotion_state", "risk_state", "style_signal_hint", "position_budget_hint"}:
+                row[column] = "ok"
+            else:
+                row[column] = 1
+        return row
+
+    monkeypatch.setattr(
+        market_monitor,
+        "compute_market_emotion_row",
+        fake_compute_market_emotion_row,
+    )
+
+    rows = dcp.upsert_market_emotion_state_daily("2026-06-26", service="test")
+
+    assert rows == 1
+    assert any("CREATE TABLE IF NOT EXISTS research.market_emotion_state_daily" in sql for sql, _ in captured)
+    insert_payload = captured[-1][1]
+    assert insert_payload["trade_date"] == "2026-06-26"
+    assert insert_payload["total_amount"] == 1
+    assert insert_payload["emotion_state"] == "ok"
+
+
+def test_market_monitor_stage_builds_sources_and_records_job(monkeypatch):
+    _no_db(monkeypatch)
+    calls = []
+    recorded = []
+    trade_date = date(2026, 6, 26)
+
+    monkeypatch.setattr(
+        dcp,
+        "should_skip_for_holiday",
+        lambda service, trade_date, force=False: (False, "open"),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "sync_index_daily_bars",
+        lambda start_date, end_date, service: calls.append(
+            ("sync_index_daily_bars", start_date, end_date, service)
+        ) or 7,
+    )
+    monkeypatch.setattr(
+        dcp,
+        "build_asset_status_daily_for_service",
+        lambda start_date, end_date, adjust_type, service: calls.append(
+            ("build_asset_status_daily_for_service", start_date, end_date, adjust_type, service)
+        ),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "build_industry_daily_bars_for_service",
+        lambda start_date, end_date, industry_system, adjust_type, service: calls.append(
+            (
+                "build_industry_daily_bars_for_service",
+                start_date,
+                end_date,
+                industry_system,
+                adjust_type,
+                service,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "build_concept_daily_bars_for_service",
+        lambda start_date, end_date, concept_system, adjust_type, service: calls.append(
+            (
+                "build_concept_daily_bars_for_service",
+                start_date,
+                end_date,
+                concept_system,
+                adjust_type,
+                service,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        dcp,
+        "upsert_market_emotion_state_daily",
+        lambda trade_date, service: calls.append(("upsert_market_emotion_state_daily", trade_date, service)) or 1,
+    )
+    monkeypatch.setattr(
+        dcp,
+        "check_market_monitor_sources",
+        lambda trade_date, service: {
+            "status": "success",
+            "emotion_rows": 1,
+            "index_rows": 5,
+            "industry_rows": 85,
+            "fund_flow_rows": 85,
+        },
+    )
+    monkeypatch.setattr(dcp, "upsert_job", lambda **kwargs: recorded.append(kwargs))
+
+    result = dcp.run_market_monitor_stage(
+        trade_date,
+        config=dcp.PipelineConfig(service="test", force_non_trading_day=True),
+    )
+
+    assert result == {
+        "stage": "market_monitor",
+        "status": "success",
+        "rows": 178,
+        "sources": {
+            "emotion_rows": 1,
+            "fund_flow_rows": 85,
+            "index_rows": 5,
+            "industry_rows": 85,
+            "status": "success",
+        },
+    }
+    assert calls == [
+        ("sync_index_daily_bars", "2026-06-26", "2026-06-26", "test"),
+        ("build_asset_status_daily_for_service", "2026-06-26", "2026-06-26", "qfq", "test"),
+        ("build_industry_daily_bars_for_service", "2026-06-26", "2026-06-26", "csrc", "qfq", "test"),
+        ("build_concept_daily_bars_for_service", "2026-06-26", "2026-06-26", "ths", "qfq", "test"),
+        ("upsert_market_emotion_state_daily", "2026-06-26", "test"),
+    ]
+    assert recorded[0]["stage"] == "market_monitor"
+    assert recorded[0]["job_name"] == "market_monitor_eod"
+    assert recorded[0]["status"] == "success"
+    assert recorded[0]["rows_inserted"] == 178
 
 
 def test_closed_trading_calendar_skips_daily_stage(monkeypatch):
@@ -711,11 +1113,19 @@ def test_selection_resolves_pipeline_ready_date(monkeypatch):
     assert rows[0]["trade_date"] == "2026-06-04"
 
 
-def test_cli_accepts_daily_pipeline_status_command():
-    args = build_parser().parse_args(
-        ["daily-pipeline", "--date", "20260605", "--stage", "status", "--force"]
+def test_daily_pipeline_parser_accepts_status_command():
+    args = dcp.build_arg_parser().parse_args(
+        ["--date", "20260605", "--stage", "status", "--force"]
     )
 
-    assert args.command == "daily-pipeline"
     assert args.stage == "status"
+    assert args.force is True
+
+
+def test_daily_pipeline_parser_accepts_market_monitor_stage():
+    args = dcp.build_arg_parser().parse_args(
+        ["--date", "20260605", "--stage", "market_monitor", "--force"]
+    )
+
+    assert args.stage == "market_monitor"
     assert args.force is True

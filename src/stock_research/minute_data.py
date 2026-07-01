@@ -1,7 +1,10 @@
 import datetime as dt
 import hashlib
 import json
+import os
+import socket
 import time
+from contextlib import contextmanager
 from typing import Any
 
 import baostock as bs
@@ -30,6 +33,58 @@ BAOSTOCK_RETRYABLE_ERROR_CODES = {"10001001", "10002007"}
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
 BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
 BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
+
+
+def _load_socks_module():
+    import socks
+
+    return socks
+
+
+def _load_baostock_socket_module():
+    import baostock.util.socketutil as socketutil
+
+    return socketutil
+
+
+def baostock_proxy_config() -> tuple[str, int] | None:
+    host = (os.getenv("BAOSTOCK_PROXY_HOST") or "").strip()
+    port = (os.getenv("BAOSTOCK_PROXY_PORT") or "").strip()
+    if not host or not port:
+        return None
+    return host, int(port)
+
+
+@contextmanager
+def temporary_baostock_proxy():
+    proxy = baostock_proxy_config()
+    if proxy is None:
+        yield
+        return
+    host, port = proxy
+    socks = _load_socks_module()
+    socketutil = _load_baostock_socket_module()
+    original_socket = socketutil.socket.socket
+    socks.setdefaultproxy(socks.SOCKS5, host, port, rdns=True)
+    socketutil.socket.socket = socks.socksocket
+    try:
+        yield
+    finally:
+        socketutil.socket.socket = original_socket
+        socks.setdefaultproxy()
+
+
+@contextmanager
+def temporary_socket_timeout(timeout_seconds: float | None):
+    if timeout_seconds is None:
+        yield
+        return
+    previous_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(timeout_seconds)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous_timeout)
 
 
 def parse_float(value: Any) -> float | None:
@@ -143,16 +198,18 @@ def query_baostock_minute_rows(
     end_date: dt.date,
     freq: str,
     adjust_type: str,
+    timeout_seconds: float | None = None,
 ) -> list[dict[str, str]]:
     def operation() -> list[dict[str, str]]:
-        rs = bs.query_history_k_data_plus(
-            code,
-            ",".join(MINUTE_FIELDS),
-            start_date=start_date.isoformat(),
-            end_date=end_date.isoformat(),
-            frequency=baostock_frequency(freq),
-            adjustflag=adjustflag_for_adjust_type(adjust_type),
-        )
+        with temporary_baostock_proxy(), temporary_socket_timeout(timeout_seconds):
+            rs = bs.query_history_k_data_plus(
+                code,
+                ",".join(MINUTE_FIELDS),
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+                frequency=baostock_frequency(freq),
+                adjustflag=adjustflag_for_adjust_type(adjust_type),
+            )
         if rs.error_code != "0":
             raise RuntimeError(
                 f"baostock minute query failed for {code}: {rs.error_code} {rs.error_msg}"
@@ -163,22 +220,22 @@ def query_baostock_minute_rows(
             rows.append(dict(zip(rs.fields, rs.get_row_data(), strict=True)))
         return rows
 
-    return run_with_baostock_retry(operation)
+    return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
 
 
 def is_retryable_baostock_error(message: str) -> bool:
     return any(error_code in message for error_code in BAOSTOCK_RETRYABLE_ERROR_CODES)
 
 
-def relogin_or_raise() -> None:
+def relogin_or_raise(timeout_seconds: float | None = None) -> None:
     try:
         bs.logout()
     except Exception:
         pass
-    login_or_raise()
+    login_or_raise(timeout_seconds=timeout_seconds)
 
 
-def run_with_baostock_retry(operation):
+def run_with_baostock_retry(operation, timeout_seconds: float | None = None):
     last_error: RuntimeError | None = None
     for attempt in range(1, BAOSTOCK_MAX_ATTEMPTS + 1):
         try:
@@ -187,7 +244,7 @@ def run_with_baostock_retry(operation):
             last_error = exc
             if attempt >= BAOSTOCK_MAX_ATTEMPTS or not is_retryable_baostock_error(str(exc)):
                 raise
-            relogin_or_raise()
+            relogin_or_raise(timeout_seconds=timeout_seconds)
             time.sleep(BAOSTOCK_RETRY_SLEEP_SECONDS)
     assert last_error is not None
     raise last_error
@@ -294,10 +351,11 @@ def upsert_stock_minute_bars(
     return len(market_rows)
 
 
-def login_or_raise() -> None:
+def login_or_raise(timeout_seconds: float | None = None) -> None:
     last_error = ""
     for attempt in range(BAOSTOCK_LOGIN_MAX_ATTEMPTS):
-        login = bs.login()
+        with temporary_baostock_proxy(), temporary_socket_timeout(timeout_seconds):
+            login = bs.login()
         if login.error_code == "0":
             return
         last_error = f"{login.error_code} {login.error_msg}"

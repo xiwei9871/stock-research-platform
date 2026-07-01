@@ -640,8 +640,13 @@ LHB_PHASE15_ACCOUNT_TRADE_COLUMNS = [
     "top_n",
     "phase12a_rule_layer",
     "entry_trade_date",
+    "entry_time",
     "entry_price",
+    "exit_status",
+    "exit_signal",
+    "exit_reason",
     "exit_trade_date",
+    "exit_time",
     "exit_price",
     "realized_return",
     "position_notional",
@@ -8005,14 +8010,11 @@ def _find_lhb_next_tradable_entry_execution_idx(
     start_idx: int,
     reference_price: float,
 ) -> tuple[int | None, int]:
-    blocked_count = 0
-    for idx in range(int(start_idx), len(frame)):
-        bar = frame.iloc[idx]
-        if _is_lhb_locked_limit_up_bar(bar, reference_price=reference_price):
-            blocked_count += 1
-            continue
-        return idx, blocked_count
-    return None, blocked_count
+    _ = reference_price
+    idx = int(start_idx)
+    if idx < len(frame):
+        return idx, 0
+    return None, 0
 
 
 def _lhb_phase12a_real_entry_exits(
@@ -9027,8 +9029,13 @@ def _lhb_phase15_trade_record(row: pd.Series) -> dict[str, Any]:
         "top_n": row.get("top_n", ""),
         "phase12a_rule_layer": row.get("phase12a_rule_layer", ""),
         "entry_trade_date": row.get("entry_trade_date", ""),
+        "entry_time": row.get("entry_time", ""),
         "entry_price": row.get("entry_price", ""),
+        "exit_status": row.get("exit_status", ""),
+        "exit_signal": row.get("exit_signal", ""),
+        "exit_reason": row.get("exit_reason", ""),
         "exit_trade_date": row.get("exit_trade_date", ""),
+        "exit_time": row.get("exit_time", ""),
         "exit_price": row.get("exit_price", ""),
         "realized_return": row.get("realized_return", ""),
         "position_notional": pd.NA,

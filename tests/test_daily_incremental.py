@@ -194,16 +194,15 @@ def test_check_market_data_freshness_blocks_when_market_bars_are_missing(monkeyp
     monkeypatch.setattr(
         daily_incremental,
         "fetch_all",
-        lambda conn, sql, params: [{"adjust_type": "hfq", "bar_count": 3355}],
+        lambda conn, sql, params: [{"bar_count": 0}],
     )
 
     result = daily_incremental.check_market_data_freshness({"trade_date": "2026-05-12"})
 
     assert result == {
         "status": "blocked",
-        "reason": "market_daily_bar incomplete for 2026-05-12: hfq=3355<4000, qfq=0<4000",
-        "counts": {"hfq": 3355, "qfq": 0},
-        "min_required_rows": 4000,
+        "reason": "market_daily_bar missing for 2026-05-12",
+        "bar_count": 0,
     }
 
 
@@ -212,19 +211,12 @@ def test_check_market_data_freshness_passes_when_market_bars_exist(monkeypatch):
     monkeypatch.setattr(
         daily_incremental,
         "fetch_all",
-        lambda conn, sql, params: [
-            {"adjust_type": "hfq", "bar_count": 5207},
-            {"adjust_type": "qfq", "bar_count": 5207},
-        ],
+        lambda conn, sql, params: [{"bar_count": 1234}],
     )
 
     result = daily_incremental.check_market_data_freshness({"trade_date": "2026-05-12"})
 
-    assert result == {
-        "status": "ok",
-        "counts": {"hfq": 5207, "qfq": 5207},
-        "min_required_rows": 4000,
-    }
+    assert result == {"status": "ok", "bar_count": 1234}
 
 
 def test_build_default_step_runners_wire_daily_jobs(monkeypatch):
@@ -244,7 +236,7 @@ def test_build_default_step_runners_wire_daily_jobs(monkeypatch):
         daily_incremental,
         "check_market_data_freshness",
         lambda context: calls.append(("check_market_data_freshness", context))
-        or {"status": "ok", "counts": {"hfq": 5207, "qfq": 5207}, "min_required_rows": 4000},
+        or {"status": "ok", "bar_count": 1234},
     )
     monkeypatch.setattr(
         daily_incremental,
@@ -308,8 +300,12 @@ def test_build_default_step_runners_wire_daily_jobs(monkeypatch):
 
     assert [call[0] for call in calls] == daily_incremental.DAILY_INCREMENTAL_STEPS
     assert outputs[1] == {"rows": 11}
-    assert outputs[2] == {"counts": {"hfq": 5207, "qfq": 5207}, "min_required_rows": 4000}
+    assert outputs[2] == {"bar_count": 1234}
     assert calls[1][1]["source_service"] == "stock_hfq"
     assert calls[1][1]["start_date"] == "2026-05-12"
+    assert calls[7][1]["start_date"] == "2026-05-12"
+    assert calls[7][1]["end_date"] == "2026-05-12"
+    assert calls[7][1]["industry_system"] == "csrc"
+    assert calls[7][1]["adjust_type"] == "qfq"
     assert calls[9][1]["lookback_bars"] == 130
     assert calls[10][1]["approved_only"] is True

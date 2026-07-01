@@ -4,6 +4,7 @@ import argparse
 import concurrent.futures
 import json
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -14,7 +15,14 @@ from zoneinfo import ZoneInfo
 
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
+from stock_research.core_data import (
+    build_asset_status_daily_for_service,
+    build_concept_daily_bars_for_service,
+    build_industry_daily_bars_for_service,
+)
 from stock_research.db import connect, execute, execute_many, fetch_all
+from stock_research.loaders.baostock_ingestion import sync_index_daily_bars
+from stock_research.market_emotion_state_v1 import DAILY_OUTPUT_COLUMNS
 from stock_research.minute_data import (
     login_or_raise as baostock_login_or_raise,
     minute_market_row as baostock_minute_market_row,
@@ -27,6 +35,13 @@ PIPELINE_READY_STATUSES = {"READY", "DEGRADED_READY"}
 PIPELINE_FINAL_STATUSES = {"READY", "DEGRADED_READY", "NOT_READY"}
 DAILY_ADJUST_TYPES = ("raw", "qfq", "hfq")
 DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO = 0.01
+MARKET_MONITOR_INDEX_IDS = (
+    "SSE_COMPOSITE",
+    "SZSE_COMPONENT",
+    "CHINEXT",
+    "STAR_50",
+    "BSE_50",
+)
 
 
 DAILY_CLOSE_PIPELINE_SQL = """
@@ -90,6 +105,7 @@ CREATE TABLE IF NOT EXISTS ops.daily_pipeline_status (
     pipeline_status text NOT NULL CHECK (pipeline_status IN ('READY', 'DEGRADED_READY', 'NOT_READY')),
     daily_status text NOT NULL,
     minute5_status text NOT NULL,
+    market_monitor_status text NOT NULL DEFAULT 'skipped',
     deps_status text NOT NULL,
     latest_ready_trade_date date,
     using_fallback_trade_date boolean NOT NULL DEFAULT false,
@@ -97,6 +113,9 @@ CREATE TABLE IF NOT EXISTS ops.daily_pipeline_status (
     failed_jobs jsonb NOT NULL DEFAULT '[]'::jsonb,
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE ops.daily_pipeline_status
+    ADD COLUMN IF NOT EXISTS market_monitor_status text NOT NULL DEFAULT 'skipped';
 """
 
 
@@ -108,7 +127,7 @@ class PipelineConfig:
     max_workers_daily: int = 2
     max_workers_minute5: int = 2
     max_workers_akshare_minute5: int = 2
-    max_workers_baostock_minute5: int = 2
+    max_workers_baostock_minute5: int = 1
     request_timeout_seconds: int = 20
     max_retries: int = 3
     daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
@@ -134,7 +153,7 @@ class PipelineConfig:
                 os.getenv("MAX_WORKERS_AKSHARE_MINUTE5", os.getenv("MAX_WORKERS_MINUTE5", "2"))
             ),
             max_workers_baostock_minute5=int(
-                os.getenv("MAX_WORKERS_BAOSTOCK_MINUTE5", "2")
+                os.getenv("MAX_WORKERS_BAOSTOCK_MINUTE5", "1")
             ),
             request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")),
             max_retries=int(os.getenv("MAX_RETRIES", "3")),
@@ -474,14 +493,25 @@ def load_active_ts_codes(service: str, trade_date: date | None = None) -> list[s
     return [f"{row['symbol']}.{row['exchange']}" for row in rows]
 
 
+MINUTE5_SOURCES = ("baostock_sh", "baostock_sz")
+
+
 def split_minute5_sources(ts_codes: list[str]) -> dict[str, list[str]]:
-    sources = {"akshare": [], "baostock": []}
+    sources = {source: [] for source in MINUTE5_SOURCES}
     for ts_code in ts_codes:
         if ts_code.endswith(".SH"):
-            sources["akshare"].append(ts_code)
+            sources["baostock_sh"].append(ts_code)
         elif ts_code.endswith(".SZ"):
-            sources["baostock"].append(ts_code)
+            sources["baostock_sz"].append(ts_code)
     return sources
+
+
+def minute5_success_sources(ts_code: str) -> tuple[str, ...]:
+    if ts_code.endswith(".SH"):
+        return ("baostock_sh", "akshare")
+    if ts_code.endswith(".SZ"):
+        return ("baostock_sz", "baostock")
+    return ()
 
 
 def load_retry_ts_codes(service: str, trade_date: date, stage: str = "minute5") -> list[str]:
@@ -568,12 +598,34 @@ def inspect_minute5_quality_from_db(
     }
 
 
+def build_retry_failed_source_plan(
+    missing_symbols: list[str], *, config: PipelineConfig
+) -> list[tuple[str, list[str], int]]:
+    if not missing_symbols:
+        return []
+    source_codes = split_minute5_sources(missing_symbols)
+    plan = []
+    for source in MINUTE5_SOURCES:
+        codes = source_codes[source]
+        if codes:
+            plan.append((source, codes, 1))
+    return plan
+
+
 def call_with_timeout(
     func: Callable[..., Any], timeout_seconds: int, *args: Any, **kwargs: Any
 ) -> Any:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func, *args, **kwargs)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    timed_out = False
+    future = executor.submit(func, *args, **kwargs)
+    try:
         return future.result(timeout=timeout_seconds)
+    except TimeoutError:
+        timed_out = True
+        future.cancel()
+        raise
+    finally:
+        executor.shutdown(wait=not timed_out, cancel_futures=timed_out)
 
 
 def retry_call(
@@ -908,13 +960,16 @@ def ts_code_to_baostock_code(ts_code: str) -> str:
 def fetch_baostock_minute5_rows(
     ts_code: str, *, start_date: date, end_date: date, timeout_seconds: int
 ) -> list[dict[str, Any]]:
-    del timeout_seconds
-    raw_rows = query_baostock_minute_rows(
-        ts_code_to_baostock_code(ts_code),
-        start_date,
-        end_date,
-        freq="5min",
-        adjust_type="raw",
+    raw_rows = call_with_timeout(
+        lambda: query_baostock_minute_rows(
+            ts_code_to_baostock_code(ts_code),
+            start_date,
+            end_date,
+            freq="5min",
+            adjust_type="raw",
+            timeout_seconds=timeout_seconds,
+        ),
+        timeout_seconds,
     )
     return [
         baostock_minute_market_row(row, freq="5min", adjust_type="raw")
@@ -1206,28 +1261,10 @@ def run_daily_stage(
     missing_adjust_types_after_tushare = tuple(
         sorted({adjust_type for _ts_code, adjust_type in missing_pairs_after_tushare})
     )
-    akshare_rows: list[dict[str, Any]] = []
-    akshare_attempts = 0
-    akshare_error = None
-    if missing_after_tushare:
-        logger.info("daily fallback source=akshare missing=%s", len(missing_after_tushare))
-        akshare_rows, akshare_attempts, akshare_error = retry_call(
-            lambda: akshare_fetcher(
-                trade_date,
-                ts_codes=missing_after_tushare,
-                timeout_seconds=config.request_timeout_seconds,
-                adjust_types=missing_adjust_types_after_tushare,
-            ),
-            max_retries=config.max_retries,
-        )
-    normalized_akshare = normalize_daily_rows(akshare_rows, "akshare")
     final_rows_by_key = {
         (row["ts_code"], row.get("adjust_type") or "raw"): row
         for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
     }
-    for row in normalized_akshare:
-        key = (row["ts_code"], row.get("adjust_type") or "raw")
-        final_rows_by_key.setdefault(key, row)
     final_rows = list(final_rows_by_key.values())
     rows_upserted = daily_upserter(config.service, final_rows)
     quality = inspect_daily_quality(
@@ -1238,17 +1275,17 @@ def run_daily_stage(
     status = "success" if quality["status"] in {"pass", "warning"} and final_rows else "failed"
     if status == "success" and (quality["missing_symbols"] or quality["abnormal_symbols"]):
         status = "partial_success"
-    error_summary = tushare_error or tushare_adjusted_error or akshare_error
+    error_summary = tushare_error or tushare_adjusted_error
     upsert_job(
         service=config.service,
         trade_date=trade_date,
         job_name="daily_bar",
         stage="daily",
-        source="mixed" if normalized_akshare else ("tushare" if normalized_tushare or normalized_tushare_adjusted else "akshare"),
+        source="tushare" if final_rows else "none",
         status=status,
         started_at=started,
         finished_at=finished,
-        attempt_count=max(tushare_attempts, tushare_adjusted_attempts, akshare_attempts),
+        attempt_count=max(tushare_attempts, tushare_adjusted_attempts),
         rows_inserted=rows_upserted,
         rows_failed=len(quality["missing_symbols"]),
         missing_symbols_count=len(quality["missing_symbols"]),
@@ -1291,20 +1328,15 @@ def run_minute5_stage(
     expected_ts_codes = ts_codes or load_active_ts_codes(config.service, trade_date)
     lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
-    failures_by_source: dict[str, dict[str, str]] = {"akshare": {}, "baostock": {}}
-    attempts_by_source: dict[str, dict[str, int]] = {"akshare": {}, "baostock": {}}
-    source_rows_by_symbol: dict[str, dict[str, list[dict[str, Any]]]] = {
-        "akshare": {},
-        "baostock": {},
-    }
     source_codes = split_minute5_sources(expected_ts_codes)
-    source_fetchers = {"akshare": fetcher, "baostock": baostock_fetcher}
-    source_workers = {
-        "akshare": config.max_workers_akshare_minute5,
-        "baostock": config.max_workers_baostock_minute5,
+    failures_by_source: dict[str, dict[str, str]] = {source: {} for source in MINUTE5_SOURCES}
+    attempts_by_source: dict[str, dict[str, int]] = {source: {} for source in MINUTE5_SOURCES}
+    source_rows_by_symbol: dict[str, dict[str, list[dict[str, Any]]]] = {
+        source: {} for source in MINUTE5_SOURCES
     }
+    source_fetchers = {source: baostock_fetcher for source in MINUTE5_SOURCES}
 
-    for source in ("akshare", "baostock"):
+    for source in MINUTE5_SOURCES:
         upsert_job(
             service=config.service,
             trade_date=trade_date,
@@ -1332,119 +1364,34 @@ def run_minute5_stage(
     def _run_source(source: str, codes: list[str]) -> None:
         if not codes:
             return
-        if source == "baostock" and baostock_fetcher is fetch_baostock_minute5_rows:
-            executor = concurrent.futures.ProcessPoolExecutor(
-                max_workers=max(1, source_workers[source]),
-                initializer=baostock_login_or_raise,
-            )
-            try:
-                future_to_code = {
-                    executor.submit(
-                        fetch_baostock_minute5_worker,
-                        ts_code,
-                        lookback_start,
-                        trade_date,
-                        config.request_timeout_seconds,
-                        config.max_retries,
-                    ): ts_code
-                    for ts_code in codes
-                }
-                pending = set(future_to_code)
-                deadline = time.monotonic() + config.minute5_source_timeout_seconds
-                while pending:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        for future in pending:
-                            ts_code = future_to_code[future]
-                            failures_by_source[source][ts_code] = "minute5 source timeout"
-                            record_failed_symbol(
-                                service=config.service,
-                                trade_date=trade_date,
-                                stage="minute5",
-                                dataset_name="minute5_bar",
-                                ts_code=ts_code,
-                                source=source,
-                                error_type="TimeoutError",
-                                error_summary="minute5 source timeout",
-                                attempt_count=0,
-                            )
-                        if hasattr(executor, "terminate_workers"):
-                            executor.terminate_workers()
-                        else:
-                            executor.shutdown(wait=False, cancel_futures=True)
-                        return
-                    done, pending = concurrent.futures.wait(
-                        pending,
-                        timeout=min(5.0, remaining),
-                        return_when=concurrent.futures.FIRST_COMPLETED,
-                    )
-                    for future in done:
-                        ts_code = future_to_code[future]
-                        try:
-                            ts_code, rows, attempt_count, error = future.result()
-                        except Exception as exc:  # noqa: BLE001 - worker crash must be recorded per symbol.
-                            rows, attempt_count = [], 0
-                            error = f"{type(exc).__name__}: {exc}"
-                            ts_code = future_to_code[future]
-                        attempts_by_source[source][ts_code] = attempt_count
-                        if error:
-                            failures_by_source[source][ts_code] = error
-                            record_failed_symbol(
-                                service=config.service,
-                                trade_date=trade_date,
-                                stage="minute5",
-                                dataset_name="minute5_bar",
-                                ts_code=ts_code,
-                                source=source,
-                                error_type=error.split(":", 1)[0],
-                                error_summary=error,
-                                attempt_count=attempt_count,
-                            )
-                        else:
-                            source_rows_by_symbol[source][ts_code] = rows
-                            rows_by_symbol.setdefault(ts_code, []).extend(rows)
-            finally:
-                executor.shutdown(wait=False, cancel_futures=True)
-            return
+        logger.info(
+            "minute5 source started source=%s symbols=%s workers=%s",
+            source,
+            len(codes),
+            1,
+        )
+        for ts_code in codes:
+            source_name, ts_code, rows, attempt_count, error = _one(source, ts_code)
+            attempts_by_source[source_name][ts_code] = attempt_count
+            if error:
+                failures_by_source[source_name][ts_code] = error
+                record_failed_symbol(
+                    service=config.service,
+                    trade_date=trade_date,
+                    stage="minute5",
+                    dataset_name="minute5_bar",
+                    ts_code=ts_code,
+                    source=source_name,
+                    error_type=error.split(":", 1)[0],
+                    error_summary=error,
+                    attempt_count=attempt_count,
+                )
+            else:
+                source_rows_by_symbol[source_name][ts_code] = rows
+                rows_by_symbol.setdefault(ts_code, []).extend(rows)
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=max(1, source_workers[source])
-        ) as executor:
-            futures = [executor.submit(_one, source, ts_code) for ts_code in codes]
-            for future in concurrent.futures.as_completed(futures):
-                source_name, ts_code, rows, attempt_count, error = future.result()
-                attempts_by_source[source_name][ts_code] = attempt_count
-                if error:
-                    failures_by_source[source_name][ts_code] = error
-                    record_failed_symbol(
-                        service=config.service,
-                        trade_date=trade_date,
-                        stage="minute5",
-                        dataset_name="minute5_bar",
-                        ts_code=ts_code,
-                        source=source_name,
-                        error_type=error.split(":", 1)[0],
-                        error_summary=error,
-                        attempt_count=attempt_count,
-                    )
-                else:
-                    source_rows_by_symbol[source_name][ts_code] = rows
-                    rows_by_symbol.setdefault(ts_code, []).extend(rows)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as source_executor:
-        source_futures = []
-        for source in ("akshare", "baostock"):
-            logger.info(
-                "minute5 source started source=%s symbols=%s workers=%s",
-                source,
-                len(source_codes[source]),
-                source_workers[source],
-            )
-            source_futures.append(
-                source_executor.submit(_run_source, source, source_codes[source])
-            )
-        for future in concurrent.futures.as_completed(source_futures):
-            future.result()
+    for source in MINUTE5_SOURCES:
+        _run_source(source, source_codes[source])
 
     all_rows = [row for rows in rows_by_symbol.values() for row in rows]
     rows_upserted = upserter(config.service, all_rows)
@@ -1476,7 +1423,7 @@ def run_minute5_stage(
             ), source_quality
         return "success", source_quality
 
-    for source in ("akshare", "baostock"):
+    for source in MINUTE5_SOURCES:
         source_status, source_quality = _source_status(source)
         source_rows = sum(
             len(rows) for rows in source_rows_by_symbol[source].values()
@@ -1516,13 +1463,13 @@ def run_minute5_stage(
     else:
         status = "success"
     logger.info(
-        "minute5 stage finished status=%s rows=%s failures=%s coverage=%.4f akshare_symbols=%s baostock_symbols=%s",
+        "minute5 stage finished status=%s rows=%s failures=%s coverage=%.4f baostock_sh_symbols=%s baostock_sz_symbols=%s",
         status,
         rows_upserted,
         len(failures),
         coverage,
-        len(source_codes["akshare"]),
-        len(source_codes["baostock"]),
+        len(source_codes["baostock_sh"]),
+        len(source_codes["baostock_sz"]),
     )
     return {
         "stage": "minute5",
@@ -1545,15 +1492,13 @@ def run_retry_failed_stage(
     if not missing_symbols:
         return {"stage": "retry_failed", "status": "skipped", "rows": 0, "failed_symbols": []}
 
-    akshare_failed = [ts_code for ts_code in missing_symbols if ts_code.endswith(".SH")]
-    baostock_failed = [ts_code for ts_code in missing_symbols if ts_code.endswith(".SZ")]
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
     failures: dict[str, str] = {}
     attempts: dict[str, int] = {}
     lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
 
     def _fetch_with_source(source: str, ts_code: str) -> tuple[str, str, list[dict[str, Any]], int, str | None]:
-        source_fetcher = fetch_baostock_minute5_rows if source == "baostock" else fetcher
+        source_fetcher = fetch_baostock_minute5_rows if source.startswith("baostock_") else fetcher
         rows, attempt_count, error = retry_call(
             lambda: source_fetcher(
                 ts_code,
@@ -1565,80 +1510,26 @@ def run_retry_failed_stage(
         )
         return source, ts_code, rows, attempt_count, error
 
-    retry_plan = [
-        ("baostock", akshare_failed, config.max_workers_baostock_minute5),
-        ("akshare", baostock_failed, config.max_workers_akshare_minute5),
-    ]
+    retry_plan = build_retry_failed_source_plan(missing_symbols, config=config)
     for source, codes, workers in retry_plan:
         if not codes:
             continue
-        if source == "baostock":
-            executor = concurrent.futures.ProcessPoolExecutor(
-                max_workers=max(1, workers),
-                initializer=baostock_login_or_raise,
-            )
-            try:
-                future_to_code = {
-                    executor.submit(
-                        fetch_baostock_minute5_worker,
-                        ts_code,
-                        lookback_start,
-                        trade_date,
-                        config.request_timeout_seconds,
-                        config.max_retries,
-                    ): ts_code
-                    for ts_code in codes
-                }
-                pending = set(future_to_code)
-                deadline = time.monotonic() + config.minute5_source_timeout_seconds
-                while pending:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        for future in pending:
-                            failures[future_to_code[future]] = "minute5 fallback timeout"
-                        if hasattr(executor, "terminate_workers"):
-                            executor.terminate_workers()
-                        else:
-                            executor.shutdown(wait=False, cancel_futures=True)
-                        break
-                    done, pending = concurrent.futures.wait(
-                        pending,
-                        timeout=min(5.0, remaining),
-                        return_when=concurrent.futures.FIRST_COMPLETED,
-                    )
-                    for future in done:
-                        ts_code = future_to_code[future]
-                        try:
-                            ts_code, rows, attempt_count, error = future.result()
-                        except Exception as exc:  # noqa: BLE001 - worker failure is per-symbol failure.
-                            rows, attempt_count = [], 0
-                            error = f"{type(exc).__name__}: {exc}"
-                        attempts[ts_code] = attempt_count
-                        if error:
-                            failures[ts_code] = error
-                        else:
-                            rows_by_symbol[ts_code] = rows
-            finally:
-                executor.shutdown(wait=False, cancel_futures=True)
-        else:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
-                futures = [executor.submit(_fetch_with_source, source, ts_code) for ts_code in codes]
-                for future in concurrent.futures.as_completed(futures):
-                    _source, ts_code, rows, attempt_count, error = future.result()
-                    attempts[ts_code] = attempt_count
-                    if error:
-                        failures[ts_code] = error
-                    else:
-                        rows_by_symbol[ts_code] = rows
+        for ts_code in codes:
+            _source, ts_code, rows, attempt_count, error = _fetch_with_source(source, ts_code)
+            attempts[ts_code] = attempt_count
+            if error:
+                failures[ts_code] = error
+            else:
+                rows_by_symbol[ts_code] = rows
 
     rows = [row for symbol_rows in rows_by_symbol.values() for row in symbol_rows]
     rows_upserted = upserter(config.service, rows)
     for ts_code in missing_symbols:
         if ts_code not in failures and ts_code in rows_by_symbol:
-            original_source = "akshare" if ts_code.endswith(".SH") else "baostock"
-            mark_failed_symbol_success(
-                config.service, trade_date, "minute5", "minute5_bar", ts_code, original_source
-            )
+            for source in minute5_success_sources(ts_code):
+                mark_failed_symbol_success(
+                    config.service, trade_date, "minute5", "minute5_bar", ts_code, source
+                )
     expected_ts_codes = load_active_ts_codes(config.service, trade_date)
     quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
@@ -1672,6 +1563,259 @@ def run_retry_failed_stage(
         "rows": rows_upserted,
         "failed_symbols": sorted(failures),
         "attempts": max(attempts.values(), default=0),
+    }
+
+
+def _sql_literal_type(column: str) -> str:
+    if column == "trade_date":
+        return "date"
+    if column in {"emotion_state", "risk_state", "style_signal_hint", "position_budget_hint"}:
+        return "text"
+    return "numeric"
+
+
+def _clean_market_emotion_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    if hasattr(value, "item"):
+        value = value.item()
+    return value
+
+
+def ensure_market_emotion_state_daily_table(service: str = SETTINGS.research_service) -> None:
+    column_sql = ",\n        ".join(
+        f"{column} {_sql_literal_type(column)}"
+        for column in DAILY_OUTPUT_COLUMNS
+        if column != "trade_date"
+    )
+    sql = f"""
+    CREATE SCHEMA IF NOT EXISTS research;
+    CREATE TABLE IF NOT EXISTS research.market_emotion_state_daily (
+        trade_date date PRIMARY KEY,
+        {column_sql},
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """
+    alter_sql = "\n".join(
+        f"ALTER TABLE research.market_emotion_state_daily ADD COLUMN IF NOT EXISTS {column} {_sql_literal_type(column)};"
+        for column in DAILY_OUTPUT_COLUMNS
+        if column != "trade_date"
+    )
+    alter_sql += "\nALTER TABLE research.market_emotion_state_daily ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();"
+    with connect(service) as conn:
+        execute(conn, sql)
+        execute(conn, alter_sql)
+
+
+def upsert_market_emotion_state_daily(
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> int:
+    from stock_research.dashboard.market_monitor import compute_market_emotion_row
+
+    ensure_market_emotion_state_daily_table(service)
+    row = compute_market_emotion_row(trade_date, service=service)
+    if not row:
+        return 0
+    payload = {
+        column: _clean_market_emotion_value(row.get(column))
+        for column in DAILY_OUTPUT_COLUMNS
+    }
+    payload["trade_date"] = trade_date
+    columns = list(DAILY_OUTPUT_COLUMNS)
+    placeholders = ", ".join(f"%({column})s" for column in columns)
+    update_sql = ",\n        ".join(
+        f"{column} = EXCLUDED.{column}"
+        for column in columns
+        if column != "trade_date"
+    )
+    sql = f"""
+    INSERT INTO research.market_emotion_state_daily (
+        {", ".join(columns)}
+    )
+    VALUES ({placeholders})
+    ON CONFLICT (trade_date) DO UPDATE SET
+        {update_sql},
+        updated_at = now()
+    """
+    with connect(service) as conn:
+        execute(conn, sql, payload)
+    return 1
+
+
+def check_market_monitor_sources(
+    trade_date: str,
+    service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    ensure_market_emotion_state_daily_table(service)
+    sql = """
+    WITH emotion AS (
+        SELECT count(*)::int AS emotion_rows
+        FROM research.market_emotion_state_daily
+        WHERE trade_date = %s
+          AND total_amount IS NOT NULL
+          AND up_count IS NOT NULL
+          AND down_count IS NOT NULL
+          AND limit_up_count IS NOT NULL
+          AND limit_down_count IS NOT NULL
+    ),
+    indices AS (
+        SELECT count(DISTINCT index_id)::int AS index_rows
+        FROM market.index_daily_bar
+        WHERE trade_date = %s
+          AND index_id = ANY(%s)
+    ),
+    industries AS (
+        SELECT count(*)::int AS industry_rows
+        FROM market.industry_daily_bar
+        WHERE trade_date = %s
+          AND industry_system = 'csrc'
+    ),
+    fund_flow AS (
+        SELECT count(*)::int AS fund_flow_rows
+        FROM market.industry_daily_bar
+        WHERE trade_date = %s
+          AND industry_system = 'csrc'
+          AND amount IS NOT NULL
+          AND close IS NOT NULL
+          AND preclose IS NOT NULL
+          AND preclose <> 0
+    )
+    SELECT
+        emotion.emotion_rows,
+        indices.index_rows,
+        industries.industry_rows,
+        fund_flow.fund_flow_rows
+    FROM emotion, indices, industries, fund_flow
+    """
+    with connect(service) as conn:
+        rows = fetch_all(
+            conn,
+            sql,
+            [
+                trade_date,
+                trade_date,
+                list(MARKET_MONITOR_INDEX_IDS),
+                trade_date,
+                trade_date,
+            ],
+        )
+    row = dict(rows[0]) if rows else {}
+    result = {
+        "emotion_rows": int(row.get("emotion_rows") or 0),
+        "index_rows": int(row.get("index_rows") or 0),
+        "industry_rows": int(row.get("industry_rows") or 0),
+        "fund_flow_rows": int(row.get("fund_flow_rows") or 0),
+    }
+    result["status"] = (
+        "success"
+        if result["emotion_rows"] >= 1
+        and result["index_rows"] >= len(MARKET_MONITOR_INDEX_IDS)
+        and result["industry_rows"] > 0
+        and result["fund_flow_rows"] > 0
+        else "failed"
+    )
+    return result
+
+
+def run_market_monitor_stage(
+    trade_date: date,
+    *,
+    config: PipelineConfig,
+) -> dict[str, Any]:
+    skip, reason = should_skip_for_holiday(
+        config.service,
+        trade_date,
+        force=config.force_non_trading_day,
+    )
+    if skip:
+        return record_skipped_stage(
+            service=config.service,
+            trade_date=trade_date,
+            stage="market_monitor",
+            job_name="market_monitor_eod",
+            source="internal",
+            reason=f"trading_calendar={reason}",
+        )
+
+    logger, _log_path = setup_stage_logger(trade_date, "market_monitor")
+    started = datetime.now(ZoneInfo(config.timezone))
+    trade_date_str = trade_date.isoformat()
+    status = "success"
+    error_summary = None
+    rows_inserted = 0
+    rows_failed = 0
+    sources: dict[str, Any] = {}
+
+    try:
+        index_rows = int(sync_index_daily_bars(trade_date_str, trade_date_str, config.service) or 0)
+        build_asset_status_daily_for_service(
+            trade_date_str,
+            trade_date_str,
+            "qfq",
+            config.service,
+        )
+        build_industry_daily_bars_for_service(
+            trade_date_str,
+            trade_date_str,
+            "csrc",
+            "qfq",
+            config.service,
+        )
+        build_concept_daily_bars_for_service(
+            trade_date_str,
+            trade_date_str,
+            "ths",
+            "qfq",
+            config.service,
+        )
+        emotion_rows = int(upsert_market_emotion_state_daily(trade_date_str, config.service) or 0)
+        sources = check_market_monitor_sources(trade_date_str, config.service)
+        rows_inserted = (
+            index_rows
+            + emotion_rows
+            + int(sources.get("industry_rows") or 0)
+            + int(sources.get("fund_flow_rows") or 0)
+        )
+        if sources.get("status") != "success":
+            status = "failed"
+            rows_failed = 1
+            error_summary = (
+                "market_monitor_sources failed: "
+                f"emotion_rows={sources.get('emotion_rows', 0)} "
+                f"index_rows={sources.get('index_rows', 0)} "
+                f"industry_rows={sources.get('industry_rows', 0)} "
+                f"fund_flow_rows={sources.get('fund_flow_rows', 0)}"
+            )
+        logger.info("market monitor sources=%s rows=%s", sources, rows_inserted)
+    except Exception as exc:  # noqa: BLE001 - pipeline jobs must record failures.
+        status = "failed"
+        rows_failed = 1
+        error_summary = f"{type(exc).__name__}: {exc}"
+        logger.exception("market monitor stage failed")
+
+    finished = datetime.now(ZoneInfo(config.timezone))
+    upsert_job(
+        service=config.service,
+        trade_date=trade_date,
+        job_name="market_monitor_eod",
+        stage="market_monitor",
+        source="internal",
+        status=status,
+        started_at=started,
+        finished_at=finished,
+        attempt_count=1,
+        rows_inserted=rows_inserted,
+        rows_failed=rows_failed,
+        error_summary=error_summary,
+    )
+    return {
+        "stage": "market_monitor",
+        "status": status,
+        "rows": rows_inserted,
+        "sources": sources,
     }
 
 
@@ -1850,6 +1994,7 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         quality_by_dataset.get("minute5_bar"),
         max_gap_ratio=config.external_data_max_quality_gap_ratio,
     )
+    market_monitor_status = _stage_status_from_jobs(rows, "market_monitor")
     deps_status = _stage_status_from_jobs(rows, "deps")
     failed_jobs = [
         {
@@ -1863,13 +2008,20 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         if row["status"] in {"failed", "partial_success"}
     ]
     non_trading_day = calendar_status == "closed"
-    critical_ok = daily_status in {"success", "partial_success"} and minute5_status in {
-        "success",
-        "partial_success",
-    } and deps_status in {"success", "partial_success", "skipped"}
+    critical_ok = (
+        daily_status in {"success", "partial_success"}
+        and minute5_status in {"success", "partial_success"}
+        and market_monitor_status in {"success", "partial_success", "skipped"}
+        and deps_status in {"success", "partial_success", "skipped"}
+    )
     if non_trading_day:
         pipeline_status = "READY"
-    elif not critical_ok or daily_status == "failed" or minute5_status == "failed":
+    elif (
+        not critical_ok
+        or daily_status == "failed"
+        or minute5_status == "failed"
+        or market_monitor_status == "failed"
+    ):
         pipeline_status = "NOT_READY"
     elif daily_status == "partial_success" or minute5_status == "partial_success" or any(
         row["status"] == "partial_success" for row in rows
@@ -1897,6 +2049,7 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         "pipeline_status": pipeline_status,
         "daily_status": daily_status,
         "minute5_status": minute5_status,
+        "market_monitor_status": market_monitor_status,
         "deps_status": deps_status,
         "latest_ready_trade_date": visible_trade_date,
         "using_fallback_trade_date": pipeline_status == "NOT_READY" or non_trading_day,
@@ -1905,18 +2058,19 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
     }
     sql_upsert = """
     INSERT INTO ops.daily_pipeline_status (
-        trade_date, pipeline_status, daily_status, minute5_status, deps_status,
+        trade_date, pipeline_status, daily_status, minute5_status, market_monitor_status, deps_status,
         latest_ready_trade_date, using_fallback_trade_date, warnings, failed_jobs
     )
     VALUES (
         %(trade_date)s, %(pipeline_status)s, %(daily_status)s, %(minute5_status)s,
-        %(deps_status)s, %(latest_ready_trade_date)s, %(using_fallback_trade_date)s,
+        %(market_monitor_status)s, %(deps_status)s, %(latest_ready_trade_date)s, %(using_fallback_trade_date)s,
         %(warnings)s::jsonb, %(failed_jobs)s::jsonb
     )
     ON CONFLICT (trade_date) DO UPDATE SET
         pipeline_status = EXCLUDED.pipeline_status,
         daily_status = EXCLUDED.daily_status,
         minute5_status = EXCLUDED.minute5_status,
+        market_monitor_status = EXCLUDED.market_monitor_status,
         deps_status = EXCLUDED.deps_status,
         latest_ready_trade_date = EXCLUDED.latest_ready_trade_date,
         using_fallback_trade_date = EXCLUDED.using_fallback_trade_date,
@@ -1936,7 +2090,7 @@ def load_data_status_for_dashboard(
     service: str = SETTINGS.research_service, current_trade_date: date | None = None
 ) -> dict[str, Any]:
     sql = """
-    SELECT trade_date, pipeline_status, daily_status, minute5_status, deps_status,
+    SELECT trade_date, pipeline_status, daily_status, minute5_status, market_monitor_status, deps_status,
            latest_ready_trade_date, using_fallback_trade_date, warnings, failed_jobs, updated_at
     FROM ops.daily_pipeline_status
     ORDER BY trade_date DESC
@@ -1951,6 +2105,7 @@ def load_data_status_for_dashboard(
             "pipeline_status": "NOT_READY",
             "daily_status": "skipped",
             "minute5_status": "skipped",
+            "market_monitor_status": "skipped",
             "deps_status": "skipped",
             "failed_jobs": [],
             "warnings": ["pipeline_status_not_initialized"],
@@ -1967,6 +2122,7 @@ def load_data_status_for_dashboard(
         "pipeline_status": row["pipeline_status"],
         "daily_status": row["daily_status"],
         "minute5_status": row["minute5_status"],
+        "market_monitor_status": row.get("market_monitor_status") or "skipped",
         "deps_status": row["deps_status"],
         "failed_jobs": row["failed_jobs"] or [],
         "warnings": row["warnings"] or [],
@@ -2008,6 +2164,8 @@ def run_pipeline_stage(stage: str, trade_date: date, config: PipelineConfig) -> 
         return run_minute5_stage(trade_date, config=config)
     if stage == "deps":
         return run_deps_stage(trade_date, config=config)
+    if stage == "market_monitor":
+        return run_market_monitor_stage(trade_date, config=config)
     if stage == "retry_failed":
         return run_retry_failed_stage(trade_date, config=config)
     if stage in {"health", "finalize"}:
@@ -2018,6 +2176,7 @@ def run_pipeline_stage(stage: str, trade_date: date, config: PipelineConfig) -> 
         results = {
             "daily": run_daily_stage(trade_date, config=config),
             "minute5": run_minute5_stage(trade_date, config=config),
+            "market_monitor": run_market_monitor_stage(trade_date, config=config),
             "deps": run_deps_stage(trade_date, config=config),
         }
         results["health"] = finalize_pipeline_status(trade_date, config=config)
@@ -2030,7 +2189,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--date", help="Trade date in YYYYMMDD or YYYY-MM-DD")
     parser.add_argument(
         "--stage",
-        choices=["all", "daily", "minute5", "deps", "health", "retry_failed", "status"],
+        choices=[
+            "all",
+            "daily",
+            "minute5",
+            "deps",
+            "market_monitor",
+            "health",
+            "retry_failed",
+            "status",
+        ],
         default="all",
     )
     parser.add_argument("--apply-schema", action="store_true", default=True)

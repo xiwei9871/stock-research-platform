@@ -71,6 +71,125 @@ def test_build_internal_ops_snapshot_keeps_ready_requested_date_ready(monkeypatc
     assert snapshot["intervention"]["reason_code"] == "ready"
 
 
+def test_build_internal_ops_snapshot_defaults_to_latest_status_trade_date(monkeypatch):
+    captured: dict[str, date] = {}
+
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot._fetch_latest_pipeline_status_row",
+        lambda service: {"trade_date": date(2026, 6, 29)},
+    )
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot._today_in_timezone",
+        lambda tz_name: date(2026, 6, 30),
+    )
+
+    def fake_status_context(service, trade_date):
+        captured["status_date"] = trade_date
+        return {
+            "data_status": {
+                "latest_ready_trade_date": "2026-06-29",
+                "current_trade_date": "2026-06-29",
+                "pipeline_status": "DEGRADED_READY",
+                "daily_status": "partial_success",
+                "minute5_status": "partial_success",
+                "deps_status": "success",
+                "failed_jobs": [],
+                "warnings": [],
+                "last_updated_at": "2026-06-29T22:08:33+08:00",
+            },
+            "requested_trade_date": "2026-06-29",
+            "status_trade_date": "2026-06-29",
+            "latest_available_trade_date": "2026-06-29",
+            "matches_requested_trade_date": True,
+        }
+
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot._load_pipeline_status_context", fake_status_context)
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.load_intraday_status", lambda service, run_date: {})
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot.summarize_operational_health",
+        lambda **kwargs: {
+            "trade_date": "2026-06-29",
+            "status": "ok",
+            "alert_count": 0,
+            "ingest": {},
+            "stale_ingest": {},
+            "backfill": {},
+            "stale_backfill": {},
+            "daily_jobs": [],
+        },
+    )
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.load_ops_stage_details", lambda service, trade_date=None: [])
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot._now_in_timezone",
+        lambda tz_name: "2026-06-30T06:30:00+08:00",
+    )
+
+    snapshot = build_internal_ops_snapshot("stock_research")
+
+    assert captured["status_date"] == date(2026, 6, 29)
+    assert snapshot["run_window"]["requested_trade_date"] == "2026-06-29"
+    assert snapshot["readiness"]["ready_status"] == "degraded_ready"
+    assert snapshot["readiness"]["blocking_issue_count"] == 0
+
+
+def test_build_internal_ops_snapshot_does_not_count_degraded_ready_warnings_as_blocking(monkeypatch):
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",
+        lambda service, trade_date: {
+            "data_status": {
+                "latest_ready_trade_date": "2026-06-30",
+                "current_trade_date": "2026-06-30",
+                "pipeline_status": "DEGRADED_READY",
+                "daily_status": "partial_success",
+                "minute5_status": "partial_success",
+                "deps_status": "success",
+                "failed_jobs": [{"stage": "minute5", "status": "partial_success"}],
+                "warnings": ["optional_or_partial_data_failed"],
+                "last_updated_at": "2026-06-30T21:02:37+08:00",
+            },
+            "requested_trade_date": "2026-06-30",
+            "status_trade_date": "2026-06-30",
+            "latest_available_trade_date": "2026-06-30",
+            "matches_requested_trade_date": True,
+        },
+    )
+    monkeypatch.setattr("stock_research.dashboard.ops_snapshot.load_intraday_status", lambda service, run_date: {})
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot.summarize_operational_health",
+        lambda **kwargs: {
+            "trade_date": "2026-06-30",
+            "status": "ok",
+            "alert_count": 0,
+            "ingest": {},
+            "stale_ingest": {},
+            "backfill": {},
+            "stale_backfill": {},
+            "daily_jobs": [],
+        },
+    )
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot.load_ops_stage_details",
+        lambda service, trade_date=None: [
+            {
+                "stage": "minute5",
+                "status": "running",
+                "started_at": "2026-06-30T19:00:00+08:00",
+                "updated_at": "2026-06-30T19:00:00+08:00",
+                "error_summary": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "stock_research.dashboard.ops_snapshot._now_in_timezone",
+        lambda tz_name: "2026-06-30T21:30:00+08:00",
+    )
+
+    snapshot = build_internal_ops_snapshot("stock_research", trade_date=date(2026, 6, 30))
+
+    assert snapshot["readiness"]["ready_status"] == "degraded_ready"
+    assert snapshot["readiness"]["blocking_issue_count"] == 0
+
+
 def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch):
     monkeypatch.setattr(
         "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",

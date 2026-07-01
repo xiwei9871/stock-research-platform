@@ -21,6 +21,7 @@ PY
 fi
 
 source "$ROOT/scripts/stock_cron_guard.sh"
+clear_stock_proxy_env
 stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
 
 ENRICH_START_DATE="${PLATFORM_READY_ENRICH_START_DATE:-$("$PYTHON" - <<PY

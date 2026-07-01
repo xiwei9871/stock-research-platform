@@ -11,6 +11,13 @@ The design must prioritize PnL over audit-label reduction. It must avoid hard ve
 - `partial_exit_v1`
 - `combined_soft_ownership_v1`
 
+Interpretability constraints for this round:
+
+- adjusted target weights must not be auto-normalized back to full invested exposure
+- released weight must flow to cash, not to other holdings
+- ownership diagnostics may be computed for every variant, but ownership-based exit suppression must stay variant-specific
+- true damage exits may not be suppressed by soft ownership
+
 ## Scope
 
 This design covers:
@@ -317,6 +324,7 @@ Persist one row per asset per day with:
 - `exit_fraction`
 - `whether_exit_was_suppressed_by_ownership`
 - `whether_addback_occurred`
+- `missing_meta_state`
 - `confirmed_regime_state`
 - `score_rank`
 - `mid_trend_layer`
@@ -340,6 +348,24 @@ Trade-level diagnostics must include:
 - `exit_reason`
 - `confirmed_damage_flag`
 
+### Exposure accounting
+
+Experimental target weights must not be automatically rescaled to `100%` invested after:
+
+- entry soft downweighting
+- partial exit
+- ownership-preserving hold/no-add decisions
+
+Released weight must become `cash_weight`. It may not be redistributed across other holdings.
+
+Every variant summary must include:
+
+- `average_exposure`
+- `cash_weight_avg`
+- `min_exposure`
+- `max_exposure`
+- `return_per_unit_exposure`
+
 ## Variant Logic
 
 ### Baseline
@@ -350,6 +376,22 @@ Control path:
   - `start_date=2025-01-01`
   - `end_date=2026-06-12`
 - confirm outputs match current known result within a small tolerance
+
+Baseline reproduction validation must compare at least:
+
+- daily holdings row count
+- trade changes row count
+- final equity
+- `total_return`
+- `max_drawdown`
+- total trades
+- daily equity series difference
+
+If baseline materially mismatches the reference artifact, the runner must:
+
+1. write a diff report
+2. stop variant main-conclusion generation
+3. mark the experiment invalid for interpretation
 
 ### `entry_soft_weight_v1`
 
@@ -382,6 +424,11 @@ Multipliers:
 - extreme_damage: `0.1`
 
 No hard veto except optional near-zero weight for extreme damage.
+
+Interpretability rule:
+
+- reduced entry weight increases cash
+- it does not implicitly reweight stronger names upward
 
 ### `ownership_hold_v1`
 
@@ -432,6 +479,21 @@ Minimal confirmed damage:
 - `mid_trend_layer == risk_exclusion_watch`, or
 - `max_drawdown_20_score < 35` and `stock_excess_ret_20_score < 35`
 
+Implementation constraint:
+
+- `ownership_hold_v1` must be able to read state for a previously held asset even when that asset disappears from baseline `protected_selection`
+- daily state for such assets must be looked up from the full funnel/detail frame and price frame
+- if state is unavailable, record `missing_meta_state`
+- missing state may not default to healthy
+
+True damage that must trigger `full_exit` and may not be suppressed:
+
+- ATR trailing stop
+- `mid_trend_layer == risk_exclusion_watch`
+- repeated rank break above damage threshold
+- `max_drawdown_20_score` plus `stock_excess_ret_20_score` joint damage
+- no profit cushion plus continued deterioration
+
 ### `partial_exit_v1`
 
 Intent:
@@ -445,11 +507,18 @@ Rules:
 - elif rank weakens but ownership intact: `hold`, fraction `0.0`
 - addback allowed when later target weight implied by baseline exceeds current experimental weight and ownership damage clears
 
+Ablation boundary:
+
+- `partial_exit_v1` may compute ownership diagnostics for reporting
+- but it may not use ownership-state suppression to extend holding life beyond replacing `full_exit` with `reduce`
+- this variant tests exit sizing only
+
 Implementation method:
 
 - no engine rewrite
 - use adjusted `target_weight` at holdings layer
 - derive `buy / increase / decrease / sell` from experimental target weights
+- released weight stays in cash
 
 ### `combined_soft_ownership_v1`
 
@@ -460,6 +529,13 @@ Combine:
 - partial exit from `partial_exit_v1`
 
 Only confirmed damage may force `full_exit`.
+
+Variant boundary:
+
+- ownership diagnostics may exist for all variants
+- actual exit suppression by ownership is allowed only in:
+  - `ownership_hold_v1`
+  - `combined_soft_ownership_v1`
 
 ## Execution Flow
 
@@ -473,6 +549,13 @@ New experimental runner:
 6. derive holdings, trades, equity, summary
 7. build diagnostics and audit outputs
 8. compare against rerun baseline over the same window
+
+When an owned asset is absent from baseline `protected_selection` on a day:
+
+- look up its metadata from the full funnel detail by `trade_date + asset_id`
+- look up its price state from the full price frame
+- if metadata is missing, record `missing_meta_state`
+- do not classify it as healthy by default
 
 ## Evaluation Outputs
 
@@ -523,6 +606,11 @@ Secondary:
 - `bad_sell_count`
 - `bad_sell_rate`
 - `issue_rate`
+- `average_exposure`
+- `cash_weight_avg`
+- `min_exposure`
+- `max_exposure`
+- `return_per_unit_exposure`
 
 If current engine lacks a metric, the experimental runner may compute it from daily returns and round-trip trade diagnostics. Missing metrics must be explicitly marked, not silently omitted.
 
@@ -554,6 +642,8 @@ Parameters:
 - `--variants`
 - `--baseline-reference-dir`
 - optional robustness splits flag
+
+Any robustness split output is secondary only. The main conclusion must remain the full-window result from `2025-01-01` to `2026-06-12`.
 
 Default variants:
 
@@ -607,6 +697,11 @@ Therefore partial exit will be implemented by:
 
 This is acceptable for a research variant and keeps baseline intact.
 
+Important interpretation rule:
+
+- lower adjusted weights create cash
+- they must not cause hidden redistribution into the remaining active names
+
 ## Success Criteria
 
 The experiment is successful only if at least one soft-ownership variant:
@@ -616,6 +711,14 @@ The experiment is successful only if at least one soft-ownership variant:
 - shows a credible mechanism of improvement in diagnostics
 
 Reducing `bad_buy / bad_sell` alone is not success.
+
+The final interpretation must explicitly answer:
+
+1. whether return change was mainly caused by average exposure change
+2. whether drawdown change was mainly caused by higher cash weight
+3. whether top winners contribution was harmed by entry soft weighting
+4. among suppressed exits, which cases were saved winners vs false holds
+5. whether partial-exit released capital stayed in cash rather than being reallocated
 
 ## Next Step After Approval
 

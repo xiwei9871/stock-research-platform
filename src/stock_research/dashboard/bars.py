@@ -13,6 +13,19 @@ RESOLUTION_TRADING_DAYS = {
     "5m": 5,
 }
 
+
+def normalize_market_asset_id(asset_id: str) -> str:
+    text = str(asset_id or "").strip().upper()
+    if text.startswith("CN:"):
+        return text
+    if "." not in text:
+        return text
+    code, exchange = text.split(".", 1)
+    if exchange in {"SH", "SZ", "BJ"} and len(code) == 6 and code.isdigit():
+        return f"CN:{exchange}:{code}"
+    return text
+
+
 def load_daily_bars(
     asset_id: str,
     start_date: str,
@@ -36,7 +49,11 @@ def load_daily_bars(
     ORDER BY trade_date
     """
     with connect(service) as conn:
-        rows = fetch_all(conn, sql, [asset_id, start_date, end_date, adjust_type])
+        rows = fetch_all(
+            conn,
+            sql,
+            [asset_id, start_date, end_date, adjust_type],
+        )
     return [_bar_point(row).to_dict() for row in rows]
 
 
@@ -46,7 +63,7 @@ def load_bars(
     start_date: str | None = None,
     resolution: str = "1D",
     adjust_type: str = "qfq",
-    source: str = "akshare",
+    source: str = "baostock",
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
     normalized_resolution = normalize_resolution(resolution)
@@ -103,7 +120,14 @@ def load_minute_bars(
         rows = fetch_all(
             conn,
             sql,
-            [asset_id, start_time, end_time, freq, adjust_type, source],
+            [
+                asset_id,
+                start_time,
+                end_time,
+                freq,
+                adjust_type,
+                source,
+            ],
         )
     return [_bar_point(row).to_dict() for row in rows]
 

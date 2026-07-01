@@ -87,27 +87,51 @@ Public snapshot:
 curl http://127.0.0.1:8765/api/public/snapshot
 ```
 
-Public-only frontend deployment:
+Canonical frontend deployment:
 
 ```bash
 cd /Users/xiwei/stock_research/dashboard
-VITE_PUBLIC_SNAPSHOT_ONLY=true pnpm build
+pnpm build
 ```
 
-That build path switches Vite to `dashboard/public.html`, which bootstraps
-`dashboard/src/public-main.tsx`. The resulting artifact imports only
-`PublicSnapshotPage` plus shared styles, so it is a true public-only bundle
-rather than a runtime branch inside the internal app shell bundle.
-
-Normal builds still use `dashboard/index.html` with `dashboard/src/main.tsx`.
-Those mixed-mode builds keep local and shared `/public` route support while the
-rest of the routes continue to render the internal dashboard shell.
+The only supported frontend is the AppShell bundle from `dashboard/index.html`
+and `dashboard/src/main.tsx`. Do not reintroduce `public-snapshot.html`,
+`src/public-main.tsx`, or a separate public-only bundle. See
+`docs/canonical-frontend.md`.
 
 Start the dashboard API:
 
 ```bash
 stock-research dashboard-api --host 127.0.0.1 --port 8765
 ```
+
+## EOD Auto Repair
+
+Run diagnostics only:
+
+```bash
+rtk .venv/bin/python -m stock_research.eod_auto_repair \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/eod_auto_repair/YYYY-MM-DD-check \
+  --mode check
+```
+
+Run diagnostics, repair, publish strategies, and verify:
+
+```bash
+rtk .venv/bin/python -m stock_research.eod_auto_repair \
+  --trade-date YYYY-MM-DD \
+  --output-dir outputs/research/eod_auto_repair/YYYY-MM-DD \
+  --mode repair
+```
+
+Important safety rule: Baostock minute repair is always single-worker. Do not bypass this in cron or manual runs.
+
+Primary outputs:
+
+- `outputs/research/eod_auto_repair/YYYY-MM-DD/run_summary.json`
+- `outputs/research/eod_auto_repair/YYYY-MM-DD/run_report.md`
+- `outputs/research/strategy_daily_eod/YYYY-MM-DD/review_queue_strategy_manifest.csv`
 
 Build a P17 shadow follow-up queue:
 

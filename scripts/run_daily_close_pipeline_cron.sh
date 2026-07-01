@@ -9,6 +9,7 @@ TRADE_DATE="${TRADE_DATE:-}"
 STAGE="${1:-all}"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
+clear_stock_proxy_env
 stock_cron_guard_or_exit "$PYTHON_BIN" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
 
 if [[ -n "${TRADE_DATE}" ]]; then

@@ -1,5 +1,16 @@
-from stock_research.cli import build_parser, format_progress_bar
 from stock_research.schema import CREATE_RESEARCH_EXTENSION_SQL, CREATE_TABLES_SQL
+
+
+def build_parser():
+    from stock_research.cli import build_parser as _build_parser
+
+    return _build_parser()
+
+
+def format_progress_bar(value, total, width=20):
+    from stock_research.cli import format_progress_bar as _format_progress_bar
+
+    return _format_progress_bar(value, total, width=width)
 
 
 def test_schema_contains_core_tables():
@@ -83,6 +94,16 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_event" in sql
     assert "CREATE TABLE IF NOT EXISTS factor.factor_daily" in sql
     assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
+
+
+def test_research_extension_contains_concept_sector_tables():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+
+    assert "CREATE TABLE IF NOT EXISTS core.concept_board" in sql
+    assert "CREATE TABLE IF NOT EXISTS core.concept_membership" in sql
+    assert "CREATE TABLE IF NOT EXISTS market.concept_daily_bar" in sql
+    assert "idx_core_concept_membership_asset_date" in sql
+    assert "idx_market_concept_daily_bar_system_date_desc" in sql
 
 
 def test_research_extension_creates_watchlist_tables():

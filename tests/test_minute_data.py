@@ -1,4 +1,5 @@
 import datetime as dt
+import types
 
 from stock_research import minute_data
 from stock_research.minute_data import (
@@ -131,6 +132,49 @@ def test_query_baostock_minute_rows_uses_frequency_and_adjustflag(monkeypatch):
     assert calls[0][2]["adjustflag"] == "2"
 
 
+def test_query_baostock_minute_rows_applies_socket_timeout(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self):
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    observed = {"timeouts": []}
+
+    monkeypatch.setattr(minute_data.socket, "getdefaulttimeout", lambda: None)
+    monkeypatch.setattr(
+        minute_data.socket,
+        "setdefaulttimeout",
+        observed["timeouts"].append,
+    )
+    monkeypatch.setattr(
+        minute_data.bs,
+        "query_history_k_data_plus",
+        lambda *args, **kwargs: Result(),
+    )
+
+    minute_data.query_baostock_minute_rows(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="qfq",
+        timeout_seconds=7,
+    )
+
+    assert observed["timeouts"] == [7, None]
+
+
 def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     class Result:
         fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
@@ -175,6 +219,65 @@ def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
 
     assert len(rows) == 1
     assert calls == {"query": 2, "login": 1, "logout": 1}
+
+
+def test_login_or_raise_applies_socket_timeout(monkeypatch):
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    observed = {"timeouts": []}
+
+    monkeypatch.setattr(minute_data.socket, "getdefaulttimeout", lambda: None)
+    monkeypatch.setattr(
+        minute_data.socket,
+        "setdefaulttimeout",
+        observed["timeouts"].append,
+    )
+    monkeypatch.setattr(minute_data.bs, "login", lambda: Login())
+
+    minute_data.login_or_raise(timeout_seconds=9)
+
+    assert observed["timeouts"] == [9, None]
+
+
+def test_login_or_raise_uses_configured_socks_proxy(monkeypatch):
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    proxy_calls = []
+    fake_socks = types.SimpleNamespace(
+        SOCKS5="SOCKS5",
+        socksocket="proxied-socket",
+        setdefaultproxy=lambda *args, **kwargs: proxy_calls.append((args, kwargs)),
+    )
+    fake_socket_module = types.SimpleNamespace(
+        socket=types.SimpleNamespace(socket="original-socket")
+    )
+
+    monkeypatch.setenv("BAOSTOCK_PROXY_HOST", "192.168.3.213")
+    monkeypatch.setenv("BAOSTOCK_PROXY_PORT", "7897")
+    monkeypatch.setattr(minute_data, "_load_socks_module", lambda: fake_socks)
+    monkeypatch.setattr(
+        minute_data,
+        "_load_baostock_socket_module",
+        lambda: fake_socket_module,
+    )
+
+    def fake_login():
+        assert fake_socket_module.socket.socket == "proxied-socket"
+        return Login()
+
+    monkeypatch.setattr(minute_data.bs, "login", fake_login)
+
+    minute_data.login_or_raise(timeout_seconds=9)
+
+    assert proxy_calls == [
+        (("SOCKS5", "192.168.3.213", 7897), {"rdns": True}),
+        ((), {}),
+    ]
+    assert fake_socket_module.socket.socket == "original-socket"
 
 
 def test_login_or_raise_retries_transient_network_error(monkeypatch):
