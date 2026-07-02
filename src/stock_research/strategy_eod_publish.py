@@ -41,12 +41,34 @@ BASE_CHECKS = {
     "daily_bars": {
         "source": "market_daily_bar",
         "sql": """
-            SELECT max(trade_date)::text AS latest_trade_date,
-                   count(*) AS row_count,
-                   count(DISTINCT asset_id) AS asset_count
-            FROM market_daily_bar
-            WHERE adjust_type = 'hfq'
-              AND trade_date = %s
+            WITH bars AS (
+                SELECT max(trade_date)::text AS latest_trade_date,
+                       count(*) AS row_count,
+                       count(DISTINCT asset_id) AS asset_count
+                FROM market_daily_bar
+                WHERE adjust_type = 'hfq'
+                  AND trade_date = %s
+            ),
+            quality AS (
+                SELECT expected_count,
+                       actual_count,
+                       jsonb_array_length(missing_symbols) AS missing_count,
+                       jsonb_array_length(abnormal_symbols) AS abnormal_count
+                FROM ops.daily_pipeline_quality
+                WHERE trade_date = %s
+                  AND dataset_name = 'daily_bar'
+                ORDER BY updated_at DESC
+                LIMIT 1
+            )
+            SELECT bars.latest_trade_date,
+                   bars.row_count,
+                   bars.asset_count,
+                   quality.expected_count,
+                   quality.actual_count,
+                   quality.missing_count,
+                   quality.abnormal_count
+            FROM bars
+            LEFT JOIN quality ON true
         """,
     },
     "technical_features": {
@@ -82,6 +104,7 @@ BASE_CHECKS = {
         """,
     },
 }
+PUBLISHABLE_BASE_STATUSES = {"success", "partial"}
 NEWS_MIN_QUALITY_SCORE = 65
 REPORT_SUFFIXES = {".html", ".md", ".json", ".csv"}
 NEWS_FEATURE_DB_COLUMNS = [
@@ -130,7 +153,7 @@ def publish_strategy_eod(
             started_at=started_at,
         )
     )
-    if any(entry["status"] != "success" for entry in entries):
+    if not _base_entries_publishable(entries):
         entries.append(
             _failure_entry(
                 run_id=run_id,
@@ -550,8 +573,7 @@ def _build_base_manifest_entries(
         row = rows.get(module, {})
         row_count = int(row.get("row_count") or 0)
         latest_trade_date = str(row.get("latest_trade_date") or "")
-        status = "success" if row_count > 0 and latest_trade_date == trade_date else "unavailable"
-        warnings = [] if status == "success" else [f"{module} missing for {trade_date}"]
+        status, warnings = _base_status_and_warnings(module, row, trade_date)
         entries.append(
             build_manifest_entry(
                 run_id=run_id,
@@ -565,18 +587,47 @@ def _build_base_manifest_entries(
                 ended_at=datetime.now(timezone.utc),
                 row_count=row_count,
                 asset_count=_optional_int(row.get("asset_count")),
-                latest_trade_date=latest_trade_date if status == "success" else None,
+                latest_trade_date=latest_trade_date if status in PUBLISHABLE_BASE_STATUSES else None,
                 warnings=warnings,
             )
         )
     return entries
 
 
+def _base_status_and_warnings(module: str, row: dict[str, Any], trade_date: str) -> tuple[str, list[str]]:
+    row_count = int(row.get("row_count") or 0)
+    latest_trade_date = str(row.get("latest_trade_date") or "")
+    if row_count <= 0 or latest_trade_date != trade_date:
+        return "unavailable", [f"{module} missing for {trade_date}"]
+
+    expected_count = int(row.get("expected_count") or 0)
+    missing_count = int(row.get("missing_count") or 0)
+    abnormal_count = int(row.get("abnormal_count") or 0)
+    if module == "daily_bars" and expected_count > 0 and (missing_count > 0 or abnormal_count > 0):
+        gap_count = missing_count + abnormal_count
+        if gap_count / expected_count <= 0.01:
+            return "partial", [
+                "daily_bars degraded within tolerance: "
+                f"missing={missing_count} abnormal={abnormal_count} expected={expected_count}"
+            ]
+        return "unavailable", [
+            "daily_bars gap exceeds tolerance: "
+            f"missing={missing_count} abnormal={abnormal_count} expected={expected_count}"
+        ]
+
+    return "success", []
+
+
+def _base_entries_publishable(entries: list[dict[str, Any]]) -> bool:
+    return all(str(entry.get("status") or "") in PUBLISHABLE_BASE_STATUSES for entry in entries)
+
+
 def _load_base_check_rows(trade_date: str) -> dict[str, dict[str, Any]]:
     result = {}
     with connect(SETTINGS.research_service) as conn:
         for module, config in BASE_CHECKS.items():
-            rows = fetch_all(conn, str(config["sql"]), [trade_date])
+            sql = str(config["sql"])
+            rows = fetch_all(conn, sql, [trade_date] * sql.count("%s"))
             result[module] = dict(rows[0]) if rows else {}
     return result
 
