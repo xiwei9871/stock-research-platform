@@ -272,3 +272,202 @@ def test_run_eod_auto_repair_writes_report_when_recheck_plan_builder_raises(tmp_
     assert "RuntimeError" in summary.checks_after[0].message
     assert (tmp_path / "run_summary.json").exists()
     assert (tmp_path / "run_report.md").exists()
+
+
+def test_run_eod_auto_repair_runs_stages_in_dependency_order(tmp_path):
+    calls = []
+    check_state = {
+        "minute5_bars": [RepairStatus.FAILED, RepairStatus.SUCCESS],
+        "score_topn": [RepairStatus.FAILED, RepairStatus.SUCCESS],
+        "watchlist": [RepairStatus.FAILED, RepairStatus.SUCCESS],
+        "strategy_publish": [RepairStatus.FAILED, RepairStatus.SUCCESS],
+    }
+
+    def check_plan_builder(trade_date):
+        checks = []
+        for name in ["minute5_bars", "score_topn", "watchlist", "strategy_publish"]:
+
+            def run_check(check_name=name):
+                status = check_state[check_name][0]
+                return RepairCheckResult(
+                    check_name,
+                    status,
+                    "ready" if status == RepairStatus.SUCCESS else "missing",
+                    blocker=status == RepairStatus.FAILED,
+                )
+
+            checks.append(SimpleNamespace(name=name, run=run_check))
+        return checks
+
+    def make_action(name):
+        def action(trade_date, output_dir):
+            calls.append(name)
+            check_name = {
+                "repair_minute5_bars": "minute5_bars",
+                "repair_score_topn": "score_topn",
+                "repair_watchlist": "watchlist",
+                "repair_strategy_publish": "strategy_publish",
+            }[name]
+            check_state[check_name].pop(0)
+            return RepairActionResult(name, RepairStatus.SUCCESS, "fixed")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "minute5_bars": make_action("repair_minute5_bars"),
+            "score_topn": make_action("repair_score_topn"),
+            "watchlist": make_action("repair_watchlist"),
+            "strategy_publish": make_action("repair_strategy_publish"),
+        },
+    )
+
+    assert calls == [
+        "repair_minute5_bars",
+        "repair_score_topn",
+        "repair_watchlist",
+        "repair_strategy_publish",
+    ]
+    assert summary.final_status == RepairStatus.SUCCESS
+    assert [stage.name for stage in summary.stages] == [
+        "base_bars",
+        "scores_and_watchlists",
+        "strategy_eod",
+    ]
+
+
+def test_run_eod_auto_repair_stops_downstream_stage_when_prerequisite_blocker_remains(tmp_path):
+    calls = []
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="minute5_bars",
+                run=lambda: RepairCheckResult("minute5_bars", RepairStatus.FAILED, "missing", blocker=True),
+            ),
+            SimpleNamespace(
+                name="score_topn",
+                run=lambda: RepairCheckResult("score_topn", RepairStatus.FAILED, "missing", blocker=True),
+            ),
+        ]
+
+    def minute_action(trade_date, output_dir):
+        calls.append("repair_minute5_bars")
+        return RepairActionResult("repair_minute5_bars", RepairStatus.FAILED, "still missing")
+
+    def score_action(trade_date, output_dir):
+        calls.append("repair_score_topn")
+        return RepairActionResult("repair_score_topn", RepairStatus.SUCCESS, "fixed")
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={"minute5_bars": minute_action, "score_topn": score_action},
+    )
+
+    assert calls == ["repair_minute5_bars"]
+    assert summary.final_status == RepairStatus.FAILED
+    assert summary.remaining_blockers == ["minute5_bars", "score_topn"]
+
+
+def test_run_eod_auto_repair_stage_results_are_scoped_to_stage_checks(tmp_path):
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="minute5_bars",
+                run=lambda: RepairCheckResult("minute5_bars", RepairStatus.SUCCESS, "ready"),
+            ),
+            SimpleNamespace(
+                name="score_topn",
+                run=lambda: RepairCheckResult("score_topn", RepairStatus.FAILED, "missing", blocker=True),
+            ),
+        ]
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+    )
+
+    assert [check.name for check in summary.stages[0].checks_after] == ["minute5_bars"]
+    assert summary.stages[0].remaining_blockers == []
+
+
+def test_run_eod_auto_repair_publish_only_skips_lower_level_repair_actions(tmp_path):
+    calls = []
+    strategy_status = [RepairStatus.FAILED, RepairStatus.SUCCESS]
+
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="minute5_bars",
+                run=lambda: RepairCheckResult("minute5_bars", RepairStatus.FAILED, "missing", blocker=True),
+            ),
+            SimpleNamespace(
+                name="strategy_publish",
+                run=lambda: RepairCheckResult(
+                    "strategy_publish",
+                    strategy_status[0],
+                    "ready" if strategy_status[0] == RepairStatus.SUCCESS else "missing",
+                    blocker=strategy_status[0] == RepairStatus.FAILED,
+                ),
+            ),
+        ]
+
+    def minute_action(trade_date, output_dir):
+        calls.append("repair_minute5_bars")
+        return RepairActionResult("repair_minute5_bars", RepairStatus.FAILED, "still missing")
+
+    def strategy_action(trade_date, output_dir):
+        calls.append("repair_strategy_publish")
+        strategy_status.pop(0)
+        return RepairActionResult("repair_strategy_publish", RepairStatus.SUCCESS, "fixed")
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="publish-only",
+        check_plan_builder=check_plan_builder,
+        action_registry={"minute5_bars": minute_action, "strategy_publish": strategy_action},
+    )
+
+    assert calls == ["repair_strategy_publish"]
+    assert [stage.name for stage in summary.stages] == ["strategy_eod"]
+    assert summary.remaining_blockers == ["minute5_bars"]
+
+
+def test_run_eod_auto_repair_does_not_recheck_when_no_actions_run(tmp_path):
+    calls = {"daily_bars": 0}
+
+    def check_plan_builder(trade_date):
+        def run_check():
+            calls["daily_bars"] += 1
+            status = RepairStatus.SUCCESS if calls["daily_bars"] == 1 else RepairStatus.FAILED
+            return RepairCheckResult(
+                "daily_bars",
+                status,
+                "ready" if status == RepairStatus.SUCCESS else "changed",
+                blocker=status == RepairStatus.FAILED,
+            )
+
+        return [SimpleNamespace(name="daily_bars", run=run_check)]
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+    )
+
+    assert calls["daily_bars"] == 1
+    assert summary.actions == []
+    assert summary.final_status == RepairStatus.SUCCESS

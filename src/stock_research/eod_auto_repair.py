@@ -10,11 +10,22 @@ from stock_research.eod_auto_repair_models import (
     RepairActionResult,
     RepairCheckResult,
     RepairRunSummary,
+    RepairStageResult,
     RepairStatus,
 )
 
 
 ActionRunner = Callable[[str, str | Path], RepairActionResult]
+
+STAGE_CHECKS: list[tuple[str, tuple[str, ...]]] = [
+    ("base_bars", ("daily_bars", "minute5_bars")),
+    ("features", ("technical_features", "lhb_source", "lhb_features")),
+    ("scores_and_watchlists", ("score_topn", "watchlist")),
+    ("market_monitor", ("market_monitor",)),
+    ("strategy_eod", ("strategy_publish", "review_queue", "strategy_score_audit")),
+    ("presentation", ("reports", "review_evidence_snapshots", "ops_health", "dashboard_surface_freshness")),
+]
+PUBLISH_ONLY_STAGE_NAMES = {"strategy_eod", "presentation"}
 
 
 def _safe_run_check(check) -> RepairCheckResult:
@@ -54,6 +65,25 @@ def _safe_run_action(name: str, runner: ActionRunner, trade_date: str, output_di
             status=RepairStatus.FAILED,
             message=f"{type(exc).__name__}: {exc}",
         )
+
+
+def _checks_by_name(checks: list[RepairCheckResult]) -> dict[str, RepairCheckResult]:
+    return {check.name: check for check in checks}
+
+
+def _stage_checks(checks: list[RepairCheckResult], names: tuple[str, ...]) -> list[RepairCheckResult]:
+    by_name = _checks_by_name(checks)
+    return [by_name[name] for name in names if name in by_name]
+
+
+def _has_blocker(checks: list[RepairCheckResult]) -> bool:
+    return any(check.blocker and check.status != RepairStatus.SUCCESS for check in checks)
+
+
+def _stages_for_mode(mode: str) -> list[tuple[str, tuple[str, ...]]]:
+    if mode == "publish-only":
+        return [(name, checks) for name, checks in STAGE_CHECKS if name in PUBLISH_ONLY_STAGE_NAMES]
+    return STAGE_CHECKS
 
 
 def _final_status(checks: list[RepairCheckResult]) -> RepairStatus:
@@ -135,17 +165,40 @@ def run_eod_auto_repair(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     checks_before = _safe_run_check_plan(check_plan_builder, trade_date)
+    current_checks = checks_before
+    stages: list[RepairStageResult] = []
     actions: list[RepairActionResult] = []
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
     if mode != "check":
-        for check in checks_before:
-            if check.status == RepairStatus.SUCCESS:
+        for stage_name, check_names in _stages_for_mode(mode):
+            before = _stage_checks(current_checks, check_names)
+            if not before:
                 continue
-            runner = registry.get(check.name)
-            if runner is None:
-                continue
-            actions.append(_safe_run_action(check.name, runner, trade_date, out))
-    checks_after = _safe_run_check_plan(check_plan_builder, trade_date) if actions else checks_before
+            stage_actions = []
+            for check in before:
+                if check.status == RepairStatus.SUCCESS:
+                    continue
+                runner = registry.get(check.name)
+                if runner is None:
+                    continue
+                action = _safe_run_action(check.name, runner, trade_date, out)
+                stage_actions.append(action)
+                actions.append(action)
+            if stage_actions:
+                current_checks = _safe_run_check_plan(check_plan_builder, trade_date)
+            after = _stage_checks(current_checks, check_names)
+            stages.append(
+                RepairStageResult(
+                    name=stage_name,
+                    checks_before=before,
+                    actions=stage_actions,
+                    checks_after=after,
+                    remaining_blockers=_remaining_blockers(after),
+                )
+            )
+            if _has_blocker(after):
+                break
+    checks_after = current_checks if actions or stages else checks_before
     summary = RepairRunSummary(
         trade_date=trade_date,
         mode=mode,
@@ -153,6 +206,7 @@ def run_eod_auto_repair(
         checks_before=checks_before,
         actions=actions,
         checks_after=checks_after,
+        stages=stages,
         remaining_blockers=_remaining_blockers(checks_after),
         remaining_non_blockers=_remaining_non_blockers(checks_after),
         next_actions=_next_actions(checks_after),
