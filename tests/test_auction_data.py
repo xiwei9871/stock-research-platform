@@ -899,25 +899,19 @@ def test_write_open_auction_spot_snapshot_report(tmp_path):
     assert "- failed: False" in text
 
 
-def test_build_open_auction_spot_snapshot_cron_entries_uses_requested_slots():
+def test_build_open_auction_spot_snapshot_cron_entries_uses_single_day_runner():
     entries = build_open_auction_spot_snapshot_cron_entries(
         project_dir="/Users/xiwei/stock_research",
         output_dir="outputs/research/open_auction_spot_snapshot",
-        log_path="logs/open_auction_spot_snapshot.log",
+        log_path="logs/open_auction_spot_snapshot_day.log",
     )
 
-    assert len(entries) == 6
-    assert entries[0].startswith("15 9 * * 1-5 ")
-    assert "scripts/run_open_auction_spot_snapshot.sh 09:15" in entries[0]
-    assert entries[1].startswith("17 9 * * 1-5 ")
-    assert "scripts/run_open_auction_spot_snapshot.sh 09:17" in entries[1]
-    assert entries[-1].startswith("25 9 * * 1-5 ")
-    assert "scripts/run_open_auction_spot_snapshot.sh 09:25" in entries[-1]
-    for target_time in ["09:15", "09:17", "09:19", "09:21", "09:23", "09:25"]:
-        assert any(
-            f"scripts/run_open_auction_spot_snapshot.sh {target_time}" in entry
-            for entry in entries
-        )
+    assert entries == [
+        "14 9 * * 1-5 cd /Users/xiwei/stock_research && "
+        "OPEN_AUCTION_SPOT_OUTPUT_DIR=outputs/research/open_auction_spot_snapshot "
+        "scripts/run_open_auction_spot_snapshot_day.sh $(date +\\%F) "
+        ">> logs/open_auction_spot_snapshot_day.log 2>&1"
+    ]
 
 
 def test_build_open_auction_spot_snapshot_cron_entries_quotes_shell_paths():
@@ -931,6 +925,8 @@ def test_build_open_auction_spot_snapshot_cron_entries_quotes_shell_paths():
     assert "cd '/Users/xiwei/stock research' &&" in first_entry
     assert "OPEN_AUCTION_SPOT_OUTPUT_DIR='outputs/research/open auction spot'" in first_entry
     assert ">> 'logs/open auction spot.log' 2>&1" in first_entry
+    assert "scripts/run_open_auction_spot_snapshot_day.sh $(date +\\%F)" in first_entry
+    assert "run_open_auction_spot_snapshot.sh 09:15" not in first_entry
     assert "$(date +\\%F)" in first_entry
 
 

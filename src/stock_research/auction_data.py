@@ -606,29 +606,26 @@ def build_open_auction_spot_snapshot_cron_entries(
     *,
     project_dir: str = "/Users/xiwei/stock_research",
     output_dir: str = "outputs/research/open_auction_spot_snapshot",
-    log_path: str = "logs/open_auction_spot_snapshot.log",
+    log_path: str = "logs/open_auction_spot_snapshot_day.log",
 ) -> list[str]:
     quoted_project_dir = shlex.quote(project_dir)
     quoted_output_dir = shlex.quote(output_dir)
     quoted_log_path = shlex.quote(log_path)
-    entries = []
-    for target_time, minute in OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS:
-        entries.append(
-            " ".join(
-                [
-                    str(minute),
-                    "9",
-                    "*",
-                    "*",
-                    "1-5",
-                    f"cd {quoted_project_dir} &&",
-                    f"OPEN_AUCTION_SPOT_OUTPUT_DIR={quoted_output_dir}",
-                    f"scripts/run_open_auction_spot_snapshot.sh {target_time} $(date +\\%F)",
-                    f">> {quoted_log_path} 2>&1",
-                ]
-            )
+    return [
+        " ".join(
+            [
+                "14",
+                "9",
+                "*",
+                "*",
+                "1-5",
+                f"cd {quoted_project_dir} &&",
+                f"OPEN_AUCTION_SPOT_OUTPUT_DIR={quoted_output_dir}",
+                "scripts/run_open_auction_spot_snapshot_day.sh $(date +\\%F)",
+                f">> {quoted_log_path} 2>&1",
+            ]
         )
-    return entries
+    ]
 
 
 def open_auction_minute_market_row(

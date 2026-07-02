@@ -225,6 +225,12 @@ from stock_research.market_data import (
 )
 from stock_research.market_emotion_state_v1 import run_market_emotion_state_v1_backfill
 from stock_research.migration_safety import run_backup_restore_check
+from stock_research.baostock_minute_backfill_watchdog import (
+    DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT,
+    DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH,
+    DEFAULT_BAOSTOCK_SAFETY_MULTIPLIER,
+    run_baostock_minute_backfill_probe,
+)
 from stock_research.minute_backfill import (
     benchmark_baostock_minute_backfill_workers,
     load_backfill_status,
@@ -1039,6 +1045,27 @@ def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> N
     parser.add_argument("--report-dry-run", action="store_true")
 
 
+def add_baostock_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
+    add_minute_backfill_watchdog_arguments(parser)
+    parser.add_argument(
+        "--baostock-daily-request-limit",
+        type=int,
+        default=DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT,
+    )
+    parser.add_argument(
+        "--baostock-safety-multiplier",
+        type=float,
+        default=DEFAULT_BAOSTOCK_SAFETY_MULTIPLIER,
+    )
+    parser.add_argument("--max-daily-backfill-requests", type=int)
+    parser.add_argument("--today-adjust-types", type=parse_adjust_types)
+    parser.add_argument(
+        "--request-ledger-path",
+        default=str(DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH),
+    )
+    parser.add_argument("--quota-day")
+
+
 def run_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
     result = run_minute_backfill_watchdog(
         start_date=args.start_date,
@@ -1063,6 +1090,45 @@ def run_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
     print(f"minute_backfill_watchdog|delta_rows|{result['run_result']['rows']}")
     if "work_remaining" in result["status"]:
         print(f"minute_backfill_watchdog|work_remaining|{result['status']['work_remaining']}")
+
+
+def run_baostock_minute_backfill_watchdog_command(args: argparse.Namespace) -> None:
+    result = run_minute_backfill_watchdog(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        freq=args.freq,
+        adjust_types=args.adjust_types,
+        max_jobs=args.max_jobs,
+        workers=args.workers,
+        stale_after_minutes=args.stale_after_minutes,
+        run_timeout_seconds=args.run_timeout_seconds,
+        report_target=args.report_target,
+        report_account=args.report_account,
+        openclaw_bin=args.openclaw_bin,
+        report_dry_run=args.report_dry_run,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=args.baostock_daily_request_limit,
+        baostock_safety_multiplier=args.baostock_safety_multiplier,
+        max_daily_backfill_requests=args.max_daily_backfill_requests,
+        today_adjust_types=args.today_adjust_types,
+        request_ledger_path=args.request_ledger_path,
+        quota_day=dt.date.fromisoformat(args.quota_day) if args.quota_day else None,
+    )
+    delta_success = (
+        int(result["post_summary"]["success_jobs"])
+        - int(result["pre_summary"]["success_jobs"])
+    )
+    budget = result.get("baostock_request_budget", {})
+    print(f"baostock_minute_backfill_watchdog|action|{result['status']['watchdog_action']}")
+    print(f"baostock_minute_backfill_watchdog|delta_success|{delta_success}")
+    print(f"baostock_minute_backfill_watchdog|delta_rows|{result['run_result']['rows']}")
+    print(f"baostock_minute_backfill_watchdog|safe_daily_request_budget|{budget.get('safe_daily_request_budget', 0)}")
+    print(f"baostock_minute_backfill_watchdog|today_reserved_requests|{budget.get('today_reserved_requests', 0)}")
+    print(f"baostock_minute_backfill_watchdog|backfill_request_budget|{budget.get('backfill_request_budget', 0)}")
+    print(f"baostock_minute_backfill_watchdog|allocated_requests|{budget.get('allocated_requests', 0)}")
+    print(f"baostock_minute_backfill_watchdog|consumed_requests|{budget.get('consumed_requests', 0)}")
+    if "work_remaining" in result["status"]:
+        print(f"baostock_minute_backfill_watchdog|work_remaining|{result['status']['work_remaining']}")
 
 
 def add_technical_feature_watchdog_arguments(parser: argparse.ArgumentParser) -> None:
@@ -1753,7 +1819,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         default="outputs/research/open_auction_spot_snapshot",
     )
-    open_auction_spot_snapshot_cron.add_argument("--log-path", default="logs/open_auction_spot_snapshot.log")
+    open_auction_spot_snapshot_cron.add_argument("--log-path", default="logs/open_auction_spot_snapshot_day.log")
 
     xtick_auction_detail = subparsers.add_parser("collect-xtick-auction-detail-v1")
     xtick_auction_detail.add_argument("--trade-date", required=True)
@@ -1969,6 +2035,9 @@ def build_parser() -> argparse.ArgumentParser:
     minute_backfill_watchdog = subparsers.add_parser("minute-backfill-watchdog")
     add_minute_backfill_watchdog_arguments(minute_backfill_watchdog)
 
+    baostock_minute_backfill_watchdog = subparsers.add_parser("baostock-minute-backfill-watchdog")
+    add_baostock_minute_backfill_watchdog_arguments(baostock_minute_backfill_watchdog)
+
     backfill_watchdog = subparsers.add_parser("backfill-watchdog")
     backfill_watchdog.add_argument(
         "--adapter",
@@ -1981,6 +2050,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_minute_backfill = subparsers.add_parser("baostock-minute-backfill-status")
     status_minute_backfill.add_argument("--output-dir", default="outputs/research")
+
+    probe_minute_backfill = subparsers.add_parser("probe-baostock-minute-backfill-coverage")
+    probe_minute_backfill.add_argument("--start-date", required=True)
+    probe_minute_backfill.add_argument("--end-date", required=True)
+    probe_minute_backfill.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    probe_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
 
     validate_minutes = subparsers.add_parser("validate-minute-bars")
     validate_minutes.add_argument("--start-date", required=True)
@@ -8943,6 +9022,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             print(f"minute_backfill_range|{key}|{value}")
     elif args.command == "minute-backfill-watchdog":
         run_minute_backfill_watchdog_command(args)
+    elif args.command == "baostock-minute-backfill-watchdog":
+        run_baostock_minute_backfill_watchdog_command(args)
     elif args.command == "backfill-watchdog":
         if args.adapter == "minute":
             run_minute_backfill_watchdog_command(args)
@@ -8955,6 +9036,15 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         for key, value in result["summary"].items():
             print(f"minute_backfill_status|{key}|{value}")
         print(f"minute_backfill_status_by_period_rows|{len(result['by_period'])}")
+    elif args.command == "probe-baostock-minute-backfill-coverage":
+        result = run_baostock_minute_backfill_probe(
+            start_date=args.start_date,
+            end_date=args.end_date,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+        )
+        for key, value in result.items():
+            print(f"baostock_minute_backfill_probe|{key}|{value}")
     elif args.command == "validate-minute-bars":
         result = validate_minute_bars(
             start_date=args.start_date,

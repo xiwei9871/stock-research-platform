@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
+from stock_research.baostock_minute_backfill_watchdog import allocate_daily_backfill_quota
 from stock_research.minute_backfill_adapter import (
     MinuteBackfillAdapter,
     _run_backfill_once_with_timeout,
@@ -129,6 +130,102 @@ def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypat
     }
     assert result["timed_out"] is False
     assert result["message"] == "backfill_watchdog|status\naction=healthy"
+
+
+def test_run_minute_backfill_watchdog_limits_jobs_by_baostock_daily_quota(monkeypatch, tmp_path):
+    generic_calls = []
+
+    def fake_run_watchdog_once(**kwargs):
+        generic_calls.append(kwargs)
+        return {
+            "scope": {"run_id": "minute-backfill:5min:raw,qfq:2024-01-01:2024-01-31", "window": "2024-01-01..2024-01-31"},
+            "pre_rows": [],
+            "post_rows": [],
+            "pre_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "post_summary": BackfillSummary(0, 0, 0, 0, 0, 0, 0),
+            "previous_frontier": {"completed_through": None, "currently_working_on": None},
+            "frontier": {"completed_through": None, "currently_working_on": None},
+            "status": BackfillWatchdogStatus(
+                watchdog_action="healthy",
+                progress_advanced=True,
+                work_remaining=True,
+                stale_tasks_reset=0,
+                timed_out=False,
+                previous_frontier={"completed_through": None, "currently_working_on": None},
+                current_frontier={"completed_through": None, "currently_working_on": "2024-01"},
+            ),
+            "stale_tasks_reset": 0,
+            "run_result": {
+                "attempted": 12,
+                "success": 12,
+                "failed": 0,
+                "rows": 576,
+                "status": "completed",
+                "timed_out": False,
+            },
+            "timed_out": False,
+            "message": "backfill_watchdog|status\nrun_success=12",
+        }
+
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", fake_run_watchdog_once)
+    monkeypatch.setattr(minute_backfill_watchdog, "send_openclaw_feishu_message", lambda **kwargs: None)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    result = run_minute_backfill_watchdog(
+        start_date="2024-01-01",
+        end_date="2024-01-31",
+        freq="5min",
+        adjust_types=["raw", "qfq"],
+        max_jobs=100,
+        enable_baostock_request_budget=True,
+        baostock_daily_request_limit=100,
+        baostock_safety_multiplier=1.1,
+        today_adjust_types=["raw", "qfq"],
+        request_ledger_path=tmp_path / "quota.json",
+        quota_day=dt.date(2026, 7, 2),
+        report_target="chat:test",
+    )
+
+    assert generic_calls[0]["max_jobs"] == 70
+    assert result["baostock_request_budget"]["safe_daily_request_budget"] == 90
+    assert result["baostock_request_budget"]["today_reserved_requests"] == 20
+    assert result["baostock_request_budget"]["backfill_request_budget"] == 70
+    assert result["baostock_request_budget"]["allocated_requests"] == 70
+    assert result["baostock_request_budget"]["consumed_requests"] == 12
+
+
+def test_run_minute_backfill_watchdog_releases_baostock_quota_when_runner_raises(monkeypatch, tmp_path):
+    def raise_from_runner(**kwargs):
+        raise RuntimeError("runner failed before attempting jobs")
+
+    ledger_path = tmp_path / "quota.json"
+    quota_day = dt.date(2026, 7, 2)
+    monkeypatch.setattr(minute_backfill_watchdog, "run_watchdog_once", raise_from_runner)
+    monkeypatch.setattr(minute_backfill_watchdog, "load_active_baostock_asset_count", lambda: 10)
+
+    with pytest.raises(RuntimeError, match="runner failed"):
+        run_minute_backfill_watchdog(
+            start_date="2024-01-01",
+            end_date="2024-01-31",
+            freq="5min",
+            adjust_types=["raw", "qfq"],
+            max_jobs=100,
+            enable_baostock_request_budget=True,
+            baostock_daily_request_limit=100,
+            baostock_safety_multiplier=1.1,
+            today_adjust_types=["raw", "qfq"],
+            request_ledger_path=ledger_path,
+            quota_day=quota_day,
+            report_target="chat:test",
+        )
+
+    allocation = allocate_daily_backfill_quota(
+        ledger_path=ledger_path,
+        day=quota_day,
+        backfill_request_budget=70,
+        requested_requests=70,
+    )
+    assert allocation.allocated_requests == 70
 
 
 def test_run_minute_backfill_watchdog_reuses_generic_message_when_reconciliation_is_unchanged(monkeypatch):

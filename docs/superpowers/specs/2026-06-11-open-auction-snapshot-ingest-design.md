@@ -99,13 +99,16 @@ Add a helper command to print cron entries:
 .venv/bin/python -m stock_research.cli open-auction-spot-snapshot-cron-entry
 ```
 
-Add a shell wrapper:
+The helper prints one daily cron entry. The cron starts a single day runner at 09:14. The day runner waits for each target time in order, uses a `mkdir` lock directory instead of `flock`, and calls the single-target wrapper sequentially so full-market AKShare requests do not overlap.
+
+Add shell wrappers:
 
 ```bash
+scripts/run_open_auction_spot_snapshot_day.sh 2026-06-11
 scripts/run_open_auction_spot_snapshot.sh 09:17 2026-06-11
 ```
 
-The wrapper should default to today's date when the date argument is omitted.
+Both wrappers should default to today's date when the date argument is omitted.
 
 ## Reporting
 

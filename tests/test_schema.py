@@ -895,6 +895,47 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert benchmark_args.freq == "5min"
     assert benchmark_args.adjust_types == ["raw"]
 
+    watchdog_args = build_parser().parse_args(
+        [
+            "baostock-minute-backfill-watchdog",
+            "--start-date",
+            "2021-07-02",
+            "--end-date",
+            "2026-07-02",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--baostock-daily-request-limit",
+            "50000",
+            "--baostock-safety-multiplier",
+            "1.1",
+            "--request-ledger-path",
+            "logs/baostock_minute_request_quota.json",
+            "--report-target",
+            "chat:oc_82dd978138a0cde5864868c5b5b8e754",
+        ]
+    )
+    assert watchdog_args.command == "baostock-minute-backfill-watchdog"
+    assert watchdog_args.baostock_safety_multiplier == 1.1
+    assert watchdog_args.request_ledger_path == "logs/baostock_minute_request_quota.json"
+
+    probe_args = build_parser().parse_args(
+        [
+            "probe-baostock-minute-backfill-coverage",
+            "--start-date",
+            "2021-07-02",
+            "--end-date",
+            "2026-07-02",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+        ]
+    )
+    assert probe_args.command == "probe-baostock-minute-backfill-coverage"
+    assert probe_args.adjust_types == ["raw", "qfq"]
+
     status_args = build_parser().parse_args(["baostock-minute-backfill-status"])
     assert status_args.command == "baostock-minute-backfill-status"
 

@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+import datetime as dt
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
+from stock_research.baostock_minute_backfill_watchdog import (
+    DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT,
+    DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH,
+    DEFAULT_BAOSTOCK_SAFETY_MULTIPLIER,
+    allocate_daily_backfill_quota,
+    calculate_baostock_minute_budget,
+    finalize_daily_backfill_quota,
+    load_active_baostock_asset_count,
+)
 from stock_research.backfill_watchdog import (
     BackfillSummary,
     format_watchdog_message,
@@ -34,6 +46,13 @@ def run_minute_backfill_watchdog(
     report_account: str = "jarvis",
     openclaw_bin: str = "openclaw",
     report_dry_run: bool = False,
+    enable_baostock_request_budget: bool = False,
+    baostock_daily_request_limit: int = DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT,
+    baostock_safety_multiplier: float = DEFAULT_BAOSTOCK_SAFETY_MULTIPLIER,
+    max_daily_backfill_requests: int | None = None,
+    today_adjust_types: list[str] | None = None,
+    request_ledger_path: str | Path = DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH,
+    quota_day: dt.date | None = None,
 ) -> dict[str, Any]:
     adapter = MinuteBackfillAdapter(
         start_date=start_date,
@@ -44,14 +63,52 @@ def run_minute_backfill_watchdog(
         retry_failed=retry_failed,
         sleep_seconds=sleep_seconds,
     )
-    result = run_watchdog_once(
-        adapter=adapter,
-        stale_after_minutes=stale_after_minutes,
-        run_timeout_seconds=run_timeout_seconds,
-        max_jobs=max_jobs,
-        workers=workers,
-        send_message=None,
-    )
+    effective_max_jobs = max_jobs
+    budget_payload: dict[str, Any] | None = None
+    allocation = None
+    if enable_baostock_request_budget:
+        budget = calculate_baostock_minute_budget(
+            active_asset_count=load_active_baostock_asset_count(),
+            today_adjust_types=today_adjust_types or adjust_types or ["raw", "qfq"],
+            daily_request_limit=baostock_daily_request_limit,
+            safety_multiplier=baostock_safety_multiplier,
+            max_backfill_requests=max_daily_backfill_requests,
+        )
+        allocation_day = quota_day or dt.date.today()
+        allocation = allocate_daily_backfill_quota(
+            ledger_path=request_ledger_path,
+            day=allocation_day,
+            backfill_request_budget=budget.backfill_request_budget,
+            requested_requests=max_jobs,
+        )
+        effective_max_jobs = allocation.allocated_requests
+        budget_payload = {
+            **asdict(budget),
+            "quota_day": allocation_day.isoformat(),
+            "allocated_requests": allocation.allocated_requests,
+            "consumed_requests": allocation.consumed_requests,
+            "active_reserved_requests": allocation.active_reserved_requests,
+            "request_ledger_path": str(request_ledger_path),
+        }
+
+    try:
+        result = run_watchdog_once(
+            adapter=adapter,
+            stale_after_minutes=stale_after_minutes,
+            run_timeout_seconds=run_timeout_seconds,
+            max_jobs=effective_max_jobs,
+            workers=workers,
+            send_message=None,
+        )
+    except Exception:
+        if allocation is not None:
+            finalize_daily_backfill_quota(
+                ledger_path=request_ledger_path,
+                day=allocation.day,
+                allocated_requests=allocation.allocated_requests,
+                attempted_requests=0,
+            )
+        raise
 
     run_result = _reconcile_timeout_run_result(
         run_result=result["run_result"],
@@ -81,6 +138,19 @@ def run_minute_backfill_watchdog(
             status=result["status"],
             extra_lines=extra_lines,
         )
+    if allocation is not None and budget_payload is not None:
+        finalized = finalize_daily_backfill_quota(
+            ledger_path=request_ledger_path,
+            day=allocation.day,
+            allocated_requests=allocation.allocated_requests,
+            attempted_requests=int(run_result.get("attempted", 0) or 0),
+        )
+        budget_payload.update(
+            {
+                "consumed_requests": finalized.consumed_requests,
+                "active_reserved_requests": finalized.active_reserved_requests,
+            }
+        )
     if should_send_watchdog_message(result["status"]):
         send_openclaw_feishu_message(
             message=message,
@@ -105,6 +175,7 @@ def run_minute_backfill_watchdog(
         "run_result": run_result,
         "timed_out": bool(run_result.get("timed_out")),
         "message": message,
+        **({"baostock_request_budget": budget_payload} if budget_payload is not None else {}),
     }
 
 

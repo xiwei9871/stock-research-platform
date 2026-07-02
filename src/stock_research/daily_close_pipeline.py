@@ -493,6 +493,25 @@ def load_active_ts_codes(service: str, trade_date: date | None = None) -> list[s
     return [f"{row['symbol']}.{row['exchange']}" for row in rows]
 
 
+def load_minute5_expected_ts_codes(service: str, trade_date: date) -> list[str]:
+    sql = """
+    SELECT DISTINCT a.symbol, a.exchange
+    FROM asset_master a
+    JOIN market_daily_bar b
+      ON b.asset_id = a.asset_id
+     AND b.trade_date = %s
+     AND b.adjust_type = 'raw'
+    WHERE a.status = 'listed'
+      AND a.exchange IN ('SH', 'SZ')
+    ORDER BY a.exchange, a.symbol
+    """
+    with connect(service) as conn:
+        rows = fetch_all(conn, sql, [trade_date])
+    if not rows:
+        return load_active_ts_codes(service, trade_date)
+    return [f"{row['symbol']}.{row['exchange']}" for row in rows]
+
+
 MINUTE5_SOURCES = ("baostock_sh", "baostock_sz")
 
 
@@ -1325,7 +1344,7 @@ def run_minute5_stage(
         )
     logger, log_path = setup_stage_logger(trade_date, "minute5")
     started = datetime.now(ZoneInfo(config.timezone))
-    expected_ts_codes = ts_codes or load_active_ts_codes(config.service, trade_date)
+    expected_ts_codes = ts_codes or load_minute5_expected_ts_codes(config.service, trade_date)
     lookback_start = trade_date - timedelta(days=max(config.minute5_lookback_days - 1, 0))
     rows_by_symbol: dict[str, list[dict[str, Any]]] = {}
     source_codes = split_minute5_sources(expected_ts_codes)
@@ -1530,7 +1549,7 @@ def run_retry_failed_stage(
                 mark_failed_symbol_success(
                     config.service, trade_date, "minute5", "minute5_bar", ts_code, source
                 )
-    expected_ts_codes = load_active_ts_codes(config.service, trade_date)
+    expected_ts_codes = load_minute5_expected_ts_codes(config.service, trade_date)
     quality = inspect_minute5_quality_from_db(config.service, expected_ts_codes, trade_date)
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
     coverage = quality["actual_count"] / quality["expected_count"] if quality["expected_count"] else 1.0
@@ -1996,6 +2015,11 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
     )
     market_monitor_status = _stage_status_from_jobs(rows, "market_monitor")
     deps_status = _stage_status_from_jobs(rows, "deps")
+    quality_success_stages = set()
+    if daily_status == "success" and quality_by_dataset.get("daily_bar"):
+        quality_success_stages.add("daily")
+    if minute5_status == "success" and quality_by_dataset.get("minute5_bar"):
+        quality_success_stages.add("minute5")
     failed_jobs = [
         {
             "stage": row["stage"],
@@ -2006,6 +2030,7 @@ def finalize_pipeline_status(trade_date: date, *, config: PipelineConfig) -> dic
         }
         for row in rows
         if row["status"] in {"failed", "partial_success"}
+        and row["stage"] not in quality_success_stages
     ]
     non_trading_day = calendar_status == "closed"
     critical_ok = (

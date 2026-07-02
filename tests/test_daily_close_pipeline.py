@@ -467,6 +467,29 @@ def test_split_minute5_sources_routes_sh_and_sz_to_separate_baostock_workers_and
     }
 
 
+def test_load_minute5_expected_ts_codes_uses_daily_raw_traded_universe(monkeypatch):
+    _no_db(monkeypatch)
+
+    def fake_fetch_all(_conn, sql, params=None):
+        assert "market_daily_bar" in sql
+        assert params == [date(2026, 7, 1)]
+        return [
+            {"symbol": "600000", "exchange": "SH"},
+            {"symbol": "000001", "exchange": "SZ"},
+        ]
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(
+        dcp,
+        "load_active_ts_codes",
+        lambda _service, _trade_date: ["600000.SH", "600193.SH", "000001.SZ"],
+    )
+
+    result = dcp.load_minute5_expected_ts_codes("test", date(2026, 7, 1))
+
+    assert result == ["600000.SH", "000001.SZ"]
+
+
 def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
     calls = {}
 
@@ -616,7 +639,7 @@ def test_retry_failed_stage_runs_baostock_exchange_rescue_inline(monkeypatch):
     monkeypatch.setattr(dcp, "upsert_quality", lambda **_kwargs: None)
     monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
     monkeypatch.setattr(dcp, "mark_failed_symbol_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(dcp, "load_active_ts_codes", lambda _service, _trade_date: ["600000.SH", "000001.SZ"])
+    monkeypatch.setattr(dcp, "load_minute5_expected_ts_codes", lambda _service, _trade_date: ["600000.SH", "000001.SZ"])
 
     class RaisingExecutor:
         def __init__(self, *args, **kwargs):
@@ -842,6 +865,63 @@ def test_finalize_pipeline_status_uses_quality_threshold_over_old_failed_jobs(mo
     assert result["daily_status"] == "partial_success"
     assert result["minute5_status"] == "partial_success"
     assert result["latest_ready_trade_date"] == date(2026, 6, 18)
+
+
+def test_finalize_pipeline_status_hides_superseded_minute5_failures_when_quality_passes(monkeypatch):
+    _no_db(monkeypatch)
+    jobs = [
+        {
+            "stage": "daily",
+            "job_name": "daily_bar",
+            "source": "tushare",
+            "status": "partial_success",
+            "error_summary": None,
+        },
+        {
+            "stage": "minute5",
+            "job_name": "minute5_bar",
+            "source": "baostock_sh",
+            "status": "failed",
+            "error_summary": "old source failure",
+        },
+        {
+            "stage": "minute5",
+            "job_name": "minute5_bar",
+            "source": "fallback",
+            "status": "success",
+            "error_summary": None,
+        },
+        {"stage": "deps", "job_name": "daily_factor_pipeline", "source": "internal", "status": "success"},
+    ]
+    quality = [
+        {
+            "dataset_name": "daily_bar",
+            "expected_count": 15627,
+            "actual_count": 15561,
+            "missing_count": 66,
+            "abnormal_count": 0,
+        },
+        {
+            "dataset_name": "minute5_bar",
+            "expected_count": 5187,
+            "actual_count": 5187,
+            "missing_count": 0,
+            "abnormal_count": 0,
+        },
+    ]
+
+    def fake_fetch_all(_conn, sql, _params=None):
+        if "FROM ops.daily_pipeline_quality" in sql:
+            return quality
+        return jobs
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(dcp, "latest_ready_trade_date", lambda _service: date(2026, 6, 30))
+
+    result = dcp.finalize_pipeline_status(date(2026, 7, 1), config=dcp.PipelineConfig(service="test"))
+
+    assert result["minute5_status"] == "success"
+    assert all(job["stage"] != "minute5" for job in result["failed_jobs"])
 
 
 def test_finalize_pipeline_status_blocks_ready_when_market_monitor_failed(monkeypatch):
