@@ -1,6 +1,12 @@
 import json
 from types import SimpleNamespace
 
+import pandas as pd
+
+import stock_research.reports.daily_research_report_cli as daily_research_report_cli
+import stock_research.strategy_eod_publish as strategy_eod_publish
+import stock_research.watchlist.workflow as watchlist_workflow
+from stock_research.data_run_manifest import build_manifest_entry
 from stock_research.eod_auto_repair import build_default_action_registry, run_eod_auto_repair
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairStatus
 
@@ -157,9 +163,87 @@ def test_default_action_registry_contains_repairable_checks():
     registry = build_default_action_registry(output_root="outputs")
 
     assert "minute5_bars" in registry
+    assert "technical_features" in registry
     assert "lhb_features" in registry
-    assert "strategy_publish" in registry
+    assert "score_topn" in registry
+    assert "watchlist" in registry
     assert "market_monitor" in registry
+    assert "strategy_publish" in registry
+    assert "reports" in registry
+    assert "review_evidence_snapshots" in registry
+
+
+def test_default_watchlist_action_persists_diagnostics_snapshot(monkeypatch, tmp_path):
+    stored = []
+
+    monkeypatch.setattr(
+        watchlist_workflow,
+        "build_watchlist_snapshot",
+        lambda **kwargs: pd.DataFrame(
+            [{"watchlist_id": kwargs["watchlist_id"], "trade_date": kwargs["trade_date"], "asset_id": "A"}]
+        ),
+    )
+    monkeypatch.setattr(
+        watchlist_workflow,
+        "build_watchlist_diagnostics_snapshot",
+        lambda **kwargs: {
+            "risk": pd.DataFrame(
+                [{"watchlist_id": "diagnostics", "trade_date": kwargs["trade_date"], "asset_id": "B"}]
+            )
+        },
+    )
+    monkeypatch.setattr(
+        watchlist_workflow,
+        "store_watchlist_daily_signals",
+        lambda frame: stored.append(frame.copy()) or len(frame),
+    )
+
+    result = build_default_action_registry(output_root="outputs")["watchlist"]("2026-07-01", tmp_path)
+
+    assert result.status == RepairStatus.SUCCESS
+    assert result.metrics == {"default_rows": 1, "diagnostics_rows": 1}
+    assert len(stored) == 1
+    assert stored[0]["watchlist_id"].tolist() == ["diagnostics"]
+
+
+def test_default_reports_action_generates_daily_research_reports_before_manifest_refresh(monkeypatch, tmp_path):
+    calls = []
+    entries = [
+        build_manifest_entry(
+            run_id="run-1",
+            run_date="2026-07-01",
+            trade_date="2026-07-01",
+            module="generated_reports",
+            source="reports",
+            tier="tier2",
+            status="success",
+            started_at="2026-07-01T00:00:00Z",
+            ended_at="2026-07-01T00:00:01Z",
+            row_count=2,
+            asset_count=None,
+            latest_trade_date="2026-07-01",
+            artifact_path="/tmp/reports/bundle.md",
+            metadata={"reports_dir": "/tmp/reports"},
+        )
+    ]
+
+    def fake_run_daily_research_report(**kwargs):
+        calls.append(("generate", kwargs))
+        return {"report_paths": {"bundle": {"markdown_path": "/tmp/reports/bundle.md"}}}
+
+    monkeypatch.setattr(daily_research_report_cli, "run_daily_research_report", fake_run_daily_research_report)
+    monkeypatch.setattr(strategy_eod_publish, "_write_report_content_manifest_entries", lambda **kwargs: entries)
+    monkeypatch.setattr("stock_research.data_run_manifest.upsert_data_run_manifest", lambda entry: calls.append(("upsert", entry)))
+
+    result = build_default_action_registry(output_root="outputs")["reports"]("2026-07-01", tmp_path)
+
+    assert calls[0][0] == "generate"
+    assert calls[0][1]["trade_date"] == "2026-07-01"
+    assert calls[0][1]["score_version"] == "manual_v1"
+    assert calls[0][1]["record_run"] is False
+    assert ("upsert", entries[0]) in calls
+    assert result.metrics["generated_reports"] == 2
+    assert result.artifact_paths == ["/tmp/reports"]
 
 
 def test_run_eod_auto_repair_records_action_exception_and_writes_report(tmp_path):

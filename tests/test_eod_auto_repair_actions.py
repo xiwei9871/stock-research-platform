@@ -1,10 +1,15 @@
 import pytest
 
 from stock_research.eod_auto_repair_actions import (
+    repair_generated_reports,
     repair_lhb_source_and_features,
     repair_market_monitor,
     repair_minute5_bars,
+    repair_review_evidence_snapshots,
+    repair_score_topn,
     repair_strategy_publish,
+    repair_technical_features,
+    repair_watchlist,
 )
 from stock_research.eod_auto_repair_models import RepairStatus
 
@@ -78,3 +83,69 @@ def test_repair_market_monitor_wraps_runner_result():
 
     assert result.status == RepairStatus.SUCCESS
     assert result.metrics["index_rows"] == 5
+
+
+def test_repair_technical_features_passes_trade_date_to_runner():
+    captured = {}
+
+    def runner(**kwargs):
+        captured.update(kwargs)
+        return {"stored_rows": 5187}
+
+    result = repair_technical_features("2026-07-01", runner=runner)
+
+    assert result.status == RepairStatus.SUCCESS
+    assert captured["trade_date"] == "2026-07-01"
+    assert captured["adjust_type"] == "hfq"
+    assert result.metrics["stored_rows"] == 5187
+
+
+def test_repair_score_topn_passes_manual_v1_to_runner():
+    captured = {}
+
+    def runner(**kwargs):
+        captured.update(kwargs)
+        return {"score_rows": 5187}
+
+    result = repair_score_topn("2026-07-01", output_dir="/tmp/out", runner=runner)
+
+    assert result.status == RepairStatus.SUCCESS
+    assert captured["trade_date"] == "2026-07-01"
+    assert captured["score_version"] == "manual_v1"
+    assert result.metrics["score_rows"] == 5187
+
+
+def test_repair_watchlist_builds_default_and_diagnostics():
+    calls = []
+
+    def runner(**kwargs):
+        calls.append(kwargs)
+        return {"members": 50}
+
+    result = repair_watchlist("2026-07-01", runner=runner)
+
+    assert result.status == RepairStatus.SUCCESS
+    assert [call["watchlist_id"] for call in calls] == ["default", "diagnostics"]
+    assert result.metrics == {"default_rows": 50, "diagnostics_rows": 50}
+
+
+def test_repair_generated_reports_wraps_runner_output():
+    result = repair_generated_reports(
+        "2026-07-01",
+        runner=lambda **kwargs: {"generated_reports": 2, "output_dir": "/tmp/reports"},
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert result.metrics["generated_reports"] == 2
+    assert result.artifact_paths == ["/tmp/reports"]
+
+
+def test_repair_review_evidence_snapshots_wraps_runner_output():
+    result = repair_review_evidence_snapshots(
+        "2026-07-01",
+        runner=lambda **kwargs: {"snapshot_rows": 28, "output_dir": "/tmp/snapshots"},
+    )
+
+    assert result.status == RepairStatus.SUCCESS
+    assert result.metrics["snapshot_rows"] == 28
+    assert result.artifact_paths == ["/tmp/snapshots"]

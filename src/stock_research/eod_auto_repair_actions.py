@@ -90,3 +90,98 @@ def repair_market_monitor(
         message="market monitor refreshed",
         metrics=dict(result or {}),
     )
+
+
+def repair_technical_features(
+    trade_date: str,
+    *,
+    runner: Callable[..., dict[str, Any]],
+) -> RepairActionResult:
+    result = runner(
+        trade_date=trade_date,
+        lookback_bars=260,
+        adjust_type="hfq",
+        build_strategy="latest_only",
+    )
+    return RepairActionResult(
+        name="repair_technical_features",
+        status=RepairStatus.SUCCESS,
+        message="technical features rebuilt",
+        metrics=dict(result or {}),
+    )
+
+
+def repair_score_topn(
+    trade_date: str,
+    *,
+    output_dir: str | Path,
+    runner: Callable[..., dict[str, Any]],
+) -> RepairActionResult:
+    result = runner(
+        trade_date=trade_date,
+        score_version="manual_v1",
+        output_dir=output_dir,
+    )
+    return RepairActionResult(
+        name="repair_score_topn",
+        status=RepairStatus.SUCCESS,
+        message="score topn rebuilt",
+        metrics=dict(result or {}),
+    )
+
+
+def repair_watchlist(
+    trade_date: str,
+    *,
+    runner: Callable[..., dict[str, Any]],
+) -> RepairActionResult:
+    default_result = runner(trade_date=trade_date, watchlist_id="default")
+    diagnostics_result = runner(trade_date=trade_date, watchlist_id="diagnostics")
+    return RepairActionResult(
+        name="repair_watchlist",
+        status=RepairStatus.SUCCESS,
+        message="watchlists rebuilt",
+        metrics={
+            "default_rows": _row_count(default_result),
+            "diagnostics_rows": _row_count(diagnostics_result),
+        },
+    )
+
+
+def repair_generated_reports(
+    trade_date: str,
+    *,
+    runner: Callable[..., dict[str, Any]],
+) -> RepairActionResult:
+    result = runner(trade_date=trade_date)
+    output_dir = str(result.get("output_dir") or "")
+    return RepairActionResult(
+        name="repair_generated_reports",
+        status=RepairStatus.SUCCESS,
+        message="generated reports refreshed",
+        metrics=dict(result or {}),
+        artifact_paths=[output_dir] if output_dir else [],
+    )
+
+
+def repair_review_evidence_snapshots(
+    trade_date: str,
+    *,
+    runner: Callable[..., dict[str, Any]],
+) -> RepairActionResult:
+    result = runner(trade_date=trade_date)
+    output_dir = str(result.get("output_dir") or "")
+    return RepairActionResult(
+        name="repair_review_evidence_snapshots",
+        status=RepairStatus.SUCCESS,
+        message="review evidence snapshots rebuilt",
+        metrics=dict(result or {}),
+        artifact_paths=[output_dir] if output_dir else [],
+    )
+
+
+def _row_count(result: dict[str, Any] | None) -> int:
+    row_count = (result or {}).get("members")
+    if row_count is None:
+        row_count = (result or {}).get("row_count")
+    return int(row_count or 0)
