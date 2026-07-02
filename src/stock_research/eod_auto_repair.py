@@ -17,6 +17,45 @@ from stock_research.eod_auto_repair_models import (
 ActionRunner = Callable[[str, str | Path], RepairActionResult]
 
 
+def _safe_run_check(check) -> RepairCheckResult:
+    try:
+        return check.run()
+    except Exception as exc:  # noqa: BLE001 - report must survive diagnostic failures.
+        return RepairCheckResult(
+            name=str(getattr(check, "name", "check_plan")),
+            status=RepairStatus.FAILED,
+            message=f"{type(exc).__name__}: {exc}",
+            metrics={},
+            blocker=True,
+        )
+
+
+def _safe_run_check_plan(check_plan_builder, trade_date: str) -> list[RepairCheckResult]:
+    try:
+        return [_safe_run_check(check) for check in check_plan_builder(trade_date)]
+    except Exception as exc:  # noqa: BLE001 - plan failures belong in the report.
+        return [
+            RepairCheckResult(
+                name="check_plan",
+                status=RepairStatus.FAILED,
+                message=f"{type(exc).__name__}: {exc}",
+                metrics={},
+                blocker=True,
+            )
+        ]
+
+
+def _safe_run_action(name: str, runner: ActionRunner, trade_date: str, output_dir: Path) -> RepairActionResult:
+    try:
+        return runner(trade_date, output_dir)
+    except Exception as exc:  # noqa: BLE001 - action failures belong in the report.
+        return RepairActionResult(
+            name=name,
+            status=RepairStatus.FAILED,
+            message=f"{type(exc).__name__}: {exc}",
+        )
+
+
 def _final_status(checks: list[RepairCheckResult]) -> RepairStatus:
     blockers = [check for check in checks if check.blocker and check.status != RepairStatus.SUCCESS]
     if blockers:
@@ -31,6 +70,29 @@ def _final_status(checks: list[RepairCheckResult]) -> RepairStatus:
     if skipped:
         return RepairStatus.DEGRADED
     return RepairStatus.SUCCESS
+
+
+def _remaining_blockers(checks: list[RepairCheckResult]) -> list[str]:
+    return [check.name for check in checks if check.blocker and check.status != RepairStatus.SUCCESS]
+
+
+def _remaining_non_blockers(checks: list[RepairCheckResult]) -> list[str]:
+    return [
+        check.name
+        for check in checks
+        if not check.blocker and check.status not in {RepairStatus.SUCCESS, RepairStatus.DEGRADED}
+    ]
+
+
+def _next_actions(checks: list[RepairCheckResult]) -> list[str]:
+    actions = []
+    blockers = _remaining_blockers(checks)
+    if blockers:
+        actions.append(f"Resolve blocking checks: {', '.join(blockers)}")
+    non_blockers = _remaining_non_blockers(checks)
+    if non_blockers:
+        actions.append(f"Review non-blocking gaps: {', '.join(non_blockers)}")
+    return actions
 
 
 def _write_summary_files(summary: RepairRunSummary, output_dir: str | Path) -> None:
@@ -72,7 +134,7 @@ def run_eod_auto_repair(
         raise ValueError("mode must be check, repair, or publish-only")
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    checks_before = [check.run() for check in check_plan_builder(trade_date)]
+    checks_before = _safe_run_check_plan(check_plan_builder, trade_date)
     actions: list[RepairActionResult] = []
     registry = action_registry if action_registry is not None else build_default_action_registry(output_root="outputs")
     if mode != "check":
@@ -82,8 +144,8 @@ def run_eod_auto_repair(
             runner = registry.get(check.name)
             if runner is None:
                 continue
-            actions.append(runner(trade_date, out))
-    checks_after = [check.run() for check in check_plan_builder(trade_date)] if actions else checks_before
+            actions.append(_safe_run_action(check.name, runner, trade_date, out))
+    checks_after = _safe_run_check_plan(check_plan_builder, trade_date) if actions else checks_before
     summary = RepairRunSummary(
         trade_date=trade_date,
         mode=mode,
@@ -91,6 +153,9 @@ def run_eod_auto_repair(
         checks_before=checks_before,
         actions=actions,
         checks_after=checks_after,
+        remaining_blockers=_remaining_blockers(checks_after),
+        remaining_non_blockers=_remaining_non_blockers(checks_after),
+        next_actions=_next_actions(checks_after),
     )
     if write_reports:
         _write_summary_files(summary, out)
