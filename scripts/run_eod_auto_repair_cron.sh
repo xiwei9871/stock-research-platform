@@ -8,13 +8,32 @@ LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
 LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"
 
+source "$ROOT/scripts/stock_cron_guard.sh"
+clear_stock_proxy_env
+
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$LOCK_FILE")"
 
+exec 9>"$LOCK_FILE"
+if ! lockf -s -t 0 9; then
+  echo "eod_auto_repair|locked|$LOCK_FILE" | tee -a "$LOG_DIR/$TRADE_DATE.log"
+  exit 0
+fi
+
 cd "$ROOT"
-# Entrypoint: python -m stock_research.eod_auto_repair
-flock -n "$LOCK_FILE" \
+set +e
+{
+  echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
+  # Entrypoint: python -m stock_research.eod_auto_repair
   rtk "$PYTHON" -m stock_research.eod_auto_repair \
     --trade-date "$TRADE_DATE" \
     --output-dir "$OUTPUT_DIR" \
-    --mode repair \
-  2>&1 | tee "$LOG_DIR/$TRADE_DATE.log"
+    --mode repair
+  rc=$?
+  echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json"
+  echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md"
+  echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
+  exit "$rc"
+} 2>&1 | tee -a "$LOG_DIR/$TRADE_DATE.log"
+rc=${PIPESTATUS[0]}
+set -e
+exit "$rc"
