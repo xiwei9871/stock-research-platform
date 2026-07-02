@@ -5,14 +5,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from stock_research.config import SETTINGS
 
-DEFAULT_STRATEGY_CONTRACT_PATH = Path(
-    "/Users/xiwei/stock_research/outputs/research/"
-    "official_strategy_contract_rescan_20260101_20260617_fresh_all/"
-    "official_strategy_contracts.json"
+STRATEGY_CONTRACT_RELATIVE_PATH = (
+    Path("research")
+    / "official_strategy_contract_rescan_20260101_20260617_fresh_all"
+    / "official_strategy_contracts.json"
 )
+DEFAULT_STRATEGY_CONTRACT_PATH = Path(SETTINGS.output_root) / STRATEGY_CONTRACT_RELATIVE_PATH
 OFFICIAL_TRANSACTION_COST_BPS = 10.0
 OFFICIAL_MAX_POSITION_WEIGHT = 0.2
+
+
+def default_strategy_contract_path(output_root: str | Path | None = None) -> Path:
+    return Path(output_root or SETTINGS.output_root) / STRATEGY_CONTRACT_RELATIVE_PATH
 
 
 @dataclass(frozen=True)
@@ -37,11 +43,11 @@ class ContractValidationResult:
 
 
 def load_strategy_contracts(
-    path: str | Path = DEFAULT_STRATEGY_CONTRACT_PATH,
+    path: str | Path | None = None,
     *,
     profile: str = "balanced",
 ) -> dict[str, StrategyContract]:
-    source = Path(path)
+    source = Path(path) if path is not None else default_strategy_contract_path()
     payload = json.loads(source.read_text(encoding="utf-8"))
     contracts: dict[str, StrategyContract] = {}
     for row in payload.get("profiles") or []:
