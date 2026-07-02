@@ -11,6 +11,7 @@ from typing import Any
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 from stock_research.minute_backfill import TRADING_MINUTE_BARS_PER_DAY
+from stock_research.minute_data import bs, login_or_raise, query_baostock_minute_rows
 
 
 DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT = 50_000
@@ -217,6 +218,85 @@ def run_baostock_minute_backfill_probe(
             freq=freq,
             adjust_types=adjust_types or ["raw", "qfq"],
         )
+
+
+def probe_baostock_minute_availability(
+    *,
+    codes: list[str],
+    dates: list[str | dt.date],
+    freq: str = "5min",
+    adjust_types: list[str] | None = None,
+    timeout_seconds: float | None = None,
+) -> list[dict[str, Any]]:
+    if not codes:
+        raise ValueError("codes must not be empty")
+    if not dates:
+        raise ValueError("dates must not be empty")
+    parsed_dates = [_parse_date(value) for value in dates]
+    selected_adjust_types = adjust_types or ["raw"]
+    rows: list[dict[str, Any]] = []
+    try:
+        login_or_raise(timeout_seconds=timeout_seconds)
+        for code in codes:
+            for day in parsed_dates:
+                for adjust_type in selected_adjust_types:
+                    rows.append(
+                        _probe_one_baostock_minute_availability(
+                            code=code,
+                            day=day,
+                            freq=freq,
+                            adjust_type=adjust_type,
+                            timeout_seconds=timeout_seconds,
+                        )
+                    )
+    finally:
+        try:
+            bs.logout()
+        except Exception:
+            pass
+    return rows
+
+
+def _probe_one_baostock_minute_availability(
+    *,
+    code: str,
+    day: dt.date,
+    freq: str,
+    adjust_type: str,
+    timeout_seconds: float | None,
+) -> dict[str, Any]:
+    base = {
+        "code": code,
+        "date": day.isoformat(),
+        "freq": freq,
+        "adjust_type": adjust_type,
+        "rows": 0,
+        "available": False,
+        "first_time": "",
+        "last_time": "",
+        "error": "",
+    }
+    try:
+        query_rows = query_baostock_minute_rows(
+            code,
+            day,
+            day,
+            freq=freq,
+            adjust_type=adjust_type,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as exc:
+        return {
+            **base,
+            "error": f"{exc.__class__.__name__}: {exc}",
+        }
+    return {
+        **base,
+        "rows": len(query_rows),
+        "available": bool(query_rows),
+        "first_time": str(query_rows[0].get("time", "")) if query_rows else "",
+        "last_time": str(query_rows[-1].get("time", "")) if query_rows else "",
+    }
 
 
 def _parse_date(value: str | dt.date) -> dt.date:

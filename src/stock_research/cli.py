@@ -229,6 +229,7 @@ from stock_research.baostock_minute_backfill_watchdog import (
     DEFAULT_BAOSTOCK_DAILY_REQUEST_LIMIT,
     DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH,
     DEFAULT_BAOSTOCK_SAFETY_MULTIPLIER,
+    probe_baostock_minute_availability,
     run_baostock_minute_backfill_probe,
 )
 from stock_research.minute_backfill import (
@@ -2060,6 +2061,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="5min",
     )
     probe_minute_backfill.add_argument("--adjust-types", type=parse_adjust_types, default=["raw", "qfq"])
+
+    probe_minute_availability = subparsers.add_parser("probe-baostock-minute-availability")
+    probe_minute_availability.add_argument("--codes", type=lambda value: parse_str_list(value, "--codes"), required=True)
+    probe_minute_availability.add_argument("--dates", type=lambda value: parse_str_list(value, "--dates"), required=True)
+    probe_minute_availability.add_argument(
+        "--freq",
+        choices=["1min", "5min", "15min", "30min", "60min"],
+        default="5min",
+    )
+    probe_minute_availability.add_argument("--adjust-types", type=parse_adjust_types, default=["raw"])
+    probe_minute_availability.add_argument("--timeout-seconds", type=float, default=20)
 
     validate_minutes = subparsers.add_parser("validate-minute-bars")
     validate_minutes.add_argument("--start-date", required=True)
@@ -9045,6 +9057,27 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         )
         for key, value in result.items():
             print(f"baostock_minute_backfill_probe|{key}|{value}")
+    elif args.command == "probe-baostock-minute-availability":
+        rows = probe_baostock_minute_availability(
+            codes=args.codes,
+            dates=args.dates,
+            freq=args.freq,
+            adjust_types=args.adjust_types,
+            timeout_seconds=args.timeout_seconds,
+        )
+        for row in rows:
+            print(
+                "baostock_minute_availability|"
+                f"code|{row['code']}|"
+                f"date|{row['date']}|"
+                f"freq|{row['freq']}|"
+                f"adjust_type|{row['adjust_type']}|"
+                f"rows|{row['rows']}|"
+                f"available|{row['available']}|"
+                f"first_time|{row['first_time']}|"
+                f"last_time|{row['last_time']}|"
+                f"error|{row['error']}"
+            )
     elif args.command == "validate-minute-bars":
         result = validate_minute_bars(
             start_date=args.start_date,

@@ -112,3 +112,80 @@ def test_load_five_year_probe_summary_counts_monthly_and_daily_requests(monkeypa
     assert summary["daily_chunk_requests"] == 11555168
     assert summary["monthly_chunk_requests"] == 598454
     assert summary["estimated_rows"] == 554648064
+
+
+def test_probe_baostock_minute_availability_records_rows_and_errors(monkeypatch):
+    calls = []
+    logged_out = []
+
+    def fake_query(code, start_date, end_date, freq, adjust_type, timeout_seconds=None):
+        calls.append((code, start_date, end_date, freq, adjust_type, timeout_seconds))
+        if code == "sh.600000" and start_date == dt.date(2020, 1, 2):
+            return [
+                {"date": "2020-01-02", "time": "20200102093500000"},
+                {"date": "2020-01-02", "time": "20200102150000000"},
+            ]
+        if code == "sh.600000" and start_date == dt.date(2019, 12, 31):
+            return []
+        raise RuntimeError("baostock failed")
+
+    monkeypatch.setattr(watchdog, "login_or_raise", lambda timeout_seconds=None: None)
+    monkeypatch.setattr(watchdog, "query_baostock_minute_rows", fake_query)
+    monkeypatch.setattr(watchdog.bs, "logout", lambda: logged_out.append(True))
+
+    rows = watchdog.probe_baostock_minute_availability(
+        codes=["sh.600000", "sz.000001"],
+        dates=[dt.date(2019, 12, 31), dt.date(2020, 1, 2)],
+        freq="5min",
+        adjust_types=["raw"],
+        timeout_seconds=7,
+    )
+
+    assert rows == [
+        {
+            "code": "sh.600000",
+            "date": "2019-12-31",
+            "freq": "5min",
+            "adjust_type": "raw",
+            "rows": 0,
+            "available": False,
+            "first_time": "",
+            "last_time": "",
+            "error": "",
+        },
+        {
+            "code": "sh.600000",
+            "date": "2020-01-02",
+            "freq": "5min",
+            "adjust_type": "raw",
+            "rows": 2,
+            "available": True,
+            "first_time": "20200102093500000",
+            "last_time": "20200102150000000",
+            "error": "",
+        },
+        {
+            "code": "sz.000001",
+            "date": "2019-12-31",
+            "freq": "5min",
+            "adjust_type": "raw",
+            "rows": 0,
+            "available": False,
+            "first_time": "",
+            "last_time": "",
+            "error": "RuntimeError: baostock failed",
+        },
+        {
+            "code": "sz.000001",
+            "date": "2020-01-02",
+            "freq": "5min",
+            "adjust_type": "raw",
+            "rows": 0,
+            "available": False,
+            "first_time": "",
+            "last_time": "",
+            "error": "RuntimeError: baostock failed",
+        },
+    ]
+    assert calls[0] == ("sh.600000", dt.date(2019, 12, 31), dt.date(2019, 12, 31), "5min", "raw", 7)
+    assert logged_out == [True]

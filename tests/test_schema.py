@@ -936,6 +936,26 @@ def test_cli_accepts_baostock_ingestion_commands():
     assert probe_args.command == "probe-baostock-minute-backfill-coverage"
     assert probe_args.adjust_types == ["raw", "qfq"]
 
+    availability_args = build_parser().parse_args(
+        [
+            "probe-baostock-minute-availability",
+            "--codes",
+            "sh.600000,sz.000001",
+            "--dates",
+            "2019-12-31,2020-01-02,2021-07-01",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw,qfq",
+            "--timeout-seconds",
+            "15",
+        ]
+    )
+    assert availability_args.command == "probe-baostock-minute-availability"
+    assert availability_args.codes == ["sh.600000", "sz.000001"]
+    assert availability_args.dates == ["2019-12-31", "2020-01-02", "2021-07-01"]
+    assert availability_args.timeout_seconds == 15
+
     status_args = build_parser().parse_args(["baostock-minute-backfill-status"])
     assert status_args.command == "baostock-minute-backfill-status"
 
