@@ -116,7 +116,7 @@ rtk .venv/bin/python -m stock_research.eod_auto_repair \
   --mode check
 ```
 
-Run diagnostics, repair, publish strategies, and verify:
+Run staged repair:
 
 ```bash
 rtk .venv/bin/python -m stock_research.eod_auto_repair \
@@ -126,6 +126,8 @@ rtk .venv/bin/python -m stock_research.eod_auto_repair \
 ```
 
 Important safety rule: Baostock minute repair is always single-worker. Do not bypass this in cron or manual runs.
+
+The repair command runs dependency stages in this order: base bars, features, scores/watchlists, market monitor, strategy EOD, presentation freshness. It stops before downstream stages when a blocker remains.
 
 Primary outputs:
 

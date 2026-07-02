@@ -555,3 +555,94 @@ def test_run_eod_auto_repair_does_not_recheck_when_no_actions_run(tmp_path):
     assert calls["daily_bars"] == 1
     assert summary.actions == []
     assert summary.final_status == RepairStatus.SUCCESS
+
+
+def test_run_report_contains_stage_blockers_actions_and_next_steps(tmp_path):
+    def check_plan_builder(trade_date):
+        return [
+            SimpleNamespace(
+                name="reports",
+                run=lambda: RepairCheckResult(
+                    "reports",
+                    RepairStatus.FAILED,
+                    "generated reports missing",
+                    blocker=False,
+                ),
+            )
+        ]
+
+    run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="check",
+        check_plan_builder=check_plan_builder,
+        action_registry={},
+        write_reports=True,
+    )
+
+    report = (tmp_path / "run_report.md").read_text()
+    assert "Final status" in report
+    assert "Remaining non-blockers" in report
+    assert "reports" in report
+    assert "Next actions" in report
+
+
+def test_20260701_incident_flow_repairs_minute_score_watchlist_then_degrades_on_reports(tmp_path):
+    state = {
+        "minute5_bars": RepairStatus.FAILED,
+        "score_topn": RepairStatus.FAILED,
+        "watchlist": RepairStatus.FAILED,
+        "strategy_publish": RepairStatus.FAILED,
+        "reports": RepairStatus.FAILED,
+    }
+    blockers = {
+        "minute5_bars": True,
+        "score_topn": True,
+        "watchlist": True,
+        "strategy_publish": True,
+        "reports": False,
+    }
+    calls = []
+
+    def check_plan_builder(trade_date):
+        checks = []
+        for name in ["minute5_bars", "score_topn", "watchlist", "strategy_publish", "reports"]:
+            def run_check(check_name=name):
+                return RepairCheckResult(
+                    check_name,
+                    state[check_name],
+                    "ready" if state[check_name] == RepairStatus.SUCCESS else "missing",
+                    blocker=blockers[check_name],
+                )
+
+            checks.append(SimpleNamespace(name=name, run=run_check))
+        return checks
+
+    def action_for(check_name):
+        def action(trade_date, output_dir):
+            calls.append(check_name)
+            if check_name != "reports":
+                state[check_name] = RepairStatus.SUCCESS
+            return RepairActionResult(f"repair_{check_name}", RepairStatus.SUCCESS, "ran")
+
+        return action
+
+    summary = run_eod_auto_repair(
+        trade_date="2026-07-01",
+        output_dir=tmp_path,
+        mode="repair",
+        check_plan_builder=check_plan_builder,
+        action_registry={
+            "minute5_bars": action_for("minute5_bars"),
+            "score_topn": action_for("score_topn"),
+            "watchlist": action_for("watchlist"),
+            "strategy_publish": action_for("strategy_publish"),
+            "reports": action_for("reports"),
+        },
+        write_reports=True,
+    )
+
+    assert calls == ["minute5_bars", "score_topn", "watchlist", "strategy_publish", "reports"]
+    assert summary.final_status == RepairStatus.DEGRADED
+    assert summary.remaining_blockers == []
+    assert summary.remaining_non_blockers == ["reports"]

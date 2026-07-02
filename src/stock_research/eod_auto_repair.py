@@ -95,7 +95,7 @@ def _final_status(checks: list[RepairCheckResult]) -> RepairStatus:
         return RepairStatus.DEGRADED
     failed = [check for check in checks if check.status == RepairStatus.FAILED]
     if failed:
-        return RepairStatus.FAILED
+        return RepairStatus.DEGRADED
     skipped = [check for check in checks if check.status == RepairStatus.SKIPPED]
     if skipped:
         return RepairStatus.DEGRADED
@@ -135,9 +135,23 @@ def _write_summary_files(summary: RepairRunSummary, output_dir: str | Path) -> N
         "",
         f"- Mode: {summary.mode}",
         f"- Final status: {summary.final_status.value}",
+        f"- Remaining blockers: {', '.join(summary.remaining_blockers) if summary.remaining_blockers else 'none'}",
+        f"- Remaining non-blockers: {', '.join(summary.remaining_non_blockers) if summary.remaining_non_blockers else 'none'}",
+        "",
+        "## Stages",
+    ]
+    if summary.stages:
+        for stage in summary.stages:
+            blockers = ", ".join(stage.remaining_blockers) if stage.remaining_blockers else "none"
+            lines.append(f"- {stage.name}: blockers={blockers}")
+            for action in stage.actions:
+                lines.append(f"  - action {action.name}: {action.status.value} {action.message}")
+    else:
+        lines.append("- none")
+    lines.extend([
         "",
         "## Checks Before",
-    ]
+    ])
     for check in summary.checks_before:
         lines.append(f"- {check.name}: {check.status.value} {json.dumps(check.metrics, ensure_ascii=False)}")
     lines.append("")
@@ -148,6 +162,12 @@ def _write_summary_files(summary: RepairRunSummary, output_dir: str | Path) -> N
     lines.append("## Checks After")
     for check in summary.checks_after:
         lines.append(f"- {check.name}: {check.status.value} {json.dumps(check.metrics, ensure_ascii=False)}")
+    lines.append("")
+    lines.append("## Next actions")
+    if summary.next_actions:
+        lines.extend(f"- {item}" for item in summary.next_actions)
+    else:
+        lines.append("- none")
     (out / "run_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
