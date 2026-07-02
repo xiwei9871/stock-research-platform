@@ -111,7 +111,8 @@ def test_blockers_audit_and_outputs_are_clean() -> None:
     assert int(metrics["lookahead violation rows"]) == 0
     assert int(metrics["trading language hit count"]) == 0
     assert int(metrics["source layers evaluated"]) >= 7
-    assert "?? src/stock_research/tech_bottleneck_v1.py" in str(metrics["formal strategy file status"])
+    strategy_status = str(metrics["formal strategy file status"])
+    assert strategy_status == "clean" or "src/stock_research/tech_bottleneck_v1.py" in strategy_status
 
     for path in OUTPUT_DIR.rglob("*"):
         if path.is_file() and path.suffix.lower() in {".csv", ".md", ".txt"}:

@@ -1646,9 +1646,135 @@ body {
   overflow-wrap: anywhere;
 }
 
+.asset-chart-shell {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .asset-chart {
   width: 100%;
   min-height: 460px;
+}
+
+.asset-chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 3px 10px;
+  max-width: min(260px, calc(100% - 24px));
+  border: 1px solid #c8d3e3;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  padding: 8px 10px;
+  color: #1f2937;
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.asset-chart-tooltip strong {
+  grid-column: 1 / -1;
+  color: #111827;
+  font-size: 12px;
+}
+
+.chart-axis-ticks {
+  display: grid;
+  gap: 8px;
+  margin: -10px 72px 0 8px;
+  padding: 0;
+  list-style: none;
+  color: #475467;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.chart-axis-ticks li {
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chart-axis-ticks li:first-child {
+  text-align: left;
+}
+
+.chart-axis-ticks li:last-child {
+  text-align: right;
+}
+
+.chart-range-tool {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(220px, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  border: 1px solid #d7dee8;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  color: #475467;
+  font-size: 12px;
+}
+
+.chart-window-controls {
+  display: grid;
+  grid-template-columns: 28px minmax(140px, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.chart-window-controls button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border: 1px solid #c8d3e3;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1f2937;
+  padding: 0;
+}
+
+.chart-window-controls button:disabled {
+  color: #98a2b3;
+  background: #eef2f7;
+}
+
+.chart-window-track {
+  position: relative;
+  height: 12px;
+  min-width: 0;
+  border: 1px solid #c8d3e3;
+  border-radius: 999px;
+  background: #e8edf5;
+  cursor: grab;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.chart-window-selection {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 14px;
+  border-radius: 999px;
+  background: #174ea6;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.chart-window-slider {
+  position: absolute;
+  inset: -6px 0;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .data-explorer-workspace {

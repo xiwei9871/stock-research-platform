@@ -27,13 +27,18 @@ const DEFAULT_TRADE_DATE = '2026-06-18';
 const SCORE_VERSION = 'manual_v1';
 const ADJUST_TYPE = 'qfq';
 const STOCK_CHART_VISIBLE_BARS = 120;
-const CHART_RESOLUTIONS = [
+const DAILY_CHART_RESOLUTIONS = [
   { value: '1D', label: '日K' },
+  { value: '1W', label: '周K' },
+  { value: '1M', label: '月K' }
+] as const;
+const INTRADAY_CHART_RESOLUTIONS = [
   { value: '60m', label: '60m' },
   { value: '30m', label: '30m' },
   { value: '10m', label: '10m' },
   { value: '5m', label: '5m' }
 ] as const;
+const CHART_RESOLUTIONS = [...DAILY_CHART_RESOLUTIONS, ...INTRADAY_CHART_RESOLUTIONS] as const;
 type ChartResolution = (typeof CHART_RESOLUTIONS)[number]['value'];
 
 type StockWorkspaceProps = {
@@ -128,6 +133,17 @@ function normalizeAssetId(value: string) {
     return `${trimmed}.${trimmed.startsWith('6') ? 'SH' : 'SZ'}`;
   }
   return trimmed;
+}
+
+function isIntradayChartResolution(resolution: ChartResolution) {
+  return INTRADAY_CHART_RESOLUTIONS.some((item) => item.value === resolution);
+}
+
+function toChartAxisPeriod(resolution: ChartResolution) {
+  if (resolution === '1D' || resolution === '1W' || resolution === '1M') {
+    return resolution;
+  }
+  return 'intraday';
 }
 
 function formatValue(value: unknown) {
@@ -496,19 +512,13 @@ export function StockWorkspace({
       setIsChartLoading(false);
       return;
     }
-    if (chartResolution === '1D') {
-      setChartBars(profile.bars ?? []);
-      setChartError(null);
-      setIsChartLoading(false);
-      return;
-    }
-
     let ignore = false;
     setIsChartLoading(true);
     setChartError(null);
-    fetchDailyBars(profile.canonical_asset_id, startDate, endDate, {
+    const chartStartDate = isIntradayChartResolution(chartResolution) ? startDate : undefined;
+    fetchDailyBars(profile.canonical_asset_id, chartStartDate, endDate, {
       resolution: chartResolution,
-      adjustType: 'raw'
+      adjustType: isIntradayChartResolution(chartResolution) ? 'raw' : ADJUST_TYPE
     })
       .then((rows) => {
         if (!ignore) {
@@ -670,6 +680,12 @@ export function StockWorkspace({
   const marketFacts = visibleEvidenceDigest?.facts.filter((fact) => fact.kind === 'market') ?? [];
   const marketRiskFlags =
     visibleEvidenceDigest?.risk_flags.filter((flag) => flag.key.startsWith('market_')) ?? [];
+  const isIntradayChartActive = isIntradayChartResolution(chartResolution);
+  const chartAxisPeriod = toChartAxisPeriod(chartResolution);
+  const visibleChartBarCount = chartBars.length > 0 ? Math.min(STOCK_CHART_VISIBLE_BARS, chartBars.length) : STOCK_CHART_VISIBLE_BARS;
+  const chartWindowLabel = isIntradayChartActive
+    ? `${startDate} to ${endDate}`
+    : `历史 ${chartBars.length} bars / 固定显示 ${visibleChartBarCount} bars / 截至 ${endDate}`;
 
   const openDigestAction = (action: EvidenceDigestAction) => {
     const nextContext: StockEntryContext = {
@@ -1013,11 +1029,12 @@ export function StockWorkspace({
                 <div className="section-heading">
                   <h2>价格走势</h2>
                   <span className="muted">
-                    {chartBars.length} bars / {startDate} to {endDate}
+                    {isIntradayChartActive ? `${chartBars.length} bars / ` : ''}
+                    {chartWindowLabel}
                   </span>
                 </div>
                 <div className="segmented-control stock-chart-resolution" role="group" aria-label="K line period">
-                  {CHART_RESOLUTIONS.map((resolution) => (
+                  {DAILY_CHART_RESOLUTIONS.map((resolution) => (
                     <button
                       key={resolution.value}
                       type="button"
@@ -1028,13 +1045,37 @@ export function StockWorkspace({
                       {resolution.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={isIntradayChartActive ? 'active' : ''}
+                    aria-pressed={isIntradayChartActive}
+                    onClick={() => setChartResolution(isIntradayChartActive ? chartResolution : '60m')}
+                  >
+                    分时
+                  </button>
                 </div>
+                {isIntradayChartActive ? (
+                  <div className="segmented-control stock-chart-resolution stock-chart-intraday-resolution" role="group" aria-label="分时周期">
+                    {INTRADAY_CHART_RESOLUTIONS.map((resolution) => (
+                      <button
+                        key={resolution.value}
+                        type="button"
+                        className={chartResolution === resolution.value ? 'active' : ''}
+                        aria-pressed={chartResolution === resolution.value}
+                        onClick={() => setChartResolution(resolution.value)}
+                      >
+                        {resolution.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {isChartLoading ? <p className="muted">Loading chart bars...</p> : null}
                 {chartError ? <p className="error-text">{chartError}</p> : null}
                 {!isChartLoading && chartBars.length > 0 ? (
                   <AssetChart
                     bars={chartBars}
-                    timeAxisMode={chartResolution === '1D' ? 'daily' : 'intraday'}
+                    timeAxisMode={isIntradayChartActive ? 'intraday' : 'daily'}
+                    timeAxisPeriod={chartAxisPeriod}
                     visibleBarCount={STOCK_CHART_VISIBLE_BARS}
                   />
                 ) : null}

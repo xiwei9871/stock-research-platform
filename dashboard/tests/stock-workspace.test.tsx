@@ -16,6 +16,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAssetNews: vi.fn(),
   fetchAssetProfile: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
+  fetchDailyBars: vi.fn(),
   searchAssets: vi.fn(),
   updateOperatorDecision: vi.fn()
 }));
@@ -23,7 +24,17 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('../src/api/client', () => apiMocks);
 
 vi.mock('../src/charts/AssetChart', () => ({
-  AssetChart: ({ bars }: { bars: unknown[] }) => <div data-testid="asset-chart">{bars.length} bars</div>
+  AssetChart: ({
+    bars,
+    timeAxisMode
+  }: {
+    bars: unknown[];
+    timeAxisMode?: string;
+  }) => (
+    <div data-testid="asset-chart">
+      {bars.length} bars / {timeAxisMode}
+    </div>
+  )
 }));
 
 function makeProfile(overrides: Partial<AssetProfile> = {}): AssetProfile {
@@ -280,6 +291,7 @@ beforeEach(() => {
   apiMocks.fetchAssetResearchReports.mockResolvedValue(makeResearchReports());
   apiMocks.fetchAssetNews.mockResolvedValue(newsPayload);
   apiMocks.fetchEvidenceDigest.mockResolvedValue(makeEvidenceDigest());
+  apiMocks.fetchDailyBars.mockResolvedValue([]);
   apiMocks.searchAssets.mockResolvedValue([]);
   apiMocks.createOperatorDecision.mockResolvedValue({
     event_id: 'operator_decision:operator-decision-api-2026-06-08:0:abc',
@@ -305,6 +317,67 @@ afterEach(() => {
 });
 
 describe('StockWorkspace', () => {
+  it('groups intraday chart periods under 分时 and loads weekly or monthly bars', async () => {
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    expect(await screen.findByRole('heading', { name: /平安银行|Stock Workspace/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', undefined, '2026-06-18', {
+        resolution: '1D',
+        adjustType: 'qfq'
+      })
+    );
+    expect(screen.getByRole('button', { name: '日K' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '周K' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '月K' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '分时' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '30m' })).not.toBeInTheDocument();
+
+    apiMocks.fetchDailyBars.mockResolvedValueOnce([
+      { time: '2026-06-05', open: 10, high: 12, low: 9.8, close: 11.5, volume: 3000, amount: 33000 }
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: '周K' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', undefined, '2026-06-18', {
+        resolution: '1W',
+        adjustType: 'qfq'
+      })
+    );
+    expect(screen.getByRole('button', { name: '周K' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('daily');
+
+    apiMocks.fetchDailyBars.mockResolvedValueOnce([
+      { time: '2026-06-18 10:30:00', open: 10, high: 10.8, low: 9.9, close: 10.5, volume: 1800, amount: 19000 }
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: '分时' }));
+    expect(screen.getByRole('button', { name: '60m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '30m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '10m' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '5m' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-12-20', '2026-06-18', {
+        resolution: '60m',
+        adjustType: 'raw'
+      })
+    );
+
+    apiMocks.fetchDailyBars.mockResolvedValueOnce([
+      { time: '2026-06-18 10:00:00', open: 10, high: 10.5, low: 9.9, close: 10.3, volume: 1000, amount: 10300 }
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: '30m' }));
+
+    await waitFor(() =>
+      expect(apiMocks.fetchDailyBars).toHaveBeenLastCalledWith('000001.SZ', '2025-12-20', '2026-06-18', {
+        resolution: '30m',
+        adjustType: 'raw'
+      })
+    );
+    expect(screen.getByRole('button', { name: '分时' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('intraday');
+  });
+
   it('renders a review-first layout with price state and collapsed secondary evidence', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({

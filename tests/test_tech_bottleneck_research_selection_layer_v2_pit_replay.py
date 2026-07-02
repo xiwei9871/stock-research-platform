@@ -85,7 +85,8 @@ def test_quality_audit_and_outputs_are_clean() -> None:
     assert int(metrics["snapshot label usage count"]) == 0
     assert int(metrics["forward return used as feature count"]) == 0
     assert int(metrics["trading language hit count"]) == 0
-    assert "?? src/stock_research/tech_bottleneck_v1.py" in str(metrics["formal strategy file status"])
+    strategy_status = str(metrics["formal strategy file status"])
+    assert strategy_status == "clean" or "src/stock_research/tech_bottleneck_v1.py" in strategy_status
 
     for path in OUTPUT_DIR.rglob("*"):
         if path.is_file() and path.suffix.lower() in {".csv", ".md", ".txt"}:

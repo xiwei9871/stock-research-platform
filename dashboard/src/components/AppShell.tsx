@@ -14,6 +14,7 @@ import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { SectorType } from './market-monitor/mockData';
 import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
 import type { GlobalSearchResult } from '../api/types';
+import { TechBottleneckWatchlistReviewPage } from '../features/techBottleneckWatchlistReview/TechBottleneckWatchlistReviewPage';
 
 type WorkspaceMode =
   | 'home'
@@ -24,6 +25,7 @@ type WorkspaceMode =
   | 'researchReports'
   | 'stock'
   | 'watchlist'
+  | 'techBottleneckReview'
   | 'factors'
   | 'strategyLab'
   | 'generatedReports';
@@ -69,15 +71,27 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
   { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
+  {
+    mode: 'techBottleneckReview',
+    label: '科技卡脖子观察池',
+    ariaLabel: 'Open Tech Bottleneck Watchlist Review workspace'
+  },
   { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
   { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
   { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
 ];
 
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
+const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
+
+function workspaceModeFromPath(pathname: string): WorkspaceMode {
+  return pathname === TECH_BOTTLENECK_REVIEW_PATH ? 'techBottleneckReview' : 'home';
+}
 
 export function AppShell() {
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('home');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
+    typeof window === 'undefined' ? 'home' : workspaceModeFromPath(window.location.pathname)
+  );
   const [selectedAssetId, setSelectedAssetId] = useState('000001.SZ');
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
@@ -104,6 +118,16 @@ export function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setWorkspaceMode(workspaceModeFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, []);
+
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
     setSelectedAssetId(assetId);
     setStockHandoff((current) => ({
@@ -118,6 +142,11 @@ export function AppShell() {
     if (mode === 'stock') {
       openStockWorkspace(selectedAssetId);
       return;
+    }
+    if (mode === 'techBottleneckReview' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_PATH) {
+      window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_PATH);
+    } else if (mode !== 'techBottleneckReview' && window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
+      window.history.pushState({}, '', '/');
     }
     setWorkspaceMode(mode);
   }
@@ -294,6 +323,7 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
               onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
             />
           ) : null}
+          {workspaceMode === 'techBottleneckReview' ? <TechBottleneckWatchlistReviewPage /> : null}
           {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
           {workspaceMode === 'generatedReports' ? (
             <GeneratedReportsWorkspace

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toCandlestickData, toVolumeData } from '../src/charts/chartData';
+import { toAlignedPriceVolumeData, toCandlestickData, toVolumeData } from '../src/charts/chartData';
 
 describe('chart data conversion', () => {
   it('drops rows without complete OHLC values', () => {
@@ -42,5 +42,17 @@ describe('chart data conversion', () => {
 
     expect(candles).toEqual([{ time: '2026-05-29', open: 11, high: 12, low: 10, close: 11.5 }]);
     expect(volumes).toEqual([{ time: '2026-05-29', value: 200, color: '#d64545' }]);
+  });
+
+  it('builds candlestick and volume data from the same valid bar sequence', () => {
+    const aligned = toAlignedPriceVolumeData([
+      { time: '2026-05-28', open: 10, high: 11, low: 9, close: 10.5, volume: 100, amount: 1000 },
+      { time: '2026-05-29', open: 10.5, high: 11.5, low: 10, close: 11, volume: null, amount: 1100 },
+      { time: '2026-06-01', open: 11, high: 12, low: 10.8, close: 11.8, volume: 120, amount: 1400 }
+    ]);
+
+    expect(aligned.chartPointCount).toBe(2);
+    expect(aligned.candles.map((point) => point.time)).toEqual(['2026-05-28', '2026-06-01']);
+    expect(aligned.volumes.map((point) => point.time)).toEqual(['2026-05-28', '2026-06-01']);
   });
 });

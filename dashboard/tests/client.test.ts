@@ -61,6 +61,24 @@ describe('dashboard API client', () => {
     expect(result[0].time).toBe('2026-05-29 10:00:00');
   });
 
+  it('omits start_date when requesting a fixed-count bars window', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ time: '2026-06-30', close: 10.5 }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDailyBars('CN:SZ:000001', undefined, '2026-07-01', {
+      resolution: '1M',
+      adjustType: 'qfq'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/assets/CN%3ASZ%3A000001/bars?end_date=2026-07-01&adjust_type=qfq&resolution=1M'
+    );
+    expect(result[0].time).toBe('2026-06-30');
+  });
+
   it('runs default backtests through the background job endpoint', async () => {
     const fetchMock = vi
       .fn()

@@ -357,16 +357,20 @@ export async function refreshPublicNews(): Promise<PublicNewsRefreshResponse> {
 
 export async function fetchDailyBars(
   assetId: string,
-  startDate: string,
+  startDate: string | undefined,
   endDate: string,
   options: string | { resolution?: string; adjustType?: string } = 'qfq'
 ): Promise<BarPoint[]> {
   const adjustType = typeof options === 'string' ? options : options.adjustType ?? 'qfq';
   const resolution = typeof options === 'string' ? undefined : options.resolution;
-  const resolutionQuery = resolution ? `&resolution=${encodeURIComponent(resolution)}` : '';
+  const queryParts = [
+    ...(startDate ? [`start_date=${encodeURIComponent(startDate)}`] : []),
+    `end_date=${encodeURIComponent(endDate)}`,
+    `adjust_type=${encodeURIComponent(adjustType)}`
+  ];
+  if (resolution) queryParts.push(`resolution=${encodeURIComponent(resolution)}`);
   const payload = await getJson<{ items: BarPoint[] }>(
-    `/api/assets/${encodeURIComponent(assetId)}/bars?start_date=${encodeURIComponent(startDate)}` +
-      `&end_date=${encodeURIComponent(endDate)}&adjust_type=${encodeURIComponent(adjustType)}${resolutionQuery}`
+    `/api/assets/${encodeURIComponent(assetId)}/bars?${queryParts.join('&')}`
   );
   return payload.items;
 }

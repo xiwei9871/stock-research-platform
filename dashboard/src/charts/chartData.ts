@@ -18,6 +18,13 @@ export type VolumePoint = {
   color: string;
 };
 
+export type AlignedPriceVolumeData = {
+  candles: CandlePoint[];
+  volumes: VolumePoint[];
+  detailsByTimeKey: Map<string, { amount: number | null }>;
+  chartPointCount: number;
+};
+
 function normalizeTime(input: string): Time | null {
   if (DAILY_DATE_PATTERN.test(input)) {
     return input;
@@ -73,4 +80,50 @@ export function toVolumeData(points: BarPoint[], resolveTime: TimeResolver = (po
       };
     })
     .filter((point): point is VolumePoint => point !== null);
+}
+
+export function toAlignedPriceVolumeData(
+  points: BarPoint[],
+  resolveTime: TimeResolver = (point) => normalizeTime(point.time)
+): AlignedPriceVolumeData {
+  const candles: CandlePoint[] = [];
+  const volumes: VolumePoint[] = [];
+  const detailsByTimeKey = new Map<string, { amount: number | null }>();
+
+  points.forEach((point, index) => {
+    const time = resolveTime(point, index);
+    if (
+      time === null ||
+      point.open === null ||
+      point.high === null ||
+      point.low === null ||
+      point.close === null ||
+      point.volume === null
+    ) {
+      return;
+    }
+
+    candles.push({
+      time,
+      open: point.open,
+      high: point.high,
+      low: point.low,
+      close: point.close
+    });
+    volumes.push({
+      time,
+      value: point.volume,
+      color: point.close >= point.open ? '#d64545' : '#1f9d55'
+    });
+    detailsByTimeKey.set(String(time), {
+      amount: point.amount
+    });
+  });
+
+  return {
+    candles,
+    volumes,
+    detailsByTimeKey,
+    chartPointCount: candles.length
+  };
 }

@@ -1271,6 +1271,8 @@ describe('dashboard app shell', () => {
 
     apiMocks.fetchDailyBars.mockClear();
     apiMocks.fetchDailyBars.mockResolvedValueOnce(makeBars(3));
+    apiMocks.fetchDailyBars.mockResolvedValueOnce(makeBars(3));
+    fireEvent.click(screen.getByRole('button', { name: '分时' }));
     fireEvent.click(screen.getByRole('button', { name: '30m' }));
 
     await waitFor(() =>

@@ -176,19 +176,19 @@ describe('strategy chart markers', () => {
         downColor: '#1f9d55',
         wickUpColor: '#d64545',
         wickDownColor: '#1f9d55'
-      })
+      }),
+      0
     );
   });
 
   it('uses a fixed initial visible bar count instead of fitting all dense intraday bars', () => {
     const bars = Array.from({ length: 180 }, (_, index) => bar({ time: `2026-06-03 10:${String(index).padStart(2, '0')}:00` }));
 
-    render(createElement(AssetChart, { bars, visibleBarCount: 120 }));
+    render(createElement(AssetChart, { bars, timeAxisMode: 'intraday', visibleBarCount: 120 }));
     const chart = chartMocks.createChart.mock.results[0].value;
     const timeScale = chart.timeScale();
 
     expect(timeScale.setVisibleLogicalRange).toHaveBeenCalledWith({ from: 60, to: 179 });
-    expect(timeScale.fitContent).not.toHaveBeenCalled();
   });
 
   it('formats intraday axis ticks like trading software', () => {

@@ -421,6 +421,37 @@ def test_asset_bars_route_passes_resolution_to_unified_loader(monkeypatch):
     assert response.json()["items"] == [{"time": "2026-05-29 10:00:00", "close": 10.5}]
 
 
+def test_asset_bars_route_accepts_encoded_canonical_asset_for_weekly_bars(monkeypatch):
+    captured = {}
+
+    def fake_load_bars(**kwargs):
+        captured.update(kwargs)
+        return [{"time": "2026-06-05", "close": 10.5}]
+
+    monkeypatch.setattr(dashboard_app, "load_bars", fake_load_bars)
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/assets/CN%3ASZ%3A000001/bars"
+        "?start_date=2026-01-02"
+        "&end_date=2026-07-01"
+        "&resolution=1W"
+        "&adjust_type=qfq"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "asset_id": "CN:SZ:000001",
+        "start_date": "2026-01-02",
+        "end_date": "2026-07-01",
+        "resolution": "1W",
+        "adjust_type": "qfq",
+        "source": "baostock",
+    }
+    assert response.json()["resolution"] == "1W"
+    assert response.json()["items"] == [{"time": "2026-06-05", "close": 10.5}]
+
+
 def test_asset_decisions_route_returns_read_only_history(monkeypatch):
     captured = {}
 

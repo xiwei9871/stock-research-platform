@@ -7,6 +7,8 @@ from stock_research.db import connect, fetch_all
 
 RESOLUTION_TRADING_DAYS = {
     "1D": 90,
+    "1W": 260,
+    "1M": 1250,
     "60m": 40,
     "30m": 20,
     "10m": 8,
@@ -41,7 +43,8 @@ def load_daily_bars(
         low,
         close,
         volume,
-        amount
+        amount,
+        source
     FROM market_daily_bar
     WHERE asset_id = %s
       AND trade_date BETWEEN %s AND %s
@@ -67,14 +70,20 @@ def load_bars(
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
     normalized_resolution = normalize_resolution(resolution)
-    if start_date is None:
+    if start_date is None and normalized_resolution in {"1D", "1W", "1M"}:
+        start_date = earliest_daily_bar_date(asset_id, adjust_type, service) or "1900-01-01"
+    elif start_date is None:
         start_date, end_date = recent_trade_date_window(
             end_date=end_date,
             trading_days=RESOLUTION_TRADING_DAYS[normalized_resolution],
             service=service,
         )
-    if normalized_resolution == "1D":
-        return load_daily_bars(asset_id, start_date, end_date, adjust_type, service)
+    if normalized_resolution in {"1D", "1W", "1M"}:
+        daily_rows = load_daily_bars(asset_id, start_date, end_date, adjust_type, service)
+        if normalized_resolution == "1D":
+            return daily_rows
+        aggregated_rows = aggregate_daily_bars(daily_rows, normalized_resolution)
+        return aggregated_rows
 
     minute_rows = load_minute_bars(
         asset_id=asset_id,
@@ -132,6 +141,28 @@ def load_minute_bars(
     return [_bar_point(row).to_dict() for row in rows]
 
 
+def earliest_daily_bar_date(
+    asset_id: str,
+    adjust_type: str = "qfq",
+    service: str = SETTINGS.research_service,
+) -> str | None:
+    sql = """
+    SELECT MIN(trade_date)::text AS start_date
+    FROM market_daily_bar
+    WHERE asset_id = %s
+      AND adjust_type = %s
+    """
+    try:
+        with connect(service) as conn:
+            rows = fetch_all(conn, sql, [asset_id, adjust_type])
+    except Exception:
+        return None
+    if not rows:
+        return None
+    value = rows[0].get("start_date")
+    return str(value)[:10] if value else None
+
+
 def normalize_resolution(resolution: str) -> str:
     text = str(resolution or "1D").strip()
     aliases = {
@@ -139,6 +170,13 @@ def normalize_resolution(resolution: str) -> str:
         "1d": "1D",
         "day": "1D",
         "daily": "1D",
+        "W": "1W",
+        "1w": "1W",
+        "week": "1W",
+        "weekly": "1W",
+        "M": "1M",
+        "month": "1M",
+        "monthly": "1M",
         "5min": "5m",
         "10min": "10m",
         "30min": "30m",
@@ -176,6 +214,51 @@ def recent_trade_date_window(
     end = dt.date.fromisoformat(str(end_date)[:10])
     start = end - dt.timedelta(days=max(1, int(trading_days)) * 2)
     return start.isoformat(), end.isoformat()
+
+
+def aggregate_daily_bars(rows: list[dict[str, Any]], resolution: str) -> list[dict[str, Any]]:
+    normalized_resolution = normalize_resolution(resolution)
+    if normalized_resolution not in {"1W", "1M"}:
+        raise ValueError(f"unsupported daily aggregation resolution: {resolution}")
+
+    buckets: dict[tuple[int, int] | tuple[int, int, int], list[dict[str, Any]]] = {}
+    for row in rows:
+        parsed = _parse_bar_date(str(row.get("time") or ""))
+        if parsed is None:
+            continue
+        if normalized_resolution == "1W":
+            iso_year, iso_week, _ = parsed.isocalendar()
+            key = (iso_year, iso_week)
+        else:
+            key = (parsed.year, parsed.month)
+        buckets.setdefault(key, []).append(row)
+
+    result = []
+    for bucket_rows in buckets.values():
+        ordered = sorted(bucket_rows, key=lambda item: str(item.get("time") or ""))
+        open_value = _first_number(ordered, "open")
+        close_value = _last_number(ordered, "close")
+        highs = [_to_float(item.get("high")) for item in ordered]
+        lows = [_to_float(item.get("low")) for item in ordered]
+        if (
+            open_value is None
+            or close_value is None
+            or all(value is None for value in highs)
+            or all(value is None for value in lows)
+        ):
+            continue
+        result.append(
+            {
+                "time": str(ordered[-1].get("time") or "")[:10],
+                "open": open_value,
+                "high": max(value for value in highs if value is not None),
+                "low": min(value for value in lows if value is not None),
+                "close": close_value,
+                "volume": _sum_optional(ordered, "volume"),
+                "amount": _sum_optional(ordered, "amount"),
+            }
+        )
+    return result
 
 
 def aggregate_minute_bars(rows: list[dict[str, Any]], resolution: str) -> list[dict[str, Any]]:
@@ -225,15 +308,24 @@ def aggregate_minute_bars(rows: list[dict[str, Any]], resolution: str) -> list[d
 
 
 def _bar_point(row: dict[str, Any]) -> BarPoint:
+    volume = _float_or_none(row.get("volume"))
+    amount = _float_or_none(row.get("amount"))
+    if _uses_tushare_daily_units(row):
+        volume = volume * 100 if volume is not None else None
+        amount = amount * 1000 if amount is not None else None
     return BarPoint(
         time=str(row["time"]),
         open=_float_or_none(row.get("open")),
         high=_float_or_none(row.get("high")),
         low=_float_or_none(row.get("low")),
         close=_float_or_none(row.get("close")),
-        volume=_float_or_none(row.get("volume")),
-        amount=_float_or_none(row.get("amount")),
+        volume=volume,
+        amount=amount,
     )
+
+
+def _uses_tushare_daily_units(row: dict[str, Any]) -> bool:
+    return str(row.get("source") or "").startswith("derived:tushare")
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -246,6 +338,13 @@ def _parse_bar_time(value: str) -> dt.datetime | None:
     text = value.strip().replace("T", " ")
     try:
         return dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _parse_bar_date(value: str) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(value.strip()[:10])
     except ValueError:
         return None
 
