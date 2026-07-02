@@ -13,8 +13,31 @@ clear_stock_proxy_env
 
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$LOCK_FILE")"
 
-exec 9>"$LOCK_FILE"
-if ! lockf -s -t 0 9; then
+acquire_lock() {
+  while true; do
+    if mkdir "$LOCK_FILE" 2>/dev/null; then
+      printf '%s\n' "$$" > "$LOCK_FILE/pid"
+      trap 'rm -rf "$LOCK_FILE"' EXIT INT TERM
+      return 0
+    fi
+
+    if [[ -d "$LOCK_FILE" ]]; then
+      return 1
+    fi
+
+    lock_pid="$(cat "$LOCK_FILE" 2>/dev/null || true)"
+    if ! [[ "$lock_pid" =~ ^[0-9]+$ ]]; then
+      return 1
+    fi
+    if kill -0 "$lock_pid" 2>/dev/null; then
+      return 1
+    fi
+
+    rm -f "$LOCK_FILE" 2>/dev/null || true
+  done
+}
+
+if ! acquire_lock; then
   echo "eod_auto_repair|locked|$LOCK_FILE" | tee -a "$LOG_DIR/$TRADE_DATE.log"
   exit 0
 fi
