@@ -107,6 +107,10 @@ function platformRiskStatus(readiness: PlatformReadiness | null) {
   return '正常';
 }
 
+function firstDate(...dates: Array<string | null | undefined>) {
+  return dates.map((date) => date?.trim()).find(Boolean) ?? '';
+}
+
 function healthGroup(readiness: PlatformReadiness | null, key: string): PlatformReadinessHealthGroup | null {
   return readiness?.health_groups?.find((group) => group.key === key) ?? null;
 }
@@ -368,11 +372,13 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const reviewHealth = healthGroup(readiness, 'review_chain');
   const contentHealth = healthGroup(readiness, 'content_chain');
   const healthGroups = readiness?.health_groups ?? [];
-  const displayTradeDate = readiness
-    ? readiness.display_trade_date !== undefined
-      ? readiness.display_trade_date || '-'
-      : readiness.latest_trade_date ?? readiness.latest_market_date ?? '-'
-    : summary?.latest_market_date ?? '-';
+  const displayTradeDate =
+    firstDate(
+      readiness?.latest_market_date,
+      readiness?.latest_trade_date,
+      summary?.latest_market_date,
+      readiness?.display_trade_date
+    ) || '-';
 
   useEffect(() => {
     let ignore = false;

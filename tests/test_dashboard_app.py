@@ -168,6 +168,22 @@ def test_public_news_refresh_route_returns_counts(monkeypatch):
     assert response.json()["counts_by_category"] == {"live": 2}
 
 
+def test_dashboard_cache_clear_route_clears_eod_response_cache():
+    client = TestClient(dashboard_app.create_app())
+    cache = client.app.state.eod_response_cache
+    assert cache.get_or_set(("review_queue", ""), lambda: {"trade_date": "2026-06-30"}) == {
+        "trade_date": "2026-06-30"
+    }
+
+    response = client.post("/api/dashboard/cache/clear")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "cleared"}
+    assert cache.get_or_set(("review_queue", ""), lambda: {"trade_date": "2026-07-02"}) == {
+        "trade_date": "2026-07-02"
+    }
+
+
 def test_midtrend_post_exit_review_lite_route_returns_artifact(monkeypatch):
     monkeypatch.setattr(
         dashboard_app,

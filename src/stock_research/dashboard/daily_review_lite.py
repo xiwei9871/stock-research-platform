@@ -197,7 +197,13 @@ def _sections(
     )
     market_review_items = [
         _item("市场情绪日期", market.get("trade_date") or selected_trade_date),
-        _item("上涨/下跌", _join_counts(breadth.get("advancers"), breadth.get("decliners"))),
+        _item(
+            "上涨/下跌",
+            _join_counts(
+                _first_present(breadth, "advancers", "up_count"),
+                _first_present(breadth, "decliners", "down_count"),
+            ),
+        ),
         _item(
             "涨停/跌停",
             _join_counts(limit_performance.get("limit_up_count"), limit_performance.get("limit_down_count")),
@@ -206,7 +212,10 @@ def _sections(
     ]
     groups = queue.get("groups") if isinstance(queue.get("groups"), list) else []
     strategy_items = [
-        _item(str(group.get("label") or group.get("bucket") or "策略"), f"{group.get('count', 0)} 只")
+        _item(
+            str(group.get("label") or group.get("strategy_name") or group.get("strategy_id") or group.get("bucket") or "策略"),
+            f"{group.get('count', 0)} 只",
+        )
         for group in groups
     ]
     artifact_items = [_item(artifact["label"], artifact.get("url") or artifact.get("path")) for artifact in artifacts]
@@ -310,6 +319,14 @@ def _join_counts(left: Any, right: Any) -> str:
     if left is None and right is None:
         return ""
     return f"{left or 0} / {right or 0}"
+
+
+def _first_present(values: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = values.get(key)
+        if value is not None:
+            return value
+    return None
 
 
 def _format_score(value: Any) -> str:

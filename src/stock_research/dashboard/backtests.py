@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from stock_research.config import SETTINGS
-from stock_research.data_run_manifest import load_latest_data_run_manifest
+from stock_research.data_run_manifest import load_recent_data_run_manifest
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.dashboard.strategy_backtest_adapters import (
     STRATEGY_BACKTEST_REGISTRY,
@@ -225,13 +225,20 @@ def _latest_eod_strategy_module(strategy_id: str) -> dict[str, Any] | None:
     if not module_name:
         return None
     try:
-        modules = list(load_latest_data_run_manifest())
+        modules = list(load_recent_data_run_manifest())
     except Exception:
         return None
-    for module in modules:
-        if str(module.get("module") or "") == module_name:
-            return module
-    return None
+    candidates = [module for module in modules if str(module.get("module") or "") == module_name]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda module: (
+            str(module.get("latest_trade_date") or module.get("trade_date") or ""),
+            str(module.get("ended_at") or module.get("updated_at") or module.get("created_at") or ""),
+            str(module.get("run_id") or ""),
+        ),
+    )
 
 
 def _read_eod_strategy_rows(

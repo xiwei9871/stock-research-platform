@@ -64,6 +64,48 @@ export type BarPoint = {
   amount: number | null;
 };
 
+export type AssetQuoteSnapshot = {
+  trade_date: string | null;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  preclose: number | null;
+  volume: number | null;
+  amount: number | null;
+  turnover_rate: number | null;
+  pct_chg: number | null;
+  amount_ratio_20d: number | null;
+  data_status: 'available' | 'partial' | 'missing' | string;
+  missing_fields: string[];
+};
+
+export type CompanyProfile = {
+  asset_id: string;
+  ts_code: string | null;
+  symbol: string;
+  name: string;
+  exchange: string;
+  board: string | null;
+  list_date: string | null;
+  is_active: boolean | null;
+  is_beijing: boolean | null;
+  is_star: boolean | null;
+  is_chinext: boolean | null;
+  region: string | null;
+  source: string | null;
+};
+
+export type ValuationSnapshot = {
+  total_market_cap: number | null;
+  float_market_cap: number | null;
+  pe_ttm: number | null;
+  pb: number | null;
+  volume_ratio: number | null;
+  data_status: 'available' | 'partial' | 'unavailable' | string;
+  missing_fields: string[];
+};
+
 export type ScoreRow = {
   trade_date: string;
   asset_id: string;
@@ -810,6 +852,9 @@ export type AssetProfile = {
   asset_id: string;
   canonical_asset_id: string;
   asset: AssetSummary | null;
+  quote_snapshot?: AssetQuoteSnapshot | null;
+  company_profile?: CompanyProfile | null;
+  valuation_snapshot?: ValuationSnapshot | null;
   bars: BarPoint[];
   score: ScoreRow | null;
   signals: WatchlistSignalRow[];

@@ -1270,18 +1270,24 @@ describe('dashboard app shell', () => {
     expect(await screen.findByTestId('asset-chart')).toHaveTextContent('1 bars');
 
     apiMocks.fetchDailyBars.mockClear();
-    apiMocks.fetchDailyBars.mockResolvedValueOnce(makeBars(3));
-    apiMocks.fetchDailyBars.mockResolvedValueOnce(makeBars(3));
+    apiMocks.fetchDailyBars.mockImplementation(
+      (
+        _assetId: string,
+        _startDate: string,
+        _endDate: string,
+        options?: { resolution?: string; adjustType?: string }
+      ) => Promise.resolve(options?.resolution === '30m' ? makeBars(3) : makeBars(1))
+    );
     fireEvent.click(screen.getByRole('button', { name: '分时' }));
     fireEvent.click(screen.getByRole('button', { name: '30m' }));
 
     await waitFor(() =>
-      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-20', '2026-06-18', {
+      expect(apiMocks.fetchDailyBars).toHaveBeenCalledWith('000001.SZ', '2025-12-14', '2026-06-12', {
         resolution: '30m',
         adjustType: 'raw'
       })
     );
-    expect(await screen.findByTestId('asset-chart')).toHaveTextContent('3 bars');
+    await waitFor(() => expect(screen.getByTestId('asset-chart')).toHaveTextContent('3 bars'));
     expect(screen.getByRole('button', { name: '30m' })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -1343,9 +1349,9 @@ describe('dashboard app shell', () => {
       expect(await screen.findByRole('heading', { name: /贵州茅台 CN:SH:600519/ })).toBeInTheDocument();
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         'CN:SH:600519',
-        '2026-06-08',
-        '2025-12-10',
-        '2026-06-08',
+        '2026-06-12',
+        '2025-12-14',
+        '2026-06-12',
         'manual_v1',
         'qfq'
       );
@@ -1356,6 +1362,7 @@ describe('dashboard app shell', () => {
 
   type MockWorkspaceRender = {
     initialAssetId?: string;
+    defaultTradeDate?: string;
     entryContext?: {
       assetId?: string;
       sourceWorkspace?: string;
@@ -1504,12 +1511,14 @@ describe('dashboard app shell', () => {
       return {
         StockWorkspace: ({
           initialAssetId,
+          defaultTradeDate,
           entryContext,
           onOpenNews,
           onOpenResearchReports,
           onOpenMarketMonitor
         }: {
           initialAssetId?: string;
+          defaultTradeDate?: string;
           entryContext?: {
             assetId?: string;
             sourceWorkspace?: string;
@@ -1529,7 +1538,7 @@ describe('dashboard app shell', () => {
             stockMountId += 1;
             return stockMountId;
           });
-          stockRenders.push({ initialAssetId, entryContext, mountId });
+          stockRenders.push({ initialAssetId, defaultTradeDate, entryContext, mountId });
           return (
             <div data-testid="mock-stock-workspace">
               {initialAssetId}:{entryContext?.sourceWorkspace ?? 'none'}:{entryContext?.query ?? 'none'}:
@@ -1727,6 +1736,43 @@ describe('dashboard app shell', () => {
     });
   });
 
+  it('uses the latest market date rather than the gated display date for stock workspace defaults', async () => {
+    apiMocks.fetchPlatformReadiness.mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'BLOCKED',
+      as_of: '2026-07-02T16:00:00+08:00',
+      display_trade_date: '2026-06-30',
+      latest_trade_date: '2026-07-02',
+      latest_market_date: '2026-07-02',
+      display_gate: {
+        display_trade_date: '2026-06-30',
+        latest_market_date: '2026-07-02',
+        candidate_trade_date: '2026-07-02',
+        candidate_status: 'before_cutoff',
+        display_status: 'ready'
+      },
+      checks: [],
+      warnings: []
+    });
+    apiMocks.fetchPlatformSummary.mockResolvedValueOnce({
+      latest_market_date: '2026-07-02',
+      latest_score_date: '2026-07-01',
+      latest_factor_date: '2026-07-01',
+      market_asset_count: 5207,
+      score_asset_count: 5207,
+      factor_count: 43,
+      score_versions: ['manual_v1'],
+      topn_preview: []
+    });
+
+    const { stockRenders } = await renderMockedAppShellForHandoff();
+
+    await waitFor(() => expect(apiMocks.fetchPlatformReadiness).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
+
+    await waitFor(() => expect(stockRenders.at(-1)?.defaultTradeDate).toBe('2026-07-02'));
+  });
+
   it('resets stale stock source context when opening stock from plain navigation', async () => {
     const { stockRenders } = await renderMockedAppShellForHandoff();
 
@@ -1794,7 +1840,7 @@ describe('dashboard app shell', () => {
 
     fireEvent.click(dailyReview);
 
-    expect(await screen.findByTestId('mock-daily-review-workspace')).toHaveTextContent('daily review:2026-06-08');
+    expect(await screen.findByTestId('mock-daily-review-workspace')).toHaveTextContent('daily review:2026-06-12');
   });
 
   it('uses news row context when news opens a stock asset', async () => {

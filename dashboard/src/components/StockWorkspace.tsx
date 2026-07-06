@@ -15,12 +15,12 @@ import type {
   AssetResearchReportResponse,
   AssetSummary,
   DecisionEventRow,
-  EvidenceDigestAction,
   EvidenceDigestResponse
 } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 import type { SectorType } from './market-monitor/mockData';
+import type { TechBottleneckStockEntryContext } from '../features/techBottleneckWatchlistReview/types';
 
 const DEFAULT_ASSET_ID = '000001.SZ';
 const DEFAULT_TRADE_DATE = '2026-06-18';
@@ -71,7 +71,7 @@ type StockWorkspaceAssetProfile = AssetProfile & {
 };
 
 export type StockEntryContext = {
-  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market' | 'reviewQueue';
+  sourceWorkspace?: 'search' | 'news' | 'watchlist' | 'researchReports' | 'market' | 'reviewQueue' | 'techBottleneck';
   assetId?: string;
   query?: string;
   matchReason?: string;
@@ -88,7 +88,7 @@ export type StockEntryContext = {
   evidenceDigestSnapshotId?: string;
   scoreVersion?: string;
   topnRank?: number | null;
-};
+} & TechBottleneckStockEntryContext;
 
 function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['sourceWorkspace']>) {
   if (sourceWorkspace === 'search') return 'Search';
@@ -96,6 +96,7 @@ function formatSourceWorkspace(sourceWorkspace: NonNullable<StockEntryContext['s
   if (sourceWorkspace === 'watchlist') return 'Watchlist';
   if (sourceWorkspace === 'researchReports') return 'Research Reports';
   if (sourceWorkspace === 'reviewQueue') return 'Review Queue';
+  if (sourceWorkspace === 'techBottleneck') return 'Tech Bottleneck Candidate Review';
   return 'Market Monitor';
 }
 
@@ -135,6 +136,12 @@ function normalizeAssetId(value: string) {
   return trimmed;
 }
 
+function comparableStockCode(value: string) {
+  const normalized = value.trim().toUpperCase();
+  const sixDigitCode = normalized.match(/\d{6}/)?.[0];
+  return sixDigitCode ?? normalized;
+}
+
 function isIntradayChartResolution(resolution: ChartResolution) {
   return INTRADAY_CHART_RESOLUTIONS.some((item) => item.value === resolution);
 }
@@ -169,22 +176,6 @@ function formatScore(profile: AssetProfile | null) {
 
 function formatDigestScore(score: number) {
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
-}
-
-function getDigestActionAriaLabel(action: EvidenceDigestAction) {
-  if (action.workspace === 'news') return '查看相关新闻';
-  if (action.workspace === 'researchReports') return '查看相关研报';
-  return action.label;
-}
-
-function getDigestActionLabel(action: EvidenceDigestAction) {
-  if (action.workspace === 'news') return '查看相关新闻';
-  if (action.workspace === 'researchReports') return '查看相关研报';
-  return action.label;
-}
-
-function isVisibleDigestAction(action: EvidenceDigestAction) {
-  return action.workspace === 'news' || action.workspace === 'researchReports';
 }
 
 function getEvidenceDigestKey(assetId: string, date: string) {
@@ -228,6 +219,55 @@ function formatRatio(value: number | null) {
   return `${value.toFixed(2)}x`;
 }
 
+function formatPrice(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return value.toFixed(2);
+}
+
+function formatPercentPoints(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}%`;
+}
+
+function formatUnsignedPercentPoints(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return `${value.toFixed(2)}%`;
+}
+
+function formatChineseAmount(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  const abs = Math.abs(value);
+  if (abs >= 100000000) return `${(value / 100000000).toFixed(2)}亿`;
+  if (abs >= 10000) return `${(value / 10000).toFixed(2)}万`;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function formatTradeVolume(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(2)}万`;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function formatOptionalMetric(value: number | null | undefined, formatter: (metric: number) => string) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return formatter(value);
+}
+
+function formatResearchPriorityScore(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function formatReportScore(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '-';
+  return value.toFixed(0);
+}
+
+function localReportHref(path?: string) {
+  return path && path.trim() ? `/${path}` : '';
+}
+
 function pctChange(from: number | null | undefined, to: number | null | undefined) {
   if (!from || !to) return null;
   return to / from - 1;
@@ -268,6 +308,31 @@ function buildReviewMetrics(profile: AssetProfile | null) {
     amountRatio,
     highDrawdown,
     state: reviewPriceState(dayReturn, fiveDayReturn, highDrawdown)
+  };
+}
+
+function buildFallbackQuoteSnapshot(profile: AssetProfile | null) {
+  const bars = profile?.bars ?? [];
+  const last = bars.at(-1);
+  const previous = bars.at(-2);
+  if (!last) return null;
+  return {
+    trade_date: last.time?.slice(0, 10) ?? null,
+    open: last.open,
+    high: last.high,
+    low: last.low,
+    close: last.close,
+    preclose: previous?.close ?? null,
+    volume: last.volume,
+    amount: last.amount,
+    turnover_rate: null,
+    pct_chg:
+      typeof previous?.close === 'number' && typeof last.close === 'number' && previous.close !== 0
+        ? (last.close / previous.close - 1) * 100
+        : null,
+    amount_ratio_20d: buildReviewMetrics(profile).amountRatio,
+    data_status: 'partial',
+    missing_fields: ['turnover_rate', 'preclose']
   };
 }
 
@@ -455,6 +520,10 @@ export function StockWorkspace({
 
   useEffect(() => {
     mountedRef.current = true;
+    setAssetId(normalizeAssetId(initialAssetId));
+    setTradeDate(initialTradeDate);
+    setStartDate(initialStartDate);
+    setEndDate(initialTradeDate);
     void loadProfile(initialAssetId, initialTradeDate, initialStartDate, initialTradeDate);
     return () => {
       mountedRef.current = false;
@@ -623,6 +692,9 @@ export function StockWorkspace({
   const factorRows = getFactorRows(profile);
   const close = latestClose(profile);
   const reviewMetrics = buildReviewMetrics(profile);
+  const quoteSnapshot = profile?.quote_snapshot ?? buildFallbackQuoteSnapshot(profile);
+  const companyProfile = profile?.company_profile;
+  const valuationSnapshot = profile?.valuation_snapshot;
   const visibleAssetNews =
     assetNews && profile && assetNews.asset_id === profile.canonical_asset_id ? assetNews : null;
   const visibleNewsError =
@@ -635,8 +707,9 @@ export function StockWorkspace({
   const latestNewsDate = visibleAssetNews?.summary.latest_published_at?.slice(0, 10) ?? '-';
   const latestReportDate = visibleResearchReports?.summary.latest_report_date ?? '-';
   const currentAssetId = profile?.canonical_asset_id ?? entryContext?.assetId ?? assetId;
-  const entryContextAssetId = entryContext?.assetId ? normalizeAssetId(entryContext.assetId) : null;
-  const isEntryContextForCurrentAsset = !entryContextAssetId || entryContextAssetId === currentAssetId;
+  const entryContextAssetCode = entryContext?.assetId ? comparableStockCode(entryContext.assetId) : null;
+  const currentAssetCode = comparableStockCode(currentAssetId);
+  const isEntryContextForCurrentAsset = !entryContextAssetCode || entryContextAssetCode === currentAssetCode;
   const currentEntryContext: StockEntryContext = isEntryContextForCurrentAsset
     ? {
         ...entryContext,
@@ -651,8 +724,10 @@ export function StockWorkspace({
     currentEntryContext.eventKey ? `eventKey: ${currentEntryContext.eventKey}` : null,
     currentEntryContext.reportId ? `reportId: ${currentEntryContext.reportId}` : null,
     currentEntryContext.tradeDate ? `Trade Date ${currentEntryContext.tradeDate}` : null,
-    currentEntryContext.monitorTab ? `Monitor Tab ${currentEntryContext.monitorTab}` : null
+    currentEntryContext.monitorTab ? `Monitor Tab ${currentEntryContext.monitorTab}` : null,
+    currentEntryContext.techBottleneckSource ? `Tech Bottleneck Source ${currentEntryContext.techBottleneckSource}` : null
   ].filter((value): value is string => Boolean(value));
+  const isTechBottleneckEntry = currentEntryContext.sourceWorkspace === 'techBottleneck';
   const visibleEvidenceDigest =
     evidenceDigest &&
     profile &&
@@ -687,24 +762,6 @@ export function StockWorkspace({
     ? `${startDate} to ${endDate}`
     : `历史 ${chartBars.length} bars / 固定显示 ${visibleChartBarCount} bars / 截至 ${endDate}`;
 
-  const openDigestAction = (action: EvidenceDigestAction) => {
-    const nextContext: StockEntryContext = {
-      ...currentEntryContext,
-      assetId: action.asset_id ?? currentEntryContext.assetId ?? currentAssetId,
-      query: action.query ?? currentEntryContext.query,
-      newsId: action.news_id ?? currentEntryContext.newsId,
-      reportId: action.report_id ?? currentEntryContext.reportId,
-      eventKey: action.event_key ?? currentEntryContext.eventKey,
-      monitorTab: action.monitor_tab ?? currentEntryContext.monitorTab
-    };
-
-    if (action.workspace === 'news') {
-      onOpenNews?.({ ...nextContext, sourceWorkspace: 'news' });
-    } else if (action.workspace === 'researchReports') {
-      onOpenResearchReports?.({ ...nextContext, sourceWorkspace: 'researchReports' });
-    }
-  };
-
   return (
     <section className="workspace-stack stock-detail-shell" aria-label="Stock Workspace workspace">
       <header className="workspace-header">
@@ -732,53 +789,322 @@ export function StockWorkspace({
         ) : null}
       </header>
 
-      <form className="compact-toolbar" onSubmit={handleSubmit}>
-        <label>
-          Stock
-          <input
-            aria-label="stock workspace asset"
-            value={assetId}
-            onChange={(event) => setAssetId(event.target.value)}
-          />
-        </label>
-        <label>
-          Trade Date
-          <input
-            aria-label="stock workspace trade date"
-            type="date"
-            value={tradeDate}
-            onChange={(event) => setTradeDate(event.target.value)}
-          />
-        </label>
-        <label>
-          Start
-          <input
-            aria-label="stock workspace start date"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-          />
-        </label>
-        <label>
-          End
-          <input
-            aria-label="stock workspace end date"
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-          />
-        </label>
-        <button type="submit">Load Stock</button>
-        {isLoading ? <span className="muted">Loading stock profile...</span> : null}
-      </form>
+      {isTechBottleneckEntry ? (
+        <section className="workspace-band tech-bottleneck-stock-context" role="region" aria-label="技术瓶颈候选上下文">
+          <div className="section-heading">
+            <div>
+              <h2>技术瓶颈候选上下文</h2>
+              <p className="muted">Research-only · manual review only · no production signal/admission</p>
+            </div>
+            <span className="status-chip neutral">{currentEntryContext.reviewStatus ?? 'not_reviewed'}</span>
+          </div>
+          <div className="stock-summary-strip compact tech-bottleneck-context-metrics">
+            <div>
+              <span>候选名称</span>
+              <strong>{currentEntryContext.stockName ?? currentEntryContext.query ?? currentAssetId}</strong>
+            </div>
+            <div>
+              <span>来源</span>
+              <strong>{currentEntryContext.sourceGroup ?? '-'}</strong>
+            </div>
+            <div>
+              <span>原 Tier</span>
+              <strong>{currentEntryContext.previousTier ?? '-'}</strong>
+            </div>
+            <div>
+              <span>证据强度</span>
+              <strong>{currentEntryContext.evidenceStrength ?? '-'}</strong>
+            </div>
+            <div>
+              <span>瓶颈相关性</span>
+              <strong>{currentEntryContext.bottleneckRelevance ?? '-'}</strong>
+            </div>
+            <div>
+              <span>研究优先级</span>
+              <strong>{formatResearchPriorityScore(currentEntryContext.researchPriorityScore)}</strong>
+            </div>
+          </div>
+          <div className="tech-bottleneck-context-grid">
+            <article>
+              <span>人工审批分类</span>
+              <strong>{currentEntryContext.finalManualApprovalCategory ?? '-'}</strong>
+            </article>
+            <article>
+              <span>证据/业务类别</span>
+              <strong>{currentEntryContext.evidenceCategory || currentEntryContext.businessRelevanceCategory || '-'}</strong>
+            </article>
+            <article>
+              <span>下一步动作</span>
+              <strong>{currentEntryContext.nextAction ?? '-'}</strong>
+            </article>
+            <article>
+              <span>Guardrails</span>
+              <strong>allowed_for_signal={currentEntryContext.allowedForSignal ? 'true' : 'false'}</strong>
+              <strong>allowed_for_admission={currentEntryContext.allowedForAdmission ? 'true' : 'false'}</strong>
+            </article>
+          </div>
+          {currentEntryContext.rationale ? <p>{currentEntryContext.rationale}</p> : null}
+          {currentEntryContext.evidenceExcerpt ? <p className="muted">{currentEntryContext.evidenceExcerpt}</p> : null}
+          {currentEntryContext.primarySourceUrl ? (
+            <a href={currentEntryContext.primarySourceUrl} target="_blank" rel="noreferrer">
+              打开 primary source
+            </a>
+          ) : null}
+        </section>
+      ) : null}
+
+      {isTechBottleneckEntry ? (
+        <section className="workspace-band tech-bottleneck-report-panel" role="region" aria-label="Tech Bottleneck Report panel">
+          <div className="section-heading">
+            <div>
+              <h2>Tech Bottleneck Report</h2>
+              <p className="muted">Enriched source-backed report access · research-only</p>
+            </div>
+            <span className="status-chip neutral">{currentEntryContext.reportStatus ?? 'report_pending'}</span>
+          </div>
+          <div className="stock-summary-strip compact tech-bottleneck-context-metrics">
+            <div>
+              <span>report_status</span>
+              <strong>{currentEntryContext.reportStatus ?? '-'}</strong>
+            </div>
+            <div>
+              <span>bottleneck_confidence_score</span>
+              <strong>{formatReportScore(currentEntryContext.bottleneckConfidenceScore)}</strong>
+            </div>
+            <div>
+              <span>evidence_quality_score</span>
+              <strong>{formatReportScore(currentEntryContext.evidenceQualityScore)}</strong>
+            </div>
+            <div>
+              <span>review_decision</span>
+              <strong>{currentEntryContext.reportReviewDecision ?? '-'}</strong>
+            </div>
+            <div>
+              <span>evidence_strength</span>
+              <strong>{currentEntryContext.evidenceStrength ?? '-'}</strong>
+            </div>
+            <div>
+              <span>bottleneck_relevance</span>
+              <strong>{currentEntryContext.bottleneckRelevance ?? '-'}</strong>
+            </div>
+          </div>
+          <div className="tech-bottleneck-report-links" aria-label="Tech Bottleneck report links">
+            {currentEntryContext.reportHtmlPath ? (
+              <a href={localReportHref(currentEntryContext.reportHtmlPath)} target="_blank" rel="noreferrer">
+                打开HTML报告
+              </a>
+            ) : null}
+            {currentEntryContext.reportPdfPath ? (
+              <a href={localReportHref(currentEntryContext.reportPdfPath)} target="_blank" rel="noreferrer">
+                打开PDF报告
+              </a>
+            ) : null}
+            {currentEntryContext.evidenceMatrixPath ? (
+              <a href={localReportHref(currentEntryContext.evidenceMatrixPath)} target="_blank" rel="noreferrer">
+                查看证据矩阵
+              </a>
+            ) : null}
+            {currentEntryContext.reportSourcesPath ? (
+              <a href={localReportHref(currentEntryContext.reportSourcesPath)} target="_blank" rel="noreferrer">
+                查看引用与数据源
+              </a>
+            ) : null}
+          </div>
+          <div className="tech-bottleneck-context-grid">
+            <article>
+              <span>evidence_gap_note</span>
+              <strong>{currentEntryContext.evidenceGapNote ?? '-'}</strong>
+            </article>
+            <article>
+              <span>next_action</span>
+              <strong>{currentEntryContext.nextAction ?? '-'}</strong>
+            </article>
+          </div>
+        </section>
+      ) : null}
+
+      <details className="stock-load-settings">
+        <summary>
+          <span>回放 / 切换设置</span>
+          <small>
+            {assetId} · 复盘日 {tradeDate} · 图表 {startDate} 至 {endDate}
+          </small>
+        </summary>
+        <form className="compact-toolbar" onSubmit={handleSubmit}>
+          <label>
+            股票代码
+            <input
+              aria-label="stock workspace asset"
+              value={assetId}
+              onChange={(event) => setAssetId(event.target.value)}
+            />
+          </label>
+          <label>
+            复盘日期
+            <input
+              aria-label="stock workspace trade date"
+              type="date"
+              value={tradeDate}
+              onChange={(event) => setTradeDate(event.target.value)}
+            />
+          </label>
+          <label>
+            图表开始
+            <input
+              aria-label="stock workspace start date"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+          </label>
+          <label>
+            图表结束
+            <input
+              aria-label="stock workspace end date"
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+            />
+          </label>
+          <button type="submit">加载回放</button>
+          {isLoading ? <span className="muted">正在加载...</span> : null}
+        </form>
+      </details>
 
       {error ? <p className="error-text">{error}</p> : null}
 
       {profile ? (
         <>
+          <section className="workspace-band stock-quote-dossier" role="region" aria-label="行情快照">
+            <div className="section-heading">
+              <div>
+                <h2>行情快照</h2>
+                <p className="muted">
+                  {quoteSnapshot?.trade_date ?? endDate} · 数据状态 {quoteSnapshot?.data_status ?? 'missing'}
+                </p>
+              </div>
+              <span
+                className={
+                  quoteSnapshot?.pct_chg != null && quoteSnapshot.pct_chg < 0
+                    ? 'status-chip market-down'
+                    : 'status-chip market-up'
+                }
+              >
+                {formatPercentPoints(quoteSnapshot?.pct_chg)}
+              </span>
+            </div>
+            <div className="stock-dossier-grid">
+              <div className="stock-summary-strip stock-quote-metrics">
+                <div>
+                  <span>最新价</span>
+                  <strong className={quoteSnapshot?.pct_chg != null && quoteSnapshot.pct_chg < 0 ? 'market-down' : 'market-up'}>
+                    {formatPrice(quoteSnapshot?.close)}
+                  </strong>
+                </div>
+                <div>
+                  <span>涨跌幅</span>
+                  <strong className={quoteSnapshot?.pct_chg != null && quoteSnapshot.pct_chg < 0 ? 'market-down' : 'market-up'}>
+                    {formatPercentPoints(quoteSnapshot?.pct_chg)}
+                  </strong>
+                </div>
+                <div>
+                  <span>今开</span>
+                  <strong>{formatPrice(quoteSnapshot?.open)}</strong>
+                </div>
+                <div>
+                  <span>最高</span>
+                  <strong>{formatPrice(quoteSnapshot?.high)}</strong>
+                </div>
+                <div>
+                  <span>最低</span>
+                  <strong>{formatPrice(quoteSnapshot?.low)}</strong>
+                </div>
+                <div>
+                  <span>昨收</span>
+                  <strong>{formatPrice(quoteSnapshot?.preclose)}</strong>
+                </div>
+                <div>
+                  <span>成交量</span>
+                  <strong>{formatTradeVolume(quoteSnapshot?.volume)}</strong>
+                </div>
+                <div>
+                  <span>成交额</span>
+                  <strong>{formatChineseAmount(quoteSnapshot?.amount)}</strong>
+                </div>
+                <div>
+                  <span>换手率</span>
+                  <strong>{formatUnsignedPercentPoints(quoteSnapshot?.turnover_rate)}</strong>
+                </div>
+                <div>
+                  <span>量能/20日均额</span>
+                  <strong>{formatRatio(quoteSnapshot?.amount_ratio_20d ?? null)}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="stock-dossier-support">
+              <article className="stock-mini-panel" role="region" aria-label="规模估值">
+                <div className="section-heading compact-heading">
+                  <h3>规模估值</h3>
+                  <span className="muted">{valuationSnapshot?.data_status ?? 'unavailable'}</span>
+                </div>
+                <div className="stock-summary-strip compact">
+                  <div>
+                    <span>总市值</span>
+                    <strong>{formatOptionalMetric(valuationSnapshot?.total_market_cap, formatChineseAmount)}</strong>
+                  </div>
+                  <div>
+                    <span>流通市值</span>
+                    <strong>{formatOptionalMetric(valuationSnapshot?.float_market_cap, formatChineseAmount)}</strong>
+                  </div>
+                  <div>
+                    <span>市盈率</span>
+                    <strong>{formatOptionalMetric(valuationSnapshot?.pe_ttm, (value) => value.toFixed(2))}</strong>
+                  </div>
+                  <div>
+                    <span>PB</span>
+                    <strong>{formatOptionalMetric(valuationSnapshot?.pb, (value) => value.toFixed(2))}</strong>
+                  </div>
+                  <div>
+                    <span>量比</span>
+                    <strong>{formatOptionalMetric(valuationSnapshot?.volume_ratio, (value) => `${value.toFixed(2)}x`)}</strong>
+                  </div>
+                </div>
+              </article>
+              <article className="stock-mini-panel" role="region" aria-label="股票简况">
+                <div className="section-heading compact-heading">
+                  <h3>股票简况</h3>
+                  <span className="muted">{companyProfile?.source ?? 'asset detail'}</span>
+                </div>
+                <div className="stock-summary-strip compact">
+                  <div>
+                    <span>交易所</span>
+                    <strong>{companyProfile?.exchange ?? profile.asset?.exchange ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>板块</span>
+                    <strong>{companyProfile?.board ?? profile.asset?.board ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>上市日期</span>
+                    <strong>{companyProfile?.list_date ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>区域</span>
+                    <strong>{companyProfile?.region ?? '-'}</strong>
+                  </div>
+                  <div>
+                    <span>状态</span>
+                    <strong>{companyProfile?.is_active ?? profile.asset?.is_active ? '正常' : '非活跃'}</strong>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+
           <section className="workspace-band stock-review-summary" role="region" aria-label="复盘摘要">
             <div className="section-heading">
               <div>
+                <h2>策略复盘摘要</h2>
                 <strong className="stock-review-name">{identityName}</strong>
                 <p className="muted">
                   {profile.canonical_asset_id} · {identitySymbol}
@@ -1001,20 +1327,6 @@ export function StockWorkspace({
                           <span className="status-chip neutral" key={warning}>
                             {formatSnapshotWarning(warning)}
                           </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    {visibleEvidenceDigest.next_actions.some(isVisibleDigestAction) ? (
-                      <div className="compact-toolbar">
-                        {visibleEvidenceDigest.next_actions.filter(isVisibleDigestAction).map((action) => (
-                          <button
-                            key={action.key}
-                            type="button"
-                            aria-label={getDigestActionAriaLabel(action)}
-                            onClick={() => openDigestAction(action)}
-                          >
-                            {getDigestActionLabel(action)}
-                          </button>
                         ))}
                       </div>
                     ) : null}

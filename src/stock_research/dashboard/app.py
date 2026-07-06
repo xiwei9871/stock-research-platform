@@ -434,6 +434,11 @@ def create_app() -> FastAPI:
         app.state.eod_response_cache.clear()
         return refresh_public_news_for_dashboard()
 
+    @app.post("/api/dashboard/cache/clear")
+    def dashboard_cache_clear():
+        app.state.eod_response_cache.clear()
+        return {"status": "cleared"}
+
     @app.get("/api/midtrend/post-exit-review-lite")
     def midtrend_post_exit_review_lite():
         return load_midtrend_post_exit_review_lite()

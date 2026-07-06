@@ -452,7 +452,7 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
     expect(screen.getByText('平台日期')).toBeVisible();
-    expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
+    expect(screen.getByText('2026-06-12')).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
@@ -514,7 +514,7 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
     expect(screen.getByText('平台日期')).toBeVisible();
-    expect(screen.getAllByText('2026-06-08')[0]).toBeVisible();
+    expect(screen.getByText('2026-06-12')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.getByRole('button', { name: '打开策略实验室' })).toBeVisible();
@@ -591,7 +591,7 @@ describe('AppShell and HomeCockpit', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Generated Reports', level: 1 })).toBeVisible());
     expect(screen.getByText('Local generated artifacts from TopN, risk, factor, backtest, and validation jobs.')).toBeVisible();
     expect(api.fetchOverview).toHaveBeenCalledWith({
-      tradeDate: '2026-06-08',
+      tradeDate: '2026-06-12',
       scoreVersion: 'manual_v1',
       watchlistId: 'default',
       topN: 5

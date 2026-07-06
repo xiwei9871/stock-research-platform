@@ -135,6 +135,8 @@ def build_review_queue(
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
     latest_market_date = str(summary.get("latest_market_date") or "")
+    if latest_market_date:
+        return latest_market_date
     try:
         gate = select_display_date(
             list(load_recent_data_run_manifest()),
@@ -144,7 +146,6 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
         gate = {}
     return str(
         gate.get("display_trade_date")
-        or latest_market_date
         or summary.get("latest_score_date")
         or ""
     )

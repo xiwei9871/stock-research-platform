@@ -15,6 +15,13 @@ import type { SectorType } from './market-monitor/mockData';
 import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
 import type { GlobalSearchResult } from '../api/types';
 import { TechBottleneckWatchlistReviewPage } from '../features/techBottleneckWatchlistReview/TechBottleneckWatchlistReviewPage';
+import {
+  techBottleneckWorkbenchAdjacentWatchlist,
+  techBottleneckWorkbenchCoreCandidates,
+  techBottleneckWorkbenchEvidenceBackfillQueue,
+  techBottleneckWorkbenchRejectedCandidates
+} from '../features/techBottleneckWatchlistReview/techBottleneckCandidateUniverseData';
+import type { TechBottleneckWorkbenchCandidate } from '../features/techBottleneckWatchlistReview/types';
 
 type WorkspaceMode =
   | 'home'
@@ -55,7 +62,7 @@ type StockHandoff = {
   tradeDate?: string;
   monitorTab?: string;
   version: number;
-};
+} & Omit<StockEntryContext, 'version'>;
 
 function normalizeMarketMonitorTab(monitorTab?: string | null): SectorType | undefined {
   if (!monitorTab) return undefined;
@@ -83,22 +90,105 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
 
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
 const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
+const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
+
+function firstDate(...dates: Array<string | null | undefined>) {
+  return dates.map((date) => date?.trim()).find(Boolean) ?? '';
+}
 
 function workspaceModeFromPath(pathname: string): WorkspaceMode {
-  return pathname === TECH_BOTTLENECK_REVIEW_PATH ? 'techBottleneckReview' : 'home';
+  if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReview';
+  if (pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return 'stock';
+  return 'home';
+}
+
+function stockCodeFromTechBottleneckPath(pathname: string) {
+  if (!pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return '';
+  return pathname.slice(TECH_BOTTLENECK_STOCK_PREFIX.length).split('/')[0];
+}
+
+function stockCodeToAssetId(stockCode: string) {
+  const normalized = stockCode.trim().toUpperCase();
+  if (/^\d{6}$/.test(normalized)) {
+    return `${normalized}.${normalized.startsWith('6') ? 'SH' : 'SZ'}`;
+  }
+  return normalized;
+}
+
+function findTechBottleneckCandidate(stockCode: string): TechBottleneckWorkbenchCandidate | undefined {
+  const normalized = stockCode.trim().toUpperCase().split('.')[0];
+  return [
+    ...techBottleneckWorkbenchCoreCandidates,
+    ...techBottleneckWorkbenchAdjacentWatchlist,
+    ...techBottleneckWorkbenchEvidenceBackfillQueue,
+    ...techBottleneckWorkbenchRejectedCandidates
+  ].find((candidate) => candidate.stockCode === normalized);
+}
+
+function techBottleneckStockHandoffFromLocation(pathname: string, search: string): StockHandoff | null {
+  const stockCode = stockCodeFromTechBottleneckPath(pathname);
+  if (!stockCode) return null;
+  const candidate = findTechBottleneckCandidate(stockCode);
+  const assetId = stockCodeToAssetId(stockCode);
+  const source = new URLSearchParams(search).get('source') ?? 'tech_bottleneck_candidate_universe_workbench_patch_v1';
+  return {
+    assetId,
+    sourceWorkspace: 'techBottleneck',
+    query: candidate?.stockName ?? stockCode,
+    stockName: candidate?.stockName,
+    techBottleneckSource: source,
+    sourceGroup: candidate?.sourceGroup,
+    previousTier: candidate?.previousTier,
+    finalManualApprovalCategory: candidate?.finalManualApprovalCategory,
+    industry: candidate?.industry,
+    conceptTags: candidate?.conceptTags,
+    evidenceCategory: candidate?.evidenceCategory,
+    businessRelevanceCategory: candidate?.businessRelevanceCategory,
+    researchPriorityScore: candidate?.researchPriorityScore,
+    reviewPriorityRank: candidate?.reviewPriorityRank,
+    evidenceStrength: candidate?.evidenceStrength,
+    bottleneckRelevance: candidate?.bottleneckRelevance,
+    reviewDecisionSource: candidate?.reviewDecisionSource,
+    primarySourceUrl: candidate?.primarySourceUrl,
+    manualApprovalRequired: candidate?.manualApprovalRequired,
+    allowedForWorkbenchCandidatePool: candidate?.allowedForWorkbenchCandidatePool,
+    allowedForSignal: candidate?.allowedForSignal ?? false,
+    allowedForAdmission: candidate?.allowedForAdmission ?? false,
+    rationale: candidate?.rationale,
+    reviewStatus: candidate?.reviewStatus,
+    notes: candidate?.notes,
+    nextAction: candidate?.nextAction,
+    evidenceExcerpt: candidate?.evidenceExcerpt,
+    reportStatus: candidate?.reportStatus,
+    bottleneckConfidenceScore: candidate?.bottleneckConfidenceScore,
+    evidenceQualityScore: candidate?.evidenceQualityScore,
+    reportReviewDecision: candidate?.reportReviewDecision,
+    reportUpdatedAt: candidate?.reportUpdatedAt,
+    reportMdPath: candidate?.reportMdPath,
+    reportHtmlPath: candidate?.reportHtmlPath,
+    reportPdfPath: candidate?.reportPdfPath,
+    evidenceMatrixPath: candidate?.evidenceMatrixPath,
+    reportSourcesPath: candidate?.reportSourcesPath,
+    evidenceGapNote: candidate?.evidenceGapNote,
+    matchReason: 'tech_bottleneck_candidate_universe_workbench_patch_v1',
+    version: 0
+  };
 }
 
 export function AppShell() {
+  const initialTechBottleneckStockHandoff =
+    typeof window === 'undefined' ? null : techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
     typeof window === 'undefined' ? 'home' : workspaceModeFromPath(window.location.pathname)
   );
-  const [selectedAssetId, setSelectedAssetId] = useState('000001.SZ');
+  const [selectedAssetId, setSelectedAssetId] = useState(initialTechBottleneckStockHandoff?.assetId ?? '000001.SZ');
   const [newsHandoff, setNewsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [researchReportsHandoff, setResearchReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
-  const [stockHandoff, setStockHandoff] = useState<StockHandoff>({ version: 0 });
+  const [stockHandoff, setStockHandoff] = useState<StockHandoff>(initialTechBottleneckStockHandoff ?? { version: 0 });
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
+  const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +196,16 @@ export function AppShell() {
       if (cancelled) {
         return;
       }
-      const readinessDate =
-        readinessResult.status === 'fulfilled'
-          ? readinessResult.value.display_trade_date ?? readinessResult.value.latest_trade_date
-          : undefined;
+      const readiness = readinessResult.status === 'fulfilled' ? readinessResult.value : null;
+      const summary = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
+      const latestAvailableDate = firstDate(readiness?.latest_market_date, summary?.latest_market_date, readiness?.latest_trade_date);
+      const readinessDate = firstDate(latestAvailableDate, readiness?.display_trade_date);
       const summaryDate = summaryResult.status === 'fulfilled' ? summaryResult.value.latest_market_date : undefined;
       setDisplayTradeDate(readinessDate || summaryDate || FALLBACK_DISPLAY_TRADE_DATE);
+      setStockDefaultTradeDate(
+        firstDate(readiness?.latest_market_date, readiness?.latest_trade_date, summary?.latest_market_date, readinessDate) ||
+          FALLBACK_DISPLAY_TRADE_DATE
+      );
     });
     return () => {
       cancelled = true;
@@ -120,7 +214,18 @@ export function AppShell() {
 
   useEffect(() => {
     const handleLocationChange = () => {
-      setWorkspaceMode(workspaceModeFromPath(window.location.pathname));
+      const nextMode = workspaceModeFromPath(window.location.pathname);
+      if (window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) {
+        const techBottleneckHandoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
+        if (techBottleneckHandoff?.assetId) {
+          setSelectedAssetId(techBottleneckHandoff.assetId);
+          setStockHandoff((current) => ({
+            ...techBottleneckHandoff,
+            version: current.version + 1
+          }));
+        }
+      }
+      setWorkspaceMode(nextMode);
     };
     window.addEventListener('popstate', handleLocationChange);
     return () => {
@@ -145,7 +250,10 @@ export function AppShell() {
     }
     if (mode === 'techBottleneckReview' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_PATH) {
       window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_PATH);
-    } else if (mode !== 'techBottleneckReview' && window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
+    } else if (
+      mode !== 'techBottleneckReview' &&
+      (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH || window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
+    ) {
       window.history.pushState({}, '', '/');
     }
     setWorkspaceMode(mode);
@@ -310,7 +418,7 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
             <StockWorkspace
               key={`stock:${stockHandoff.version}`}
               initialAssetId={stockHandoff.assetId ?? selectedAssetId}
-              defaultTradeDate={displayTradeDate}
+              defaultTradeDate={stockDefaultTradeDate}
               entryContext={stockHandoff}
               onOpenNews={openNewsWorkspaceFromStock}
               onOpenResearchReports={openResearchReportsWorkspaceFromStock}

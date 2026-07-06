@@ -57,7 +57,7 @@ def test_build_market_monitor_eod_uses_latest_complete_date(monkeypatch):
     assert payload["generated_reports"][0]["report_type"] == "daily_topn_report"
 
 
-def test_build_market_monitor_eod_defaults_to_display_gate_date(monkeypatch):
+def test_build_market_monitor_eod_defaults_to_latest_market_date_when_display_gate_lags(monkeypatch):
     requested_top_scores: list[tuple[str, str, int]] = []
     monkeypatch.setattr(
         market_monitor,
@@ -112,9 +112,9 @@ def test_build_market_monitor_eod_defaults_to_display_gate_date(monkeypatch):
 
     payload = market_monitor.build_market_monitor_eod()
 
-    assert payload["trade_date"] == "2026-06-17"
-    assert requested_top_scores == [("2026-06-17", "manual_v1", 5)]
-    assert payload["strategy_signal_summary"]["topn_preview"][0]["asset_id"] == "DISPLAY.SZ"
+    assert payload["trade_date"] == "2026-06-18"
+    assert requested_top_scores == []
+    assert payload["strategy_signal_summary"]["topn_preview"][0]["asset_id"] == "LATEST.SZ"
 
 
 def test_build_market_monitor_eod_maps_market_emotion_row(monkeypatch):

@@ -412,6 +412,8 @@ def build_market_monitor_eod(
 
 def _default_display_trade_date(summary: dict[str, Any]) -> str:
     latest_market_date = str(summary.get("latest_market_date") or "")
+    if latest_market_date:
+        return latest_market_date
     try:
         gate = select_display_date(
             list(load_latest_data_run_manifest()),
@@ -424,12 +426,7 @@ def _default_display_trade_date(summary: dict[str, Any]) -> str:
         display_trade_date = ""
     if latest_market_date and display_trade_date and display_trade_date > latest_market_date:
         display_trade_date = latest_market_date
-    return str(
-        display_trade_date
-        or latest_market_date
-        or summary.get("latest_score_date")
-        or ""
-    )
+    return str(display_trade_date or summary.get("latest_score_date") or "")
 
 
 def _should_load_scores_for_default_date(summary: dict[str, Any], selected_trade_date: str) -> bool:

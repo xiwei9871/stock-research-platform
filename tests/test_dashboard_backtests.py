@@ -1,6 +1,23 @@
 from stock_research.dashboard import backtests
 
 
+def test_latest_eod_strategy_module_uses_recent_manifest_by_module(monkeypatch):
+    monkeypatch.setattr(
+        backtests,
+        "load_recent_data_run_manifest",
+        lambda: [
+            {"module": "generated_reports", "latest_trade_date": "2026-07-02", "status": "success"},
+            {"module": "strategy_lhb_shortline", "latest_trade_date": "2026-06-05", "status": "success"},
+            {"module": "strategy_lhb_shortline", "latest_trade_date": "2026-07-02", "status": "success"},
+        ],
+        raising=False,
+    )
+
+    module = backtests._latest_eod_strategy_module("lhb_shortline")
+
+    assert module["latest_trade_date"] == "2026-07-02"
+
+
 def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypatch):
     monkeypatch.setattr(backtests, "_read_eod_strategy_rows", lambda module, latest_trade_date, strategy_id: [])
     monkeypatch.setattr(backtests, "_validate_eod_summary_contract", lambda strategy_id, summary: ("success", "ok"))
