@@ -128,3 +128,168 @@ export type TechBottleneckFinancialStatementRow = {
   researchOnly: boolean;
   writebackEnabled: boolean;
 };
+
+export type TechBottleneckNewsSummary = {
+  sectionName: string;
+  sectionStatus: 'passed';
+  watchlistCount: number;
+  supportedCount: number;
+  partialCount: number;
+  missingCount: number;
+  pitAvailableEventCount: number;
+  postAdmissionEventCount: number;
+  dateMissingEventCount: number;
+  lookaheadViolationRows: number;
+  writebackEnabled: boolean;
+  manualReviewWritebackEnabled: boolean;
+  usedForSignal: boolean;
+  usedForAdmission: boolean;
+  researchOnly: boolean;
+};
+
+export type TechBottleneckNewsRow = {
+  assetId: string;
+  symbol: string;
+  name: string;
+  support: 'supported' | 'partial' | 'missing';
+  eventCount: number;
+  pitAvailableEventCount: number;
+  postAdmissionEventCount: number;
+  dateMissingEventCount: number;
+  riskEventCount: number;
+  sourceQuality: string;
+  dataGap: boolean;
+  dataGapNote: string;
+  partialCoverageNote: string;
+  usedForSignal: boolean;
+  usedForAdmission: boolean;
+  researchOnly: boolean;
+  writebackEnabled: boolean;
+};
+
+export type TechBottleneckNewsEventCard = {
+  assetId: string;
+  symbol: string;
+  name: string;
+  publishDate: string;
+  eventType: string;
+  sourceType: string;
+  title: string;
+  matchedTopic: string;
+  pitStatus: 'pit_available' | 'post_admission_context' | 'date_missing';
+  sourceQuality: string;
+  cardGroup: string;
+  eventNote: string;
+  usedForSignal: boolean;
+  usedForAdmission: boolean;
+  researchOnly: boolean;
+  writebackEnabled: boolean;
+};
+
+export type TechBottleneckManualReviewWritebackContract = {
+  sectionName: 'Manual Review Research-Only Writeback';
+  sectionStatus: 'passed';
+  manualReviewWritebackEnabled: boolean;
+  manualReviewWritebackScope: 'manual_review_only';
+  strategyWritebackEnabled: boolean;
+  baselineAdmissionChangeEnabled: boolean;
+  researchOnly: boolean;
+  usedForSignal: boolean;
+  usedForAdmission: boolean;
+  allowedFields: string[];
+  auditRequired: boolean;
+  saveButtonLabel: '保存研究复盘';
+};
+
+export type TechBottleneckManualReviewDraft = {
+  reviewStatus: string;
+  manualReviewConclusion: string;
+  selectedLabels: string;
+  evidenceQualityReview: string;
+  financialStatementReview: string;
+  newsContextReview: string;
+  riskReview: string;
+  dataGapConfirmation: boolean;
+  reviewNote: string;
+  reviewer: string;
+  reviewedAt: string;
+};
+
+export type TechBottleneckWorkbenchQueue = 'core' | 'adjacent' | 'evidence_backfill' | 'rejected';
+
+export type TechBottleneckWorkbenchCandidate = {
+  stockCode: string;
+  stockName: string;
+  queue: TechBottleneckWorkbenchQueue;
+  sourceGroup: string;
+  previousTier: string;
+  finalManualApprovalCategory: string;
+  industry: string;
+  conceptTags: string[];
+  evidenceCategory: string;
+  businessRelevanceCategory: string;
+  researchPriorityScore: number | null;
+  reviewPriorityRank: number;
+  evidenceStrength: string;
+  bottleneckRelevance: string;
+  reviewDecisionSource: string;
+  primarySourceUrl: string;
+  manualApprovalRequired: boolean;
+  allowedForWorkbenchCandidatePool: boolean;
+  allowedForSignal: boolean;
+  allowedForAdmission: boolean;
+  rationale: string;
+  reviewStatus: string;
+  notes: string;
+  nextAction: string;
+  evidenceExcerpt: string;
+  reportStatus?: string;
+  bottleneckConfidenceScore?: number | null;
+  evidenceQualityScore?: number | null;
+  reportReviewDecision?: string;
+  reportUpdatedAt?: string;
+  reportMdPath?: string;
+  reportHtmlPath?: string;
+  reportPdfPath?: string;
+  evidenceMatrixPath?: string;
+  reportSourcesPath?: string;
+  evidenceGapNote?: string;
+};
+
+export type TechBottleneckStockEntryContext = {
+  stockName?: string;
+  techBottleneckSource?: string;
+  sourceGroup?: string;
+  previousTier?: string;
+  finalManualApprovalCategory?: string;
+  industry?: string;
+  conceptTags?: string[];
+  evidenceCategory?: string;
+  businessRelevanceCategory?: string;
+  researchPriorityScore?: number | null;
+  reviewPriorityRank?: number;
+  evidenceStrength?: string;
+  bottleneckRelevance?: string;
+  reviewDecisionSource?: string;
+  primarySourceUrl?: string;
+  manualApprovalRequired?: boolean;
+  allowedForWorkbenchCandidatePool?: boolean;
+  allowedForSignal?: boolean;
+  allowedForAdmission?: boolean;
+  rationale?: string;
+  reviewStatus?: string;
+  notes?: string;
+  nextAction?: string;
+  evidenceExcerpt?: string;
+  reportStatus?: string;
+  bottleneckConfidenceScore?: number | null;
+  evidenceQualityScore?: number | null;
+  reportReviewDecision?: string;
+  reportUpdatedAt?: string;
+  reportMdPath?: string;
+  reportHtmlPath?: string;
+  reportPdfPath?: string;
+  evidenceMatrixPath?: string;
+  reportSourcesPath?: string;
+  evidenceGapNote?: string;
+};

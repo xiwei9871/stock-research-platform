@@ -1,7 +1,12 @@
 import type {
   TechBottleneckFinancialStatementRow,
   TechBottleneckFinancialStatementSummary,
+  TechBottleneckManualReviewDraft,
+  TechBottleneckManualReviewWritebackContract,
   TechBottleneckManualTemplateStatus,
+  TechBottleneckNewsEventCard,
+  TechBottleneckNewsRow,
+  TechBottleneckNewsSummary,
   TechBottleneckPrioritySummary,
   TechBottleneckReportLink,
   TechBottleneckRiskRow,
@@ -40,6 +45,65 @@ export const techBottleneckFinancialStatementSummary: TechBottleneckFinancialSta
   usedForSignal: false,
   usedForAdmission: false,
   researchOnly: true
+};
+
+export const techBottleneckNewsSummary: TechBottleneckNewsSummary = {
+  sectionName: 'News and Event Review Context',
+  sectionStatus: 'passed',
+  watchlistCount: 102,
+  supportedCount: 30,
+  partialCount: 1,
+  missingCount: 71,
+  pitAvailableEventCount: 189,
+  postAdmissionEventCount: 11,
+  dateMissingEventCount: 71,
+  lookaheadViolationRows: 0,
+  writebackEnabled: false,
+  manualReviewWritebackEnabled: false,
+  usedForSignal: false,
+  usedForAdmission: false,
+  researchOnly: true
+};
+
+export const techBottleneckManualReviewWritebackContract: TechBottleneckManualReviewWritebackContract = {
+  sectionName: 'Manual Review Research-Only Writeback',
+  sectionStatus: 'passed',
+  manualReviewWritebackEnabled: true,
+  manualReviewWritebackScope: 'manual_review_only',
+  strategyWritebackEnabled: false,
+  baselineAdmissionChangeEnabled: false,
+  researchOnly: true,
+  usedForSignal: false,
+  usedForAdmission: false,
+  allowedFields: [
+    'review_status',
+    'manual_review_conclusion',
+    'selected_labels',
+    'evidence_quality_review',
+    'financial_statement_review',
+    'news_context_review',
+    'risk_review',
+    'data_gap_confirmation',
+    'review_note',
+    'reviewer',
+    'reviewed_at'
+  ],
+  auditRequired: true,
+  saveButtonLabel: '保存研究复盘'
+};
+
+export const techBottleneckManualReviewDefaultDraft: TechBottleneckManualReviewDraft = {
+  reviewStatus: 'not_reviewed',
+  manualReviewConclusion: 'not_reviewed',
+  selectedLabels: '',
+  evidenceQualityReview: 'not_reviewed',
+  financialStatementReview: '',
+  newsContextReview: '',
+  riskReview: '',
+  dataGapConfirmation: false,
+  reviewNote: '',
+  reviewer: '',
+  reviewedAt: ''
 };
 
 export const techBottleneckWarnings = [
@@ -109,6 +173,14 @@ export const techBottleneckSections: TechBottleneckSectionSpec[] = [
     purpose: 'Display template readiness without review label writeback.',
     displayFields: ['templateRows', 'notReviewedCount', 'historyRows'],
     interactionsAllowed: ['view template fields'],
+    writebackAllowed: false,
+    usedForSignal: false
+  },
+  {
+    title: 'News and Event Review Context',
+    purpose: 'Display dated news and disclosure context with source quality warnings.',
+    displayFields: ['news_support', 'pit_available_event_count', 'source_quality', 'news_data_gap'],
+    interactionsAllowed: ['filter', 'sort', 'view event cards'],
     writebackAllowed: false,
     usedForSignal: false
   }
@@ -317,6 +389,142 @@ export const techBottleneckFinancialStatementRows: TechBottleneckFinancialStatem
     balanceSheetPressureContext: 'balance_sheet_pressure_low',
     rdIntensityContext: 'neutral_context',
     dataGapNote: '',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  }
+];
+
+export const techBottleneckNewsRows: TechBottleneckNewsRow[] = [
+  {
+    assetId: 'CN:SH:600098',
+    symbol: '600098',
+    name: '广州发展',
+    support: 'missing',
+    eventCount: 0,
+    pitAvailableEventCount: 0,
+    postAdmissionEventCount: 0,
+    dateMissingEventCount: 1,
+    riskEventCount: 0,
+    sourceQuality: 'missing',
+    dataGap: true,
+    dataGapNote: 'News context unavailable or date-missing before first admission date.',
+    partialCoverageNote: '',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  },
+  {
+    assetId: 'CN:SH:600219',
+    symbol: '600219',
+    name: '南山铝业',
+    support: 'supported',
+    eventCount: 4,
+    pitAvailableEventCount: 4,
+    postAdmissionEventCount: 0,
+    dateMissingEventCount: 0,
+    riskEventCount: 2,
+    sourceQuality: 'high',
+    dataGap: false,
+    dataGapNote: '',
+    partialCoverageNote: '',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  },
+  {
+    assetId: 'CN:SZ:002028',
+    symbol: '002028',
+    name: '思源电气',
+    support: 'partial',
+    eventCount: 1,
+    pitAvailableEventCount: 0,
+    postAdmissionEventCount: 1,
+    dateMissingEventCount: 0,
+    riskEventCount: 0,
+    sourceQuality: 'low',
+    dataGap: true,
+    dataGapNote: '',
+    partialCoverageNote: 'Partial news coverage only; manual review should verify event completeness.',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  },
+  {
+    assetId: 'CN:SH:688002',
+    symbol: '688002',
+    name: '睿创微纳',
+    support: 'supported',
+    eventCount: 12,
+    pitAvailableEventCount: 8,
+    postAdmissionEventCount: 4,
+    dateMissingEventCount: 0,
+    riskEventCount: 3,
+    sourceQuality: 'high',
+    dataGap: false,
+    dataGapNote: '',
+    partialCoverageNote: '',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  }
+];
+
+export const techBottleneckNewsEventCards: TechBottleneckNewsEventCard[] = [
+  {
+    assetId: 'CN:SH:600219',
+    symbol: '600219',
+    name: '南山铝业',
+    publishDate: '2026-01-20',
+    eventType: 'capacity_expansion',
+    sourceType: 'announcement',
+    title: '南山铝业:山东南山铝业股份有限公司第十一届董事会第二十五次会议决议公告',
+    matchedTopic: 'capacity_project',
+    pitStatus: 'pit_available',
+    sourceQuality: 'high',
+    cardGroup: 'PIT-Available Events',
+    eventNote: 'Available at first admission cutoff.',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  },
+  {
+    assetId: 'CN:SH:688002',
+    symbol: '688002',
+    name: '睿创微纳',
+    publishDate: '2026-04-28',
+    eventType: 'financial_risk',
+    sourceType: 'announcement',
+    title: '睿创微纳:关于开展外汇套期保值业务的公告',
+    matchedTopic: 'risk_disclosure',
+    pitStatus: 'post_admission_context',
+    sourceQuality: 'high',
+    cardGroup: 'Post-Admission Review Context',
+    eventNote: 'Post-admission review context only; not PIT evidence.',
+    usedForSignal: false,
+    usedForAdmission: false,
+    researchOnly: true,
+    writebackEnabled: false
+  },
+  {
+    assetId: 'CN:SH:600098',
+    symbol: '600098',
+    name: '广州发展',
+    publishDate: '',
+    eventType: 'data_gap',
+    sourceType: 'unknown',
+    title: 'News source mapping data gap',
+    matchedTopic: 'missing_news_source',
+    pitStatus: 'date_missing',
+    sourceQuality: 'degraded',
+    cardGroup: 'Date-Missing / Degraded Events',
+    eventNote: 'Date missing or source gap; degraded and not strong PIT evidence.',
     usedForSignal: false,
     usedForAdmission: false,
     researchOnly: true,
