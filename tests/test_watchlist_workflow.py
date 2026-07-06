@@ -305,6 +305,10 @@ def test_build_watchlist_diagnostics_snapshot_sets_watchlist_identity(monkeypatc
     assert list(result["must_watch"]["watchlist_id"]) == ["diagnostics"]
     assert list(result["full"]["trade_date"]) == ["2026-05-20"]
     assert list(result["must_watch"]["trade_date"]) == ["2026-05-20"]
+    assert list(result["full"]["stock_code"]) == ["000001.SZ"]
+    assert list(result["must_watch"]["stock_code"]) == ["000001.SZ"]
+    assert list(result["full"]["stock_name"]) == ["Alpha"]
+    assert list(result["must_watch"]["stock_name"]) == ["Alpha"]
 
 
 def test_build_watchlist_diagnostics_snapshot_maps_asset_identity_into_diagnostics_inputs(monkeypatch):

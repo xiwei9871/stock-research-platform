@@ -72,3 +72,43 @@ exit 0
     assert result.returncode == 0
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-24" in calls
+
+
+def test_run_strategy_daily_eod_cron_exits_nonzero_when_business_status_failed(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+
+    fake_python.write_text(
+        """#!/usr/bin/env bash
+if [[ "$*" == *"run-strategy-daily-eod"* ]]; then
+  echo "strategy_daily_eod|status|failed"
+  echo "strategy_daily_eod|summary_path|/tmp/summary.json"
+  exit 0
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "STRATEGY_DAILY_EOD_ROOT": str(fake_root),
+            "STRATEGY_DAILY_EOD_PYTHON": str(fake_python),
+            "STRATEGY_DAILY_EOD_TRADE_DATE": "2026-06-24",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_strategy_daily_eod_cron.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "strategy_daily_eod|status|failed" in result.stdout
+    assert "strategy_daily_eod|business_failed" in result.stderr

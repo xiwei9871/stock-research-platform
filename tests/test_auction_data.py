@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import sys
 import types
 from decimal import Decimal
@@ -9,6 +10,7 @@ import pytest
 
 from stock_research import cli
 from stock_research import auction_data
+from stock_research import eastmoney_http
 from stock_research.auction_data import (
     auction_market_row,
     auction_staging_row,
@@ -577,38 +579,118 @@ def test_upsert_stock_open_auction_spot_snapshots_writes_staging_and_market(monk
     assert calls[1][2][0]["target_time"] == dt.time(9, 17)
 
 
-def test_query_eastmoney_spot_snapshot_rows_retries_temporary_failures(monkeypatch):
+def _eastmoney_spot_payload(*, total: int = 1) -> str:
+    return json.dumps(
+        {
+            "data": {
+                "total": total,
+                "diff": [
+                    {
+                        "f2": 10.5,
+                        "f3": 1.2,
+                        "f4": 0.12,
+                        "f5": 1000,
+                        "f6": 1050000,
+                        "f7": 3.1,
+                        "f8": 1.5,
+                        "f9": 20.0,
+                        "f10": 1.1,
+                        "f11": 0.0,
+                        "f12": "000001",
+                        "f14": "平安银行",
+                        "f15": 10.6,
+                        "f16": 10.3,
+                        "f17": 10.4,
+                        "f18": 10.38,
+                        "f20": 1000000000,
+                        "f21": 900000000,
+                        "f22": 0.1,
+                        "f23": 0.9,
+                        "f24": 2.0,
+                        "f25": 3.0,
+                    }
+                ],
+            }
+        }
+    )
+
+
+def test_query_eastmoney_spot_snapshot_rows_uses_curl_main_path(monkeypatch):
     calls = []
 
-    def fake_spot():
-        calls.append("called")
-        if len(calls) < 3:
-            raise RuntimeError("temporary ssl eof")
-        return pd.DataFrame([raw_spot_snapshot_row()])
+    class FakeCompleted:
+        returncode = 0
+        stderr = ""
+        stdout = _eastmoney_spot_payload()
 
-    monkeypatch.setitem(sys.modules, "akshare", types.SimpleNamespace(stock_zh_a_spot_em=fake_spot))
+    def fake_run(cmd, *, capture_output, env, text, timeout):
+        calls.append(cmd)
+        return FakeCompleted()
+
+    monkeypatch.setattr(eastmoney_http.subprocess, "run", fake_run)
     monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
 
     rows = query_eastmoney_spot_snapshot_rows(retries=3, retry_sleep_seconds=0)
 
-    assert rows == [raw_spot_snapshot_row()]
-    assert calls == ["called", "called", "called"]
+    assert len(calls) == 1
+    assert calls[0][0] == "curl"
+    assert "--retry" in calls[0]
+    assert "--retry-all-errors" in calls[0]
+    assert "-A" in calls[0]
+    assert rows[0]["代码"] == "000001"
+    assert rows[0]["名称"] == "平安银行"
+    assert rows[0]["最新价"] == 10.5
+    assert rows[0]["今开"] == 10.4
+    assert rows[0]["昨收"] == 10.38
 
 
-def test_query_eastmoney_spot_snapshot_rows_reports_attempts_after_retries(monkeypatch):
+def test_query_eastmoney_spot_snapshot_rows_reports_curl_failure(monkeypatch):
     calls = []
 
-    def fake_spot():
-        calls.append("called")
-        raise RuntimeError("temporary ssl eof")
+    class FakeCompleted:
+        returncode = 52
+        stderr = "Empty reply from server"
+        stdout = ""
 
-    monkeypatch.setitem(sys.modules, "akshare", types.SimpleNamespace(stock_zh_a_spot_em=fake_spot))
+    def fake_run(cmd, *, capture_output, env, text, timeout):
+        calls.append(cmd)
+        return FakeCompleted()
+
+    monkeypatch.setattr(eastmoney_http.subprocess, "run", fake_run)
     monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
 
-    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+    with pytest.raises(RuntimeError, match="curl rc=52"):
         query_eastmoney_spot_snapshot_rows(retries=3, retry_sleep_seconds=0)
 
-    assert calls == ["called", "called", "called"]
+    assert len(calls) == 3
+
+
+def test_query_eastmoney_spot_snapshot_rows_keeps_first_page_when_later_page_fails(monkeypatch):
+    calls = []
+
+    class FakeCompleted:
+        stderr = ""
+
+        def __init__(self, returncode: int, stdout: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = "Empty reply from server" if returncode else ""
+
+    def fake_run(cmd, *, capture_output, env, text, timeout):
+        calls.append(cmd)
+        url = cmd[-1]
+        if "pn=1" in url:
+            return FakeCompleted(0, _eastmoney_spot_payload(total=101))
+        return FakeCompleted(52)
+
+    monkeypatch.setattr(eastmoney_http.subprocess, "run", fake_run)
+    monkeypatch.setattr(auction_data.time, "sleep", lambda seconds: None)
+
+    rows = query_eastmoney_spot_snapshot_rows(retries=1, retry_sleep_seconds=0)
+
+    assert len(rows) == 1
+    assert rows[0]["代码"] == "000001"
+    assert len(calls) == 4
 
 
 def test_collect_open_auction_spot_snapshot_queries_once_and_reports(monkeypatch):

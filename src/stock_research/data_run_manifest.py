@@ -190,7 +190,24 @@ def load_recent_data_run_manifest(
     service: str = SETTINGS.research_service,
 ) -> list[dict[str, Any]]:
     if trade_date:
-        return load_latest_data_run_manifest(trade_date=trade_date, service=service)
+        sql = """
+        WITH ranked AS (
+            SELECT
+                *,
+                row_number() OVER (
+                    PARTITION BY module, source
+                    ORDER BY COALESCE(ended_at, updated_at, created_at) DESC, run_id DESC
+                ) AS rn
+            FROM ops.data_run_manifest
+            WHERE trade_date = %(trade_date)s
+        )
+        SELECT *
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY tier, module, source
+        """
+        with connect(service) as conn:
+            return list(fetch_all(conn, sql, {"trade_date": trade_date}))
     sql = """
     WITH latest_date AS (
         SELECT max(trade_date) AS trade_date

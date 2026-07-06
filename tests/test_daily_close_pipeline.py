@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
+import os
+import sys
+import types
 
 import pytest
 
@@ -18,6 +21,12 @@ def _no_db(monkeypatch):
     monkeypatch.setattr(dcp, "connect", _fake_connect)
     monkeypatch.setattr(dcp, "execute", lambda *args, **kwargs: None)
     monkeypatch.setattr(dcp, "execute_many", lambda *args, **kwargs: None)
+    if hasattr(dcp, "derive_qfq_minute5_from_daily_factor"):
+        monkeypatch.setattr(
+            dcp,
+            "derive_qfq_minute5_from_daily_factor",
+            lambda _service, _trade_date: {"raw_rows": 0, "inserted_rows": 0},
+        )
 
 
 def test_daily_close_schema_migrates_market_monitor_status_column():
@@ -543,6 +552,50 @@ def test_fetch_baostock_minute5_rows_uses_call_with_timeout(monkeypatch):
     assert rows[0]["source"] == "baostock"
 
 
+def test_fetch_akshare_minute5_rows_clears_proxy_env_for_eastmoney_call(monkeypatch):
+    class FakeFrame:
+        empty = False
+
+        def to_dict(self, orient):
+            assert orient == "records"
+            return [
+                {
+                    "时间": "2026-07-03 09:35:00",
+                    "开盘": 10.0,
+                    "最高": 10.2,
+                    "最低": 9.9,
+                    "收盘": 10.1,
+                    "成交量": 100,
+                    "成交额": 1000,
+                }
+            ]
+
+    def fake_stock_zh_a_hist_min_em(**_kwargs):
+        leaked = [
+            name
+            for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+            if os.environ.get(name)
+        ]
+        assert leaked == []
+        return FakeFrame()
+
+    fake_akshare = types.SimpleNamespace(stock_zh_a_hist_min_em=fake_stock_zh_a_hist_min_em)
+    monkeypatch.setitem(sys.modules, "akshare", fake_akshare)
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.setenv(name, "http://192.168.3.185:7890")
+
+    rows = dcp.fetch_akshare_minute5_rows(
+        "000001.SZ",
+        start_date=date(2026, 7, 3),
+        end_date=date(2026, 7, 3),
+        timeout_seconds=7,
+    )
+
+    assert rows[0]["source"] == "akshare"
+    assert rows[0]["trade_time"] == datetime(2026, 7, 3, 9, 35)
+    assert os.environ["HTTP_PROXY"] == "http://192.168.3.185:7890"
+
+
 def test_call_with_timeout_shuts_down_executor_without_waiting_on_timeout(monkeypatch):
     calls = {}
 
@@ -715,6 +768,117 @@ def test_minute5_stage_runs_exchange_split_sources(monkeypatch):
     assert result["status"] == "success"
     assert result["source_symbols"] == {"baostock_sh": 1, "baostock_sz": 1}
     assert {job["source"] for job in finished} == {"baostock_sh", "baostock_sz"}
+
+
+def test_minute5_stage_prints_progress_every_50_completed_symbols(monkeypatch, capsys):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+
+    def rows_for(ts_code):
+        rows = []
+        for hour in [9, 10, 11, 13, 14]:
+            for minute in [0, 5, 10, 15, 20, 25, 30, 35, 40]:
+                rows.append(
+                    {
+                        "asset_id": f"asset:{ts_code}",
+                        "ts_code": ts_code,
+                        "trade_time": datetime(2026, 6, 5, hour, minute),
+                        "trade_date": date(2026, 6, 5),
+                        "freq": "5min",
+                        "adjust_type": "raw",
+                        "open": 1,
+                        "high": 1,
+                        "low": 1,
+                        "close": 1,
+                        "volume": 1,
+                        "amount": 1,
+                        "source": "baostock",
+                    }
+                )
+        return rows
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return rows_for(ts_code)
+
+    ts_codes = [f"60{i:04d}.SH" for i in range(51)]
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+        ts_codes=ts_codes,
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    output = capsys.readouterr().out
+    assert result["status"] == "success"
+    assert "minute5|progress|source=baostock_sh|completed=50|total=51|success=50|failed=0" in output
+
+
+def test_derive_qfq_minute5_from_daily_factor_uses_daily_raw_qfq_ratio_for_all_raw_sources(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dcp, "connect", _fake_connect)
+
+    def fake_fetch_all(_conn, sql, params=None):
+        captured["sql"] = sql
+        captured["params"] = params
+        return [{"raw_rows": 48, "inserted_rows": 48}]
+
+    monkeypatch.setattr(dcp, "fetch_all", fake_fetch_all)
+
+    result = dcp.derive_qfq_minute5_from_daily_factor("test", date(2026, 6, 5))
+
+    assert result == {"raw_rows": 48, "inserted_rows": 48}
+    assert "market.stock_minute_bar raw" in captured["sql"]
+    assert "market_daily_bar daily_raw" in captured["sql"]
+    assert "market_daily_bar daily_qfq" in captured["sql"]
+    assert "daily_qfq.close / daily_raw.close" in captured["sql"]
+    assert "raw.adjust_type = 'raw'" in captured["sql"]
+    assert "raw.source = 'baostock'" not in captured["sql"]
+    assert "adjustment_factor" not in captured["sql"]
+    assert captured["params"] == [date(2026, 6, 5)]
+
+
+def test_minute5_stage_derives_qfq_after_raw_upsert(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+    calls = []
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+        ts_codes=["600000.SH"],
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+        qfq_deriver=lambda service, trade_date: calls.append((service, trade_date))
+        or {"raw_rows": 1, "inserted_rows": 1},
+    )
+
+    assert result["status"] == "success"
+    assert result["qfq_rows"] == 1
+    assert calls == [("test", date(2026, 6, 5))]
 
 
 def test_minute5_stage_runs_baostock_globally_serial_without_parallel_source_executors(monkeypatch):

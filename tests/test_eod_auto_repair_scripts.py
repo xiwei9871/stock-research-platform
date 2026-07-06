@@ -14,6 +14,7 @@ def _write_executable(path: Path, content: str) -> None:
 def _make_cron_harness(
     tmp_path: Path,
     python_body: str | None = None,
+    flock_body: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> tuple[Path, dict[str, str]]:
     root = tmp_path / "stock_research"
@@ -33,12 +34,18 @@ def _make_cron_harness(
         'echo "rtk|$*" >> "$STOCK_RESEARCH_ROOT/rtk.log"\n'
         'exec "$@"\n',
     )
-    for lock_cmd in ("flock", "lockf"):
+    _write_executable(
+        bin_dir / "curl",
+        "#!/usr/bin/env bash\n"
+        'echo "curl|$*" >> "$STOCK_RESEARCH_ROOT/curl.log"\n'
+        'exit "${STUB_CURL_RC:-0}"\n',
+    )
+    if flock_body is not None:
         _write_executable(
-            bin_dir / lock_cmd,
+            bin_dir / "flock",
             "#!/usr/bin/env bash\n"
-            f'echo "{lock_cmd}|$*" >> "$STOCK_RESEARCH_ROOT/lock-command.log"\n'
-            "exit 66\n",
+            'echo "flock|$*" >> "$STOCK_RESEARCH_ROOT/lock-command.log"\n'
+            f"{flock_body}\n",
         )
     python_stub = bin_dir / "python"
     _write_executable(
@@ -54,6 +61,7 @@ def _make_cron_harness(
             "PATH": f"{bin_dir}:{env['PATH']}",
             "STOCK_RESEARCH_ROOT": str(root),
             "STOCK_RESEARCH_PYTHON": str(python_stub),
+            "EOD_AUTO_REPAIR_DISABLE_FLOCK": "0" if flock_body is not None else "1",
         }
     )
     if extra_env:
@@ -76,16 +84,52 @@ def test_eod_auto_repair_cron_uses_module_entrypoint_and_portable_lock():
     script = Path("scripts/run_eod_auto_repair_cron.sh").read_text()
 
     assert "python -m stock_research.eod_auto_repair" in script
-    assert "flock" not in script
-    assert "lockf" not in script
+    assert "command -v flock" in script
+    assert "LOCK_MODE=" in script
+    assert "python_lockfile" in script
     assert "stock_cron_guard.sh" in script
     assert 'LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"' in script
     assert 'mkdir "$LOCK_FILE"' in script
-    assert "eod_auto_repair|locked|$LOCK_FILE" in script
-    assert "--mode repair" in script
+    assert "eod_auto_repair|locked|lock_mode|" in script
+    assert "--mode loop" in script
+    assert "--action-timeout-seconds" in script
+    assert 'ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"' in script
     assert "logs/eod_auto_repair" in script
     assert "run_summary.json" in script
     assert "run_report.md" in script
+    assert "lock_mode|$LOCK_MODE" in script
+
+
+def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        flock_body="exit 0",
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    assert "flock|" in (root / "lock-command.log").read_text()
+    log_text = (root / "logs" / "eod_auto_repair" / "2026-07-02.log").read_text()
+    assert "eod_auto_repair|lock_mode|flock" in log_text
+    assert "--mode loop" in (root / "python.log").read_text()
+    assert "--action-timeout-seconds" in (root / "python.log").read_text()
+    assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in (root / "curl.log").read_text()
+    assert "eod_auto_repair|dashboard_cache_clear|success" in log_text
+
+
+def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        flock_body="exit 1",
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    log_text = (root / "logs" / "eod_auto_repair" / "2026-07-02.log").read_text()
+    assert "eod_auto_repair|locked|lock_mode|flock" in log_text
+    assert not (root / "python.log").exists()
 
 
 def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tmp_path):
@@ -117,10 +161,11 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     assert result.returncode == 7
     assert not lock_file.exists()
     assert "-m stock_research.eod_auto_repair" in (root / "python.log").read_text()
-    lock_command_log = root / "lock-command.log"
-    assert not lock_command_log.exists()
+    assert "--mode loop" in (root / "python.log").read_text()
+    assert "--action-timeout-seconds" in (root / "python.log").read_text()
     log = root / "logs" / "eod_auto_repair" / f"{trade_date}.log"
     log_text = log.read_text()
+    assert "eod_auto_repair|lock_mode|python_lockfile" in log_text
     assert "eod_auto_repair|locked" not in log_text
     assert f"eod_auto_repair|summary|{root}/outputs/research/eod_auto_repair/{trade_date}/run_summary.json" in log_text
     assert f"eod_auto_repair|report|{root}/outputs/research/eod_auto_repair/{trade_date}/run_report.md" in log_text
@@ -209,7 +254,7 @@ def test_eod_auto_repair_cron_treats_pidless_lock_directory_as_locked(tmp_path):
     assert not (root / "python.log").exists()
     assert lock_file.is_dir()
     log_text = (root / "logs" / "eod_auto_repair" / f"{trade_date}.log").read_text()
-    assert "eod_auto_repair|locked" in log_text
+    assert "eod_auto_repair|locked|lock_mode|python_lockfile" in log_text
 
 
 def test_eod_auto_repair_cron_treats_empty_old_lock_file_as_locked(tmp_path):

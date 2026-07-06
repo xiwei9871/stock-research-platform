@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -41,6 +42,14 @@ MARKET_MONITOR_INDEX_IDS = (
     "CHINEXT",
     "STAR_50",
     "BSE_50",
+)
+STOCK_PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
 )
 
 
@@ -934,13 +943,14 @@ def fetch_akshare_minute5_rows(
     def _fetch() -> list[dict[str, Any]]:
         import akshare as ak
 
-        frame = ak.stock_zh_a_hist_min_em(
-            symbol=ts_code_symbol(ts_code),
-            period="5",
-            start_date=f"{start_date:%Y-%m-%d} 09:30:00",
-            end_date=f"{end_date:%Y-%m-%d} 15:00:00",
-            adjust="",
-        )
+        with temporary_stock_proxy_env_cleared():
+            frame = ak.stock_zh_a_hist_min_em(
+                symbol=ts_code_symbol(ts_code),
+                period="5",
+                start_date=f"{start_date:%Y-%m-%d} 09:30:00",
+                end_date=f"{end_date:%Y-%m-%d} 15:00:00",
+                adjust="",
+            )
         if frame is None or frame.empty:
             return []
         rows = []
@@ -969,6 +979,23 @@ def fetch_akshare_minute5_rows(
         return rows
 
     return call_with_timeout(_fetch, timeout_seconds)
+
+
+@contextmanager
+def temporary_stock_proxy_env_cleared():
+    previous = {key: os.environ.get(key) for key in (*STOCK_PROXY_ENV_KEYS, "NO_PROXY", "no_proxy")}
+    for key in STOCK_PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
+    os.environ["NO_PROXY"] = "*"
+    os.environ["no_proxy"] = "*"
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def ts_code_to_baostock_code(ts_code: str) -> str:
@@ -1089,6 +1116,83 @@ def upsert_minute5_bars(service: str, rows: list[dict[str, Any]]) -> int:
     with connect(service) as conn:
         execute_many(conn, sql, rows)
     return len(rows)
+
+
+def derive_qfq_minute5_from_daily_factor(service: str, trade_date: date) -> dict[str, int]:
+    sql = """
+    WITH raw_rows AS (
+        SELECT
+            raw.asset_id,
+            raw.ts_code,
+            raw.trade_time,
+            raw.trade_date,
+            raw.freq,
+            raw.open,
+            raw.high,
+            raw.low,
+            raw.close,
+            raw.volume,
+            raw.amount,
+            raw.source,
+            daily_qfq.close / daily_raw.close AS qfq_factor
+        FROM market.stock_minute_bar raw
+        JOIN market_daily_bar daily_raw
+          ON daily_raw.asset_id = raw.asset_id
+         AND daily_raw.trade_date = raw.trade_date
+         AND daily_raw.adjust_type = 'raw'
+         AND daily_raw.close IS NOT NULL
+         AND daily_raw.close <> 0
+        JOIN market_daily_bar daily_qfq
+          ON daily_qfq.asset_id = raw.asset_id
+         AND daily_qfq.trade_date = raw.trade_date
+         AND daily_qfq.adjust_type = 'qfq'
+         AND daily_qfq.close IS NOT NULL
+        WHERE raw.trade_date = %s
+          AND raw.freq = '5min'
+          AND raw.adjust_type = 'raw'
+    ),
+    upserted AS (
+        INSERT INTO market.stock_minute_bar (
+            asset_id, ts_code, trade_time, trade_date, freq, adjust_type,
+            open, high, low, close, volume, amount, source
+        )
+        SELECT
+            asset_id,
+            ts_code,
+            trade_time,
+            trade_date,
+            freq,
+            'qfq' AS adjust_type,
+            open * qfq_factor AS open,
+            high * qfq_factor AS high,
+            low * qfq_factor AS low,
+            close * qfq_factor AS close,
+            volume,
+            amount,
+            source
+        FROM raw_rows
+        ON CONFLICT (trade_date, asset_id, trade_time, freq, adjust_type, source)
+        DO UPDATE SET
+            ts_code = EXCLUDED.ts_code,
+            open = EXCLUDED.open,
+            high = EXCLUDED.high,
+            low = EXCLUDED.low,
+            close = EXCLUDED.close,
+            volume = EXCLUDED.volume,
+            amount = EXCLUDED.amount,
+            updated_at = now()
+        RETURNING 1
+    )
+    SELECT
+        (SELECT count(*) FROM raw_rows) AS raw_rows,
+        (SELECT count(*) FROM upserted) AS inserted_rows
+    """
+    with connect(service) as conn:
+        row = fetch_all(conn, sql, [trade_date])[0]
+    return {
+        "raw_rows": int(row.get("raw_rows") or 0),
+        "inserted_rows": int(row.get("inserted_rows") or 0),
+    }
 
 
 def inspect_daily_quality(
@@ -1329,6 +1433,7 @@ def run_minute5_stage(
     fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
     baostock_fetcher: Callable[..., list[dict[str, Any]]] = fetch_baostock_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
+    qfq_deriver: Callable[[str, date], dict[str, int]] | None = None,
 ) -> dict[str, Any]:
     skip, calendar_status = should_skip_for_holiday(
         config.service, trade_date, force=config.force_non_trading_day
@@ -1389,6 +1494,7 @@ def run_minute5_stage(
             len(codes),
             1,
         )
+        success_count = 0
         for ts_code in codes:
             source_name, ts_code, rows, attempt_count, error = _one(source, ts_code)
             attempts_by_source[source_name][ts_code] = attempt_count
@@ -1408,12 +1514,26 @@ def run_minute5_stage(
             else:
                 source_rows_by_symbol[source_name][ts_code] = rows
                 rows_by_symbol.setdefault(ts_code, []).extend(rows)
+                success_count += 1
+            completed_count = len(attempts_by_source[source_name])
+            if completed_count % 50 == 0:
+                progress_line = (
+                    f"minute5|progress|source={source_name}|completed={completed_count}|"
+                    f"total={len(codes)}|success={success_count}|failed={len(failures_by_source[source_name])}"
+                )
+                print(progress_line, flush=True)
+                logger.info(progress_line)
 
     for source in MINUTE5_SOURCES:
         _run_source(source, source_codes[source])
 
     all_rows = [row for rows in rows_by_symbol.values() for row in rows]
     rows_upserted = upserter(config.service, all_rows)
+    qfq_deriver = qfq_deriver or derive_qfq_minute5_from_daily_factor
+    qfq_result = qfq_deriver(config.service, trade_date) if rows_upserted else {
+        "raw_rows": 0,
+        "inserted_rows": 0,
+    }
     quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
 
@@ -1494,6 +1614,7 @@ def run_minute5_stage(
         "stage": "minute5",
         "status": status,
         "rows": rows_upserted,
+        "qfq_rows": qfq_result["inserted_rows"],
         "failed_symbols": sorted(failures),
         "source_symbols": {source: len(codes) for source, codes in source_codes.items()},
         "quality": quality,

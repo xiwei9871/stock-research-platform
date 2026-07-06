@@ -58,6 +58,17 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
         (Path(output_dir) / "strategy_lhb_shortline_review.csv").write_text(frame.to_csv(index=False), encoding="utf-8")
         return {"status": "success", "review_rows": 1, "paths": {"review": str(Path(output_dir) / "strategy_lhb_shortline_review.csv")}}
 
+    output_dir = tmp_path / "2026-06-24"
+    output_dir.mkdir(parents=True)
+    official_manifest = output_dir / "review_queue_strategy_manifest.csv"
+    official_manifest.write_text("official dashboard manifest\n", encoding="utf-8")
+    official_lhb = output_dir / "strategy_lhb_shortline_review.csv"
+    official_mid = output_dir / "strategy_mid_trend_review.csv"
+    official_tech = output_dir / "strategy_tech_bottleneck_review.csv"
+    official_lhb.write_text("official lhb\n", encoding="utf-8")
+    official_mid.write_text("official mid\n", encoding="utf-8")
+    official_tech.write_text("official tech\n", encoding="utf-8")
+
     result = eod.run_strategy_daily_eod(
         trade_date="2026-06-24",
         output_root=tmp_path,
@@ -67,10 +78,15 @@ def test_run_strategy_daily_eod_writes_summary_and_status(tmp_path: Path, monkey
         tech_runner=runner,
     )
 
-    summary_path = tmp_path / "2026-06-24" / "strategy_eod_publish_summary.json"
+    summary_path = tmp_path / "2026-06-24" / "strategy_daily_eod_legacy" / "strategy_eod_publish_summary.json"
     assert result["status"] == "success"
     assert summary_path.exists()
-    assert (tmp_path / "2026-06-24" / "review_queue_strategy_manifest.csv").exists()
+    assert official_manifest.read_text(encoding="utf-8") == "official dashboard manifest\n"
+    assert official_lhb.read_text(encoding="utf-8") == "official lhb\n"
+    assert official_mid.read_text(encoding="utf-8") == "official mid\n"
+    assert official_tech.read_text(encoding="utf-8") == "official tech\n"
+    assert (tmp_path / "2026-06-24" / "strategy_daily_eod_legacy" / "strategy_daily_eod_review_manifest.csv").exists()
+    assert result["output_dir"].endswith("strategy_daily_eod_legacy")
     assert captured["payload"]["status"] == "success"
 
 

@@ -11,6 +11,7 @@ import tushare as ts
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.eastmoney_http import curl_eastmoney_json
 from stock_research.minute_data import canonical_json, parse_float, payload_hash
 
 
@@ -31,7 +32,26 @@ OPEN_AUCTION_SPOT_SNAPSHOT_TARGETS = [
     ("09:25", 25),
 ]
 
-
+EASTMONEY_SPOT_SNAPSHOT_URLS = [
+    "https://33.push2.eastmoney.com/api/qt/clist/get",
+    "https://82.push2.eastmoney.com/api/qt/clist/get",
+    "https://push2.eastmoney.com/api/qt/clist/get",
+]
+EASTMONEY_SPOT_SNAPSHOT_PARAMS = {
+    "pn": "1",
+    "pz": "100",
+    "po": "1",
+    "np": "1",
+    "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+    "fltt": "2",
+    "invt": "2",
+    "fid": "f12",
+    "fs": "m:0 t:6,m:0 t:80,m:1 t:2,m:1 t:23,m:0 t:81 s:2048",
+    "fields": (
+        "f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f13,f14,f15,f16,f17,f18,"
+        "f20,f21,f23,f24,f25,f22,f11,f62,f128,f136,f115,f152"
+    ),
+}
 def parse_tushare_trade_date(value: Any) -> dt.date:
     return dt.datetime.strptime(str(value), "%Y%m%d").date()
 
@@ -352,21 +372,57 @@ def query_eastmoney_spot_snapshot_rows(
     retries: int = 3,
     retry_sleep_seconds: float = 2.0,
 ) -> list[dict[str, Any]]:
-    import akshare as ak
-
-    last_error: Exception | None = None
-    attempts = max(1, retries)
-    for attempt in range(1, attempts + 1):
+    page_size = int(EASTMONEY_SPOT_SNAPSHOT_PARAMS["pz"])
+    first_payload = curl_eastmoney_json(
+        EASTMONEY_SPOT_SNAPSHOT_URLS,
+        {**EASTMONEY_SPOT_SNAPSHOT_PARAMS, "pn": "1"},
+        retries=retries,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    first_data = first_payload.get("data") or {}
+    rows = list(first_data.get("diff") or [])
+    total = int(first_data.get("total") or len(rows))
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    for page in range(2, total_pages + 1):
         try:
-            frame = ak.stock_zh_a_spot_em()
-            return list(frame.to_dict("records"))
-        except Exception as exc:
-            last_error = exc
-            if attempt < attempts and retry_sleep_seconds:
-                time.sleep(retry_sleep_seconds)
-    if last_error is None:
-        raise RuntimeError(f"AKShare spot snapshot failed after {attempts} attempts")
-    raise RuntimeError(f"AKShare spot snapshot failed after {attempts} attempts: {last_error}") from last_error
+            payload = curl_eastmoney_json(
+                EASTMONEY_SPOT_SNAPSHOT_URLS,
+                {**EASTMONEY_SPOT_SNAPSHOT_PARAMS, "pn": str(page)},
+                retries=retries,
+                retry_sleep_seconds=retry_sleep_seconds,
+            )
+        except RuntimeError:
+            continue
+        rows.extend((payload.get("data") or {}).get("diff") or [])
+    return [_eastmoney_spot_snapshot_row(row, index=index) for index, row in enumerate(rows, start=1)]
+
+
+def _eastmoney_spot_snapshot_row(row: dict[str, Any], *, index: int) -> dict[str, Any]:
+    return {
+        "序号": index,
+        "代码": row.get("f12"),
+        "名称": row.get("f14"),
+        "最新价": row.get("f2"),
+        "涨跌幅": row.get("f3"),
+        "涨跌额": row.get("f4"),
+        "成交量": row.get("f5"),
+        "成交额": row.get("f6"),
+        "振幅": row.get("f7"),
+        "最高": row.get("f15"),
+        "最低": row.get("f16"),
+        "今开": row.get("f17"),
+        "昨收": row.get("f18"),
+        "量比": row.get("f10"),
+        "换手率": row.get("f8"),
+        "市盈率-动态": row.get("f9"),
+        "市净率": row.get("f23"),
+        "总市值": row.get("f20"),
+        "流通市值": row.get("f21"),
+        "涨速": row.get("f22"),
+        "5分钟涨跌": row.get("f11"),
+        "60日涨跌幅": row.get("f24"),
+        "年初至今涨跌幅": row.get("f25"),
+    }
 
 
 def upsert_stock_open_auction_spot_snapshots(

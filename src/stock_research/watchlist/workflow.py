@@ -146,14 +146,54 @@ def build_watchlist_diagnostics_snapshot(
         risk_watch_n=risk_watch_n,
         opportunity_watch_n=opportunity_watch_n,
     )
-    for frame in diagnostics.values():
+    for key, frame in list(diagnostics.items()):
+        frame = _fill_diagnostics_identity(frame, asset_identity)
         if frame.empty:
             frame["watchlist_id"] = pd.Series(dtype="object")
             frame["trade_date"] = pd.Series(dtype="object")
+            diagnostics[key] = frame
             continue
         frame["watchlist_id"] = "diagnostics"
         frame["trade_date"] = trade_date
+        diagnostics[key] = frame
     return diagnostics
+
+
+def _fill_diagnostics_identity(frame: pd.DataFrame, asset_identity: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    for column in ("stock_code", "stock_name"):
+        if column not in result.columns:
+            result[column] = pd.Series(dtype="object")
+    if result.empty or "asset_id" not in result.columns:
+        return result
+
+    identity_by_asset = {
+        str(row.get("asset_id")): row
+        for row in asset_identity.to_dict("records")
+        if row.get("asset_id")
+    }
+
+    def stock_code_for(row: pd.Series) -> str:
+        raw_current = row.get("stock_code")
+        current = "" if pd.isna(raw_current) else str(raw_current or "").strip()
+        if current:
+            return current
+        asset_id = str(row.get("asset_id") or "")
+        identity = identity_by_asset.get(asset_id, {})
+        return str(identity.get("ts_code") or _ts_code_from_asset_id(asset_id) or "").strip()
+
+    def stock_name_for(row: pd.Series) -> str:
+        raw_current = row.get("stock_name")
+        current = "" if pd.isna(raw_current) else str(raw_current or "").strip()
+        if current:
+            return current
+        asset_id = str(row.get("asset_id") or "")
+        identity = identity_by_asset.get(asset_id, {})
+        return str(identity.get("stock_name") or asset_id).strip()
+
+    result["stock_code"] = result.apply(stock_code_for, axis=1)
+    result["stock_name"] = result.apply(stock_name_for, axis=1)
+    return result
 
 
 def build_watchlist_snapshot(

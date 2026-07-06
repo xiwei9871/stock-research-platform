@@ -10,22 +10,45 @@ def repair_minute5_bars(
     trade_date: str,
     *,
     workers: int = 1,
+    max_jobs: int = 20_000,
+    batch_size: int = 100,
+    progress: Callable[[dict[str, Any]], None] | None = None,
     runner: Callable[..., dict[str, Any]],
 ) -> RepairActionResult:
     if int(workers) != 1:
         raise ValueError("Baostock minute backfill must use workers=1")
-    result = runner(
-        start_date=trade_date,
-        end_date=trade_date,
-        freq="5min",
-        adjust_types=["raw", "qfq"],
-        workers=1,
-    )
+    remaining_budget = max(1, int(max_jobs))
+    batch_limit = max(1, int(batch_size))
+    totals = {"attempted": 0, "success": 0, "failed": 0, "rows": 0, "batches": 0}
+    reset_stale_before_run = True
+    while remaining_budget > 0:
+        result = runner(
+            start_date=trade_date,
+            end_date=trade_date,
+            freq="5min",
+            adjust_types=["raw", "qfq"],
+            workers=1,
+            max_jobs=min(batch_limit, remaining_budget),
+            retry_failed=True,
+            reset_stale_before_run=reset_stale_before_run,
+            progress=progress,
+            progress_interval=100,
+        )
+        reset_stale_before_run = False
+        totals["batches"] += 1
+        attempted = int((result or {}).get("attempted") or 0)
+        totals["attempted"] += attempted
+        totals["success"] += int((result or {}).get("success") or 0)
+        totals["failed"] += int((result or {}).get("failed") or 0)
+        totals["rows"] += int((result or {}).get("rows") or 0)
+        if attempted <= 0:
+            break
+        remaining_budget -= attempted
     return RepairActionResult(
         name="repair_minute5_bars",
         status=RepairStatus.SUCCESS,
         message="minute5 repair submitted",
-        metrics=dict(result or {}),
+        metrics=totals,
     )
 
 
@@ -127,6 +150,32 @@ def repair_score_topn(
         status=RepairStatus.SUCCESS,
         message="score topn rebuilt",
         metrics=dict(result or {}),
+    )
+
+
+def repair_factor_daily(
+    trade_date: str,
+    *,
+    runner: Callable[..., Any],
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> RepairActionResult:
+    result = runner(
+        start_date=trade_date,
+        end_date=trade_date,
+        lookback_bars=130,
+        industry_system="csrc",
+        workers=1,
+        skip_complete=False,
+        progress=progress,
+    )
+    rows = 0
+    if getattr(result, "empty", True) is False and "factor_rows" in result:
+        rows = int(result["factor_rows"].sum())
+    return RepairActionResult(
+        name="repair_factor_daily",
+        status=RepairStatus.SUCCESS,
+        message="factor daily exact-window backfill complete",
+        metrics={"factor_rows": rows},
     )
 
 

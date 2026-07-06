@@ -10,25 +10,17 @@ OUTPUT_DIR="${PLATFORM_READY_OUTPUT_DIR:-$ROOT/outputs/research}"
 REPORTS_DIR="${PLATFORM_READY_REPORTS_DIR:-$ROOT/reports}"
 OPENCLAW_BIN="${PLATFORM_READY_OPENCLAW_BIN:-$ROOT/scripts/openclaw_runtime_cli.sh}"
 ENRICH_DATASETS="${PLATFORM_READY_ENRICH_DATASETS:-lhb,repurchase,survey,forecast,express}"
+SMOKE_ONLY="${PLATFORM_READY_SMOKE_ONLY:-0}"
 
 if [ -z "$TRADE_DATE" ]; then
-  TRADE_DATE="$("$PYTHON" - <<'PY'
-from stock_research.daily_close_pipeline import PipelineConfig, parse_trade_date
-config = PipelineConfig()
-print(parse_trade_date(None, config.timezone).isoformat())
-PY
-)"
+  TRADE_DATE="$("$PYTHON" -c 'from stock_research.daily_close_pipeline import PipelineConfig, parse_trade_date; config = PipelineConfig(); print(parse_trade_date(None, config.timezone).isoformat())')"
 fi
 
 source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
 stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
 
-ENRICH_START_DATE="${PLATFORM_READY_ENRICH_START_DATE:-$("$PYTHON" - <<PY
-from datetime import date, timedelta
-print((date.fromisoformat("$TRADE_DATE") - timedelta(days=14)).isoformat())
-PY
-)}"
+ENRICH_START_DATE="${PLATFORM_READY_ENRICH_START_DATE:-$("$PYTHON" -c "from datetime import date, timedelta; print((date.fromisoformat('$TRADE_DATE') - timedelta(days=14)).isoformat())")}"
 
 LHB_CASE_PATH="${PLATFORM_READY_LHB_CASE_PATH:-$OUTPUT_DIR/dragon_case_curated_library_failure_v2_1.csv}"
 LHB_FEATURES_PATH="${PLATFORM_READY_LHB_FEATURES_PATH:-$OUTPUT_DIR/lhb_risk_feature_case_detail_v2_1.csv}"
@@ -43,15 +35,31 @@ run_step() {
   echo "platform_ready_build|step|done|$(date '+%Y-%m-%d %H:%M:%S %z')"
 }
 
+if [ "$SMOKE_ONLY" = "1" ]; then
+  {
+    echo "=== platform ready build smoke start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
+    echo "trade_date=$TRADE_DATE"
+    cd "$ROOT"
+    "$PYTHON" -c "import stock_research.platform_ready; import stock_research.cli; print('platform_ready_build|smoke|imports_ok')"
+    echo "platform_ready_build|smoke|would_run|public_news_refresh"
+    echo "platform_ready_build|smoke|would_run|free_enrichment|datasets=$ENRICH_DATASETS|start_date=$ENRICH_START_DATE|end_date=$TRADE_DATE"
+    echo "platform_ready_build|smoke|would_run|daily_factor"
+    echo "platform_ready_build|smoke|would_run|technical_features"
+    echo "platform_ready_build|smoke|would_run|lhb_shortline"
+    echo "platform_ready_build|smoke|would_run|watchlist_default"
+    echo "platform_ready_build|smoke|would_run|strategy_daily_eod"
+    echo "platform_ready_build|smoke|would_run|platform_ready_check"
+    echo "=== platform ready build smoke end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=0 ==="
+  } 2>&1 | tee -a "$RUN_LOG"
+  exit 0
+fi
+
 {
   echo "=== platform ready build start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
   echo "trade_date=$TRADE_DATE"
   cd "$ROOT"
 
-  run_step public_news_refresh "$PYTHON" - <<'PY'
-from stock_research.public_news.service import refresh_public_news_for_dashboard
-print(refresh_public_news_for_dashboard())
-PY
+  run_step public_news_refresh "$PYTHON" -c "from stock_research.public_news.service import refresh_public_news_for_dashboard; print(refresh_public_news_for_dashboard())"
 
   IFS=',' read -r -a enrich_datasets <<< "$ENRICH_DATASETS"
   for dataset in "${enrich_datasets[@]}"; do
@@ -87,6 +95,10 @@ PY
     --score-version manual_v1 \
     --top-n 30 \
     --output-dir "$OUTPUT_DIR"
+
+  run_step strategy_daily_eod "$PYTHON" -m stock_research.cli run-strategy-daily-eod \
+    --trade-date "$TRADE_DATE" \
+    --output-root "$OUTPUT_DIR/strategy_daily_eod"
 
   run_step platform_ready_check "$PYTHON" -m stock_research.platform_ready \
     --trade-date "$TRADE_DATE" \

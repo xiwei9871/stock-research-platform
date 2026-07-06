@@ -41,7 +41,7 @@ def run_strategy_daily_eod(
 ) -> dict[str, Any]:
     apply_strategy_daily_eod_status_schema(service=service)
     dependency_checker = dependency_checker or check_strategy_daily_eod_dependencies
-    output_dir = Path(output_root) / trade_date
+    output_dir = Path(output_root) / trade_date / "strategy_daily_eod_legacy"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dependency_check = dependency_checker(trade_date=trade_date, service=service)
@@ -606,7 +606,7 @@ def _write_review_manifest(output_dir: Path) -> None:
         path = output_dir / filename
         if path.exists() and path.stat().st_size > 0:
             frames.append(pd.read_csv(path, low_memory=False))
-    manifest_path = output_dir / "review_queue_strategy_manifest.csv"
+    manifest_path = output_dir / "strategy_daily_eod_review_manifest.csv"
     if not frames:
         pd.DataFrame().to_csv(manifest_path, index=False)
         return

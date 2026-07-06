@@ -19,19 +19,41 @@ def test_repair_minute5_bars_rejects_multiple_workers():
         repair_minute5_bars("2026-06-29", workers=2, runner=lambda **kwargs: {})
 
 
-def test_repair_minute5_bars_passes_single_worker_to_runner():
-    captured = {}
+def test_repair_minute5_bars_runs_single_worker_batches_until_no_pending_jobs():
+    calls = []
+    progress_events = []
+    batches = iter([
+        {"attempted": 100, "success": 99, "failed": 1, "rows": 4752},
+        {"attempted": 25, "success": 25, "failed": 0, "rows": 1200},
+        {"attempted": 0, "success": 0, "failed": 0, "rows": 0},
+    ])
 
     def runner(**kwargs):
-        captured.update(kwargs)
-        return {"raw_success": 5209, "qfq_success": 5209}
+        calls.append(kwargs)
+        kwargs["progress"]({"event": "minute_backfill_progress", "completed": 100})
+        return next(batches)
 
-    result = repair_minute5_bars("2026-06-29", workers=1, runner=runner)
+    result = repair_minute5_bars(
+        "2026-06-29",
+        workers=1,
+        runner=runner,
+        progress=progress_events.append,
+        batch_size=100,
+    )
 
     assert result.status == RepairStatus.SUCCESS
-    assert captured["workers"] == 1
-    assert captured["start_date"] == "2026-06-29"
-    assert captured["end_date"] == "2026-06-29"
+    assert [call["workers"] for call in calls] == [1, 1, 1]
+    assert [call["max_jobs"] for call in calls] == [100, 100, 100]
+    assert [call["reset_stale_before_run"] for call in calls] == [True, False, False]
+    assert all(call["retry_failed"] is True for call in calls)
+    assert all(call["start_date"] == "2026-06-29" for call in calls)
+    assert all(call["end_date"] == "2026-06-29" for call in calls)
+    assert result.metrics == {"attempted": 125, "success": 124, "failed": 1, "rows": 5952, "batches": 3}
+    assert progress_events == [
+        {"event": "minute_backfill_progress", "completed": 100},
+        {"event": "minute_backfill_progress", "completed": 100},
+        {"event": "minute_backfill_progress", "completed": 100},
+    ]
 
 
 def test_repair_lhb_source_and_features_runs_enrichment_then_feature_build():

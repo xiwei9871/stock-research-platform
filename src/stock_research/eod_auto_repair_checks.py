@@ -76,6 +76,11 @@ def _fetch_one(fetcher: Callable[[str, list[object]], list[dict[str, object]]], 
     return dict(rows[0]) if rows else {}
 
 
+def _date_text_after(value: str, trade_date: str) -> bool:
+    normalized = str(value or "")[:10]
+    return bool(normalized and normalized > trade_date)
+
+
 def check_daily_bars(trade_date: str, *, fetcher=_default_fetcher) -> RepairCheckResult:
     sql = """
         SELECT expected_count,
@@ -178,6 +183,41 @@ def check_technical_features(trade_date: str, *, fetcher=_default_fetcher) -> Re
         trade_date=trade_date,
     )
     return RepairCheckResult(result.name, result.status, result.message, {**result.metrics, "asset_count": int(row.get("asset_count") or 0)}, result.blocker)
+
+
+def check_factor_daily(trade_date: str, *, fetcher=_default_fetcher) -> RepairCheckResult:
+    from stock_research.factor_config import manual_v1_config
+
+    calc_version = str(manual_v1_config().get("calc_version") or "v1")
+    sql = """
+        SELECT count(*)::int AS row_count,
+               count(DISTINCT asset_id)::int AS asset_count,
+               count(DISTINCT factor_name)::int AS factor_count,
+               max(trade_date)::text AS latest_trade_date
+        FROM factor.factor_daily
+        WHERE trade_date = %s
+          AND calc_version = %s
+    """
+    row = _fetch_one(fetcher, sql, [trade_date, calc_version])
+    result = evaluate_count_check(
+        name="factor_daily",
+        row_count=int(row.get("row_count") or 0),
+        min_rows=1,
+        latest_trade_date=str(row.get("latest_trade_date") or ""),
+        trade_date=trade_date,
+    )
+    return RepairCheckResult(
+        result.name,
+        result.status,
+        result.message,
+        {
+            **result.metrics,
+            "asset_count": int(row.get("asset_count") or 0),
+            "factor_count": int(row.get("factor_count") or 0),
+            "calc_version": calc_version,
+        },
+        result.blocker,
+    )
 
 
 def check_score_topn(trade_date: str, *, fetcher=_default_fetcher, score_version: str = "manual_v1") -> RepairCheckResult:
@@ -472,10 +512,29 @@ def check_dashboard_surface_freshness(
     issues: list[str] = []
     degraded_issues: list[str] = []
     readiness = dict(readiness_loader(trade_date))
+    readiness_status = str(readiness.get("status") or "")
+    readiness_latest_trade_date = str(readiness.get("latest_trade_date") or "")
+    readiness_latest_market_date = str(readiness.get("latest_market_date") or "")
+    readiness_advanced_past_trade_date = _date_text_after(
+        readiness_latest_trade_date,
+        trade_date,
+    ) or _date_text_after(readiness_latest_market_date, trade_date)
     for key in ("display_trade_date", "latest_trade_date", "latest_market_date"):
         value = str(readiness.get(key) or "")
         if value and value != trade_date:
-            issues.append(f"readiness:{key}={value}")
+            issue = f"readiness:{key}={value}"
+            if (
+                readiness_advanced_past_trade_date
+                or (
+                    key == "display_trade_date"
+                    and readiness_status in {"OK", "PARTIAL", "ready", "degraded_ready"}
+                    and readiness_latest_trade_date == trade_date
+                    and readiness_latest_market_date == trade_date
+                )
+            ):
+                degraded_issues.append(issue)
+            else:
+                issues.append(issue)
     for group in list(readiness.get("health_groups") or []):
         if not isinstance(group, dict):
             continue
@@ -484,7 +543,11 @@ def check_dashboard_surface_freshness(
                 continue
             status = str(item.get("status") or "")
             if status in {"missing_data", "unknown", "stale"}:
-                issues.append(f"readiness:{item.get('key')}:{status}")
+                issue = f"readiness:{item.get('key')}:{status}"
+                if readiness_advanced_past_trade_date:
+                    degraded_issues.append(issue)
+                else:
+                    issues.append(issue)
 
     ops_snapshot = dict(ops_snapshot_loader(trade_date))
     run_window = ops_snapshot.get("run_window") if isinstance(ops_snapshot.get("run_window"), dict) else {}
@@ -580,6 +643,7 @@ def build_check_plan(trade_date: str) -> list[RepairCheck]:
         RepairCheck("lhb_source", lambda: check_lhb_source(trade_date)),
         RepairCheck("lhb_features", lambda: check_lhb_features(trade_date)),
         RepairCheck("technical_features", lambda: check_technical_features(trade_date)),
+        RepairCheck("factor_daily", lambda: check_factor_daily(trade_date)),
         RepairCheck("score_topn", lambda: check_score_topn(trade_date)),
         RepairCheck("watchlist", lambda: check_watchlist(trade_date)),
         RepairCheck("market_monitor", lambda: check_market_monitor(trade_date)),

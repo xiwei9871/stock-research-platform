@@ -21,6 +21,7 @@ STALE_AFTER_MINUTES="${FACTOR_GATE_WATCHDOG_STALE_AFTER_MINUTES:-20}"
 RUN_TIMEOUT_SECONDS="${FACTOR_GATE_WATCHDOG_RUN_TIMEOUT_SECONDS:-7200}"
 COMPLETION_SENTINEL="${FACTOR_GATE_WATCHDOG_COMPLETION_SENTINEL:-$LOG_DIR/wave5-factor-gate-watchdog.completed}"
 COMPLETION_KEY="${FACTOR_GATE_WATCHDOG_COMPLETION_KEY:-factor-gate|$START_DATE|$END_DATE|validation$VALIDATION_START_DATE|h$HORIZONS|primary$PRIMARY_HORIZON|$SCORE_VERSION|$CALC_VERSION|max$MAX_JOBS|workers$WORKERS|timeout$RUN_TIMEOUT_SECONDS}"
+SMOKE_ONLY="${FACTOR_GATE_WATCHDOG_SMOKE_ONLY:-0}"
 RUN_OUTPUT=""
 
 mkdir -p "$LOG_DIR"
@@ -38,6 +39,12 @@ trap cleanup EXIT
   echo "python=$PYTHON"
   echo "openclaw_bin=$OPENCLAW_BIN"
   echo "completion_sentinel=$COMPLETION_SENTINEL"
+
+  if [ "$SMOKE_ONLY" = "1" ]; then
+    echo "factor_gate_watchdog|smoke|would_run|adapter=factor-gate|start_date=$START_DATE|end_date=$END_DATE|validation_start_date=$VALIDATION_START_DATE|max_jobs=$MAX_JOBS|workers=$WORKERS"
+    echo "=== factor gate backfill watchdog host run end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=0 ==="
+    exit 0
+  fi
 
   if [ -f "$COMPLETION_SENTINEL" ] && [ "$(cat "$COMPLETION_SENTINEL")" = "$COMPLETION_KEY" ]; then
     echo "skipped because backfill completion sentinel is current"

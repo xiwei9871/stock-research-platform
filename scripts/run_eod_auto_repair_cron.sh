@@ -7,13 +7,16 @@ TRADE_DATE="${1:-$(date +%F)}"
 LOG_DIR="$ROOT/logs/eod_auto_repair"
 OUTPUT_DIR="$ROOT/outputs/research/eod_auto_repair/$TRADE_DATE"
 LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"
+FLOCK_FILE="$ROOT/.locks/eod_auto_repair.flock"
+ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
+DASHBOARD_CACHE_CLEAR_URL="${DASHBOARD_CACHE_CLEAR_URL:-http://127.0.0.1:8765/api/dashboard/cache/clear}"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
 
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$LOCK_FILE")"
 
-acquire_lock() {
+acquire_python_lock() {
   while true; do
     if mkdir "$LOCK_FILE" 2>/dev/null; then
       printf '%s\n' "$$" > "$LOCK_FILE/pid"
@@ -37,26 +40,70 @@ acquire_lock() {
   done
 }
 
-if ! acquire_lock; then
-  echo "eod_auto_repair|locked|$LOCK_FILE" | tee -a "$LOG_DIR/$TRADE_DATE.log"
+log_locked() {
+  lock_path="$LOCK_FILE"
+  if [[ "${LOCK_MODE:-}" == "flock" ]]; then
+    lock_path="$FLOCK_FILE"
+  fi
+  echo "eod_auto_repair|locked|lock_mode|${LOCK_MODE:-unknown}|path|$lock_path" | tee -a "$LOG_DIR/$TRADE_DATE.log"
+}
+
+clear_dashboard_cache() {
+  if [[ -z "${DASHBOARD_CACHE_CLEAR_URL:-}" ]]; then
+    echo "eod_auto_repair|dashboard_cache_clear|skipped|url_empty"
+    return 0
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "eod_auto_repair|dashboard_cache_clear|skipped|curl_missing|url|$DASHBOARD_CACHE_CLEAR_URL"
+    return 0
+  fi
+  if curl -fsS -m 5 -X POST "$DASHBOARD_CACHE_CLEAR_URL" >/dev/null; then
+    echo "eod_auto_repair|dashboard_cache_clear|success|url|$DASHBOARD_CACHE_CLEAR_URL"
+  else
+    echo "eod_auto_repair|dashboard_cache_clear|failed|url|$DASHBOARD_CACHE_CLEAR_URL"
+  fi
+}
+
+run_repair() {
+  cd "$ROOT"
+  set +e
+  {
+    echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
+    echo "eod_auto_repair|lock_mode|$LOCK_MODE"
+    # Entrypoint: python -m stock_research.eod_auto_repair
+    rtk "$PYTHON" -m stock_research.eod_auto_repair \
+      --trade-date "$TRADE_DATE" \
+      --output-dir "$OUTPUT_DIR" \
+      --mode loop \
+      --action-timeout-seconds "$ACTION_TIMEOUT_SECONDS"
+    rc=$?
+    echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json"
+    echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md"
+    clear_dashboard_cache
+    echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
+    exit "$rc"
+  } 2>&1 | tee -a "$LOG_DIR/$TRADE_DATE.log"
+  rc=${PIPESTATUS[0]}
+  set -e
+  return "$rc"
+}
+
+if [[ "${EOD_AUTO_REPAIR_DISABLE_FLOCK:-0}" != "1" ]] && command -v flock >/dev/null 2>&1; then
+  LOCK_MODE="flock"
+  exec 9>"$FLOCK_FILE"
+  if ! flock -n 9; then
+    log_locked
+    exit 0
+  fi
+  run_repair
+  exit "$?"
+fi
+
+LOCK_MODE="python_lockfile"
+if ! acquire_python_lock; then
+  log_locked
   exit 0
 fi
 
-cd "$ROOT"
-set +e
-{
-  echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
-  # Entrypoint: python -m stock_research.eod_auto_repair
-  rtk "$PYTHON" -m stock_research.eod_auto_repair \
-    --trade-date "$TRADE_DATE" \
-    --output-dir "$OUTPUT_DIR" \
-    --mode repair
-  rc=$?
-  echo "eod_auto_repair|summary|$OUTPUT_DIR/run_summary.json"
-  echo "eod_auto_repair|report|$OUTPUT_DIR/run_report.md"
-  echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
-  exit "$rc"
-} 2>&1 | tee -a "$LOG_DIR/$TRADE_DATE.log"
-rc=${PIPESTATUS[0]}
-set -e
-exit "$rc"
+run_repair
+exit "$?"

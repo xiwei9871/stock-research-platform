@@ -82,7 +82,54 @@ exit 0
     assert "-m stock_research.cli build-technical-features-daily" in calls
     assert "-m stock_research.cli run-lhb-shortline-daily-v1" in calls
     assert "-m stock_research.cli watchlist-build" in calls
+    assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-18" in calls
     assert "-m stock_research.platform_ready --trade-date 2026-06-18" in calls
+    assert calls.index("-m stock_research.cli run-strategy-daily-eod") < calls.index("-m stock_research.platform_ready")
+
+
+def test_platform_build_script_smoke_mode_does_not_run_data_steps(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+    calls_file = tmp_path / "calls.txt"
+
+    fake_python.write_text(
+        f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "{calls_file}"
+if [[ "$1" == "-c" ]]; then
+  printf 'platform_ready_build|smoke|imports_ok\\n'
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PLATFORM_READY_ROOT": str(fake_root),
+            "PLATFORM_READY_PYTHON": str(fake_python),
+            "PLATFORM_READY_TRADE_DATE": "2026-06-18",
+            "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_SMOKE_ONLY": "1",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_platform_ready_build_cron.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "platform_ready_build|smoke|would_run|strategy_daily_eod" in result.stdout
+    calls = calls_file.read_text(encoding="utf-8")
+    assert "-m stock_research.cli free-enrichment-backfill" not in calls
+    assert "-m stock_research.cli run-daily-factor-pipeline" not in calls
+    assert "-m stock_research.platform_ready" not in calls
 
 
 def test_platform_ready_check_script_runs_eod_auto_repair_and_exits_with_status(tmp_path: Path) -> None:
@@ -140,6 +187,46 @@ exit 3
     assert "-m stock_research.platform_ready" not in call
 
 
+def test_platform_ready_check_script_emits_heartbeat_while_repair_runs(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+    calls_file = tmp_path / "calls.txt"
+
+    fake_python.write_text(
+        f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" > "{calls_file}"
+sleep 2
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PLATFORM_READY_ROOT": str(fake_root),
+            "PLATFORM_READY_PYTHON": str(fake_python),
+            "PLATFORM_READY_TRADE_DATE": "2026-06-18",
+            "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_CHECK_HEARTBEAT_SECONDS": "1",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_platform_ready_check_cron.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" in result.stdout
+
+
 def test_platform_ready_check_script_defaults_to_latest_market_date(tmp_path: Path) -> None:
     fake_root = tmp_path / "root"
     fake_root.mkdir()
@@ -149,8 +236,8 @@ def test_platform_ready_check_script_defaults_to_latest_market_date(tmp_path: Pa
 
     fake_python.write_text(
         f"""#!/usr/bin/env bash
-    if [[ "$#" -eq 1 && "$1" == "-" ]]; then
-  printf 'date-resolver\\n' >> "{calls_file}"
+if [[ "$#" -ge 2 && "$1" == "-c" ]]; then
+  printf 'date-resolver-via-c\\n' >> "{calls_file}"
   printf '2026-06-29\\n'
   exit 0
 fi
@@ -180,7 +267,7 @@ exit 0
 
     assert result.returncode == 0
     calls = calls_file.read_text(encoding="utf-8")
-    assert "date-resolver" in calls
+    assert "date-resolver-via-c" in calls
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-29" in calls
     assert "eod_auto_repair/2026-06-29" in result.stdout
 
