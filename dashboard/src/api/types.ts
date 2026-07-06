@@ -54,6 +54,58 @@ export type GlobalSearchResponse = {
   warnings: string[];
 };
 
+export type DataToBriefDocling90StockRow = {
+  stock_code: string;
+  stock_name: string;
+  asset_id: string;
+  report_status: string;
+  parser_artifact_status: string;
+  citation_status: string;
+  citation_claim_count: number;
+  page_level_citation_count: number;
+  source_level_citation_count: number;
+  table_row_count: number;
+  table_provenance_status: string;
+  table_provenance_full_count?: number;
+  parser_artifact_ready?: boolean;
+  report_md_path: string;
+  report_html_path: string;
+  report_pdf_path: string;
+  evidence_matrix_path: string;
+  claim_citation_map_path: string;
+  sources_jsonl_path: string;
+  warnings: string[];
+  allowed_for_signal: boolean;
+  allowed_for_admission: boolean;
+  production_update?: boolean;
+};
+
+export type DataToBriefDocling90ReviewPayload = {
+  task_name: string;
+  batch_id: string;
+  source_output_dir: string;
+  generated_at: string;
+  research_only: boolean;
+  stock_count: number;
+  report_success_count: number;
+  evidence_required_count: number;
+  citation_claim_count: number;
+  page_level_citation_count: number;
+  source_level_citation_count: number;
+  table_row_count: number;
+  table_provenance_full_count: number;
+  parser_artifact_ready_count: number;
+  cold_parse_runtime_seconds: number;
+  cached_postprocess_runtime_seconds: number;
+  unresolved_citation_count: number;
+  artifact_consistency_fail_count: number;
+  allowed_for_signal: boolean;
+  allowed_for_admission: boolean;
+  production_update: boolean;
+  acceptance_decision: string;
+  per_stock: DataToBriefDocling90StockRow[];
+};
+
 export type BarPoint = {
   time: string;
   open: number | null;

@@ -44,6 +44,7 @@ def run_data_to_brief_docling_parser_poc(
     *,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     source_roots: list[str | Path] | None = None,
+    pilot_stocks: list[dict[str, str]] | None = None,
     limit_per_stock: int = 1,
     docling_parser: DoclingParser | None = None,
     skip_docling: bool = False,
@@ -55,7 +56,8 @@ def run_data_to_brief_docling_parser_poc(
     (output / "chunks").mkdir(parents=True, exist_ok=True)
 
     updated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    sources = discover_pilot_sources(source_roots=roots, limit_per_stock=limit_per_stock)
+    selected_pilot_stocks = pilot_stocks or DEFAULT_PILOT_STOCKS
+    sources = discover_pilot_sources(source_roots=roots, pilot_stocks=selected_pilot_stocks, limit_per_stock=limit_per_stock)
     smoke = build_docling_install_smoke(skip_docling=skip_docling)
     if docling_parser is None and not skip_docling:
         docling_parser = parse_with_docling
@@ -111,25 +113,44 @@ def run_data_to_brief_docling_parser_poc(
             },
         )
 
+        docling_json = _jsonable(docling.get("json") or {})
+        text_items = _docling_text_items(docling_json)
+        table_items = _docling_table_items(docling_json)
         chunks = build_chunks(markdown)
         chunk_records = []
         for index, chunk_text in enumerate(chunks, start=1):
             citation_id = f"S{len(source_chunk_rows) + 1}"
             chunk_id = f"{source.stock_code}-D1-C{index}"
+            provenance = _recover_chunk_provenance(chunk_text, text_items)
             row = {
                 "citation_id": citation_id,
                 "chunk_id": chunk_id,
                 "stock_code": source.stock_code,
                 "stock_name": source.stock_name,
                 "asset_id": source.asset_id,
+                "source_id": citation_id,
                 "source_type": "local_pdf",
                 "source_title": source.pdf_path.name,
                 "source_path": str(source.pdf_path),
+                "source_path_or_url": str(source.pdf_path),
                 "parser": "docling" if docling.get("status") == "parsed" else "pypdf_fallback",
+                "parser_version": _safe_text(smoke.get("version")),
                 "docling_status": _safe_text(docling.get("status")),
+                "parse_status": _safe_text(docling.get("status")),
                 "chunk_index": index,
                 "char_count": len(chunk_text),
+                "chunk_text_length": len(chunk_text),
                 "excerpt": _excerpt(chunk_text),
+                "chunk_text": chunk_text,
+                "page_start": provenance["page_start"],
+                "page_end": provenance["page_end"],
+                "page_locator": provenance["page_locator"],
+                "bbox": provenance["bbox"],
+                "docling_item_ref": provenance["docling_item_ref"],
+                "section_heading": provenance["section_heading"],
+                "citation_granularity": "page_level" if provenance["page_locator"] else "source_level" if source.pdf_path else "unknown",
+                "citation_ready": bool(chunk_text and source.pdf_path),
+                "issue_warning": "" if provenance["page_locator"] else "missing_page_locator",
                 "parsed_markdown_path": str(md_path),
                 "parsed_json_path": str(json_path),
                 "updated_at": updated_at,
@@ -146,14 +167,29 @@ def run_data_to_brief_docling_parser_poc(
                 "stock_code": source.stock_code,
                 "stock_name": source.stock_name,
                 "asset_id": source.asset_id,
+                "source_id": first_citation,
                 "source_type": "local_pdf",
                 "source_title": source.pdf_path.name,
                 "source_path": str(source.pdf_path),
+                "source_path_or_url": str(source.pdf_path),
                 "parser": "docling" if docling.get("status") == "parsed" else "pypdf_fallback",
+                "parser_version": _safe_text(smoke.get("version")),
                 "docling_status": _safe_text(docling.get("status")),
+                "parse_status": _safe_text(docling.get("status")),
                 "chunk_index": 1,
                 "char_count": 0,
+                "chunk_text_length": 0,
                 "excerpt": "",
+                "chunk_text": "",
+                "page_start": "",
+                "page_end": "",
+                "page_locator": "",
+                "bbox": "",
+                "docling_item_ref": "",
+                "section_heading": "",
+                "citation_granularity": "source_level" if source.pdf_path else "unknown",
+                "citation_ready": False,
+                "issue_warning": "empty_chunk_text|missing_page_locator",
                 "parsed_markdown_path": str(md_path),
                 "parsed_json_path": str(json_path),
                 "updated_at": updated_at,
@@ -167,30 +203,53 @@ def run_data_to_brief_docling_parser_poc(
             "stock_name": source.stock_name,
             "claim_text": "local PDF was parsed into evidence-ready chunks for Data-to-Brief follow-up",
             "citation_id": first_citation,
+            "source_id": first_citation,
             "source_type": "local_pdf",
             "source_path": str(source.pdf_path),
+            "source_path_or_url": str(source.pdf_path),
             "excerpt": _excerpt(markdown),
             "evidence_strength": "source_chunk_available" if markdown else "source_file_available_text_empty",
             "evidence_required": False,
             "parser": "docling" if docling.get("status") == "parsed" else "pypdf_fallback",
             "docling_status": _safe_text(docling.get("status")),
+            "page_locator": chunk_records[0].get("page_locator", "") if chunk_records else "",
+            "citation_granularity": chunk_records[0].get("citation_granularity", "source_level") if chunk_records else "source_level",
             "updated_at": updated_at,
         }
         evidence_rows.append(evidence)
         claim_map_rows.append(_claim_map_from_evidence(evidence))
 
         for table_index, table in enumerate(_list_value(docling.get("tables")), start=1):
+            table_id = _safe_text(table.get("table_id")) or f"T{table_index}"
+            table_provenance = _recover_table_provenance(table_id, table_index, table, table_items)
             table_rows.append(
                 {
                     "stock_code": source.stock_code,
                     "stock_name": source.stock_name,
+                    "source_id": first_citation,
+                    "source_type": "local_pdf",
+                    "source_title": source.pdf_path.name,
+                    "source_path_or_url": str(source.pdf_path),
                     "citation_id": first_citation,
-                    "table_id": _safe_text(table.get("table_id")) or f"T{table_index}",
-                    "row_count": table.get("row_count", ""),
-                    "column_count": table.get("column_count", ""),
-                    "caption": _safe_text(table.get("caption")),
+                    "table_id": table_id,
+                    "page_locator": table_provenance["page_locator"],
+                    "bbox": table_provenance["bbox"],
+                    "docling_table_ref": table_provenance["docling_table_ref"],
+                    "row_count": table_provenance["row_count"] or table.get("row_count", ""),
+                    "column_count": table_provenance["column_count"] or table.get("column_count", ""),
+                    "caption": _safe_text(table.get("caption")) or table_provenance["table_caption"],
+                    "table_title": _safe_text(table.get("caption")) or table_provenance["table_title"],
+                    "table_caption": _safe_text(table.get("caption")) or table_provenance["table_caption"],
+                    "table_markdown": table_provenance["table_markdown"],
+                    "table_csv_preview": table_provenance["table_csv_preview"],
+                    "table_html_preview": table_provenance["table_html_preview"],
+                    "table_relevance": _table_relevance(table_provenance["table_markdown"]),
                     "source_path": str(source.pdf_path),
                     "parser": "docling",
+                    "parser_version": _safe_text(smoke.get("version")),
+                    "parse_status": _safe_text(docling.get("status")),
+                    "citation_granularity": "page_level" if table_provenance["page_locator"] else "source_level",
+                    "issue_warning": "" if table_provenance["page_locator"] else "missing_page_locator",
                     "updated_at": updated_at,
                 }
             )
@@ -207,13 +266,30 @@ def run_data_to_brief_docling_parser_poc(
         columns=[
             "stock_code",
             "stock_name",
+            "source_id",
+            "source_type",
+            "source_title",
+            "source_path_or_url",
             "citation_id",
             "table_id",
+            "page_locator",
+            "bbox",
+            "docling_table_ref",
             "row_count",
             "column_count",
             "caption",
+            "table_title",
+            "table_caption",
+            "table_markdown",
+            "table_csv_preview",
+            "table_html_preview",
+            "table_relevance",
             "source_path",
             "parser",
+            "parser_version",
+            "parse_status",
+            "citation_granularity",
+            "issue_warning",
             "updated_at",
         ],
     )
@@ -221,7 +297,7 @@ def run_data_to_brief_docling_parser_poc(
     summary = {
         "task_name": TASK_NAME,
         "output_dir": str(output),
-        "pilot_stock_count": len(DEFAULT_PILOT_STOCKS),
+        "pilot_stock_count": len(selected_pilot_stocks),
         "local_pdf_count": sum(1 for source in sources if source.pdf_path is not None),
         "docling_parsed_count": sum(1 for row in comparison_rows if row.get("docling_status") == "parsed"),
         "docling_failed_count": sum(1 for row in comparison_rows if row.get("docling_status") in {"parse_error", "import_error"}),
@@ -246,10 +322,15 @@ def run_data_to_brief_docling_parser_poc(
     return {"summary": summary, "sources": sources}
 
 
-def discover_pilot_sources(*, source_roots: list[Path], limit_per_stock: int = 1) -> list[PilotSource]:
+def discover_pilot_sources(
+    *,
+    source_roots: list[Path],
+    pilot_stocks: list[dict[str, str]] | None = None,
+    limit_per_stock: int = 1,
+) -> list[PilotSource]:
     pdfs = _all_pdfs(source_roots)
     selected: list[PilotSource] = []
-    for stock in DEFAULT_PILOT_STOCKS:
+    for stock in pilot_stocks or DEFAULT_PILOT_STOCKS:
         matches = [
             path
             for path in pdfs
@@ -392,6 +473,186 @@ def build_chunks(markdown: str, *, max_chars: int = 1400) -> list[str]:
     if current:
         chunks.append(current)
     return chunks
+
+
+def _docling_text_items(docling_json: Any) -> list[dict[str, Any]]:
+    if not isinstance(docling_json, dict):
+        return []
+    items = docling_json.get("texts", [])
+    if not isinstance(items, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        prov = item.get("prov", []) or []
+        pages = sorted({int(p.get("page_no")) for p in prov if isinstance(p, dict) and p.get("page_no")})
+        rows.append(
+            {
+                "index": index,
+                "self_ref": _safe_text(item.get("self_ref")) or f"#/texts/{index}",
+                "label": _safe_text(item.get("label")),
+                "text": _safe_text(item.get("text")),
+                "pages": pages,
+                "bbox": _bbox_string(prov[0].get("bbox")) if prov and isinstance(prov[0], dict) else "",
+            }
+        )
+    return rows
+
+
+def _docling_table_items(docling_json: Any) -> list[dict[str, Any]]:
+    if not isinstance(docling_json, dict):
+        return []
+    items = docling_json.get("tables", [])
+    if not isinstance(items, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        prov = item.get("prov", []) or []
+        pages = sorted({int(p.get("page_no")) for p in prov if isinstance(p, dict) and p.get("page_no")})
+        grid = ((item.get("data") or {}).get("grid") or []) if isinstance(item.get("data"), dict) else []
+        text = _table_grid_text(grid)
+        rows.append(
+            {
+                "index": index,
+                "self_ref": _safe_text(item.get("self_ref")) or f"#/tables/{index}",
+                "pages": pages,
+                "bbox": _bbox_string(prov[0].get("bbox")) if prov and isinstance(prov[0], dict) else "",
+                "row_count": len(grid),
+                "column_count": max((len(row) for row in grid), default=0),
+                "table_text": text,
+                "table_title": _infer_table_title(text),
+            }
+        )
+    return rows
+
+
+def _recover_chunk_provenance(chunk_text: str, text_items: list[dict[str, Any]]) -> dict[str, str]:
+    matched = _match_text_items(chunk_text, text_items)
+    pages = sorted({page for item in matched for page in item.get("pages", [])})
+    locator = _page_range(pages)
+    heading = ""
+    if matched:
+        first_index = int(matched[0].get("index", 0))
+        prior_headings = [item for item in text_items if int(item.get("index", 0)) <= first_index and "section_header" in _safe_text(item.get("label"))]
+        if prior_headings:
+            heading = _safe_text(prior_headings[-1].get("text"))
+    return {
+        "page_start": str(pages[0]) if pages else "",
+        "page_end": str(pages[-1]) if pages else "",
+        "page_locator": locator,
+        "bbox": _safe_text(matched[0].get("bbox")) if matched else "",
+        "docling_item_ref": "|".join(_safe_text(item.get("self_ref")) for item in matched[:5]) if matched else "",
+        "section_heading": heading,
+    }
+
+
+def _match_text_items(chunk_text: str, text_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compact_chunk = _compact(chunk_text)
+    if not compact_chunk:
+        return []
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for item in text_items:
+        text = _compact(item.get("text"))
+        if not text:
+            continue
+        score = 0
+        if text[:80] and text[:80] in compact_chunk:
+            score += 2
+        if compact_chunk[:80] and compact_chunk[:80] in text:
+            score += 3
+        if len(set(text) & set(compact_chunk)) > 30:
+            score += 1
+        if score:
+            scored.append((score, item))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for _, item in scored[:8]]
+
+
+def _recover_table_provenance(table_id: str, table_index: int, table: dict[str, Any], table_items: list[dict[str, Any]]) -> dict[str, str]:
+    item = table_items[table_index - 1] if 0 <= table_index - 1 < len(table_items) else {}
+    pages = item.get("pages", []) if isinstance(item, dict) else []
+    locator = _page_range(pages)
+    table_markdown = _safe_text(item.get("table_text"))
+    title = _safe_text(table.get("caption")) or _safe_text(item.get("table_title"))
+    return {
+        "page_locator": locator,
+        "bbox": _safe_text(item.get("bbox")),
+        "docling_table_ref": _safe_text(item.get("self_ref")) or f"#/tables/{table_index - 1}",
+        "table_title": title,
+        "table_caption": title,
+        "row_count": _safe_text(item.get("row_count")),
+        "column_count": _safe_text(item.get("column_count")),
+        "table_markdown": table_markdown,
+        "table_csv_preview": table_markdown.replace(" | ", ","),
+        "table_html_preview": _table_html(table_markdown, table_id),
+    }
+
+
+def _page_range(pages: list[int]) -> str:
+    if not pages:
+        return ""
+    clean = sorted(set(int(page) for page in pages if page))
+    if not clean:
+        return ""
+    return str(clean[0]) if clean[0] == clean[-1] else f"{clean[0]}-{clean[-1]}"
+
+
+def _bbox_string(bbox: Any) -> str:
+    if not isinstance(bbox, dict):
+        return ""
+    return ",".join(f"{key}={bbox.get(key)}" for key in ["l", "t", "r", "b"] if key in bbox)
+
+
+def _table_grid_text(grid: Any) -> str:
+    if not isinstance(grid, list):
+        return ""
+    rows = []
+    for row in grid[:30]:
+        if not isinstance(row, list):
+            continue
+        rows.append(" | ".join(_safe_text(cell.get("text")) for cell in row if isinstance(cell, dict)))
+    return "\n".join(rows)
+
+
+def _infer_table_title(text: str) -> str:
+    return _safe_text(text).splitlines()[0][:120] if _safe_text(text) else ""
+
+
+def _table_html(table_text: str, table_id: str) -> str:
+    if not table_text:
+        return ""
+    rows = []
+    for line in table_text.splitlines()[:20]:
+        cells = "".join(f"<td>{_safe_text(cell)}</td>" for cell in line.split(" | "))
+        rows.append(f"<tr>{cells}</tr>")
+    return f"<table data-table-id=\"{table_id}\">" + "".join(rows) + "</table>"
+
+
+def _table_relevance(text: str) -> str:
+    if any(k in text for k in ["收入", "营业收入", "主营业务", "分产品", "分行业"]):
+        return "revenue_structure"
+    if any(k in text for k in ["产品", "设备", "材料", "系统", "模块"]):
+        return "product_structure"
+    if any(k in text for k in ["研发费用", "研发投入"]):
+        return "R&D_expense"
+    if any(k in text for k in ["研发人员", "技术人员"]):
+        return "R&D_personnel"
+    if any(k in text for k in ["毛利", "毛利率"]):
+        return "gross_margin"
+    if any(k in text for k in ["净利润", "现金流", "资产", "负债"]):
+        return "financial_summary"
+    if any(k in text for k in ["客户", "供应商"]):
+        return "customer_supplier"
+    if any(k in text for k in ["风险", "不确定性"]):
+        return "risk_disclosure"
+    return "other" if text else "unknown"
+
+
+def _compact(value: Any) -> str:
+    return re.sub(r"\s+", "", _safe_text(value))
 
 
 def _all_pdfs(source_roots: list[Path]) -> list[Path]:

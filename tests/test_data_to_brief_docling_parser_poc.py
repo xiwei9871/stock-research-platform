@@ -29,7 +29,30 @@ def test_docling_parser_poc_writes_evidence_ready_outputs(tmp_path: Path) -> Non
             "status": "parsed",
             "parser": "docling",
             "markdown": "# 中微公司\n\n公司刻蚀设备产品进一步取得进展。\n\n| 项目 | 内容 |\n| --- | --- |\n| 产品 | 刻蚀设备 |",
-            "json": {"pages": 1, "document": "fake"},
+            "json": {
+                "pages": {"1": {"page_no": 1}},
+                "texts": [
+                    {
+                        "self_ref": "#/texts/0",
+                        "label": "section_header",
+                        "text": "中微公司",
+                        "prov": [{"page_no": 1, "bbox": {"l": 1, "t": 2, "r": 3, "b": 4}}],
+                    },
+                    {
+                        "self_ref": "#/texts/1",
+                        "label": "text",
+                        "text": "公司刻蚀设备产品进一步取得进展。",
+                        "prov": [{"page_no": 1, "bbox": {"l": 5, "t": 6, "r": 7, "b": 8}}],
+                    },
+                ],
+                "tables": [
+                    {
+                        "self_ref": "#/tables/0",
+                        "prov": [{"page_no": 1, "bbox": {"l": 9, "t": 10, "r": 11, "b": 12}}],
+                        "data": {"grid": [[{"text": "项目"}, {"text": "内容"}], [{"text": "产品"}, {"text": "刻蚀设备"}]]},
+                    }
+                ],
+            },
             "tables": [{"table_id": "T1", "row_count": 1, "column_count": 2, "caption": "产品表"}],
             "error_type": "",
             "error_message": "",
@@ -77,6 +100,12 @@ def test_docling_parser_poc_writes_evidence_ready_outputs(tmp_path: Path) -> Non
     assert evidence["evidence_required"].isin([True, False]).all()
     assert evidence[evidence["stock_code"].eq("002371")]["evidence_required"].all()
     assert tables.iloc[0]["table_id"] == "T1"
+    assert {"page_start", "page_end", "page_locator", "bbox", "docling_item_ref", "section_heading", "citation_granularity", "citation_ready"}.issubset(sources.columns)
+    assert sources[sources["stock_code"].eq("688012")]["citation_granularity"].eq("page_level").all()
+    assert sources[sources["stock_code"].eq("688012")]["page_locator"].fillna("").astype(str).str.len().gt(0).all()
+    assert {"page_locator", "bbox", "docling_table_ref", "table_title", "table_markdown", "table_csv_preview", "table_html_preview", "table_relevance", "citation_granularity"}.issubset(tables.columns)
+    assert tables.iloc[0]["citation_granularity"] == "page_level"
+    assert str(tables.iloc[0]["page_locator"]) == "1"
     parsed_comparison = comparison[comparison["stock_code"].eq("688012")]
     assert parsed_comparison.iloc[0]["docling_status"] == "parsed"
 

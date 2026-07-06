@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FactorLabWorkspace } from './FactorLabWorkspace';
 import { DailyReviewLiteWorkspace } from './DailyReviewLiteWorkspace';
+import { DataToBriefDocling90ReviewWorkspace } from './DataToBriefDocling90ReviewWorkspace';
 import { GeneratedReportsWorkspace } from './GeneratedReportsWorkspace';
 import { GlobalSearchBox } from './GlobalSearchBox';
 import { HomeCockpit } from './HomeCockpit';
@@ -33,6 +34,7 @@ type WorkspaceMode =
   | 'stock'
   | 'watchlist'
   | 'techBottleneckReview'
+  | 'dataToBriefDocling90'
   | 'factors'
   | 'strategyLab'
   | 'generatedReports';
@@ -83,6 +85,11 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
     label: '科技卡脖子观察池',
     ariaLabel: 'Open Tech Bottleneck Watchlist Review workspace'
   },
+  {
+    mode: 'dataToBriefDocling90',
+    label: 'Docling报告审计',
+    ariaLabel: 'Open Data-to-Brief Docling 90-stock review workspace'
+  },
   { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
   { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
   { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
@@ -91,6 +98,7 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
 const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
 const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
+const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
 
 function firstDate(...dates: Array<string | null | undefined>) {
   return dates.map((date) => date?.trim()).find(Boolean) ?? '';
@@ -98,6 +106,7 @@ function firstDate(...dates: Array<string | null | undefined>) {
 
 function workspaceModeFromPath(pathname: string): WorkspaceMode {
   if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReview';
+  if (pathname === DATA_TO_BRIEF_DOCLING_90_PATH) return 'dataToBriefDocling90';
   if (pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return 'stock';
   return 'home';
 }
@@ -250,9 +259,14 @@ export function AppShell() {
     }
     if (mode === 'techBottleneckReview' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_PATH) {
       window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_PATH);
+    } else if (mode === 'dataToBriefDocling90' && window.location.pathname !== DATA_TO_BRIEF_DOCLING_90_PATH) {
+      window.history.pushState({}, '', DATA_TO_BRIEF_DOCLING_90_PATH);
     } else if (
       mode !== 'techBottleneckReview' &&
-      (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH || window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
+      mode !== 'dataToBriefDocling90' &&
+      (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
+        window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
+        window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
     ) {
       window.history.pushState({}, '', '/');
     }
@@ -432,6 +446,7 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
             />
           ) : null}
           {workspaceMode === 'techBottleneckReview' ? <TechBottleneckWatchlistReviewPage /> : null}
+          {workspaceMode === 'dataToBriefDocling90' ? <DataToBriefDocling90ReviewWorkspace /> : null}
           {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
           {workspaceMode === 'generatedReports' ? (
             <GeneratedReportsWorkspace

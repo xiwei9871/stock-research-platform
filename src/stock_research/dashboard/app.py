@@ -96,6 +96,9 @@ from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
 )
+from stock_research.data_to_brief_docling_90_stock_review_dashboard_integration import (
+    load_dashboard_payload as load_data_to_brief_docling_90_dashboard_payload,
+)
 from stock_research.daily_close_pipeline import load_data_status_for_dashboard
 from stock_research.operator_decision.write_service import create_operator_decision
 
@@ -222,6 +225,10 @@ def create_app() -> FastAPI:
     @app.get("/api/data/status")
     def data_status():
         return load_data_status_for_dashboard()
+
+    @app.get("/api/research/data-to-brief/docling-90")
+    def data_to_brief_docling_90_review():
+        return load_data_to_brief_docling_90_dashboard_payload()
 
     @app.get("/api/ops/snapshot")
     def ops_snapshot(date: str | None = None):

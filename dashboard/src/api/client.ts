@@ -11,6 +11,7 @@ import type {
   CreateOperatorDecisionResponse,
   DashboardOverview,
   DailyReviewLitePayload,
+  DataToBriefDocling90ReviewPayload,
   DecisionEventRow,
   DecisionOutcomeRow,
   EvidenceDigestResponse,
@@ -224,6 +225,10 @@ export async function fetchPublicNews(params: PublicNewsParams = {}): Promise<Pu
 
 export async function fetchPublicNewsStatus(): Promise<PublicNewsCollectorStatus> {
   return getJson('/api/public-news/status');
+}
+
+export async function fetchDataToBriefDocling90Review(): Promise<DataToBriefDocling90ReviewPayload> {
+  return getJson('/api/research/data-to-brief/docling-90');
 }
 
 export async function fetchAssetNews(
