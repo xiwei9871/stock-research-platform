@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
     close numeric,
     volume numeric,
     amount numeric,
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
@@ -638,7 +638,7 @@ CREATE TABLE IF NOT EXISTS market.stock_minute_bar (
     close numeric,
     volume numeric,
     amount numeric,
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (trade_date, asset_id, trade_time, freq, adjust_type, source)
@@ -653,7 +653,7 @@ CREATE TABLE IF NOT EXISTS market.minute_bar_backfill_job (
     end_date date NOT NULL,
     freq text NOT NULL CHECK (freq IN ('1min', '5min', '15min', '30min', '60min')),
     adjust_type text NOT NULL CHECK (adjust_type IN ('raw', 'qfq', 'hfq')),
-    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare')),
+    source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney')),
     status text NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed', 'skipped')) DEFAULT 'pending',
     attempt_count integer NOT NULL DEFAULT 0,
     row_count_market integer NOT NULL DEFAULT 0,
@@ -2128,9 +2128,6 @@ CREATE INDEX IF NOT EXISTS idx_core_industry_membership_window
 
 CREATE INDEX IF NOT EXISTS idx_core_asset_lifecycle_event_asset_date
     ON core.asset_lifecycle_event (asset_id, event_date, event_type);
-
-CREATE INDEX IF NOT EXISTS idx_core_asset_status_daily_lookup
-    ON core.asset_status_daily (trade_date, asset_id);
 
 CREATE INDEX IF NOT EXISTS idx_market_index_daily_bar_date
     ON market.index_daily_bar (trade_date, index_id);

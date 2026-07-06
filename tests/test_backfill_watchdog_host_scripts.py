@@ -130,6 +130,8 @@ def test_baostock_minute_backfill_watchdog_host_uses_budgeted_command(tmp_path):
     assert result.returncode == 0
     assert "stock_research.cli baostock-minute-backfill-watchdog" in invoked
     assert "--start-date 2020-01-02" in invoked
+    assert "--adjust-types raw,qfq" in invoked
+    assert "--workers 1" in invoked
     assert "--baostock-daily-request-limit 50000" in invoked
     assert "--baostock-safety-multiplier 1.1" in invoked
     assert "--request-ledger-path" in invoked

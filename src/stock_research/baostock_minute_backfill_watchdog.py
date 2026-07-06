@@ -151,6 +151,48 @@ def load_active_baostock_asset_count(
     return int(row["active_baostock_assets"] or 0)
 
 
+def load_baostock_minute_backfill_progress(
+    *,
+    start_date: str | dt.date,
+    end_date: str | dt.date,
+    freq: str = "5min",
+    adjust_types: list[str] | None = None,
+    research_service: str = SETTINGS.research_service,
+) -> dict[str, Any]:
+    parsed_start = _parse_date(start_date)
+    parsed_end = _parse_date(end_date)
+    selected_adjust_types = adjust_types or ["raw"]
+    with connect(research_service) as conn:
+        row = fetch_all(
+            conn,
+            _MINUTE_BACKFILL_DAILY_PROGRESS_SQL,
+            [
+                parsed_start,
+                parsed_end,
+                len(selected_adjust_types),
+                freq,
+                selected_adjust_types,
+            ],
+        )[0]
+    current_expected = int(row.get("current_expected_jobs") or 0)
+    current_success = int(row.get("current_success_jobs") or 0)
+    pct = (current_success / current_expected * 100) if current_expected else 100.0
+    return {
+        "start_date": parsed_start.isoformat(),
+        "end_date": parsed_end.isoformat(),
+        "freq": freq,
+        "adjust_types": ",".join(selected_adjust_types),
+        "completed_through": row.get("completed_through"),
+        "current_trade_date": row.get("current_trade_date"),
+        "current_expected_jobs": current_expected,
+        "current_success_jobs": current_success,
+        "current_remaining_jobs": int(row.get("current_remaining_jobs") or 0),
+        "current_progress_pct": f"{pct:.2f}",
+        "completed_trade_days": int(row.get("completed_trade_days") or 0),
+        "total_trade_days": int(row.get("total_trade_days") or 0),
+    }
+
+
 def load_baostock_minute_backfill_probe_summary(
     conn,
     *,
@@ -333,6 +375,63 @@ FROM core.asset_master
 WHERE is_active = true
   AND baostock_code IS NOT NULL
   AND baostock_code <> ''
+"""
+
+_MINUTE_BACKFILL_DAILY_PROGRESS_SQL = """
+/* baostock_minute_backfill_daily_progress */
+WITH days AS (
+    SELECT DISTINCT trade_date
+    FROM market.trading_calendar
+    WHERE trade_date BETWEEN %s AND %s
+      AND is_open = true
+), expected AS (
+    SELECT d.trade_date, (count(a.asset_id)::int * %s::int) AS expected_jobs
+    FROM days d
+    JOIN core.asset_master a
+      ON a.baostock_code IS NOT NULL
+     AND a.baostock_code <> ''
+     AND (a.list_date IS NULL OR a.list_date <= d.trade_date)
+     AND (a.delist_date IS NULL OR a.delist_date >= d.trade_date)
+    GROUP BY d.trade_date
+), success_by_day AS (
+    SELECT d.trade_date, count(j.job_id)::int AS success_jobs
+    FROM days d
+    JOIN market.minute_bar_backfill_job j
+      ON j.start_date <= d.trade_date
+     AND j.end_date >= d.trade_date
+     AND j.freq = %s
+     AND j.adjust_type = ANY(%s)
+     AND j.status = 'success'
+    GROUP BY d.trade_date
+), progress AS (
+    SELECT
+      e.trade_date,
+      e.expected_jobs,
+      COALESCE(s.success_jobs, 0)::int AS success_jobs,
+      GREATEST(e.expected_jobs - COALESCE(s.success_jobs, 0), 0)::int AS remaining_jobs,
+      COALESCE(s.success_jobs, 0) >= e.expected_jobs AS complete
+    FROM expected e
+    LEFT JOIN success_by_day s USING (trade_date)
+), marked AS (
+    SELECT *,
+      bool_and(complete) OVER (ORDER BY trade_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+        AS contiguous_complete
+    FROM progress
+), next_incomplete AS (
+    SELECT *
+    FROM marked
+    WHERE NOT contiguous_complete
+    ORDER BY trade_date
+    LIMIT 1
+)
+SELECT
+  (SELECT max(trade_date)::text FROM marked WHERE contiguous_complete) AS completed_through,
+  (SELECT count(*)::int FROM marked WHERE contiguous_complete) AS completed_trade_days,
+  (SELECT count(*)::int FROM marked) AS total_trade_days,
+  (SELECT trade_date::text FROM next_incomplete) AS current_trade_date,
+  (SELECT expected_jobs FROM next_incomplete) AS current_expected_jobs,
+  (SELECT success_jobs FROM next_incomplete) AS current_success_jobs,
+  (SELECT remaining_jobs FROM next_incomplete) AS current_remaining_jobs
 """
 
 _DISTINCT_OPEN_DAYS_SQL = """

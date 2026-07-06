@@ -132,6 +132,7 @@ def test_minute_backfill_adapter_run_once_disables_internal_stale_reset(monkeypa
 
 def test_run_backfill_once_with_timeout_terminates_work_in_background(monkeypatch, tmp_path):
     marker = tmp_path / "completed.txt"
+    reset_calls = []
 
     def fake_run_baostock_minute_backfill(**kwargs):
         time.sleep(0.2)
@@ -143,9 +144,17 @@ def test_run_backfill_once_with_timeout_terminates_work_in_background(monkeypatc
             "rows": 240,
         }
 
+    def fake_reset_running_jobs_in_scope(**kwargs):
+        reset_calls.append(kwargs)
+        return 7
+
     monkeypatch.setattr(
         "stock_research.minute_backfill_adapter.run_baostock_minute_backfill",
         fake_run_baostock_minute_backfill,
+    )
+    monkeypatch.setattr(
+        "stock_research.minute_backfill_adapter.reset_running_jobs_in_scope",
+        fake_reset_running_jobs_in_scope,
     )
 
     result = _run_backfill_once_with_timeout(
@@ -165,6 +174,11 @@ def test_run_backfill_once_with_timeout_terminates_work_in_background(monkeypatc
     time.sleep(0.35)
 
     assert result["timed_out"] is True
+    assert result["reset_running_jobs"] == 7
+    assert reset_calls[0]["start_date"] == dt.date(2024, 1, 1)
+    assert reset_calls[0]["end_date"] == dt.date(2024, 1, 31)
+    assert reset_calls[0]["freq"] == "5min"
+    assert reset_calls[0]["adjust_types"] == ["raw"]
     assert marker.exists() is False
 
 

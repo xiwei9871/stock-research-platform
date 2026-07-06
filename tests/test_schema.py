@@ -93,6 +93,12 @@ def test_research_extension_creates_schemas_and_tables():
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_job" in sql
     assert "CREATE TABLE IF NOT EXISTS ingest.batch_event" in sql
     assert "CREATE TABLE IF NOT EXISTS factor.factor_daily" in sql
+
+
+def test_schema_does_not_create_redundant_asset_status_lookup_index():
+    sql = CREATE_RESEARCH_EXTENSION_SQL
+    assert "PRIMARY KEY (trade_date, asset_id)" in sql
+    assert "idx_core_asset_status_daily_lookup" not in sql
     assert "CREATE TABLE IF NOT EXISTS factor.stock_score_daily" in sql
 
 
@@ -162,6 +168,7 @@ def test_research_extension_includes_unified_stock_minute_bar_tables():
     sql = CREATE_RESEARCH_EXTENSION_SQL
     assert "CREATE TABLE IF NOT EXISTS market.stock_minute_bar" in sql
     assert "CREATE TABLE IF NOT EXISTS staging.baostock_stock_minute_bar" in sql
+    assert "source text NOT NULL CHECK (source IN ('baostock', 'tushare', 'akshare', 'eastmoney'))" in sql
     assert "freq text NOT NULL" in sql
     assert "adjust_type text NOT NULL" in sql
     assert "CHECK (freq IN ('1min', '5min', '15min', '30min', '60min'))" in sql

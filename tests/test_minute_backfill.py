@@ -1,10 +1,12 @@
 import datetime as dt
+import time
 from contextlib import contextmanager
 
 from stock_research import minute_backfill
 from stock_research.minute_backfill import (
     BackfillJob,
     build_backfill_jobs,
+    derive_qfq_minute_bars_from_raw_job,
     month_ranges,
     summarize_backfill_status,
     validate_minute_bar_rows,
@@ -109,6 +111,309 @@ def test_run_backfill_skips_success_jobs_and_executes_pending(monkeypatch):
     assert result["attempted"] == 1
     assert result["success"] == 1
     assert marked == [("success", "pending", 1, 1)]
+
+
+def test_run_backfill_job_worker_passes_request_timeout_to_baostock_query(monkeypatch):
+    calls = {}
+    job = {
+        "job_id": "job-timeout",
+        "baostock_code": "sz.000001",
+        "start_date": dt.date(2024, 1, 1),
+        "end_date": dt.date(2024, 1, 31),
+        "freq": "5min",
+        "adjust_type": "raw",
+    }
+
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(
+        minute_backfill,
+        "request_params",
+        lambda baostock_code, start_date, end_date, freq, adjust_type: {
+            "code": baostock_code,
+            "start_date": start_date,
+            "end_date": end_date,
+            "freq": freq,
+            "adjust_type": adjust_type,
+        },
+    )
+
+    def fake_query(baostock_code, start_date, end_date, freq, adjust_type, timeout_seconds=None):
+        calls["timeout_seconds"] = timeout_seconds
+        return []
+
+    monkeypatch.setattr(minute_backfill, "query_baostock_minute_rows", fake_query)
+    monkeypatch.setattr(minute_backfill, "upsert_stock_minute_bars", lambda rows, freq, adjust_type, params: 0)
+
+    result = minute_backfill._run_backfill_job_worker_attempt(job, sleep_seconds=0, request_timeout_seconds=30)
+
+    assert result["error"] is None
+    assert calls["timeout_seconds"] == 30
+
+
+def test_run_backfill_job_worker_returns_error_when_baostock_query_exceeds_timeout(monkeypatch):
+    job = {
+        "job_id": "job-timeout",
+        "baostock_code": "sz.000001",
+        "start_date": dt.date(2024, 1, 1),
+        "end_date": dt.date(2024, 1, 31),
+        "freq": "5min",
+        "adjust_type": "raw",
+    }
+
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(
+        minute_backfill,
+        "request_params",
+        lambda baostock_code, start_date, end_date, freq, adjust_type: {},
+    )
+
+    def slow_query(*_args, **_kwargs):
+        time.sleep(1)
+        return []
+
+    monkeypatch.setattr(minute_backfill, "query_baostock_minute_rows", slow_query)
+
+    result = minute_backfill.run_backfill_job_worker(
+        job,
+        sleep_seconds=0,
+        request_timeout_seconds=0.01,
+    )
+
+    assert result["job_id"] == "job-timeout"
+    assert "timed out after 0.01 seconds" in result["error"]
+
+
+def test_run_backfill_marks_worker_errors_skipped_so_watchdog_does_not_retry_immediately(monkeypatch):
+    jobs = [
+        {
+            "job_id": "hung-job",
+            "baostock_code": "sz.002560",
+            "start_date": dt.date(2020, 1, 2),
+            "end_date": dt.date(2020, 1, 31),
+            "freq": "5min",
+            "adjust_type": "raw",
+            "status": "pending",
+        }
+    ]
+    marked = []
+
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: jobs)
+    monkeypatch.setattr(minute_backfill, "mark_job_success", lambda *args: marked.append(("success", args)))
+    monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda *args: marked.append(("failed", args)))
+    monkeypatch.setattr(minute_backfill, "mark_job_skipped", lambda job_id, error: marked.append(("skipped", job_id, error)))
+    monkeypatch.setattr(
+        minute_backfill,
+        "run_backfill_job_worker",
+        lambda job, sleep_seconds: {
+            "job_id": job["job_id"],
+            "row_count_market": 0,
+            "row_count_staging": 0,
+            "error": "TimeoutError: baostock request timed out",
+        },
+    )
+
+    result = minute_backfill.run_baostock_minute_backfill(max_jobs=1, workers=1)
+
+    assert result == {"attempted": 1, "success": 0, "failed": 1, "rows": 0}
+    assert marked == [("skipped", "hung-job", "TimeoutError: baostock request timed out")]
+
+
+def test_derive_qfq_minute_bars_from_raw_job_scales_prices_and_marks_qfq_job(monkeypatch):
+    conn = FakeConnection(rows=[{"raw_rows": 48, "inserted_rows": 48}])
+    monkeypatch.setattr(minute_backfill, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(minute_backfill, "execute", lambda conn, sql, params=None: conn.executed.append((sql, params)))
+
+    rows = derive_qfq_minute_bars_from_raw_job(
+        conn,
+        {
+            "asset_id": "CN:SH:600000",
+            "ts_code": "600000.SH",
+            "start_date": dt.date(2024, 1, 1),
+            "end_date": dt.date(2024, 1, 31),
+            "freq": "5min",
+            "source": "baostock",
+        },
+    )
+
+    insert_sql, insert_params = conn.executed[0]
+    mark_sql, mark_params = conn.executed[1]
+    assert rows == 48
+    assert "INSERT INTO market.stock_minute_bar" in insert_sql
+    assert "raw.open * af.qfq_factor" in insert_sql
+    assert "raw.high * af.qfq_factor" in insert_sql
+    assert "raw.low * af.qfq_factor" in insert_sql
+    assert "raw.close * af.qfq_factor" in insert_sql
+    assert "raw.volume" in insert_sql
+    assert "raw.amount" in insert_sql
+    assert "raw.source" in insert_sql
+    assert "af.qfq_factor IS NOT NULL" in insert_sql
+    assert insert_params == [
+        "CN:SH:600000",
+        "600000.SH",
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 31),
+        "5min",
+        "baostock",
+    ]
+    assert "UPDATE market.minute_bar_backfill_job" in mark_sql
+    assert "adjust_type = 'qfq'" in mark_sql
+    assert "row_count_staging = 0" in mark_sql
+    assert mark_params == [48, "CN:SH:600000", dt.date(2024, 1, 1), dt.date(2024, 1, 31), "5min", "baostock"]
+
+
+def test_run_backfill_derives_qfq_after_raw_success_when_requested(monkeypatch):
+    jobs = [
+        {
+            "job_id": "raw-job",
+            "asset_id": "CN:SH:600000",
+            "ts_code": "600000.SH",
+            "baostock_code": "sh.600000",
+            "start_date": dt.date(2024, 1, 1),
+            "end_date": dt.date(2024, 1, 31),
+            "freq": "5min",
+            "adjust_type": "raw",
+            "status": "pending",
+            "source": "baostock",
+        }
+    ]
+    marked = []
+    derived = []
+
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: jobs)
+    monkeypatch.setattr(minute_backfill, "mark_job_success", lambda job_id, row_count_market, row_count_staging: marked.append(("success", job_id, row_count_market, row_count_staging)))
+    monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda job_id, error: marked.append(("failed", job_id, error)))
+    monkeypatch.setattr(
+        minute_backfill,
+        "run_backfill_job_worker",
+        lambda job, sleep_seconds: {
+            "job_id": job["job_id"],
+            "row_count_market": 768,
+            "row_count_staging": 768,
+            "error": None,
+        },
+    )
+
+    def fake_derive(conn, job):
+        derived.append((conn, job))
+        return 768
+
+    monkeypatch.setattr(minute_backfill, "derive_qfq_minute_bars_from_raw_job", fake_derive)
+
+    result = minute_backfill.run_baostock_minute_backfill(
+        max_jobs=1,
+        adjust_types=["raw", "qfq"],
+        workers=1,
+    )
+
+    assert result == {"attempted": 1, "success": 2, "failed": 0, "rows": 1536}
+    assert marked == [("success", "raw-job", 768, 768)]
+    assert derived[0][1]["job_id"] == "raw-job"
+
+
+def test_run_backfill_reports_progress_every_100_jobs(monkeypatch):
+    jobs = [
+        {
+            "job_id": f"job{i}",
+            "baostock_code": "sh.600000",
+            "start_date": dt.date(2024, 1, 1),
+            "end_date": dt.date(2024, 1, 1),
+            "freq": "5min",
+            "adjust_type": "raw",
+            "status": "pending",
+        }
+        for i in range(201)
+    ]
+    progress_events = []
+
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: jobs)
+    monkeypatch.setattr(minute_backfill, "mark_job_success", lambda job_id, row_count_market, row_count_staging: None)
+    monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda job_id, error: None)
+    monkeypatch.setattr(
+        minute_backfill,
+        "run_backfill_job_worker",
+        lambda job, sleep_seconds: {
+            "job_id": job["job_id"],
+            "row_count_market": 48,
+            "row_count_staging": 48,
+            "error": None,
+        },
+    )
+
+    result = minute_backfill.run_baostock_minute_backfill(
+        max_jobs=500,
+        sleep_seconds=0,
+        progress=progress_events.append,
+        progress_interval=100,
+    )
+
+    assert result == {"attempted": 201, "success": 201, "failed": 0, "rows": 9648}
+    assert [event["event"] for event in progress_events] == [
+        "minute_backfill_started",
+        "minute_backfill_progress",
+        "minute_backfill_progress",
+        "minute_backfill_completed",
+    ]
+    assert [event["completed_jobs"] for event in progress_events] == [0, 100, 200, 201]
+    assert progress_events[-1]["total_jobs"] == 201
+    assert progress_events[-1]["success_jobs"] == 201
+
+
+def test_run_backfill_reports_heartbeat_while_job_is_still_running(monkeypatch):
+    jobs = [
+        {
+            "job_id": "slow-job",
+            "baostock_code": "sh.600000",
+            "start_date": dt.date(2024, 1, 1),
+            "end_date": dt.date(2024, 1, 1),
+            "freq": "5min",
+            "adjust_type": "raw",
+            "status": "pending",
+        }
+    ]
+    progress_events = []
+
+    monkeypatch.setattr(minute_backfill, "connect", fake_connect)
+    monkeypatch.setattr(minute_backfill, "reset_stale_running_jobs", lambda: 0)
+    monkeypatch.setattr(minute_backfill, "initialize_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "shutdown_backfill_worker", lambda: None)
+    monkeypatch.setattr(minute_backfill, "claim_backfill_jobs", lambda conn, **kwargs: jobs)
+    monkeypatch.setattr(minute_backfill, "mark_job_success", lambda job_id, row_count_market, row_count_staging: None)
+    monkeypatch.setattr(minute_backfill, "mark_job_failed", lambda job_id, error: None)
+
+    def slow_worker(job, sleep_seconds):
+        time.sleep(0.05)
+        return {
+            "job_id": job["job_id"],
+            "row_count_market": 48,
+            "row_count_staging": 48,
+            "error": None,
+        }
+
+    monkeypatch.setattr(minute_backfill, "run_backfill_job_worker", slow_worker)
+
+    minute_backfill.run_baostock_minute_backfill(
+        max_jobs=1,
+        sleep_seconds=0,
+        progress=progress_events.append,
+        progress_interval=100,
+        progress_heartbeat_seconds=0.01,
+    )
+
+    heartbeat = next(event for event in progress_events if event["event"] == "minute_backfill_heartbeat")
+    assert heartbeat["completed_jobs"] == 0
+    assert heartbeat["total_jobs"] == 1
 
 
 def test_claim_backfill_jobs_uses_skip_locked_and_marks_rows_running(monkeypatch):

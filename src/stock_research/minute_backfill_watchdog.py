@@ -13,6 +13,7 @@ from stock_research.baostock_minute_backfill_watchdog import (
     calculate_baostock_minute_budget,
     finalize_daily_backfill_quota,
     load_active_baostock_asset_count,
+    load_baostock_minute_backfill_progress,
 )
 from stock_research.backfill_watchdog import (
     BackfillSummary,
@@ -54,19 +55,33 @@ def run_minute_backfill_watchdog(
     request_ledger_path: str | Path = DEFAULT_BAOSTOCK_REQUEST_LEDGER_PATH,
     quota_day: dt.date | None = None,
 ) -> dict[str, Any]:
+    requested_adjust_types = adjust_types
+    effective_adjust_types = adjust_types
+    if enable_baostock_request_budget:
+        effective_adjust_types = ["raw"]
+    derive_qfq_from_raw = bool(
+        enable_baostock_request_budget
+        and requested_adjust_types is not None
+        and "qfq" in requested_adjust_types
+    )
     adapter = MinuteBackfillAdapter(
         start_date=start_date,
         end_date=end_date,
         freq=freq,
-        adjust_types=adjust_types,
+        adjust_types=effective_adjust_types,
         batch_by=batch_by,
         retry_failed=retry_failed,
         sleep_seconds=sleep_seconds,
+        derive_qfq_from_raw=derive_qfq_from_raw,
     )
     effective_max_jobs = max_jobs
+    effective_workers = workers
     budget_payload: dict[str, Any] | None = None
+    pre_daily_progress: dict[str, Any] | None = None
+    post_daily_progress: dict[str, Any] | None = None
     allocation = None
     if enable_baostock_request_budget:
+        effective_workers = 1
         budget = calculate_baostock_minute_budget(
             active_asset_count=load_active_baostock_asset_count(),
             today_adjust_types=today_adjust_types or adjust_types or ["raw", "qfq"],
@@ -89,7 +104,16 @@ def run_minute_backfill_watchdog(
             "consumed_requests": allocation.consumed_requests,
             "active_reserved_requests": allocation.active_reserved_requests,
             "request_ledger_path": str(request_ledger_path),
+            "requested_adjust_types": list(requested_adjust_types or []),
+            "baostock_fetch_adjust_types": list(effective_adjust_types or []),
         }
+        if start_date is not None and end_date is not None and freq is not None:
+            pre_daily_progress = load_baostock_minute_backfill_progress(
+                start_date=start_date,
+                end_date=end_date,
+                freq=freq,
+                adjust_types=effective_adjust_types,
+            )
 
     try:
         result = run_watchdog_once(
@@ -97,7 +121,7 @@ def run_minute_backfill_watchdog(
             stale_after_minutes=stale_after_minutes,
             run_timeout_seconds=run_timeout_seconds,
             max_jobs=effective_max_jobs,
-            workers=workers,
+            workers=effective_workers,
             send_message=None,
         )
     except Exception:
@@ -151,6 +175,18 @@ def run_minute_backfill_watchdog(
                 "active_reserved_requests": finalized.active_reserved_requests,
             }
         )
+        if start_date is not None and end_date is not None and freq is not None:
+            post_daily_progress = load_baostock_minute_backfill_progress(
+                start_date=start_date,
+                end_date=end_date,
+                freq=freq,
+                adjust_types=effective_adjust_types,
+            )
+            post_daily_progress = _with_progress_delta(
+                pre_daily_progress=pre_daily_progress,
+                post_daily_progress=post_daily_progress,
+            )
+            message = _append_daily_progress_message(message, post_daily_progress)
     if should_send_watchdog_message(result["status"]):
         send_openclaw_feishu_message(
             message=message,
@@ -176,7 +212,44 @@ def run_minute_backfill_watchdog(
         "timed_out": bool(run_result.get("timed_out")),
         "message": message,
         **({"baostock_request_budget": budget_payload} if budget_payload is not None else {}),
+        **({"baostock_backfill_progress": post_daily_progress} if post_daily_progress is not None else {}),
     }
+
+
+def _with_progress_delta(
+    *,
+    pre_daily_progress: dict[str, Any] | None,
+    post_daily_progress: dict[str, Any],
+) -> dict[str, Any]:
+    progress = dict(post_daily_progress)
+    if (
+        pre_daily_progress is not None
+        and pre_daily_progress.get("current_trade_date") == post_daily_progress.get("current_trade_date")
+    ):
+        progress["run_delta_current_success_jobs"] = (
+            int(post_daily_progress.get("current_success_jobs", 0) or 0)
+            - int(pre_daily_progress.get("current_success_jobs", 0) or 0)
+        )
+    else:
+        progress["run_delta_current_success_jobs"] = int(post_daily_progress.get("current_success_jobs", 0) or 0)
+    return progress
+
+
+def _append_daily_progress_message(message: str, progress: dict[str, Any]) -> str:
+    current_trade_date = progress.get("current_trade_date") or ""
+    completed_through = progress.get("completed_through") or ""
+    current_expected = int(progress.get("current_expected_jobs", 0) or 0)
+    current_success = int(progress.get("current_success_jobs", 0) or 0)
+    current_remaining = int(progress.get("current_remaining_jobs", 0) or 0)
+    current_pct = progress.get("current_progress_pct") or "0.00"
+    lines = [
+        f"baostock_raw_completed_through={completed_through}",
+        f"baostock_raw_current_trade_date={current_trade_date}",
+        f"baostock_raw_current_progress={current_success}/{current_expected} ({current_pct}%)",
+        f"baostock_raw_current_remaining_jobs={current_remaining}",
+        f"baostock_raw_run_delta_current_success_jobs={int(progress.get('run_delta_current_success_jobs', 0) or 0)}",
+    ]
+    return "\n".join([message, *lines])
 
 
 def _legacy_summary_dict(summary: BackfillSummary) -> dict[str, int]:

@@ -1128,6 +1128,24 @@ def run_baostock_minute_backfill_watchdog_command(args: argparse.Namespace) -> N
     print(f"baostock_minute_backfill_watchdog|backfill_request_budget|{budget.get('backfill_request_budget', 0)}")
     print(f"baostock_minute_backfill_watchdog|allocated_requests|{budget.get('allocated_requests', 0)}")
     print(f"baostock_minute_backfill_watchdog|consumed_requests|{budget.get('consumed_requests', 0)}")
+    progress = result.get("baostock_backfill_progress", {})
+    if progress:
+        current_success = int(progress.get("current_success_jobs", 0) or 0)
+        current_expected = int(progress.get("current_expected_jobs", 0) or 0)
+        print(f"baostock_minute_backfill_watchdog|raw_completed_through|{progress.get('completed_through') or ''}")
+        print(f"baostock_minute_backfill_watchdog|raw_current_trade_date|{progress.get('current_trade_date') or ''}")
+        print(
+            "baostock_minute_backfill_watchdog|raw_current_progress|"
+            f"{current_success}/{current_expected}|{progress.get('current_progress_pct') or '0.00'}"
+        )
+        print(
+            "baostock_minute_backfill_watchdog|raw_current_remaining_jobs|"
+            f"{int(progress.get('current_remaining_jobs', 0) or 0)}"
+        )
+        print(
+            "baostock_minute_backfill_watchdog|raw_run_delta_current_success_jobs|"
+            f"{int(progress.get('run_delta_current_success_jobs', 0) or 0)}"
+        )
     if "work_remaining" in result["status"]:
         print(f"baostock_minute_backfill_watchdog|work_remaining|{result['status']['work_remaining']}")
 

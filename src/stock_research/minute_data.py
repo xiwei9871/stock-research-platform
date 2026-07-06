@@ -12,6 +12,7 @@ import baostock as bs
 from stock_research.assets import asset_id_from_baostock_code
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute_many, fetch_all
+from stock_research.eastmoney_http import curl_eastmoney_json
 
 
 MINUTE_FIELDS = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
@@ -28,6 +29,26 @@ ADJUST_TO_BAOSTOCK = {
     "qfq": "2",
     "hfq": "1",
 }
+FREQ_TO_EASTMONEY_KLT = {
+    "1min": "1",
+    "5min": "5",
+    "15min": "15",
+    "30min": "30",
+    "60min": "60",
+}
+ADJUST_TO_EASTMONEY_FQT = {
+    "raw": "0",
+    "qfq": "1",
+    "hfq": "2",
+}
+EASTMONEY_KLINE_URLS = [
+    "https://33.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://63.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://82.push2his.eastmoney.com/api/qt/stock/kline/get",
+    "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+]
+EASTMONEY_KLINE_FIELDS1 = "f1,f2,f3,f4,f5,f6"
+EASTMONEY_KLINE_FIELDS2 = "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
 BAOSTOCK_MAX_ATTEMPTS = 3
 BAOSTOCK_RETRYABLE_ERROR_CODES = {"10001001", "10002007"}
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
@@ -122,9 +143,40 @@ def adjustflag_for_adjust_type(adjust_type: str) -> str:
         raise ValueError(f"Unsupported adjust_type: {adjust_type}") from exc
 
 
+def eastmoney_kline_frequency(freq: str) -> str:
+    try:
+        return FREQ_TO_EASTMONEY_KLT[freq]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported minute frequency: {freq}") from exc
+
+
+def eastmoney_adjust_flag(adjust_type: str) -> str:
+    try:
+        return ADJUST_TO_EASTMONEY_FQT[adjust_type]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported adjust_type: {adjust_type}") from exc
+
+
 def ts_code_from_baostock_code(code: str) -> str:
     exchange, symbol = code.split(".", 1)
     return f"{symbol}.{exchange.upper()}"
+
+
+def baostock_code_from_ts_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    return f"{exchange.lower()}.{symbol}"
+
+
+def eastmoney_secid_from_ts_code(ts_code: str) -> str:
+    symbol, exchange = ts_code.split(".", 1)
+    exchange_id = {
+        "SH": "1",
+        "SZ": "0",
+        "BJ": "0",
+    }.get(exchange.upper())
+    if exchange_id is None:
+        raise ValueError(f"Unsupported Eastmoney exchange: {exchange}")
+    return f"{exchange_id}.{symbol}"
 
 
 def request_params(
@@ -221,6 +273,57 @@ def query_baostock_minute_rows(
         return rows
 
     return run_with_baostock_retry(operation, timeout_seconds=timeout_seconds)
+
+
+def query_eastmoney_kline_minute_rows(
+    ts_code: str,
+    start_date: dt.date,
+    end_date: dt.date,
+    *,
+    freq: str,
+    adjust_type: str,
+    retries: int = 3,
+    retry_sleep_seconds: float = 1.0,
+) -> list[dict[str, str]]:
+    params = {
+        "secid": eastmoney_secid_from_ts_code(ts_code),
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "fields1": EASTMONEY_KLINE_FIELDS1,
+        "fields2": EASTMONEY_KLINE_FIELDS2,
+        "klt": eastmoney_kline_frequency(freq),
+        "fqt": eastmoney_adjust_flag(adjust_type),
+        "beg": start_date.strftime("%Y%m%d"),
+        "end": end_date.strftime("%Y%m%d"),
+    }
+    payload = curl_eastmoney_json(
+        EASTMONEY_KLINE_URLS,
+        params,
+        retries=retries,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    data = payload.get("data") or {}
+    return [
+        _eastmoney_kline_row_to_minute_row(kline, ts_code=ts_code)
+        for kline in data.get("klines") or []
+    ]
+
+
+def _eastmoney_kline_row_to_minute_row(kline: str, *, ts_code: str) -> dict[str, str]:
+    parts = kline.split(",")
+    if len(parts) < 7:
+        raise ValueError(f"Eastmoney kline row has too few fields: {kline}")
+    trade_time = dt.datetime.strptime(parts[0], "%Y-%m-%d %H:%M")
+    return {
+        "date": trade_time.date().isoformat(),
+        "time": trade_time.strftime("%Y%m%d%H%M%S") + "000",
+        "code": baostock_code_from_ts_code(ts_code),
+        "open": parts[1],
+        "close": parts[2],
+        "high": parts[3],
+        "low": parts[4],
+        "volume": parts[5],
+        "amount": parts[6],
+    }
 
 
 def is_retryable_baostock_error(message: str) -> bool:
