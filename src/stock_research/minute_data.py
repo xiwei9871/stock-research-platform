@@ -51,6 +51,14 @@ EASTMONEY_KLINE_FIELDS1 = "f1,f2,f3,f4,f5,f6"
 EASTMONEY_KLINE_FIELDS2 = "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
 BAOSTOCK_MAX_ATTEMPTS = 3
 BAOSTOCK_RETRYABLE_ERROR_CODES = {"10001001", "10002007"}
+BAOSTOCK_RETRYABLE_ERROR_MESSAGES = {
+    "Broken pipe",
+    "接收数据异常",
+    "网络接收错误",
+    "timed out",
+    "Connection reset",
+    "Connection aborted",
+}
 BAOSTOCK_RETRY_SLEEP_SECONDS = 1.0
 BAOSTOCK_LOGIN_MAX_ATTEMPTS = 5
 BAOSTOCK_LOGIN_RETRY_ERROR_CODES = {"10002007"}
@@ -327,7 +335,9 @@ def _eastmoney_kline_row_to_minute_row(kline: str, *, ts_code: str) -> dict[str,
 
 
 def is_retryable_baostock_error(message: str) -> bool:
-    return any(error_code in message for error_code in BAOSTOCK_RETRYABLE_ERROR_CODES)
+    return any(error_code in message for error_code in BAOSTOCK_RETRYABLE_ERROR_CODES) or any(
+        marker in message for marker in BAOSTOCK_RETRYABLE_ERROR_MESSAGES
+    )
 
 
 def relogin_or_raise(timeout_seconds: float | None = None) -> None:
@@ -339,11 +349,11 @@ def relogin_or_raise(timeout_seconds: float | None = None) -> None:
 
 
 def run_with_baostock_retry(operation, timeout_seconds: float | None = None):
-    last_error: RuntimeError | None = None
+    last_error: Exception | None = None
     for attempt in range(1, BAOSTOCK_MAX_ATTEMPTS + 1):
         try:
             return operation()
-        except RuntimeError as exc:
+        except Exception as exc:
             last_error = exc
             if attempt >= BAOSTOCK_MAX_ATTEMPTS or not is_retryable_baostock_error(str(exc)):
                 raise

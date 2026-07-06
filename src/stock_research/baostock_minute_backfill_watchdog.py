@@ -401,7 +401,7 @@ WITH days AS (
      AND j.end_date >= d.trade_date
      AND j.freq = %s
      AND j.adjust_type = ANY(%s)
-     AND j.status = 'success'
+     AND j.status = ANY(ARRAY['success','skipped'])
     GROUP BY d.trade_date
 ), progress AS (
     SELECT

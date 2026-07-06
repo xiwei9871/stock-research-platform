@@ -333,6 +333,53 @@ def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     assert calls == {"query": 2, "login": 1, "logout": 1}
 
 
+def test_query_baostock_minute_rows_retries_broken_pipe_during_iteration(monkeypatch):
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self, *, broken_pipe=False):
+            self.broken_pipe = broken_pipe
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            if self.broken_pipe:
+                raise BrokenPipeError(32, "Broken pipe")
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    class Login:
+        error_code = "0"
+        error_msg = "success"
+
+    calls = {"query": 0, "login": 0, "logout": 0}
+
+    def fake_query(*args, **kwargs):
+        calls["query"] += 1
+        return Result(broken_pipe=calls["query"] == 1)
+
+    monkeypatch.setattr(minute_data.time, "sleep", lambda _: None)
+    monkeypatch.setattr(minute_data.bs, "query_history_k_data_plus", fake_query)
+    monkeypatch.setattr(minute_data.bs, "login", lambda: calls.__setitem__("login", calls["login"] + 1) or Login())
+    monkeypatch.setattr(minute_data.bs, "logout", lambda: calls.__setitem__("logout", calls["logout"] + 1))
+
+    rows = minute_data.query_baostock_minute_rows(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="raw",
+    )
+
+    assert len(rows) == 1
+    assert calls == {"query": 2, "login": 1, "logout": 1}
+
+
 def test_login_or_raise_applies_socket_timeout(monkeypatch):
     class Login:
         error_code = "0"

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from stock_research.backfill_watchdog import BackfillSummary, BackfillWatchdogStatus
+import stock_research.baostock_minute_backfill_watchdog as baostock_minute_backfill_watchdog
 from stock_research.baostock_minute_backfill_watchdog import allocate_daily_backfill_quota
 from stock_research.minute_backfill_adapter import (
     MinuteBackfillAdapter,
@@ -33,6 +34,12 @@ def _row(
         "end_date": end_date,
         "status": status,
     }
+
+
+def test_baostock_daily_progress_treats_skipped_jobs_as_handled():
+    sql = baostock_minute_backfill_watchdog._MINUTE_BACKFILL_DAILY_PROGRESS_SQL
+
+    assert "j.status = ANY(ARRAY['success','skipped'])" in sql
 
 
 def test_run_minute_backfill_watchdog_delegates_through_generic_runner(monkeypatch):
