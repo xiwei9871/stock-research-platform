@@ -201,6 +201,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 {"concept_name": "高股息"},
             ]
         if "FROM finance.main_business_composition" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08", "CN:SZ:000001", "2026-06-08"]
             return [
                 {
                     "report_period": "2025-12-31",
@@ -228,6 +229,15 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                     "revenue_ratio": 0.26,
                     "gross_profit": 24000000000.0,
                     "gross_margin": 0.40,
+                },
+                {
+                    "report_period": "2026-12-31",
+                    "classify_type": "按产品",
+                    "item_name": "未来业务",
+                    "revenue": 999999999999.0,
+                    "revenue_ratio": 0.99,
+                    "gross_profit": 888888888888.0,
+                    "gross_margin": 0.88,
                 },
             ]
         if "FROM finance.income_statement" in normalized_sql and "announcement_date <=" in normalized_sql:
@@ -280,11 +290,11 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
     assert profile["company_overview"] == {
         "industry": "银行",
         "concept_tags": ["中字头", "高股息"],
-        "business_summary": None,
-        "profile_summary": None,
+        "business_summary": "主营产品包括公司银行业务、零售银行业务。",
+        "profile_summary": "平安银行位于深圳，属于银行行业，上市板为主板。",
         "primary_products": ["公司银行业务", "零售银行业务"],
-        "data_status": "partial",
-        "missing_fields": ["business_summary", "profile_summary"],
+        "data_status": "available",
+        "missing_fields": [],
     }
     assert profile["business_composition"] == {
         "report_period": "2025-12-31",

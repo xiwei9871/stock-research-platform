@@ -14,11 +14,12 @@ def load_asset_profile_fundamentals(
     *,
     fetch_all_fn: FetchAll = fetch_all,
 ) -> dict[str, Any]:
-    business_rows = _load_business_rows(conn, asset_id, fetch_all_fn=fetch_all_fn)
+    business_rows = _load_business_rows(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
     company_overview = _build_company_overview(
         industry=_load_industry(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
         concept_tags=_load_concept_tags(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
         primary_products=_primary_products(business_rows),
+        company_profile=_load_company_profile_context(conn, asset_id, fetch_all_fn=fetch_all_fn),
     )
     return {
         "company_overview": company_overview,
@@ -55,7 +56,7 @@ def _load_industry(
     FROM core.industry_membership
     WHERE asset_id = %s
       AND start_date <= %s
-      AND (end_date IS NULL OR %s < end_date)
+      AND (end_date IS NULL OR end_date >= %s)
     ORDER BY level DESC, start_date DESC
     LIMIT 1
     """
@@ -78,7 +79,7 @@ def _load_concept_tags(
     FROM core.concept_membership
     WHERE asset_id = %s
       AND start_date <= %s
-      AND (end_date IS NULL OR %s < end_date)
+      AND (end_date IS NULL OR end_date >= %s)
     ORDER BY concept_name
     """
     rows = fetch_all_fn(conn, sql, [asset_id, trade_date, trade_date])
@@ -93,6 +94,7 @@ def _load_concept_tags(
 def _load_business_rows(
     conn: Any,
     asset_id: str,
+    trade_date: str,
     *,
     fetch_all_fn: FetchAll,
 ) -> list[dict[str, Any]]:
@@ -107,14 +109,37 @@ def _load_business_rows(
            gross_margin
     FROM finance.main_business_composition
     WHERE asset_id = %s
+      AND report_period <= %s
       AND report_period = (
           SELECT max(report_period)
           FROM finance.main_business_composition
           WHERE asset_id = %s
+            AND report_period <= %s
       )
     ORDER BY classify_type, revenue DESC NULLS LAST, item_name
     """
-    return fetch_all_fn(conn, sql, [asset_id, asset_id])
+    rows = fetch_all_fn(conn, sql, [asset_id, trade_date, asset_id, trade_date])
+    return [
+        row
+        for row in rows
+        if (str(row.get("report_period") or "")[:10] or "9999-12-31") <= trade_date
+    ]
+
+
+def _load_company_profile_context(
+    conn: Any,
+    asset_id: str,
+    *,
+    fetch_all_fn: FetchAll,
+) -> dict[str, Any] | None:
+    sql = """
+    SELECT name, board, region
+    FROM core.asset_master
+    WHERE asset_id = %s
+    LIMIT 1
+    """
+    rows = fetch_all_fn(conn, sql, [asset_id])
+    return rows[0] if rows else None
 
 
 def _primary_products(rows: list[dict[str, Any]]) -> list[str]:
@@ -133,12 +158,15 @@ def _build_company_overview(
     industry: str | None,
     concept_tags: list[str],
     primary_products: list[str],
+    company_profile: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    business_summary = _derive_business_summary(primary_products)
+    profile_summary = _derive_profile_summary(industry, company_profile)
     overview = {
         "industry": industry,
         "concept_tags": concept_tags,
-        "business_summary": None,
-        "profile_summary": None,
+        "business_summary": business_summary,
+        "profile_summary": profile_summary,
         "primary_products": primary_products,
     }
     missing_fields = [
@@ -151,6 +179,32 @@ def _build_company_overview(
         "data_status": "available" if not missing_fields else "partial",
         "missing_fields": missing_fields,
     }
+
+
+def _derive_business_summary(primary_products: list[str]) -> str | None:
+    products = [value for value in primary_products if value]
+    if not products:
+        return None
+    return f"主营产品包括{'、'.join(products[:3])}。"
+
+
+def _derive_profile_summary(industry: str | None, company_profile: dict[str, Any] | None) -> str | None:
+    name = str((company_profile or {}).get("name") or "").strip()
+    region = str((company_profile or {}).get("region") or "").strip()
+    board = str((company_profile or {}).get("board") or "").strip()
+    industry_text = str(industry or "").strip()
+    if not any([name, region, board, industry_text]):
+        return None
+    summary_parts: list[str] = []
+    prefix = name or "该公司"
+    if region:
+        prefix = f"{prefix}位于{region}"
+    summary_parts.append(prefix)
+    if industry_text:
+        summary_parts.append(f"属于{industry_text}行业")
+    if board:
+        summary_parts.append(f"上市板为{board}")
+    return "，".join(summary_parts) + "。"
 
 
 def _build_business_composition(rows: list[dict[str, Any]]) -> dict[str, Any]:
