@@ -214,32 +214,38 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 {"concept_name": "中字头"},
                 {"concept_name": "高股息"},
             ]
+        if "SELECT DISTINCT report_period::text AS report_period" in normalized_sql and "FROM finance.main_business_composition" in normalized_sql:
+            assert params == ["CN:SZ:000001"]
+            return [
+                {"report_period": "2025-09-30"},
+                {"report_period": "2024-12-31"},
+            ]
         if "FROM finance.main_business_composition" in normalized_sql and "report_period = %s" in normalized_sql:
-            assert params == ["CN:SZ:000001", "2025-12-31"]
+            assert params == ["CN:SZ:000001", "2025-09-30"]
             return [
                 {
-                    "report_period": "2025-12-31",
+                    "report_period": "2025-09-30",
                     "classify_type": "按产品",
-                    "item_name": "公司银行业务",
-                    "revenue": 120000000000.0,
-                    "revenue_ratio": 0.52,
-                    "gross_margin": 0.42,
+                    "item_name": "对公业务",
+                    "revenue": 90000000000.0,
+                    "revenue_ratio": 0.48,
+                    "gross_margin": 0.39,
                 },
                 {
-                    "report_period": "2025-12-31",
+                    "report_period": "2025-09-30",
                     "classify_type": "按产品",
-                    "item_name": "零售银行业务",
-                    "revenue": 80000000000.0,
-                    "revenue_ratio": 0.35,
-                    "gross_margin": 0.40,
+                    "item_name": "零售业务",
+                    "revenue": 70000000000.0,
+                    "revenue_ratio": 0.33,
+                    "gross_margin": 0.37,
                 },
                 {
-                    "report_period": "2025-12-31",
+                    "report_period": "2025-09-30",
                     "classify_type": "地区",
-                    "item_name": "华南地区",
-                    "revenue": 60000000000.0,
-                    "revenue_ratio": 0.26,
-                    "gross_margin": 0.40,
+                    "item_name": "华东地区",
+                    "revenue": 50000000000.0,
+                    "revenue_ratio": 0.25,
+                    "gross_margin": 0.36,
                 },
             ]
         if "SELECT report_period::text AS report_period, announcement_date::text AS announcement_date, revenue, np_parent" in normalized_sql:
@@ -314,14 +320,14 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
     assert profile["company_overview"] == {
         "industry": "银行",
         "concept_tags": ["中字头", "高股息"],
-        "business_summary": "主营产品包括公司银行业务、零售银行业务。",
+        "business_summary": "主营产品包括对公业务、零售业务。",
         "profile_summary": "平安银行位于深圳，属于银行行业，上市板为主板。",
-        "primary_products": ["公司银行业务", "零售银行业务"],
+        "primary_products": ["对公业务", "零售业务"],
         "data_status": "available",
         "missing_fields": [],
     }
     assert profile["business_composition"] == {
-        "report_period": "2025-12-31",
+        "report_period": "2025-09-30",
         "data_status": "available",
         "missing_fields": [],
         "groups": [
@@ -329,16 +335,16 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 "classify_type": "按产品",
                 "items": [
                     {
-                        "item_name": "公司银行业务",
-                        "revenue": 120000000000.0,
-                        "revenue_ratio": 0.52,
-                        "gross_margin": 0.42,
+                        "item_name": "对公业务",
+                        "revenue": 90000000000.0,
+                        "revenue_ratio": 0.48,
+                        "gross_margin": 0.39,
                     },
                     {
-                        "item_name": "零售银行业务",
-                        "revenue": 80000000000.0,
-                        "revenue_ratio": 0.35,
-                        "gross_margin": 0.40,
+                        "item_name": "零售业务",
+                        "revenue": 70000000000.0,
+                        "revenue_ratio": 0.33,
+                        "gross_margin": 0.37,
                     },
                 ],
             },
@@ -346,18 +352,18 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 "classify_type": "地区",
                 "items": [
                     {
-                        "item_name": "华南地区",
-                        "revenue": 60000000000.0,
-                        "revenue_ratio": 0.26,
-                        "gross_margin": 0.40,
+                        "item_name": "华东地区",
+                        "revenue": 50000000000.0,
+                        "revenue_ratio": 0.25,
+                        "gross_margin": 0.36,
                     }
                 ],
             },
         ],
     }
     assert profile["financial_snapshot"] == {
-        "report_period": "2025-09-30",
-        "announcement_date": "2025-10-31",
+        "report_period": None,
+        "announcement_date": None,
         "revenue_ttm": 220000000000.0,
         "np_parent_ttm": 45000000000.0,
         "operating_cash_flow": 51000000000.0,
@@ -365,8 +371,8 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         "gross_margin": 0.418,
         "debt_ratio": 0.912,
         "ocf_to_np": 1.13,
-        "data_status": "available",
-        "missing_fields": [],
+        "data_status": "partial",
+        "missing_fields": ["report_period", "announcement_date"],
     }
 
 

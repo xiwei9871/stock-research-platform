@@ -18,10 +18,16 @@ def load_asset_profile_fundamentals(
     latest_income = _latest_disclosed_row(income_rows)
     latest_indicator = _load_latest_indicator_row(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
     latest_cash_flow = _load_latest_cash_flow_row(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
+    disclosed_report_periods = _disclosed_report_periods(latest_indicator, latest_income, latest_cash_flow)
     business_rows = _load_business_rows(
         conn,
         asset_id,
-        report_period=_latest_disclosed_report_period(latest_indicator, latest_income, latest_cash_flow),
+        report_period=_latest_business_composition_report_period(
+            conn,
+            asset_id,
+            disclosed_report_periods,
+            fetch_all_fn=fetch_all_fn,
+        ),
         fetch_all_fn=fetch_all_fn,
     )
     company_overview = _build_company_overview(
@@ -249,7 +255,7 @@ def _load_financial_snapshot(
         ),
     }
     latest_income = _latest_disclosed_row(income_rows)
-    anchor_row = latest_indicator or latest_income or latest_cash_flow
+    anchor_row = _coherent_financial_anchor(latest_indicator, latest_income, latest_cash_flow)
     return {
         "report_period": _to_date_text((anchor_row or {}).get("report_period")),
         "announcement_date": _to_date_text((anchor_row or {}).get("announcement_date")),
@@ -365,6 +371,66 @@ def _latest_disclosed_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         reverse=True,
     )
     return disclosed[0] if disclosed else None
+
+
+def _disclosed_report_periods(*rows: dict[str, Any] | None) -> list[str]:
+    periods = [
+        _to_date_text((row or {}).get("report_period"))
+        for row in rows
+        if _to_date_text((row or {}).get("report_period")) is not None
+    ]
+    return sorted(set(periods), reverse=True)
+
+
+def _latest_business_composition_report_period(
+    conn: Any,
+    asset_id: str,
+    disclosed_report_periods: list[str],
+    *,
+    fetch_all_fn: FetchAll,
+) -> str | None:
+    if not disclosed_report_periods:
+        return None
+    sql = """
+    SELECT DISTINCT report_period::text AS report_period
+    FROM finance.main_business_composition
+    WHERE asset_id = %s
+    ORDER BY report_period DESC
+    """
+    rows = fetch_all_fn(conn, sql, [asset_id])
+    available_periods = {
+        _to_date_text(row.get("report_period"))
+        for row in rows
+        if _to_date_text(row.get("report_period")) is not None
+    }
+    for report_period in disclosed_report_periods:
+        if report_period in available_periods:
+            return report_period
+    return None
+
+
+def _coherent_financial_anchor(*rows: dict[str, Any] | None) -> dict[str, Any] | None:
+    disclosed_rows = [row for row in rows if row]
+    if not disclosed_rows:
+        return None
+    report_periods = {
+        _to_date_text(row.get("report_period"))
+        for row in disclosed_rows
+        if _to_date_text(row.get("report_period")) is not None
+    }
+    if len(report_periods) != 1:
+        return None
+    announcement_dates = {
+        _to_date_text(row.get("announcement_date"))
+        for row in disclosed_rows
+        if _to_date_text(row.get("announcement_date")) is not None
+    }
+    if len(announcement_dates) == 1:
+        return disclosed_rows[0]
+    return {
+        "report_period": next(iter(report_periods)),
+        "announcement_date": None,
+    }
 
 
 def _filter_disclosed_rows(rows: list[dict[str, Any]], trade_date: str) -> list[dict[str, Any]]:
