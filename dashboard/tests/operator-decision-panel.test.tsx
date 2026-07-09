@@ -46,6 +46,8 @@ function renderPanel(overrides: Partial<Parameters<typeof OperatorDecisionPanel>
       decisionDate="2026-06-12"
       runId="eod-2026-06-12-local"
       digestKey="2026-06-12:manual_v1:000001.SZ"
+      reviewItemSnapshotId="review_item_snapshot:abc"
+      evidenceDigestSnapshotId="evidence_digest_snapshot:def"
       sourceType="score_topn"
       sourceName="manual_v1_topn"
       sourceContextEntry="evidence_digest"
@@ -93,12 +95,24 @@ describe('OperatorDecisionPanel', () => {
         stock_name: '平安银行',
         decision_date: '2026-06-12',
         operator_action: 'watch',
+        decision_label: 'observe',
         operator_note: '观察回踩确认',
+        evidence_artifact_id: 'evidence_digest:2026-06-12:manual_v1:000001.SZ',
+        manual_review_required: true,
+        auto_trade_enabled: false,
         run_id: 'eod-2026-06-12-local',
         digest_key: '2026-06-12:manual_v1:000001.SZ',
+        review_item_snapshot_id: 'review_item_snapshot:abc',
+        evidence_digest_snapshot_id: 'evidence_digest_snapshot:def',
         source_type: 'score_topn',
         source_name: 'manual_v1_topn',
-        source_context: { entry: 'evidence_digest' }
+        source_context: {
+          entry: 'evidence_digest',
+          run_id: 'eod-2026-06-12-local',
+          digest_key: '2026-06-12:manual_v1:000001.SZ',
+          review_item_snapshot_id: 'review_item_snapshot:abc',
+          evidence_digest_snapshot_id: 'evidence_digest_snapshot:def'
+        }
       })
     );
     expect(await screen.findByText('复盘已保存')).toBeInTheDocument();

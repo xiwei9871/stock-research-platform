@@ -1,12 +1,28 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from inspect import signature
+import os
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
+from stock_research.config import SETTINGS
+from stock_research.dashboard.api_guardrails import (
+    PublicationGuardBlocked,
+    assert_publication_ready,
+    require_guarded_operation,
+)
 from stock_research.dashboard.asset_profile import build_asset_profile
+from stock_research.dashboard.auth_service import (
+    authenticate_user,
+    create_session,
+    current_user_read_model,
+    load_current_user_from_session,
+    revoke_session,
+    validate_csrf,
+)
 from stock_research.dashboard.backtests import (
     list_backtest_strategies,
     run_backtest,
@@ -15,9 +31,14 @@ from stock_research.dashboard.backtests import (
 )
 from stock_research.dashboard.backtest_jobs import BacktestJobStore
 from stock_research.dashboard.bars import load_bars, load_daily_bars, load_minute_bars, normalize_resolution
-from stock_research.dashboard.decisions import load_asset_decision_history, update_operator_decision_event
+from stock_research.dashboard.decisions import (
+    load_asset_decision_history,
+    update_operator_decision_event,
+    validate_operator_decision_payload as validate_structured_operator_decision_payload,
+)
 from stock_research.dashboard.daily_review_lite import build_daily_review_lite
 from stock_research.dashboard.evidence_digest import build_evidence_digest
+from stock_research.dashboard.evidence_registry import evidence_artifact_read_model, list_evidence_artifacts
 from stock_research.dashboard.experiment_proposals import load_experiment_proposals_summary
 from stock_research.dashboard.experiment_replay import load_experiment_replay_summary
 from stock_research.dashboard.factors import (
@@ -27,6 +48,10 @@ from stock_research.dashboard.factors import (
 )
 from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.market_overview_service import build_market_overview_payload
+from stock_research.dashboard.market_anomaly_context import (
+    build_market_anomaly_context,
+    market_anomaly_context_read_model,
+)
 from stock_research.dashboard.news import (
     load_asset_news,
     load_public_news_for_dashboard,
@@ -37,7 +62,9 @@ from stock_research.dashboard.news_scheduler import (
     PublicNewsScheduler,
     scheduler_enabled_from_env,
 )
+from stock_research.dashboard.operator_decision_validation import validate_operator_decision_payload
 from stock_research.dashboard.overview import build_dashboard_overview
+from stock_research.dashboard.observability import install_request_id_middleware
 from stock_research.dashboard.outcome_analytics import load_outcome_analytics_summary
 from stock_research.dashboard.outcomes import load_asset_outcome_history
 from stock_research.dashboard.ops_snapshot import (
@@ -47,8 +74,25 @@ from stock_research.dashboard.ops_snapshot import (
 )
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.readiness import build_platform_readiness
+from stock_research.dashboard.read_models import platform_summary_read_model
 from stock_research.dashboard.response_cache import DashboardResponseCache, dashboard_eod_cache_ttl_seconds
 from stock_research.dashboard.reports import load_report_links
+from stock_research.dashboard.research_cases import (
+    list_research_cases,
+    load_research_case_detail,
+    research_case_detail_read_model,
+    research_case_read_model,
+)
+from stock_research.dashboard.research_queue_health import (
+    load_research_queue_health,
+    research_queue_health_read_model,
+)
+from stock_research.dashboard.research_queue_gaps import list_research_queue_gaps, research_queue_gaps_read_model
+from stock_research.dashboard.research_publish_gate import get_research_publish_gate, research_publish_gate_read_model
+from stock_research.dashboard.research_publication_snapshots import (
+    get_publication_snapshot,
+    list_publication_snapshots,
+)
 from stock_research.dashboard.research_reports import (
     list_research_reports,
     load_asset_research_reports,
@@ -62,6 +106,23 @@ from stock_research.review_evidence_snapshots import (
     list_review_item_snapshots,
     load_evidence_digest_snapshot,
 )
+from stock_research.research_review_actions import (
+    list_review_actions,
+    record_review_action,
+    review_action_read_model,
+)
+from stock_research.research_publication_package import (
+    build_research_publication_package,
+    research_publication_package_read_model,
+)
+from stock_research.research_external_delivery import (
+    build_research_external_delivery_plan,
+    delivery_plan_read_model,
+)
+from stock_research.research_external_delivery_attempts import (
+    get_external_delivery_attempt,
+    list_external_delivery_attempts,
+)
 from stock_research.dashboard.scores import (
     load_asset_detail,
     load_asset_score_for_dashboard,
@@ -72,6 +133,14 @@ from stock_research.dashboard.search import load_global_search
 from stock_research.dashboard.sector_detail_service import build_sector_detail_payload
 from stock_research.dashboard.sector_fund_flow_service import build_sector_fund_flow_payload
 from stock_research.dashboard.sector_heatmap_service import build_sector_heatmap_payload
+from stock_research.dashboard.stock_heatmap_service import (
+    build_stock_heatmap_payload,
+    stock_heatmap_read_model,
+)
+from stock_research.dashboard.stock_market_context_heatmap import (
+    build_stock_market_context_heatmap,
+    stock_market_context_heatmap_read_model,
+)
 from stock_research.dashboard.schemas import SectorType
 from stock_research.dashboard.shadow_outcomes import load_shadow_outcomes_summary
 from stock_research.dashboard.shadow_analytics_review import load_shadow_analytics_review_summary
@@ -82,6 +151,19 @@ from stock_research.dashboard.shadow_follow_up_resolution import load_shadow_fol
 from stock_research.dashboard.shadow_watchlist import load_shadow_watchlist_summary
 from stock_research.dashboard.strategy_catalog import list_strategy_catalog
 from stock_research.dashboard.strategy_score_audit import load_strategy_score_audit_payload
+from stock_research.dashboard.tech_bottleneck_review_universe import (
+    get_review_universe_stock,
+    list_review_universe_evidence,
+    list_review_universe_sources,
+    list_review_universe_stocks,
+    load_review_universe_filter_options,
+    load_review_universe_summary,
+)
+from stock_research.dashboard.tech_bottleneck_review_decisions import (
+    build_decision_summary as build_tech_bottleneck_review_decision_summary,
+    list_manual_decisions as list_tech_bottleneck_review_decisions,
+    record_manual_decision as record_tech_bottleneck_review_decision,
+)
 from stock_research.dashboard.strategy_validation import (
     build_strategy_validation_replay,
     list_strategy_validation_artifacts,
@@ -95,6 +177,12 @@ from stock_research.dashboard.strategy_validation import (
 from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
     load_watchlist_signals_for_dashboard,
+)
+from stock_research.dashboard.user_admin import (
+    create_dashboard_user,
+    list_admin_users,
+    reset_dashboard_user_password,
+    set_dashboard_user_active,
 )
 from stock_research.data_to_brief_docling_90_stock_review_dashboard_integration import (
     load_dashboard_payload as load_data_to_brief_docling_90_dashboard_payload,
@@ -146,6 +234,87 @@ def load_midtrend_post_exit_review_lite() -> dict:
     }
 
 
+def _require_guard(request: Request, operation: str) -> None:
+    try:
+        require_guarded_operation(operation=operation, headers=request.headers)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+class LoginPayload(BaseModel):
+    username: str
+    password: str
+
+
+class AdminCreateUserPayload(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+    display_name: str = ""
+
+
+class AdminResetPasswordPayload(BaseModel):
+    password: str
+
+
+def _set_auth_cookies(response: JSONResponse, session_token: str, csrf_token: str) -> None:
+    response.set_cookie(
+        SETTINGS.dashboard_session_cookie,
+        session_token,
+        httponly=True,
+        secure=SETTINGS.dashboard_cookie_secure,
+        samesite="lax",
+        max_age=SETTINGS.dashboard_session_ttl_seconds,
+        path="/",
+    )
+    response.set_cookie(
+        SETTINGS.dashboard_csrf_cookie,
+        csrf_token,
+        httponly=False,
+        secure=SETTINGS.dashboard_cookie_secure,
+        samesite="lax",
+        max_age=SETTINGS.dashboard_session_ttl_seconds,
+        path="/",
+    )
+
+
+def _current_user_or_401(request: Request):
+    session_token = request.cookies.get(SETTINGS.dashboard_session_cookie, "")
+    user = load_current_user_from_session(session_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="not_authenticated")
+    return user
+
+
+def _admin_user_or_403(request: Request):
+    user = _current_user_or_401(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="admin_required")
+    return user
+
+
+def _require_csrf(request: Request) -> None:
+    try:
+        validate_csrf(
+            csrf_cookie=request.cookies.get(SETTINGS.dashboard_csrf_cookie, ""),
+            csrf_header=str(request.headers.get("x-csrf-token") or request.headers.get("X-CSRF-Token") or ""),
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+
+
+def _dashboard_auth_required() -> bool:
+    raw = os.environ.get("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return SETTINGS.dashboard_auth_required
+
+
 def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -158,6 +327,7 @@ def create_app() -> FastAPI:
             await scheduler.stop()
 
     app = FastAPI(title="Stock Research Dashboard API", lifespan=lifespan)
+    install_request_id_middleware(app)
     app.state.eod_response_cache = DashboardResponseCache(ttl_seconds=dashboard_eod_cache_ttl_seconds())
     app.state.backtest_jobs = BacktestJobStore(run_fresh_backtest)
     app.state.public_news_scheduler = PublicNewsScheduler(
@@ -165,6 +335,92 @@ def create_app() -> FastAPI:
         interval_seconds=NEWS_SCHEDULER_INTERVAL_SECONDS,
         enabled=scheduler_enabled_from_env(),
     )
+
+    @app.middleware("http")
+    async def dashboard_auth_required_middleware(request: Request, call_next):
+        if (
+            _dashboard_auth_required()
+            and request.url.path.startswith("/api/")
+            and request.url.path not in AUTH_EXEMPT_PATHS
+        ):
+            session_token = request.cookies.get(SETTINGS.dashboard_session_cookie, "")
+            if load_current_user_from_session(session_token) is None:
+                return JSONResponse({"detail": "not_authenticated"}, status_code=401)
+        return await call_next(request)
+
+    @app.get("/api/auth/me")
+    def auth_me(request: Request):
+        session_token = request.cookies.get(SETTINGS.dashboard_session_cookie, "")
+        user = load_current_user_from_session(session_token)
+        if user is None:
+            raise HTTPException(status_code=401, detail="not_authenticated")
+        return {"user": current_user_read_model(user)}
+
+    @app.post("/api/auth/login")
+    def auth_login(payload: LoginPayload, request: Request):
+        try:
+            user = authenticate_user(payload.username, payload.password)
+        except PermissionError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        session = create_session(
+            user,
+            user_agent=str(request.headers.get("user-agent") or ""),
+            ip_address=str(request.client.host if request.client else ""),
+        )
+        response = JSONResponse({"user": current_user_read_model(user)})
+        _set_auth_cookies(response, str(session["session_token"]), str(session["csrf_token"]))
+        return response
+
+    @app.post("/api/auth/logout")
+    def auth_logout(request: Request):
+        session_token = request.cookies.get(SETTINGS.dashboard_session_cookie, "")
+        if session_token:
+            revoke_session(session_token)
+        response = JSONResponse({"status": "logged_out"})
+        response.delete_cookie(SETTINGS.dashboard_session_cookie, path="/")
+        response.delete_cookie(SETTINGS.dashboard_csrf_cookie, path="/")
+        return response
+
+    @app.get("/api/admin/users")
+    def admin_users(request: Request):
+        _admin_user_or_403(request)
+        return {"items": list_admin_users()}
+
+    @app.post("/api/admin/users")
+    def admin_create_user(payload: AdminCreateUserPayload, request: Request):
+        _admin_user_or_403(request)
+        _require_csrf(request)
+        try:
+            user = create_dashboard_user(
+                payload.username,
+                payload.password,
+                role=payload.role,
+                display_name=payload.display_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"user": user}
+
+    @app.post("/api/admin/users/{user_id}/disable")
+    def admin_disable_user(user_id: str, request: Request):
+        _admin_user_or_403(request)
+        _require_csrf(request)
+        set_dashboard_user_active(user_id, False)
+        return {"status": "disabled", "user_id": user_id}
+
+    @app.post("/api/admin/users/{user_id}/enable")
+    def admin_enable_user(user_id: str, request: Request):
+        _admin_user_or_403(request)
+        _require_csrf(request)
+        set_dashboard_user_active(user_id, True)
+        return {"status": "enabled", "user_id": user_id}
+
+    @app.post("/api/admin/users/{user_id}/reset-password")
+    def admin_reset_password(user_id: str, payload: AdminResetPasswordPayload, request: Request):
+        _admin_user_or_403(request)
+        _require_csrf(request)
+        reset_dashboard_user_password(user_id, payload.password)
+        return {"status": "password_reset", "user_id": user_id}
 
     @app.get("/api/dashboard/overview")
     def dashboard_overview(
@@ -179,7 +435,7 @@ def create_app() -> FastAPI:
     def platform_summary(score_version: str = "manual_v1", top_n: int = 5):
         return app.state.eod_response_cache.get_or_set(
             ("platform_summary", score_version, top_n),
-            lambda: load_platform_summary(score_version=score_version, top_n=top_n),
+            lambda: platform_summary_read_model(load_platform_summary(score_version=score_version, top_n=top_n)),
         )
 
     @app.get("/api/platform/readiness")
@@ -229,6 +485,79 @@ def create_app() -> FastAPI:
     @app.get("/api/research/data-to-brief/docling-90")
     def data_to_brief_docling_90_review():
         return load_data_to_brief_docling_90_dashboard_payload()
+
+    @app.get("/api/research/tech-bottleneck/review-universe/summary")
+    def tech_bottleneck_review_universe_summary():
+        return load_review_universe_summary()
+
+    @app.get("/api/research/tech-bottleneck/review-universe/stocks")
+    def tech_bottleneck_review_universe_stocks(
+        review_universe_source: str | None = None,
+        current_layer_status: str | None = None,
+        manual_approval_status: str | None = None,
+        hard_tech_domain: str | None = None,
+        supply_chain_role_hint: str | None = None,
+        concept_pollution_risk: str | None = None,
+        route_around_or_substitution_risk: str | None = None,
+        value_capture_risk: str | None = None,
+        primary_source_supported: str | None = None,
+        frontend_review_status: str | None = None,
+        reviewer_decision: str | None = None,
+        q: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        return list_review_universe_stocks(
+            review_universe_source=review_universe_source,
+            current_layer_status=current_layer_status,
+            manual_approval_status=manual_approval_status,
+            hard_tech_domain=hard_tech_domain,
+            supply_chain_role_hint=supply_chain_role_hint,
+            concept_pollution_risk=concept_pollution_risk,
+            route_around_or_substitution_risk=route_around_or_substitution_risk,
+            value_capture_risk=value_capture_risk,
+            primary_source_supported=primary_source_supported,
+            frontend_review_status=frontend_review_status,
+            reviewer_decision=reviewer_decision,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.get("/api/research/tech-bottleneck/review-universe/stocks/{stock_code}/evidence")
+    def tech_bottleneck_review_universe_stock_evidence(stock_code: str):
+        return list_review_universe_evidence(stock_code)
+
+    @app.get("/api/research/tech-bottleneck/review-universe/stocks/{stock_code}/sources")
+    def tech_bottleneck_review_universe_stock_sources(stock_code: str):
+        return list_review_universe_sources(stock_code)
+
+    @app.get("/api/research/tech-bottleneck/review-universe/stocks/{stock_code}")
+    def tech_bottleneck_review_universe_stock_detail(stock_code: str):
+        stock = get_review_universe_stock(stock_code)
+        if stock is None:
+            raise HTTPException(status_code=404, detail="stock_not_found")
+        return stock
+
+    @app.get("/api/research/tech-bottleneck/review-universe/filter-options")
+    def tech_bottleneck_review_universe_filter_options():
+        return load_review_universe_filter_options()
+
+    @app.post("/api/research/tech-bottleneck/review-universe/decisions")
+    def tech_bottleneck_review_universe_decision_create(request: Request, payload: dict):
+        try:
+            _require_guard(request, "tech_bottleneck_review_decision_write")
+            return record_tech_bottleneck_review_decision(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/research/tech-bottleneck/review-universe/decisions")
+    def tech_bottleneck_review_universe_decisions(stock_code: str | None = None, limit: int = 50):
+        return list_tech_bottleneck_review_decisions(stock_code=stock_code, limit=limit)
+
+    @app.get("/api/research/tech-bottleneck/review-universe/decision-summary")
+    def tech_bottleneck_review_universe_decision_summary():
+        return build_tech_bottleneck_review_decision_summary()
 
     @app.get("/api/ops/snapshot")
     def ops_snapshot(date: str | None = None):
@@ -282,6 +611,39 @@ def create_app() -> FastAPI:
             ),
         )
 
+    @app.get("/api/market-monitor/stocks/heatmap")
+    def market_monitor_stock_heatmap(
+        trade_date: str,
+        market: str = "all",
+        period: str = "1d",
+        group: str = "industry",
+        size_by: str = "amount",
+    ):
+        try:
+            return app.state.eod_response_cache.get_or_set(
+                ("market_monitor_stock_heatmap", trade_date, market, period, group, size_by),
+                lambda: stock_heatmap_read_model(
+                    build_stock_heatmap_payload(
+                        trade_date,
+                        market=market,
+                        period=period,
+                        group=group,
+                        size_by=size_by,
+                    )
+                ),
+            )
+        except ValueError as exc:
+            if str(exc) == "unsupported_stock_heatmap_option":
+                raise HTTPException(status_code=400, detail="unsupported_stock_heatmap_option") from exc
+            raise
+
+    @app.get("/api/market-monitor/anomaly-context")
+    def market_monitor_anomaly_context(trade_date: str):
+        return app.state.eod_response_cache.get_or_set(
+            ("market_monitor_anomaly_context", trade_date),
+            lambda: market_anomaly_context_read_model(build_market_anomaly_context(trade_date)),
+        )
+
     @app.get("/api/market-monitor/sectors/fund-flow")
     def market_monitor_sector_fund_flow(
         trade_date: str,
@@ -325,6 +687,147 @@ def create_app() -> FastAPI:
             lookback_days=lookback_days,
             score_version=score_version,
         )
+
+    @app.get("/api/research/cases")
+    def research_cases_route(
+        trade_date: str | None = None,
+        status: str | None = None,
+        asset_id: str | None = None,
+        limit: int = 50,
+    ):
+        return {
+            "items": [
+                research_case_read_model(item)
+                for item in list_research_cases(
+                    trade_date=trade_date,
+                    status=status,
+                    asset_id=asset_id,
+                    limit=limit,
+                )
+            ]
+        }
+
+    @app.get("/api/research/queue/health")
+    def research_queue_health_route(trade_date: str | None = None):
+        return research_queue_health_read_model(load_research_queue_health(trade_date=trade_date))
+
+    @app.get("/api/research/queue/gaps")
+    def research_queue_gaps_route(trade_date: str | None = None, limit: int = 50):
+        return research_queue_gaps_read_model(list_research_queue_gaps(trade_date=trade_date, limit=limit))
+
+    @app.get("/api/research/queue/publish-gate")
+    def research_publish_gate_route(trade_date: str):
+        return research_publish_gate_read_model(get_research_publish_gate(trade_date=trade_date))
+
+    @app.get("/api/research/publication/preview")
+    def research_publication_preview_route(trade_date: str):
+        return research_publication_package_read_model(build_research_publication_package(trade_date=trade_date))
+
+    @app.get("/api/research/publication/snapshots")
+    def research_publication_snapshots_route(
+        trade_date: str | None = None,
+        channel: str | None = None,
+        limit: int = 50,
+    ):
+        return {
+            "items": list_publication_snapshots(
+                trade_date=trade_date,
+                channel=channel,
+                limit=limit,
+            )
+        }
+
+    @app.get("/api/research/publication/snapshots/{publication_snapshot_id:path}")
+    def research_publication_snapshot_detail_route(publication_snapshot_id: str):
+        snapshot = get_publication_snapshot(publication_snapshot_id)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="publication_snapshot_not_found")
+        return snapshot
+
+    @app.get("/api/research/publication/delivery-plan")
+    def research_external_delivery_plan_route(publication_snapshot_id: str, channel: str = "feishu_preview"):
+        plan = build_research_external_delivery_plan(
+            publication_snapshot_id=publication_snapshot_id,
+            channel=channel,
+        )
+        if plan["status"] == "snapshot_not_found":
+            raise HTTPException(status_code=404, detail="publication_snapshot_not_found")
+        if plan["status"] == "unsupported_channel":
+            raise HTTPException(status_code=400, detail="unsupported_delivery_channel")
+        return delivery_plan_read_model(plan)
+
+    @app.get("/api/research/publication/delivery-attempts")
+    def research_external_delivery_attempts_route(
+        publication_snapshot_id: str | None = None,
+        trade_date: str | None = None,
+        channel: str | None = None,
+        limit: int = 50,
+    ):
+        return {
+            "items": list_external_delivery_attempts(
+                publication_snapshot_id=publication_snapshot_id,
+                trade_date=trade_date,
+                channel=channel,
+                limit=limit,
+            )
+        }
+
+    @app.get("/api/research/publication/delivery-attempts/{delivery_attempt_id:path}")
+    def research_external_delivery_attempt_detail_route(delivery_attempt_id: str):
+        attempt = get_external_delivery_attempt(delivery_attempt_id)
+        if attempt is None:
+            raise HTTPException(status_code=404, detail="delivery_attempt_not_found")
+        return attempt
+
+    @app.post("/api/research/review-actions")
+    def research_review_action_create(request: Request, payload: dict):
+        try:
+            _require_guard(request, "research_review_action_write")
+            review_action_id = record_review_action(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"review_action_id": review_action_id, "status": "recorded"}
+
+    @app.get("/api/research/review-actions")
+    def research_review_actions_route(
+        case_id: str | None = None,
+        trade_date: str | None = None,
+        limit: int = 50,
+    ):
+        return {
+            "items": [
+                item
+                for item in (
+                    review_action_read_model(action)
+                    for action in list_review_actions(case_id=case_id, trade_date=trade_date, limit=limit)
+                )
+                if item is not None
+            ]
+        }
+
+    @app.get("/api/research/cases/{case_id:path}")
+    def research_case_detail_route(case_id: str, limit: int = 100):
+        detail = load_research_case_detail(case_id, limit=limit)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="research_case_not_found")
+        return research_case_detail_read_model(detail)
+
+    @app.get("/api/research/evidence")
+    def research_evidence_route(
+        asset_id: str | None = None,
+        source_type: str | None = None,
+        limit: int = 50,
+    ):
+        return {
+            "items": [
+                evidence_artifact_read_model(item)
+                for item in list_evidence_artifacts(
+                    asset_id=asset_id,
+                    source_type=source_type,
+                    limit=limit,
+                )
+            ]
+        }
 
     @app.get("/api/strategy-score-audit")
     def strategy_score_audit_route(trade_date: str):
@@ -437,12 +940,14 @@ def create_app() -> FastAPI:
         return load_public_news_for_dashboard(**filters)
 
     @app.post("/api/public-news/refresh")
-    def public_news_refresh():
+    def public_news_refresh(request: Request):
+        _require_guard(request, "public_news_refresh")
         app.state.eod_response_cache.clear()
         return refresh_public_news_for_dashboard()
 
     @app.post("/api/dashboard/cache/clear")
-    def dashboard_cache_clear():
+    def dashboard_cache_clear(request: Request):
+        _require_guard(request, "dashboard_cache_clear")
         app.state.eod_response_cache.clear()
         return {"status": "cleared"}
 
@@ -602,6 +1107,15 @@ def create_app() -> FastAPI:
             "item": load_asset_score_for_dashboard(asset_id, trade_date, score_version),
         }
 
+    @app.get("/api/stocks/{asset_id:path}/market-context/heatmap")
+    def stock_market_context_heatmap(asset_id: str, trade_date: str):
+        return app.state.eod_response_cache.get_or_set(
+            ("stock_market_context_heatmap", asset_id, trade_date),
+            lambda: stock_market_context_heatmap_read_model(
+                build_stock_market_context_heatmap(asset_id, trade_date)
+            ),
+        )
+
     @app.get("/api/assets/{asset_id}/profile")
     def asset_profile_route(
         asset_id: str,
@@ -640,15 +1154,22 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/operator-decisions")
-    def operator_decisions(payload: dict):
+    def operator_decisions(request: Request, payload: dict):
         try:
+            _require_guard(request, "operator_decision_write")
+            assert_publication_ready(lambda: build_platform_readiness(score_version="manual_v1"))
+            validate_operator_decision_payload(payload)
+            payload = validate_structured_operator_decision_payload(payload)
             return create_operator_decision(payload)
+        except PublicationGuardBlocked as exc:
+            raise HTTPException(status_code=409, detail=exc.detail) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.patch("/api/operator-decisions/{event_id}")
-    def operator_decision_update(event_id: str, payload: dict):
+    def operator_decision_update(event_id: str, request: Request, payload: dict):
         try:
+            _require_guard(request, "operator_decision_update")
             return {"item": update_operator_decision_event(event_id, payload)}
         except ValueError as exc:
             status_code = 404 if str(exc) == "decision_event_not_found" else 400
@@ -862,8 +1383,9 @@ def create_app() -> FastAPI:
         return {"items": list_backtest_strategies()}
 
     @app.post("/api/backtests/jobs")
-    def backtest_job_submit(payload: dict):
+    def backtest_job_submit(request: Request, payload: dict):
         try:
+            _require_guard(request, "backtest_job_submit")
             return app.state.backtest_jobs.submit(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -876,22 +1398,25 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="backtest job not found") from exc
 
     @app.post("/api/backtests/run")
-    def backtest_run(payload: dict):
+    def backtest_run(request: Request, payload: dict):
         try:
+            _require_guard(request, "backtest_run")
             return run_backtest(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/backtests/run-fresh")
-    def backtest_run_fresh(payload: dict):
+    def backtest_run_fresh(request: Request, payload: dict):
         try:
+            _require_guard(request, "backtest_run_fresh")
             return run_fresh_backtest(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/api/backtests/run-replay")
-    def backtest_run_replay(payload: dict):
+    def backtest_run_replay(request: Request, payload: dict):
         try:
+            _require_guard(request, "backtest_run_replay")
             return run_replay_backtest(payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

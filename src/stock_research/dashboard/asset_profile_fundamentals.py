@@ -139,7 +139,7 @@ def _load_company_profile_context(
 def _primary_products(rows: list[dict[str, Any]]) -> list[str]:
     products: list[str] = []
     for row in rows:
-        if str(row.get("classify_type") or "").strip() not in {"产品", "按产品"}:
+        if str(row.get("classify_type") or "").strip() not in {"产品", "按产品", "按产品分类"}:
             continue
         value = str(row.get("item_name") or "").strip()
         if value and value not in products:

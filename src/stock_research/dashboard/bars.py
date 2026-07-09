@@ -51,12 +51,20 @@ def load_daily_bars(
       AND adjust_type = %s
     ORDER BY trade_date
     """
+    asset_ids = [asset_id]
+    canonical_asset_id = normalize_market_asset_id(asset_id)
+    if canonical_asset_id not in asset_ids:
+        asset_ids.append(canonical_asset_id)
     with connect(service) as conn:
-        rows = fetch_all(
-            conn,
-            sql,
-            [asset_id, start_date, end_date, adjust_type],
-        )
+        rows: list[dict[str, Any]] = []
+        for candidate_asset_id in asset_ids:
+            rows = fetch_all(
+                conn,
+                sql,
+                [candidate_asset_id, start_date, end_date, adjust_type],
+            )
+            if rows:
+                break
     return [_bar_point(row).to_dict() for row in rows]
 
 

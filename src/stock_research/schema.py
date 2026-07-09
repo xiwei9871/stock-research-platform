@@ -1,7 +1,9 @@
 import datetime as dt
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.auth_schema import DASHBOARD_AUTH_SCHEMA_SQL
 from stock_research.db import connect, execute
+from stock_research.research_objects import RESEARCH_OBJECTS_SQL
 
 
 STOCK_MINUTE_BAR_PARTITIONED_TABLE_SQL = """
@@ -2421,8 +2423,10 @@ def apply_schema(service: str = SETTINGS.research_service) -> None:
     with connect(service) as conn:
         execute(conn, CREATE_TABLES_SQL)
         execute(conn, CREATE_RESEARCH_SCHEMAS_SQL)
+        execute(conn, DASHBOARD_AUTH_SCHEMA_SQL)
         migrate_stock_minute_bar_to_partitioned(conn)
         execute(conn, CREATE_RESEARCH_EXTENSION_SQL)
+        execute(conn, RESEARCH_OBJECTS_SQL)
         ensure_research_schema_compatibility(conn)
         ensure_stock_minute_bar_partitions(conn)
 

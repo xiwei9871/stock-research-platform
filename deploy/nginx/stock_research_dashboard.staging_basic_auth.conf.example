@@ -1,0 +1,58 @@
+# Staging/internal Nginx config for Stock Research Dashboard external smoke tests.
+# Basic Auth is a temporary external access gate, not application role authorization.
+# PostgreSQL is never exposed by this config. Only static dashboard files and /api/ are public.
+# Keep X-Dashboard-Write-Token and database credentials server-side; never inject them into the frontend bundle.
+# WebSocket is not required by the current dashboard.
+
+server {
+    listen 80;
+    server_name stock-research-staging.example.com;
+
+    root /opt/stock_research/dashboard/dist;
+    index index.html;
+
+    client_max_body_size 20m;
+
+    auth_basic "Stock Research staging";
+    auth_basic_user_file /etc/nginx/.htpasswd-stock-research-dashboard;
+
+    # Optional staging IP allowlist. Replace the example range with reviewer/VPN egress IPs.
+    # Remove these lines only when another upstream access control is active.
+    allow 203.0.113.0/24;
+    deny all;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        application/json
+        application/javascript
+        application/xml
+        image/svg+xml;
+
+    access_log /var/log/nginx/stock_research_dashboard_staging.access.log;
+    error_log /var/log/nginx/stock_research_dashboard_staging.error.log;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_read_timeout 120s;
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800, immutable";
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

@@ -247,7 +247,7 @@ def _read_eod_strategy_rows(
     latest_trade_date: str,
     strategy_id: str,
 ) -> list[dict[str, Any]]:
-    artifact_path = Path(str(module.get("artifact_path") or ""))
+    artifact_path = _resolve_synced_output_path(module.get("artifact_path"))
     if not artifact_path.exists() or artifact_path.is_dir():
         return []
     try:
@@ -305,7 +305,7 @@ def _performance_as_of_date(summary: dict[str, Any], *, fallback: str) -> str:
 def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, Any]) -> dict[str, Any]:
     metadata = module.get("metadata") if isinstance(module.get("metadata"), dict) else {}
     output_paths = metadata.get("output_paths") if isinstance(metadata.get("output_paths"), dict) else {}
-    equity_path = Path(str(metadata.get("equity_path") or output_paths.get("equity_path") or ""))
+    equity_path = _resolve_synced_output_path(metadata.get("equity_path") or output_paths.get("equity_path"))
     if not equity_path.exists():
         return {}
     try:
@@ -344,6 +344,19 @@ def _metrics_from_eod_equity_path(module: dict[str, Any], strategy: dict[str, An
         "latest_period_return_pct": _percent_metric(latest_period_return),
         "latest_period_label": latest_period_label,
     }
+
+
+def _resolve_synced_output_path(value: Any) -> Path:
+    path = Path(str(value or ""))
+    if path.exists():
+        return path
+    parts = path.parts
+    if "outputs" not in parts:
+        return path
+    output_index = parts.index("outputs")
+    suffix = Path(*parts[output_index + 1 :]) if output_index + 1 < len(parts) else Path()
+    relocated = Path(getattr(SETTINGS, "output_root", "outputs")) / suffix
+    return relocated if relocated.exists() else path
 
 
 def _latest_year_equity_frame(frame: pd.DataFrame) -> pd.DataFrame:

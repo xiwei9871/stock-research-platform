@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
 from stock_research.daily_health import summarize_operational_health
+from stock_research.dashboard.readiness_policy import classify_pipeline_readiness
 from stock_research.db import connect, fetch_all
 
 try:
@@ -246,32 +247,32 @@ def _build_readiness(
     pipeline: dict[str, Any],
     status_context: dict[str, Any],
 ) -> dict[str, Any]:
-    pipeline_status = str(data_status.get("pipeline_status") or "NOT_READY")
     latest_ready_trade_date = data_status.get("latest_ready_trade_date")
     failed_jobs = data_status.get("failed_jobs") or []
-    ready_for_dashboard = status_context.get("matches_requested_trade_date") and pipeline_status in {"READY", "DEGRADED_READY"}
-    blocking_issue_count = 0 if ready_for_dashboard else len(failed_jobs)
+    decision = classify_pipeline_readiness(
+        data_status,
+        requested_trade_date=str(status_context.get("requested_trade_date") or ""),
+    )
+    ready_for_dashboard = decision.ready_for_dashboard
+    blocking_issue_count = len(decision.blocking_reasons)
+    if failed_jobs and not ready_for_dashboard:
+        blocking_issue_count += len(failed_jobs)
     if health_block.get("stalled") and not ready_for_dashboard:
         blocking_issue_count += 1
     if health_block.get("has_alerts"):
         blocking_issue_count += max(1, int(health_block.get("alert_count") or 0))
     if pipeline.get("overall_status") in {"blocked", "not_started"}:
         blocking_issue_count += 1
-    ready_for_publication = ready_for_dashboard and blocking_issue_count == 0 and not health_block.get("has_alerts")
-    if pipeline_status == "READY" and status_context.get("matches_requested_trade_date"):
-        ready_status = "ready"
-    elif pipeline_status == "DEGRADED_READY" and status_context.get("matches_requested_trade_date"):
-        ready_status = "degraded_ready"
-    elif ready_for_dashboard:
-        ready_status = "degraded_ready" if blocking_issue_count else "ready"
-    else:
-        ready_status = "not_ready"
+    ready_for_publication = decision.ready_for_publication and blocking_issue_count == 0 and not health_block.get("has_alerts")
+    ready_status = decision.status if ready_for_dashboard else "not_ready"
     return {
         "latest_ready_trade_date": latest_ready_trade_date,
         "ready_status": ready_status,
         "ready_for_dashboard": ready_for_dashboard,
         "ready_for_publication": ready_for_publication,
         "blocking_issue_count": blocking_issue_count,
+        "blocking_reasons": decision.blocking_reasons,
+        "warnings": decision.warnings,
     }
 
 

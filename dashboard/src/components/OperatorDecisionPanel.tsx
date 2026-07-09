@@ -16,6 +16,15 @@ const ACTION_LABELS: Record<OperatorAction, string> = {
   close: '关闭'
 };
 
+const ACTION_DECISION_LABELS: Record<OperatorAction, string> = {
+  watch: 'observe',
+  skip: 'no_action',
+  follow_up: 'observe',
+  add_to_shadow: 'candidate',
+  note: 'observe',
+  close: 'remove'
+};
+
 function workflowEffectLabel(effect: WorkflowEffect) {
   if (effect.type === 'watchlist_item' && effect.status === 'upserted') return '已加入人工观察池';
   if (effect.type === 'watchlist_item' && effect.status === 'deactivated') return '已关闭人工观察';
@@ -71,7 +80,9 @@ export function OperatorDecisionPanel({
         stock_name: stockName,
         decision_date: decisionDate,
         operator_action: operatorAction,
+        decision_label: ACTION_DECISION_LABELS[operatorAction],
         decision_status: 'open',
+        evidence_artifact_id: digestKey ? `evidence_digest:${digestKey}` : undefined,
         operator_note: operatorNote,
         follow_up_date: followUpDate || undefined,
         run_id: runId,
@@ -80,8 +91,14 @@ export function OperatorDecisionPanel({
         evidence_digest_snapshot_id: evidenceDigestSnapshotId,
         source_type: sourceType,
         source_name: sourceName,
+        manual_review_required: true,
+        auto_trade_enabled: false,
         source_context: {
-          entry: sourceContextEntry
+          entry: sourceContextEntry,
+          run_id: runId,
+          digest_key: digestKey,
+          review_item_snapshot_id: reviewItemSnapshotId,
+          evidence_digest_snapshot_id: evidenceDigestSnapshotId
         }
       });
       setResult(response);

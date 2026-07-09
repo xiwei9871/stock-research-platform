@@ -1,0 +1,19 @@
+[Unit]
+Description=Stock Research FastAPI dashboard API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stockresearch
+Group=stockresearch
+WorkingDirectory=/opt/stock_research
+EnvironmentFile=/etc/stock-research/dashboard.env
+ExecStart=/opt/stock_research/.venv/bin/stock-research dashboard-api --host ${DASHBOARD_API_BIND_HOST} --port ${DASHBOARD_API_BIND_PORT}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

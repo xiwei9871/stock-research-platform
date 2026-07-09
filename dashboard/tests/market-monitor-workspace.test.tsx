@@ -7,9 +7,11 @@ import type { ComponentProps } from 'react';
 
 const apiMocks = vi.hoisted(() => ({
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketAnomalyContext: vi.fn(),
   fetchMarketOverview: vi.fn(),
   fetchSectorHeatmap: vi.fn(),
   fetchSectorFundFlow: vi.fn(),
+  fetchStockHeatmap: vi.fn(),
   fetchSectorDetail: vi.fn()
 }));
 
@@ -347,6 +349,95 @@ function makeFundFlowResponse(sectorType: 'industry' | 'concept', overrides: Rec
   };
 }
 
+function makeStockHeatmapResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-12',
+    market: 'all',
+    period: '1d',
+    group: 'industry',
+    size_by: 'amount',
+    updated_at: '2026-06-12 15:10',
+    source: 'market_daily_bar',
+    data_status: 'completed',
+    warnings: [],
+    summary: {
+      stock_count: 1,
+      up_count: 1,
+      flat_count: 0,
+      down_count: 0,
+      total_amount: 3000000000
+    },
+    groups: [
+      {
+        group_id: 'BK_BANK',
+        group_name: '银行',
+        value: 3000000000,
+        change_pct: 0.02,
+        stock_count: 1,
+        children: [
+          {
+            asset_id: 'CN:SZ:000001',
+            symbol: '000001',
+            name: '平安银行',
+            price: 12.5,
+            change_pct: 0.02,
+            amount: 3000000000,
+            value: 3000000000,
+            group_id: 'BK_BANK',
+            group_name: '银行'
+          }
+        ]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function makeMarketAnomalyContextResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    trade_date: '2026-06-12',
+    data_status: 'completed',
+    summary: {
+      hot_industry_count: 1,
+      hot_stock_count: 1,
+      volume_spike_count: 1,
+      strong_move_count: 1
+    },
+    hot_industries: [
+      {
+        industry_id: 'bank',
+        industry_name: '银行',
+        change_pct: 0.041,
+        amount: 4000000000,
+        stock_count: 2,
+        up_count: 2,
+        down_count: 0,
+        volume_spike_count: 1,
+        strong_move_count: 1,
+        anomaly_score: 12.4,
+        explanation_bullets: ['银行成交额约 40.0 亿。', '1 只成分股出现放量信号。']
+      }
+    ],
+    hot_stocks: [
+      {
+        asset_id: 'CN:SZ:000001',
+        symbol: '000001',
+        name: '平安银行',
+        industry_id: 'bank',
+        industry_name: '银行',
+        change_pct: 0.062,
+        amount: 3000000000,
+        amount_ratio_20d: 3,
+        turnover_rate: 4.2,
+        anomaly_tags: ['volume_spike', 'strong_up'],
+        explanation_bullets: ['放量：成交额约为近20日均值 3.0x。', '涨幅 6.20%，属于强势上涨。']
+      }
+    ],
+    warnings: [],
+    ...overrides
+  };
+}
+
 function makeManyFundFlowResponse(sectorType: 'industry' | 'concept' = 'industry') {
   const inflow = makeManyHeatmapItems(14, sectorType);
   const outflow = makeManyHeatmapItems(14, sectorType).map((item, index) => ({
@@ -461,7 +552,9 @@ function overrideChartSize(initialWidth: number, initialHeight: number) {
 
 describe('MarketMonitorWorkspace', () => {
   beforeEach(() => {
+    vi.resetAllMocks();
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketAnomalyContext.mockResolvedValue(makeMarketAnomalyContextResponse());
     apiMocks.fetchMarketOverview.mockResolvedValue(makeOverviewResponse());
     apiMocks.fetchSectorHeatmap.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
       Promise.resolve(makeHeatmapResponse(sectorType, { trade_date: tradeDate }))
@@ -469,7 +562,20 @@ describe('MarketMonitorWorkspace', () => {
     apiMocks.fetchSectorFundFlow.mockImplementation((tradeDate: string, sectorType: 'industry' | 'concept') =>
       Promise.resolve(makeFundFlowResponse(sectorType, { trade_date: tradeDate }))
     );
+    apiMocks.fetchStockHeatmap.mockImplementation((tradeDate: string) =>
+      Promise.resolve(makeStockHeatmapResponse({ trade_date: tradeDate }))
+    );
     apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn((text: string) => ({ width: text.length * 8 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      scale: vi.fn()
+    })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
     echartsMocks.handlers.clear();
     echartsMocks.charts.length = 0;
     resizeObserverMocks.instances.length = 0;
@@ -481,7 +587,6 @@ describe('MarketMonitorWorkspace', () => {
 
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -493,6 +598,7 @@ describe('MarketMonitorWorkspace', () => {
       expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-12', 'industry');
       expect(apiMocks.fetchSectorFundFlow).toHaveBeenCalledWith('2026-06-12', 'industry');
       expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledWith({ topN: 5 });
+      expect(apiMocks.fetchMarketAnomalyContext).toHaveBeenCalledWith('2026-06-12');
     });
 
     expect(screen.getByRole('heading', { name: '市场总览' })).toBeInTheDocument();
@@ -510,6 +616,55 @@ describe('MarketMonitorWorkspace', () => {
     expect(screen.getByRole('region', { name: '市场情绪状态条' })).toBeInTheDocument();
     expect(screen.getByText('综合强度')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '市场情绪摘要' })).not.toBeInTheDocument();
+  });
+
+  it('renders anomaly context explanations and stock tags', async () => {
+    const onOpenAsset = vi.fn();
+    renderWorkspace({ onOpenAsset });
+
+    const panel = await screen.findByRole('region', { name: '异常热区解释' });
+
+    expect(within(panel).getByText('行业联动排序')).toBeInTheDocument();
+    expect(within(panel).getByText('银行')).toBeInTheDocument();
+    expect(within(panel).getByText('1 只成分股出现放量信号。')).toBeInTheDocument();
+    expect(within(panel).getByText('异常个股标签')).toBeInTheDocument();
+    expect(within(panel).getByText('平安银行')).toBeInTheDocument();
+    expect(within(panel).getByText('放量')).toBeInTheDocument();
+    expect(within(panel).getByText('强涨')).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole('button', { name: '打开异常个股 平安银行' }));
+
+    expect(onOpenAsset).toHaveBeenCalledWith('CN:SZ:000001', {
+      sourceWorkspace: 'market',
+      monitorTab: 'anomaly_context',
+      tradeDate: '2026-06-12',
+      matchReason: 'market_anomaly_context',
+      query: '平安银行'
+    });
+  });
+
+  it('switches from sector heatmap to stock heatmap and opens selected stock', async () => {
+    const onOpenAsset = vi.fn();
+    renderWorkspace({ onOpenAsset });
+
+    await waitFor(() => expect(apiMocks.fetchSectorHeatmap).toHaveBeenCalledWith('2026-06-12', 'industry'));
+
+    fireEvent.click(screen.getByRole('button', { name: '个股云图' }));
+
+    await waitFor(() => expect(apiMocks.fetchStockHeatmap).toHaveBeenCalledWith('2026-06-12'));
+    expect(screen.getByRole('img', { name: '全市场个股云图' })).toBeInTheDocument();
+    const stockHeatmapList = screen.getByRole('region', { name: '热区个股 Top N' });
+    expect(stockHeatmapList).toBeInTheDocument();
+    expect(within(stockHeatmapList).getByText('平安银行')).toBeInTheDocument();
+
+    fireEvent.click(within(stockHeatmapList).getByRole('button', { name: /打开 平安银行/ }));
+
+    expect(onOpenAsset).toHaveBeenCalledWith('CN:SZ:000001', {
+      sourceWorkspace: 'market',
+      monitorTab: 'stock_heatmap',
+      tradeDate: '2026-06-12',
+      matchReason: 'stock_heatmap'
+    });
   });
 
   it('updates the detail panel and starts real detail orchestration when a ranking row is selected', async () => {

@@ -15,6 +15,7 @@ htmlcov/
 .venv/
 venv/
 env/
+!deploy/env/
 
 # Local generated artifacts
 *.log
@@ -22,6 +23,7 @@ env/
 /dist/
 /cache/
 /data/manual/
+/data/*.db
 /logs/
 /reports/
 /output/
@@ -37,6 +39,7 @@ env/
 # Local environment and secrets
 .env
 .env.*
+!deploy/env/.env.dashboard.example
 *.local
 config/local_secrets.json
 

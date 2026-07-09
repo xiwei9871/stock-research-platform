@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  fetchCurrentUser,
+  fetchAdminUsers,
+  createAdminUser,
+  disableAdminUser,
+  enableAdminUser,
+  resetAdminUserPassword,
+  loginDashboardUser,
+  logoutDashboardUser,
   createOperatorDecision,
   fetchDailyBars,
   fetchAssetDecisions,
@@ -23,9 +31,23 @@ import {
   fetchResearchReportDocument,
   fetchResearchReportSummary,
   fetchResearchReports,
+  fetchResearchCases,
+  fetchResearchCaseDetail,
+  fetchResearchQueueHealth,
+  fetchResearchPublishGate,
+  fetchResearchPublicationPreview,
+  fetchResearchPublicationSnapshots,
+  fetchResearchExternalDeliveryPlan,
+  fetchResearchExternalDeliveryAttempts,
+  fetchResearchQueueGaps,
+  createResearchReviewAction,
+  fetchResearchEvidence,
   fetchSectorDetail,
   fetchSectorFundFlow,
   fetchSectorHeatmap,
+  fetchMarketAnomalyContext,
+  fetchStockHeatmap,
+  fetchStockMarketContextHeatmap,
   fetchEvidenceDigestSnapshot,
   fetchEvidenceDigestSnapshots,
   fetchReviewQueue,
@@ -43,6 +65,119 @@ import {
 } from '../src/api/client';
 
 describe('dashboard API client', () => {
+  it('uses cookie credentials for auth session endpoints and csrf for logout', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'logged_out' })
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: 'stock_research_csrf=csrf-token'
+    });
+
+    await fetchCurrentUser();
+    await loginDashboardUser({ username: 'admin', password: 'secret' });
+    await logoutDashboardUser();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/auth/me', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        body: JSON.stringify({ username: 'admin', password: 'secret' })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' })
+      })
+    );
+  });
+
+  it('uses cookie credentials and csrf for admin user management endpoints', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ items: [{ user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }] })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ user: { user_id: 'user:2', username: 'analyst', display_name: '', role: 'user', is_active: true } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'disabled', user_id: 'user:2' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'enabled', user_id: 'user:2' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'password_reset', user_id: 'user:2' })
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(document, 'cookie', {
+      writable: true,
+      value: 'stock_research_csrf=csrf-token'
+    });
+
+    await fetchAdminUsers();
+    await createAdminUser({ username: 'analyst', password: 'secret123', role: 'user', display_name: '' });
+    await disableAdminUser('user:2');
+    await enableAdminUser('user:2');
+    await resetAdminUserPassword('user:2', 'next-secret');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/users', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/users',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/users/user%3A2/disable',
+      expect.objectContaining({ method: 'POST', credentials: 'include', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/admin/users/user%3A2/enable',
+      expect.objectContaining({ method: 'POST', credentials: 'include', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      '/api/admin/users/user%3A2/reset-password',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf-token' }),
+        body: JSON.stringify({ password: 'next-secret' })
+      })
+    );
+  });
+
   it('requests asset bars with explicit resolution and adjust type', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -160,6 +295,288 @@ describe('dashboard API client', () => {
       '/api/dashboard/overview?trade_date=2026-05-29&score_version=manual_v1&watchlist_id=default&top_n=20'
     );
     expect(result.trade_date).toBe('2026-05-29');
+  });
+
+  it('fetches research cases with filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ case_id: 'research_case:1', title: 'Case 1' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchCases({ tradeDate: '2026-07-06', status: 'open', limit: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/cases?trade_date=2026-07-06&status=open&limit=5');
+    expect(result.items[0].case_id).toBe('research_case:1');
+  });
+
+  it('fetches research case detail with encoded case id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        case: { case_id: 'research_case:1', title: 'Case 1' },
+        claims: [],
+        evidence: [],
+        summary: { claim_count: 0, evidence_count: 0, missing_or_partial_evidence_count: 0 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchCaseDetail('research_case:1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/cases/research_case%3A1');
+    expect(result.case.case_id).toBe('research_case:1');
+  });
+
+  it('fetches research queue health with trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-07',
+        status: 'healthy',
+        can_review: true,
+        can_publish_research_queue: false,
+        summary: { case_count: 100, claim_count: 600 },
+        last_refresh: null,
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchQueueHealth({ tradeDate: '2026-07-07' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/queue/health?trade_date=2026-07-07');
+    expect(result.status).toBe('healthy');
+  });
+
+  it('fetches research publish gate with trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-03',
+        status: 'blocked',
+        research_ready_for_publication: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false,
+        publication_entrypoint_status: 'scaffolded',
+        summary: { case_count: 15, pending_gap_count: 14 },
+        blockers: [{ code: 'pending_gap', message: '14 gap cases have not been reviewed', count: 14 }],
+        warnings: [],
+        top_blocked_cases: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchPublishGate({ tradeDate: '2026-07-03' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/queue/publish-gate?trade_date=2026-07-03');
+    expect(result.status).toBe('blocked');
+    expect(result.actual_publish_enabled).toBe(false);
+  });
+
+  it('fetches research publication preview with trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-03',
+        package_id: 'research_publication_package:abc',
+        publishable: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false,
+        gate: {
+          status: 'blocked',
+          research_ready_for_publication: false,
+          actual_publish_enabled: false,
+          internal_snapshot_enabled: false,
+          external_delivery_enabled: false
+        },
+        summary: { case_count: 15, claim_count: 90, gap_count: 15 },
+        sections: [],
+        warnings: [],
+        blockers: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchPublicationPreview({ tradeDate: '2026-07-03' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/publication/preview?trade_date=2026-07-03');
+    expect(result.publishable).toBe(false);
+    expect(result.actual_publish_enabled).toBe(false);
+  });
+
+  it('fetches research publication snapshots with trade date and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+            trade_date: '2026-07-03',
+            channel: 'research_queue_internal',
+            title: 'Research Queue Internal Snapshot 2026-07-03',
+            created_by: 'research_queue_publish',
+            created_at: '2026-07-08T10:00:00+08:00',
+            package_id: 'research_publication_package:abc',
+            gate_status: 'research_ready',
+            research_ready_for_publication: true,
+            actual_external_delivery_enabled: false,
+            case_count: 2,
+            claim_count: 3,
+            evidence_count: 4,
+            gap_count: 0,
+            blocker_count: 0
+          }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchPublicationSnapshots({ tradeDate: '2026-07-03', limit: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/publication/snapshots?trade_date=2026-07-03&limit=5');
+    expect(result.items[0].publication_snapshot_id).toBe('publication_snapshot:research_queue_internal:abc');
+    expect(result.items[0].actual_external_delivery_enabled).toBe(false);
+  });
+
+  it('fetches research external delivery plan with snapshot id and channel', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        delivery_plan_id: 'research_external_delivery_plan:abc',
+        publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+        trade_date: '2026-07-03',
+        channel: 'feishu_preview',
+        dry_run: true,
+        external_send_enabled: false,
+        status: 'preview_ready',
+        message: {
+          title: 'Research Queue Snapshot 2026-07-03',
+          summary: 'Cases 2, claims 3, evidence 4, gaps 0. Gate research_ready.',
+          sections: []
+        },
+        source: {
+          package_id: 'research_publication_package:abc',
+          gate_status: 'research_ready',
+          snapshot_channel: 'research_queue_internal'
+        },
+        blockers: [],
+        warnings: ['External delivery is not connected in this version.']
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchExternalDeliveryPlan({
+      publicationSnapshotId: 'publication_snapshot:research_queue_internal:abc',
+      channel: 'feishu_preview'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/research/publication/delivery-plan?publication_snapshot_id=publication_snapshot%3Aresearch_queue_internal%3Aabc&channel=feishu_preview'
+    );
+    expect(result.status).toBe('preview_ready');
+    expect(result.external_send_enabled).toBe(false);
+  });
+
+  it('fetches research external delivery attempts with snapshot id and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            delivery_attempt_id: 'external_delivery_attempt:abc',
+            publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+            trade_date: '2026-07-03',
+            channel: 'feishu_preview',
+            mode: 'dry_run',
+            status: 'preview_recorded',
+            dry_run: true,
+            external_send_enabled: false,
+            delivery_plan_id: 'research_external_delivery_plan:abc',
+            message_title: 'Research Queue Snapshot 2026-07-03',
+            created_by: 'operator',
+            created_at: '2026-07-08T10:00:00+08:00',
+            error_code: '',
+            error_message: ''
+          }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchExternalDeliveryAttempts({
+      publicationSnapshotId: 'publication_snapshot:research_queue_internal:abc',
+      limit: 5
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/research/publication/delivery-attempts?publication_snapshot_id=publication_snapshot%3Aresearch_queue_internal%3Aabc&limit=5'
+    );
+    expect(result.items[0].status).toBe('preview_recorded');
+    expect(result.items[0].external_send_enabled).toBe(false);
+  });
+
+  it('fetches research queue gaps with trade date and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-03',
+        items: [{ case_id: 'research_case:1', gap_reasons: ['partial_evidence'] }],
+        summary: { gap_case_count: 1, partial_evidence_count: 1 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchQueueGaps({ tradeDate: '2026-07-03', limit: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/queue/gaps?trade_date=2026-07-03&limit=5');
+    expect(result.items[0].gap_reasons).toEqual(['partial_evidence']);
+  });
+
+  it('creates a research review action', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ review_action_id: 'review_action:abc', status: 'recorded' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createResearchReviewAction({
+      case_id: 'research_case:1',
+      action_type: 'request_more_evidence',
+      gap_reasons: ['missing_evidence'],
+      comment: '需要补证',
+      reviewer: 'operator'
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/research/review-actions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: 'research_case:1',
+        action_type: 'request_more_evidence',
+        gap_reasons: ['missing_evidence'],
+        comment: '需要补证',
+        reviewer: 'operator'
+      })
+    });
+    expect(result.review_action_id).toBe('review_action:abc');
+  });
+
+  it('fetches research evidence with filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [{ evidence_id: 'evidence_artifact:1', title: 'Evidence 1' }] })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchResearchEvidence({ assetId: 'CN:SZ:000001', sourceType: 'review_item_snapshot', limit: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/research/evidence?asset_id=CN%3ASZ%3A000001&source_type=review_item_snapshot&limit=20'
+    );
+    expect(result.items[0].evidence_id).toBe('evidence_artifact:1');
   });
 
   it('fetches platform readiness with mode and checks', async () => {
@@ -309,6 +726,97 @@ describe('dashboard API client', () => {
       '/api/market-monitor/sectors/heatmap?trade_date=2026-06-26&type=industry'
     );
     expect(result.items).toEqual([]);
+  });
+
+  it('fetches stock heatmap with P0 options', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-07',
+        market: 'all',
+        period: '1d',
+        group: 'industry',
+        size_by: 'amount',
+        updated_at: '2026-07-07T15:30:00+08:00',
+        source: 'market_daily_bar',
+        data_status: 'completed',
+        warnings: [],
+        summary: {
+          stock_count: 1,
+          up_count: 1,
+          flat_count: 0,
+          down_count: 0,
+          total_amount: 100
+        },
+        groups: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchStockHeatmap('2026-07-07');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/market-monitor/stocks/heatmap?trade_date=2026-07-07&market=all&period=1d&group=industry&size_by=amount'
+    );
+    expect(result.summary.stock_count).toBe(1);
+  });
+
+  it('fetches market anomaly context for the selected trade date', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        trade_date: '2026-07-07',
+        data_status: 'completed',
+        summary: {
+          hot_industry_count: 1,
+          hot_stock_count: 1,
+          volume_spike_count: 1,
+          strong_move_count: 1
+        },
+        hot_industries: [],
+        hot_stocks: [],
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchMarketAnomalyContext('2026-07-07');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/market-monitor/anomaly-context?trade_date=2026-07-07');
+    expect(result.summary.hot_stock_count).toBe(1);
+  });
+
+  it('fetches stock market context heatmap with encoded asset id', async () => {
+    const payload = {
+      asset_id: 'CN:SZ:000001',
+      canonical_asset_id: 'CN:SZ:000001',
+      trade_date: '2026-07-07',
+      industry: { industry_id: 'bank', industry_name: '银行', industry_system: 'csrc' },
+      selected: null,
+      summary: {
+        peer_count: 0,
+        up_count: 0,
+        flat_count: 0,
+        down_count: 0,
+        total_amount: 0,
+        selected_in_peer_set: false
+      },
+      peers: [],
+      data_status: 'missing',
+      warnings: []
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => payload
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchStockMarketContextHeatmap('CN:SZ:000001', '2026-07-07');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/stocks/CN%3ASZ%3A000001/market-context/heatmap?trade_date=2026-07-07'
+    );
+    expect(result).toEqual(payload);
   });
 
   it('fetches sector fund flow with the default 1d period', async () => {
@@ -909,6 +1417,22 @@ describe('dashboard API client', () => {
       operator_action: 'watch'
     });
     expect(result.snapshot_linkage_status).toBe('linked');
+  });
+
+  it('surfaces operator decision validation detail from failed writes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: 'operator_decision_missing_evidence_linkage' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createOperatorDecision({
+        asset_id: '000001.SZ',
+        operator_action: 'watch'
+      })
+    ).rejects.toThrow('POST /api/operator-decisions failed with 400: operator_decision_missing_evidence_linkage');
   });
 
   it('fetches asset outcomes with optional review session and limit', async () => {

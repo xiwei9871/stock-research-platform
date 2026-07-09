@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
 import {
+  createResearchReviewAction,
   fetchBacktestStrategies,
   fetchMarketMonitorEod,
   fetchPlatformReadiness,
   fetchPlatformSummary,
   fetchPublicNews,
+  fetchResearchCases,
+  fetchResearchCaseDetail,
+  fetchResearchEvidence,
+  fetchResearchExternalDeliveryAttempts,
+  fetchResearchExternalDeliveryPlan,
+  fetchResearchPublicationPreview,
+  fetchResearchPublicationSnapshots,
+  fetchResearchPublishGate,
+  fetchResearchQueueHealth,
   fetchStrategyScoreAudit
 } from '../api/client';
 import type {
@@ -14,6 +24,18 @@ import type {
   PlatformReadinessHealthItem,
   PlatformSummary,
   PublicNewsItem,
+  ResearchCase,
+  ResearchCaseDetail,
+  ResearchEvidenceArtifact,
+  ResearchExternalDeliveryAttempt,
+  ResearchExternalDeliveryPlan,
+  ResearchPublicationPackage,
+  ResearchPublicationSnapshotItem,
+  ResearchPublishGate,
+  ResearchPublishGateCase,
+  ResearchQueueGapCase,
+  ResearchQueueHealth,
+  ResearchReviewActionType,
   StrategyScoreAuditSummary,
   StrategyCatalogItem
 } from '../api/types';
@@ -56,6 +78,23 @@ function formatOneDecimal(value: number | null | undefined) {
 
 function formatScore(value: number | null | undefined) {
   return typeof value === 'number' && !Number.isNaN(value) ? `${value.toFixed(1)} 分` : '-';
+}
+
+function formatBeijingMinute(value: string | null | undefined) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day} ${byType.hour}:${byType.minute}`;
 }
 
 function formatRatio(value: number | null | undefined) {
@@ -105,6 +144,22 @@ function platformRiskStatus(readiness: PlatformReadiness | null) {
   if (readiness.status === 'BLOCKED') return '阻塞';
   if (readiness.status === 'PARTIAL' || (readiness.warnings ?? []).length > 0) return '需关注';
   return '正常';
+}
+
+function dashboardAvailabilityLabel(readiness: PlatformReadiness | null) {
+  if (!readiness?.policy) return '-';
+  return readiness.policy.ready_for_dashboard ? '可查看' : '不可查看';
+}
+
+function publicationStatusLabel(readiness: PlatformReadiness | null) {
+  if (!readiness?.policy) return '-';
+  return readiness.policy.ready_for_publication ? '可发布' : '不可发布';
+}
+
+function policyStatusClass(isReady: boolean | null | undefined) {
+  if (isReady === true) return 'ready';
+  if (isReady === false) return 'blocked';
+  return 'partial';
 }
 
 function firstDate(...dates: Array<string | null | undefined>) {
@@ -353,6 +408,134 @@ function stockNames(rows: MarketMonitorPayload['emotion_stock_lists']['limit_up'
   return rows.slice(0, 5).map((row) => row.name || row.symbol || row.asset_id).filter(Boolean);
 }
 
+function blockedPublicationCount(readiness: PlatformReadiness | null) {
+  const policy = readiness?.policy;
+  if (!policy || policy.ready_for_publication) return 0;
+  return Math.max(1, (policy.blocking_reasons ?? []).length);
+}
+
+function researchQueueBadgeLabel(
+  loading: boolean,
+  hasError: boolean,
+  openCaseCount: number,
+  evidenceGapCount: number,
+  publicationBlockCount: number,
+  evidenceCount: number
+) {
+  if (loading) return '加载中';
+  if (hasError) return '不可用';
+  if (openCaseCount === 0 && evidenceGapCount === 0 && publicationBlockCount === 0) return '无待处理';
+  if (evidenceGapCount > 0 || publicationBlockCount > 0) return '需处理';
+  return `${formatCount(evidenceCount)} evidence`;
+}
+
+function hasEvidenceGap(item: ResearchCase) {
+  const status = (item.evidence_status || '').toLowerCase();
+  return (
+    item.evidence_count <= 0 ||
+    item.missing_evidence_count > 0 ||
+    item.partial_evidence_count > 0 ||
+    (status !== '' && status !== 'complete')
+  );
+}
+
+function gapReasonLabel(reason: string) {
+  const labels: Record<string, string> = {
+    no_evidence: '无 evidence',
+    missing_evidence: '缺少 evidence',
+    partial_evidence: '部分 evidence',
+    incomplete_evidence_status: 'evidence 未完成',
+    unknown_gap: '缺口原因待确认'
+  };
+  return labels[reason] ?? reason;
+}
+
+function gapReasonText(item: ResearchQueueGapCase) {
+  const reasons = item.gap_reasons ?? [];
+  if (!reasons.length) return item.gap_summary || '缺口原因待确认';
+  return reasons.map(gapReasonLabel).join(' / ');
+}
+
+function reviewStatusLabel(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    pending: '待处理',
+    reviewed: '已审阅',
+    request_more_evidence: '需要补充证据',
+    deferred: '暂缓处理'
+  };
+  return labels[String(status || 'pending')] ?? String(status || 'pending');
+}
+
+function reviewActionLabel(actionType: string | null | undefined) {
+  const labels: Record<string, string> = {
+    acknowledge_gap: '已知晓缺口',
+    request_more_evidence: '需要补充证据',
+    mark_reviewed: '标记已审阅',
+    defer: '暂缓处理'
+  };
+  return labels[String(actionType || '')] ?? String(actionType || '-');
+}
+
+function publishGateStatusText(status: string | undefined) {
+  if (status === 'research_ready') return '研究审阅已通过，可记录内部快照；外部发送未接入';
+  if (status === 'empty') return '无研究队列，无法执行研究发布检查';
+  if (status === 'failed') return '研究发布检查失败';
+  if (status === 'entrypoint_missing') return '外部发送入口未接入';
+  return '研究发布检查未通过';
+}
+
+function publishGateCaseReasonText(item: ResearchPublishGateCase) {
+  const reasons = item.gap_reasons ?? [];
+  if (!reasons.length) return item.gap_summary || '-';
+  return reasons.map(gapReasonLabel).join(' / ');
+}
+
+function researchPublicationBlockCount(gate: ResearchPublishGate | null, readiness: PlatformReadiness | null) {
+  if (!gate) return blockedPublicationCount(readiness);
+  if (gate.status === 'empty' || gate.status === 'research_ready' || gate.research_ready_for_publication) return 0;
+  const blockerCount = gate.blockers.reduce((total, blocker) => total + (blocker.count || 0), 0);
+  const summaryBlockCount =
+    gate.summary.pending_gap_count + gate.summary.request_more_evidence_count + gate.summary.error_count;
+  return Math.max(blockerCount, summaryBlockCount, gate.top_blocked_cases.length, 1);
+}
+
+function researchQueueActionText(
+  openCaseCount: number,
+  evidenceGapCount: number,
+  publicationBlockCount: number,
+  hasError: boolean
+) {
+  if (hasError) return '展开查看接口错误，先不要据此判断今日无事项。';
+  if (evidenceGapCount > 0 && publicationBlockCount > 0) return '先处理证据缺口，再处理发布保护。';
+  if (evidenceGapCount > 0) return '先补齐或审阅证据缺口。';
+  if (publicationBlockCount > 0) return '先处理平台发布保护。';
+  if (openCaseCount > 0) return '有研究案例待审阅，可展开查看。';
+  return '无需日常处理。';
+}
+
+function researchQueueSnapshotText(
+  loading: boolean,
+  hasError: boolean,
+  openCaseCount: number,
+  evidenceGapCount: number,
+  publicationBlockCount: number
+) {
+  if (loading) return '研究队列加载中，正在检查今日案例和发布状态。';
+  if (hasError) return '研究队列暂不可用。';
+  if (openCaseCount === 0 && evidenceGapCount === 0 && publicationBlockCount === 0) return '今日暂无待处理研究事项。';
+  return `今日有 ${formatCount(openCaseCount)} 个待审案例，${formatCount(evidenceGapCount)} 个证据缺口，${formatCount(
+    publicationBlockCount
+  )} 个发布阻塞。`;
+}
+
+function metadataText(metadata: Record<string, unknown>) {
+  const entries = Object.entries(metadata ?? {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
+  if (!entries.length) return '';
+  return entries
+    .map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(',') : String(value)}`)
+    .join(' · ');
+}
+
 export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [strategies, setStrategies] = useState<StrategyCatalogItem[]>([]);
@@ -363,6 +546,29 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const [readinessError, setReadinessError] = useState<string | null>(null);
   const [scoreAudit, setScoreAudit] = useState<StrategyScoreAuditSummary | null>(null);
   const [scoreAuditError, setScoreAuditError] = useState<string | null>(null);
+  const [researchCases, setResearchCases] = useState<ResearchCase[]>([]);
+  const [researchEvidence, setResearchEvidence] = useState<ResearchEvidenceArtifact[]>([]);
+  const [researchQueueHealth, setResearchQueueHealth] = useState<ResearchQueueHealth | null>(null);
+  const [researchPublishGate, setResearchPublishGate] = useState<ResearchPublishGate | null>(null);
+  const [researchPublicationPreview, setResearchPublicationPreview] = useState<ResearchPublicationPackage | null>(null);
+  const [researchPublicationSnapshots, setResearchPublicationSnapshots] = useState<ResearchPublicationSnapshotItem[]>([]);
+  const [researchExternalDeliveryPlan, setResearchExternalDeliveryPlan] = useState<ResearchExternalDeliveryPlan | null>(null);
+  const [researchExternalDeliveryAttempts, setResearchExternalDeliveryAttempts] = useState<ResearchExternalDeliveryAttempt[]>([]);
+  const [researchExternalDeliveryPlanLoading, setResearchExternalDeliveryPlanLoading] = useState(false);
+  const [researchExternalDeliveryPlanError, setResearchExternalDeliveryPlanError] = useState<string | null>(null);
+  const [researchPublicationPreviewLoading, setResearchPublicationPreviewLoading] = useState(false);
+  const [researchPublicationPreviewError, setResearchPublicationPreviewError] = useState<string | null>(null);
+  const [researchQueueLoading, setResearchQueueLoading] = useState(false);
+  const [researchQueueError, setResearchQueueError] = useState<string | null>(null);
+  const [healthCheckExpanded, setHealthCheckExpanded] = useState(false);
+  const [researchQueueExpanded, setResearchQueueExpanded] = useState(false);
+  const [selectedResearchCaseId, setSelectedResearchCaseId] = useState<string | null>(null);
+  const [researchCaseDetail, setResearchCaseDetail] = useState<ResearchCaseDetail | null>(null);
+  const [researchCaseDetailLoading, setResearchCaseDetailLoading] = useState(false);
+  const [researchCaseDetailError, setResearchCaseDetailError] = useState<string | null>(null);
+  const [reviewActionComment, setReviewActionComment] = useState('');
+  const [reviewActionSubmitting, setReviewActionSubmitting] = useState<ResearchReviewActionType | null>(null);
+  const [reviewActionError, setReviewActionError] = useState<string | null>(null);
   const [widgetWarnings, setWidgetWarnings] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -372,6 +578,10 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
   const reviewHealth = healthGroup(readiness, 'review_chain');
   const contentHealth = healthGroup(readiness, 'content_chain');
   const healthGroups = readiness?.health_groups ?? [];
+  const policy = readiness?.policy;
+  const showPublicationGuard =
+    Boolean(policy) &&
+    (!policy?.ready_for_publication || (policy?.blocking_reasons ?? []).length > 0 || (policy?.warnings ?? []).length > 0);
   const displayTradeDate =
     firstDate(
       readiness?.latest_market_date,
@@ -379,6 +589,33 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
       summary?.latest_market_date,
       readiness?.display_trade_date
     ) || '-';
+  const openResearchCaseCount = researchCases.filter((item) => item.status.toLowerCase() === 'open').length;
+  const evidenceGapCount = researchCases.filter(hasEvidenceGap).length;
+  const researchQueueSummary = researchQueueHealth?.summary;
+  const displayedOpenResearchCaseCount = researchQueueSummary?.open_case_count ?? openResearchCaseCount;
+  const displayedEvidenceGapCount = researchQueueSummary?.evidence_gap_count ?? evidenceGapCount;
+  const displayedPublicationBlockCount = researchPublicationBlockCount(researchPublishGate, readiness);
+  const researchQueueHasError = Boolean(researchQueueError);
+  const researchQueueSnapshot = researchQueueSnapshotText(
+    researchQueueLoading,
+    researchQueueHasError,
+    displayedOpenResearchCaseCount,
+    displayedEvidenceGapCount,
+    displayedPublicationBlockCount
+  );
+  const researchQueueAction = researchQueueActionText(
+    displayedOpenResearchCaseCount,
+    displayedEvidenceGapCount,
+    displayedPublicationBlockCount,
+    researchQueueHasError
+  );
+  const researchQueueRefreshText = researchQueueHealth?.last_refresh?.finished_at
+    ? `最近刷新 ${formatBeijingMinute(researchQueueHealth.last_refresh.finished_at)}`
+    : '';
+  const topResearchCases = researchCases.slice(0, 5);
+  const topGapCases = researchQueueHealth?.status === 'partial' ? (researchQueueHealth.top_gap_cases ?? []).slice(0, 5) : [];
+  const latestPublicationSnapshot = researchPublicationSnapshots[0] ?? null;
+  const latestExternalDeliveryAttempt = researchExternalDeliveryAttempts[0] ?? null;
 
   useEffect(() => {
     let ignore = false;
@@ -498,6 +735,203 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
     };
   }, [displayTradeDate]);
 
+  useEffect(() => {
+    if (!displayTradeDate || displayTradeDate === '-') {
+      setResearchCases([]);
+      setResearchEvidence([]);
+      setResearchQueueHealth(null);
+      setResearchPublishGate(null);
+      setResearchPublicationPreview(null);
+      setResearchPublicationSnapshots([]);
+      setResearchExternalDeliveryPlan(null);
+      setResearchExternalDeliveryAttempts([]);
+      setResearchExternalDeliveryPlanLoading(false);
+      setResearchExternalDeliveryPlanError(null);
+      setResearchPublicationPreviewLoading(false);
+      setResearchPublicationPreviewError(null);
+      setResearchQueueLoading(false);
+      setResearchQueueError(null);
+      setSelectedResearchCaseId(null);
+      setResearchCaseDetail(null);
+      setResearchCaseDetailError(null);
+      setReviewActionComment('');
+      setReviewActionError(null);
+      return;
+    }
+
+    let ignore = false;
+    setResearchQueueLoading(true);
+    setResearchQueueError(null);
+    setResearchExternalDeliveryPlan(null);
+    setResearchExternalDeliveryAttempts([]);
+    setResearchExternalDeliveryPlanLoading(false);
+    setResearchExternalDeliveryPlanError(null);
+    void Promise.all([
+      fetchResearchCases({ tradeDate: displayTradeDate, status: 'open', limit: 100 }),
+      fetchResearchEvidence({ limit: 100 }),
+      fetchResearchQueueHealth({ tradeDate: displayTradeDate }),
+      fetchResearchPublishGate({ tradeDate: displayTradeDate }),
+      fetchResearchPublicationSnapshots({ tradeDate: displayTradeDate, limit: 5 })
+    ]).then(
+      ([casesPayload, evidencePayload, healthPayload, publishGatePayload, snapshotsPayload]) => {
+        if (!ignore) {
+          setResearchCases(casesPayload.items);
+          setResearchEvidence(evidencePayload.items);
+          setResearchQueueHealth(healthPayload);
+          setResearchPublishGate(publishGatePayload);
+          setResearchPublicationSnapshots(snapshotsPayload.items);
+          const latestSnapshot = snapshotsPayload.items[0] ?? null;
+          if (latestSnapshot) {
+            setResearchExternalDeliveryPlanLoading(true);
+            void Promise.all([
+              fetchResearchExternalDeliveryPlan({
+                publicationSnapshotId: latestSnapshot.publication_snapshot_id,
+                channel: 'feishu_preview'
+              }),
+              fetchResearchExternalDeliveryAttempts({
+                publicationSnapshotId: latestSnapshot.publication_snapshot_id,
+                limit: 5
+              })
+            ]).then(
+              ([planPayload, attemptsPayload]) => {
+                if (!ignore) {
+                  setResearchExternalDeliveryPlan(planPayload);
+                  setResearchExternalDeliveryAttempts(attemptsPayload.items);
+                  setResearchExternalDeliveryPlanLoading(false);
+                  setResearchExternalDeliveryPlanError(null);
+                }
+              },
+              (err: unknown) => {
+                if (!ignore) {
+                  setResearchExternalDeliveryPlan(null);
+                  setResearchExternalDeliveryAttempts([]);
+                  setResearchExternalDeliveryPlanLoading(false);
+                  setResearchExternalDeliveryPlanError(`外部发送预案不可用：${errorMessage(err)}`);
+                }
+              }
+            );
+          }
+          setResearchPublicationPreview(null);
+          setResearchPublicationPreviewError(null);
+          setSelectedResearchCaseId((current) =>
+            current && casesPayload.items.some((item) => item.case_id === current) ? current : null
+          );
+          setResearchQueueLoading(false);
+          setResearchQueueError(null);
+        }
+      },
+      (err: unknown) => {
+        if (!ignore) {
+          setResearchCases([]);
+          setResearchEvidence([]);
+          setResearchQueueHealth(null);
+          setResearchPublishGate(null);
+          setResearchPublicationPreview(null);
+          setResearchPublicationSnapshots([]);
+          setResearchExternalDeliveryPlan(null);
+          setResearchExternalDeliveryAttempts([]);
+          setResearchExternalDeliveryPlanLoading(false);
+          setResearchExternalDeliveryPlanError(null);
+          setResearchPublicationPreviewLoading(false);
+          setResearchPublicationPreviewError(null);
+          setSelectedResearchCaseId(null);
+          setResearchCaseDetail(null);
+          setResearchQueueLoading(false);
+          setResearchQueueError(`研究队列不可用：${errorMessage(err)}`);
+        }
+      }
+    );
+
+    return () => {
+      ignore = true;
+    };
+  }, [displayTradeDate]);
+
+  const loadResearchPublicationPreview = () => {
+    if (!displayTradeDate || displayTradeDate === '-') return;
+    setResearchPublicationPreviewLoading(true);
+    setResearchPublicationPreviewError(null);
+    void fetchResearchPublicationPreview({ tradeDate: displayTradeDate }).then(
+      (payload) => {
+        setResearchPublicationPreview(payload);
+        setResearchPublicationPreviewLoading(false);
+        setResearchPublicationPreviewError(null);
+      },
+      (err: unknown) => {
+        setResearchPublicationPreview(null);
+        setResearchPublicationPreviewLoading(false);
+        setResearchPublicationPreviewError(`发布预览不可用：${errorMessage(err)}`);
+      }
+    );
+  };
+
+  const openResearchCaseDetail = (caseId: string) => {
+    setSelectedResearchCaseId(caseId);
+    setResearchCaseDetail(null);
+    setResearchCaseDetailLoading(true);
+    setResearchCaseDetailError(null);
+    setReviewActionError(null);
+    void fetchResearchCaseDetail(caseId).then(
+      (payload) => {
+        setResearchCaseDetail(payload);
+        setResearchCaseDetailLoading(false);
+        setResearchCaseDetailError(null);
+      },
+      (err: unknown) => {
+        setResearchCaseDetail(null);
+        setResearchCaseDetailLoading(false);
+        setResearchCaseDetailError(`研究案例详情不可用：${errorMessage(err)}`);
+      }
+    );
+  };
+
+  const refreshResearchQueueForReviewAction = (caseId: string) =>
+    Promise.all([
+      fetchResearchCaseDetail(caseId),
+      fetchResearchCases({ tradeDate: displayTradeDate, status: 'open', limit: 100 }),
+      fetchResearchEvidence({ limit: 100 }),
+      fetchResearchQueueHealth({ tradeDate: displayTradeDate }),
+      fetchResearchPublishGate({ tradeDate: displayTradeDate })
+    ]).then(([detailPayload, casesPayload, evidencePayload, healthPayload, publishGatePayload]) => {
+      setResearchCaseDetail(detailPayload);
+      setResearchCases(casesPayload.items);
+      setResearchEvidence(evidencePayload.items);
+      setResearchQueueHealth(healthPayload);
+      setResearchPublishGate(publishGatePayload);
+    });
+
+  const submitReviewAction = (actionType: ResearchReviewActionType) => {
+    if (!researchCaseDetail || !displayTradeDate || displayTradeDate === '-') return;
+    const currentCase = researchCaseDetail.case;
+    setReviewActionSubmitting(actionType);
+    setReviewActionError(null);
+    void createResearchReviewAction({
+      case_id: currentCase.case_id,
+      trade_date: currentCase.trade_date || displayTradeDate,
+      asset_id: currentCase.asset_id,
+      action_type: actionType,
+      gap_reasons: researchCaseDetail.gap_reasons ?? [],
+      reviewer: 'operator',
+      comment: reviewActionComment,
+      source_context: {
+        from: 'home_cockpit_gap_detail',
+        case_source_type: currentCase.source_type,
+        case_source_id: currentCase.source_id
+      }
+    }).then(
+      () =>
+        refreshResearchQueueForReviewAction(currentCase.case_id).then(() => {
+          setReviewActionComment('');
+          setReviewActionSubmitting(null);
+          setReviewActionError(null);
+        }),
+      (err: unknown) => {
+        setReviewActionSubmitting(null);
+        setReviewActionError(`审阅动作写入失败：${errorMessage(err)}`);
+      }
+    );
+  };
+
   return (
     <section className="home-cockpit" aria-label="策略指挥中心">
       <header className="workspace-header">
@@ -536,6 +970,18 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           <span>风险状态</span>
           <strong className={`readiness-value ${readinessStatusClass(readiness?.status)}`}>{platformRiskStatus(readiness)}</strong>
         </div>
+        <div>
+          <span>看板状态</span>
+          <strong className={`readiness-value ${policyStatusClass(policy?.ready_for_dashboard)}`}>
+            {dashboardAvailabilityLabel(readiness)}
+          </strong>
+        </div>
+        <div>
+          <span>发布状态</span>
+          <strong className={`readiness-value ${policyStatusClass(policy?.ready_for_publication)}`}>
+            {publicationStatusLabel(readiness)}
+          </strong>
+        </div>
         <div className="status-strip-audit-cell">
           <span>策略打分审计</span>
           <strong className={`readiness-value ${strategyScoreAuditStatusClass(scoreAudit, scoreAuditError)}`}>
@@ -544,6 +990,35 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
           <small>{strategyScoreAuditSummaryText(scoreAudit, scoreAuditError)}</small>
         </div>
       </section>
+
+      {showPublicationGuard ? (
+        <section className="workspace-panel publication-guard-panel" aria-label="平台发布保护">
+          <div className="section-heading">
+            <h2>平台发布保护</h2>
+            <span className={`status-chip ${policy?.ready_for_publication ? 'success' : 'warning'}`}>
+              {publicationStatusLabel(readiness)}
+            </span>
+          </div>
+          {(policy?.blocking_reasons ?? []).length > 0 ? (
+            <div className="tag-stack">
+              {(policy?.blocking_reasons ?? []).map((reason) => (
+                <span className="status-chip warning" key={reason}>
+                  {reason}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {(policy?.warnings ?? []).length > 0 ? (
+            <div className="tag-stack">
+              {(policy?.warnings ?? []).map((warning) => (
+                <span className="status-chip neutral" key={warning}>
+                  {formatReadinessWarning(warning)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {scoreAudit?.overall_status === 'warning' ? (
         <section className="workspace-panel audit-action-panel" aria-label="策略打分审计处理建议">
@@ -608,16 +1083,28 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
         </section>
       ) : null}
 
-      <section className="workspace-panel health-check-panel" aria-label="平台健康检查">
-        <details>
-          <summary>
-            <span>健康检查</span>
-            <strong>
+      <section className="workspace-panel collapsible-panel health-check-panel" aria-label="平台健康检查">
+        <div className="collapsible-panel-heading">
+          <div className="collapsible-panel-title">
+            <h2>健康检查</h2>
+            <p className="muted">
               基础数据 {readinessCount(baseDataHealth, 4)} · 策略执行 {readinessCount(strategyHealth, 3)} · 复盘链路{' '}
               {readinessCount(reviewHealth, 3)} · 内容链路 {readinessCount(contentHealth, 3)}
-            </strong>
-          </summary>
-          <div className="health-check-grid">
+            </p>
+          </div>
+          <div className="section-heading-actions collapsible-panel-actions">
+            <button
+              type="button"
+              aria-expanded={healthCheckExpanded}
+              aria-controls="health-check-details"
+              onClick={() => setHealthCheckExpanded((value) => !value)}
+            >
+              {healthCheckExpanded ? '收起' : '展开'}
+            </button>
+          </div>
+        </div>
+        {healthCheckExpanded ? (
+          <div className="collapsible-panel-body health-check-grid" id="health-check-details">
             {healthGroups.map((group) => (
               <article className="health-check-group" key={group.key}>
                 <div className="health-check-group-header">
@@ -641,7 +1128,540 @@ export function HomeCockpit({ onNavigate }: HomeCockpitProps) {
             ))}
             {!healthGroups.length ? <p className="muted">健康检查数据加载中...</p> : null}
           </div>
-        </details>
+        ) : null}
+      </section>
+
+      <section className="workspace-panel collapsible-panel research-workbench-panel" aria-label="今日研究队列">
+        <div className="collapsible-panel-heading">
+          <div className="collapsible-panel-title">
+            <h2>今日研究队列</h2>
+            <p className="muted">{displayTradeDate === '-' ? '等待平台日期' : `研究日期 ${displayTradeDate}`}</p>
+            <p className="research-queue-snapshot">{researchQueueSnapshot}</p>
+            <p className="research-queue-action">{researchQueueAction}</p>
+            {researchQueueRefreshText ? <p className="muted">{researchQueueRefreshText}</p> : null}
+          </div>
+          <div className="section-heading-actions collapsible-panel-actions">
+            <span className="status-chip neutral">
+              {researchQueueBadgeLabel(
+                researchQueueLoading,
+                researchQueueHasError,
+                displayedOpenResearchCaseCount,
+                displayedEvidenceGapCount,
+                displayedPublicationBlockCount,
+                researchEvidence.length
+              )}
+            </span>
+            <button
+              type="button"
+              aria-expanded={researchQueueExpanded}
+              aria-controls="research-queue-details"
+              onClick={() => setResearchQueueExpanded((value) => !value)}
+            >
+              {researchQueueExpanded ? '收起' : '展开'}
+            </button>
+          </div>
+        </div>
+        {researchQueueExpanded ? (
+          <div className="collapsible-panel-body research-queue-details" id="research-queue-details">
+            <div className="research-queue-summary">
+              <div>
+                <span>Open Cases</span>
+                <strong>{researchQueueLoading ? '-' : formatCount(displayedOpenResearchCaseCount)}</strong>
+              </div>
+              <div>
+                <span>Evidence Gaps</span>
+                <strong>{researchQueueLoading ? '-' : formatCount(displayedEvidenceGapCount)}</strong>
+              </div>
+              <div>
+                <span>Publication Blocks</span>
+                <strong>{formatCount(displayedPublicationBlockCount)}</strong>
+              </div>
+            </div>
+            {researchQueueHealth ? (
+              <div className="research-queue-health" aria-label="Research queue health">
+                <div>
+                  <span>Queue Health</span>
+                  <strong>{researchQueueHealth.status}</strong>
+                </div>
+                <div>
+                  <span>Last Refresh</span>
+                  <strong>{formatBeijingMinute(researchQueueHealth.last_refresh?.finished_at)}</strong>
+                </div>
+                <div>
+                  <span>Cases</span>
+                  <strong>{formatCount(researchQueueHealth.summary.case_count)}</strong>
+                </div>
+                <div>
+                  <span>Claims</span>
+                  <strong>{formatCount(researchQueueHealth.summary.claim_count)}</strong>
+                </div>
+                <div>
+                  <span>Evidence</span>
+                  <strong>{formatCount(researchQueueHealth.summary.evidence_artifact_count)}</strong>
+                </div>
+                <div>
+                  <span>Links</span>
+                  <strong>{formatCount(researchQueueHealth.summary.evidence_link_count)}</strong>
+                </div>
+                <div>
+                  <span>Unmatched Digest</span>
+                  <strong>{formatCount(researchQueueHealth.summary.unmatched_digest_count)}</strong>
+                </div>
+                <div>
+                  <span>Review</span>
+                  <strong>{researchQueueHealth.can_review ? '可审阅' : '不可审阅'}</strong>
+                </div>
+                  <div>
+                    <span>Research Publish</span>
+                    <strong>{researchQueueHealth.can_publish_research_queue ? '可发布' : '外部发送未接入'}</strong>
+                  </div>
+              </div>
+            ) : null}
+            {researchPublishGate ? (
+              <div className="research-publish-gate" aria-label="研究发布检查">
+                <div className="research-publish-gate-heading">
+                  <div>
+                    <strong>研究发布检查</strong>
+                    <span>{publishGateStatusText(researchPublishGate.status)}</span>
+                  </div>
+                  <div className="research-publish-gate-actions">
+                    <span className="status-chip neutral">{researchPublishGate.status}</span>
+                    <button type="button" onClick={loadResearchPublicationPreview} disabled={researchPublicationPreviewLoading}>
+                      {researchPublicationPreviewLoading ? '生成预览中' : '查看发布预览'}
+                    </button>
+                  </div>
+                </div>
+                <div className="research-publish-gate-summary">
+                  <div>
+                    <span>Research Publish Gate</span>
+                    <strong>{researchPublishGate.status}</strong>
+                  </div>
+                  <div>
+                    <span>Actual Publish</span>
+                    <strong>外部发送入口未接入</strong>
+                  </div>
+                  <div>
+                    <span>Internal Snapshot</span>
+                    <strong>{researchPublishGate.internal_snapshot_enabled ? 'Gate 通过后可记录' : 'Gate 未通过，不能记录'}</strong>
+                  </div>
+                  <div>
+                    <span>Pending Gaps</span>
+                    <strong>{formatCount(researchPublishGate.summary.pending_gap_count)}</strong>
+                  </div>
+                  <div>
+                    <span>Need Evidence</span>
+                    <strong>{formatCount(researchPublishGate.summary.request_more_evidence_count)}</strong>
+                  </div>
+                </div>
+                {researchPublishGate.blockers.length > 0 ? (
+                  <div className="research-publish-blockers" aria-label="研究发布检查阻断原因">
+                    {researchPublishGate.blockers.slice(0, 3).map((blocker) => (
+                      <div className="research-publish-blocker" key={blocker.code}>
+                        <strong>{blocker.code}</strong>
+                        <span>{blocker.message}</span>
+                        <small>{formatCount(blocker.count)}</small>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {researchPublishGate.top_blocked_cases.length > 0 ? (
+                  <div className="research-gap-list" aria-label="研究发布检查阻断案例">
+                    <div className="research-gap-heading">
+                      <strong>Top Blocked Cases</strong>
+                      <span>{formatCount(researchPublishGate.top_blocked_cases.length)}</span>
+                    </div>
+                    {researchPublishGate.top_blocked_cases.map((item) => (
+                      <div className="research-case-row" key={`publish-gate:${item.case_id}`}>
+                        <strong>{item.title || item.case_id}</strong>
+                        <span>{item.asset_id || '-'}</span>
+                        <span>{item.theme || '-'}</span>
+                        <span>{reviewStatusLabel(item.review_status)}</span>
+                        <span>{publishGateCaseReasonText(item)}</span>
+                        <button type="button" onClick={() => openResearchCaseDetail(item.case_id)}>
+                          审阅
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {researchPublicationPreviewError ? <p className="error-text">{researchPublicationPreviewError}</p> : null}
+                {researchPublicationPreview ? (
+                  <div className="research-publication-preview" aria-label="发布预览">
+                    <div className="research-publication-preview-heading">
+                      <div>
+                        <strong>发布预览</strong>
+                        <span>预览，不是发布</span>
+                      </div>
+                      <span className="status-chip neutral">{`publishable=${
+                        researchPublicationPreview.publishable ? 'true' : 'false'
+                      }`}</span>
+                    </div>
+                    <div className="research-source-trace">
+                      <span>Package</span>
+                      <strong>{researchPublicationPreview.package_id}</strong>
+                    </div>
+                    <div className="research-publication-preview-summary">
+                      <div>
+                        <span>Gate</span>
+                        <strong>{researchPublicationPreview.gate.status}</strong>
+                      </div>
+                      <div>
+                        <span>Actual Publish</span>
+                        <strong>外部发送入口未接入</strong>
+                      </div>
+                      <div>
+                        <span>Internal Snapshot</span>
+                        <strong>
+                          {researchPublicationPreview.internal_snapshot_enabled ? 'Gate 通过后可记录' : 'Gate 未通过，不能记录'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Cases</span>
+                        <strong>{formatCount(researchPublicationPreview.summary.case_count)}</strong>
+                      </div>
+                      <div>
+                        <span>Claims</span>
+                        <strong>{formatCount(researchPublicationPreview.summary.claim_count)}</strong>
+                      </div>
+                      <div>
+                        <span>Evidence</span>
+                        <strong>{formatCount(researchPublicationPreview.summary.evidence_count)}</strong>
+                      </div>
+                      <div>
+                        <span>Gaps</span>
+                        <strong>{formatCount(researchPublicationPreview.summary.gap_count)}</strong>
+                      </div>
+                    </div>
+                    {researchPublicationPreview.blockers.length > 0 ? (
+                      <div className="research-publish-blockers" aria-label="发布预览阻断原因">
+                        {researchPublicationPreview.blockers.slice(0, 3).map((blocker) => (
+                          <div className="research-publish-blocker" key={`preview:${blocker.code}`}>
+                            <strong>{blocker.code}</strong>
+                            <span>{blocker.message}</span>
+                            <small>{formatCount(blocker.count)}</small>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="research-publication-preview" aria-label="内部发布快照">
+                  <div className="research-publication-preview-heading">
+                    <div>
+                      <strong>内部发布快照</strong>
+                      <span>只代表内部 research queue snapshot，不代表外部已发送</span>
+                    </div>
+                    <span className="status-chip neutral">{`snapshot_count=${formatCount(researchPublicationSnapshots.length)}`}</span>
+                  </div>
+                  {latestPublicationSnapshot ? (
+                    <>
+                      <div className="research-source-trace">
+                        <span>Latest Snapshot</span>
+                        <strong>{latestPublicationSnapshot.publication_snapshot_id}</strong>
+                      </div>
+                      <div className="research-publication-preview-summary">
+                        <div>
+                          <span>Created</span>
+                          <strong>{formatBeijingMinute(latestPublicationSnapshot.created_at)}</strong>
+                        </div>
+                        <div>
+                          <span>Channel</span>
+                          <strong>{latestPublicationSnapshot.channel}</strong>
+                        </div>
+                        <div>
+                          <span>Gate</span>
+                          <strong>{latestPublicationSnapshot.gate_status}</strong>
+                        </div>
+                        <div>
+                          <span>Cases</span>
+                          <strong>{formatCount(latestPublicationSnapshot.case_count)}</strong>
+                        </div>
+                        <div>
+                          <span>Claims</span>
+                          <strong>{formatCount(latestPublicationSnapshot.claim_count)}</strong>
+                        </div>
+                        <div>
+                          <span>Evidence</span>
+                          <strong>{formatCount(latestPublicationSnapshot.evidence_count)}</strong>
+                        </div>
+                        <div>
+                          <span>Gaps</span>
+                          <strong>{formatCount(latestPublicationSnapshot.gap_count)}</strong>
+                        </div>
+                        <div>
+                          <span>External Delivery</span>
+                          <strong>外部发送状态：未接入</strong>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="muted">暂无内部发布快照</p>
+                  )}
+                </div>
+                {latestPublicationSnapshot ? (
+                  <div className="research-publication-preview" aria-label="外部发送预案">
+                    <div className="research-publication-preview-heading">
+                      <div>
+                        <strong>外部发送预案</strong>
+                        <span>外部发送预案，仅 dry-run</span>
+                      </div>
+                      <span className="status-chip neutral">真实外部发送尚未接入</span>
+                    </div>
+                    {researchExternalDeliveryPlanLoading ? <p className="muted">外部发送预案加载中...</p> : null}
+                    {researchExternalDeliveryPlanError ? <p className="error-text">{researchExternalDeliveryPlanError}</p> : null}
+                    {researchExternalDeliveryPlan ? (
+                      <>
+                        <div className="research-source-trace">
+                          <span>Delivery Plan</span>
+                          <strong>{researchExternalDeliveryPlan.delivery_plan_id}</strong>
+                        </div>
+                        <div className="research-publication-preview-summary">
+                          <div>
+                            <span>Channel Preview</span>
+                            <strong>{researchExternalDeliveryPlan.channel}</strong>
+                          </div>
+                          <div>
+                            <span>External Send</span>
+                            <strong>{researchExternalDeliveryPlan.external_send_enabled ? 'enabled' : 'disabled'}</strong>
+                          </div>
+                          <div>
+                            <span>Message Title</span>
+                            <strong>{researchExternalDeliveryPlan.message.title || '-'}</strong>
+                          </div>
+                          <div>
+                            <span>Sections</span>
+                            <strong>{formatCount(researchExternalDeliveryPlan.message.sections.length)}</strong>
+                          </div>
+                        </div>
+                        <p className="muted">{researchExternalDeliveryPlan.message.summary}</p>
+                        <p className="muted">不会发送飞书/邮件；真实外部发送尚未接入。</p>
+                        {researchExternalDeliveryPlan.warnings.length > 0 ? (
+                          <div className="tag-stack" aria-label="外部发送预案警告">
+                            {researchExternalDeliveryPlan.warnings.map((warning) => (
+                              <span className="status-chip neutral" key={warning}>
+                                {warning}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="research-publication-preview" aria-label="发送尝试账本">
+                  <div className="research-publication-preview-heading">
+                    <div>
+                      <strong>发送尝试账本</strong>
+                      <span>只记录 dry-run 尝试，不代表外部发布完成</span>
+                    </div>
+                    <span className="status-chip neutral">{`attempt_count=${formatCount(researchExternalDeliveryAttempts.length)}`}</span>
+                  </div>
+                  {latestExternalDeliveryAttempt ? (
+                    <>
+                      <div className="research-source-trace">
+                        <span>Latest Attempt</span>
+                        <strong>{latestExternalDeliveryAttempt.delivery_attempt_id}</strong>
+                      </div>
+                      <div className="research-publication-preview-summary">
+                        <div>
+                          <span>Status</span>
+                          <strong>{latestExternalDeliveryAttempt.status}</strong>
+                        </div>
+                        <div>
+                          <span>Channel</span>
+                          <strong>{latestExternalDeliveryAttempt.channel}</strong>
+                        </div>
+                        <div>
+                          <span>Dry Run</span>
+                          <strong>{latestExternalDeliveryAttempt.dry_run ? 'true' : 'false'}</strong>
+                        </div>
+                        <div>
+                          <span>External Send</span>
+                          <strong>{latestExternalDeliveryAttempt.external_send_enabled ? 'enabled' : 'disabled'}</strong>
+                        </div>
+                        <div>
+                          <span>Created</span>
+                          <strong>{formatBeijingMinute(latestExternalDeliveryAttempt.created_at)}</strong>
+                        </div>
+                        <div>
+                          <span>Error</span>
+                          <strong>{latestExternalDeliveryAttempt.error_code || latestExternalDeliveryAttempt.error_message || '-'}</strong>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="muted">暂无外部发送尝试记录</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+            {researchQueueError ? <p className="error-text">{researchQueueError}</p> : null}
+            {researchQueueLoading ? <p className="muted">研究队列加载中...</p> : null}
+            {!researchQueueLoading && !researchQueueError && topResearchCases.length === 0 ? (
+              <p className="muted">今日暂无 open research case。</p>
+            ) : null}
+            {topResearchCases.length > 0 ? (
+              <div className="research-case-list" aria-label="Top research cases">
+                {topResearchCases.map((item) => (
+                  <div className="research-case-row" key={item.case_id}>
+                    <strong>{item.title || item.case_id}</strong>
+                    <span>{item.asset_id || '-'}</span>
+                    <span>{item.theme || '-'}</span>
+                    <span>{item.status}</span>
+                    <span>{`${item.evidence_count} evidence / ${item.claim_count} claims`}</span>
+                    <button type="button" onClick={() => openResearchCaseDetail(item.case_id)}>
+                      审阅
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {topGapCases.length > 0 ? (
+              <div className="research-gap-list" aria-label="待处理证据缺口">
+                <div className="research-gap-heading">
+                  <strong>待处理证据缺口</strong>
+                  <span>{`${formatCount(topGapCases.length)} / ${formatCount(displayedEvidenceGapCount)}`}</span>
+                </div>
+                {topGapCases.map((item) => (
+                  <div className="research-case-row" key={`gap:${item.case_id}`}>
+                    <strong>{item.title || item.case_id}</strong>
+                    <span>{item.asset_id || '-'}</span>
+                    <span>{item.theme || '-'}</span>
+                    <span>{gapReasonText(item)}</span>
+                    <span>{`${item.evidence_count} evidence / ${item.claim_count} claims`}</span>
+                    <button type="button" onClick={() => openResearchCaseDetail(item.case_id)}>
+                      审阅
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {selectedResearchCaseId && researchQueueExpanded ? (
+          <div className="research-case-detail" role="region" aria-label="研究案例详情">
+            {researchCaseDetailLoading ? <p className="muted">研究案例详情加载中...</p> : null}
+            {researchCaseDetailError ? <p className="error-text">{researchCaseDetailError}</p> : null}
+            {!researchCaseDetailLoading && !researchCaseDetailError && researchCaseDetail ? (
+              <>
+                <div className="research-case-detail-header">
+                  <div>
+                    <h3>{researchCaseDetail.case.title || researchCaseDetail.case.case_id}</h3>
+                    <p className="muted">
+                      {researchCaseDetail.case.asset_id || '-'} · {researchCaseDetail.case.theme || '-'} ·{' '}
+                      {researchCaseDetail.case.status || '-'}
+                    </p>
+                  </div>
+                  <span className="status-chip neutral">{`${researchCaseDetail.summary.evidence_count} evidence`}</span>
+                </div>
+                <div className="research-source-trace">
+                  <span>{researchCaseDetail.case.source_type || '-'}</span>
+                  <strong>{researchCaseDetail.case.source_id || '-'}</strong>
+                </div>
+                {(researchCaseDetail.gap_reasons?.length || researchCaseDetail.gap_summary) ? (
+                  <div className="research-source-trace">
+                    <span>Gap</span>
+                    <strong>
+                      {researchCaseDetail.gap_reasons?.length
+                        ? researchCaseDetail.gap_reasons.map(gapReasonLabel).join(' / ')
+                        : researchCaseDetail.gap_summary}
+                    </strong>
+                  </div>
+                ) : null}
+                <div className="research-detail-columns">
+                  <div>
+                    <h4>Claims</h4>
+                    {researchCaseDetail.claims.length === 0 ? <p className="muted">暂无 claims。</p> : null}
+                    {researchCaseDetail.claims.map((claim) => (
+                      <div className="research-detail-row" key={claim.claim_id}>
+                        <strong>{claim.claim_type}</strong>
+                        <span>{claim.claim_text}</span>
+                        <small>{`${claim.source_type || '-'} · ${claim.source_id || '-'}`}</small>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <h4>Evidence</h4>
+                    {researchCaseDetail.evidence.length === 0 ? <p className="muted">暂无 linked evidence。</p> : null}
+                    {researchCaseDetail.evidence.map((evidence) => {
+                      const meta = metadataText(evidence.allowed_metadata);
+                      return (
+                        <div className="research-detail-row" key={`${evidence.evidence_id}:${evidence.target_type}:${evidence.target_id}`}>
+                          <strong>{evidence.title || evidence.evidence_id}</strong>
+                          <span>{`${evidence.relation || '-'} · ${evidence.target_type || '-'}`}</span>
+                          <small>{`${evidence.source_type || '-'} · ${evidence.source_id || '-'}`}</small>
+                          {meta ? <small>{meta}</small> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="research-review-actions" aria-label="人工审阅动作">
+                  <div className="research-review-actions-heading">
+                    <div>
+                      <h4>人工审阅动作</h4>
+                      <p className="muted">当前状态：{reviewStatusLabel(researchCaseDetail.review_status)}</p>
+                    </div>
+                    <span className="status-chip neutral">{reviewStatusLabel(researchCaseDetail.review_status)}</span>
+                  </div>
+                  <div className="research-source-trace">
+                    <span>当前状态</span>
+                    <strong>{reviewStatusLabel(researchCaseDetail.review_status)}</strong>
+                  </div>
+                  {researchCaseDetail.latest_review_action ? (
+                    <div className="research-source-trace">
+                      <span>Latest Action</span>
+                      <strong>
+                        {reviewActionLabel(researchCaseDetail.latest_review_action.action_type)}
+                        {researchCaseDetail.latest_review_action.comment
+                          ? ` · ${researchCaseDetail.latest_review_action.comment}`
+                          : ''}
+                      </strong>
+                    </div>
+                  ) : null}
+                  <label className="research-review-comment">
+                    <span>审阅备注</span>
+                    <textarea
+                      aria-label="审阅备注"
+                      value={reviewActionComment}
+                      onChange={(event) => setReviewActionComment(event.target.value)}
+                      rows={3}
+                    />
+                  </label>
+                  <div className="research-review-action-buttons">
+                    {[
+                      ['acknowledge_gap', '已知晓缺口'],
+                      ['request_more_evidence', '需要补充证据'],
+                      ['mark_reviewed', '标记已审阅'],
+                      ['defer', '暂缓处理']
+                    ].map(([actionType, label]) => (
+                      <button
+                        type="button"
+                        key={actionType}
+                        disabled={reviewActionSubmitting !== null}
+                        onClick={() => submitReviewAction(actionType)}
+                      >
+                        {reviewActionSubmitting === actionType ? '写入中...' : label}
+                      </button>
+                    ))}
+                  </div>
+                  {reviewActionError ? <p className="error-text">{reviewActionError}</p> : null}
+                  <div className="research-review-history" aria-label="审阅动作历史">
+                    <h4>审阅动作历史</h4>
+                    {(researchCaseDetail.review_actions ?? []).length === 0 ? <p className="muted">暂无审阅动作。</p> : null}
+                    {(researchCaseDetail.review_actions ?? []).slice(0, 5).map((action) => (
+                      <div className="research-detail-row" key={action.review_action_id}>
+                        <strong>{reviewActionLabel(action.action_type)}</strong>
+                        <span>{action.comment || '-'}</span>
+                        <small>{`${action.reviewer || 'operator'} · ${action.created_at || '-'}`}</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="workspace-panel strategy-performance-panel" aria-label="启用策略表现">

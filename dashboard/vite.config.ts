@@ -11,6 +11,7 @@ export default defineConfig({
     }
   },
   test: {
-    environment: 'jsdom'
+    environment: 'jsdom',
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.spec.ts']
   }
 });

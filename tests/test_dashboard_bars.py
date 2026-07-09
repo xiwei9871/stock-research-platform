@@ -46,6 +46,44 @@ def test_load_daily_bars_uses_market_daily_bar(monkeypatch):
     assert result[0]["time"] == "2026-05-29"
 
 
+def test_load_daily_bars_falls_back_to_canonical_asset_id(monkeypatch):
+    captured_calls = []
+
+    def fake_connect(service):
+        return FakeConnect()
+
+    def fake_fetch_all(conn, sql, params):
+        captured_calls.append(params)
+        if params[0] == "000049.SZ":
+            return []
+        if params[0] == "CN:SZ:000049":
+            return [
+                {
+                    "time": "2026-07-08",
+                    "open": 24.56,
+                    "high": 24.71,
+                    "low": 23.73,
+                    "close": 23.97,
+                    "volume": 64158.15,
+                    "amount": 154374.39666,
+                    "source": "derived:tushare_raw_latest_factor",
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(bars, "connect", fake_connect)
+    monkeypatch.setattr(bars, "fetch_all", fake_fetch_all)
+
+    result = bars.load_daily_bars("000049.SZ", "2026-07-01", "2026-07-08", "qfq")
+
+    assert captured_calls == [
+        ["000049.SZ", "2026-07-01", "2026-07-08", "qfq"],
+        ["CN:SZ:000049", "2026-07-01", "2026-07-08", "qfq"],
+    ]
+    assert result[0]["time"] == "2026-07-08"
+    assert result[0]["close"] == 23.97
+
+
 def test_load_daily_bars_normalizes_tushare_units(monkeypatch):
     def fake_connect(service):
         return FakeConnect()

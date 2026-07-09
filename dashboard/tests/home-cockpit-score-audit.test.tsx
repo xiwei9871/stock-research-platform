@@ -10,6 +10,15 @@ const apiMocks = vi.hoisted(() => ({
   fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchPublicNews: vi.fn(),
+  fetchResearchCases: vi.fn(),
+  fetchResearchCaseDetail: vi.fn(),
+  fetchResearchQueueHealth: vi.fn(),
+  fetchResearchPublishGate: vi.fn(),
+  fetchResearchPublicationPreview: vi.fn(),
+  fetchResearchPublicationSnapshots: vi.fn(),
+  fetchResearchExternalDeliveryPlan: vi.fn(),
+  fetchResearchExternalDeliveryAttempts: vi.fn(),
+  fetchResearchEvidence: vi.fn(),
   fetchStrategyScoreAudit: vi.fn()
 }));
 
@@ -94,6 +103,90 @@ describe('HomeCockpit strategy score audit summary', () => {
       items: [],
       warnings: []
     });
+    apiMocks.fetchResearchCases.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchEvidence.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchQueueHealth.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      can_review: false,
+      can_publish_research_queue: false,
+      publish_gate_status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      last_refresh: null,
+      warnings: []
+    });
+    apiMocks.fetchResearchPublishGate.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        pending_gap_count: 0,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [],
+      warnings: [],
+      top_blocked_cases: []
+    });
+    apiMocks.fetchResearchPublicationPreview.mockResolvedValue({
+      trade_date: '2026-06-08',
+      package_id: 'research_publication_package:empty',
+      publishable: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      gate: {
+        status: 'empty',
+        research_ready_for_publication: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false
+      },
+      summary: {
+        case_count: 0,
+        claim_count: 0,
+        evidence_count: 0,
+        evidence_link_count: 0,
+        gap_count: 0,
+        reviewed_gap_count: 0,
+        pending_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      sections: [],
+      warnings: [],
+      blockers: []
+    });
+    apiMocks.fetchResearchPublicationSnapshots.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchExternalDeliveryAttempts.mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {

@@ -129,7 +129,7 @@ def _evaluate_run(trade_date: str, run_id: str, rows: list[dict[str, Any]]) -> d
     missing = [
         module
         for module in sorted(required_modules)
-        if str((by_module.get(module) or {}).get("status") or "") != "success"
+        if not _module_ready_for_display(module, by_module.get(module) or {})
     ]
     tech_snapshot_failures = _tech_candidate_snapshot_failures(trade_date, by_module)
     contract_failures = _contract_failures(by_module)
@@ -153,6 +153,13 @@ def _evaluate_run(trade_date: str, run_id: str, rows: list[dict[str, Any]]) -> d
         "contract_total_count": len(REQUIRED_STRATEGY_MODULES),
         "blocking_reasons": [f"missing:{module}" for module in missing] + tech_snapshot_failures + contract_failures,
     }
+
+
+def _module_ready_for_display(module: str, row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "")
+    if status == "success":
+        return True
+    return module == "daily_bars" and status in {"partial", "degraded"}
 
 
 def _tech_candidate_snapshot_failures(trade_date: str, by_module: dict[str, dict[str, Any]]) -> list[str]:

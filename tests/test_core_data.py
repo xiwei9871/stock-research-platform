@@ -32,6 +32,18 @@ def test_sync_core_asset_master_maps_existing_public_assets(monkeypatch):
     assert params is None
 
 
+def test_sync_core_asset_master_does_not_overwrite_existing_region(monkeypatch):
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    core_data.sync_core_asset_master(conn)
+
+    sql, _params = conn.executed[0]
+    assert "NULL AS region" not in sql
+    assert "region = EXCLUDED.region" not in sql
+    assert "region = COALESCE(NULLIF(a.region, ''), EXCLUDED.region)" in sql
+
+
 def test_sync_chinese_stock_names_from_akshare_updates_public_and_core(monkeypatch):
     conn = FakeConnection()
 
@@ -183,6 +195,7 @@ def test_sync_concept_memberships_from_akshare_upserts_boards_and_members(monkey
     result = core_data.sync_concept_memberships_from_akshare(
         conn,
         trade_date="2026-06-30",
+        concept_system="ths",
         board_fetcher=fake_board_fetcher,
         constituent_fetcher=fake_constituent_fetcher,
     )
@@ -197,3 +210,39 @@ def test_sync_concept_memberships_from_akshare_upserts_boards_and_members(monkey
     assert ("000063.SZ", "ths", "309135", "人工智能", "2026-06-30", "akshare:concept_constituents") in membership_rows
     assert ("300024.SZ", "ths", "300024", "机器人概念", "2026-06-30", "akshare:concept_constituents") in membership_rows
     assert any("UPDATE core.concept_membership" in sql for sql, _params in conn.executed)
+
+
+def test_sync_concept_memberships_from_akshare_defaults_to_eastmoney_sources(monkeypatch):
+    import pandas as pd
+
+    conn = FakeConnection()
+    monkeypatch.setattr(core_data, "execute_many", fake_execute_many)
+    monkeypatch.setattr(core_data, "execute", fake_execute)
+
+    class FakeAk:
+        @staticmethod
+        def stock_board_concept_name_em():
+            return pd.DataFrame([{"板块名称": "机器人概念", "板块代码": "BK0545"}])
+
+        @staticmethod
+        def stock_board_concept_cons_em(symbol):
+            assert symbol == "BK0545"
+            return pd.DataFrame([{"代码": "300024", "名称": "机器人"}])
+
+    monkeypatch.setattr(core_data, "ak", FakeAk)
+
+    result = core_data.sync_concept_memberships_from_akshare(
+        conn,
+        trade_date="2026-07-09",
+        concept_system="em",
+    )
+
+    assert result == {"boards": 1, "memberships": 1, "failed_concepts": []}
+    board_sql, board_rows = conn.executed_many[0]
+    membership_sql, membership_rows = conn.executed_many[1]
+    assert "INSERT INTO core.concept_board" in board_sql
+    assert "INSERT INTO core.concept_membership" in membership_sql
+    assert board_rows == [("em", "BK0545", "机器人概念", "akshare:stock_board_concept_name_em", True)]
+    assert membership_rows == [
+        ("300024.SZ", "em", "BK0545", "机器人概念", "2026-07-09", "akshare:stock_board_concept_cons_em")
+    ]

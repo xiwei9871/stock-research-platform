@@ -1,3 +1,6 @@
+import pandas as pd
+from types import SimpleNamespace
+
 from stock_research.dashboard import backtests
 
 
@@ -58,3 +61,35 @@ def test_lhb_stale_performance_does_not_publish_latest_day_zero_return(monkeypat
     assert "latest_day_return_pct" not in metrics
     assert "latest_period_return_pct" not in metrics
     assert metrics["latest_period_label"] == "收益估值截止 2026-06-26"
+
+
+def test_eod_equity_path_relocates_synced_local_output_root(monkeypatch, tmp_path):
+    output_root = tmp_path / "outputs"
+    equity_path = (
+        output_root
+        / "research"
+        / "strategy_daily_eod"
+        / "2026-07-03"
+        / "strategy_tech_bottleneck_equity.csv"
+    )
+    equity_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {"trade_date": "2026-07-02", "equity": 1.10, "drawdown": -0.02, "daily_return": 0.01},
+            {"trade_date": "2026-07-03", "equity": 1.21, "drawdown": -0.01, "daily_return": 0.10},
+        ]
+    ).to_csv(equity_path, index=False)
+    monkeypatch.setattr(backtests, "SETTINGS", SimpleNamespace(output_root=output_root), raising=False)
+
+    metrics = backtests._metrics_from_eod_equity_path(
+        {
+            "metadata": {
+                "output_paths": {
+                    "equity_path": "/mnt/internal/stock_research/outputs/research/strategy_daily_eod/2026-07-03/strategy_tech_bottleneck_equity.csv"
+                }
+            }
+        },
+        {"strategy_id": "tech_bottleneck", "default_parameters": {"rebalance_frequency": "daily"}},
+    )
+
+    assert metrics["latest_day_return_pct"] == 10.0

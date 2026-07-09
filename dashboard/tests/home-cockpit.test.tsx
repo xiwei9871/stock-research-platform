@@ -42,6 +42,16 @@ vi.mock('../src/api/client', () => ({
   fetchMarketMonitorEod: vi.fn(),
   fetchPublicNews: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
+  fetchResearchCases: vi.fn(),
+  fetchResearchCaseDetail: vi.fn(),
+  fetchResearchQueueHealth: vi.fn(),
+  fetchResearchPublishGate: vi.fn(),
+  fetchResearchPublicationPreview: vi.fn(),
+  fetchResearchPublicationSnapshots: vi.fn(),
+  fetchResearchExternalDeliveryPlan: vi.fn(),
+  fetchResearchExternalDeliveryAttempts: vi.fn(),
+  createResearchReviewAction: vi.fn(),
+  fetchResearchEvidence: vi.fn(),
   fetchReviewQueue: vi.fn()
 }));
 
@@ -69,6 +79,29 @@ describe('AppShell and HomeCockpit', () => {
           label: 'News flow',
           status: 'partial',
           detail: 'Collector is lagging'
+        }
+      ],
+      health_groups: [
+        {
+          key: 'base_data',
+          label: '基础数据',
+          status: 'partial',
+          ready_count: 1,
+          total_count: 2,
+          items: [
+            {
+              key: 'market_data',
+              label: 'Market data',
+              status: 'ready',
+              detail: 'Latest EOD data loaded'
+            },
+            {
+              key: 'news_flow',
+              label: 'News flow',
+              status: 'partial',
+              detail: 'Collector is lagging'
+            }
+          ]
         }
       ],
       warnings: ['Generated Reports unavailable']
@@ -343,6 +376,280 @@ describe('AppShell and HomeCockpit', () => {
       next_actions: [],
       warnings: []
     });
+    vi.mocked(api.fetchResearchCases).mockResolvedValue({
+      items: [
+        {
+          case_id: 'research_case:alpha',
+          trade_date: '2026-06-12',
+          asset_id: 'CN:SZ:000001',
+          theme: 'bank_reversal',
+          title: 'Bank reversal candidate',
+          status: 'open',
+          priority: 20,
+          source_type: 'review_item_snapshot',
+          source_id: 'review_item_snapshot:alpha',
+          evidence_status: 'partial',
+          missing_evidence_count: 1,
+          partial_evidence_count: 0,
+          evidence_count: 0,
+          claim_count: 2
+        },
+        {
+          case_id: 'research_case:beta',
+          trade_date: '2026-06-12',
+          asset_id: 'CN:SH:600001',
+          theme: 'industry_rotation',
+          title: 'Industry rotation follow-up',
+          status: 'open',
+          priority: 35,
+          source_type: 'review_item_snapshot',
+          source_id: 'review_item_snapshot:beta',
+          evidence_status: 'complete',
+          missing_evidence_count: 0,
+          partial_evidence_count: 0,
+          evidence_count: 3,
+          claim_count: 1
+        }
+      ]
+    });
+    vi.mocked(api.fetchResearchEvidence).mockResolvedValue({
+      items: [
+        {
+          evidence_id: 'evidence_artifact:evidence_digest_snapshot:abc',
+          source_type: 'evidence_digest_snapshot',
+          source_id: 'evidence_digest_snapshot:abc',
+          asset_id: 'CN:SH:600001',
+          trade_date: '2026-06-12',
+          title: 'Evidence snapshot',
+          uri: '',
+          content_hash: 'hash123',
+          allowed_metadata: { digest_key: 'digest:1' }
+        }
+      ]
+    });
+    vi.mocked(api.fetchResearchCaseDetail).mockResolvedValue({
+      case: {
+        case_id: 'research_case:alpha',
+        trade_date: '2026-06-12',
+        asset_id: 'CN:SZ:000001',
+        theme: 'bank_reversal',
+        title: 'Bank reversal candidate',
+        status: 'open',
+        priority: 20,
+        source_type: 'review_item_snapshot',
+        source_id: 'review_item_snapshot:alpha'
+      },
+      claims: [
+        {
+          claim_id: 'research_claim:1',
+          claim_type: 'risk',
+          claim_text: 'evidence_status=partial, missing=1, partial=0',
+          confidence: null,
+          status: 'draft',
+          source_type: 'review_item_snapshot',
+          source_id: 'review_item_snapshot:alpha'
+        }
+      ],
+      evidence: [
+        {
+          evidence_id: 'evidence_artifact:1',
+          source_type: 'review_item_snapshot',
+          source_id: 'review_item_snapshot:alpha',
+          asset_id: 'CN:SZ:000001',
+          trade_date: '2026-06-12',
+          title: 'Review snapshot evidence',
+          uri: '',
+          content_hash: 'hash123',
+          relation: 'supports',
+          target_type: 'research_case',
+          target_id: 'research_case:alpha',
+          allowed_metadata: { digest_key: 'digest:1', seed_version: 'research_case_seed_v1' }
+        }
+      ],
+      summary: {
+        claim_count: 1,
+        evidence_count: 1,
+        missing_or_partial_evidence_count: 1,
+        evidence_status: 'partial',
+        missing_evidence_count: 1,
+        partial_evidence_count: 0
+      },
+      gap_reasons: ['missing_evidence', 'incomplete_evidence_status'],
+      gap_summary: 'missing evidence signal found; evidence status is partial',
+      review_status: 'pending',
+      latest_review_action: null,
+      review_actions: []
+    });
+    vi.mocked(api.createResearchReviewAction).mockResolvedValue({
+      review_action_id: 'review_action:new',
+      status: 'recorded'
+    });
+    vi.mocked(api.fetchResearchQueueHealth).mockResolvedValue({
+      trade_date: '2026-06-12',
+      status: 'partial',
+      can_review: true,
+      can_publish_research_queue: false,
+      publish_gate_status: 'blocked',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 2,
+        open_case_count: 2,
+        claim_count: 3,
+        evidence_artifact_count: 4,
+        evidence_link_count: 5,
+        evidence_gap_count: 1,
+        unmatched_digest_count: 0,
+        error_count: 0,
+        no_evidence_count: 0,
+        missing_evidence_count: 1,
+        partial_evidence_count: 0,
+        incomplete_evidence_status_count: 1,
+        unknown_gap_count: 0
+      },
+      top_gap_cases: [
+        {
+          case_id: 'research_case:alpha',
+          trade_date: '2026-06-12',
+          asset_id: 'CN:SZ:000001',
+          theme: 'bank_reversal',
+          title: 'Bank reversal candidate',
+          status: 'open',
+          priority: 20,
+          evidence_count: 0,
+          claim_count: 2,
+          gap_reasons: ['missing_evidence', 'incomplete_evidence_status'],
+          gap_summary: 'missing evidence signal found; evidence status is partial',
+          review_status: 'pending',
+          latest_review_action: null,
+          source_type: 'review_item_snapshot',
+          source_id: 'review_item_snapshot:alpha'
+        }
+      ],
+      last_refresh: {
+        run_id: 'research_queue_refresh:1',
+        finished_at: '2026-06-12T02:00:00.257014+00:00',
+        manifest_path: 'outputs/research/research_queue_refresh_v1/2026-06-12/research_queue_refresh_manifest.json'
+      },
+      warnings: ['evidence_gap_count=1']
+    });
+    vi.mocked(api.fetchResearchPublishGate).mockResolvedValue({
+      trade_date: '2026-06-12',
+      status: 'blocked',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 2,
+        open_case_count: 2,
+        claim_count: 3,
+        evidence_artifact_count: 4,
+        evidence_link_count: 5,
+        evidence_gap_count: 1,
+        pending_gap_count: 1,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [
+        { code: 'pending_gap', message: '1 gap case has not been reviewed', count: 1 },
+        {
+          code: 'external_delivery_not_connected',
+          message: 'External research delivery is not connected',
+          count: 1
+        }
+      ],
+      warnings: [],
+      top_blocked_cases: [
+        {
+          case_id: 'research_case:alpha',
+          trade_date: '2026-06-12',
+          asset_id: 'CN:SZ:000001',
+          theme: 'bank_reversal',
+          title: 'Bank reversal candidate',
+          review_status: 'pending',
+          gap_reasons: ['missing_evidence', 'incomplete_evidence_status'],
+          gap_summary: 'missing evidence signal found; evidence status is partial'
+        }
+      ]
+    });
+    vi.mocked(api.fetchResearchPublicationPreview).mockResolvedValue({
+      trade_date: '2026-06-12',
+      package_id: 'research_publication_package:alpha',
+      publishable: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      gate: {
+        status: 'blocked',
+        research_ready_for_publication: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false
+      },
+      summary: {
+        case_count: 2,
+        claim_count: 3,
+        evidence_count: 4,
+        evidence_link_count: 5,
+        gap_count: 1,
+        reviewed_gap_count: 0,
+        pending_gap_count: 1,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      sections: [
+        {
+          section_type: 'blocked_cases',
+          title: '发布阻塞项',
+          items: [
+            {
+              case_id: 'research_case:alpha',
+              trade_date: '2026-06-12',
+              asset_id: 'CN:SZ:000001',
+              theme: 'bank_reversal',
+              title: 'Bank reversal candidate',
+              review_status: 'pending',
+              gap_reasons: ['missing_evidence'],
+              gap_summary: 'missing evidence signal found'
+            }
+          ]
+        }
+      ],
+      warnings: [],
+      blockers: [{ code: 'pending_gap', message: '1 gap case has not been reviewed', count: 1 }]
+    });
+    vi.mocked(api.fetchResearchPublicationSnapshots).mockResolvedValue({ items: [] });
+    vi.mocked(api.fetchResearchExternalDeliveryPlan).mockResolvedValue({
+      delivery_plan_id: 'research_external_delivery_plan:abc',
+      publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+      trade_date: '2026-06-12',
+      channel: 'feishu_preview',
+      dry_run: true,
+      external_send_enabled: false,
+      status: 'preview_ready',
+      message: {
+        title: 'Research Queue Snapshot 2026-06-12',
+        summary: 'Cases 2, claims 3, evidence 4, gaps 0. Gate research_ready.',
+        sections: [{ section_type: 'research_queue_summary', title: '研究队列摘要', items: [] }]
+      },
+      source: {
+        package_id: 'research_publication_package:abc',
+        gate_status: 'research_ready',
+        snapshot_channel: 'research_queue_internal'
+      },
+      blockers: [],
+      warnings: ['External delivery is not connected in this version.']
+    });
+    vi.mocked(api.fetchResearchExternalDeliveryAttempts).mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {
@@ -355,6 +662,7 @@ describe('AppShell and HomeCockpit', () => {
 
     expect(await screen.findByText('策略指挥中心')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
+    expect(screen.getByText('今日研究队列')).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('市场环境')).toBeVisible();
     expect(screen.getByText('高质量新闻')).toBeVisible();
@@ -365,6 +673,17 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.queryByText('Today Focus')).not.toBeInTheDocument();
     expect(screen.queryByText('Today Actions')).not.toBeInTheDocument();
     expect(screen.queryByText('CN:SZ:300951')).not.toBeInTheDocument();
+
+    const healthCheckRegion = screen.getByRole('region', { name: '平台健康检查' });
+    expect(healthCheckRegion).toHaveClass('collapsible-panel');
+    const healthCheck = within(healthCheckRegion);
+    expect(healthCheck.getByRole('button', { name: '展开' })).toHaveAttribute('aria-expanded', 'false');
+    expect(healthCheck.queryByText('Market data')).not.toBeInTheDocument();
+    fireEvent.click(healthCheck.getByRole('button', { name: '展开' }));
+    expect(healthCheck.getByRole('button', { name: '收起' })).toHaveAttribute('aria-expanded', 'true');
+    expect(healthCheck.getByText('Market data')).toBeVisible();
+    fireEvent.click(healthCheck.getByRole('button', { name: '收起' }));
+    expect(healthCheck.getByRole('button', { name: '展开' })).toHaveAttribute('aria-expanded', 'false');
 
     const strategyPerformance = within(screen.getByRole('region', { name: '启用策略表现' }));
     expect(strategyPerformance.getByText('LHB Shortline Combo')).toBeVisible();
@@ -384,6 +703,66 @@ describe('AppShell and HomeCockpit', () => {
     expect(strategyPerformance.getByText('持仓明细暂无')).toBeVisible();
     expect(strategyPerformance.getAllByText('最新持仓 5')).toHaveLength(2);
     expect(strategyPerformance.getAllByText('截至 2026-06-08')).toHaveLength(2);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueueRegion = screen.getByRole('region', { name: '今日研究队列' });
+    expect(researchQueueRegion).toHaveClass('collapsible-panel');
+    const researchQueue = within(researchQueueRegion);
+    expect(researchQueue.getByRole('button', { name: '展开' })).toHaveAttribute('aria-expanded', 'false');
+    expect(researchQueue.getByText('今日有 2 个待审案例，1 个证据缺口，2 个发布阻塞。')).toBeVisible();
+    expect(researchQueue.getByText('先处理证据缺口，再处理发布保护。')).toBeVisible();
+    expect(researchQueue.getByText('最近刷新 2026-06-12 10:00')).toBeVisible();
+    expect(researchQueue.queryByText('Open Cases')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('Evidence Gaps')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('Publication Blocks')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('Last Refresh')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('2026-06-12T02:00:00.257014+00:00')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('Bank reversal candidate')).not.toBeInTheDocument();
+
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+
+    expect(researchQueue.getByRole('button', { name: '收起' })).toHaveAttribute('aria-expanded', 'true');
+    expect(researchQueue.getByText('Open Cases')).toBeVisible();
+    expect(researchQueue.getByText('Evidence Gaps')).toBeVisible();
+    expect(researchQueue.getByText('Publication Blocks')).toBeVisible();
+    expect(researchQueue.getByText('partial')).toBeVisible();
+    expect(researchQueue.getByText('Last Refresh')).toBeVisible();
+    expect(researchQueue.getByText('2026-06-12 10:00')).toBeVisible();
+    expect(researchQueue.queryByText('2026-06-12T02:00:00.257014+00:00')).not.toBeInTheDocument();
+    expect(researchQueue.getByText('Claims')).toBeVisible();
+    expect(researchQueue.getByText('3')).toBeVisible();
+    expect(researchQueue.getByText('Links')).toBeVisible();
+    expect(researchQueue.getByText('5')).toBeVisible();
+    expect(researchQueue.getByText('外部发送未接入')).toBeVisible();
+    expect(researchQueue.getByText('研究发布检查')).toBeVisible();
+    expect(researchQueue.getByText('研究发布检查未通过')).toBeVisible();
+    expect(researchQueue.getByText('外部发送入口未接入')).toBeVisible();
+    expect(researchQueue.getByText('内部发布快照')).toBeVisible();
+    expect(researchQueue.getByText('暂无内部发布快照')).toBeVisible();
+    expect(researchQueue.getByText('1 gap case has not been reviewed')).toBeVisible();
+    expect(researchQueue.getByText('待处理证据缺口')).toBeVisible();
+    expect(researchQueue.getAllByText('缺少 evidence / evidence 未完成')[0]).toBeVisible();
+    expect(researchQueue.getAllByText('Bank reversal candidate')[0]).toBeVisible();
+    expect(researchQueue.getAllByText('CN:SZ:000001')[0]).toBeVisible();
+    expect(researchQueue.getAllByText('bank_reversal')[0]).toBeVisible();
+    expect(researchQueue.getAllByText('0 evidence / 2 claims')[0]).toBeVisible();
+    expect(researchQueue.getByText('Industry rotation follow-up')).toBeVisible();
+    expect(researchQueue.getByText('3 evidence / 1 claims')).toBeVisible();
+    expect(api.fetchResearchCases).toHaveBeenCalledWith(
+      expect.objectContaining({ tradeDate: '2026-06-12', status: 'open', limit: 100 })
+    );
+    expect(api.fetchResearchEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100 })
+    );
+    expect(api.fetchResearchQueueHealth).toHaveBeenCalledWith(
+      expect.objectContaining({ tradeDate: '2026-06-12' })
+    );
+    expect(api.fetchResearchPublishGate).toHaveBeenCalledWith(
+      expect.objectContaining({ tradeDate: '2026-06-12' })
+    );
+    expect(api.fetchResearchPublicationSnapshots).toHaveBeenCalledWith(
+      expect.objectContaining({ tradeDate: '2026-06-12', limit: 5 })
+    );
 
     const marketRegime = within(screen.getByRole('region', { name: '市场环境' }));
     expect(marketRegime.getByText('73.6')).toBeVisible();
@@ -433,6 +812,382 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.queryByRole('navigation', { name: 'Quick actions' })).not.toBeInTheDocument();
   });
 
+  it('opens a research case detail panel from the research queue', async () => {
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    fireEvent.click(researchQueue.getAllByRole('button', { name: /审阅/ })[0]);
+
+    const detail = within(await screen.findByRole('region', { name: '研究案例详情' }));
+    expect(detail.getByText('Bank reversal candidate')).toBeVisible();
+    expect(detail.getByText('review_item_snapshot')).toBeVisible();
+    expect(detail.getByText('review_item_snapshot:alpha')).toBeVisible();
+    expect(detail.getByText('缺少 evidence / evidence 未完成')).toBeVisible();
+    expect(detail.getByText('evidence_status=partial, missing=1, partial=0')).toBeVisible();
+    expect(detail.getByText('Review snapshot evidence')).toBeVisible();
+    expect(detail.getByText('supports · research_case')).toBeVisible();
+    expect(detail.getByText('人工审阅动作')).toBeVisible();
+    expect(detail.getByText('当前状态')).toBeVisible();
+    expect(detail.getAllByText('待处理')[0]).toBeVisible();
+    expect(detail.getByRole('button', { name: '需要补充证据' })).toBeVisible();
+    expect(api.fetchResearchCaseDetail).toHaveBeenCalledWith('research_case:alpha');
+  });
+
+  it('records a research review action and refreshes detail and health', async () => {
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    fireEvent.click(researchQueue.getAllByRole('button', { name: /审阅/ })[0]);
+
+    const detail = within(await screen.findByRole('region', { name: '研究案例详情' }));
+    fireEvent.change(detail.getByLabelText('审阅备注'), { target: { value: '需要补充公告证据' } });
+    fireEvent.click(detail.getByRole('button', { name: '需要补充证据' }));
+
+    await waitFor(() => {
+      expect(api.createResearchReviewAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          case_id: 'research_case:alpha',
+          trade_date: '2026-06-12',
+          asset_id: 'CN:SZ:000001',
+          action_type: 'request_more_evidence',
+          gap_reasons: ['missing_evidence', 'incomplete_evidence_status'],
+          reviewer: 'operator',
+          comment: '需要补充公告证据',
+          source_context: expect.objectContaining({ from: 'home_cockpit_gap_detail' })
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(api.fetchResearchCaseDetail).toHaveBeenCalledTimes(2);
+      expect(api.fetchResearchQueueHealth).toHaveBeenCalledTimes(2);
+      expect(api.fetchResearchPublishGate).toHaveBeenCalledTimes(2);
+    });
+    expect(researchQueue.getByText('外部发送未接入')).toBeVisible();
+  });
+
+  it('shows a dry-run research publication preview without publish actions', async () => {
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    fireEvent.click(await researchQueue.findByRole('button', { name: '查看发布预览' }));
+
+    const preview = within(await researchQueue.findByLabelText('发布预览'));
+    expect(preview.getByText('发布预览')).toBeVisible();
+    expect(preview.getByText('预览，不是发布')).toBeVisible();
+    expect(preview.getByText('publishable=false')).toBeVisible();
+    expect(preview.getByText('research_publication_package:alpha')).toBeVisible();
+    expect(preview.getByText('Gate 未通过，不能记录')).toBeVisible();
+    expect(preview.getByText('外部发送入口未接入')).toBeVisible();
+    expect(preview.getByText('1 gap case has not been reviewed')).toBeVisible();
+    expect(api.fetchResearchPublicationPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ tradeDate: '2026-06-12' })
+    );
+    expect(researchQueue.queryByRole('button', { name: '立即发布' })).not.toBeInTheDocument();
+    expect(researchQueue.queryByRole('button', { name: '发送飞书' })).not.toBeInTheDocument();
+    expect(researchQueue.queryByRole('button', { name: '写入 publication snapshot' })).not.toBeInTheDocument();
+  });
+
+  it('shows latest internal publication snapshot summary without external publish wording', async () => {
+    vi.mocked(api.fetchResearchPublicationSnapshots).mockResolvedValueOnce({
+      items: [
+        {
+          publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+          trade_date: '2026-06-12',
+          channel: 'research_queue_internal',
+          title: 'Research Queue Internal Snapshot 2026-06-12',
+          created_by: 'research_queue_publish',
+          created_at: '2026-06-12T03:00:00.000000+00:00',
+          package_id: 'research_publication_package:abc',
+          gate_status: 'research_ready',
+          research_ready_for_publication: true,
+          actual_external_delivery_enabled: false,
+          case_count: 2,
+          claim_count: 3,
+          evidence_count: 4,
+          gap_count: 0,
+          blocker_count: 0
+        }
+      ]
+    });
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+
+    expect(await researchQueue.findByText('内部发布快照')).toBeVisible();
+    expect(researchQueue.getByText('publication_snapshot:research_queue_internal:abc')).toBeVisible();
+    expect(researchQueue.getByText('research_queue_internal')).toBeVisible();
+    expect(researchQueue.getByText('research_ready')).toBeVisible();
+    expect(researchQueue.getByText('外部发送状态：未接入')).toBeVisible();
+    expect(researchQueue.queryByText('外部已发布')).not.toBeInTheDocument();
+    expect(researchQueue.queryByRole('button', { name: '立即发布' })).not.toBeInTheDocument();
+    expect(researchQueue.queryByRole('button', { name: '发送飞书' })).not.toBeInTheDocument();
+  });
+
+  it('shows external delivery dry-run plan when an internal snapshot exists', async () => {
+    vi.mocked(api.fetchResearchPublicationSnapshots).mockResolvedValueOnce({
+      items: [
+        {
+          publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+          trade_date: '2026-06-12',
+          channel: 'research_queue_internal',
+          title: 'Research Queue Internal Snapshot 2026-06-12',
+          created_by: 'research_queue_publish',
+          created_at: '2026-06-12T03:00:00.000000+00:00',
+          package_id: 'research_publication_package:abc',
+          gate_status: 'research_ready',
+          research_ready_for_publication: true,
+          actual_external_delivery_enabled: false,
+          case_count: 2,
+          claim_count: 3,
+          evidence_count: 4,
+          gap_count: 0,
+          blocker_count: 0
+        }
+      ]
+    });
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+
+    expect(await researchQueue.findByText('外部发送预案')).toBeVisible();
+    expect(researchQueue.getByText('外部发送预案，仅 dry-run')).toBeVisible();
+    expect(researchQueue.getByText('feishu_preview')).toBeVisible();
+    expect(researchQueue.getByText('Research Queue Snapshot 2026-06-12')).toBeVisible();
+    expect(researchQueue.getByText('Cases 2, claims 3, evidence 4, gaps 0. Gate research_ready.')).toBeVisible();
+    expect(researchQueue.getByText('External delivery is not connected in this version.')).toBeVisible();
+    expect(api.fetchResearchExternalDeliveryPlan).toHaveBeenCalledWith({
+      publicationSnapshotId: 'publication_snapshot:research_queue_internal:abc',
+      channel: 'feishu_preview'
+    });
+    expect(researchQueue.getByText('发送尝试账本')).toBeVisible();
+    expect(researchQueue.getByText('暂无外部发送尝试记录')).toBeVisible();
+    expect(researchQueue.queryByRole('button', { name: '立即推送' })).not.toBeInTheDocument();
+    expect(researchQueue.queryByRole('button', { name: '真实发送' })).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('已发布到飞书')).not.toBeInTheDocument();
+  });
+
+  it('shows latest external delivery dry-run attempt ledger', async () => {
+    vi.mocked(api.fetchResearchPublicationSnapshots).mockResolvedValueOnce({
+      items: [
+        {
+          publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+          trade_date: '2026-06-12',
+          channel: 'research_queue_internal',
+          title: 'Research Queue Internal Snapshot 2026-06-12',
+          created_by: 'research_queue_publish',
+          created_at: '2026-06-12T03:00:00.000000+00:00',
+          package_id: 'research_publication_package:abc',
+          gate_status: 'research_ready',
+          research_ready_for_publication: true,
+          actual_external_delivery_enabled: false,
+          case_count: 2,
+          claim_count: 3,
+          evidence_count: 4,
+          gap_count: 0,
+          blocker_count: 0
+        }
+      ]
+    });
+    vi.mocked(api.fetchResearchExternalDeliveryAttempts).mockResolvedValueOnce({
+      items: [
+        {
+          delivery_attempt_id: 'external_delivery_attempt:abc',
+          publication_snapshot_id: 'publication_snapshot:research_queue_internal:abc',
+          trade_date: '2026-06-12',
+          channel: 'feishu_preview',
+          mode: 'dry_run',
+          status: 'preview_recorded',
+          dry_run: true,
+          external_send_enabled: false,
+          delivery_plan_id: 'research_external_delivery_plan:abc',
+          message_title: 'Research Queue Snapshot 2026-06-12',
+          created_by: 'operator',
+          created_at: '2026-06-12T03:05:00.000000+00:00',
+          error_code: '',
+          error_message: ''
+        }
+      ]
+    });
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+
+    const ledger = within(await researchQueue.findByLabelText('发送尝试账本'));
+    expect(ledger.getByText('external_delivery_attempt:abc')).toBeVisible();
+    expect(ledger.getByText('preview_recorded')).toBeVisible();
+    expect(ledger.getByText('feishu_preview')).toBeVisible();
+    expect(ledger.getByText('disabled')).toBeVisible();
+    expect(researchQueue.queryByText('delivery success')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('已发送到飞书')).not.toBeInTheDocument();
+  });
+
+  it('shows an error when recording a research review action fails', async () => {
+    vi.mocked(api.createResearchReviewAction).mockRejectedValueOnce(new Error('write token missing'));
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(await screen.findByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    fireEvent.click(researchQueue.getAllByRole('button', { name: /审阅/ })[0]);
+
+    const detail = within(await screen.findByRole('region', { name: '研究案例详情' }));
+    fireEvent.click(detail.getByRole('button', { name: '已知晓缺口' }));
+
+    expect(await screen.findByText(/审阅动作写入失败：write token missing/)).toBeVisible();
+  });
+
+  it('does not show gap cases when research queue is healthy', async () => {
+    vi.mocked(api.fetchResearchQueueHealth).mockResolvedValueOnce({
+      trade_date: '2026-06-12',
+      status: 'healthy',
+      can_review: true,
+      can_publish_research_queue: false,
+      publish_gate_status: 'research_ready',
+      research_ready_for_publication: true,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: true,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 2,
+        open_case_count: 2,
+        claim_count: 3,
+        evidence_artifact_count: 4,
+        evidence_link_count: 5,
+        evidence_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0,
+        no_evidence_count: 0,
+        missing_evidence_count: 0,
+        partial_evidence_count: 0,
+        incomplete_evidence_status_count: 0,
+        unknown_gap_count: 0
+      },
+      top_gap_cases: [],
+      last_refresh: null,
+      warnings: []
+    });
+    vi.mocked(api.fetchResearchPublishGate).mockResolvedValueOnce({
+      trade_date: '2026-06-12',
+      status: 'research_ready',
+      research_ready_for_publication: true,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: true,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 2,
+        open_case_count: 2,
+        claim_count: 3,
+        evidence_artifact_count: 4,
+        evidence_link_count: 5,
+        evidence_gap_count: 0,
+        pending_gap_count: 0,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [],
+      warnings: [
+        {
+          code: 'external_delivery_not_connected',
+          message: 'External research delivery is not connected',
+          count: 1
+        }
+      ],
+      top_blocked_cases: []
+    });
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(screen.getByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    expect(await researchQueue.findByText('研究审阅已通过，可记录内部快照；外部发送未接入')).toBeVisible();
+    expect(researchQueue.queryByText('待处理证据缺口')).not.toBeInTheDocument();
+    expect(researchQueue.queryByText('真实可发布')).not.toBeInTheDocument();
+  });
+
+  it('shows empty research publish gate without reporting blockers', async () => {
+    vi.mocked(api.fetchResearchCases).mockResolvedValueOnce({ items: [] });
+    vi.mocked(api.fetchResearchQueueHealth).mockResolvedValueOnce({
+      trade_date: '2026-06-12',
+      status: 'empty',
+      can_review: false,
+      can_publish_research_queue: false,
+      publish_gate_status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      top_gap_cases: [],
+      last_refresh: null,
+      warnings: []
+    });
+    vi.mocked(api.fetchResearchPublishGate).mockResolvedValueOnce({
+      trade_date: '2026-06-12',
+      status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        pending_gap_count: 0,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [],
+      warnings: [],
+      top_blocked_cases: []
+    });
+
+    render(<AppShell />);
+
+    await screen.findByText('策略指挥中心');
+    const researchQueue = within(screen.getByRole('region', { name: '今日研究队列' }));
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+
+    expect(await researchQueue.findByText('无研究队列，无法执行研究发布检查')).toBeVisible();
+    expect(researchQueue.queryByText('待处理证据缺口')).not.toBeInTheDocument();
+  });
+
   it('keeps core cockpit content when platform readiness fails', async () => {
     vi.mocked(api.fetchPlatformReadiness).mockRejectedValueOnce(new Error('readiness unavailable'));
 
@@ -442,6 +1197,43 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getByText('平台就绪状态不可用：readiness unavailable')).toBeVisible();
     expect(screen.getByText('策略持仓状态')).toBeVisible();
     expect(screen.getByText('市场环境')).toBeVisible();
+  });
+
+  it('surfaces degraded readiness as dashboard-available and publication-ready with warnings', async () => {
+    vi.mocked(api.fetchPlatformReadiness).mockResolvedValueOnce({
+      mode: 'eod_local',
+      status: 'PARTIAL',
+      as_of: '2026-06-30T21:30:00+08:00',
+      latest_market_date: '2026-06-30',
+      latest_trade_date: '2026-06-30',
+      display_trade_date: '2026-06-30',
+      candidate_trade_date: '2026-06-30',
+      checks: [],
+      health_groups: [],
+      warnings: ['pipeline_status=DEGRADED_READY'],
+      policy: {
+        status: 'degraded_ready',
+        ready_for_dashboard: true,
+        ready_for_publication: true,
+        blocking_reasons: [],
+        warnings: [
+          'pipeline_status=DEGRADED_READY',
+          'partial_data=daily_status=partial_success',
+          'partial_data=minute5_status=partial_success'
+        ]
+      }
+    });
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    const homeStatus = within(screen.getByRole('region', { name: '首页状态' }));
+    expect(homeStatus.getByText('可查看')).toBeVisible();
+    expect(homeStatus.getByText('可发布')).toBeVisible();
+    const policyPanel = within(screen.getByRole('region', { name: '平台发布保护' }));
+    expect(policyPanel.getByText('可发布')).toBeVisible();
+    expect(policyPanel.getByText(/daily_status=partial_success/)).toBeVisible();
+    expect(policyPanel.getByText(/minute5_status=partial_success/)).toBeVisible();
   });
 
   it('keeps core cockpit content when optional home widgets fail', async () => {
@@ -458,6 +1250,23 @@ describe('AppShell and HomeCockpit', () => {
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.getByText('市场环境不可用：market monitor unavailable')).toBeVisible();
     expect(screen.getByText('新闻流不可用：news unavailable')).toBeVisible();
+  });
+
+  it('shows research queue errors without breaking the cockpit', async () => {
+    vi.mocked(api.fetchResearchCases).mockRejectedValueOnce(new Error('research cases unavailable'));
+    vi.mocked(api.fetchResearchEvidence).mockRejectedValueOnce(new Error('research evidence unavailable'));
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
+    expect(screen.getByText('今日研究队列')).toBeVisible();
+    const researchQueue = within(screen.getByRole('region', { name: '今日研究队列' }));
+    expect(await researchQueue.findByText('研究队列暂不可用。')).toBeVisible();
+    expect(researchQueue.getByText('不可用')).toBeVisible();
+    expect(researchQueue.queryByText('无待处理')).not.toBeInTheDocument();
+    expect(screen.queryByText(/研究队列不可用：research cases unavailable/)).not.toBeInTheDocument();
+    fireEvent.click(researchQueue.getByRole('button', { name: '展开' }));
+    expect(await researchQueue.findByText(/研究队列不可用：research cases unavailable/)).toBeVisible();
   });
 
   it('does not load manual v1 evidence digest rows on the home page', async () => {

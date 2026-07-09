@@ -136,16 +136,23 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
             ]
         )
 
+    status = aggregate_readiness_status(checks)
     return {
         "mode": "eod_local",
-        "status": aggregate_readiness_status(checks),
+        "status": status,
+        "policy": _policy_from_manifest_status(
+            status=status,
+            missing_data=_missing_from_checks(checks),
+            partial_data=_partial_from_checks(checks),
+            warnings=warnings,
+        ),
         "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
         "run_id": "",
         "latest_trade_date": latest_market_date,
         "latest_market_date": latest_market_date,
         "source": "lightweight_probe",
         "summary_path": "",
-        "tiers": _tiers_from_status(aggregate_readiness_status(checks)),
+        "tiers": _tiers_from_status(status),
         "modules": [],
         "checks": checks,
         "health_groups": _build_health_groups_from_checks(
@@ -157,7 +164,7 @@ def build_platform_readiness(score_version: str = "manual_v1") -> dict[str, Any]
         "missing_data": _missing_from_checks(checks),
         "partial_data": _partial_from_checks(checks),
         "next_actions": _next_actions(
-            aggregate_readiness_status(checks),
+            status,
             _missing_from_checks(checks),
             _partial_from_checks(checks),
         ),
@@ -216,10 +223,12 @@ def _build_manifest_readiness(
     health_blocking_missing = _health_missing_keys(
         health_groups,
         blocking_group_keys={"base_data", "strategy_execution"},
+        statuses={"missing_data"},
     )
     health_partial_missing = _health_missing_keys(
         health_groups,
         blocking_group_keys={"review_chain", "content_chain"},
+        statuses={"missing_data", "partial"},
     )
     missing_data.extend(health_blocking_missing)
     partial_data.extend(health_partial_missing)
@@ -227,10 +236,17 @@ def _build_manifest_readiness(
     status = "BLOCKED" if missing_data else (
         "PARTIAL" if partial_data or summary["status"] == "PARTIAL" else summary["status"]
     )
+    policy = _policy_from_manifest_status(
+        status=status,
+        missing_data=missing_data,
+        partial_data=partial_data,
+        warnings=warnings,
+    )
     run_id = str(active_modules[0].get("run_id") or "") if active_modules else ""
     return {
         "mode": "eod_local",
         "status": status,
+        "policy": policy,
         "as_of": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
         "run_id": run_id,
         "latest_trade_date": latest_trade_date,
@@ -254,6 +270,38 @@ def _build_manifest_readiness(
         "partial_data": _dedupe(partial_data),
         "next_actions": _next_actions(status, missing_data, partial_data),
         "dashboard_url": "http://127.0.0.1:5174",
+    }
+
+
+def _policy_from_manifest_status(
+    *,
+    status: str,
+    missing_data: list[str],
+    partial_data: list[str],
+    warnings: list[str],
+) -> dict[str, Any]:
+    if status == "BLOCKED":
+        return {
+            "status": "blocked",
+            "ready_for_dashboard": False,
+            "ready_for_publication": False,
+            "blocking_reasons": _dedupe(missing_data),
+            "warnings": _dedupe(warnings),
+        }
+    if status == "PARTIAL":
+        return {
+            "status": "degraded_ready",
+            "ready_for_dashboard": True,
+            "ready_for_publication": True,
+            "blocking_reasons": [],
+            "warnings": _dedupe([*warnings, *[f"partial_data={item}" for item in partial_data]]),
+        }
+    return {
+        "status": "ready",
+        "ready_for_dashboard": True,
+        "ready_for_publication": True,
+        "blocking_reasons": [],
+        "warnings": _dedupe(warnings),
     }
 
 
@@ -379,7 +427,14 @@ def _build_manifest_health_groups(
             modules=("strategy_tech_bottleneck",),
         ),
     ]
-    stock_workspace_ready = _health_ready(base_items, "daily_bars") and _health_ready(base_items, "score_topn")
+    daily_status = _health_status(base_items, "daily_bars")
+    score_status = _health_status(base_items, "score_topn")
+    stock_workspace_ready = daily_status == "ready" and score_status == "ready"
+    stock_workspace_partial = (
+        not stock_workspace_ready
+        and daily_status in {"ready", "partial"}
+        and score_status in {"ready", "partial"}
+    )
     review_items = [
         _manifest_health_item(
             by_module,
@@ -396,10 +451,16 @@ def _build_manifest_health_groups(
         {
             "key": "stock_workspace",
             "label": "Stock Workspace",
-            "status": "ready" if stock_workspace_ready else "missing_data",
+            "status": "ready"
+            if stock_workspace_ready
+            else ("partial" if stock_workspace_partial else "missing_data"),
             "detail": "日线和评分可用，个股工作台可打开"
             if stock_workspace_ready
-            else "缺少日线或评分，个股工作台证据链不完整",
+            else (
+                "日线或评分处于降级状态，个股工作台可打开但需关注数据缺口"
+                if stock_workspace_partial
+                else "缺少日线或评分，个股工作台证据链不完整"
+            ),
             "row_count": None,
             "latest_trade_date": latest_market_date,
         },
@@ -658,17 +719,25 @@ def _health_ready(items: list[dict[str, Any]], key: str) -> bool:
     return any(item.get("key") == key and item.get("status") == "ready" for item in items)
 
 
+def _health_status(items: list[dict[str, Any]], key: str) -> str:
+    for item in items:
+        if item.get("key") == key:
+            return str(item.get("status") or "")
+    return ""
+
+
 def _health_missing_keys(
     health_groups: list[dict[str, Any]],
     *,
     blocking_group_keys: set[str],
+    statuses: set[str],
 ) -> list[str]:
     keys: list[str] = []
     for group in health_groups:
         if str(group.get("key") or "") not in blocking_group_keys:
             continue
         for item in group.get("items") or []:
-            if item.get("status") == "missing_data":
+            if str(item.get("status") or "") in statuses:
                 keys.append(str(item.get("key") or ""))
     return _dedupe(keys)
 

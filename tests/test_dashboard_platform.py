@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import platform
+from stock_research.dashboard import read_models
 
 
 class FakeConnection:
@@ -24,6 +25,8 @@ def test_load_platform_summary_combines_coverage_and_topn(monkeypatch):
 
     def fake_fetch_all(conn, sql, params=None):
         calls.append(sql)
+        if "ops.dashboard_platform_summary_daily" in sql:
+            return []
         if "max(trade_date) AS latest_market_date" in sql:
             return [{"latest_market_date": "2026-06-08", "market_asset_count": 5207}]
         if "max(trade_date) AS latest_score_date" in sql:
@@ -47,8 +50,8 @@ def test_load_platform_summary_combines_coverage_and_topn(monkeypatch):
             ]
         raise AssertionError(sql)
 
-    monkeypatch.setattr(platform, "connect", fake_connect)
-    monkeypatch.setattr(platform, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(read_models, "connect", fake_connect)
+    monkeypatch.setattr(read_models, "fetch_all", fake_fetch_all)
 
     result = platform.load_platform_summary()
 
@@ -75,3 +78,40 @@ def test_platform_summary_route(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["latest_market_date"] == "2026-06-08"
+
+
+def test_platform_summary_route_uses_public_read_model(monkeypatch):
+    monkeypatch.setattr(
+        dashboard_app,
+        "load_platform_summary",
+        lambda **kwargs: {
+            "latest_market_date": "2026-06-08",
+            "latest_score_date": "2026-06-08",
+            "latest_factor_date": "2026-06-07",
+            "market_asset_count": 5207,
+            "score_asset_count": 5207,
+            "factor_count": 43,
+            "score_versions": ["manual_v1"],
+            "topn_preview": [
+                {
+                    "trade_date": "2026-06-08",
+                    "asset_id": "CN:SZ:300951",
+                    "rank": 1,
+                    "score_total": 89.9,
+                    "score_version": "manual_v1",
+                    "score_components": {"ret_20_score": 97.4},
+                    "internal_debug_sql": "SELECT secret",
+                }
+            ],
+            "internal_connection_string": "postgres://secret",
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get("/api/platform/summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "internal_connection_string" not in payload
+    assert "internal_debug_sql" not in payload["topn_preview"][0]
+    assert payload["topn_preview"][0]["score_components"] == {"ret_20_score": 97.4}

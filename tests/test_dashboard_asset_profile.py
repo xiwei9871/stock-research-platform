@@ -225,7 +225,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
             return [
                 {
                     "report_period": "2025-09-30",
-                    "classify_type": "按产品",
+                    "classify_type": "按产品分类",
                     "item_name": "对公业务",
                     "revenue": 90000000000.0,
                     "revenue_ratio": 0.48,
@@ -233,7 +233,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 },
                 {
                     "report_period": "2025-09-30",
-                    "classify_type": "按产品",
+                    "classify_type": "按产品分类",
                     "item_name": "零售业务",
                     "revenue": 70000000000.0,
                     "revenue_ratio": 0.33,
@@ -332,7 +332,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         "missing_fields": [],
         "groups": [
             {
-                "classify_type": "按产品",
+                "classify_type": "按产品分类",
                 "items": [
                     {
                         "item_name": "对公业务",

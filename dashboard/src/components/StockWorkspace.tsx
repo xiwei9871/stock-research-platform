@@ -5,6 +5,7 @@ import {
   fetchAssetResearchReports,
   fetchDailyBars,
   fetchEvidenceDigest,
+  fetchStockMarketContextHeatmap,
   searchAssets,
   updateOperatorDecision
 } from '../api/client';
@@ -15,10 +16,15 @@ import type {
   AssetResearchReportResponse,
   AssetSummary,
   DecisionEventRow,
-  EvidenceDigestResponse
+  EvidenceDigestResponse,
+  StockMarketContextHeatmapPayload
 } from '../api/types';
 import { AssetChart } from '../charts/AssetChart';
 import { OperatorDecisionPanel } from './OperatorDecisionPanel';
+import { BusinessQualitySection } from './stock-workspace/BusinessQualitySection';
+import { CompanyBasicsSection } from './stock-workspace/CompanyBasicsSection';
+import { StockMarketContextHeatmap } from './stock-workspace/StockMarketContextHeatmap';
+import { readableTechBottleneckOptionLabel } from './techBottleneck/TechBottleneckFilterBar';
 import type { SectorType } from './market-monitor/mockData';
 import type { TechBottleneckStockEntryContext } from '../features/techBottleneckWatchlistReview/types';
 
@@ -48,6 +54,7 @@ type StockWorkspaceProps = {
   onOpenNews?: (context: StockEntryContext) => void;
   onOpenResearchReports?: (context: StockEntryContext) => void;
   onOpenMarketMonitor?: (context: StockEntryContext) => void;
+  onOpenAsset?: (assetId: string, context: StockEntryContext) => void;
 };
 
 function offsetDate(dateValue: string, dayOffset: number) {
@@ -196,6 +203,18 @@ function getFactorRows(profile: AssetProfile | null): FactorDisplayRow[] {
   return [...rawFactorRows, ...scoreComponentRows];
 }
 
+function dedupeAssetMatches(matches: AssetSummary[]) {
+  const seen = new Set<string>();
+  return matches.filter((match) => {
+    const key = normalizeAssetId(match.asset_id);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function formatReason(reason: Record<string, unknown>) {
   return Object.entries(reason)
     .map(([key, value]) => `${key}: ${formatValue(value)}`)
@@ -252,6 +271,75 @@ function formatTradeVolume(value: number | null | undefined) {
 function formatOptionalMetric(value: number | null | undefined, formatter: (metric: number) => string) {
   if (value == null || Number.isNaN(value)) return '-';
   return formatter(value);
+}
+
+function normalizeCompactSentence(value: string) {
+  return value.replace(/\s+/g, ' ').replace(/[;；]+/g, '；').trim();
+}
+
+function firstCompactClause(value: string) {
+  const normalized = normalizeCompactSentence(value);
+  if (!normalized) return '';
+  const [clause] = normalized.split(/[；;。]|(?<=\.)\s+/);
+  return clause?.trim() ?? '';
+}
+
+function truncateCompactText(value: string, maxLength = 26) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function summarizeTechBottleneckGap(entryContext: StockEntryContext) {
+  const rawGapNote = normalizeCompactSentence(entryContext.evidenceGapNote ?? '');
+  const readableReportStatus = readableTechBottleneckOptionLabel(entryContext.reportStatus ?? '');
+  const readableReviewDecision = readableTechBottleneckOptionLabel(entryContext.reportReviewDecision ?? '');
+  const readableEvidenceStrength = readableTechBottleneckOptionLabel(entryContext.evidenceStrength ?? '');
+  const gapSignals = [
+    { match: /primary source/i, summary: '一手来源仍待补齐' },
+    { match: /页级|page/i, summary: '页级证据映射待补齐' },
+    { match: /财报|annual report/i, summary: '财报链路仍待补齐' },
+    { match: /客户|customer/i, summary: '客户验证证据待补齐' }
+  ];
+  for (const signal of gapSignals) {
+    if (signal.match.test(rawGapNote)) {
+      return signal.summary;
+    }
+  }
+  if (rawGapNote) {
+    return truncateCompactText(firstCompactClause(rawGapNote) || rawGapNote);
+  }
+  if (readableReportStatus && readableReportStatus !== '全部') {
+    return truncateCompactText(readableReportStatus);
+  }
+  if (readableReviewDecision && readableReviewDecision !== '全部') {
+    return truncateCompactText(readableReviewDecision);
+  }
+  if (entryContext.evidenceStrength === 'pending_primary_source') {
+    return '一手来源仍待补齐';
+  }
+  if (entryContext.evidenceStrength === 'insufficient' || entryContext.evidenceStrength === 'missing') {
+    return `${readableEvidenceStrength || '证据'}，需继续补齐`;
+  }
+  return '-';
+}
+
+function summarizeTechBottleneckNextStep(nextAction: string | undefined) {
+  const normalized = normalizeCompactSentence(nextAction ?? '');
+  if (!normalized) return '-';
+  const lowered = normalized.toLowerCase();
+  if (lowered.includes('manual review') && lowered.includes('backfill')) {
+    return '先补证，再做人工复核';
+  }
+  if (lowered.includes('manual review')) {
+    return '人工复核确认';
+  }
+  if (lowered.includes('backfill')) {
+    return '优先回填关键证据';
+  }
+  if (lowered.includes('keep in default hard-tech review pool')) {
+    return '留在默认复核池继续跟踪';
+  }
+  return truncateCompactText(firstCompactClause(normalized) || normalized);
 }
 
 function formatResearchPriorityScore(value: number | null | undefined) {
@@ -341,13 +429,53 @@ function lineageText(lineage: Record<string, unknown> | undefined, key: string) 
   return typeof value === 'string' ? value : undefined;
 }
 
+export function reviewActionLabel(reviewMetrics: ReturnType<typeof buildReviewMetrics>, digest: EvidenceDigestResponse | null) {
+  if (digest?.bucket === 'risk_heavy') return '等待确认';
+  if (reviewMetrics.highDrawdown != null && reviewMetrics.highDrawdown <= -0.08) return '降级观察';
+  if (reviewMetrics.dayReturn != null && reviewMetrics.dayReturn > 0.015) return '继续跟踪';
+  return '继续观察';
+}
+
+export function reviewConfidenceLabel(
+  reviewMetrics: ReturnType<typeof buildReviewMetrics>,
+  entryContext: StockEntryContext,
+  digest: EvidenceDigestResponse | null
+) {
+  const digestScore = typeof digest?.score === 'number' ? digest.score : null;
+  const bottleneckScore =
+    typeof entryContext.bottleneckConfidenceScore === 'number' ? entryContext.bottleneckConfidenceScore : null;
+  const baseline = digestScore ?? bottleneckScore ?? 50;
+  if (baseline >= 75) return '较高';
+  if (baseline >= 55) return '中等';
+  if (reviewMetrics.highDrawdown != null && reviewMetrics.highDrawdown <= -0.08) return '偏低';
+  return '待确认';
+}
+
+export function reviewConclusionText(
+  reviewMetrics: ReturnType<typeof buildReviewMetrics>,
+  entryContext: StockEntryContext,
+  digest: EvidenceDigestResponse | null
+) {
+  if (entryContext.sourceWorkspace === 'techBottleneck' && entryContext.nextAction) {
+    return `明日先${entryContext.nextAction}，再决定是否继续跟踪。`;
+  }
+  if (entryContext.sourceWorkspace === 'techBottleneck' && entryContext.evidenceGapNote) {
+    return '卡脖子 thesis 仍可跟踪，但明日优先验证缺失证据。';
+  }
+  if (reviewMetrics.state === '加速') return '走势仍在强化，明日优先观察延续性与量价匹配。';
+  if (reviewMetrics.state === '回撤') return '高位回撤压力较大，明日先判断是否转弱再决定是否继续跟踪。';
+  if (digest?.bucket === 'strong') return '证据面偏强，明日重点看价格是否确认。';
+  return '暂无单边结论，明日结合价格行为与证据变化继续复盘。';
+}
+
 export function StockWorkspace({
   initialAssetId = DEFAULT_ASSET_ID,
   defaultTradeDate = DEFAULT_TRADE_DATE,
   entryContext,
   onOpenNews,
   onOpenResearchReports,
-  onOpenMarketMonitor
+  onOpenMarketMonitor,
+  onOpenAsset
 }: StockWorkspaceProps) {
   const initialTradeDate = entryContext?.tradeDate ?? defaultTradeDate ?? DEFAULT_TRADE_DATE;
   const initialStartDate = offsetDate(initialTradeDate, -180);
@@ -363,17 +491,20 @@ export function StockWorkspace({
   const [assetNews, setAssetNews] = useState<AssetNewsResponse | null>(null);
   const [researchReports, setResearchReports] = useState<AssetResearchReportResponse | null>(null);
   const [evidenceDigest, setEvidenceDigest] = useState<EvidenceDigestResponse | null>(null);
+  const [marketContextHeatmap, setMarketContextHeatmap] = useState<StockMarketContextHeatmapPayload | null>(null);
   const [assetMatches, setAssetMatches] = useState<AssetSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isNewsLoading, setIsNewsLoading] = useState(false);
   const [isResearchReportsLoading, setIsResearchReportsLoading] = useState(false);
   const [isEvidenceDigestLoading, setIsEvidenceDigestLoading] = useState(false);
+  const [marketContextHeatmapLoading, setMarketContextHeatmapLoading] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newsError, setNewsError] = useState<{ assetId: string; message: string } | null>(null);
   const [newsLoadingAssetId, setNewsLoadingAssetId] = useState<string | null>(null);
   const [researchReportsError, setResearchReportsError] = useState<string | null>(null);
   const [evidenceDigestError, setEvidenceDigestError] = useState<string | null>(null);
+  const [marketContextHeatmapError, setMarketContextHeatmapError] = useState<string | null>(null);
   const [evidenceDigestKey, setEvidenceDigestKey] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [editingDecisionId, setEditingDecisionId] = useState<string | null>(null);
@@ -387,6 +518,7 @@ export function StockWorkspace({
   const newsRequestIdRef = useRef(0);
   const researchReportsRequestIdRef = useRef(0);
   const evidenceDigestRequestIdRef = useRef(0);
+  const marketContextHeatmapRequestIdRef = useRef(0);
   const searchRequestIdRef = useRef(0);
 
   const isLatestProfileRequest = useCallback((requestId: number) => {
@@ -408,7 +540,7 @@ export function StockWorkspace({
     try {
       const items = await searchAssets(query, 8);
       if (mountedRef.current && profileRequestId === profileRequestIdRef.current && requestId === searchRequestIdRef.current) {
-        setAssetMatches(items);
+        setAssetMatches(dedupeAssetMatches(items));
       }
     } catch (err: unknown) {
       if (mountedRef.current && profileRequestId === profileRequestIdRef.current && requestId === searchRequestIdRef.current) {
@@ -531,6 +663,7 @@ export function StockWorkspace({
       newsRequestIdRef.current += 1;
       researchReportsRequestIdRef.current += 1;
       evidenceDigestRequestIdRef.current += 1;
+      marketContextHeatmapRequestIdRef.current += 1;
       searchRequestIdRef.current += 1;
     };
   }, [initialAssetId, initialStartDate, initialTradeDate]);
@@ -678,13 +811,58 @@ export function StockWorkspace({
       .finally(() => {
         if (mountedRef.current && requestId === evidenceDigestRequestIdRef.current) {
           setIsEvidenceDigestLoading(false);
+      }
+    });
+  }, [profile]);
+
+  useEffect(() => {
+    const targetAssetId = profile?.canonical_asset_id ?? assetId;
+    if (!profile || !targetAssetId || !tradeDate) {
+      marketContextHeatmapRequestIdRef.current += 1;
+      setMarketContextHeatmap(null);
+      setMarketContextHeatmapLoading(false);
+      setMarketContextHeatmapError(null);
+      return;
+    }
+
+    const requestId = marketContextHeatmapRequestIdRef.current + 1;
+    marketContextHeatmapRequestIdRef.current = requestId;
+
+    setMarketContextHeatmap(null);
+    setMarketContextHeatmapError(null);
+    setMarketContextHeatmapLoading(true);
+
+    fetchStockMarketContextHeatmap(targetAssetId, tradeDate)
+      .then((payload) => {
+        if (mountedRef.current && requestId === marketContextHeatmapRequestIdRef.current) {
+          setMarketContextHeatmap(payload);
+        }
+      })
+      .catch((err: unknown) => {
+        if (mountedRef.current && requestId === marketContextHeatmapRequestIdRef.current) {
+          setMarketContextHeatmapError(err instanceof Error ? err.message : String(err));
+          setMarketContextHeatmap(null);
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current && requestId === marketContextHeatmapRequestIdRef.current) {
+          setMarketContextHeatmapLoading(false);
         }
       });
-  }, [profile]);
+  }, [assetId, profile, tradeDate]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void loadProfile();
+  };
+
+  const handleSelectPeerFromMarketContext = (nextAssetId: string) => {
+    onOpenAsset?.(nextAssetId, {
+      sourceWorkspace: 'market',
+      monitorTab: 'stock_peer_heatmap',
+      tradeDate,
+      matchReason: 'peer_heatmap'
+    });
   };
 
   const identityName = profile?.asset?.name ?? profile?.asset_id ?? assetId;
@@ -694,7 +872,9 @@ export function StockWorkspace({
   const reviewMetrics = buildReviewMetrics(profile);
   const quoteSnapshot = profile?.quote_snapshot ?? buildFallbackQuoteSnapshot(profile);
   const companyProfile = profile?.company_profile;
-  const valuationSnapshot = profile?.valuation_snapshot;
+  const companyOverview = profile?.company_overview;
+  const businessComposition = profile?.business_composition;
+  const financialSnapshot = profile?.financial_snapshot;
   const visibleAssetNews =
     assetNews && profile && assetNews.asset_id === profile.canonical_asset_id ? assetNews : null;
   const visibleNewsError =
@@ -749,6 +929,21 @@ export function StockWorkspace({
     lineageText(digestLineage, 'evidence_digest_snapshot_id') ?? currentEntryContext.evidenceDigestSnapshotId;
   const reviewSourceName = currentEntryContext.sourceName ?? decisionSourceName ?? currentEntryContext.sourceWorkspace;
   const reviewRank = currentEntryContext.topnRank ?? profile?.score?.rank ?? null;
+  const reviewAction = reviewActionLabel(reviewMetrics, visibleEvidenceDigest);
+  const reviewConfidence = reviewConfidenceLabel(reviewMetrics, currentEntryContext, visibleEvidenceDigest);
+  const reviewConclusion = reviewConclusionText(reviewMetrics, currentEntryContext, visibleEvidenceDigest);
+  const decisionDrivers = [
+    { label: '来源策略', value: reviewSourceName ?? '-' },
+    { label: '复盘日期', value: tradeDate },
+    { label: '策略排名', value: reviewRank != null ? `第 ${reviewRank} 名` : '-' },
+    { label: '策略分数', value: formatScore(profile) },
+    { label: '最新收盘', value: formatValue(close) },
+    { label: '当日涨跌幅', value: formatPercent(reviewMetrics.dayReturn) },
+    { label: '近5日表现', value: formatPercent(reviewMetrics.fiveDayReturn) },
+    { label: '量能/20日均额', value: formatRatio(reviewMetrics.amountRatio) },
+    { label: '新闻/研报', value: `${visibleAssetNews?.summary.news_count_7d ?? '-'} / ${latestReportDate}` },
+    { label: '价格状态', value: reviewMetrics.state }
+  ];
   const marketMonitorSection = visibleEvidenceDigest?.sections?.market_monitor;
   const marketMonitorStatus = marketMonitorSection?.status ?? 'missing';
   const marketMonitorTab = visibleEvidenceDigest?.source_refs.monitor_tab ?? currentEntryContext.monitorTab ?? '';
@@ -761,15 +956,23 @@ export function StockWorkspace({
   const chartWindowLabel = isIntradayChartActive
     ? `${startDate} to ${endDate}`
     : `历史 ${chartBars.length} bars / 固定显示 ${visibleChartBarCount} bars / 截至 ${endDate}`;
+  const thesisGapSummary = summarizeTechBottleneckGap(currentEntryContext);
+  const thesisNextStepSummary = summarizeTechBottleneckNextStep(currentEntryContext.nextAction);
+  const thesisGapDetail = normalizeCompactSentence(currentEntryContext.evidenceGapNote ?? '');
+  const thesisActionDetail = normalizeCompactSentence(currentEntryContext.nextAction ?? '');
+  const thesisSupportLines = [
+    currentEntryContext.rationale ? normalizeCompactSentence(currentEntryContext.rationale) : '',
+    currentEntryContext.evidenceExcerpt ? normalizeCompactSentence(currentEntryContext.evidenceExcerpt) : ''
+  ].filter((line, index, array) => Boolean(line) && array.indexOf(line) === index);
 
   return (
-    <section className="workspace-stack stock-detail-shell" aria-label="Stock Workspace workspace">
+    <section className="workspace-stack stock-detail-shell" aria-label="个股复盘工作台">
       <header className="workspace-header">
-        <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : 'Stock Workspace'}</h1>
+        <h1>{profile ? `${identityName} ${profile.canonical_asset_id}` : '个股工作台'}</h1>
         <p className="muted">个股复盘工作台：集中查看走势、策略证据、新闻研报和人工复盘记录。</p>
         {currentEntryContext.sourceWorkspace ? (
           <p className="muted">
-            Opened from {formatSourceWorkspace(currentEntryContext.sourceWorkspace)}
+            来源工作台：{formatSourceWorkspace(currentEntryContext.sourceWorkspace)}
             {currentEntryContext.matchReason ? (
               <>
                 {' '}
@@ -779,7 +982,7 @@ export function StockWorkspace({
           </p>
         ) : null}
         {sourceObjectIds.length > 0 ? (
-          <div className="tag-stack" aria-label="Source context">
+          <div className="tag-stack" aria-label="来源上下文">
             {sourceObjectIds.map((sourceObjectId) => (
               <span key={sourceObjectId} className="status-chip neutral">
                 {sourceObjectId}
@@ -788,140 +991,6 @@ export function StockWorkspace({
           </div>
         ) : null}
       </header>
-
-      {isTechBottleneckEntry ? (
-        <section className="workspace-band tech-bottleneck-stock-context" role="region" aria-label="技术瓶颈候选上下文">
-          <div className="section-heading">
-            <div>
-              <h2>技术瓶颈候选上下文</h2>
-              <p className="muted">Research-only · manual review only · no production signal/admission</p>
-            </div>
-            <span className="status-chip neutral">{currentEntryContext.reviewStatus ?? 'not_reviewed'}</span>
-          </div>
-          <div className="stock-summary-strip compact tech-bottleneck-context-metrics">
-            <div>
-              <span>候选名称</span>
-              <strong>{currentEntryContext.stockName ?? currentEntryContext.query ?? currentAssetId}</strong>
-            </div>
-            <div>
-              <span>来源</span>
-              <strong>{currentEntryContext.sourceGroup ?? '-'}</strong>
-            </div>
-            <div>
-              <span>原 Tier</span>
-              <strong>{currentEntryContext.previousTier ?? '-'}</strong>
-            </div>
-            <div>
-              <span>证据强度</span>
-              <strong>{currentEntryContext.evidenceStrength ?? '-'}</strong>
-            </div>
-            <div>
-              <span>瓶颈相关性</span>
-              <strong>{currentEntryContext.bottleneckRelevance ?? '-'}</strong>
-            </div>
-            <div>
-              <span>研究优先级</span>
-              <strong>{formatResearchPriorityScore(currentEntryContext.researchPriorityScore)}</strong>
-            </div>
-          </div>
-          <div className="tech-bottleneck-context-grid">
-            <article>
-              <span>人工审批分类</span>
-              <strong>{currentEntryContext.finalManualApprovalCategory ?? '-'}</strong>
-            </article>
-            <article>
-              <span>证据/业务类别</span>
-              <strong>{currentEntryContext.evidenceCategory || currentEntryContext.businessRelevanceCategory || '-'}</strong>
-            </article>
-            <article>
-              <span>下一步动作</span>
-              <strong>{currentEntryContext.nextAction ?? '-'}</strong>
-            </article>
-            <article>
-              <span>Guardrails</span>
-              <strong>allowed_for_signal={currentEntryContext.allowedForSignal ? 'true' : 'false'}</strong>
-              <strong>allowed_for_admission={currentEntryContext.allowedForAdmission ? 'true' : 'false'}</strong>
-            </article>
-          </div>
-          {currentEntryContext.rationale ? <p>{currentEntryContext.rationale}</p> : null}
-          {currentEntryContext.evidenceExcerpt ? <p className="muted">{currentEntryContext.evidenceExcerpt}</p> : null}
-          {currentEntryContext.primarySourceUrl ? (
-            <a href={currentEntryContext.primarySourceUrl} target="_blank" rel="noreferrer">
-              打开 primary source
-            </a>
-          ) : null}
-        </section>
-      ) : null}
-
-      {isTechBottleneckEntry ? (
-        <section className="workspace-band tech-bottleneck-report-panel" role="region" aria-label="Tech Bottleneck Report panel">
-          <div className="section-heading">
-            <div>
-              <h2>Tech Bottleneck Report</h2>
-              <p className="muted">Enriched source-backed report access · research-only</p>
-            </div>
-            <span className="status-chip neutral">{currentEntryContext.reportStatus ?? 'report_pending'}</span>
-          </div>
-          <div className="stock-summary-strip compact tech-bottleneck-context-metrics">
-            <div>
-              <span>report_status</span>
-              <strong>{currentEntryContext.reportStatus ?? '-'}</strong>
-            </div>
-            <div>
-              <span>bottleneck_confidence_score</span>
-              <strong>{formatReportScore(currentEntryContext.bottleneckConfidenceScore)}</strong>
-            </div>
-            <div>
-              <span>evidence_quality_score</span>
-              <strong>{formatReportScore(currentEntryContext.evidenceQualityScore)}</strong>
-            </div>
-            <div>
-              <span>review_decision</span>
-              <strong>{currentEntryContext.reportReviewDecision ?? '-'}</strong>
-            </div>
-            <div>
-              <span>evidence_strength</span>
-              <strong>{currentEntryContext.evidenceStrength ?? '-'}</strong>
-            </div>
-            <div>
-              <span>bottleneck_relevance</span>
-              <strong>{currentEntryContext.bottleneckRelevance ?? '-'}</strong>
-            </div>
-          </div>
-          <div className="tech-bottleneck-report-links" aria-label="Tech Bottleneck report links">
-            {currentEntryContext.reportHtmlPath ? (
-              <a href={localReportHref(currentEntryContext.reportHtmlPath)} target="_blank" rel="noreferrer">
-                打开HTML报告
-              </a>
-            ) : null}
-            {currentEntryContext.reportPdfPath ? (
-              <a href={localReportHref(currentEntryContext.reportPdfPath)} target="_blank" rel="noreferrer">
-                打开PDF报告
-              </a>
-            ) : null}
-            {currentEntryContext.evidenceMatrixPath ? (
-              <a href={localReportHref(currentEntryContext.evidenceMatrixPath)} target="_blank" rel="noreferrer">
-                查看证据矩阵
-              </a>
-            ) : null}
-            {currentEntryContext.reportSourcesPath ? (
-              <a href={localReportHref(currentEntryContext.reportSourcesPath)} target="_blank" rel="noreferrer">
-                查看引用与数据源
-              </a>
-            ) : null}
-          </div>
-          <div className="tech-bottleneck-context-grid">
-            <article>
-              <span>evidence_gap_note</span>
-              <strong>{currentEntryContext.evidenceGapNote ?? '-'}</strong>
-            </article>
-            <article>
-              <span>next_action</span>
-              <strong>{currentEntryContext.nextAction ?? '-'}</strong>
-            </article>
-          </div>
-        </section>
-      ) : null}
 
       <details className="stock-load-settings">
         <summary>
@@ -975,23 +1044,146 @@ export function StockWorkspace({
 
       {profile ? (
         <>
-          <section className="workspace-band stock-quote-dossier" role="region" aria-label="行情快照">
+          <section className="workspace-band stock-review-summary stock-review-conclusion" role="region" aria-label="明日处理结论">
             <div className="section-heading">
               <div>
-                <h2>行情快照</h2>
+                <h2>明日处理结论</h2>
                 <p className="muted">
-                  {quoteSnapshot?.trade_date ?? endDate} · 数据状态 {quoteSnapshot?.data_status ?? 'missing'}
+                  {identityName} · {profile.canonical_asset_id} · 结论更新 {tradeDate}
                 </p>
               </div>
-              <span
-                className={
-                  quoteSnapshot?.pct_chg != null && quoteSnapshot.pct_chg < 0
-                    ? 'status-chip market-down'
-                    : 'status-chip market-up'
-                }
-              >
-                {formatPercentPoints(quoteSnapshot?.pct_chg)}
-              </span>
+              <span className="status-chip">{reviewAction}</span>
+            </div>
+            <div className="stock-summary-strip stock-review-conclusion-metrics">
+              <div>
+                <span>明日处理建议</span>
+                <strong>{reviewAction}</strong>
+              </div>
+              <div>
+                <span>一句话结论</span>
+                <strong>{reviewConclusion}</strong>
+              </div>
+              <div>
+                <span>结论置信度</span>
+                <strong>{reviewConfidence}</strong>
+              </div>
+            </div>
+            <div className="stock-summary-strip stock-review-metrics">
+              {decisionDrivers.map((driver) => (
+                <article key={driver.label} className="stock-review-driver-chip">
+                  <span>{driver.label}</span>
+                  <strong>{driver.value}</strong>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          {isTechBottleneckEntry ? (
+            <section className="workspace-band stock-tech-thesis" role="region" aria-label="科技卡脖子 thesis 复盘">
+              <div className="section-heading">
+                <div>
+                  <h2>科技卡脖子 thesis 复盘</h2>
+                  <p className="muted">research-only · manual review only · no production signal/admission</p>
+                </div>
+                <span className="status-chip neutral">{currentEntryContext.reviewStatus ?? 'not_reviewed'}</span>
+              </div>
+              <div className="stock-summary-strip compact stock-tech-thesis-metrics">
+                <div>
+                  <span>thesis 判断</span>
+                  <strong>{readableTechBottleneckOptionLabel(currentEntryContext.bottleneckRelevance ?? '-')}</strong>
+                </div>
+                <div>
+                  <span>bottleneck_confidence_score</span>
+                  <strong>{formatReportScore(currentEntryContext.bottleneckConfidenceScore)}</strong>
+                </div>
+                <div>
+                  <span>evidence_quality_score</span>
+                  <strong>{formatReportScore(currentEntryContext.evidenceQualityScore)}</strong>
+                </div>
+                <div>
+                  <span>证据强度</span>
+                  <strong>{readableTechBottleneckOptionLabel(currentEntryContext.evidenceStrength ?? '-')}</strong>
+                </div>
+              </div>
+              <div className="stock-tech-thesis-summary-grid">
+                <div>
+                  <span>当前缺口</span>
+                  <strong>{thesisGapSummary}</strong>
+                  {thesisGapDetail && thesisGapDetail !== thesisGapSummary ? <p className="muted">{thesisGapDetail}</p> : null}
+                </div>
+                <div>
+                  <span>建议动作</span>
+                  <strong>{thesisNextStepSummary}</strong>
+                  {thesisActionDetail && thesisActionDetail !== thesisNextStepSummary ? (
+                    <p className="muted">{thesisActionDetail}</p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="tech-bottleneck-context-grid stock-thesis-grid">
+                <article>
+                  <span>研究优先级</span>
+                  <strong>{formatResearchPriorityScore(currentEntryContext.researchPriorityScore)}</strong>
+                </article>
+              </div>
+              {thesisSupportLines.length > 0 ? (
+                <div className="stock-tech-thesis-notes">
+                  {thesisSupportLines.map((line) => (
+                    <p key={line} className="muted">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {currentEntryContext.primarySourceUrl ? (
+                <a href={currentEntryContext.primarySourceUrl} target="_blank" rel="noreferrer">
+                  打开 primary source
+                </a>
+              ) : null}
+              <div className="tech-bottleneck-report-links" aria-label="科技卡脖子报告链接">
+                {currentEntryContext.reportHtmlPath ? (
+                  <a href={localReportHref(currentEntryContext.reportHtmlPath)} target="_blank" rel="noreferrer">
+                    打开HTML报告
+                  </a>
+                ) : null}
+                {currentEntryContext.reportPdfPath ? (
+                  <a href={localReportHref(currentEntryContext.reportPdfPath)} target="_blank" rel="noreferrer">
+                    打开PDF报告
+                  </a>
+                ) : null}
+                {currentEntryContext.evidenceMatrixPath ? (
+                  <a href={localReportHref(currentEntryContext.evidenceMatrixPath)} target="_blank" rel="noreferrer">
+                    查看证据矩阵
+                  </a>
+                ) : null}
+                {currentEntryContext.reportSourcesPath ? (
+                  <a href={localReportHref(currentEntryContext.reportSourcesPath)} target="_blank" rel="noreferrer">
+                    查看引用与数据源
+                  </a>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          <CompanyBasicsSection
+            asset={profile.asset}
+            companyProfile={companyProfile}
+            companyOverview={companyOverview}
+          />
+
+          <BusinessQualitySection
+            businessComposition={businessComposition}
+            financialSnapshot={financialSnapshot}
+          />
+
+          <section className="workspace-band stock-price-behavior" role="region" aria-label="今日价格行为">
+            <div className="section-heading">
+              <div>
+                <h2>今日价格行为</h2>
+                <p className="muted">
+                  {quoteSnapshot?.trade_date ?? endDate} · {reviewMetrics.state}
+                </p>
+              </div>
+              <span className="status-chip">{reviewMetrics.state}</span>
             </div>
             <div className="stock-dossier-grid">
               <div className="stock-summary-strip stock-quote-metrics">
@@ -1041,525 +1233,300 @@ export function StockWorkspace({
                 </div>
               </div>
             </div>
-            <div className="stock-dossier-support">
-              <article className="stock-mini-panel" role="region" aria-label="规模估值">
-                <div className="section-heading compact-heading">
-                  <h3>规模估值</h3>
-                  <span className="muted">{valuationSnapshot?.data_status ?? 'unavailable'}</span>
-                </div>
-                <div className="stock-summary-strip compact">
-                  <div>
-                    <span>总市值</span>
-                    <strong>{formatOptionalMetric(valuationSnapshot?.total_market_cap, formatChineseAmount)}</strong>
-                  </div>
-                  <div>
-                    <span>流通市值</span>
-                    <strong>{formatOptionalMetric(valuationSnapshot?.float_market_cap, formatChineseAmount)}</strong>
-                  </div>
-                  <div>
-                    <span>市盈率</span>
-                    <strong>{formatOptionalMetric(valuationSnapshot?.pe_ttm, (value) => value.toFixed(2))}</strong>
-                  </div>
-                  <div>
-                    <span>PB</span>
-                    <strong>{formatOptionalMetric(valuationSnapshot?.pb, (value) => value.toFixed(2))}</strong>
-                  </div>
-                  <div>
-                    <span>量比</span>
-                    <strong>{formatOptionalMetric(valuationSnapshot?.volume_ratio, (value) => `${value.toFixed(2)}x`)}</strong>
-                  </div>
-                </div>
-              </article>
-              <article className="stock-mini-panel" role="region" aria-label="股票简况">
-                <div className="section-heading compact-heading">
-                  <h3>股票简况</h3>
-                  <span className="muted">{companyProfile?.source ?? 'asset detail'}</span>
-                </div>
-                <div className="stock-summary-strip compact">
-                  <div>
-                    <span>交易所</span>
-                    <strong>{companyProfile?.exchange ?? profile.asset?.exchange ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>板块</span>
-                    <strong>{companyProfile?.board ?? profile.asset?.board ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>上市日期</span>
-                    <strong>{companyProfile?.list_date ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>区域</span>
-                    <strong>{companyProfile?.region ?? '-'}</strong>
-                  </div>
-                  <div>
-                    <span>状态</span>
-                    <strong>{companyProfile?.is_active ?? profile.asset?.is_active ? '正常' : '非活跃'}</strong>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section className="workspace-band stock-review-summary" role="region" aria-label="复盘摘要">
             <div className="section-heading">
-              <div>
-                <h2>策略复盘摘要</h2>
-                <strong className="stock-review-name">{identityName}</strong>
-                <p className="muted">
-                  {profile.canonical_asset_id} · {identitySymbol}
-                </p>
-              </div>
-              <span className="status-chip">{reviewMetrics.state}</span>
+              <h3>价格走势</h3>
+              <span className="muted">
+                {isIntradayChartActive ? `${chartBars.length} bars / ` : ''}
+                {chartWindowLabel}
+              </span>
             </div>
-            <div className="stock-summary-strip stock-review-metrics">
-              <div>
-                <span>来源策略</span>
-                <strong>{reviewSourceName ?? '-'}</strong>
-              </div>
-              <div>
-                <span>复盘日期</span>
-                <strong>{tradeDate}</strong>
-              </div>
-              <div>
-                <span>策略排名</span>
-                <strong>{reviewRank != null ? `第 ${reviewRank} 名` : '-'}</strong>
-              </div>
-              <div>
-                <span>策略分数</span>
-                <strong>{formatScore(profile)}</strong>
-              </div>
-              <div>
-                <span>最新收盘</span>
-                <strong>{formatValue(close)}</strong>
-              </div>
-              <div>
-                <span>当日涨跌幅</span>
-                <strong className={reviewMetrics.dayReturn != null && reviewMetrics.dayReturn < 0 ? 'market-down' : 'market-up'}>
-                  {formatPercent(reviewMetrics.dayReturn)}
-                </strong>
-              </div>
-              <div>
-                <span>近5日表现</span>
-                <strong className={reviewMetrics.fiveDayReturn != null && reviewMetrics.fiveDayReturn < 0 ? 'market-down' : 'market-up'}>
-                  {formatPercent(reviewMetrics.fiveDayReturn)}
-                </strong>
-              </div>
-              <div>
-                <span>近20日表现</span>
-                <strong className={reviewMetrics.twentyDayReturn != null && reviewMetrics.twentyDayReturn < 0 ? 'market-down' : 'market-up'}>
-                  {formatPercent(reviewMetrics.twentyDayReturn)}
-                </strong>
-              </div>
-              <div>
-                <span>量能/20日均额</span>
-                <strong>{formatRatio(reviewMetrics.amountRatio)}</strong>
-              </div>
-              <div>
-                <span>高位回撤</span>
-                <strong className={reviewMetrics.highDrawdown != null && reviewMetrics.highDrawdown < 0 ? 'market-down' : 'market-up'}>
-                  {formatPercent(reviewMetrics.highDrawdown)}
-                </strong>
-              </div>
-              <div>
-                <span>价格状态</span>
-                <strong>{reviewMetrics.state}</strong>
-              </div>
-              <div>
-                <span>新闻/研报</span>
-                <strong>
-                  {visibleAssetNews?.summary.news_count_7d ?? '-'} / {latestReportDate}
-                </strong>
-              </div>
+            <div className="segmented-control stock-chart-resolution" role="group" aria-label="K line period">
+              {DAILY_CHART_RESOLUTIONS.map((resolution) => (
+                <button
+                  key={resolution.value}
+                  type="button"
+                  className={chartResolution === resolution.value ? 'active' : ''}
+                  aria-pressed={chartResolution === resolution.value}
+                  onClick={() => setChartResolution(resolution.value)}
+                >
+                  {resolution.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={isIntradayChartActive ? 'active' : ''}
+                aria-pressed={isIntradayChartActive}
+                onClick={() => setChartResolution(isIntradayChartActive ? chartResolution : '60m')}
+              >
+                分时
+              </button>
             </div>
+            {isIntradayChartActive ? (
+              <div className="segmented-control stock-chart-resolution stock-chart-intraday-resolution" role="group" aria-label="分时周期">
+                {INTRADAY_CHART_RESOLUTIONS.map((resolution) => (
+                  <button
+                    key={resolution.value}
+                    type="button"
+                    className={chartResolution === resolution.value ? 'active' : ''}
+                    aria-pressed={chartResolution === resolution.value}
+                    onClick={() => setChartResolution(resolution.value)}
+                  >
+                    {resolution.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {isChartLoading ? <p className="muted">Loading chart bars...</p> : null}
+            {chartError ? <p className="error-text">{chartError}</p> : null}
+            {!isChartLoading && chartBars.length > 0 ? (
+              <AssetChart
+                bars={chartBars}
+                timeAxisMode={isIntradayChartActive ? 'intraday' : 'daily'}
+                timeAxisPeriod={chartAxisPeriod}
+                visibleBarCount={STOCK_CHART_VISIBLE_BARS}
+              />
+            ) : null}
+            {!isChartLoading && !chartError && chartBars.length === 0 ? <p className="muted">No bars available.</p> : null}
           </section>
 
           <div className="stock-detail-layout">
-            <aside className="workspace-band stock-context-rail" role="region" aria-label="复盘决策栏">
-              <div className="section-heading">
-                <h2>复盘操作</h2>
-                <span className="muted">{profile.canonical_asset_id}</span>
-              </div>
-              <OperatorDecisionPanel
-                assetId={profile.canonical_asset_id}
-                stockCode={visibleEvidenceDigest?.stock_code ?? profile.canonical_asset_id}
-                stockName={visibleEvidenceDigest?.stock_name ?? profile.asset?.name}
-                decisionDate={visibleEvidenceDigest?.latest_trade_date ?? visibleEvidenceDigest?.trade_date ?? tradeDate}
-                runId={decisionRunId}
-                digestKey={decisionDigestKey}
-                reviewItemSnapshotId={decisionReviewItemSnapshotId}
-                evidenceDigestSnapshotId={decisionEvidenceDigestSnapshotId}
-                sourceType={decisionSourceType}
-                sourceName={decisionSourceName}
-                sourceContextEntry="evidence_digest"
-                onDecisionCreated={() => {
-                  void loadProfile(currentAssetId, tradeDate, startDate, endDate);
-                }}
-              />
-              <section className="stock-review-log" role="region" aria-label="复盘日志">
-                <div className="section-heading compact-heading">
-                  <h3>复盘日志</h3>
-                  <span className="muted">{profile.decisions.length} 条</span>
-                </div>
-                {decisionEditError ? <p className="error-text">{decisionEditError}</p> : null}
-                <div className="decision-list">
-                  {profile.decisions.map((decision) => {
-                    const isEditing = editingDecisionId === decision.event_id;
-                    return (
-                      <article className="decision-row" key={decision.event_id}>
-                        <div>
-                          <strong>{formatDecisionLabel(decision.decision_label)}</strong>
-                          <span>{decision.review_date}</span>
-                        </div>
-                        {isEditing ? (
-                          <form className="workspace-stack" onSubmit={(event) => saveDecisionEdit(event, decision.event_id)}>
-                            <label>
-                              复盘备注
-                              <textarea
-                                aria-label="复盘日志备注"
-                                rows={3}
-                                value={decisionEditNotes}
-                                onChange={(event) => setDecisionEditNotes(event.target.value)}
-                              />
-                            </label>
-                            <label className="inline-check">
-                              <input
-                                aria-label="需要跟进"
-                                type="checkbox"
-                                checked={decisionEditRequiresFollowUp}
-                                onChange={(event) => setDecisionEditRequiresFollowUp(event.target.checked)}
-                              />
-                              需要跟进
-                            </label>
-                            <label>
-                              跟进说明
-                              <input
-                                aria-label="跟进说明"
-                                value={decisionEditFollowUpNote}
-                                onChange={(event) => setDecisionEditFollowUpNote(event.target.value)}
-                              />
-                            </label>
-                            <div className="compact-toolbar">
-                              <button type="submit" disabled={decisionEditSavingId === decision.event_id}>
-                                {decisionEditSavingId === decision.event_id ? '保存中...' : '保存复盘日志'}
-                              </button>
-                              <button type="button" onClick={cancelDecisionEdit}>
-                                取消
-                              </button>
-                            </div>
-                          </form>
-                        ) : (
-                          <>
-                            <p>{decision.notes || '暂无备注'}</p>
-                            {decision.follow_up_note ? <span>{decision.follow_up_note}</span> : null}
-                            {decision.requires_follow_up ? <span className="risk-tag">需要跟进</span> : null}
-                            <button type="button" className="inline-button" onClick={() => startDecisionEdit(decision)}>
-                              编辑复盘日志
-                            </button>
-                          </>
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
-                {profile.decisions.length === 0 ? <p className="muted">暂无复盘日志，保存一次复盘决策后会出现在这里。</p> : null}
-              </section>
-              <div className="section-heading compact-heading">
-                <h3>外部证据入口</h3>
-              </div>
-              <div className="compact-toolbar">
-                <button type="button" aria-label="Open News workspace" onClick={() => onOpenNews?.(currentEntryContext)}>
-                  打开新闻
-                </button>
-                <button
-                  type="button"
-                  aria-label="Open Research Reports workspace"
-                  onClick={() => onOpenResearchReports?.(currentEntryContext)}
-                >
-                  打开研报
-                </button>
-              </div>
-            </aside>
-
             <div className="stock-detail-main">
-              <section className="workspace-band" role="region" aria-label="Evidence Digest">
+              <section className="stock-evidence-zone" role="region" aria-label="支撑证据">
                 <div className="section-heading">
-                  <h2>Evidence Digest</h2>
-                  {isEvidenceDigestPending ? <span className="muted">Loading digest...</span> : null}
+                  <div>
+                    <h2>支撑证据</h2>
+                    <p className="muted">用新闻、研报、Digest、策略信号和市场环境解释明日处理建议。</p>
+                  </div>
                 </div>
-                {evidenceDigestError ? <p className="error-text">{evidenceDigestError}</p> : null}
-                {visibleEvidenceDigest ? (
-                  <>
-                    <div className="metric-grid compact">
-                      <span>
-                        <span>Title</span>
-                        <strong>{visibleEvidenceDigest.title}</strong>
-                      </span>
-                      <span>
-                        <span>Score</span>
-                        <strong>Score {formatDigestScore(visibleEvidenceDigest.score)}</strong>
-                      </span>
-                      <span>
-                        <span>Bucket</span>
-                        <strong>{formatEvidenceBucket(visibleEvidenceDigest.bucket)}</strong>
-                      </span>
-                    </div>
-                    <div className="compact-news-list">
-                      {visibleEvidenceDigest.facts.map((fact) => (
-                        <div key={`${fact.kind}-${fact.key ?? fact.label}`} className="news-stock-row">
-                          <strong>{fact.label}</strong>
-                          {fact.severity ? <span className="status-chip neutral">{fact.severity}</span> : null}
+                <section className="workspace-band" role="region" aria-label="证据摘要">
+                  <div className="section-heading">
+                    <h2>证据摘要</h2>
+                    {isEvidenceDigestPending ? <span className="muted">正在加载证据摘要...</span> : null}
+                  </div>
+                  {evidenceDigestError ? <p className="error-text">{evidenceDigestError}</p> : null}
+                  {visibleEvidenceDigest ? (
+                    <>
+                      <div className="metric-grid compact">
+                        <span>
+                          <span>标题</span>
+                          <strong>{visibleEvidenceDigest.title}</strong>
+                        </span>
+                        <span>
+                          <span>Score</span>
+                          <strong>Score {formatDigestScore(visibleEvidenceDigest.score)}</strong>
+                        </span>
+                        <span>
+                          <span>分桶</span>
+                          <strong>{formatEvidenceBucket(visibleEvidenceDigest.bucket)}</strong>
+                        </span>
+                      </div>
+                      <div className="compact-news-list">
+                        {visibleEvidenceDigest.facts.map((fact) => (
+                          <div key={`${fact.kind}-${fact.key ?? fact.label}`} className="news-stock-row">
+                            <strong>{fact.label}</strong>
+                            {fact.severity ? <span className="status-chip neutral">{fact.severity}</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                      {visibleEvidenceDigest.risk_flags.length > 0 ? (
+                        <div className="tag-stack">
+                          {visibleEvidenceDigest.risk_flags.map((flag) => (
+                            <span key={flag.key} className="status-chip warning">
+                              {flag.label}
+                            </span>
+                          ))}
                         </div>
+                      ) : null}
+                      {visibleEvidenceDigest.warnings.length > 0 ? (
+                        <div className="tag-stack">
+                          {visibleEvidenceDigest.warnings.map((warning) => (
+                            <span className="status-chip neutral" key={warning}>
+                              {formatSnapshotWarning(warning)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {!isEvidenceDigestPending && !evidenceDigestError && !visibleEvidenceDigest ? (
+                    <p className="muted">暂无证据摘要。</p>
+                  ) : null}
+                </section>
+
+                <section className="stock-evidence-grid">
+                  <article className="workspace-band" role="region" aria-label="Market Monitor State">
+                    <div className="section-heading">
+                      <h2>个股市场环境</h2>
+                      <span className="muted">{marketMonitorStatus}</span>
+                    </div>
+                    <div className="stock-summary-strip stock-review-metrics">
+                      <div>
+                        <span>市场证据</span>
+                        <strong>{marketMonitorStatus === 'available' ? '已接入' : '未命中'}</strong>
+                      </div>
+                      <div>
+                        <span>关联榜单</span>
+                        <strong>{marketMonitorTab || '-'}</strong>
+                      </div>
+                      <div>
+                        <span>市场提示</span>
+                        <strong>{marketRiskFlags.length > 0 ? `${marketRiskFlags.length} 条风险` : '无直接风险'}</strong>
+                      </div>
+                    </div>
+                    <div role="region" aria-label="同业市场定位">
+                      <StockMarketContextHeatmap
+                        payload={marketContextHeatmap}
+                        loading={marketContextHeatmapLoading}
+                        error={marketContextHeatmapError}
+                        onSelectStock={handleSelectPeerFromMarketContext}
+                      />
+                    </div>
+                    {marketFacts.length > 0 || marketRiskFlags.length > 0 ? (
+                      <div className="compact-news-list">
+                        {[...marketFacts, ...marketRiskFlags].map((item) => (
+                          <div key={item.key} className="news-stock-row">
+                            <strong>{item.label}</strong>
+                            {'severity' in item && item.severity ? <span className="status-chip warning">{item.severity}</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">该股未出现在涨停、炸板、跌停或竞价监控名单；当前页不再跳转市场监控。</p>
+                    )}
+                  </article>
+
+                  <article className="workspace-band" role="region" aria-label="Strategy Signal">
+                    <div className="section-heading">
+                      <h2>策略信号</h2>
+                      <span className="muted">{profile.signals.length} signals</span>
+                    </div>
+                    {profile.signals.map((signal) => (
+                      <div key={`${signal.watchlist_id}-${signal.asset_id}-${signal.primary_signal}`} className="signal-card">
+                        <div>
+                          <strong>{signal.primary_signal}</strong>
+                          <span>Priority {signal.priority}</span>
+                        </div>
+                        <p>{formatReason(signal.reason_json)}</p>
+                        <div className="tag-stack">
+                          {signal.signal_tags.map((tag) => (
+                            <span key={tag} className="status-chip neutral">
+                              {tag}
+                            </span>
+                          ))}
+                          {signal.risk_tags.map((tag) => (
+                            <span key={tag} className="risk-tag">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {profile.signals.length === 0 ? <p className="muted">No active watchlist signal.</p> : null}
+                  </article>
+
+                  <article className="workspace-band" role="region" aria-label="Research Coverage">
+                    <div className="section-heading">
+                      <h2>研报覆盖</h2>
+                      {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
+                    </div>
+                    {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
+                    {visibleResearchReports ? (
+                      <section className="stock-summary-strip" aria-label="Stock research report summary">
+                        <div>
+                          <span>Coverage</span>
+                          <strong>90d reports {visibleResearchReports.summary.report_count_90d}</strong>
+                        </div>
+                        <div>
+                          <span>30d Reports</span>
+                          <strong>{visibleResearchReports.summary.report_count_30d}</strong>
+                        </div>
+                        <div>
+                          <span>Brokers</span>
+                          <strong>{visibleResearchReports.summary.broker_coverage_count_90d} brokers</strong>
+                        </div>
+                        <div>
+                          <span>Latest Rating</span>
+                          <strong>{formatValue(visibleResearchReports.summary.latest_rating)}</strong>
+                        </div>
+                        <div>
+                          <span>Target Price</span>
+                          <strong>{formatValue(visibleResearchReports.summary.latest_target_price)}</strong>
+                        </div>
+                      </section>
+                    ) : null}
+                  </article>
+
+                  <article className="workspace-band" role="region" aria-label="Related News">
+                    <div className="section-heading">
+                      <h2>相关新闻</h2>
+                      {isVisibleNewsLoading ? <span className="muted">Loading...</span> : null}
+                    </div>
+                    {visibleAssetNews ? (
+                      <div className="metric-grid compact">
+                        <span>
+                          <span>1d News</span>
+                          <strong>{visibleAssetNews.summary.news_count_1d}</strong>
+                        </span>
+                        <span>
+                          <span>7d News</span>
+                          <strong>{visibleAssetNews.summary.news_count_7d}</strong>
+                        </span>
+                        <span>
+                          <span>Sources</span>
+                          <strong>{visibleAssetNews.summary.source_count ?? 0}</strong>
+                        </span>
+                      </div>
+                    ) : null}
+                    {visibleNewsError ? <p className="error-text">{visibleNewsError}</p> : null}
+                    {visibleAssetNews?.warnings?.length ? <p className="muted">{visibleAssetNews.warnings.join(' | ')}</p> : null}
+                    <div className="compact-news-list">
+                      {(visibleAssetNews?.items ?? []).map((item) => (
+                        <a key={item.news_id} className="evidence-link-row" href={item.url} target="_blank" rel="noreferrer">
+                          <strong>{item.title}</strong>
+                          <span>{item.published_at.slice(0, 10)}</span>
+                        </a>
                       ))}
                     </div>
-                    {visibleEvidenceDigest.risk_flags.length > 0 ? (
-                      <div className="tag-stack">
-                        {visibleEvidenceDigest.risk_flags.map((flag) => (
-                          <span key={flag.key} className="status-chip warning">
-                            {flag.label}
-                          </span>
-                        ))}
-                      </div>
+                    {!isVisibleNewsLoading && !visibleNewsError && (visibleAssetNews?.items.length ?? 0) === 0 ? (
+                      <p className="muted">No related news found.</p>
                     ) : null}
-                    {visibleEvidenceDigest.warnings.length > 0 ? (
-                      <div className="tag-stack">
-                        {visibleEvidenceDigest.warnings.map((warning) => (
-                          <span className="status-chip neutral" key={warning}>
-                            {formatSnapshotWarning(warning)}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </>
-                ) : null}
-                {!isEvidenceDigestPending && !evidenceDigestError && !visibleEvidenceDigest ? (
-                  <p className="muted">No digest available.</p>
-                ) : null}
-              </section>
+                  </article>
 
-              <section className="workspace-band" aria-label="Price & Events">
-                <div className="section-heading">
-                  <h2>价格走势</h2>
-                  <span className="muted">
-                    {isIntradayChartActive ? `${chartBars.length} bars / ` : ''}
-                    {chartWindowLabel}
-                  </span>
-                </div>
-                <div className="segmented-control stock-chart-resolution" role="group" aria-label="K line period">
-                  {DAILY_CHART_RESOLUTIONS.map((resolution) => (
-                    <button
-                      key={resolution.value}
-                      type="button"
-                      className={chartResolution === resolution.value ? 'active' : ''}
-                      aria-pressed={chartResolution === resolution.value}
-                      onClick={() => setChartResolution(resolution.value)}
-                    >
-                      {resolution.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={isIntradayChartActive ? 'active' : ''}
-                    aria-pressed={isIntradayChartActive}
-                    onClick={() => setChartResolution(isIntradayChartActive ? chartResolution : '60m')}
-                  >
-                    分时
-                  </button>
-                </div>
-                {isIntradayChartActive ? (
-                  <div className="segmented-control stock-chart-resolution stock-chart-intraday-resolution" role="group" aria-label="分时周期">
-                    {INTRADAY_CHART_RESOLUTIONS.map((resolution) => (
-                      <button
-                        key={resolution.value}
-                        type="button"
-                        className={chartResolution === resolution.value ? 'active' : ''}
-                        aria-pressed={chartResolution === resolution.value}
-                        onClick={() => setChartResolution(resolution.value)}
-                      >
-                        {resolution.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                {isChartLoading ? <p className="muted">Loading chart bars...</p> : null}
-                {chartError ? <p className="error-text">{chartError}</p> : null}
-                {!isChartLoading && chartBars.length > 0 ? (
-                  <AssetChart
-                    bars={chartBars}
-                    timeAxisMode={isIntradayChartActive ? 'intraday' : 'daily'}
-                    timeAxisPeriod={chartAxisPeriod}
-                    visibleBarCount={STOCK_CHART_VISIBLE_BARS}
-                  />
-                ) : null}
-                {!isChartLoading && !chartError && chartBars.length === 0 ? <p className="muted">No bars available.</p> : null}
-              </section>
-
-              <section className="stock-evidence-grid">
-            <article className="workspace-band" role="region" aria-label="Market Monitor State">
-              <div className="section-heading">
-                <h2>个股市场环境</h2>
-                <span className="muted">{marketMonitorStatus}</span>
-              </div>
-              <div className="stock-summary-strip stock-review-metrics">
-                <div>
-                  <span>市场证据</span>
-                  <strong>{marketMonitorStatus === 'available' ? '已接入' : '未命中'}</strong>
-                </div>
-                <div>
-                  <span>关联榜单</span>
-                  <strong>{marketMonitorTab || '-'}</strong>
-                </div>
-                <div>
-                  <span>市场提示</span>
-                  <strong>{marketRiskFlags.length > 0 ? `${marketRiskFlags.length} 条风险` : '无直接风险'}</strong>
-                </div>
-              </div>
-              {marketFacts.length > 0 || marketRiskFlags.length > 0 ? (
-                <div className="compact-news-list">
-                  {[...marketFacts, ...marketRiskFlags].map((item) => (
-                    <div key={item.key} className="news-stock-row">
-                      <strong>{item.label}</strong>
-                      {'severity' in item && item.severity ? <span className="status-chip warning">{item.severity}</span> : null}
+                  <article className="workspace-band" role="region" aria-label="Research Reports">
+                    <div className="section-heading">
+                      <h2>研报列表</h2>
+                      {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted">该股未出现在涨停、炸板、跌停或竞价监控名单；当前页不再跳转市场监控。</p>
-              )}
-            </article>
-
-            <article className="workspace-band" role="region" aria-label="Strategy Signal">
-              <div className="section-heading">
-                <h2>策略信号</h2>
-                <span className="muted">{profile.signals.length} signals</span>
-              </div>
-              {profile.signals.map((signal) => (
-                <div key={`${signal.watchlist_id}-${signal.asset_id}-${signal.primary_signal}`} className="signal-card">
-                  <div>
-                    <strong>{signal.primary_signal}</strong>
-                    <span>Priority {signal.priority}</span>
-                  </div>
-                  <p>{formatReason(signal.reason_json)}</p>
-                  <div className="tag-stack">
-                    {signal.signal_tags.map((tag) => (
-                      <span key={tag} className="status-chip neutral">
-                        {tag}
-                      </span>
-                    ))}
-                    {signal.risk_tags.map((tag) => (
-                      <span key={tag} className="risk-tag">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {profile.signals.length === 0 ? <p className="muted">No active watchlist signal.</p> : null}
-            </article>
-
-            <article className="workspace-band" role="region" aria-label="Research Coverage">
-              <div className="section-heading">
-                <h2>研报覆盖</h2>
-                {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
-              </div>
-              {researchReportsError ? <p className="error-text">{researchReportsError}</p> : null}
-              {visibleResearchReports ? (
-                <section className="stock-summary-strip" aria-label="Stock research report summary">
-                  <div>
-                    <span>Coverage</span>
-                    <strong>90d reports {visibleResearchReports.summary.report_count_90d}</strong>
-                  </div>
-                  <div>
-                    <span>30d Reports</span>
-                    <strong>{visibleResearchReports.summary.report_count_30d}</strong>
-                  </div>
-                  <div>
-                    <span>Brokers</span>
-                    <strong>{visibleResearchReports.summary.broker_coverage_count_90d} brokers</strong>
-                  </div>
-                  <div>
-                    <span>Latest Rating</span>
-                    <strong>{formatValue(visibleResearchReports.summary.latest_rating)}</strong>
-                  </div>
-                  <div>
-                    <span>Target Price</span>
-                    <strong>{formatValue(visibleResearchReports.summary.latest_target_price)}</strong>
-                  </div>
+                    <div className="compact-news-list">
+                      {(visibleResearchReports?.items ?? []).map((report) =>
+                        report.source_url ? (
+                          <a
+                            key={report.event_key}
+                            className="evidence-link-row"
+                            href={report.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <strong>{report.report_title}</strong>
+                            <span>
+                              {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
+                            </span>
+                          </a>
+                        ) : (
+                          <div key={report.event_key} className="evidence-link-row">
+                            <strong>{report.report_title}</strong>
+                            <span>
+                              {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                    {!isResearchReportsLoading && !researchReportsError && (visibleResearchReports?.items.length ?? 0) === 0 ? (
+                      <p className="muted">No research reports found.</p>
+                    ) : null}
+                  </article>
                 </section>
-              ) : null}
-            </article>
-
-            <article className="workspace-band" role="region" aria-label="Related News">
-              <div className="section-heading">
-                <h2>相关新闻</h2>
-                {isVisibleNewsLoading ? <span className="muted">Loading...</span> : null}
-              </div>
-              {visibleAssetNews ? (
-                <div className="metric-grid compact">
-                  <span>
-                    <span>1d News</span>
-                    <strong>{visibleAssetNews.summary.news_count_1d}</strong>
-                  </span>
-                  <span>
-                    <span>7d News</span>
-                    <strong>{visibleAssetNews.summary.news_count_7d}</strong>
-                  </span>
-                  <span>
-                    <span>Sources</span>
-                    <strong>{visibleAssetNews.summary.source_count ?? 0}</strong>
-                  </span>
-                </div>
-              ) : null}
-              {visibleNewsError ? <p className="error-text">{visibleNewsError}</p> : null}
-              {visibleAssetNews?.warnings?.length ? <p className="muted">{visibleAssetNews.warnings.join(' | ')}</p> : null}
-              <div className="compact-news-list">
-                {(visibleAssetNews?.items ?? []).map((item) => (
-                  <a key={item.news_id} className="evidence-link-row" href={item.url} target="_blank" rel="noreferrer">
-                    <strong>{item.title}</strong>
-                    <span>{item.published_at.slice(0, 10)}</span>
-                  </a>
-                ))}
-              </div>
-              {!isVisibleNewsLoading && !visibleNewsError && (visibleAssetNews?.items.length ?? 0) === 0 ? (
-                <p className="muted">No related news found.</p>
-              ) : null}
-            </article>
-
-            <article className="workspace-band" role="region" aria-label="Research Reports">
-              <div className="section-heading">
-                <h2>研报列表</h2>
-                {isResearchReportsLoading ? <span className="muted">Loading...</span> : null}
-              </div>
-              <div className="compact-news-list">
-                {(visibleResearchReports?.items ?? []).map((report) =>
-                  report.source_url ? (
-                    <a
-                      key={report.event_key}
-                      className="evidence-link-row"
-                      href={report.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <strong>{report.report_title}</strong>
-                      <span>
-                        {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
-                      </span>
-                    </a>
-                  ) : (
-                    <div key={report.event_key} className="evidence-link-row">
-                      <strong>{report.report_title}</strong>
-                      <span>
-                        {formatValue(report.broker)} / {formatValue(report.publish_date ?? report.report_date)}
-                      </span>
-                    </div>
-                  )
-                )}
-              </div>
-              {!isResearchReportsLoading && !researchReportsError && (visibleResearchReports?.items.length ?? 0) === 0 ? (
-                <p className="muted">No research reports found.</p>
-              ) : null}
-            </article>
-
               </section>
 
               <details className="workspace-band stock-secondary-details" role="group" aria-label="二级信息">
@@ -1721,6 +1688,97 @@ export function StockWorkspace({
                 </section>
               </details>
             </div>
+
+            <aside className="workspace-band stock-context-rail" role="region" aria-label="复盘决策栏">
+              <div className="section-heading">
+                <h2>复盘操作</h2>
+                <span className="muted">{profile.canonical_asset_id}</span>
+              </div>
+              <OperatorDecisionPanel
+                assetId={profile.canonical_asset_id}
+                stockCode={visibleEvidenceDigest?.stock_code ?? profile.canonical_asset_id}
+                stockName={visibleEvidenceDigest?.stock_name ?? profile.asset?.name}
+                decisionDate={visibleEvidenceDigest?.latest_trade_date ?? visibleEvidenceDigest?.trade_date ?? tradeDate}
+                runId={decisionRunId}
+                digestKey={decisionDigestKey}
+                reviewItemSnapshotId={decisionReviewItemSnapshotId}
+                evidenceDigestSnapshotId={decisionEvidenceDigestSnapshotId}
+                sourceType={decisionSourceType}
+                sourceName={decisionSourceName}
+                sourceContextEntry="evidence_digest"
+                onDecisionCreated={() => {
+                  void loadProfile(currentAssetId, tradeDate, startDate, endDate);
+                }}
+              />
+              <section className="stock-review-log" role="region" aria-label="复盘日志">
+                <div className="section-heading compact-heading">
+                  <h3>复盘日志</h3>
+                  <span className="muted">{profile.decisions.length} 条</span>
+                </div>
+                {decisionEditError ? <p className="error-text">{decisionEditError}</p> : null}
+                <div className="decision-list">
+                  {profile.decisions.map((decision) => {
+                    const isEditing = editingDecisionId === decision.event_id;
+                    return (
+                      <article className="decision-row" key={decision.event_id}>
+                        <div>
+                          <strong>{formatDecisionLabel(decision.decision_label)}</strong>
+                          <span>{decision.review_date}</span>
+                        </div>
+                        {isEditing ? (
+                          <form className="workspace-stack" onSubmit={(event) => saveDecisionEdit(event, decision.event_id)}>
+                            <label>
+                              复盘备注
+                              <textarea
+                                aria-label="复盘日志备注"
+                                rows={3}
+                                value={decisionEditNotes}
+                                onChange={(event) => setDecisionEditNotes(event.target.value)}
+                              />
+                            </label>
+                            <label className="inline-check">
+                              <input
+                                aria-label="需要跟进"
+                                type="checkbox"
+                                checked={decisionEditRequiresFollowUp}
+                                onChange={(event) => setDecisionEditRequiresFollowUp(event.target.checked)}
+                              />
+                              需要跟进
+                            </label>
+                            <label>
+                              跟进说明
+                              <input
+                                aria-label="跟进说明"
+                                value={decisionEditFollowUpNote}
+                                onChange={(event) => setDecisionEditFollowUpNote(event.target.value)}
+                              />
+                            </label>
+                            <div className="compact-toolbar">
+                              <button type="submit" disabled={decisionEditSavingId === decision.event_id}>
+                                {decisionEditSavingId === decision.event_id ? '保存中...' : '保存复盘日志'}
+                              </button>
+                              <button type="button" onClick={cancelDecisionEdit}>
+                                取消
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <p>{decision.notes || '暂无备注'}</p>
+                            {decision.follow_up_note ? <span>{decision.follow_up_note}</span> : null}
+                            {decision.requires_follow_up ? <span className="risk-tag">需要跟进</span> : null}
+                            <button type="button" className="inline-button" onClick={() => startDecisionEdit(decision)}>
+                              编辑复盘日志
+                            </button>
+                          </>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+                {profile.decisions.length === 0 ? <p className="muted">暂无复盘日志，保存一次复盘决策后会出现在这里。</p> : null}
+              </section>
+            </aside>
           </div>
         </>
       ) : null}

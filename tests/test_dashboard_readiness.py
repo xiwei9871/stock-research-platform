@@ -3,6 +3,7 @@ import pytest
 
 from stock_research.dashboard import app as dashboard_app
 from stock_research.dashboard import readiness
+from stock_research.dashboard.display_date_gate import select_display_date
 
 
 class _FakeConnectionContext:
@@ -805,6 +806,86 @@ def test_manifest_readiness_reports_display_trade_date_run_when_recent_manifest_
     assert payload["errors"] == []
     health_groups = {group["key"]: group for group in payload["health_groups"]}
     assert health_groups["strategy_execution"]["ready_count"] == 3
+
+
+def test_display_gate_accepts_degraded_daily_bars_when_core_run_is_ready(monkeypatch):
+    modules = [
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "daily_bars", "status": "partial"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "technical_features", "status": "success"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "score_topn", "status": "success"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "lhb_features", "status": "success"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "tech_bottleneck_candidates", "status": "success"},
+        {
+            "run_id": "r1",
+            "trade_date": "2026-07-06",
+            "module": "strategy_tech_bottleneck",
+            "status": "success",
+            "metadata": {"candidate_snapshot_latest_date": "2026-07-06"},
+        },
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "strategy_lhb_shortline", "status": "success"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "strategy_mid_trend", "status": "success"},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "review_queue_strategy_manifest", "status": "success"},
+    ]
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+
+    gate = select_display_date(modules, latest_market_date="2026-07-06")
+
+    assert gate["display_trade_date"] == "2026-07-06"
+    assert gate["candidate_status"] == "ready"
+    assert "missing:daily_bars" not in gate["blocking_reasons"]
+
+
+def test_manifest_readiness_marks_stock_workspace_partial_when_daily_bars_degraded(monkeypatch):
+    modules = [
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "daily_bars", "tier": "tier1", "status": "partial", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "technical_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "score_topn", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "lhb_features", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "tech_bottleneck_candidates", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "strategy_lhb_shortline", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "strategy_mid_trend", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+        {
+            "run_id": "r1",
+            "trade_date": "2026-07-06",
+            "module": "strategy_tech_bottleneck",
+            "tier": "tier1",
+            "status": "success",
+            "warnings": [],
+            "error_message": "",
+            "metadata": {"candidate_snapshot_latest_date": "2026-07-06"},
+        },
+        {"run_id": "r1", "trade_date": "2026-07-06", "module": "review_queue_strategy_manifest", "tier": "tier1", "status": "success", "warnings": [], "error_message": ""},
+    ]
+    monkeypatch.setattr(readiness, "load_latest_data_run_manifest", lambda trade_date=None: modules)
+    monkeypatch.setattr(
+        "stock_research.dashboard.display_date_gate.load_strategy_contracts",
+        lambda profile="balanced": {},
+    )
+    monkeypatch.setattr(
+        readiness,
+        "load_platform_summary",
+        lambda score_version, top_n: {
+            "latest_market_date": "2026-07-06",
+            "topn_preview": [{"asset_id": "CN:SH:600519"}],
+        },
+    )
+    _patch_market_monitor_ready(monkeypatch)
+
+    payload = readiness.build_platform_readiness()
+    review_group = next(group for group in payload["health_groups"] if group["key"] == "review_chain")
+    stock_workspace = next(item for item in review_group["items"] if item["key"] == "stock_workspace")
+
+    assert payload["display_trade_date"] == "2026-07-06"
+    assert stock_workspace["status"] == "partial"
+    assert "stock_workspace" in payload["partial_data"]
+    assert "stock_workspace" not in payload["missing_data"]
+    assert payload["policy"]["ready_for_dashboard"] is True
+    assert payload["policy"]["ready_for_publication"] is True
+    assert payload["policy"]["blocking_reasons"] == []
+    assert any("stock_workspace" in warning for warning in payload["policy"]["warnings"])
 
 
 def test_display_gate_failure_blocks_manifest_readiness(monkeypatch):

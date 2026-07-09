@@ -29,6 +29,82 @@ FORMAL_STRATEGY_FILES = [
 SPECIAL_PRIORITY_CODES = {"002371", "688012", "002885", "300838", "000400", "688120", "688019", "300567", "688261"}
 FORBIDDEN_REPORT_PHRASES = ["买入", "卖出", "目标价", "入场", "退出"]
 
+CONFIDENCE_CATEGORY_BASE = {
+    "verified_core": 62,
+    "manual_anchor_core_pending_evidence": 52,
+    "likely_hard_tech_pending_evidence": 44,
+}
+
+QUALITY_CATEGORY_BASE = {
+    "verified_core": 34,
+    "manual_anchor_core_pending_evidence": 20,
+    "likely_hard_tech_pending_evidence": 14,
+}
+
+BUSINESS_RELEVANCE_CONFIDENCE_BONUS = {
+    "semiconductor_equipment_or_material": 12,
+    "advanced_material": 10,
+    "high_end_equipment": 9,
+    "aerospace_defense_component": 8,
+    "precision_component": 7,
+    "industrial_software_or_simulation": 7,
+    "robotics_or_motion_control": 6,
+    "power_electronics_or_grid_equipment": 6,
+    "energy_storage_key_component": 5,
+    "": 4,
+}
+
+BUSINESS_RELEVANCE_QUALITY_BONUS = {
+    "semiconductor_equipment_or_material": 9,
+    "advanced_material": 8,
+    "high_end_equipment": 7,
+    "aerospace_defense_component": 6,
+    "precision_component": 6,
+    "industrial_software_or_simulation": 6,
+    "robotics_or_motion_control": 5,
+    "power_electronics_or_grid_equipment": 5,
+    "energy_storage_key_component": 4,
+    "": 4,
+}
+
+EVIDENCE_STRENGTH_CONFIDENCE_BONUS = {
+    "strong": 12,
+    "sufficient": 9,
+    "moderate": 5,
+    "pending_primary_source": 1,
+    "missing": 0,
+}
+
+EVIDENCE_STRENGTH_QUALITY_BONUS = {
+    "strong": 24,
+    "sufficient": 16,
+    "moderate": 10,
+    "pending_primary_source": 2,
+    "missing": 0,
+}
+
+SOURCE_GROUP_CONFIDENCE_BONUS = {
+    "non_seed_tier_a_manual_review_core": 5,
+    "verified_rescue_extension_proposal": 4,
+    "seed_tier_a": 2,
+}
+
+SOURCE_GROUP_QUALITY_BONUS = {
+    "non_seed_tier_a_manual_review_core": 4,
+    "verified_rescue_extension_proposal": 5,
+    "seed_tier_a": 1,
+}
+
+PREVIOUS_TIER_CONFIDENCE_BONUS = {
+    "Tier A": 2,
+    "Tier B": 0,
+}
+
+PREVIOUS_TIER_QUALITY_BONUS = {
+    "Tier A": 1,
+    "Tier B": 0,
+}
+
 
 def _rel(path: Path) -> str:
     return str(path.relative_to(PROJECT_ROOT))
@@ -81,6 +157,54 @@ def _score_value(value: Any, fallback: float) -> float:
         return fallback
 
 
+def _bounded_score(value: float, lower: int, upper: int) -> int:
+    return max(lower, min(upper, int(round(value))))
+
+
+def _business_relevance_confidence_bonus(category: str) -> int:
+    return BUSINESS_RELEVANCE_CONFIDENCE_BONUS.get(category, BUSINESS_RELEVANCE_CONFIDENCE_BONUS[""])
+
+
+def _business_relevance_quality_bonus(category: str) -> int:
+    return BUSINESS_RELEVANCE_QUALITY_BONUS.get(category, BUSINESS_RELEVANCE_QUALITY_BONUS[""])
+
+
+def _bottleneck_confidence_score(
+    review_pool_category: str,
+    business_relevance_category: str,
+    evidence_strength: str,
+    source_group: str,
+    previous_tier: str,
+    has_primary: bool,
+) -> int:
+    score = CONFIDENCE_CATEGORY_BASE.get(review_pool_category, 36)
+    score += _business_relevance_confidence_bonus(business_relevance_category)
+    score += EVIDENCE_STRENGTH_CONFIDENCE_BONUS.get(evidence_strength, 0)
+    score += SOURCE_GROUP_CONFIDENCE_BONUS.get(source_group, 0)
+    score += PREVIOUS_TIER_CONFIDENCE_BONUS.get(previous_tier, 0)
+    if has_primary:
+        score += 10
+    return _bounded_score(score, 32, 94)
+
+
+def _evidence_quality_score(
+    review_pool_category: str,
+    business_relevance_category: str,
+    evidence_strength: str,
+    source_group: str,
+    previous_tier: str,
+    has_primary: bool,
+) -> int:
+    score = QUALITY_CATEGORY_BASE.get(review_pool_category, 12)
+    score += _business_relevance_quality_bonus(business_relevance_category)
+    score += EVIDENCE_STRENGTH_QUALITY_BONUS.get(evidence_strength, 0)
+    score += SOURCE_GROUP_QUALITY_BONUS.get(source_group, 0)
+    score += PREVIOUS_TIER_QUALITY_BONUS.get(previous_tier, 0)
+    if has_primary:
+        score += 18
+    return _bounded_score(score, 12, 90)
+
+
 def _git_diff_formal_strategy_files() -> str:
     result = subprocess.run(
         ["git", "diff", "--", *FORMAL_STRATEGY_FILES],
@@ -114,7 +238,10 @@ def _select_candidates(pool: pd.DataFrame, stock_codes: str | None, limit: int |
 
 def _classification(row: pd.Series) -> dict[str, Any]:
     category = _clean(row.get("review_pool_category") or row.get("requalification_v2_category"))
+    business_category = _clean(row.get("business_relevance_category"))
     inherited_strength = _clean(row.get("evidence_strength"), "missing")
+    source_group = _clean(row.get("source_group"))
+    previous_tier = _clean(row.get("previous_tier"))
     has_primary = _bool_value(row.get("primary_source_evidence_available")) or bool(_clean(row.get("primary_source_url")))
     if category == "verified_core":
         strength = inherited_strength if inherited_strength in {"strong", "moderate"} else "moderate"
@@ -123,8 +250,12 @@ def _classification(row: pd.Series) -> dict[str, Any]:
             "bottleneck_relevance": "core",
             "evidence_strength": strength if has_primary else "moderate",
             "report_status": "complete" if has_primary else "partial_primary_source_missing",
-            "bottleneck_confidence_score": 86 if has_primary else 78,
-            "evidence_quality_score": 82 if has_primary else 58,
+            "bottleneck_confidence_score": _bottleneck_confidence_score(
+                category, business_category, strength, source_group, previous_tier, has_primary
+            ),
+            "evidence_quality_score": _evidence_quality_score(
+                category, business_category, strength, source_group, previous_tier, has_primary
+            ),
         }
     if category == "manual_anchor_core_pending_evidence":
         return {
@@ -132,8 +263,12 @@ def _classification(row: pd.Series) -> dict[str, Any]:
             "bottleneck_relevance": "likely",
             "evidence_strength": "missing",
             "report_status": "partial_primary_source_missing",
-            "bottleneck_confidence_score": 68,
-            "evidence_quality_score": 24,
+            "bottleneck_confidence_score": _bottleneck_confidence_score(
+                category, business_category, inherited_strength, source_group, previous_tier, has_primary
+            ),
+            "evidence_quality_score": _evidence_quality_score(
+                category, business_category, inherited_strength, source_group, previous_tier, has_primary
+            ),
         }
     if category == "likely_hard_tech_pending_evidence":
         return {
@@ -141,16 +276,24 @@ def _classification(row: pd.Series) -> dict[str, Any]:
             "bottleneck_relevance": "likely",
             "evidence_strength": "missing",
             "report_status": "partial_primary_source_missing",
-            "bottleneck_confidence_score": 58,
-            "evidence_quality_score": 20,
+            "bottleneck_confidence_score": _bottleneck_confidence_score(
+                category, business_category, inherited_strength, source_group, previous_tier, has_primary
+            ),
+            "evidence_quality_score": _evidence_quality_score(
+                category, business_category, inherited_strength, source_group, previous_tier, has_primary
+            ),
         }
     return {
         "review_decision": "downgrade_watchlist",
         "bottleneck_relevance": "adjacent",
         "evidence_strength": "weak",
         "report_status": "evidence_insufficient",
-        "bottleneck_confidence_score": 35,
-        "evidence_quality_score": 15,
+        "bottleneck_confidence_score": _bottleneck_confidence_score(
+            category, business_category, inherited_strength, source_group, previous_tier, has_primary
+        ),
+        "evidence_quality_score": _evidence_quality_score(
+            category, business_category, inherited_strength, source_group, previous_tier, has_primary
+        ),
     }
 
 

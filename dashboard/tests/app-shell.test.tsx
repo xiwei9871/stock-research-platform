@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
+import { AppShell } from '../src/components/AppShell';
 import { ShadowAnalyticsReviewPanel } from '../src/components/ShadowAnalyticsReviewPanel';
 import { ShadowReviewDecisionsPanel } from '../src/components/ShadowReviewDecisionsPanel';
 import { ShadowFollowUpQueuePanel } from '../src/components/ShadowFollowUpQueuePanel';
@@ -17,6 +18,7 @@ import type {
   DecisionOutcomeRow,
   ExperimentProposalRow,
   ExperimentReplayRow,
+  MarketAnomalyContextPayload,
   MarketMonitorPayload,
   GlobalSearchResponse,
   GlobalSearchResult,
@@ -29,10 +31,14 @@ import type {
   ShadowOutcomeAnalyticsRow,
   ShadowOutcomeRow,
   ShadowWatchlistRow,
+  StockMarketContextHeatmapPayload,
   WatchlistSignalRow
 } from '../src/api/types';
 
 const apiMocks = vi.hoisted(() => ({
+  fetchCurrentUser: vi.fn(),
+  loginDashboardUser: vi.fn(),
+  logoutDashboardUser: vi.fn(),
   fetchPlatformReadiness: vi.fn(),
   fetchPlatformSummary: vi.fn(),
   fetchStrategyScoreAudit: vi.fn(),
@@ -64,6 +70,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchFactorLibrary: vi.fn(),
   fetchFactorScorePreview: vi.fn(),
   fetchMarketMonitorEod: vi.fn(),
+  fetchMarketAnomalyContext: vi.fn(),
   fetchMarketOverview: vi.fn(),
   fetchSectorHeatmap: vi.fn(),
   fetchSectorFundFlow: vi.fn(),
@@ -72,6 +79,16 @@ const apiMocks = vi.hoisted(() => ({
   fetchResearchReports: vi.fn(),
   fetchResearchReportDocument: vi.fn(),
   fetchAssetResearchReports: vi.fn(),
+  fetchStockMarketContextHeatmap: vi.fn(),
+  fetchResearchCases: vi.fn(),
+  fetchResearchCaseDetail: vi.fn(),
+  fetchResearchQueueHealth: vi.fn(),
+  fetchResearchPublishGate: vi.fn(),
+  fetchResearchPublicationPreview: vi.fn(),
+  fetchResearchPublicationSnapshots: vi.fn(),
+  fetchResearchExternalDeliveryPlan: vi.fn(),
+  fetchResearchExternalDeliveryAttempts: vi.fn(),
+  fetchResearchEvidence: vi.fn(),
   fetchEvidenceDigest: vi.fn(),
   fetchReviewQueue: vi.fn(),
   fetchStrategyValidationRuns: vi.fn(),
@@ -447,6 +464,49 @@ function makeMarketMonitorPayload(overrides: Partial<MarketMonitorPayload> = {})
     market_emotion: marketEmotionFixture,
     emotion_stock_lists: emotionStockListsFixture,
     warnings: ['market breadth source pending'],
+    ...overrides
+  };
+}
+
+function makeMarketAnomalyContextPayload(
+  overrides: Partial<MarketAnomalyContextPayload> = {}
+): MarketAnomalyContextPayload {
+  return {
+    trade_date: '2026-06-10',
+    data_status: 'complete',
+    summary: {
+      hot_industry_count: 0,
+      hot_stock_count: 0,
+      volume_spike_count: 0,
+      strong_move_count: 0
+    },
+    hot_industries: [],
+    hot_stocks: [],
+    warnings: [],
+    ...overrides
+  };
+}
+
+function makeStockMarketContextHeatmapPayload(
+  overrides: Partial<StockMarketContextHeatmapPayload> = {}
+): StockMarketContextHeatmapPayload {
+  return {
+    asset_id: '000001.SZ',
+    canonical_asset_id: '000001.SZ',
+    trade_date: '2026-06-18',
+    industry: null,
+    selected: null,
+    summary: {
+      peer_count: 0,
+      up_count: 0,
+      flat_count: 0,
+      down_count: 0,
+      total_amount: 0,
+      selected_in_peer_set: false
+    },
+    peers: [],
+    data_status: 'missing',
+    warnings: [],
     ...overrides
   };
 }
@@ -929,9 +989,14 @@ function makeShadowFollowUpResolution(): ShadowFollowUpResolutionRow[] {
   ];
 }
 
+const TEST_ADMIN_USER = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
+
 describe('dashboard app shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMocks.fetchCurrentUser.mockResolvedValue({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
     apiMocks.fetchPlatformReadiness.mockResolvedValue({
       mode: 'eod_local',
       status: 'ready',
@@ -1079,6 +1144,9 @@ describe('dashboard app shell', () => {
     apiMocks.fetchFactorLibrary.mockResolvedValue([]);
     apiMocks.fetchFactorScorePreview.mockResolvedValue({ trade_date: '2026-06-08', selected_factors: [], items: [] });
     apiMocks.fetchMarketMonitorEod.mockResolvedValue(makeMarketMonitorPayload());
+    apiMocks.fetchMarketAnomalyContext.mockImplementation((tradeDate: string) =>
+      Promise.resolve(makeMarketAnomalyContextPayload({ trade_date: tradeDate }))
+    );
     apiMocks.fetchMarketOverview.mockImplementation((tradeDate: string) =>
       Promise.resolve(makeMarketOverviewResponse({ trade_date: tradeDate, updated_at: `${tradeDate} 15:10` }))
     );
@@ -1130,6 +1198,91 @@ describe('dashboard app shell', () => {
       items: [],
       warnings: []
     });
+    apiMocks.fetchStockMarketContextHeatmap.mockResolvedValue(makeStockMarketContextHeatmapPayload());
+    apiMocks.fetchResearchCases.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchEvidence.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchQueueHealth.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      can_review: false,
+      can_publish_research_queue: false,
+      publish_gate_status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      last_refresh: null,
+      warnings: []
+    });
+    apiMocks.fetchResearchPublishGate.mockResolvedValue({
+      trade_date: '2026-06-08',
+      status: 'empty',
+      research_ready_for_publication: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      publication_entrypoint_status: 'scaffolded',
+      summary: {
+        case_count: 0,
+        open_case_count: 0,
+        claim_count: 0,
+        evidence_artifact_count: 0,
+        evidence_link_count: 0,
+        evidence_gap_count: 0,
+        pending_gap_count: 0,
+        reviewed_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      blockers: [],
+      warnings: [],
+      top_blocked_cases: []
+    });
+    apiMocks.fetchResearchPublicationPreview.mockResolvedValue({
+      trade_date: '2026-06-08',
+      package_id: 'research_publication_package:empty',
+      publishable: false,
+      actual_publish_enabled: false,
+      internal_snapshot_enabled: false,
+      external_delivery_enabled: false,
+      gate: {
+        status: 'empty',
+        research_ready_for_publication: false,
+        actual_publish_enabled: false,
+        internal_snapshot_enabled: false,
+        external_delivery_enabled: false
+      },
+      summary: {
+        case_count: 0,
+        claim_count: 0,
+        evidence_count: 0,
+        evidence_link_count: 0,
+        gap_count: 0,
+        reviewed_gap_count: 0,
+        pending_gap_count: 0,
+        request_more_evidence_count: 0,
+        deferred_gap_count: 0,
+        unmatched_digest_count: 0,
+        error_count: 0
+      },
+      sections: [],
+      warnings: [],
+      blockers: []
+    });
+    apiMocks.fetchResearchPublicationSnapshots.mockResolvedValue({ items: [] });
+    apiMocks.fetchResearchExternalDeliveryAttempts.mockResolvedValue({ items: [] });
     apiMocks.fetchEvidenceDigest.mockResolvedValue({
       asset_id: 'CN:SZ:300951',
       canonical_asset_id: 'CN:SZ:300951',
@@ -1151,9 +1304,9 @@ describe('dashboard app shell', () => {
   });
 
   it('renders the stock research cockpit shell title', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
-    expect(screen.getByText('A股策略研究')).toBeVisible();
+    expect(await screen.findByText('A股策略研究')).toBeVisible();
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeVisible();
     expect(screen.getByText('平台日期')).toBeVisible();
     expect(screen.getByText('启用策略表现')).toBeVisible();
@@ -1162,6 +1315,17 @@ describe('dashboard app shell', () => {
     expect(screen.getByText('高质量新闻')).toBeVisible();
     expect(screen.getAllByText('LHB Shortline Combo')[0]).toBeVisible();
     expect(screen.queryByText('Manual V1 TopN Rotation')).not.toBeInTheDocument();
+  });
+
+  it('shows user management navigation only for admins', async () => {
+    const admin = { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin' as const, is_active: true };
+    const regular = { user_id: 'user:2', username: 'analyst', display_name: 'Analyst', role: 'user' as const, is_active: true };
+
+    const { rerender } = render(<AppShell currentUser={regular} />);
+
+    expect(screen.queryByRole('button', { name: 'Open User Management workspace' })).not.toBeInTheDocument();
+    rerender(<AppShell currentUser={admin} />);
+    expect(screen.getByRole('button', { name: 'Open User Management workspace' })).toBeVisible();
   });
 
   it('renders the redesigned home cockpit sections', async () => {
@@ -1219,7 +1383,7 @@ describe('dashboard app shell', () => {
       warnings: []
     });
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     expect(await screen.findByRole('heading', { name: '策略指挥中心' })).toBeInTheDocument();
     const homeStatus = within(screen.getByRole('region', { name: '首页状态' }));
@@ -1236,7 +1400,7 @@ describe('dashboard app shell', () => {
   });
 
   it('exposes the redesigned research cockpit navigation', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     expect(screen.getByRole('button', { name: 'Open Market Monitor workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Research Reports workspace' })).toBeInTheDocument();
@@ -1248,7 +1412,7 @@ describe('dashboard app shell', () => {
   });
 
   it('opens redesigned workspaces from navigation', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
     expect(await screen.findByRole('heading', { name: 'Research Reports' })).toBeInTheDocument();
@@ -1256,14 +1420,14 @@ describe('dashboard app shell', () => {
     expect(await screen.findByText('Ping An Bank Initiation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Stock Workspace' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /贵州茅台|个股复盘工作台/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Watchlist workspace' }));
     expect(await screen.findByRole('heading', { name: '观察池' })).toBeInTheDocument();
   });
 
   it('switches stock workspace chart to intraday bars', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));
     expect(await screen.findByRole('heading', { name: /贵州茅台|Stock Workspace/ })).toBeInTheDocument();
@@ -1304,14 +1468,14 @@ describe('dashboard app shell', () => {
       }
     });
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open Review Queue workspace' }));
     expect(await screen.findByRole('heading', { name: '策略复盘队列' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review Stock' }));
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
-    expect(screen.getByText('Opened from Review Queue')).toBeInTheDocument();
+    expect(screen.getByText((_content, element) => element?.textContent === '来源工作台：Review Queue')).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.fetchAssetProfile).toHaveBeenCalledWith(
         '000001.SZ',
@@ -1338,7 +1502,7 @@ describe('dashboard app shell', () => {
       );
       apiMocks.fetchAssetProfile.mockResolvedValueOnce(makeAssetProfile('CN:SH:600519'));
 
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
       fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '600519' } });
       await act(async () => {
@@ -1495,8 +1659,9 @@ describe('dashboard app shell', () => {
                   sourceWorkspace: 'market',
                   assetId: 'CN:SH:600519',
                   tradeDate: '2026-06-12',
-                  monitorTab: 'industry',
-                  query: '贵州茅台'
+                  monitorTab: 'stock_heatmap',
+                  query: '贵州茅台',
+                  matchReason: 'stock_heatmap'
                 })
               }
             >
@@ -1941,7 +2106,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
     expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
-      'CN:SH:600519:market:贵州茅台:none:none:3'
+      'CN:SH:600519:market:贵州茅台:stock_heatmap:none:3'
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock stock return current market' }));
@@ -1962,7 +2127,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Mock market open asset' }));
 
     expect(await screen.findByTestId('mock-stock-workspace')).toHaveTextContent(
-      'CN:SH:600519:market:贵州茅台:none:none:1'
+      'CN:SH:600519:market:贵州茅台:stock_heatmap:none:1'
     );
     expect(stockRenders.at(-1)).toMatchObject({
       initialAssetId: 'CN:SH:600519',
@@ -1970,7 +2135,8 @@ describe('dashboard app shell', () => {
         sourceWorkspace: 'market',
         query: '贵州茅台',
         tradeDate: '2026-06-12',
-        monitorTab: 'industry'
+        monitorTab: 'stock_heatmap',
+        matchReason: 'stock_heatmap'
       },
       mountId: 1
     });
@@ -2078,7 +2244,7 @@ describe('dashboard app shell', () => {
         warnings: []
       });
 
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
       fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
       await act(async () => {
@@ -2126,7 +2292,7 @@ describe('dashboard app shell', () => {
         warnings: []
       });
 
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
       fireEvent.change(screen.getByLabelText('Global search'), { target: { value: '茅台' } });
       await act(async () => {
@@ -2184,7 +2350,7 @@ describe('dashboard app shell', () => {
         ]
       });
 
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
       fireEvent.change(screen.getByLabelText('Global search'), { target: { value: 'Daily' } });
       await act(async () => {
@@ -2211,7 +2377,7 @@ describe('dashboard app shell', () => {
   it('explains why Generated Reports can be empty', async () => {
     apiMocks.fetchOverview.mockResolvedValue({ ...makeOverview(), reports: [] });
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Generated Reports workspace' }));
@@ -2224,7 +2390,7 @@ describe('dashboard app shell', () => {
   it('renders EOD market monitor data without implying realtime data', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
@@ -2232,7 +2398,7 @@ describe('dashboard app shell', () => {
     expect(screen.queryByText('Realtime')).not.toBeInTheDocument();
     expect(screen.getByText('Data Mode')).toBeInTheDocument();
     expect(screen.getByText('EOD Snapshot')).toBeInTheDocument();
-    expect(screen.getByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-10').length).toBeGreaterThan(0);
     expect(screen.getByText('综合强度')).toBeInTheDocument();
     expect(screen.getByText('73.6')).toBeInTheDocument();
     expect(screen.getByText('hot')).toBeInTheDocument();
@@ -2281,7 +2447,7 @@ describe('dashboard app shell', () => {
         })
       );
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
@@ -2307,7 +2473,7 @@ describe('dashboard app shell', () => {
       .mockResolvedValueOnce(makeMarketMonitorPayload())
       .mockReturnValueOnce(historicalRequest);
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
@@ -2318,7 +2484,7 @@ describe('dashboard app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load Date' }));
 
     expect(await screen.findByText('Loading 2026-06-04...')).toBeInTheDocument();
-    expect(screen.getByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-10').length).toBeGreaterThan(0);
 
     await act(async () => {
       resolveHistoricalRequest(
@@ -2348,7 +2514,7 @@ describe('dashboard app shell', () => {
         trade_date: '2026-06-10'
       } as unknown as MarketMonitorPayload);
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
@@ -2363,7 +2529,7 @@ describe('dashboard app shell', () => {
   it('supports keyboard navigation across market monitor stock tabs', async () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload());
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
 
     await screen.findByRole('heading', { name: 'Market Monitor' });
@@ -2401,7 +2567,7 @@ describe('dashboard app shell', () => {
     apiMocks.fetchMarketMonitorEod.mockResolvedValueOnce(makeMarketMonitorPayload()).mockReturnValueOnce(pendingMarketMonitor);
 
     try {
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
       fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
       expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
 
@@ -2453,7 +2619,7 @@ describe('dashboard app shell', () => {
       .mockReturnValueOnce(firstRequest)
       .mockReturnValueOnce(secondRequest);
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open Market Monitor workspace' }));
     expect(await screen.findByRole('heading', { name: 'Market Monitor' })).toBeInTheDocument();
     expect(apiMocks.fetchMarketMonitorEod).toHaveBeenCalledTimes(2);
@@ -2494,7 +2660,7 @@ describe('dashboard app shell', () => {
     });
 
     expect(await screen.findByText('000002.SZ')).toBeInTheDocument();
-    expect(screen.getByText('2026-06-11')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-11').length).toBeGreaterThan(0);
 
     await act(async () => {
       resolveFirstRequest(makeMarketMonitorPayload());
@@ -2502,13 +2668,13 @@ describe('dashboard app shell', () => {
     });
 
     expect(screen.getByText('000002.SZ')).toBeInTheDocument();
-    expect(screen.getByText('2026-06-11')).toBeInTheDocument();
+    expect(screen.getAllByText('2026-06-11').length).toBeGreaterThan(0);
     expect(screen.queryByText('000001.SZ')).not.toBeInTheDocument();
     expect(screen.queryByText('2026-06-10')).not.toBeInTheDocument();
   });
 
   it('navigates between planned platform workspaces', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     await screen.findByRole('heading', { name: '策略指挥中心' });
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
@@ -2576,7 +2742,7 @@ describe('dashboard app shell', () => {
           ],
           warnings: []
         });
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
       fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
       await act(async () => {
         await Promise.resolve();
@@ -2640,7 +2806,7 @@ describe('dashboard app shell', () => {
       warnings: []
     });
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
     expect(await screen.findByText('Loading news...')).toBeInTheDocument();
 
@@ -2738,7 +2904,7 @@ describe('dashboard app shell', () => {
         warnings: []
       });
 
-      render(<App />);
+      render(<AppShell currentUser={TEST_ADMIN_USER} />);
       fireEvent.click(screen.getByRole('button', { name: 'Open News workspace' }));
       await act(async () => {
         await Promise.resolve();
@@ -2823,7 +2989,7 @@ describe('dashboard app shell', () => {
       artifacts: []
     });
 
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));
@@ -2840,7 +3006,7 @@ describe('dashboard app shell', () => {
   });
 
   it('supports keyboard navigation between Strategy Lab tabs', async () => {
-    render(<App />);
+    render(<AppShell currentUser={TEST_ADMIN_USER} />);
     const navigation = within(screen.getByRole('complementary', { name: 'Workspace navigation' }));
 
     fireEvent.click(navigation.getByRole('button', { name: 'Open Strategy Lab workspace' }));

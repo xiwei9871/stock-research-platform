@@ -1,14 +1,19 @@
 import type {
   AssetNewsResponse,
   AssetSearchResponse,
+  AdminUserActionResponse,
+  AdminUsersResponse,
   AssetProfile,
   AssetResearchReportResponse,
+  AuthMeResponse,
   BarPoint,
   BacktestJobResponse,
   BacktestRunRequest,
   BacktestRunResult,
   CreateOperatorDecisionRequest,
   CreateOperatorDecisionResponse,
+  CreateAdminUserRequest,
+  CreateAdminUserResponse,
   DashboardOverview,
   DailyReviewLitePayload,
   DataToBriefDocling90ReviewPayload,
@@ -23,13 +28,18 @@ import type {
   FactorScorePreview,
   FactorSelection,
   GlobalSearchResponse,
+  MarketAnomalyContextPayload,
   MarketMonitorPayload,
   MarketDataStatus,
   MarketOverview,
+  LoginRequest,
+  LoginResponse,
   SectorDetail,
   SectorFundFlowItem,
   SectorHeatmapItem,
   SectorType,
+  StockHeatmapPayload,
+  StockMarketContextHeatmapPayload,
   OutcomeAnalyticsRow,
   OpsStageRow,
   PlatformDisplayDate,
@@ -41,6 +51,18 @@ import type {
   ResearchReportDocument,
   ResearchReportResponse,
   ResearchReportSummary,
+  ResearchCaseDetail,
+  ResearchCaseResponse,
+  ResearchQueueGapsResponse,
+  ResearchQueueHealth,
+  ResearchPublishGate,
+  ResearchPublicationPackage,
+  ResearchPublicationSnapshotsResponse,
+  ResearchExternalDeliveryPlan,
+  ResearchExternalDeliveryAttemptsResponse,
+  ResearchEvidenceResponse,
+  CreateResearchReviewActionRequest,
+  CreateResearchReviewActionResponse,
   ReviewItemSnapshot,
   ReviewQueueResponse,
   ScoreRow,
@@ -130,6 +152,119 @@ type DailyReviewLiteParams = {
   tradeDate?: string;
 };
 
+type ResearchCaseParams = {
+  tradeDate?: string;
+  status?: string;
+  assetId?: string;
+  limit?: number;
+};
+
+type ResearchEvidenceParams = {
+  assetId?: string;
+  sourceType?: string;
+  limit?: number;
+};
+
+type ResearchQueueHealthParams = {
+  tradeDate?: string;
+};
+
+type ResearchQueueGapsParams = {
+  tradeDate?: string;
+  limit?: number;
+};
+
+type ResearchPublishGateParams = {
+  tradeDate?: string;
+};
+
+type ResearchPublicationPreviewParams = {
+  tradeDate?: string;
+};
+
+type ResearchPublicationSnapshotsParams = {
+  tradeDate?: string;
+  channel?: string;
+  limit?: number;
+};
+
+type RequestOptions = {
+  credentials?: RequestCredentials;
+  csrfToken?: string;
+};
+
+function csrfTokenFromCookie() {
+  return (
+    document.cookie
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('stock_research_csrf='))
+      ?.split('=')
+      .slice(1)
+      .join('=') ?? ''
+  );
+}
+
+export async function fetchCurrentUser(): Promise<AuthMeResponse> {
+  return getJson<AuthMeResponse>('/api/auth/me', { credentials: 'include' });
+}
+
+export async function loginDashboardUser(request: LoginRequest): Promise<LoginResponse> {
+  return postJson<LoginResponse>('/api/auth/login', request, { credentials: 'include' });
+}
+
+export async function logoutDashboardUser(): Promise<{ status: string }> {
+  return postJson<{ status: string }>('/api/auth/logout', {}, { credentials: 'include', csrfToken: csrfTokenFromCookie() });
+}
+
+export async function fetchAdminUsers(): Promise<AdminUsersResponse> {
+  return getJson<AdminUsersResponse>('/api/admin/users', { credentials: 'include' });
+}
+
+export async function createAdminUser(request: CreateAdminUserRequest): Promise<CreateAdminUserResponse> {
+  return postJson<CreateAdminUserResponse>('/api/admin/users', request, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+}
+
+export async function disableAdminUser(userId: string): Promise<AdminUserActionResponse> {
+  return postJson<AdminUserActionResponse>(`/api/admin/users/${encodeURIComponent(userId)}/disable`, {}, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+}
+
+export async function enableAdminUser(userId: string): Promise<AdminUserActionResponse> {
+  return postJson<AdminUserActionResponse>(`/api/admin/users/${encodeURIComponent(userId)}/enable`, {}, {
+    credentials: 'include',
+    csrfToken: csrfTokenFromCookie()
+  });
+}
+
+export async function resetAdminUserPassword(userId: string, password: string): Promise<AdminUserActionResponse> {
+  return postJson<AdminUserActionResponse>(
+    `/api/admin/users/${encodeURIComponent(userId)}/reset-password`,
+    { password },
+    {
+      credentials: 'include',
+      csrfToken: csrfTokenFromCookie()
+    }
+  );
+}
+
+type ResearchExternalDeliveryPlanParams = {
+  publicationSnapshotId: string;
+  channel?: string;
+};
+
+type ResearchExternalDeliveryAttemptsParams = {
+  publicationSnapshotId?: string;
+  tradeDate?: string;
+  channel?: string;
+  limit?: number;
+};
+
 type SnapshotFilters = {
   runId?: string;
   tradeDate?: string;
@@ -182,6 +317,25 @@ export async function fetchSectorHeatmap(
 }> {
   return getJson(
     `/api/market-monitor/sectors/heatmap?trade_date=${encodeURIComponent(tradeDate)}&type=${encodeURIComponent(sectorType)}`
+  );
+}
+
+export async function fetchStockHeatmap(tradeDate: string): Promise<StockHeatmapPayload> {
+  return getJson(
+    `/api/market-monitor/stocks/heatmap?trade_date=${encodeURIComponent(tradeDate)}&market=all&period=1d&group=industry&size_by=amount`
+  );
+}
+
+export async function fetchMarketAnomalyContext(tradeDate: string): Promise<MarketAnomalyContextPayload> {
+  return getJson(`/api/market-monitor/anomaly-context?trade_date=${encodeURIComponent(tradeDate)}`);
+}
+
+export async function fetchStockMarketContextHeatmap(
+  assetId: string,
+  tradeDate: string
+): Promise<StockMarketContextHeatmapPayload> {
+  return getJson(
+    `/api/stocks/${encodeURIComponent(assetId)}/market-context/heatmap?trade_date=${encodeURIComponent(tradeDate)}`
   );
 }
 
@@ -332,6 +486,98 @@ export async function fetchEvidenceDigestSnapshot(
   snapshotId: string
 ): Promise<EvidenceDigestSnapshotDetailResponse> {
   return getJson(`/api/evidence-digest/snapshots/${encodeURIComponent(snapshotId)}`);
+}
+
+export async function fetchResearchCases(params: ResearchCaseParams = {}): Promise<ResearchCaseResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.assetId) searchParams.set('asset_id', params.assetId);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/cases?${query}` : '/api/research/cases');
+}
+
+export async function fetchResearchCaseDetail(caseId: string): Promise<ResearchCaseDetail> {
+  return getJson(`/api/research/cases/${encodeURIComponent(caseId)}`);
+}
+
+export async function fetchResearchQueueHealth(params: ResearchQueueHealthParams = {}): Promise<ResearchQueueHealth> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/queue/health?${query}` : '/api/research/queue/health');
+}
+
+export async function fetchResearchQueueGaps(params: ResearchQueueGapsParams = {}): Promise<ResearchQueueGapsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/queue/gaps?${query}` : '/api/research/queue/gaps');
+}
+
+export async function fetchResearchPublishGate(params: ResearchPublishGateParams = {}): Promise<ResearchPublishGate> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/queue/publish-gate?${query}` : '/api/research/queue/publish-gate');
+}
+
+export async function fetchResearchPublicationPreview(
+  params: ResearchPublicationPreviewParams = {}
+): Promise<ResearchPublicationPackage> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/publication/preview?${query}` : '/api/research/publication/preview');
+}
+
+export async function fetchResearchPublicationSnapshots(
+  params: ResearchPublicationSnapshotsParams = {}
+): Promise<ResearchPublicationSnapshotsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.channel) searchParams.set('channel', params.channel);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/publication/snapshots?${query}` : '/api/research/publication/snapshots');
+}
+
+export async function fetchResearchExternalDeliveryPlan(
+  params: ResearchExternalDeliveryPlanParams
+): Promise<ResearchExternalDeliveryPlan> {
+  const searchParams = new URLSearchParams();
+  searchParams.set('publication_snapshot_id', params.publicationSnapshotId);
+  if (params.channel) searchParams.set('channel', params.channel);
+  return getJson(`/api/research/publication/delivery-plan?${searchParams.toString()}`);
+}
+
+export async function fetchResearchExternalDeliveryAttempts(
+  params: ResearchExternalDeliveryAttemptsParams = {}
+): Promise<ResearchExternalDeliveryAttemptsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.publicationSnapshotId) searchParams.set('publication_snapshot_id', params.publicationSnapshotId);
+  if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
+  if (params.channel) searchParams.set('channel', params.channel);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/publication/delivery-attempts?${query}` : '/api/research/publication/delivery-attempts');
+}
+
+export async function createResearchReviewAction(
+  request: CreateResearchReviewActionRequest
+): Promise<CreateResearchReviewActionResponse> {
+  return postJson('/api/research/review-actions', request);
+}
+
+export async function fetchResearchEvidence(params: ResearchEvidenceParams = {}): Promise<ResearchEvidenceResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.assetId) searchParams.set('asset_id', params.assetId);
+  if (params.sourceType) searchParams.set('source_type', params.sourceType);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(query ? `/api/research/evidence?${query}` : '/api/research/evidence');
 }
 
 export async function searchAssets(q: string, limit = 10) {
@@ -756,22 +1002,44 @@ async function postBacktest(url: string, request: BacktestRunRequest): Promise<B
   return postJson(url, request);
 }
 
-async function postJson<T>(url: string, request: unknown): Promise<T> {
+async function postJson<T>(url: string, request: unknown, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (options.csrfToken) {
+    headers['X-CSRF-Token'] = options.csrfToken;
+  }
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
+    credentials: options.credentials,
     body: JSON.stringify(request)
   });
   if (!response.ok) {
-    throw new Error(`POST ${url} failed with ${response.status}`);
+    const detail = await responseErrorDetail(response);
+    throw new Error(`POST ${url} failed with ${response.status}${detail ? `: ${detail}` : ''}`);
   }
   return response.json() as Promise<T>;
 }
 
-async function patchJson<T>(url: string, request: unknown): Promise<T> {
+async function responseErrorDetail(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    if (typeof payload.detail === 'string') return payload.detail;
+    if (payload.detail) return JSON.stringify(payload.detail);
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+async function patchJson<T>(url: string, request: unknown, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (options.csrfToken) {
+    headers['X-CSRF-Token'] = options.csrfToken;
+  }
   const response = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
+    credentials: options.credentials,
     body: JSON.stringify(request)
   });
   if (!response.ok) {
@@ -780,8 +1048,8 @@ async function patchJson<T>(url: string, request: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function getJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
+  const response = options.credentials ? await fetch(url, { credentials: options.credentials }) : await fetch(url);
   if (!response.ok) {
     throw new Error(`GET ${url} failed with ${response.status}`);
   }

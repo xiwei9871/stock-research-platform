@@ -57,7 +57,7 @@ def sync_core_asset_master(conn) -> None:
         exchange = 'BJ' AS is_beijing,
         exchange = 'SH' AND symbol LIKE '688%' AS is_star,
         exchange = 'SZ' AND symbol ~ '^(300|301|302)' AS is_chinext,
-        NULL AS region,
+        CAST(NULL AS text) AS region,
         source
     FROM asset_master
     ON CONFLICT (asset_id) DO UPDATE SET
@@ -74,7 +74,7 @@ def sync_core_asset_master(conn) -> None:
         is_beijing = EXCLUDED.is_beijing,
         is_star = EXCLUDED.is_star,
         is_chinext = EXCLUDED.is_chinext,
-        region = EXCLUDED.region,
+        region = COALESCE(NULLIF(a.region, ''), EXCLUDED.region),
         source = EXCLUDED.source,
         updated_at = now()
     """
@@ -151,7 +151,7 @@ def sync_concept_memberships_from_akshare(
     conn,
     *,
     trade_date: str,
-    concept_system: str = "ths",
+    concept_system: str = "em",
     board_fetcher=None,
     constituent_fetcher=None,
     max_concepts: int | None = None,
@@ -159,8 +159,17 @@ def sync_concept_memberships_from_akshare(
     if ak is None and (board_fetcher is None or constituent_fetcher is None):
         raise RuntimeError("akshare is required to sync concept memberships")
 
-    board_fetcher = board_fetcher or ak.stock_board_concept_name_ths
-    constituent_fetcher = constituent_fetcher or ak.stock_board_concept_cons_em
+    default_em_fetchers = board_fetcher is None and constituent_fetcher is None and concept_system == "em"
+    if default_em_fetchers:
+        board_fetcher = ak.stock_board_concept_name_em
+        constituent_fetcher = ak.stock_board_concept_cons_em
+        board_source = "akshare:stock_board_concept_name_em"
+        constituent_source = "akshare:stock_board_concept_cons_em"
+    else:
+        board_fetcher = board_fetcher or ak.stock_board_concept_name_ths
+        constituent_fetcher = constituent_fetcher or ak.stock_board_concept_cons_em
+        board_source = "akshare:stock_board_concept_name_ths"
+        constituent_source = "akshare:concept_constituents"
     boards = _normalize_concept_boards(board_fetcher())
     if max_concepts is not None:
         boards = boards[: max(0, int(max_concepts))]
@@ -170,7 +179,7 @@ def sync_concept_memberships_from_akshare(
             concept_system,
             board["concept_code"],
             board["concept_name"],
-            "akshare:stock_board_concept_name_ths",
+            board_source,
             True,
         )
         for board in boards
@@ -199,8 +208,9 @@ def sync_concept_memberships_from_akshare(
     for board in boards:
         concept_code = board["concept_code"]
         concept_name = board["concept_name"]
+        constituent_symbol = concept_code if default_em_fetchers else concept_name
         try:
-            constituents = _normalize_concept_constituents(constituent_fetcher(concept_name))
+            constituents = _normalize_concept_constituents(constituent_fetcher(constituent_symbol))
         except Exception:  # noqa: BLE001 - vendor failures should not erase local concept history.
             failed_concepts.append(concept_name)
             continue
@@ -215,7 +225,7 @@ def sync_concept_memberships_from_akshare(
                     concept_code,
                     concept_name,
                     trade_date,
-                    "akshare:concept_constituents",
+                    constituent_source,
                 )
             )
         current_assets_by_concept[concept_code] = current_assets

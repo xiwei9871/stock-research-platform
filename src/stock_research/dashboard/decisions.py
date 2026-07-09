@@ -6,6 +6,35 @@ from typing import Any
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
 
+REQUIRED_DECISION_FIELDS = {"asset_id", "decision_label"}
+
+
+def validate_operator_decision_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_payload")
+
+    normalized = dict(payload)
+    missing = sorted(field for field in REQUIRED_DECISION_FIELDS if not str(normalized.get(field) or "").strip())
+    if missing:
+        raise ValueError(f"operator_decision_missing_fields:{','.join(missing)}")
+
+    source_context = normalized.get("source_context") if isinstance(normalized.get("source_context"), dict) else {}
+    has_evidence = bool(
+        str(normalized.get("evidence_artifact_id") or "").strip()
+        or str(normalized.get("evidence_digest_snapshot_id") or "").strip()
+        or str(normalized.get("review_item_snapshot_id") or "").strip()
+        or str(source_context.get("evidence_digest_snapshot_id") or "").strip()
+        or str(source_context.get("review_item_snapshot_id") or "").strip()
+    )
+    if not has_evidence:
+        raise ValueError("operator_decision_missing_evidence_linkage")
+    if normalized.get("auto_trade_enabled") is True:
+        raise ValueError("operator_decision_auto_trade_forbidden")
+
+    normalized["manual_review_required"] = True
+    normalized["auto_trade_enabled"] = False
+    return normalized
+
 
 def load_asset_decision_history(
     asset_id: str,

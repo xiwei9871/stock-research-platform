@@ -129,10 +129,16 @@ def test_build_internal_ops_snapshot_defaults_to_latest_status_trade_date(monkey
     assert captured["status_date"] == date(2026, 6, 29)
     assert snapshot["run_window"]["requested_trade_date"] == "2026-06-29"
     assert snapshot["readiness"]["ready_status"] == "degraded_ready"
-    assert snapshot["readiness"]["blocking_issue_count"] == 0
+    assert snapshot["readiness"]["ready_for_dashboard"] is True
+    assert snapshot["readiness"]["ready_for_publication"] is False
+    assert snapshot["readiness"]["blocking_issue_count"] == 2
+    assert snapshot["readiness"]["blocking_reasons"] == [
+        "daily_status=partial_success",
+        "minute5_status=partial_success",
+    ]
 
 
-def test_build_internal_ops_snapshot_does_not_count_degraded_ready_warnings_as_blocking(monkeypatch):
+def test_build_internal_ops_snapshot_reports_degraded_ready_publication_blockers(monkeypatch):
     monkeypatch.setattr(
         "stock_research.dashboard.ops_snapshot._load_pipeline_status_context",
         lambda service, trade_date: {
@@ -187,7 +193,13 @@ def test_build_internal_ops_snapshot_does_not_count_degraded_ready_warnings_as_b
     snapshot = build_internal_ops_snapshot("stock_research", trade_date=date(2026, 6, 30))
 
     assert snapshot["readiness"]["ready_status"] == "degraded_ready"
-    assert snapshot["readiness"]["blocking_issue_count"] == 0
+    assert snapshot["readiness"]["ready_for_dashboard"] is True
+    assert snapshot["readiness"]["ready_for_publication"] is False
+    assert snapshot["readiness"]["blocking_issue_count"] == 2
+    assert snapshot["readiness"]["blocking_reasons"] == [
+        "daily_status=partial_success",
+        "minute5_status=partial_success",
+    ]
 
 
 def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch):
@@ -255,7 +267,8 @@ def test_build_internal_ops_snapshot_uses_health_alerts_in_readiness(monkeypatch
 
     assert snapshot["pipeline"]["overall_status"] == "delayed"
     assert snapshot["health"]["has_alerts"] is True
-    assert snapshot["readiness"]["blocking_issue_count"] == 2
+    assert snapshot["readiness"]["blocking_issue_count"] == 3
+    assert "pipeline_status=NOT_READY" in snapshot["readiness"]["blocking_reasons"]
     assert snapshot["readiness"]["ready_for_publication"] is False
     assert snapshot["intervention"]["severity"] == "warning"
 

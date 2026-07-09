@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import subprocess
@@ -35,6 +36,83 @@ def _run_generator(*args: str) -> None:
 
 def _citations(markdown: str) -> set[str]:
     return set(re.findall(r"\[(S\d+)\]", markdown))
+
+
+def _load_script_module():
+    spec = importlib.util.spec_from_file_location("tech_bottleneck_candidate_reports_enriched", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_classification_scores_are_not_flat_buckets() -> None:
+    module = _load_script_module()
+
+    likely_semiconductor = pd.Series(
+        {
+            "review_pool_category": "likely_hard_tech_pending_evidence",
+            "requalification_v2_category": "likely_hard_tech_pending_evidence",
+            "evidence_strength": "pending_primary_source",
+            "business_relevance_category": "semiconductor_equipment_or_material",
+            "source_group": "seed_tier_a",
+            "previous_tier": "Tier A",
+            "primary_source_url": "",
+            "primary_source_evidence_available": False,
+        }
+    )
+    likely_grid = pd.Series(
+        {
+            "review_pool_category": "likely_hard_tech_pending_evidence",
+            "requalification_v2_category": "likely_hard_tech_pending_evidence",
+            "evidence_strength": "pending_primary_source",
+            "business_relevance_category": "power_electronics_or_grid_equipment",
+            "source_group": "seed_tier_a",
+            "previous_tier": "Tier A",
+            "primary_source_url": "",
+            "primary_source_evidence_available": False,
+        }
+    )
+    verified_moderate = pd.Series(
+        {
+            "review_pool_category": "verified_core",
+            "requalification_v2_category": "verified_core",
+            "evidence_strength": "moderate",
+            "business_relevance_category": "",
+            "source_group": "non_seed_tier_a_manual_review_core",
+            "previous_tier": "Tier A",
+            "primary_source_url": "",
+            "primary_source_evidence_available": False,
+        }
+    )
+    verified_strong_primary = pd.Series(
+        {
+            "review_pool_category": "verified_core",
+            "requalification_v2_category": "verified_core",
+            "evidence_strength": "strong",
+            "business_relevance_category": "",
+            "source_group": "verified_rescue_extension_proposal",
+            "previous_tier": "Tier B",
+            "primary_source_url": "https://example.com/source.pdf",
+            "primary_source_evidence_available": True,
+        }
+    )
+
+    likely_semiconductor_classification = module._classification(likely_semiconductor)
+    likely_grid_classification = module._classification(likely_grid)
+    verified_moderate_classification = module._classification(verified_moderate)
+    verified_strong_primary_classification = module._classification(verified_strong_primary)
+
+    assert (
+        likely_semiconductor_classification["bottleneck_confidence_score"]
+        > likely_grid_classification["bottleneck_confidence_score"]
+    )
+    assert likely_semiconductor_classification["evidence_quality_score"] > likely_grid_classification["evidence_quality_score"]
+    assert (
+        verified_strong_primary_classification["bottleneck_confidence_score"]
+        > verified_moderate_classification["bottleneck_confidence_score"]
+    )
+    assert verified_strong_primary_classification["evidence_quality_score"] > verified_moderate_classification["evidence_quality_score"]
 
 
 def test_enriched_reports_pilot_has_citations_references_and_sources() -> None:
@@ -91,6 +169,8 @@ def test_enriched_reports_full_batch_and_scope_guardrails() -> None:
     assert manifest["report_md_path"].map(lambda path: (PROJECT_ROOT / path).exists()).all()
     assert manifest["report_html_path"].map(lambda path: (PROJECT_ROOT / path).exists()).all()
     assert manifest["evidence_matrix_path"].map(lambda path: (PROJECT_ROOT / path).exists()).all()
+    assert dashboard["bottleneck_confidence_score"].nunique() >= 8
+    assert dashboard["evidence_quality_score"].nunique() >= 8
 
 
 def test_enriched_reports_aggregate_outputs_and_formal_strategy_diff_clean() -> None:

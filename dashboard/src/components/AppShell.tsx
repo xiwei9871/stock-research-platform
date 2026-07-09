@@ -11,11 +11,14 @@ import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
 import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
+import { UserManagementView } from './UserManagementView';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { SectorType } from './market-monitor/mockData';
 import { fetchPlatformReadiness, fetchPlatformSummary } from '../api/client';
-import type { GlobalSearchResult } from '../api/types';
-import { TechBottleneckWatchlistReviewPage } from '../features/techBottleneckWatchlistReview/TechBottleneckWatchlistReviewPage';
+import { fetchTechBottleneckReviewUniverseStock } from '../api/techBottleneckReview';
+import type { CurrentUser, GlobalSearchResult } from '../api/types';
+import { TechBottleneckReviewPage } from '../pages/TechBottleneckReviewPage';
+import type { TechBottleneckReviewStock } from '../types/techBottleneckReview';
 import {
   techBottleneckWorkbenchAdjacentWatchlist,
   techBottleneckWorkbenchCoreCandidates,
@@ -33,11 +36,12 @@ type WorkspaceMode =
   | 'researchReports'
   | 'stock'
   | 'watchlist'
-  | 'techBottleneckReview'
+  | 'techBottleneckReviewUniverse'
   | 'dataToBriefDocling90'
   | 'factors'
   | 'strategyLab'
-  | 'generatedReports';
+  | 'generatedReports'
+  | 'userManagement';
 
 type WorkspaceHandoff = {
   query: string;
@@ -81,31 +85,38 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
   {
-    mode: 'techBottleneckReview',
-    label: '科技卡脖子观察池',
-    ariaLabel: 'Open Tech Bottleneck Watchlist Review workspace'
-  },
-  {
     mode: 'dataToBriefDocling90',
     label: 'Docling报告审计',
     ariaLabel: 'Open Data-to-Brief Docling 90-stock review workspace'
+  },
+  {
+    mode: 'techBottleneckReviewUniverse',
+    label: '卡脖子复盘',
+    ariaLabel: 'Open Tech Bottleneck review universe workspace'
   },
   { mode: 'factors', label: '因子实验室', ariaLabel: 'Open Factor Lab workspace' },
   { mode: 'strategyLab', label: '策略实验室', ariaLabel: 'Open Strategy Lab workspace' },
   { mode: 'generatedReports', label: '生成报告', ariaLabel: 'Open Generated Reports workspace' }
 ];
 
+const ADMIN_NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }> = [
+  { mode: 'userManagement', label: '用户管理', ariaLabel: 'Open User Management workspace' }
+];
+
 const FALLBACK_DISPLAY_TRADE_DATE = '2026-06-18';
 const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
+const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-universe';
 const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
 const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
+const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
 function firstDate(...dates: Array<string | null | undefined>) {
   return dates.map((date) => date?.trim()).find(Boolean) ?? '';
 }
 
 function workspaceModeFromPath(pathname: string): WorkspaceMode {
-  if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReview';
+  if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
+  if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
   if (pathname === DATA_TO_BRIEF_DOCLING_90_PATH) return 'dataToBriefDocling90';
   if (pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return 'stock';
   return 'home';
@@ -137,9 +148,19 @@ function findTechBottleneckCandidate(stockCode: string): TechBottleneckWorkbench
 function techBottleneckStockHandoffFromLocation(pathname: string, search: string): StockHandoff | null {
   const stockCode = stockCodeFromTechBottleneckPath(pathname);
   if (!stockCode) return null;
-  const candidate = findTechBottleneckCandidate(stockCode);
   const assetId = stockCodeToAssetId(stockCode);
   const source = new URLSearchParams(search).get('source') ?? 'tech_bottleneck_candidate_universe_workbench_patch_v1';
+  if (source === TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE) {
+    return {
+      assetId,
+      sourceWorkspace: 'techBottleneck',
+      query: stockCode,
+      techBottleneckSource: source,
+      matchReason: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+      version: 0
+    };
+  }
+  const candidate = findTechBottleneckCandidate(stockCode);
   return {
     assetId,
     sourceWorkspace: 'techBottleneck',
@@ -184,7 +205,56 @@ function techBottleneckStockHandoffFromLocation(pathname: string, search: string
   };
 }
 
-export function AppShell() {
+function conceptTagsFromReviewUniverseStock(stock: TechBottleneckReviewStock) {
+  if (Array.isArray(stock.concept_tags)) return stock.concept_tags;
+  return String(stock.concept_tags || '')
+    .split(/[;,，、|]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function normalizeTechBottleneckReviewUniverseScore(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function techBottleneckReviewUniverseStockHandoff(stock: TechBottleneckReviewStock): StockHandoff {
+  return {
+    assetId: stockCodeToAssetId(stock.stock_code),
+    sourceWorkspace: 'techBottleneck',
+    query: stock.stock_name || stock.stock_code,
+    stockName: stock.stock_name,
+    techBottleneckSource: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+    sourceGroup: stock.source_group || stock.review_universe_source,
+    previousTier: stock.previous_tier || stock.current_layer_status,
+    industry: stock.industry,
+    conceptTags: conceptTagsFromReviewUniverseStock(stock),
+    evidenceStrength: stock.evidence_strength,
+    bottleneckRelevance: stock.bottleneck_relevance,
+    bottleneckConfidenceScore:
+      stock.bottleneckConfidenceScore ?? normalizeTechBottleneckReviewUniverseScore(stock.bottleneck_confidence_score),
+    evidenceQualityScore:
+      stock.evidenceQualityScore ?? normalizeTechBottleneckReviewUniverseScore(stock.evidence_quality_score),
+    reviewStatus: stock.review_status || stock.frontend_review_status,
+    allowedForSignal: false,
+    allowedForAdmission: false,
+    rationale: stock.evidence_summary_for_review,
+    nextAction: stock.next_primary_source_to_check,
+    evidenceExcerpt: stock.strongest_primary_source_claim,
+    evidenceGapNote: stock.weakest_or_riskiest_claim,
+    matchReason: TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE,
+    version: 0
+  };
+}
+
+type AppShellProps = {
+  currentUser?: CurrentUser;
+};
+
+export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
+  const currentUser = _currentUser;
+  const navItems = currentUser?.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
   const initialTechBottleneckStockHandoff =
     typeof window === 'undefined' ? null : techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
@@ -223,6 +293,9 @@ export function AppShell() {
 
   useEffect(() => {
     const handleLocationChange = () => {
+      if (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH) {
+        window.history.replaceState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+      }
       const nextMode = workspaceModeFromPath(window.location.pathname);
       if (window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) {
         const techBottleneckHandoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
@@ -236,11 +309,52 @@ export function AppShell() {
       }
       setWorkspaceMode(nextMode);
     };
+    handleLocationChange();
     window.addEventListener('popstate', handleLocationChange);
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      stockHandoff.sourceWorkspace !== 'techBottleneck' ||
+      stockHandoff.techBottleneckSource !== TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE ||
+      !stockHandoff.assetId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const stockCode = stockHandoff.assetId.split('.')[0] ?? stockHandoff.assetId;
+
+    fetchTechBottleneckReviewUniverseStock(stockCode)
+      .then((stock) => {
+        if (cancelled) return;
+        const nextContext = techBottleneckReviewUniverseStockHandoff(stock);
+        setStockHandoff((current) => {
+          if (
+            current.sourceWorkspace !== 'techBottleneck' ||
+            current.techBottleneckSource !== TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE ||
+            current.assetId !== nextContext.assetId
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            ...nextContext,
+            version: current.version + 1
+          };
+        });
+      })
+      .catch(() => {
+        // Keep the route-derived handoff if the read-model lookup is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stockHandoff.assetId, stockHandoff.sourceWorkspace, stockHandoff.techBottleneckSource]);
 
   function openStockWorkspace(assetId: string, context: Omit<StockHandoff, 'assetId' | 'version'> = {}) {
     setSelectedAssetId(assetId);
@@ -257,14 +371,15 @@ export function AppShell() {
       openStockWorkspace(selectedAssetId);
       return;
     }
-    if (mode === 'techBottleneckReview' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_PATH) {
-      window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_PATH);
+    if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
+      window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
     } else if (mode === 'dataToBriefDocling90' && window.location.pathname !== DATA_TO_BRIEF_DOCLING_90_PATH) {
       window.history.pushState({}, '', DATA_TO_BRIEF_DOCLING_90_PATH);
     } else if (
-      mode !== 'techBottleneckReview' &&
+      mode !== 'techBottleneckReviewUniverse' &&
       mode !== 'dataToBriefDocling90' &&
       (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
+        window.location.pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH ||
         window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
         window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
     ) {
@@ -307,11 +422,18 @@ export function AppShell() {
     setWorkspaceMode('market');
   }
 
-function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
-  openStockWorkspace(assetId, {
-    ...context
-  });
-}
+  function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntryContext) {
+    openStockWorkspace(assetId, {
+      ...context
+    });
+  }
+
+  function openStockWorkspaceFromTechBottleneckReviewUniverse(stock: TechBottleneckReviewStock) {
+    const context = techBottleneckReviewUniverseStockHandoff(stock);
+    if (!context.assetId) return;
+    window.history.pushState({}, '', `/tech-bottleneck/stock/${stock.stock_code}?source=${TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE}`);
+    openStockWorkspace(context.assetId, context);
+  }
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
     const { target } = result;
@@ -365,7 +487,7 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
     <main className="platform-shell">
       <aside className="platform-nav" aria-label="Workspace navigation">
         <div className="panel-title">A股策略研究</div>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <button
             type="button"
             key={item.mode}
@@ -404,8 +526,9 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
                 openStockWorkspace(assetId, {
                   sourceWorkspace: 'market',
                   query: context.query,
+                  matchReason: context.matchReason,
                   tradeDate: context.tradeDate,
-                  monitorTab: normalizeMarketMonitorTab(context.monitorTab)
+                  monitorTab: context.monitorTab
                 })
               }
             />
@@ -445,7 +568,9 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
               onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
             />
           ) : null}
-          {workspaceMode === 'techBottleneckReview' ? <TechBottleneckWatchlistReviewPage /> : null}
+          {workspaceMode === 'techBottleneckReviewUniverse' ? (
+            <TechBottleneckReviewPage onOpenStock={openStockWorkspaceFromTechBottleneckReviewUniverse} />
+          ) : null}
           {workspaceMode === 'dataToBriefDocling90' ? <DataToBriefDocling90ReviewWorkspace /> : null}
           {workspaceMode === 'strategyLab' ? <StrategyLabWorkspace defaultEndDate={displayTradeDate} /> : null}
           {workspaceMode === 'generatedReports' ? (
@@ -456,6 +581,7 @@ function openStockWorkspaceFromReviewQueue(assetId: string, context?: StockEntry
               initialPath={generatedReportsHandoff.path}
             />
           ) : null}
+          {workspaceMode === 'userManagement' ? <UserManagementView /> : null}
           {workspaceMode === 'factors' ? <FactorLabWorkspace defaultTradeDate={displayTradeDate} /> : null}
           {workspaceMode === 'news' ? (
             <NewsWorkspace

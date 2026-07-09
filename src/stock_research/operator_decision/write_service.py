@@ -12,6 +12,7 @@ from stock_research.operator_decision.snapshot_linkage import (
     merge_source_context,
     resolve_decision_snapshot_linkage,
 )
+from stock_research.research_objects import mirror_operator_decision_to_research_snapshot
 
 
 ACTION_TO_DECISION_LABEL = {
@@ -57,14 +58,8 @@ def create_operator_decision(
     event = _event_row(request, source_context_text=source_context_text)
     workflow_effects = _workflow_effects(request)
 
-    with connect(service) as conn:
-        with conn.cursor() as cur:
-            _upsert_session(cur, session)
-            _upsert_event(cur, event)
-            _apply_workflow_effects(cur, request, workflow_effects)
-
     warnings = _snapshot_warnings(merged_context)
-    return {
+    result = {
         "event_id": event["event_id"],
         "asset_id": event["asset_id"],
         "stock_code": event["stock_code"],
@@ -87,6 +82,18 @@ def create_operator_decision(
         "source_context": source_context_text,
         "workflow_effects": workflow_effects,
     }
+
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            _upsert_session(cur, session)
+            _upsert_event(cur, event)
+            _apply_workflow_effects(cur, request, workflow_effects)
+            result["decision_snapshot_id"] = mirror_operator_decision_to_research_snapshot(
+                result,
+                service=service,
+                cursor=cur,
+            )
+    return result
 
 
 def _normalize_request(payload: dict[str, Any]) -> dict[str, Any]:

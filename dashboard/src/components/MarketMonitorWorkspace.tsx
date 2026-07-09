@@ -1,19 +1,23 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
+  fetchMarketAnomalyContext,
   fetchMarketMonitorEod,
   fetchMarketOverview,
   fetchSectorDetail,
   fetchSectorFundFlow,
-  fetchSectorHeatmap
+  fetchSectorHeatmap,
+  fetchStockHeatmap
 } from '../api/client';
-import type { MarketMonitorPayload } from '../api/types';
+import type { MarketAnomalyContextPayload, MarketAnomalyStock, MarketMonitorPayload, StockHeatmapPayload } from '../api/types';
 import type { StockEntryContext } from './StockWorkspace';
+import { MarketAnomalyContextPanel } from './market-monitor/MarketAnomalyContextPanel';
 import { MarketEmotionMiniPanel } from './market-monitor/MarketEmotionMiniPanel';
 import { MarketEmotionStatusStrip } from './market-monitor/MarketEmotionStatusStrip';
 import { MarketOverviewCards } from './market-monitor/MarketOverviewCards';
 import { SectorDetailPanel } from './market-monitor/SectorDetailPanel';
 import { SectorFundRankingPanel } from './market-monitor/SectorFundRankingPanel';
 import { SectorHeatmapPanel } from './market-monitor/SectorHeatmapPanel';
+import { StockHeatmapPanel } from './market-monitor/StockHeatmapPanel';
 import {
   DEFAULT_MARKET_MONITOR_TRADE_DATE,
   createEmptyMarketOverview,
@@ -77,10 +81,17 @@ export function MarketMonitorWorkspace({
   const [resolvedTradeDate, setResolvedTradeDate] = useState(initialDate);
   const [latestAvailableTradeDate, setLatestAvailableTradeDate] = useState(initialDate);
   const [sectorType, setSectorType] = useState<SectorType>(initialMonitorTab === 'concept' ? 'concept' : 'industry');
+  const [heatmapView, setHeatmapView] = useState<'sector' | 'stock'>('sector');
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
   const [overviewData, setOverviewData] = useState<MarketOverview | null>(null);
   const [heatmapData, setHeatmapData] = useState<SectorHeatmapItem[] | null>(null);
   const [heatmapWarnings, setHeatmapWarnings] = useState<string[]>([]);
+  const [stockHeatmapData, setStockHeatmapData] = useState<StockHeatmapPayload | null>(null);
+  const [stockHeatmapLoading, setStockHeatmapLoading] = useState(false);
+  const [stockHeatmapError, setStockHeatmapError] = useState<string | null>(null);
+  const [anomalyContext, setAnomalyContext] = useState<MarketAnomalyContextPayload | null>(null);
+  const [anomalyContextLoading, setAnomalyContextLoading] = useState(false);
+  const [anomalyContextError, setAnomalyContextError] = useState<string | null>(null);
   const [rankingData, setRankingData] = useState<SectorFundFlowSet | null>(null);
   const [detailData, setDetailData] = useState<SectorDetail | null>(null);
   const [emotionPayload, setEmotionPayload] = useState<MarketMonitorPayload | null>(null);
@@ -152,6 +163,34 @@ export function MarketMonitorWorkspace({
   }, [activeTradeDate, sectorType]);
 
   useEffect(() => {
+    if (heatmapView !== 'stock') return undefined;
+
+    let cancelled = false;
+    setStockHeatmapLoading(true);
+    setStockHeatmapError(null);
+    setStockHeatmapData(null);
+
+    void fetchStockHeatmap(activeTradeDate)
+      .then((payload) => {
+        if (cancelled) return;
+        setStockHeatmapData(payload);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setStockHeatmapError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setStockHeatmapLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTradeDate, heatmapView]);
+
+  useEffect(() => {
     let cancelled = false;
 
     if (!selectedSectorId) {
@@ -211,6 +250,32 @@ export function MarketMonitorWorkspace({
     };
   }, [emotionRequestVersion, tradeDate]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setAnomalyContext(null);
+    setAnomalyContextError(null);
+    setAnomalyContextLoading(true);
+
+    void fetchMarketAnomalyContext(activeTradeDate)
+      .then((payload) => {
+        if (cancelled) return;
+        setAnomalyContext(payload);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setAnomalyContextError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAnomalyContextLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTradeDate]);
+
   const workspaceData = useMemo(
     () => ({
       marketOverview: createEmptyMarketOverview(activeTradeDate),
@@ -263,6 +328,25 @@ export function MarketMonitorWorkspace({
     setEmotionRequestVersion((current) => current + 1);
   };
 
+  const handleSelectStockFromHeatmap = (assetId: string) => {
+    onOpenAsset?.(assetId, {
+      sourceWorkspace: 'market',
+      monitorTab: 'stock_heatmap',
+      tradeDate: activeTradeDate,
+      matchReason: 'stock_heatmap'
+    });
+  };
+
+  const handleOpenAnomalyStock = (stock: MarketAnomalyStock) => {
+    onOpenAsset?.(stock.asset_id, {
+      sourceWorkspace: 'market',
+      monitorTab: 'anomaly_context',
+      tradeDate: activeTradeDate,
+      matchReason: 'market_anomaly_context',
+      query: stock.name
+    });
+  };
+
   return (
     <section className="workspace-stack" aria-label="Market Monitor workspace">
       <header className="workspace-header workspace-header-row">
@@ -312,14 +396,49 @@ export function MarketMonitorWorkspace({
       )}
 
       <section className="market-monitor-main-grid">
-        <SectorHeatmapPanel
-          items={activeHeatmap}
-          sectorType={sectorType}
-          warnings={heatmapWarnings}
-          selectedSectorId={selectedSectorId}
-          onSectorTypeChange={setSectorType}
-          onSelectSector={setSelectedSectorId}
-        />
+        <div className="market-monitor-heatmap-stack">
+          <MarketAnomalyContextPanel
+            payload={anomalyContext}
+            loading={anomalyContextLoading}
+            error={anomalyContextError}
+            onOpenStock={handleOpenAnomalyStock}
+          />
+          <div className="market-monitor-heatmap-view-toggle" role="group" aria-label="热力图视图">
+            <button
+              type="button"
+              className={heatmapView === 'sector' ? 'active' : undefined}
+              aria-pressed={heatmapView === 'sector'}
+              onClick={() => setHeatmapView('sector')}
+            >
+              板块热力
+            </button>
+            <button
+              type="button"
+              className={heatmapView === 'stock' ? 'active' : undefined}
+              aria-pressed={heatmapView === 'stock'}
+              onClick={() => setHeatmapView('stock')}
+            >
+              个股云图
+            </button>
+          </div>
+          {heatmapView === 'sector' ? (
+            <SectorHeatmapPanel
+              items={activeHeatmap}
+              sectorType={sectorType}
+              warnings={heatmapWarnings}
+              selectedSectorId={selectedSectorId}
+              onSectorTypeChange={setSectorType}
+              onSelectSector={setSelectedSectorId}
+            />
+          ) : (
+            <StockHeatmapPanel
+              payload={stockHeatmapData}
+              loading={stockHeatmapLoading}
+              error={stockHeatmapError}
+              onSelectStock={handleSelectStockFromHeatmap}
+            />
+          )}
+        </div>
         <div className="market-monitor-right-rail">
           <SectorFundRankingPanel
             ranking={activeRanking}

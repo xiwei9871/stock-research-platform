@@ -62,6 +62,8 @@ from stock_research.data_quality import (
     run_data_quality,
 )
 from stock_research.dashboard.api import run_dashboard_api
+from stock_research.dashboard.auth_schema import apply_dashboard_auth_schema
+from stock_research.dashboard.user_admin import create_dashboard_user
 from stock_research.db import connect, fetch_all
 from stock_research.dimensions import (
     seed_trading_calendar_from_bars,
@@ -87,6 +89,12 @@ from stock_research.industry_mainline_regime import (
 from stock_research.industry_regime_gated_backtest import (
     run_industry_regime_gated_backtest,
 )
+from stock_research.market_profile_backfill import (
+    audit_market_profile_gaps,
+    sync_em_profit_sheet_gap_assets,
+    sync_regions_from_tushare,
+)
+from stock_research.stock_metadata_db_hydration import sync_concept_memberships_for_service
 from stock_research.industry_exposure_risk_control import (
     run_industry_exposure_risk_control,
 )
@@ -103,6 +111,14 @@ from stock_research.factor_backfill import (
     derive_factor_backfill_window,
 )
 from stock_research.free_enrichment_data import run_free_enrichment_backfill
+from stock_research.research_case_seed import run_research_case_seed, run_research_case_seed_idempotency_audit
+from stock_research.research_evidence_backfill import run_research_evidence_backfill
+from stock_research.research_publication_snapshot_audit import run_research_publication_snapshot_audit
+from stock_research.research_publication_package import run_research_publication_preview
+from stock_research.research_external_delivery import run_research_external_delivery_plan
+from stock_research.research_external_delivery_attempts import run_research_external_delivery_attempt_audit
+from stock_research.research_queue_publish import publish_research_queue
+from stock_research.research_queue_refresh import run_research_queue_refresh
 from stock_research.approved_scoring_workflow import score_approved_factors_range
 from stock_research.factor_pipeline import build_and_store_factor_daily
 from stock_research.factor_eval_batch import run_factor_gate_batch
@@ -643,7 +659,10 @@ def parse_top_ks(value: str) -> list[int]:
 
 
 def parse_worker_counts(value: str) -> list[int]:
-    return parse_int_list(value, "--workers-list")
+    values = parse_int_list(value, "--workers-list")
+    if any(item != 1 for item in values):
+        raise argparse.ArgumentTypeError("BaoStock minute backfill must run with workers=1")
+    return values
 
 
 def parse_topn_thresholds(value: str) -> list[int]:
@@ -882,10 +901,19 @@ def universe_member_to_json(member: UniverseMember) -> str:
 
 
 def format_progress_bar(index: int, total: int, width: int = 24) -> str:
-    if total <= 0:
-        return "[" + "-" * width + "]"
-    filled = round(width * index / total)
-    return "[" + "#" * filled + "-" * (width - filled) + "]"
+    from stock_research.cli_progress import format_progress_bar as _format_progress_bar
+
+    return _format_progress_bar(index, total, width)
+
+
+def _daily_pipeline_progress_renderer(stage, renderer_factory):
+    if stage == "daily":
+        return renderer_factory("daily_bar")
+    if stage == "minute5":
+        return renderer_factory("minute5_bar")
+    if stage == "all":
+        return renderer_factory("daily_close_pipeline")
+    return None
 
 
 def print_ingest_progress(event: dict) -> None:
@@ -1036,7 +1064,7 @@ def add_minute_backfill_watchdog_arguments(parser: argparse.ArgumentParser) -> N
         default=["raw", "qfq"],
     )
     parser.add_argument("--max-jobs", type=int, default=1200)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, choices=[1], default=1)
     parser.add_argument("--stale-after-minutes", type=int, default=20)
     parser.add_argument("--run-timeout-seconds", type=int, default=1800)
     parser.add_argument("--output-dir", default="outputs/research")
@@ -1492,6 +1520,92 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("apply-schema")
     subparsers.add_parser("apply-research-schema")
+    subparsers.add_parser("dashboard-auth-init")
+    dashboard_admin_create = subparsers.add_parser("dashboard-admin-create")
+    dashboard_admin_create.add_argument("--username", required=True)
+    dashboard_admin_create.add_argument("--password", required=True)
+    dashboard_admin_create.add_argument("--role", choices=["admin", "user"], default="admin")
+    dashboard_admin_create.add_argument("--display-name", default="")
+    research_evidence_backfill = subparsers.add_parser("research-evidence-backfill")
+    research_evidence_backfill.add_argument("--trade-date")
+    research_evidence_backfill.add_argument(
+        "--source-type",
+        choices=["evidence_digest_snapshot", "review_item_snapshot", "all"],
+        default="all",
+    )
+    research_evidence_backfill.add_argument("--dry-run", action="store_true")
+    research_evidence_backfill.add_argument("--limit", type=int, default=100)
+    research_evidence_backfill.add_argument("--output-dir", type=Path, default=Path("outputs/research"))
+    research_case_seed = subparsers.add_parser("research-case-seed")
+    research_case_seed.add_argument("--trade-date")
+    research_case_seed.add_argument(
+        "--source-type",
+        choices=["review_item_snapshot", "evidence_digest_snapshot", "all"],
+        default="all",
+    )
+    research_case_seed.add_argument("--dry-run", action="store_true")
+    research_case_seed.add_argument("--limit", type=int, default=100)
+    research_case_seed.add_argument("--output-dir", type=Path, default=Path("outputs/research"))
+    research_case_seed_audit = subparsers.add_parser("research-case-seed-idempotency-audit")
+    research_case_seed_audit.add_argument("--trade-date")
+    research_case_seed_audit.add_argument(
+        "--source-type",
+        choices=["review_item_snapshot", "evidence_digest_snapshot", "all"],
+        default="all",
+    )
+    research_case_seed_audit.add_argument("--limit", type=int, default=100)
+    research_case_seed_audit.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_case_seed_idempotency_audit_v1"),
+    )
+    research_queue_refresh = subparsers.add_parser("research-queue-refresh")
+    research_queue_refresh.add_argument("--trade-date")
+    research_queue_refresh.add_argument("--limit", type=int, default=100)
+    research_queue_refresh.add_argument("--dry-run", action="store_true")
+    research_queue_refresh.add_argument("--skip-idempotency-audit", action="store_true")
+    research_queue_refresh.add_argument("--output-dir", type=Path, default=Path("outputs/research/research_queue_refresh_v1"))
+    research_publication_preview = subparsers.add_parser("research-publication-preview")
+    research_publication_preview.add_argument("--trade-date", required=True)
+    research_publication_preview.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_publication_preview_v1"),
+    )
+    research_queue_publish = subparsers.add_parser("research-queue-publish")
+    research_queue_publish.add_argument("--trade-date", required=True)
+    research_queue_publish.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_queue_publish_v1"),
+    )
+    research_queue_publish.add_argument("--dry-run", action="store_true", default=True)
+    research_queue_publish.add_argument("--commit-snapshot", action="store_true")
+    research_queue_publish.add_argument("--confirm-internal-publication", action="store_true")
+    research_publication_snapshot_audit = subparsers.add_parser("research-publication-snapshot-audit")
+    research_publication_snapshot_audit.add_argument("--trade-date", required=True)
+    research_publication_snapshot_audit.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_publication_snapshot_audit_v1"),
+    )
+    research_external_delivery_plan = subparsers.add_parser("research-external-delivery-plan")
+    research_external_delivery_plan.add_argument("--publication-snapshot-id", required=True)
+    research_external_delivery_plan.add_argument("--channel", default="feishu_preview")
+    research_external_delivery_plan.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_external_delivery_boundary_v1"),
+    )
+    research_external_delivery_plan.add_argument("--dry-run", action="store_true", default=True)
+    research_external_delivery_plan.add_argument("--record-attempt", action="store_true")
+    research_external_delivery_attempt_audit = subparsers.add_parser("research-external-delivery-attempt-audit")
+    research_external_delivery_attempt_audit.add_argument("--publication-snapshot-id", required=True)
+    research_external_delivery_attempt_audit.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/research/research_external_delivery_attempt_log_v1"),
+    )
     subparsers.add_parser("sync-assets")
     subparsers.add_parser("sync-core-assets")
     subparsers.add_parser("sync-stock-chinese-names")
@@ -1526,6 +1640,15 @@ def build_parser() -> argparse.ArgumentParser:
     intraday_pipeline.add_argument("--portfolio-id")
 
     subparsers.add_parser("finance-audit")
+    subparsers.add_parser("market-profile-audit")
+    subparsers.add_parser("sync-market-profile-regions")
+    market_profile_concepts = subparsers.add_parser("sync-market-profile-concepts")
+    market_profile_concepts.add_argument("--trade-date", required=True)
+    market_profile_concepts.add_argument("--service", default=SETTINGS.research_service)
+    market_profile_concepts.add_argument("--max-concepts", type=int)
+    market_profile_np_parent = subparsers.add_parser("sync-market-profile-np-parent")
+    market_profile_np_parent.add_argument("--limit", required=True, type=int)
+    market_profile_np_parent.add_argument("--offset", type=int, default=0)
 
     news_source_backfill = subparsers.add_parser("news-source-backfill")
     news_source_backfill.add_argument("--start-date", required=True)
@@ -2008,7 +2131,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_minute_backfill.add_argument("--max-jobs", type=int, default=50)
     run_minute_backfill.add_argument("--retry-failed", action="store_true")
     run_minute_backfill.add_argument("--sleep-seconds", type=float, default=0.5)
-    run_minute_backfill.add_argument("--workers", type=int, default=1)
+    run_minute_backfill.add_argument("--workers", type=int, choices=[1], default=1)
+    run_minute_backfill.add_argument("--progress-interval", type=int, default=50)
 
     benchmark_minute_backfill = subparsers.add_parser("benchmark-baostock-minute-backfill")
     benchmark_minute_backfill.add_argument("--start-date")
@@ -2027,7 +2151,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--workers-list",
         dest="worker_counts",
         type=parse_worker_counts,
-        default=[4, 8, 12, 16],
+        default=[1],
     )
 
     run_minute_backfill_range = subparsers.add_parser("run-baostock-minute-backfill-range")
@@ -2043,7 +2167,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_minute_backfill_range.add_argument("--max-jobs", type=int, default=500)
     run_minute_backfill_range.add_argument("--retry-failed", action="store_true")
     run_minute_backfill_range.add_argument("--sleep-seconds", type=float, default=0.1)
-    run_minute_backfill_range.add_argument("--workers", type=int, default=1)
+    run_minute_backfill_range.add_argument("--workers", type=int, choices=[1], default=1)
     run_minute_backfill_range.add_argument("--output-dir", default="outputs/research")
     run_minute_backfill_range.add_argument("--limit-assets", type=int)
     run_minute_backfill_range.add_argument("--report-target", required=True)
@@ -5008,6 +5132,88 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "apply-research-schema":
         apply_schema()
         print("research_schema_applied")
+    elif args.command == "dashboard-auth-init":
+        apply_dashboard_auth_schema()
+        print("dashboard_auth_schema_applied")
+    elif args.command == "dashboard-admin-create":
+        user = create_dashboard_user(
+            args.username,
+            args.password,
+            role=args.role,
+            display_name=args.display_name,
+        )
+        print(f"dashboard_admin_user_created|{user['user_id']}|{user['username']}")
+    elif args.command == "research-evidence-backfill":
+        summary = run_research_evidence_backfill(
+            trade_date=args.trade_date,
+            source_type=args.source_type,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-case-seed":
+        summary = run_research_case_seed(
+            trade_date=args.trade_date,
+            source_type=args.source_type,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-case-seed-idempotency-audit":
+        summary = run_research_case_seed_idempotency_audit(
+            trade_date=args.trade_date,
+            source_type=args.source_type,
+            limit=args.limit,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-queue-refresh":
+        summary = run_research_queue_refresh(
+            trade_date=args.trade_date,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            skip_idempotency_audit=args.skip_idempotency_audit,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-publication-preview":
+        summary = run_research_publication_preview(
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-queue-publish":
+        summary = publish_research_queue(
+            trade_date=args.trade_date,
+            dry_run=not args.commit_snapshot,
+            commit_snapshot=args.commit_snapshot,
+            confirm_internal_publication=args.confirm_internal_publication,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-publication-snapshot-audit":
+        summary = run_research_publication_snapshot_audit(
+            trade_date=args.trade_date,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-external-delivery-plan":
+        summary = run_research_external_delivery_plan(
+            publication_snapshot_id=args.publication_snapshot_id,
+            channel=args.channel,
+            dry_run=args.dry_run,
+            record_attempt=args.record_attempt,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    elif args.command == "research-external-delivery-attempt-audit":
+        summary = run_research_external_delivery_attempt_audit(
+            publication_snapshot_id=args.publication_snapshot_id,
+            output_dir=args.output_dir,
+        )
+        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     elif args.command == "sync-assets":
         print(f"asset_master_synced|{sync_asset_master()}")
     elif args.command == "sync-core-assets":
@@ -5022,13 +5228,20 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         for row in run_data_audit(expected_start_date=args.expected_start_date):
             print(format_audit_line(row))
     elif args.command == "daily-pipeline":
+        from stock_research.cli_progress import ProgressRenderer
+
         config = DailyClosePipelineConfig.from_env()
         if args.force:
             config = DailyClosePipelineConfig(
                 **{**config.__dict__, "force_non_trading_day": True}
             )
         trade_date = parse_daily_close_trade_date(args.date, config.timezone)
-        result = run_daily_close_pipeline_stage(args.stage, trade_date, config)
+        result = run_daily_close_pipeline_stage(
+            args.stage,
+            trade_date,
+            config,
+            progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
+        )
         print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
     elif args.command == "intraday-pipeline":
         config = IntradayConfig.from_env()
@@ -5063,6 +5276,44 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "finance-audit":
         for row in summarize_finance_coverage():
             print(format_finance_audit_line(row))
+    elif args.command == "market-profile-audit":
+        summary = audit_market_profile_gaps()
+        print(
+            "market_profile_audit|"
+            f"active_assets|{summary['active_assets']}|"
+            f"region_present|{summary['region_present']}|"
+            f"concept_present|{summary['concept_present']}|"
+            f"np_parent_present|{summary['np_parent_present']}"
+        )
+    elif args.command == "sync-market-profile-regions":
+        summary = sync_regions_from_tushare()
+        print(
+            "market_profile_regions_synced|"
+            f"source_rows|{summary['source_rows']}|"
+            f"region_rows|{summary['region_rows']}|"
+            f"updated_rows|{summary['updated_rows']}"
+        )
+    elif args.command == "sync-market-profile-concepts":
+        summary = sync_concept_memberships_for_service(
+            trade_date=args.trade_date,
+            service=args.service,
+            max_concepts=args.max_concepts,
+        )
+        print(
+            "market_profile_concepts_synced|"
+            f"boards|{summary['boards']}|"
+            f"memberships|{summary['memberships']}|"
+            f"failed_concepts|{len(summary.get('failed_concepts', []))}"
+        )
+    elif args.command == "sync-market-profile-np-parent":
+        summary = sync_em_profit_sheet_gap_assets(limit=args.limit, offset=args.offset)
+        print(
+            "market_profile_np_parent_synced|"
+            f"assets|{summary['assets']}|"
+            f"income_statement|{summary['income_statement']}|"
+            f"raw_payload|{summary['raw_payload']}|"
+            f"failed_assets|{summary['failed_assets']}"
+        )
     elif args.command == "news-source-backfill":
         result = run_news_source_backfill(
             start_date=args.start_date,
@@ -8960,6 +9211,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         for key, value in result["summary"].items():
             print(f"minute_backfill_plan|{key}|{value}")
     elif args.command == "run-baostock-minute-backfill":
+        from stock_research.cli_progress import ProgressRenderer
+
         result = run_baostock_minute_backfill(
             start_date=args.start_date,
             end_date=args.end_date,
@@ -8970,6 +9223,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             retry_failed=args.retry_failed,
             sleep_seconds=args.sleep_seconds,
             workers=args.workers,
+            progress=ProgressRenderer("minute5_backfill"),
+            progress_interval=args.progress_interval,
         )
         for key, value in result.items():
             print(f"minute_backfill_run|{key}|{value}")

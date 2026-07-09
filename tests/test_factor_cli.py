@@ -890,7 +890,7 @@ def test_cli_accepts_minute_backfill_watchdog_command():
             "--max-jobs",
             "200",
             "--workers",
-            "3",
+            "1",
             "--stale-after-minutes",
             "45",
             "--run-timeout-seconds",
@@ -913,7 +913,7 @@ def test_cli_accepts_minute_backfill_watchdog_command():
     assert args.freq == "5min"
     assert args.adjust_types == ["raw", "qfq"]
     assert args.max_jobs == 200
-    assert args.workers == 3
+    assert args.workers == 1
     assert args.stale_after_minutes == 45
     assert args.run_timeout_seconds == 1200
     assert args.output_dir == "outputs/watchdog"
@@ -940,7 +940,7 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_minute_adapter():
             "--max-jobs",
             "200",
             "--workers",
-            "3",
+            "1",
             "--stale-after-minutes",
             "45",
             "--run-timeout-seconds",
@@ -964,7 +964,7 @@ def test_cli_accepts_generic_backfill_watchdog_command_for_minute_adapter():
     assert args.freq == "5min"
     assert args.adjust_types == ["raw", "qfq"]
     assert args.max_jobs == 200
-    assert args.workers == 3
+    assert args.workers == 1
     assert args.stale_after_minutes == 45
     assert args.run_timeout_seconds == 1200
     assert args.output_dir == "outputs/watchdog"
@@ -5326,6 +5326,36 @@ def test_cli_run_stock_daily_data_pipeline_dispatches(monkeypatch, capsys):
         "stock_daily_data_pipeline|status|success",
         "stock_daily_data_pipeline|summary|outputs/daily/20260605/run_summary.json",
     ]
+
+
+def test_cli_daily_pipeline_stage_daily_wires_progress_renderer(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run_daily_close_pipeline_stage(stage, trade_date, config, **kwargs):
+        captured["stage"] = stage
+        captured["trade_date"] = trade_date
+        captured["kwargs"] = kwargs
+        kwargs["progress"](
+            {
+                "event": "daily_tushare_raw_completed",
+                "completed": 1,
+                "total": 5,
+                "rows": 5191,
+                "success": 0,
+                "failed": 0,
+            }
+        )
+        return {"stage": "daily", "status": "success", "rows": 5191}
+
+    monkeypatch.setattr(cli, "run_daily_close_pipeline_stage", fake_run_daily_close_pipeline_stage)
+
+    cli.main_for_args(["daily-pipeline", "--date", "2026-07-06", "--stage", "daily", "--force"])
+
+    output = capsys.readouterr()
+    assert captured["stage"] == "daily"
+    assert callable(captured["kwargs"]["progress"])
+    assert '"stage": "daily"' in output.out
+    assert "progress|daily_bar|event|daily_tushare_raw_completed|completed|1|total|5" in output.err
 
 
 def test_cli_run_stock_daily_data_pipeline_auto_uses_latest_complete_source_trade_date(

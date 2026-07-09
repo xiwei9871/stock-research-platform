@@ -1,3 +1,5 @@
+import pytest
+
 from stock_research.schema import CREATE_RESEARCH_EXTENSION_SQL, CREATE_TABLES_SQL
 
 
@@ -843,13 +845,13 @@ def test_cli_accepts_baostock_ingestion_commands():
             "--sleep-seconds",
             "0.5",
             "--workers",
-            "4",
+            "1",
         ]
     )
     assert run_args.command == "run-baostock-minute-backfill"
     assert run_args.max_jobs == 50
     assert run_args.retry_failed is True
-    assert run_args.workers == 4
+    assert run_args.workers == 1
 
     range_args = build_parser().parse_args(
         [
@@ -865,7 +867,7 @@ def test_cli_accepts_baostock_ingestion_commands():
             "--max-jobs",
             "200",
             "--workers",
-            "6",
+            "1",
             "--report-target",
             "chat:oc_82dd978138a0cde5864868c5b5b8e754",
             "--report-account",
@@ -873,7 +875,7 @@ def test_cli_accepts_baostock_ingestion_commands():
         ]
     )
     assert range_args.command == "run-baostock-minute-backfill-range"
-    assert range_args.workers == 6
+    assert range_args.workers == 1
     assert range_args.report_account == "jarvis"
 
     benchmark_args = build_parser().parse_args(
@@ -890,17 +892,36 @@ def test_cli_accepts_baostock_ingestion_commands():
             "--max-jobs",
             "300",
             "--workers-list",
-            "4,8,12",
+            "1",
             "--retry-failed",
             "--sleep-seconds",
             "0.05",
         ]
     )
     assert benchmark_args.command == "benchmark-baostock-minute-backfill"
-    assert benchmark_args.worker_counts == [4, 8, 12]
+    assert benchmark_args.worker_counts == [1]
     assert benchmark_args.max_jobs == 300
     assert benchmark_args.freq == "5min"
     assert benchmark_args.adjust_types == ["raw"]
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["run-baostock-minute-backfill", "--workers", "4"])
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "run-baostock-minute-backfill-range",
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-01-31",
+                "--workers",
+                "4",
+                "--report-target",
+                "chat:test",
+            ]
+        )
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["benchmark-baostock-minute-backfill", "--workers-list", "4,8"])
 
     watchdog_args = build_parser().parse_args(
         [

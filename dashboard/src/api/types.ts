@@ -1,3 +1,49 @@
+export type CurrentUser = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: 'admin' | 'user';
+  is_active: boolean;
+};
+
+export type AuthMeResponse = {
+  user: CurrentUser;
+};
+
+export type LoginRequest = {
+  username: string;
+  password: string;
+};
+
+export type LoginResponse = {
+  user: CurrentUser;
+};
+
+export type AdminUser = CurrentUser & {
+  created_at?: string;
+  last_login_at?: string;
+};
+
+export type AdminUsersResponse = {
+  items: AdminUser[];
+};
+
+export type CreateAdminUserRequest = {
+  username: string;
+  password: string;
+  role: 'admin' | 'user';
+  display_name: string;
+};
+
+export type CreateAdminUserResponse = {
+  user: AdminUser;
+};
+
+export type AdminUserActionResponse = {
+  status: string;
+  user_id: string;
+};
+
 export type AssetSummary = {
   asset_id: string;
   symbol: string;
@@ -273,7 +319,9 @@ export type CreateOperatorDecisionRequest = {
   stock_name?: string;
   decision_date?: string;
   operator_action: 'watch' | 'skip' | 'follow_up' | 'add_to_shadow' | 'remove_from_shadow' | 'note' | 'pause' | 'close' | string;
+  decision_label?: string;
   decision_status?: string;
+  evidence_artifact_id?: string;
   operator_note?: string;
   run_id?: string;
   digest_key?: string;
@@ -283,6 +331,8 @@ export type CreateOperatorDecisionRequest = {
   source_name?: string;
   follow_up_date?: string;
   tags?: string[];
+  manual_review_required?: boolean;
+  auto_trade_enabled?: boolean;
   source_context?: Record<string, unknown> | string;
 };
 
@@ -391,6 +441,353 @@ export type EvidenceDigestSnapshotDetailResponse = {
   item: EvidenceDigestSnapshot;
   warnings: string[];
   source: string;
+};
+
+export type ResearchCase = {
+  case_id: string;
+  trade_date: string;
+  asset_id: string;
+  theme: string;
+  title: string;
+  status: string;
+  priority: number;
+  source_type: string;
+  source_id: string;
+  evidence_status: string;
+  missing_evidence_count: number;
+  partial_evidence_count: number;
+  claim_count: number;
+  evidence_count: number;
+};
+
+export type ResearchCaseResponse = {
+  items: ResearchCase[];
+};
+
+export type ResearchGapReason =
+  | 'no_evidence'
+  | 'missing_evidence'
+  | 'partial_evidence'
+  | 'incomplete_evidence_status'
+  | 'unknown_gap'
+  | string;
+
+export type ResearchQueueGapCase = {
+  case_id: string;
+  trade_date: string;
+  asset_id: string;
+  theme: string;
+  title: string;
+  status: string;
+  priority: number;
+  evidence_count: number;
+  claim_count: number;
+  gap_reasons: ResearchGapReason[];
+  gap_summary: string;
+  review_status?: ResearchReviewStatus;
+  latest_review_action?: ResearchReviewAction | null;
+  source_type: string;
+  source_id: string;
+};
+
+export type ResearchQueueGapSummary = {
+  gap_case_count: number;
+  no_evidence_count: number;
+  missing_evidence_count: number;
+  partial_evidence_count: number;
+  incomplete_evidence_status_count: number;
+  unknown_gap_count: number;
+};
+
+export type ResearchQueueGapsResponse = {
+  trade_date: string | null;
+  items: ResearchQueueGapCase[];
+  summary: ResearchQueueGapSummary;
+};
+
+export type ResearchEvidenceArtifact = {
+  evidence_id: string;
+  source_type: string;
+  source_id: string;
+  asset_id: string;
+  trade_date: string;
+  title: string;
+  uri: string;
+  content_hash: string;
+  allowed_metadata: Record<string, unknown>;
+};
+
+export type ResearchEvidenceResponse = {
+  items: ResearchEvidenceArtifact[];
+};
+
+export type ResearchCaseClaim = {
+  claim_id: string;
+  claim_type: string;
+  claim_text: string;
+  confidence: number | null;
+  status: string;
+  source_type: string;
+  source_id: string;
+};
+
+export type ResearchCaseLinkedEvidence = ResearchEvidenceArtifact & {
+  relation: string;
+  target_type: string;
+  target_id: string;
+};
+
+export type ResearchReviewActionType =
+  | 'acknowledge_gap'
+  | 'request_more_evidence'
+  | 'mark_reviewed'
+  | 'defer'
+  | string;
+
+export type ResearchReviewStatus = 'pending' | 'reviewed' | 'request_more_evidence' | 'deferred' | string;
+
+export type ResearchReviewAction = {
+  review_action_id: string;
+  case_id: string;
+  trade_date: string;
+  asset_id: string;
+  action_type: ResearchReviewActionType;
+  gap_reasons: ResearchGapReason[];
+  reviewer: string;
+  comment: string;
+  created_at: string;
+  source_context: Record<string, unknown>;
+};
+
+export type CreateResearchReviewActionRequest = {
+  case_id: string;
+  trade_date?: string;
+  asset_id?: string;
+  action_type: ResearchReviewActionType;
+  gap_reasons?: ResearchGapReason[];
+  reviewer?: string;
+  comment?: string;
+  source_context?: Record<string, unknown>;
+};
+
+export type CreateResearchReviewActionResponse = {
+  review_action_id: string;
+  status: string;
+};
+
+export type ResearchCaseDetail = {
+  case: Pick<
+    ResearchCase,
+    'case_id' | 'trade_date' | 'asset_id' | 'theme' | 'title' | 'status' | 'priority' | 'source_type' | 'source_id'
+  >;
+  claims: ResearchCaseClaim[];
+  evidence: ResearchCaseLinkedEvidence[];
+  summary: {
+    claim_count: number;
+    evidence_count: number;
+    missing_or_partial_evidence_count: number;
+    evidence_status?: string;
+    missing_evidence_count?: number;
+    partial_evidence_count?: number;
+  };
+  gap_reasons?: ResearchGapReason[];
+  gap_summary?: string;
+  review_actions?: ResearchReviewAction[];
+  latest_review_action?: ResearchReviewAction | null;
+  review_status?: ResearchReviewStatus;
+};
+
+export type ResearchQueueHealth = {
+  trade_date: string;
+  status: 'healthy' | 'partial' | 'empty' | 'failed' | string;
+  can_review: boolean;
+  can_publish_research_queue: boolean;
+  publish_gate_status?: 'blocked' | 'research_ready' | 'empty' | 'failed' | 'entrypoint_missing' | string;
+  research_ready_for_publication?: boolean;
+  actual_publish_enabled?: boolean;
+  internal_snapshot_enabled?: boolean;
+  external_delivery_enabled?: boolean;
+  summary: {
+    case_count: number;
+    open_case_count: number;
+    claim_count: number;
+    evidence_artifact_count: number;
+    evidence_link_count: number;
+    evidence_gap_count: number;
+    unmatched_digest_count: number;
+    error_count: number;
+    no_evidence_count?: number;
+    missing_evidence_count?: number;
+    partial_evidence_count?: number;
+    incomplete_evidence_status_count?: number;
+    unknown_gap_count?: number;
+    reviewed_gap_count?: number;
+    pending_gap_count?: number;
+    deferred_gap_count?: number;
+    request_more_evidence_count?: number;
+  };
+  top_gap_cases?: ResearchQueueGapCase[];
+  last_refresh: {
+    run_id: string;
+    finished_at: string;
+    manifest_path: string;
+  } | null;
+  warnings: string[];
+};
+
+export type ResearchPublishGateStatus = 'blocked' | 'research_ready' | 'empty' | 'failed' | 'entrypoint_missing' | string;
+
+export type ResearchPublishGateNotice = {
+  code: string;
+  message: string;
+  count: number;
+};
+
+export type ResearchPublishGateCase = {
+  case_id: string;
+  trade_date: string;
+  asset_id: string;
+  theme: string;
+  title: string;
+  review_status: ResearchReviewStatus;
+  gap_reasons: ResearchGapReason[];
+  gap_summary: string;
+};
+
+export type ResearchPublishGate = {
+  trade_date: string;
+  status: ResearchPublishGateStatus;
+  research_ready_for_publication: boolean;
+  actual_publish_enabled: boolean;
+  internal_snapshot_enabled: boolean;
+  external_delivery_enabled: boolean;
+  publication_entrypoint_status: string;
+  summary: {
+    case_count: number;
+    open_case_count: number;
+    claim_count: number;
+    evidence_artifact_count: number;
+    evidence_link_count: number;
+    evidence_gap_count: number;
+    pending_gap_count: number;
+    reviewed_gap_count: number;
+    request_more_evidence_count: number;
+    deferred_gap_count: number;
+    unmatched_digest_count: number;
+    error_count: number;
+  };
+  blockers: ResearchPublishGateNotice[];
+  warnings: ResearchPublishGateNotice[];
+  top_blocked_cases: ResearchPublishGateCase[];
+};
+
+export type ResearchPublicationPackageSection = {
+  section_type: string;
+  title: string;
+  items: Array<Record<string, unknown>>;
+};
+
+export type ResearchPublicationPackage = {
+  trade_date: string;
+  package_id: string;
+  publishable: boolean;
+  actual_publish_enabled: boolean;
+  internal_snapshot_enabled: boolean;
+  external_delivery_enabled: boolean;
+  gate: {
+    status: ResearchPublishGateStatus;
+    research_ready_for_publication: boolean;
+    actual_publish_enabled: boolean;
+    internal_snapshot_enabled: boolean;
+    external_delivery_enabled: boolean;
+  };
+  summary: {
+    case_count: number;
+    claim_count: number;
+    evidence_count: number;
+    evidence_link_count: number;
+    gap_count: number;
+    reviewed_gap_count: number;
+    pending_gap_count: number;
+    request_more_evidence_count: number;
+    deferred_gap_count: number;
+    unmatched_digest_count: number;
+    error_count: number;
+  };
+  sections: ResearchPublicationPackageSection[];
+  warnings: ResearchPublishGateNotice[];
+  blockers: ResearchPublishGateNotice[];
+};
+
+export type ResearchPublicationSnapshotItem = {
+  publication_snapshot_id: string;
+  trade_date: string;
+  channel: string;
+  title: string;
+  created_by: string;
+  created_at: string;
+  package_id: string;
+  gate_status: string;
+  research_ready_for_publication: boolean;
+  actual_external_delivery_enabled: boolean;
+  case_count: number;
+  claim_count: number;
+  evidence_count: number;
+  gap_count: number;
+  blocker_count: number;
+};
+
+export type ResearchPublicationSnapshotsResponse = {
+  items: ResearchPublicationSnapshotItem[];
+};
+
+export type ResearchExternalDeliveryPlanSection = {
+  section_type: string;
+  title: string;
+  items: Array<Record<string, unknown>>;
+};
+
+export type ResearchExternalDeliveryPlan = {
+  delivery_plan_id: string;
+  publication_snapshot_id: string;
+  trade_date: string;
+  channel: string;
+  dry_run: boolean;
+  external_send_enabled: boolean;
+  status: 'preview_ready' | 'snapshot_not_found' | 'unsupported_channel' | 'blocked' | string;
+  message: {
+    title: string;
+    summary: string;
+    sections: ResearchExternalDeliveryPlanSection[];
+  };
+  source: {
+    package_id: string;
+    gate_status: string;
+    snapshot_channel: string;
+  };
+  blockers: ResearchPublishGateNotice[];
+  warnings: string[];
+};
+
+export type ResearchExternalDeliveryAttempt = {
+  delivery_attempt_id: string;
+  publication_snapshot_id: string;
+  trade_date: string;
+  channel: string;
+  mode: string;
+  status: string;
+  dry_run: boolean;
+  external_send_enabled: boolean;
+  delivery_plan_id: string;
+  message_title: string;
+  created_by: string;
+  created_at: string;
+  error_code: string;
+  error_message: string;
+};
+
+export type ResearchExternalDeliveryAttemptsResponse = {
+  items: ResearchExternalDeliveryAttempt[];
 };
 
 export type DecisionOutcomeRow = {
@@ -747,6 +1144,142 @@ export type SectorHeatmapItem = {
   stock_count: number | null;
 };
 
+export type StockHeatmapStock = {
+  asset_id: string;
+  symbol: string;
+  name: string;
+  price: number | null;
+  change_pct: number | null;
+  amount: number | null;
+  value: number | null;
+  group_id: string;
+  group_name: string;
+};
+
+export type StockHeatmapGroup = {
+  group_id: string;
+  group_name: string;
+  value: number | null;
+  change_pct: number | null;
+  stock_count: number;
+  children: StockHeatmapStock[];
+};
+
+export type StockHeatmapSummary = {
+  stock_count: number;
+  up_count: number;
+  flat_count: number;
+  down_count: number;
+  total_amount: number;
+};
+
+export type StockHeatmapPayload = {
+  trade_date: string;
+  market: string;
+  period: string;
+  group: string;
+  size_by: string;
+  updated_at: string | null;
+  source: string;
+  data_status: MarketDataStatus;
+  warnings: string[];
+  summary: StockHeatmapSummary;
+  groups: StockHeatmapGroup[];
+};
+
+export type MarketAnomalySummary = {
+  hot_industry_count: number;
+  hot_stock_count: number;
+  volume_spike_count: number;
+  strong_move_count: number;
+};
+
+export type MarketAnomalyIndustry = {
+  industry_id: string;
+  industry_name: string;
+  change_pct: number | null;
+  amount: number | null;
+  stock_count: number;
+  up_count: number;
+  down_count: number;
+  volume_spike_count: number;
+  strong_move_count: number;
+  anomaly_score: number;
+  explanation_bullets: string[];
+};
+
+export type MarketAnomalyStock = {
+  asset_id: string;
+  symbol: string;
+  name: string;
+  industry_id: string;
+  industry_name: string;
+  change_pct: number | null;
+  amount: number | null;
+  amount_ratio_20d: number | null;
+  turnover_rate: number | null;
+  anomaly_tags: string[];
+  explanation_bullets: string[];
+};
+
+export type MarketAnomalyContextPayload = {
+  trade_date: string;
+  data_status: MarketDataStatus;
+  summary: MarketAnomalySummary;
+  hot_industries: MarketAnomalyIndustry[];
+  hot_stocks: MarketAnomalyStock[];
+  warnings: string[];
+};
+
+export type StockMarketContextIndustry = {
+  industry_id: string;
+  industry_name: string;
+  industry_system: string;
+};
+
+export type StockMarketContextSelected = {
+  asset_id: string;
+  symbol: string;
+  name: string;
+  price: number | null;
+  change_pct: number | null;
+  amount: number | null;
+  amount_rank: number | null;
+  change_rank: number | null;
+  amount_percentile: number | null;
+  change_percentile: number | null;
+};
+
+export type StockMarketContextPeer = {
+  asset_id: string;
+  symbol: string;
+  name: string;
+  price: number | null;
+  change_pct: number | null;
+  amount: number | null;
+  value: number | null;
+  is_selected: boolean;
+};
+
+export type StockMarketContextHeatmapPayload = {
+  asset_id: string;
+  canonical_asset_id: string;
+  trade_date: string;
+  industry: StockMarketContextIndustry | null;
+  selected: StockMarketContextSelected | null;
+  summary: {
+    peer_count: number;
+    up_count: number;
+    flat_count: number;
+    down_count: number;
+    total_amount: number | null;
+    selected_in_peer_set: boolean;
+  };
+  peers: StockMarketContextPeer[];
+  data_status: MarketDataStatus;
+  warnings: string[];
+};
+
 export type SectorFundFlowItem = {
   rank: number;
   sector_id: string;
@@ -838,6 +1371,14 @@ export type PlatformReadinessHealthGroup = {
   items: PlatformReadinessHealthItem[];
 };
 
+export type PlatformReadinessPolicy = {
+  status: 'ready' | 'degraded_ready' | 'blocked' | string;
+  ready_for_dashboard: boolean;
+  ready_for_publication: boolean;
+  blocking_reasons: string[];
+  warnings: string[];
+};
+
 export type PlatformReadiness = {
   mode: string;
   status: PlatformReadinessStatus;
@@ -854,6 +1395,7 @@ export type PlatformReadiness = {
   modules?: Array<Record<string, unknown>>;
   checks: PlatformReadinessCheck[];
   health_groups?: PlatformReadinessHealthGroup[];
+  policy?: PlatformReadinessPolicy;
   warnings: string[];
   errors?: string[];
   missing_data?: string[];
