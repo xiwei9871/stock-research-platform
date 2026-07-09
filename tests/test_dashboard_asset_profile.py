@@ -1,4 +1,6 @@
 from stock_research.dashboard import asset_profile
+from stock_research.dashboard import asset_profile_fundamentals
+from stock_research.services import finance_ttm, point_in_time_finance
 import pytest
 
 
@@ -128,10 +130,22 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
     monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_decision_history", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_outcome_history", lambda *args, **kwargs: [])
+    monkeypatch.setattr(finance_ttm, "load_income_ttm_rows", lambda *args, **kwargs: pytest.fail("legacy finance_ttm loader should not be used"))
+    monkeypatch.setattr(point_in_time_finance, "get_latest_indicator", lambda *args, **kwargs: pytest.fail("legacy PIT indicator helper should not be used"))
+    monkeypatch.setattr(point_in_time_finance, "get_latest_cash_flow", lambda *args, **kwargs: pytest.fail("legacy PIT cash-flow helper should not be used"))
+    monkeypatch.setattr(point_in_time_finance, "get_latest_income_statement", lambda *args, **kwargs: pytest.fail("legacy PIT income helper should not be used"))
 
     def fake_fetch_all(conn, sql, params=None):
         normalized_sql = " ".join(sql.split())
         if "FROM core.asset_master" in normalized_sql:
+            if "WHERE asset_id = %s LIMIT 1" in normalized_sql:
+                return [
+                    {
+                        "name": "平安银行",
+                        "board": "主板",
+                        "region": "深圳",
+                    }
+                ]
             return [
                 {
                     "asset_id": "CN:SZ:000001",
@@ -200,8 +214,8 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 {"concept_name": "中字头"},
                 {"concept_name": "高股息"},
             ]
-        if "FROM finance.main_business_composition" in normalized_sql:
-            assert params == ["CN:SZ:000001", "2026-06-08", "CN:SZ:000001", "2026-06-08"]
+        if "FROM finance.main_business_composition" in normalized_sql and "report_period = %s" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2025-12-31"]
             return [
                 {
                     "report_period": "2025-12-31",
@@ -209,7 +223,6 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                     "item_name": "公司银行业务",
                     "revenue": 120000000000.0,
                     "revenue_ratio": 0.52,
-                    "gross_profit": 50000000000.0,
                     "gross_margin": 0.42,
                 },
                 {
@@ -218,7 +231,6 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                     "item_name": "零售银行业务",
                     "revenue": 80000000000.0,
                     "revenue_ratio": 0.35,
-                    "gross_profit": 32000000000.0,
                     "gross_margin": 0.40,
                 },
                 {
@@ -227,49 +239,61 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                     "item_name": "华南地区",
                     "revenue": 60000000000.0,
                     "revenue_ratio": 0.26,
-                    "gross_profit": 24000000000.0,
                     "gross_margin": 0.40,
                 },
-                {
-                    "report_period": "2026-12-31",
-                    "classify_type": "按产品",
-                    "item_name": "未来业务",
-                    "revenue": 999999999999.0,
-                    "revenue_ratio": 0.99,
-                    "gross_profit": 888888888888.0,
-                    "gross_margin": 0.88,
-                },
             ]
-        if "FROM finance.income_statement" in normalized_sql and "announcement_date <=" in normalized_sql:
+        if "SELECT report_period::text AS report_period, announcement_date::text AS announcement_date, revenue, np_parent" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
             return [
                 {
-                    "asset_id": "CN:SZ:000001",
+                    "report_period": "2026-03-31",
+                    "announcement_date": "2026-08-01",
+                    "revenue": 70000000000.0,
+                    "np_parent": 12000000000.0,
+                },
+                {
                     "report_period": "2025-12-31",
                     "announcement_date": "2026-03-20",
                     "revenue": 220000000000.0,
                     "np_parent": 45000000000.0,
                 }
             ]
-        if "FROM finance.cash_flow" in normalized_sql and "announcement_date <=" in normalized_sql:
+        if "FROM finance.cash_flow" in normalized_sql and "ORDER BY announcement_date DESC, report_period DESC LIMIT 1" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
             return [
                 {
-                    "asset_id": "CN:SZ:000001",
                     "report_period": "2025-12-31",
-                    "announcement_date": "2026-03-20",
+                    "announcement_date": "2026-03-25",
                     "net_operate_cash_flow": 51000000000.0,
                 }
             ]
-        if "FROM finance.indicator_quarter" in normalized_sql and "announcement_date <=" in normalized_sql:
+        if "FROM finance.indicator_quarter" in normalized_sql and "ORDER BY announcement_date DESC, report_period DESC LIMIT 1" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
             return [
                 {
-                    "asset_id": "CN:SZ:000001",
-                    "report_period": "2025-12-31",
-                    "announcement_date": "2026-03-20",
+                    "report_period": "2025-09-30",
+                    "announcement_date": "2025-10-31",
                     "roe": 0.1234,
                     "gross_margin": 0.418,
                     "debt_ratio": 0.912,
                     "ocf_to_np": 1.13,
                 }
+            ]
+        if "SELECT report_period::text AS report_period, announcement_date::text AS announcement_date FROM finance.income_statement" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
+            return [
+                {"report_period": "2026-03-31", "announcement_date": "2026-08-01"},
+                {"report_period": "2025-12-31", "announcement_date": "2026-03-20"},
+            ]
+        if "SELECT report_period::text AS report_period, announcement_date::text AS announcement_date FROM finance.cash_flow" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
+            return [
+                {"report_period": "2025-12-31", "announcement_date": "2026-03-25"},
+            ]
+        if "SELECT report_period::text AS report_period, announcement_date::text AS announcement_date FROM finance.indicator_quarter" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08"]
+            return [
+                {"report_period": "2025-09-30", "announcement_date": "2025-10-31"},
             ]
         if "min(trade_date)" in normalized_sql:
             return [{"min_date": "2026-06-01", "max_date": "2026-06-08", "row_count": 5}]
@@ -332,8 +356,8 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         ],
     }
     assert profile["financial_snapshot"] == {
-        "report_period": "2025-12-31",
-        "announcement_date": "2026-03-20",
+        "report_period": "2025-09-30",
+        "announcement_date": "2025-10-31",
         "revenue_ttm": 220000000000.0,
         "np_parent_ttm": 45000000000.0,
         "operating_cash_flow": 51000000000.0,

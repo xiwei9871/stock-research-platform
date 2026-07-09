@@ -1,7 +1,7 @@
 from typing import Any, Callable
 
 from stock_research.db import fetch_all
-from stock_research.services import finance_ttm, point_in_time_finance
+from stock_research.services import finance_ttm
 
 
 FetchAll = Callable[[Any, str, list[Any] | None], list[dict[str, Any]]]
@@ -14,7 +14,16 @@ def load_asset_profile_fundamentals(
     *,
     fetch_all_fn: FetchAll = fetch_all,
 ) -> dict[str, Any]:
-    business_rows = _load_business_rows(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
+    income_rows = _load_income_ttm_rows(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
+    latest_income = _latest_disclosed_row(income_rows)
+    latest_indicator = _load_latest_indicator_row(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
+    latest_cash_flow = _load_latest_cash_flow_row(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn)
+    business_rows = _load_business_rows(
+        conn,
+        asset_id,
+        report_period=_latest_disclosed_report_period(latest_indicator, latest_income, latest_cash_flow),
+        fetch_all_fn=fetch_all_fn,
+    )
     company_overview = _build_company_overview(
         industry=_load_industry(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
         concept_tags=_load_concept_tags(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
@@ -25,23 +34,13 @@ def load_asset_profile_fundamentals(
         "company_overview": company_overview,
         "business_composition": _build_business_composition(business_rows),
         "financial_snapshot": _load_financial_snapshot(
-            conn,
-            asset_id,
             trade_date,
+            income_rows=income_rows,
+            latest_indicator=latest_indicator,
+            latest_cash_flow=latest_cash_flow,
             fetch_all_fn=fetch_all_fn,
         ),
     }
-
-
-def _run_with_fetch_all(module: Any, fetch_all_fn: FetchAll, operation: Callable[[], Any]) -> Any:
-    original = getattr(module, "fetch_all")
-    if original is fetch_all_fn:
-        return operation()
-    setattr(module, "fetch_all", fetch_all_fn)
-    try:
-        return operation()
-    finally:
-        setattr(module, "fetch_all", original)
 
 
 def _load_industry(
@@ -94,36 +93,25 @@ def _load_concept_tags(
 def _load_business_rows(
     conn: Any,
     asset_id: str,
-    trade_date: str,
+    report_period: str | None,
     *,
     fetch_all_fn: FetchAll,
 ) -> list[dict[str, Any]]:
+    if not report_period:
+        return []
     sql = """
     SELECT report_period::text AS report_period,
            classify_type,
            item_name,
            revenue,
            revenue_ratio,
-           cost,
-           gross_profit,
            gross_margin
     FROM finance.main_business_composition
     WHERE asset_id = %s
-      AND report_period <= %s
-      AND report_period = (
-          SELECT max(report_period)
-          FROM finance.main_business_composition
-          WHERE asset_id = %s
-            AND report_period <= %s
-      )
+      AND report_period = %s::date
     ORDER BY classify_type, revenue DESC NULLS LAST, item_name
     """
-    rows = fetch_all_fn(conn, sql, [asset_id, trade_date, asset_id, trade_date])
-    return [
-        row
-        for row in rows
-        if (str(row.get("report_period") or "")[:10] or "9999-12-31") <= trade_date
-    ]
+    return fetch_all_fn(conn, sql, [asset_id, report_period])
 
 
 def _load_company_profile_context(
@@ -241,40 +229,30 @@ def _build_business_composition(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _load_financial_snapshot(
-    conn: Any,
-    asset_id: str,
     trade_date: str,
     *,
+    income_rows: list[dict[str, Any]],
+    latest_indicator: dict[str, Any] | None,
+    latest_cash_flow: dict[str, Any] | None,
     fetch_all_fn: FetchAll,
 ) -> dict[str, Any]:
-    income_ttm = _run_with_fetch_all(
-        finance_ttm,
-        fetch_all_fn,
-        lambda: finance_ttm.load_income_ttm_rows(
-            conn,
-            [asset_id],
-            trade_date,
-            value_columns=["revenue", "np_parent"],
+    income_ttm = {
+        "revenue_ttm": finance_ttm.calc_ttm_from_cumulative_rows(
+            income_rows,
+            value_column="revenue",
+            trade_date=trade_date,
         ),
-    ).get(asset_id, {})
-    latest_indicator = _run_with_fetch_all(
-        point_in_time_finance,
-        fetch_all_fn,
-        lambda: point_in_time_finance.get_latest_indicator(conn, asset_id, trade_date),
-    )
-    latest_cash_flow = _run_with_fetch_all(
-        point_in_time_finance,
-        fetch_all_fn,
-        lambda: point_in_time_finance.get_latest_cash_flow(conn, asset_id, trade_date),
-    )
-    latest_income = _run_with_fetch_all(
-        point_in_time_finance,
-        fetch_all_fn,
-        lambda: point_in_time_finance.get_latest_income_statement(conn, asset_id, trade_date),
-    )
+        "np_parent_ttm": finance_ttm.calc_ttm_from_cumulative_rows(
+            income_rows,
+            value_column="np_parent",
+            trade_date=trade_date,
+        ),
+    }
+    latest_income = _latest_disclosed_row(income_rows)
+    anchor_row = latest_indicator or latest_income or latest_cash_flow
     return {
-        "report_period": _to_date_text((latest_income or {}).get("report_period")),
-        "announcement_date": _to_date_text((latest_income or {}).get("announcement_date")),
+        "report_period": _to_date_text((anchor_row or {}).get("report_period")),
+        "announcement_date": _to_date_text((anchor_row or {}).get("announcement_date")),
         "revenue_ttm": _to_float(income_ttm.get("revenue_ttm")),
         "np_parent_ttm": _to_float(income_ttm.get("np_parent_ttm")),
         "operating_cash_flow": _to_float((latest_cash_flow or {}).get("net_operate_cash_flow")),
@@ -285,8 +263,8 @@ def _load_financial_snapshot(
         "data_status": "available",
         "missing_fields": [],
     } | _financial_snapshot_status(
-        report_period=_to_date_text((latest_income or {}).get("report_period")),
-        announcement_date=_to_date_text((latest_income or {}).get("announcement_date")),
+        report_period=_to_date_text((anchor_row or {}).get("report_period")),
+        announcement_date=_to_date_text((anchor_row or {}).get("announcement_date")),
         revenue_ttm=_to_float(income_ttm.get("revenue_ttm")),
         np_parent_ttm=_to_float(income_ttm.get("np_parent_ttm")),
         operating_cash_flow=_to_float((latest_cash_flow or {}).get("net_operate_cash_flow")),
@@ -295,6 +273,106 @@ def _load_financial_snapshot(
         debt_ratio=_to_float((latest_indicator or {}).get("debt_ratio")),
         ocf_to_np=_to_float((latest_indicator or {}).get("ocf_to_np")),
     )
+
+
+def _load_income_ttm_rows(
+    conn: Any,
+    asset_id: str,
+    trade_date: str,
+    *,
+    fetch_all_fn: FetchAll,
+) -> list[dict[str, Any]]:
+    sql = """
+    SELECT report_period::text AS report_period,
+           announcement_date::text AS announcement_date,
+           revenue,
+           np_parent
+    FROM finance.income_statement
+    WHERE asset_id = %s
+      AND announcement_date <= %s
+      AND (revenue IS NOT NULL OR np_parent IS NOT NULL)
+    ORDER BY report_period DESC, announcement_date DESC
+    """
+    rows = fetch_all_fn(conn, sql, [asset_id, trade_date])
+    return _filter_disclosed_rows(rows, trade_date)
+
+
+def _load_latest_indicator_row(
+    conn: Any,
+    asset_id: str,
+    trade_date: str,
+    *,
+    fetch_all_fn: FetchAll,
+) -> dict[str, Any] | None:
+    sql = """
+    SELECT report_period::text AS report_period,
+           announcement_date::text AS announcement_date,
+           roe,
+           gross_margin,
+           debt_ratio,
+           ocf_to_np
+    FROM finance.indicator_quarter
+    WHERE asset_id = %s
+      AND announcement_date <= %s
+    ORDER BY announcement_date DESC, report_period DESC
+    LIMIT 1
+    """
+    rows = fetch_all_fn(conn, sql, [asset_id, trade_date])
+    filtered = _filter_disclosed_rows(rows, trade_date)
+    return filtered[0] if filtered else None
+
+
+def _load_latest_cash_flow_row(
+    conn: Any,
+    asset_id: str,
+    trade_date: str,
+    *,
+    fetch_all_fn: FetchAll,
+) -> dict[str, Any] | None:
+    sql = """
+    SELECT report_period::text AS report_period,
+           announcement_date::text AS announcement_date,
+           net_operate_cash_flow
+    FROM finance.cash_flow
+    WHERE asset_id = %s
+      AND announcement_date <= %s
+    ORDER BY announcement_date DESC, report_period DESC
+    LIMIT 1
+    """
+    rows = fetch_all_fn(conn, sql, [asset_id, trade_date])
+    filtered = _filter_disclosed_rows(rows, trade_date)
+    return filtered[0] if filtered else None
+
+
+def _latest_disclosed_report_period(*rows: dict[str, Any] | None) -> str | None:
+    report_periods = [
+        _to_date_text((row or {}).get("report_period"))
+        for row in rows
+        if _to_date_text((row or {}).get("report_period")) is not None
+    ]
+    return max(report_periods) if report_periods else None
+
+
+def _latest_disclosed_row(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    disclosed = sorted(
+        rows,
+        key=lambda row: (
+            _to_date_text(row.get("announcement_date")) or "",
+            _to_date_text(row.get("report_period")) or "",
+        ),
+        reverse=True,
+    )
+    return disclosed[0] if disclosed else None
+
+
+def _filter_disclosed_rows(rows: list[dict[str, Any]], trade_date: str) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if (_to_date_text(row.get("announcement_date")) or "9999-12-31") <= trade_date
+    ]
 
 
 def _financial_snapshot_status(**snapshot: Any) -> dict[str, Any]:
