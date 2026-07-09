@@ -1,6 +1,7 @@
 from stock_research.config import SETTINGS
 from stock_research.db import connect, execute
 from stock_research.db import execute_many
+from stock_research.eastmoney_http import curl_eastmoney_json
 
 try:
     import akshare as ak
@@ -161,16 +162,23 @@ def sync_concept_memberships_from_akshare(
 
     default_em_fetchers = board_fetcher is None and constituent_fetcher is None and concept_system == "em"
     if default_em_fetchers:
-        board_fetcher = ak.stock_board_concept_name_em
+        board_fetcher = fetch_eastmoney_concept_boards_direct
         constituent_fetcher = ak.stock_board_concept_cons_em
-        board_source = "akshare:stock_board_concept_name_em"
+        board_source = "eastmoney:qt_clist_concept_board"
         constituent_source = "akshare:stock_board_concept_cons_em"
     else:
         board_fetcher = board_fetcher or ak.stock_board_concept_name_ths
         constituent_fetcher = constituent_fetcher or ak.stock_board_concept_cons_em
         board_source = "akshare:stock_board_concept_name_ths"
         constituent_source = "akshare:concept_constituents"
-    boards = _normalize_concept_boards(board_fetcher())
+    try:
+        boards = _normalize_concept_boards(_call_with_single_retry(board_fetcher))
+    except Exception as exc:  # noqa: BLE001 - vendor board-list failures should be reported, not crash cron.
+        return {
+            "boards": 0,
+            "memberships": 0,
+            "failed_concepts": [f"board_fetch_failed: {exc}"],
+        }
     if max_concepts is not None:
         boards = boards[: max(0, int(max_concepts))]
 
@@ -210,7 +218,9 @@ def sync_concept_memberships_from_akshare(
         concept_name = board["concept_name"]
         constituent_symbol = concept_code if default_em_fetchers else concept_name
         try:
-            constituents = _normalize_concept_constituents(constituent_fetcher(constituent_symbol))
+            constituents = _normalize_concept_constituents(
+                _call_with_single_retry(constituent_fetcher, constituent_symbol)
+            )
         except Exception:  # noqa: BLE001 - vendor failures should not erase local concept history.
             failed_concepts.append(concept_name)
             continue
@@ -280,6 +290,66 @@ def _normalize_concept_boards(frame) -> list[dict[str, str]]:
     return rows
 
 
+def fetch_eastmoney_concept_boards_direct(
+    *,
+    page_size: int = 100,
+    retries: int = 3,
+    retry_sleep_seconds: float = 1.0,
+):
+    import pandas as pd
+
+    url_candidates = [
+        "https://79.push2.eastmoney.com/api/qt/clist/get",
+        "https://push2.eastmoney.com/api/qt/clist/get",
+    ]
+    fields = "f12,f14"
+    base_params = {
+        "po": "1",
+        "np": "1",
+        "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+        "fltt": "2",
+        "invt": "2",
+        "fid": "f12",
+        "fs": "m:90 t:3 f:!50",
+        "fields": fields,
+    }
+    first = curl_eastmoney_json(
+        url_candidates,
+        {**base_params, "pn": "1", "pz": str(page_size)},
+        retries=retries,
+        retry_sleep_seconds=retry_sleep_seconds,
+    )
+    data = first.get("data") or {}
+    rows = list(data.get("diff") or [])
+    total = int(data.get("total") or len(rows))
+    pages = max(1, (total + page_size - 1) // page_size)
+    for page in range(2, pages + 1):
+        payload = curl_eastmoney_json(
+            url_candidates,
+            {**base_params, "pn": str(page), "pz": str(page_size)},
+            retries=retries,
+            retry_sleep_seconds=retry_sleep_seconds,
+        )
+        rows.extend((payload.get("data") or {}).get("diff") or [])
+    return pd.DataFrame(
+        [
+            {"板块名称": str(row.get("f14") or "").strip(), "板块代码": str(row.get("f12") or "").strip()}
+            for row in rows
+            if str(row.get("f14") or "").strip() and str(row.get("f12") or "").strip()
+        ]
+    )
+
+
+def _call_with_single_retry(func, *args):
+    last_error = None
+    for _attempt in range(2):
+        try:
+            return func(*args)
+        except Exception as exc:  # noqa: BLE001 - external data vendors often fail transiently.
+            last_error = exc
+    raise last_error
+
+
 def _normalize_concept_constituents(frame) -> list[str]:
     if frame is None or frame.empty:
         return []
@@ -299,9 +369,9 @@ def _asset_id_from_cn_stock_code(raw_code: str) -> str | None:
     if "." in code:
         left, right = code.split(".", 1)
         if right in {"SH", "SZ", "BJ"} and left.isdigit():
-            return f"{left.zfill(6)}.{right}"
+            return f"CN:{right}:{left.zfill(6)}"
         if left in {"SH", "SZ", "BJ"} and right.isdigit():
-            return f"{right.zfill(6)}.{left}"
+            return f"CN:{left}:{right.zfill(6)}"
     digits = "".join(ch for ch in code if ch.isdigit())
     if len(digits) != 6:
         return None
@@ -313,7 +383,7 @@ def _asset_id_from_cn_stock_code(raw_code: str) -> str | None:
         exchange = "BJ"
     else:
         return None
-    return f"{digits}.{exchange}"
+    return f"CN:{exchange}:{digits}"
 
 
 def build_asset_status_daily_for_service(
