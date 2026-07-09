@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -49,6 +51,80 @@ def repair_minute5_bars(
         status=RepairStatus.SUCCESS,
         message="minute5 repair submitted",
         metrics=totals,
+    )
+
+
+def repair_minute5_raw_bars(
+    trade_date: str,
+    *,
+    service: str,
+    missing_symbols_loader: Callable[[str], list[str]],
+    raw_fetcher: Callable[..., list[dict[str, Any]]],
+    upserter: Callable[[str, list[dict[str, Any]]], int],
+    qfq_deriver: Callable[[str, date], dict[str, int]],
+    quality_refresher: Callable[[str, date], dict[str, Any]],
+    timeout_seconds: int = 30,
+    symbol_sleep_seconds: float = 0.0,
+) -> RepairActionResult:
+    target_date = date.fromisoformat(trade_date)
+    missing_symbols = list(missing_symbols_loader(trade_date))
+    if not missing_symbols:
+        return RepairActionResult(
+            name="repair_minute5_raw_bars",
+            status=RepairStatus.FAILED,
+            message="minute5 raw repair had no missing symbols to attempt",
+            metrics={
+                "attempted": 0,
+                "success": 0,
+                "failed": 0,
+                "rows": 0,
+                "qfq_rows": 0,
+                "remaining_missing": 0,
+                "remaining_abnormal": 0,
+            },
+        )
+
+    all_rows: list[dict[str, Any]] = []
+    failed = 0
+    for ts_code in missing_symbols:
+        try:
+            rows = raw_fetcher(
+                ts_code,
+                start_date=target_date,
+                end_date=target_date,
+                timeout_seconds=timeout_seconds,
+            )
+        except Exception:  # noqa: BLE001 - repair action reports aggregate failures.
+            failed += 1
+            continue
+        raw_rows = [row for row in rows if row.get("adjust_type") == "raw"]
+        if raw_rows:
+            all_rows.extend(raw_rows)
+        else:
+            failed += 1
+        if symbol_sleep_seconds > 0:
+            time.sleep(symbol_sleep_seconds)
+
+    rows_upserted = upserter(service, all_rows)
+    qfq_result = qfq_deriver(service, target_date) if rows_upserted else {"inserted_rows": 0}
+    quality = quality_refresher(service, target_date)
+    remaining_missing = len(quality.get("missing_symbols") or [])
+    remaining_abnormal = len(quality.get("abnormal_symbols") or [])
+    success = max(0, len(missing_symbols) - failed)
+    status = RepairStatus.SUCCESS if rows_upserted and remaining_missing == 0 and remaining_abnormal == 0 else RepairStatus.FAILED
+    return RepairActionResult(
+        name="repair_minute5_raw_bars",
+        status=status,
+        message="minute5 raw bars repaired" if status == RepairStatus.SUCCESS else "minute5 raw repair incomplete",
+        metrics={
+            "attempted": len(missing_symbols),
+            "success": success,
+            "failed": failed,
+            "rows": int(rows_upserted or 0),
+            "qfq_rows": int(qfq_result.get("inserted_rows") or 0),
+            "remaining_missing": remaining_missing,
+            "remaining_abnormal": remaining_abnormal,
+        },
     )
 
 

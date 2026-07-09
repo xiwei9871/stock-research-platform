@@ -11,6 +11,8 @@ OUTPUT_DIR="${PLATFORM_READY_OUTPUT_DIR:-$ROOT/outputs/research}"
 REPAIR_OUTPUT_DIR="${PLATFORM_READY_REPAIR_OUTPUT_DIR:-$OUTPUT_DIR/eod_auto_repair/$TRADE_DATE}"
 HEARTBEAT_SECONDS="${PLATFORM_READY_CHECK_HEARTBEAT_SECONDS:-60}"
 
+mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$RUN_LOG")"
+
 source "$ROOT/scripts/stock_cron_guard.sh"
 clear_stock_proxy_env
 
@@ -24,9 +26,20 @@ if [ -z "$TRADE_DATE" ]; then
   REPAIR_OUTPUT_DIR="${PLATFORM_READY_REPAIR_OUTPUT_DIR:-$OUTPUT_DIR/eod_auto_repair/$TRADE_DATE}"
 fi
 
-stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}"
+stock_cron_guard_or_exit "$PYTHON" "$TRADE_DATE" "${RESEARCH_SERVICE:-}" >>"$RUN_LOG" 2>&1
 
-mkdir -p "$LOG_DIR" "$OUTPUT_DIR" "$(dirname "$RUN_LOG")"
+print_summary() {
+  local title="$1"
+  local rc="$2"
+  echo "$title"
+  echo "交易日: $TRADE_DATE"
+  echo "摘要文件: $REPAIR_OUTPUT_DIR/run_summary.json"
+  echo "报告文件: $REPAIR_OUTPUT_DIR/run_report.md"
+  if [ "$rc" -ne 0 ]; then
+    echo "退出码: $rc"
+  fi
+  echo "详细日志: $RUN_LOG"
+}
 
 run_with_heartbeat() {
   local stage="$1"
@@ -37,14 +50,14 @@ run_with_heartbeat() {
   local pid
   started="$(date +%s)"
   next_heartbeat="$HEARTBEAT_SECONDS"
-  "$@" &
+  "$@" >>"$RUN_LOG" 2>&1 &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
     sleep 1
     elapsed=$(($(date +%s) - started))
     if kill -0 "$pid" 2>/dev/null; then
       if [ "$elapsed" -ge "$next_heartbeat" ]; then
-        echo "platform_ready_check|stage|${stage}|heartbeat|elapsed=${elapsed}"
+        echo "platform_ready_check|stage|${stage}|heartbeat|elapsed=${elapsed}" >>"$RUN_LOG"
         next_heartbeat=$((next_heartbeat + HEARTBEAT_SECONDS))
       fi
     fi
@@ -53,19 +66,20 @@ run_with_heartbeat() {
 }
 
 set +e
-{
-  echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
-  cd "$ROOT"
-  run_with_heartbeat eod_auto_repair rtk "$PYTHON" -m stock_research.eod_auto_repair \
-    --trade-date "$TRADE_DATE" \
-    --output-dir "$REPAIR_OUTPUT_DIR" \
-    --mode repair
-  rc=$?
-  echo "eod_auto_repair|summary|$REPAIR_OUTPUT_DIR/run_summary.json"
-  echo "eod_auto_repair|report|$REPAIR_OUTPUT_DIR/run_report.md"
-  echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
-  exit "$rc"
-} 2>&1 | tee -a "$RUN_LOG"
-rc=${PIPESTATUS[0]}
+echo "=== eod auto repair start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"
+cd "$ROOT"
+run_with_heartbeat eod_auto_repair rtk "$PYTHON" -m stock_research.eod_auto_repair \
+  --trade-date "$TRADE_DATE" \
+  --output-dir "$REPAIR_OUTPUT_DIR" \
+  --mode repair
+rc=$?
+echo "eod_auto_repair|summary|$REPAIR_OUTPUT_DIR/run_summary.json" >>"$RUN_LOG"
+echo "eod_auto_repair|report|$REPAIR_OUTPUT_DIR/run_report.md" >>"$RUN_LOG"
+echo "=== eod auto repair end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$RUN_LOG"
 set -e
+if [ "$rc" -ne 0 ]; then
+  print_summary "EOD自动修复失败" "$rc"
+else
+  print_summary "EOD自动修复完成" "$rc"
+fi
 exit "$rc"

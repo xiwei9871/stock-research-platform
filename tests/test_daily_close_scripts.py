@@ -62,6 +62,10 @@ def test_daily_close_pipeline_script_clears_proxy_env(tmp_path: Path) -> None:
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m stock_research.stock_cron_guard --date 2026-06-22" in calls
     assert "-m scripts.daily_pipeline --date 2026-06-22 --stage minute5" in calls
+    assert "股票日终阶段完成" in result.stdout
+    assert "阶段: minute5" in result.stdout
+    assert "交易日: 2026-06-22" in result.stdout
+    assert "详细日志:" in result.stdout
 
 
 def test_daily_close_pipeline_script_smoke_mode_does_not_run_stage(tmp_path: Path) -> None:
@@ -102,7 +106,11 @@ if [[ "$*" == *"stock_research.stock_cron_guard"* ]]; then
   exit 0
 fi
 if [[ "$*" == *"--stage minute5"* ]]; then
-  printf '%s\n' '{{"stage":"minute5","status":"failed","rows":0}}'
+  if [[ "${{DAILY_PIPELINE_CRON_OUTPUT:-}}" == "compact" ]]; then
+    printf '%s\n' '{{"stage":"minute5","status":"failed","rows":0,"quality":{{"expected_count":5191,"actual_count":3939,"missing_count":1252}}}}'
+  else
+    printf '%s\n' '{{"stage":"minute5","status":"failed","rows":0,"quality":{{"missing_symbols":["600000.SH","600004.SH"]}}}}'
+  fi
   exit 0
 fi
 exit 0
@@ -127,8 +135,14 @@ exit 0
     )
 
     assert result.returncode == 1
-    assert '"status":"failed"' in result.stdout
-    assert "daily_close_pipeline|business_failed|stage=minute5|trade_date=2026-06-22" in result.stderr
+    assert "股票日终阶段失败" in result.stdout
+    assert "阶段: minute5" in result.stdout
+    assert "交易日: 2026-06-22" in result.stdout
+    assert "状态: failed" in result.stdout
+    assert "缺失: 1252" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "600000.SH" not in result.stdout
+    assert "daily_close_pipeline|business_failed|stage=minute5|trade_date=2026-06-22" not in result.stderr
 
 
 def test_open_auction_spot_snapshot_script_clears_proxy_env(tmp_path: Path) -> None:
@@ -203,9 +217,12 @@ def test_daily_close_finalize_script_clears_proxy_env(tmp_path: Path) -> None:
     assert calls.count("-m scripts.daily_pipeline --date 2026-06-22 --stage deps") == 1
     assert calls.count("-m scripts.daily_pipeline --date 2026-06-22 --stage health") == 1
     assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in curl_calls_file.read_text(encoding="utf-8")
-    assert "daily_close_finalize|stage|retry_failed|start" in result.stdout
-    assert "daily_close_finalize|stage|health|done" in result.stdout
-    assert "daily_close_finalize|dashboard_cache_clear|success" in result.stdout
+    assert "股票收盘修复完成" in result.stdout
+    assert "交易日: 2026-06-22" in result.stdout
+    assert "阶段: retry_failed=success, market_monitor=success, deps=success, health=success" in result.stdout
+    assert "Dashboard缓存: success" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "daily_close_finalize|stage|" not in result.stdout
 
 
 def test_daily_close_finalize_script_smoke_mode_does_not_run_stages(tmp_path: Path) -> None:
@@ -272,7 +289,11 @@ exit 0
     )
 
     assert result.returncode == 124
-    assert "daily_close_finalize|stage|retry_failed|timeout|1" in result.stderr
+    assert "股票收盘修复失败" in result.stdout
+    assert "失败阶段: retry_failed" in result.stdout
+    assert "退出码: 124" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "daily_close_finalize|stage|retry_failed|timeout|1" not in result.stdout
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m scripts.daily_pipeline --date 2026-06-22 --stage retry_failed" in calls
     assert "-m scripts.daily_pipeline --date 2026-06-22 --stage deps" not in calls
@@ -312,4 +333,5 @@ exit 0
     )
 
     assert result.returncode == 0
-    assert "daily_close_finalize|stage|retry_failed|heartbeat|elapsed=1" in result.stdout
+    assert "股票收盘修复完成" in result.stdout
+    assert "heartbeat" not in result.stdout

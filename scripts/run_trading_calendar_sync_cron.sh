@@ -41,16 +41,31 @@ if [[ -n "$SERVICE" ]]; then
   args+=(--service "$SERVICE")
 fi
 
-{
-  echo "=== trading calendar sync start: $(date '+%Y-%m-%d %H:%M:%S %z') ==="
-  echo "start_date=$START_DATE"
-  echo "end_date=$END_DATE"
-  echo "exchanges=$EXCHANGES"
-  cd "$ROOT"
-  "$PYTHON" "${args[@]}"
-  rc=$?
-  echo "=== trading calendar sync end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ==="
-  exit "$rc"
-} 2>&1 | tee -a "$RUN_LOG"
-rc=${PIPESTATUS[0]}
+print_summary() {
+  local title="$1"
+  local rc="$2"
+  echo "$title"
+  echo "范围: $START_DATE ~ $END_DATE"
+  echo "交易所: $EXCHANGES"
+  if [[ "$rc" -ne 0 ]]; then
+    echo "退出码: $rc"
+  fi
+  echo "详细日志: $RUN_LOG"
+}
+
+echo "=== trading calendar sync start: $(date '+%Y-%m-%d %H:%M:%S %z') ===" >>"$RUN_LOG"
+echo "start_date=$START_DATE" >>"$RUN_LOG"
+echo "end_date=$END_DATE" >>"$RUN_LOG"
+echo "exchanges=$EXCHANGES" >>"$RUN_LOG"
+cd "$ROOT"
+set +e
+"$PYTHON" "${args[@]}" >>"$RUN_LOG" 2>&1
+rc=$?
+set -e
+echo "=== trading calendar sync end: $(date '+%Y-%m-%d %H:%M:%S %z') rc=$rc ===" >>"$RUN_LOG"
+if [[ "$rc" -ne 0 ]]; then
+  print_summary "交易日历同步失败" "$rc"
+else
+  print_summary "交易日历同步完成" "$rc"
+fi
 exit "$rc"

@@ -117,7 +117,7 @@ def test_build_daily_pipeline_steps_runs_minute_watchdog_to_completion_by_defaul
 
     assert "--max-jobs" in refresh_step.command
     assert refresh_step.command[refresh_step.command.index("--max-jobs") + 1] == "12000"
-    assert refresh_step.command[refresh_step.command.index("--workers") + 1] == "8"
+    assert refresh_step.command[refresh_step.command.index("--workers") + 1] == "1"
     assert refresh_step.command[refresh_step.command.index("--run-timeout-seconds") + 1] == "7200"
     assert refresh_step.timeout_seconds == 7500
 
@@ -147,10 +147,33 @@ def test_render_daily_pipeline_feishu_message_is_mobile_sized() -> None:
 
     assert "A股日频数据任务" in message
     assert "2026-06-05" in message
-    assert "market_daily_refresh: success rows=5200" in message
-    assert "daily_event_refresh: partial_failed rows=45 error=lhb failed" in message
-    assert "outputs/daily/20260605" in message
-    assert len(message) < 1800
+    assert "需要处理" in message
+    assert "完成 1/2" in message
+    assert "daily_event_refresh" in message
+    assert "lhb failed" in message
+    assert "market_daily_refresh" not in message
+    assert "outputs/daily/20260605" not in message
+    assert len(message) < 500
+
+
+def test_render_daily_pipeline_feishu_message_truncates_long_errors() -> None:
+    message = render_daily_pipeline_feishu_message(
+        trade_date="2026-06-05",
+        status="partial_failed",
+        output_dir=Path("/Users/xiwei/stock_research/outputs/research/stock_daily_data_pipeline/2026-06-05"),
+        step_results=[
+            {"step": "load_market_bars", "status": "failed", "rows": 0, "error": "x" * 300},
+            {"step": "daily_event_refresh", "status": "failed", "rows": 0, "error": "y" * 300},
+            {"step": "daily_feature_build", "status": "failed", "rows": 0, "error": "z" * 300},
+            {"step": "label_incremental_refresh", "status": "failed", "rows": 0, "error": "w" * 300},
+        ],
+    )
+
+    assert "/Users/xiwei" not in message
+    assert "另有 1 项异常" in message
+    assert "xxxx" in message
+    assert "x" * 120 not in message
+    assert len(message) < 700
 
 
 def test_run_stock_daily_data_pipeline_records_success_and_failure(tmp_path: Path) -> None:
@@ -353,7 +376,7 @@ def test_run_stock_daily_data_pipeline_records_successful_feishu_delivery(
         step for step in summary["steps"] if step["step"] == "daily_report_delivery"
     )
     assert summary_delivery["status"] == "success"
-    assert "daily_report_delivery: success" in (tmp_path / "feishu_message.txt").read_text()
+    assert "飞书通知完成" in (tmp_path / "feishu_message.txt").read_text()
 
 
 def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
@@ -386,5 +409,5 @@ def test_run_stock_daily_data_pipeline_records_failed_feishu_delivery(
     assert summary["status"] == "partial_failed"
     assert summary_delivery["status"] == "failed"
     assert summary_delivery["error"] == "feishu unavailable"
-    assert "daily_report_delivery: failed" in (tmp_path / "feishu_message.txt").read_text()
+    assert "daily_report_delivery" in (tmp_path / "feishu_message.txt").read_text()
     assert "feishu unavailable" in (tmp_path / "feishu_message.txt").read_text()

@@ -82,9 +82,23 @@ exit 0
     assert "-m stock_research.cli build-technical-features-daily" in calls
     assert "-m stock_research.cli run-lhb-shortline-daily-v1" in calls
     assert "-m stock_research.cli watchlist-build" in calls
+    assert "-m scripts.daily_pipeline --date 2026-06-18 --stage market_monitor" in calls
+    assert "-m scripts.daily_pipeline --date 2026-06-18 --stage deps" in calls
+    assert "-m scripts.daily_pipeline --date 2026-06-18 --stage health" in calls
     assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-18" in calls
     assert "-m stock_research.platform_ready --trade-date 2026-06-18" in calls
+    assert calls.index("-m stock_research.cli watchlist-build") < calls.index(
+        "-m scripts.daily_pipeline --date 2026-06-18 --stage market_monitor"
+    )
+    assert calls.index("-m scripts.daily_pipeline --date 2026-06-18 --stage health") < calls.index(
+        "-m stock_research.cli run-strategy-daily-eod"
+    )
     assert calls.index("-m stock_research.cli run-strategy-daily-eod") < calls.index("-m stock_research.platform_ready")
+    assert "平台就绪构建完成" in result.stdout
+    assert "交易日: 2026-06-18" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "platform_ready_build|step|" not in result.stdout
+    assert "free_enrichment_batch|" not in result.stdout
 
 
 def test_platform_build_script_smoke_mode_does_not_run_data_steps(tmp_path: Path) -> None:
@@ -125,6 +139,9 @@ exit 0
     )
 
     assert result.returncode == 0
+    assert "platform_ready_build|smoke|would_run|finalize_market_monitor" in result.stdout
+    assert "platform_ready_build|smoke|would_run|finalize_deps" in result.stdout
+    assert "platform_ready_build|smoke|would_run|finalize_health" in result.stdout
     assert "platform_ready_build|smoke|would_run|strategy_daily_eod" in result.stdout
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m stock_research.cli free-enrichment-backfill" not in calls
@@ -185,6 +202,10 @@ exit 3
     assert "eod_auto_repair/2026-06-18" in call
     assert "--mode repair" in call
     assert "-m stock_research.platform_ready" not in call
+    assert "EOD自动修复失败" in result.stdout
+    assert "交易日: 2026-06-18" in result.stdout
+    assert "退出码: 3" in result.stdout
+    assert "详细日志:" in result.stdout
 
 
 def test_platform_ready_check_script_emits_heartbeat_while_repair_runs(tmp_path: Path) -> None:
@@ -224,7 +245,10 @@ exit 0
     )
 
     assert result.returncode == 0
-    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" in result.stdout
+    assert "EOD自动修复完成" in result.stdout
+    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" not in result.stdout
+    log_text = (tmp_path / "logs" / "platform_ready_check.host.log").read_text(encoding="utf-8")
+    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" in log_text
 
 
 def test_platform_ready_check_script_defaults_to_latest_market_date(tmp_path: Path) -> None:
@@ -270,6 +294,7 @@ exit 0
     assert "date-resolver-via-c" in calls
     assert "-m stock_research.eod_auto_repair --trade-date 2026-06-29" in calls
     assert "eod_auto_repair/2026-06-29" in result.stdout
+    assert "EOD自动修复完成" in result.stdout
 
 
 def test_trading_calendar_sync_script_clears_proxy_env(tmp_path: Path) -> None:
@@ -327,3 +352,7 @@ printf '2026-06-22\\n'
     assert "-m stock_research.cli sync-tushare-trading-calendar" in calls
     assert "--start-date 2026-06-22" in calls
     assert "--end-date 2026-10-20" in calls
+    assert "交易日历同步完成" in result.stdout
+    assert "范围: 2026-06-22 ~ 2026-10-20" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "trading calendar sync start" not in result.stdout

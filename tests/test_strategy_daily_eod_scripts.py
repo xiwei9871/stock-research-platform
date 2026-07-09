@@ -72,6 +72,10 @@ exit 0
     assert result.returncode == 0
     calls = calls_file.read_text(encoding="utf-8")
     assert "-m stock_research.cli run-strategy-daily-eod --trade-date 2026-06-24" in calls
+    assert "策略日终完成" in result.stdout
+    assert "交易日: 2026-06-24" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "strategy_daily_eod|" not in result.stdout
 
 
 def test_run_strategy_daily_eod_cron_exits_nonzero_when_business_status_failed(tmp_path: Path) -> None:
@@ -110,5 +114,9 @@ exit 0
     )
 
     assert result.returncode == 1
-    assert "strategy_daily_eod|status|failed" in result.stdout
-    assert "strategy_daily_eod|business_failed" in result.stderr
+    assert "策略日终失败" in result.stdout
+    assert "交易日: 2026-06-24" in result.stdout
+    assert "退出码: 1" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "strategy_daily_eod|status|failed" not in result.stdout
+    assert "strategy_daily_eod|business_failed" not in result.stderr

@@ -327,6 +327,231 @@ def test_normalize_akshare_index_daily_rows_filters_dates_and_computes_preclose(
     ]
 
 
+def test_eastmoney_index_secid_maps_star_and_bse_indices():
+    assert baostock_ingestion.eastmoney_index_secid("sh000688") == "1.000688"
+    assert baostock_ingestion.eastmoney_index_secid("bj899050") == "0.899050"
+
+
+def test_query_akshare_index_daily_rows_prefers_eastmoney_curl(monkeypatch):
+    calls = []
+
+    def fake_curl(urls, *, params, retries, retry_sleep_seconds, timeout_seconds):
+        calls.append((urls, params, retries, retry_sleep_seconds, timeout_seconds))
+        return {
+            "data": {
+                "klines": [
+                    "2026-07-06,2015.18,1996.10,2022.91,1913.82,16511997,173537383477.00,5.52"
+                ]
+            }
+        }
+
+    monkeypatch.setattr(baostock_ingestion, "curl_eastmoney_json", fake_curl)
+
+    rows = baostock_ingestion.query_akshare_index_daily_rows(
+        start_date="2026-07-06",
+        end_date="2026-07-06",
+        targets={"STAR_50": "sh000688"},
+    )
+
+    assert rows == [
+        {
+            "index_id": "STAR_50",
+            "trade_date": "2026-07-06",
+            "open": 2015.18,
+            "close": 1996.10,
+            "high": 2022.91,
+            "low": 1913.82,
+            "volume": 16511997.0,
+            "amount": 173537383477.0,
+            "source": "eastmoney",
+            "preclose": None,
+        }
+    ]
+    assert calls[0][1]["secid"] == "1.000688"
+    assert calls[0][1]["beg"] == "20260706"
+    assert calls[0][1]["end"] == "20260706"
+    assert calls[0][2] == 3
+
+
+def test_query_tencent_index_daily_rows_uses_day_and_qt_amount(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": {
+                    "sh000688": {
+                        "day": [
+                            [
+                                "2026-07-06",
+                                "2015.180",
+                                "1996.100",
+                                "2022.910",
+                                "1913.820",
+                                "16511997.000",
+                            ]
+                        ],
+                        "qt": {
+                            "sh000688": [
+                                "1",
+                                "科创50",
+                                "000688",
+                                "1996.10",
+                                "1975.60",
+                                "2015.18",
+                                "16511997",
+                                *[""] * 23,
+                                "20260706161414",
+                                "20.50",
+                                "1.04",
+                                "2022.91",
+                                "1913.82",
+                                "1996.10/16511997/173537383477",
+                                "16511997",
+                            ]
+                        },
+                    }
+                }
+            }
+
+    class FakeSession:
+        def __init__(self):
+            self.trust_env = True
+
+        def get(self, url, params, timeout):
+            assert self.trust_env is False
+            assert params["param"] == "sh000688,day,2026-07-06,2026-07-06,320"
+            return FakeResponse()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(baostock_ingestion.requests, "Session", FakeSession)
+
+    rows = baostock_ingestion.query_tencent_index_daily_rows(
+        start_date="2026-07-06",
+        end_date="2026-07-06",
+        targets={"STAR_50": "sh000688"},
+    )
+
+    assert rows == [
+        {
+            "index_id": "STAR_50",
+            "trade_date": "2026-07-06",
+            "open": 2015.18,
+            "close": 1996.1,
+            "high": 2022.91,
+            "low": 1913.82,
+            "volume": 16511997.0,
+            "amount": 173537383477.0,
+            "source": "tencent",
+            "preclose": 1975.6,
+        }
+    ]
+
+
+def test_query_tencent_index_daily_rows_uses_qt_when_day_is_missing(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": {
+                    "bj899050": {
+                        "day": [],
+                        "qt": {
+                            "bj899050": [
+                                "62",
+                                "北证50",
+                                "899050",
+                                "1245.97",
+                                "1287.82",
+                                "1279.33",
+                                "8101040",
+                                *[""] * 23,
+                                "20260706153531",
+                                "-41.85",
+                                "-3.25",
+                                "1288.16",
+                                "1245.41",
+                                "1245.97/8101040/21530902355",
+                                "8101040",
+                            ]
+                        },
+                    }
+                }
+            }
+
+    class FakeSession:
+        trust_env = True
+
+        def get(self, url, params, timeout):
+            self.trust_env = False
+            return FakeResponse()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(baostock_ingestion.requests, "Session", FakeSession)
+
+    rows = baostock_ingestion.query_tencent_index_daily_rows(
+        start_date="2026-07-06",
+        end_date="2026-07-06",
+        targets={"BSE_50": "bj899050"},
+    )
+
+    assert rows == [
+        {
+            "index_id": "BSE_50",
+            "trade_date": "2026-07-06",
+            "open": 1279.33,
+            "close": 1245.97,
+            "high": 1288.16,
+            "low": 1245.41,
+            "volume": 8101040.0,
+            "amount": 21530902355.0,
+            "source": "tencent",
+            "preclose": 1287.82,
+        }
+    ]
+
+
+def test_query_akshare_index_daily_rows_falls_back_to_tencent(monkeypatch):
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "query_eastmoney_index_daily_rows",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("eastmoney down")),
+    )
+    monkeypatch.setattr(
+        baostock_ingestion,
+        "query_tencent_index_daily_rows",
+        lambda **kwargs: [
+            {
+                "index_id": "STAR_50",
+                "trade_date": "2026-07-06",
+                "open": 2015.18,
+                "close": 1996.1,
+                "high": 2022.91,
+                "low": 1913.82,
+                "volume": 16511997.0,
+                "amount": 173537383477.0,
+                "source": "tencent",
+                "preclose": 1975.6,
+            }
+        ],
+    )
+
+    rows = baostock_ingestion.query_akshare_index_daily_rows(
+        start_date="2026-07-06",
+        end_date="2026-07-06",
+        targets={"STAR_50": "sh000688"},
+    )
+
+    assert rows[0]["source"] == "tencent"
+
+
 def test_upsert_index_daily_bars(monkeypatch):
     conn = FakeConnection()
     monkeypatch.setattr(baostock_ingestion, "execute_many", fake_execute_many)

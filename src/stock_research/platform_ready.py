@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from stock_research.config import SETTINGS
+from stock_research.dashboard.readiness_policy import classify_pipeline_readiness
 from stock_research.db import connect, fetch_all
 from stock_research.strategy_daily_eod_store import load_strategy_daily_eod_status
 
@@ -57,7 +58,12 @@ CHECK_SQL = {
         LIMIT 1
     """,
     "health_status": """
-        SELECT pipeline_status, latest_ready_trade_date::text AS latest_ready_trade_date
+        SELECT pipeline_status,
+               daily_status,
+               minute5_status,
+               deps_status,
+               market_monitor_status,
+               latest_ready_trade_date::text AS latest_ready_trade_date
         FROM ops.daily_pipeline_status
         WHERE trade_date = %s
         ORDER BY updated_at DESC
@@ -258,13 +264,20 @@ def _check_health(service: str, trade_date: str, *, allow_degraded: bool = False
     if not rows:
         return _fail("health", "missing status row")
     row = rows[0]
-    pipeline_status = str(row.get("pipeline_status") or "")
-    latest_ready = str(row.get("latest_ready_trade_date") or "")
-    ok = pipeline_status in {"READY", "DEGRADED_READY", "ready", "success"} and latest_ready == trade_date
-    detail = f"pipeline_status={pipeline_status} latest_ready_trade_date={latest_ready}"
+    decision = classify_pipeline_readiness(row, requested_trade_date=trade_date)
+    detail = (
+        f"pipeline_status={row.get('pipeline_status')} "
+        f"latest_ready_trade_date={row.get('latest_ready_trade_date')} "
+        f"policy_status={decision.status} "
+        f"blocking_reasons={','.join(decision.blocking_reasons) or 'none'}"
+    )
+    if decision.ready_for_publication:
+        return _pass("health", detail)
+    if decision.ready_for_dashboard:
+        return _pass("health", detail, degraded=True)
     if allow_degraded:
         return _pass("health", f"{detail} degraded_allowed=true", degraded=True)
-    return _pass("health", detail) if ok else _fail("health", detail)
+    return _fail("health", detail)
 
 
 def _check_strategy_daily_eod(service: str, trade_date: str) -> dict[str, Any]:

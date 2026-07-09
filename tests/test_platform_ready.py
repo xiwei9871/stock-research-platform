@@ -251,7 +251,7 @@ def test_platform_ready_check_accepts_external_data_quality_gap_under_one_percen
     assert result["status"] == "degraded_ready"
     assert all(item["status"] == "pass" for item in result["checks"])
     degraded = {item["name"] for item in result["checks"] if item.get("degraded")}
-    assert degraded == {"daily_bar", "minute5"}
+    assert degraded == {"daily_bar", "minute5", "health"}
 
 
 def test_render_ready_message_is_mobile_sized():

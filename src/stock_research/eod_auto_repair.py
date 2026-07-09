@@ -797,7 +797,7 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         repair_generated_reports,
         repair_lhb_source_and_features,
         repair_market_monitor,
-        repair_minute5_bars,
+        repair_minute5_raw_bars,
         repair_review_evidence_snapshots,
         repair_score_topn,
         repair_strategy_publish,
@@ -808,7 +808,6 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
     from stock_research.data_run_manifest import upsert_data_run_manifest
     from stock_research.free_enrichment_data import run_free_enrichment_backfill
     from stock_research.lhb_data import run_lhb_event_features_build
-    from stock_research.minute_backfill import run_baostock_minute_backfill
     from stock_research.review_evidence_snapshots import run_eod_review_evidence_snapshots
     from stock_research.reports.daily_research_report_cli import run_daily_research_report
     from stock_research.strategy_eod_publish import (
@@ -865,15 +864,35 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
         )
 
     def minute_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:
-        return repair_minute5_bars(
+        from stock_research.daily_close_pipeline import (
+            PipelineConfig,
+            derive_qfq_minute5_from_daily_factor,
+            fetch_baostock_minute5_rows,
+            inspect_minute5_quality_from_db,
+            load_latest_minute5_missing_symbols,
+            load_minute5_expected_ts_codes,
+            upsert_minute5_bars,
+            upsert_quality,
+        )
+
+        config = PipelineConfig()
+
+        def quality_refresher(service: str, target_date: date) -> dict[str, object]:
+            expected_ts_codes = load_minute5_expected_ts_codes(service, target_date)
+            quality = inspect_minute5_quality_from_db(service, expected_ts_codes, target_date)
+            upsert_quality(service=service, trade_date=target_date, dataset_name="minute5_bar", **quality)
+            return quality
+
+        return repair_minute5_raw_bars(
             trade_date,
-            workers=1,
-            runner=run_baostock_minute_backfill,
-            progress=_make_action_progress(
-                output_dir,
-                trade_date=trade_date,
-                component="minute5_bars",
-            ),
+            service=config.service,
+            missing_symbols_loader=lambda value: load_latest_minute5_missing_symbols(config.service, date.fromisoformat(value)),
+            raw_fetcher=fetch_baostock_minute5_rows,
+            upserter=upsert_minute5_bars,
+            qfq_deriver=derive_qfq_minute5_from_daily_factor,
+            quality_refresher=quality_refresher,
+            timeout_seconds=config.request_timeout_seconds,
+            symbol_sleep_seconds=config.minute5_symbol_sleep_seconds,
         )
 
     def technical_features_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:

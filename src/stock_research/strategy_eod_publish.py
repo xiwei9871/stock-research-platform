@@ -366,19 +366,29 @@ def load_strategy_score_audit_summary(
             raise FileNotFoundError(f"strategy score audit summary not found: {summary_path}")
         score_audit.setdefault("trade_date", trade_date)
         score_audit.pop("summary_path", None)
-        detail_path = _optional_path(score_audit.get("detail_path"))
-        if detail_path is None or not detail_path.exists() or not _path_belongs_to_dir(detail_path, output_dir):
+        detail_path = _relocated_output_file(
+            score_audit.get("detail_path"),
+            fallback=output_dir / "strategy_score_audit_detail.csv",
+            expected_dir=output_dir,
+        )
+        if detail_path is None:
             score_audit.pop("detail_path", None)
+        else:
+            score_audit["detail_path"] = str(detail_path)
         return score_audit
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     summary.setdefault("trade_date", trade_date)
     summary.setdefault("summary_path", str(summary_path))
     if summary.get("status") != "failed":
-        detail_path = output_dir / "strategy_score_audit_detail.csv"
-        if detail_path.exists():
-            summary.setdefault("detail_path", str(detail_path))
-        else:
+        detail_path = _relocated_output_file(
+            summary.get("detail_path"),
+            fallback=output_dir / "strategy_score_audit_detail.csv",
+            expected_dir=output_dir,
+        )
+        if detail_path is None:
             summary.pop("detail_path", None)
+        else:
+            summary["detail_path"] = str(detail_path)
     return summary
 
 
@@ -392,6 +402,15 @@ def _path_belongs_to_dir(path: Path, directory: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _relocated_output_file(value: Any, *, fallback: Path, expected_dir: Path) -> Path | None:
+    path = _optional_path(value)
+    if path is not None and path.exists() and _path_belongs_to_dir(path, expected_dir):
+        return path
+    if fallback.exists():
+        return fallback
+    return None
 
 
 def _latest_market_date() -> str:

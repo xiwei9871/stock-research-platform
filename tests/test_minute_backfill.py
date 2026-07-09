@@ -755,6 +755,52 @@ def test_run_backfill_range_reports_each_completed_month(monkeypatch):
     assert reports[1]["month"] == "2024-02"
 
 
+def test_run_minute_backfill_cli_passes_progress_renderer_and_keeps_summary(monkeypatch, capsys):
+    from stock_research import cli
+
+    captured = {}
+
+    def fake_run_baostock_minute_backfill(**kwargs):
+        captured.update(kwargs)
+        kwargs["progress"](
+            {
+                "event": "minute_backfill_progress",
+                "completed_jobs": 1,
+                "total_jobs": 2,
+                "success_jobs": 1,
+                "failed_jobs": 0,
+                "rows": 48,
+            }
+        )
+        return {"attempted": 1, "success": 1, "failed": 0, "rows": 48}
+
+    monkeypatch.setattr(cli, "run_baostock_minute_backfill", fake_run_baostock_minute_backfill)
+
+    cli.main_for_args(
+        [
+            "run-baostock-minute-backfill",
+            "--start-date",
+            "2024-01-01",
+            "--end-date",
+            "2024-01-31",
+            "--freq",
+            "5min",
+            "--adjust-types",
+            "raw",
+            "--max-jobs",
+            "2",
+            "--progress-interval",
+            "1",
+        ]
+    )
+
+    output = capsys.readouterr()
+    assert callable(captured["progress"])
+    assert captured["progress_interval"] == 1
+    assert "minute_backfill_run|rows|48" in output.out
+    assert "progress|minute5_backfill|event|minute_backfill_progress|completed|1|total|2" in output.err
+
+
 def test_validate_minute_bar_rows_finds_duplicate_ohlc_mismatch_and_date_errors():
     rows = [
         {

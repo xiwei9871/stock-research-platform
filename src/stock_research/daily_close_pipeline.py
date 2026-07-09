@@ -142,6 +142,7 @@ class PipelineConfig:
     daily_adjust_types: tuple[str, ...] = DAILY_ADJUST_TYPES
     minute5_lookback_days: int = 5
     minute5_min_coverage_ratio: float = 0.98
+    minute5_symbol_sleep_seconds: float = 0.75
     external_data_max_quality_gap_ratio: float = DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO
     minute5_source_timeout_seconds: int = 2400
     daily_start_time: str = "17:00"
@@ -172,6 +173,9 @@ class PipelineConfig:
             minute5_lookback_days=int(os.getenv("MINUTE5_LOOKBACK_DAYS", "5")),
             minute5_min_coverage_ratio=float(
                 os.getenv("MINUTE5_MIN_COVERAGE_RATIO", "0.98")
+            ),
+            minute5_symbol_sleep_seconds=float(
+                os.getenv("MINUTE5_SYMBOL_SLEEP_SECONDS", "0.75")
             ),
             external_data_max_quality_gap_ratio=float(
                 os.getenv("EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO", str(DEFAULT_EXTERNAL_DATA_MAX_QUALITY_GAP_RATIO))
@@ -536,9 +540,9 @@ def split_minute5_sources(ts_codes: list[str]) -> dict[str, list[str]]:
 
 def minute5_success_sources(ts_code: str) -> tuple[str, ...]:
     if ts_code.endswith(".SH"):
-        return ("baostock_sh", "akshare")
+        return ("baostock_sh",)
     if ts_code.endswith(".SZ"):
-        return ("baostock_sz", "baostock")
+        return ("baostock_sz",)
     return ()
 
 
@@ -1274,6 +1278,7 @@ def run_daily_stage(
     tushare_adjusted_fetcher: Callable[..., list[dict[str, Any]]] = fetch_tushare_adjusted_daily_rows,
     akshare_fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_daily_rows,
     daily_upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_daily_bars,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     skip, calendar_status = should_skip_for_holiday(
         config.service, trade_date, force=config.force_non_trading_day
@@ -1299,6 +1304,23 @@ def run_daily_stage(
         started_at=started,
     )
     expected_ts_codes = ts_codes or load_active_ts_codes(config.service, trade_date)
+    progress_total = 5
+
+    def emit_progress(event: str, completed: int, *, rows: int = 0, success: int = 0, failed: int = 0) -> None:
+        if progress is None:
+            return
+        progress(
+            {
+                "event": event,
+                "completed": completed,
+                "total": progress_total,
+                "rows": rows,
+                "success": success,
+                "failed": failed,
+            }
+        )
+
+    emit_progress("daily_started", 0)
     logger.info("daily stage started source=tushare expected=%s", len(expected_ts_codes))
     tushare_rows, tushare_attempts, tushare_error = retry_call(
         lambda: tushare_fetcher(
@@ -1310,6 +1332,7 @@ def run_daily_stage(
         max_retries=config.max_retries,
     )
     normalized_tushare = normalize_daily_rows(tushare_rows, "tushare")
+    emit_progress("daily_tushare_raw_completed", 1, rows=len(normalized_tushare))
     expected_keys = {
         (ts_code, adjust_type)
         for ts_code in expected_ts_codes
@@ -1343,6 +1366,11 @@ def run_daily_stage(
     normalized_derived = normalize_daily_rows(
         derived_rows, "derived:tushare_raw_latest_factor"
     )
+    emit_progress(
+        "daily_derived_adjusted_completed",
+        2,
+        rows=len(normalized_tushare) + len(normalized_derived),
+    )
     tushare_keys = {
         (row["ts_code"], row.get("adjust_type") or "raw")
         for row in [*normalized_tushare, *normalized_derived]
@@ -1375,6 +1403,11 @@ def run_daily_stage(
             max_retries=config.max_retries,
         )
     normalized_tushare_adjusted = normalize_daily_rows(tushare_adjusted_rows, "tushare")
+    emit_progress(
+        "daily_tushare_adjusted_completed",
+        3,
+        rows=len(normalized_tushare) + len(normalized_derived) + len(normalized_tushare_adjusted),
+    )
     tushare_keys = {
         (row["ts_code"], row.get("adjust_type") or "raw")
         for row in [*normalized_tushare, *normalized_derived, *normalized_tushare_adjusted]
@@ -1390,6 +1423,7 @@ def run_daily_stage(
     }
     final_rows = list(final_rows_by_key.values())
     rows_upserted = daily_upserter(config.service, final_rows)
+    emit_progress("daily_upsert_completed", 4, rows=rows_upserted)
     quality = inspect_daily_quality(
         final_rows, expected_ts_codes, trade_date, config.daily_adjust_types
     )
@@ -1422,6 +1456,13 @@ def run_daily_stage(
         len(quality["missing_symbols"]),
         len(quality["abnormal_symbols"]),
     )
+    emit_progress(
+        "daily_completed",
+        5,
+        rows=rows_upserted,
+        success=quality["actual_count"],
+        failed=len(quality["missing_symbols"]) + len(quality["abnormal_symbols"]),
+    )
     return {"stage": "daily", "status": status, "rows": rows_upserted, "quality": quality}
 
 
@@ -1430,10 +1471,10 @@ def run_minute5_stage(
     *,
     config: PipelineConfig,
     ts_codes: list[str] | None = None,
-    fetcher: Callable[..., list[dict[str, Any]]] = fetch_akshare_minute5_rows,
     baostock_fetcher: Callable[..., list[dict[str, Any]]] = fetch_baostock_minute5_rows,
     upserter: Callable[[str, list[dict[str, Any]]], int] = upsert_minute5_bars,
     qfq_deriver: Callable[[str, date], dict[str, int]] | None = None,
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     skip, calendar_status = should_skip_for_holiday(
         config.service, trade_date, force=config.force_non_trading_day
@@ -1459,6 +1500,25 @@ def run_minute5_stage(
         source: {} for source in MINUTE5_SOURCES
     }
     source_fetchers = {source: baostock_fetcher for source in MINUTE5_SOURCES}
+    total_symbols = sum(len(codes) for codes in source_codes.values())
+
+    def emit_progress(event: str, completed: int, *, rows: int = 0) -> None:
+        if progress is None:
+            return
+        success = sum(len(source_rows_by_symbol[source]) for source in MINUTE5_SOURCES)
+        failed = sum(len(failures_by_source[source]) for source in MINUTE5_SOURCES)
+        progress(
+            {
+                "event": event,
+                "completed": completed,
+                "total": total_symbols,
+                "rows": rows,
+                "success": success,
+                "failed": failed,
+            }
+        )
+
+    emit_progress("minute5_started", 0)
 
     for source in MINUTE5_SOURCES:
         upsert_job(
@@ -1515,6 +1575,8 @@ def run_minute5_stage(
                 source_rows_by_symbol[source_name][ts_code] = rows
                 rows_by_symbol.setdefault(ts_code, []).extend(rows)
                 success_count += 1
+            if config.minute5_symbol_sleep_seconds > 0:
+                time.sleep(config.minute5_symbol_sleep_seconds)
             completed_count = len(attempts_by_source[source_name])
             if completed_count % 50 == 0:
                 progress_line = (
@@ -1523,6 +1585,10 @@ def run_minute5_stage(
                 )
                 print(progress_line, flush=True)
                 logger.info(progress_line)
+            completed_total = sum(len(attempts_by_source[item]) for item in MINUTE5_SOURCES)
+            if completed_total and (completed_total % 50 == 0 or completed_total == total_symbols):
+                fetched_rows = sum(len(rows) for rows in rows_by_symbol.values())
+                emit_progress("minute5_progress", completed_total, rows=fetched_rows)
 
     for source in MINUTE5_SOURCES:
         _run_source(source, source_codes[source])
@@ -1534,6 +1600,7 @@ def run_minute5_stage(
         "raw_rows": 0,
         "inserted_rows": 0,
     }
+    emit_progress("minute5_completed", total_symbols, rows=rows_upserted)
     quality = inspect_minute5_quality(rows_by_symbol, expected_ts_codes, trade_date)
     upsert_quality(service=config.service, trade_date=trade_date, dataset_name="minute5_bar", **quality)
 
@@ -2302,12 +2369,18 @@ def resolve_strategy_trade_date(
     return latest.isoformat()
 
 
-def run_pipeline_stage(stage: str, trade_date: date, config: PipelineConfig) -> dict[str, Any]:
+def run_pipeline_stage(
+    stage: str,
+    trade_date: date,
+    config: PipelineConfig,
+    *,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     apply_daily_close_pipeline_schema(config.service)
     if stage == "daily":
-        return run_daily_stage(trade_date, config=config)
+        return run_daily_stage(trade_date, config=config, progress=progress)
     if stage == "minute5":
-        return run_minute5_stage(trade_date, config=config)
+        return run_minute5_stage(trade_date, config=config, progress=progress)
     if stage == "deps":
         return run_deps_stage(trade_date, config=config)
     if stage == "market_monitor":
@@ -2320,14 +2393,37 @@ def run_pipeline_stage(stage: str, trade_date: date, config: PipelineConfig) -> 
         return load_data_status_for_dashboard(config.service, trade_date)
     if stage == "all":
         results = {
-            "daily": run_daily_stage(trade_date, config=config),
-            "minute5": run_minute5_stage(trade_date, config=config),
+            "daily": run_daily_stage(trade_date, config=config, progress=progress),
+            "minute5": run_minute5_stage(trade_date, config=config, progress=progress),
             "market_monitor": run_market_monitor_stage(trade_date, config=config),
             "deps": run_deps_stage(trade_date, config=config),
         }
         results["health"] = finalize_pipeline_status(trade_date, config=config)
         return results
     raise ValueError(f"unsupported stage: {stage}")
+
+
+def compact_cron_result(result: Any) -> Any:
+    if isinstance(result, dict):
+        compact: dict[str, Any] = {}
+        for key, value in result.items():
+            if key == "missing_symbols":
+                compact["missing_count"] = len(value or [])
+                continue
+            if key == "abnormal_symbols":
+                compact["abnormal_count"] = len(value or [])
+                continue
+            if key == "failed_symbols":
+                compact["failed_count"] = len(value or [])
+                continue
+            if key.endswith("_symbols") and isinstance(value, list):
+                compact[f"{key[:-8]}_count"] = len(value)
+                continue
+            compact[key] = compact_cron_result(value)
+        return compact
+    if isinstance(result, list):
+        return [compact_cron_result(item) for item in result]
+    return result
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -2357,13 +2453,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from stock_research.cli_progress import ProgressRenderer
+
     args = build_arg_parser().parse_args(argv)
     config = PipelineConfig.from_env()
     if args.force:
         config = PipelineConfig(**{**config.__dict__, "force_non_trading_day": True})
     trade_date = parse_trade_date(args.date, config.timezone)
-    result = run_pipeline_stage(args.stage, trade_date, config)
+    result = run_pipeline_stage(
+        args.stage,
+        trade_date,
+        config,
+        progress=_daily_pipeline_progress_renderer(args.stage, ProgressRenderer),
+    )
+    if os.getenv("DAILY_PIPELINE_CRON_OUTPUT") == "compact":
+        result = compact_cron_result(result)
     print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
+
+
+def _daily_pipeline_progress_renderer(stage: str, renderer_factory: Callable[..., Any]) -> Callable[[dict[str, Any]], None] | None:
+    if stage == "daily":
+        return renderer_factory("daily_bar")
+    if stage == "minute5":
+        return renderer_factory("minute5_bar")
+    if stage == "all":
+        return renderer_factory("daily_close_pipeline")
+    return None
 
 
 if __name__ == "__main__":

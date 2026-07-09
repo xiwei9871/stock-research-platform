@@ -116,6 +116,10 @@ def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
     assert "--action-timeout-seconds" in (root / "python.log").read_text()
     assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in (root / "curl.log").read_text()
     assert "eod_auto_repair|dashboard_cache_clear|success" in log_text
+    assert "EOD自动修复完成" in result.stdout
+    assert "交易日: 2026-07-02" in result.stdout
+    assert "详细日志:" in result.stdout
+    assert "eod_auto_repair|" not in result.stdout
 
 
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
@@ -159,6 +163,10 @@ def test_eod_auto_repair_cron_ignores_stale_lock_file_and_preserves_exit_code(tm
     result = _run_cron(env, trade_date)
 
     assert result.returncode == 7
+    assert "EOD自动修复失败" in result.stdout
+    assert "交易日: 2026-07-02" in result.stdout
+    assert "退出码: 7" in result.stdout
+    assert "详细日志:" in result.stdout
     assert not lock_file.exists()
     assert "-m stock_research.eod_auto_repair" in (root / "python.log").read_text()
     assert "--mode loop" in (root / "python.log").read_text()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
+import inspect
 import os
 import sys
 import types
@@ -59,6 +60,46 @@ def test_load_data_status_for_dashboard_includes_market_monitor_status(monkeypat
     result = dcp.load_data_status_for_dashboard("test", date(2026, 6, 26))
 
     assert result["market_monitor_status"] == "success"
+
+
+def test_compact_cron_result_summarizes_minute5_missing_symbols():
+    result = {
+        "stage": "minute5",
+        "status": "failed",
+        "rows": 189072,
+        "qfq_rows": 189072,
+        "failed_symbols": ["600168.SH", "600169.SH"],
+        "source_symbols": {"baostock_sh": 2302, "baostock_sz": 2889},
+        "quality": {
+            "status": "warning",
+            "expected_count": 5191,
+            "actual_count": 3939,
+            "missing_symbols": ["600000.SH", "600004.SH", "000001.SZ"],
+            "abnormal_symbols": [],
+            "check_summary": "minute5 covered=3939 missing=1252 abnormal=0",
+        },
+    }
+
+    compact = dcp.compact_cron_result(result)
+
+    assert compact == {
+        "stage": "minute5",
+        "status": "failed",
+        "rows": 189072,
+        "qfq_rows": 189072,
+        "source_symbols": {"baostock_sh": 2302, "baostock_sz": 2889},
+        "quality": {
+            "status": "warning",
+            "expected_count": 5191,
+            "actual_count": 3939,
+            "missing_count": 3,
+            "abnormal_count": 0,
+            "check_summary": "minute5 covered=3939 missing=1252 abnormal=0",
+        },
+        "failed_count": 2,
+    }
+    assert "600000.SH" not in str(compact)
+    assert "600168.SH" not in str(compact)
 
 
 def test_market_emotion_schema_adds_missing_columns(monkeypatch):
@@ -222,6 +263,94 @@ def test_daily_stage_does_not_fallback_to_akshare_for_remaining_adjusted_gaps(mo
         "600000.SH:qfq",
         "600000.SH:raw",
     ]
+
+
+def test_daily_stage_emits_progress_events(monkeypatch):
+    _no_db(monkeypatch)
+    trade_date = date(2026, 6, 5)
+    events = []
+    config = dcp.PipelineConfig(
+        service="test",
+        tushare_token="token",
+        max_retries=1,
+        force_non_trading_day=True,
+    )
+
+    def fake_tushare_fetcher(trade_date, token, timeout_seconds, ts_codes=None):
+        return [
+            {
+                "ts_code": "000001.SZ",
+                "trade_date": trade_date,
+                "adjust_type": "raw",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10.5,
+            }
+        ]
+
+    result = dcp.run_daily_stage(
+        trade_date,
+        config=config,
+        ts_codes=["000001.SZ"],
+        tushare_fetcher=fake_tushare_fetcher,
+        derived_adjusted_fetcher=lambda *args, **kwargs: [],
+        tushare_adjusted_fetcher=lambda *args, **kwargs: [],
+        daily_upserter=lambda _service, rows: len(rows),
+        progress=events.append,
+    )
+
+    assert result["stage"] == "daily"
+    assert [event["event"] for event in events] == [
+        "daily_started",
+        "daily_tushare_raw_completed",
+        "daily_derived_adjusted_completed",
+        "daily_tushare_adjusted_completed",
+        "daily_upsert_completed",
+        "daily_completed",
+    ]
+    assert events[0] == {
+        "event": "daily_started",
+        "completed": 0,
+        "total": 5,
+        "rows": 0,
+        "success": 0,
+        "failed": 0,
+    }
+    assert events[-1]["completed"] == 5
+    assert events[-1]["total"] == 5
+    assert events[-1]["rows"] == 1
+    assert events[-1]["failed"] == 2
+
+
+def test_daily_pipeline_module_main_wires_daily_progress_renderer(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run_pipeline_stage(stage, trade_date, config, **kwargs):
+        captured["stage"] = stage
+        captured["trade_date"] = trade_date
+        captured["kwargs"] = kwargs
+        kwargs["progress"](
+            {
+                "event": "daily_tushare_raw_completed",
+                "completed": 1,
+                "total": 5,
+                "rows": 5191,
+                "success": 0,
+                "failed": 0,
+            }
+        )
+        return {"stage": stage, "status": "success", "rows": 5191}
+
+    monkeypatch.setattr(dcp, "run_pipeline_stage", fake_run_pipeline_stage)
+
+    dcp.main(["--date", "2026-07-06", "--stage", "daily", "--force"])
+
+    output = capsys.readouterr()
+    assert captured["stage"] == "daily"
+    assert callable(captured["kwargs"]["progress"])
+    assert '"stage": "daily"' in output.out
+    assert "progress|daily_bar|event|daily_tushare_raw_completed|completed|1|total|5" in output.err
 
 
 def test_derive_adjusted_daily_rows_uses_latest_local_factors(monkeypatch):
@@ -474,6 +603,18 @@ def test_split_minute5_sources_routes_sh_and_sz_to_separate_baostock_workers_and
         "baostock_sh": ["600000.SH"],
         "baostock_sz": ["000001.SZ"],
     }
+
+
+def test_minute5_success_sources_use_current_baostock_source_names():
+    assert dcp.minute5_success_sources("600000.SH") == ("baostock_sh",)
+    assert dcp.minute5_success_sources("000001.SZ") == ("baostock_sz",)
+    assert dcp.minute5_success_sources("920000.BJ") == ()
+
+
+def test_run_minute5_stage_signature_has_no_akshare_fetcher_parameter():
+    signature = inspect.signature(dcp.run_minute5_stage)
+
+    assert "fetcher" not in signature.parameters
 
 
 def test_load_minute5_expected_ts_codes_uses_daily_raw_traded_universe(monkeypatch):
@@ -814,6 +955,126 @@ def test_minute5_stage_prints_progress_every_50_completed_symbols(monkeypatch, c
     output = capsys.readouterr().out
     assert result["status"] == "success"
     assert "minute5|progress|source=baostock_sh|completed=50|total=51|success=50|failed=0" in output
+
+
+def test_minute5_stage_emits_aggregated_progress_events(monkeypatch):
+    _no_db(monkeypatch)
+    monkeypatch.setattr(dcp.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+    events = []
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(service="test", max_retries=1, force_non_trading_day=True),
+        ts_codes=["600000.SH", "000001.SZ"],
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+        progress=events.append,
+    )
+
+    assert result["status"] == "success"
+    assert [event["event"] for event in events] == [
+        "minute5_started",
+        "minute5_progress",
+        "minute5_completed",
+    ]
+    assert events[0]["completed"] == 0
+    assert events[0]["total"] == 2
+    assert events[1]["completed"] == 2
+    assert events[1]["success"] == 2
+    assert events[-1]["rows"] == 2
+
+
+def test_daily_pipeline_module_main_wires_minute5_progress_renderer(monkeypatch, capsys):
+    captured = {}
+
+    def fake_run_pipeline_stage(stage, trade_date, config, **kwargs):
+        captured["stage"] = stage
+        captured["kwargs"] = kwargs
+        kwargs["progress"](
+            {
+                "event": "minute5_progress",
+                "completed": 50,
+                "total": 100,
+                "rows": 2400,
+                "success": 50,
+                "failed": 0,
+            }
+        )
+        return {"stage": stage, "status": "success", "rows": 2400}
+
+    monkeypatch.setattr(dcp, "run_pipeline_stage", fake_run_pipeline_stage)
+
+    dcp.main(["--date", "2026-07-06", "--stage", "minute5", "--force"])
+
+    output = capsys.readouterr()
+    assert captured["stage"] == "minute5"
+    assert callable(captured["kwargs"]["progress"])
+    assert '"stage": "minute5"' in output.out
+    assert "progress|minute5_bar|event|minute5_progress|completed|50|total|100" in output.err
+
+
+def test_minute5_stage_sleeps_between_baostock_symbols(monkeypatch):
+    _no_db(monkeypatch)
+    sleeps = []
+    monkeypatch.setattr(dcp.time, "sleep", sleeps.append)
+    monkeypatch.setattr(dcp, "upsert_job", lambda **_kwargs: None)
+    monkeypatch.setattr(dcp, "record_failed_symbol", lambda **_kwargs: None)
+
+    def fake_baostock(ts_code, start_date, end_date, timeout_seconds):
+        return [
+            {
+                "asset_id": f"asset:{ts_code}",
+                "ts_code": ts_code,
+                "trade_time": datetime(2026, 6, 5, 9, 35),
+                "trade_date": date(2026, 6, 5),
+                "freq": "5min",
+                "adjust_type": "raw",
+                "open": 1,
+                "high": 1,
+                "low": 1,
+                "close": 1,
+                "volume": 1,
+                "amount": 1,
+                "source": "baostock",
+            }
+        ]
+
+    result = dcp.run_minute5_stage(
+        date(2026, 6, 5),
+        config=dcp.PipelineConfig(
+            service="test",
+            max_retries=1,
+            force_non_trading_day=True,
+            minute5_symbol_sleep_seconds=0.75,
+        ),
+        ts_codes=["600000.SH", "000001.SZ"],
+        baostock_fetcher=fake_baostock,
+        upserter=lambda _service, rows: len(rows),
+    )
+
+    assert result["status"] == "success"
+    assert sleeps == [0.75, 0.75]
 
 
 def test_derive_qfq_minute5_from_daily_factor_uses_daily_raw_qfq_ratio_for_all_raw_sources(monkeypatch):

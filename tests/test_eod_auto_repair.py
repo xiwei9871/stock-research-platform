@@ -9,6 +9,7 @@ import stock_research.strategy_eod_publish as strategy_eod_publish
 import stock_research.watchlist.workflow as watchlist_workflow
 from stock_research.data_run_manifest import build_manifest_entry
 import stock_research.eod_auto_repair as eod_auto_repair
+import stock_research.eod_auto_repair_actions as eod_auto_repair_actions
 from stock_research.eod_auto_repair import build_default_action_registry, run_eod_auto_repair
 from stock_research.eod_auto_repair_models import RepairActionResult, RepairCheckResult, RepairRunSummary, RepairStatus
 
@@ -782,6 +783,34 @@ def test_default_action_registry_contains_repairable_checks():
     assert "ops_health" in registry
     assert "reports" in registry
     assert "review_evidence_snapshots" in registry
+
+
+def test_default_minute5_action_uses_direct_raw_repair(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_repair_minute5_raw_bars(trade_date, **kwargs):
+        captured["trade_date"] = trade_date
+        captured["kwargs"] = kwargs
+        return RepairActionResult(
+            "repair_minute5_raw_bars",
+            RepairStatus.SUCCESS,
+            metrics={"attempted": 1, "rows": 48, "qfq_rows": 48},
+        )
+
+    monkeypatch.setattr(eod_auto_repair_actions, "repair_minute5_raw_bars", fake_repair_minute5_raw_bars)
+
+    registry = build_default_action_registry(output_root="outputs")
+    result = registry["minute5_bars"]("2026-07-06", tmp_path)
+
+    assert result.name == "repair_minute5_raw_bars"
+    assert captured["trade_date"] == "2026-07-06"
+    assert captured["kwargs"]["service"] != ""
+    assert callable(captured["kwargs"]["missing_symbols_loader"])
+    assert callable(captured["kwargs"]["raw_fetcher"])
+    assert callable(captured["kwargs"]["upserter"])
+    assert callable(captured["kwargs"]["qfq_deriver"])
+    assert callable(captured["kwargs"]["quality_refresher"])
+    assert captured["kwargs"]["symbol_sleep_seconds"] == 0.75
 
 
 def test_default_market_monitor_action_runs_source_stage_before_dashboard(monkeypatch, tmp_path):
