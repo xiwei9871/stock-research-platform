@@ -42,7 +42,7 @@ def build_asset_profile(
         fundamentals = load_asset_profile_fundamentals(
             conn,
             canonical_asset_id,
-            end_date,
+            trade_date,
             fetch_all_fn=fetch_all,
         )
 

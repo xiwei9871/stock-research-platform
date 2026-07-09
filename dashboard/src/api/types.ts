@@ -151,7 +151,11 @@ export type CompanyProfile = {
 export type CompanyOverview = {
   industry: string | null;
   concept_tags: string[];
+  business_summary: string | null;
+  profile_summary: string | null;
   primary_products: string[];
+  data_status: 'available' | 'partial' | 'missing' | string;
+  missing_fields: string[];
 };
 
 export type BusinessCompositionItem = {
@@ -171,6 +175,8 @@ export type BusinessCompositionGroup = {
 export type BusinessCompositionSnapshot = {
   report_period: string | null;
   groups: BusinessCompositionGroup[];
+  data_status: 'available' | 'partial' | 'missing' | string;
+  missing_fields: string[];
 };
 
 export type FinancialSnapshot = {
@@ -180,6 +186,11 @@ export type FinancialSnapshot = {
   np_parent_ttm: number | null;
   operating_cash_flow: number | null;
   roe: number | null;
+  gross_margin: number | null;
+  debt_ratio: number | null;
+  ocf_to_np: number | null;
+  data_status: 'available' | 'partial' | 'missing' | string;
+  missing_fields: string[];
 };
 
 export type ValuationSnapshot = {

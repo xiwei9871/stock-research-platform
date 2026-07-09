@@ -15,12 +15,13 @@ def load_asset_profile_fundamentals(
     fetch_all_fn: FetchAll = fetch_all,
 ) -> dict[str, Any]:
     business_rows = _load_business_rows(conn, asset_id, fetch_all_fn=fetch_all_fn)
+    company_overview = _build_company_overview(
+        industry=_load_industry(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
+        concept_tags=_load_concept_tags(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
+        primary_products=_primary_products(business_rows),
+    )
     return {
-        "company_overview": {
-            "industry": _load_industry(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
-            "concept_tags": _load_concept_tags(conn, asset_id, trade_date, fetch_all_fn=fetch_all_fn),
-            "primary_products": _primary_products(business_rows),
-        },
+        "company_overview": company_overview,
         "business_composition": _build_business_composition(business_rows),
         "financial_snapshot": _load_financial_snapshot(
             conn,
@@ -119,12 +120,37 @@ def _load_business_rows(
 def _primary_products(rows: list[dict[str, Any]]) -> list[str]:
     products: list[str] = []
     for row in rows:
-        if str(row.get("classify_type") or "").strip() != "产品":
+        if str(row.get("classify_type") or "").strip() not in {"产品", "按产品"}:
             continue
         value = str(row.get("item_name") or "").strip()
         if value and value not in products:
             products.append(value)
     return products
+
+
+def _build_company_overview(
+    *,
+    industry: str | None,
+    concept_tags: list[str],
+    primary_products: list[str],
+) -> dict[str, Any]:
+    overview = {
+        "industry": industry,
+        "concept_tags": concept_tags,
+        "business_summary": None,
+        "profile_summary": None,
+        "primary_products": primary_products,
+    }
+    missing_fields = [
+        field_name
+        for field_name, value in overview.items()
+        if value is None and field_name in {"business_summary", "profile_summary"}
+    ]
+    return {
+        **overview,
+        "data_status": "available" if not missing_fields else "partial",
+        "missing_fields": missing_fields,
+    }
 
 
 def _build_business_composition(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -148,7 +174,17 @@ def _build_business_composition(rows: list[dict[str, Any]]) -> dict[str, Any]:
         by_type.setdefault(classify_type, []).append(item)
     for classify_type, items in by_type.items():
         groups.append({"classify_type": classify_type, "items": items})
-    return {"report_period": report_period, "groups": groups}
+    missing_fields: list[str] = []
+    if report_period is None:
+        missing_fields.append("report_period")
+    if not groups:
+        missing_fields.append("groups")
+    return {
+        "report_period": report_period,
+        "groups": groups,
+        "data_status": "available" if not missing_fields else ("missing" if len(missing_fields) == 2 else "partial"),
+        "missing_fields": missing_fields,
+    }
 
 
 def _load_financial_snapshot(
@@ -190,6 +226,35 @@ def _load_financial_snapshot(
         "np_parent_ttm": _to_float(income_ttm.get("np_parent_ttm")),
         "operating_cash_flow": _to_float((latest_cash_flow or {}).get("net_operate_cash_flow")),
         "roe": _to_float((latest_indicator or {}).get("roe")),
+        "gross_margin": _to_float((latest_indicator or {}).get("gross_margin")),
+        "debt_ratio": _to_float((latest_indicator or {}).get("debt_ratio")),
+        "ocf_to_np": _to_float((latest_indicator or {}).get("ocf_to_np")),
+        "data_status": "available",
+        "missing_fields": [],
+    } | _financial_snapshot_status(
+        report_period=_to_date_text((latest_income or {}).get("report_period")),
+        announcement_date=_to_date_text((latest_income or {}).get("announcement_date")),
+        revenue_ttm=_to_float(income_ttm.get("revenue_ttm")),
+        np_parent_ttm=_to_float(income_ttm.get("np_parent_ttm")),
+        operating_cash_flow=_to_float((latest_cash_flow or {}).get("net_operate_cash_flow")),
+        roe=_to_float((latest_indicator or {}).get("roe")),
+        gross_margin=_to_float((latest_indicator or {}).get("gross_margin")),
+        debt_ratio=_to_float((latest_indicator or {}).get("debt_ratio")),
+        ocf_to_np=_to_float((latest_indicator or {}).get("ocf_to_np")),
+    )
+
+
+def _financial_snapshot_status(**snapshot: Any) -> dict[str, Any]:
+    missing_fields = [field_name for field_name, value in snapshot.items() if value is None]
+    if not missing_fields:
+        status = "available"
+    elif len(missing_fields) == len(snapshot):
+        status = "missing"
+    else:
+        status = "partial"
+    return {
+        "data_status": status,
+        "missing_fields": missing_fields,
     }
 
 

@@ -188,12 +188,14 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 }
             ]
         if "FROM core.industry_membership" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08", "2026-06-08"]
             return [
                 {
                     "industry_name": "银行",
                 }
             ]
         if "FROM core.concept_membership" in normalized_sql:
+            assert params == ["CN:SZ:000001", "2026-06-08", "2026-06-08"]
             return [
                 {"concept_name": "中字头"},
                 {"concept_name": "高股息"},
@@ -202,7 +204,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
             return [
                 {
                     "report_period": "2025-12-31",
-                    "classify_type": "产品",
+                    "classify_type": "按产品",
                     "item_name": "公司银行业务",
                     "revenue": 120000000000.0,
                     "revenue_ratio": 0.52,
@@ -211,7 +213,7 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                 },
                 {
                     "report_period": "2025-12-31",
-                    "classify_type": "产品",
+                    "classify_type": "按产品",
                     "item_name": "零售银行业务",
                     "revenue": 80000000000.0,
                     "revenue_ratio": 0.35,
@@ -254,6 +256,9 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                     "report_period": "2025-12-31",
                     "announcement_date": "2026-03-20",
                     "roe": 0.1234,
+                    "gross_margin": 0.418,
+                    "debt_ratio": 0.912,
+                    "ocf_to_np": 1.13,
                 }
             ]
         if "min(trade_date)" in normalized_sql:
@@ -268,20 +273,26 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         "000001.SZ",
         "2026-06-08",
         "2026-06-01",
-        "2026-06-08",
+        "2026-06-30",
         service="test",
     )
 
     assert profile["company_overview"] == {
         "industry": "银行",
         "concept_tags": ["中字头", "高股息"],
+        "business_summary": None,
+        "profile_summary": None,
         "primary_products": ["公司银行业务", "零售银行业务"],
+        "data_status": "partial",
+        "missing_fields": ["business_summary", "profile_summary"],
     }
     assert profile["business_composition"] == {
         "report_period": "2025-12-31",
+        "data_status": "available",
+        "missing_fields": [],
         "groups": [
             {
-                "classify_type": "产品",
+                "classify_type": "按产品",
                 "items": [
                     {
                         "item_name": "公司银行业务",
@@ -320,4 +331,9 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         "np_parent_ttm": 45000000000.0,
         "operating_cash_flow": 51000000000.0,
         "roe": 0.1234,
+        "gross_margin": 0.418,
+        "debt_ratio": 0.912,
+        "ocf_to_np": 1.13,
+        "data_status": "available",
+        "missing_fields": [],
     }
