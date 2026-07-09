@@ -162,8 +162,6 @@ export type BusinessCompositionItem = {
   item_name: string;
   revenue: number | null;
   revenue_ratio: number | null;
-  cost?: number | null;
-  gross_profit: number | null;
   gross_margin: number | null;
 };
 

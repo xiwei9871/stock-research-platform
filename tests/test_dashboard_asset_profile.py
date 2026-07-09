@@ -308,14 +308,12 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                         "item_name": "公司银行业务",
                         "revenue": 120000000000.0,
                         "revenue_ratio": 0.52,
-                        "gross_profit": 50000000000.0,
                         "gross_margin": 0.42,
                     },
                     {
                         "item_name": "零售银行业务",
                         "revenue": 80000000000.0,
                         "revenue_ratio": 0.35,
-                        "gross_profit": 32000000000.0,
                         "gross_margin": 0.40,
                     },
                 ],
@@ -327,7 +325,6 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
                         "item_name": "华南地区",
                         "revenue": 60000000000.0,
                         "revenue_ratio": 0.26,
-                        "gross_profit": 24000000000.0,
                         "gross_margin": 0.40,
                     }
                 ],
@@ -347,3 +344,91 @@ def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
         "data_status": "available",
         "missing_fields": [],
     }
+
+
+def test_build_asset_profile_overview_status_tracks_all_required_fields(monkeypatch):
+    monkeypatch.setattr(asset_profile, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(asset_profile, "load_daily_bars", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_detail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(asset_profile, "load_asset_score_for_dashboard", lambda *args, **kwargs: None)
+    monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_decision_history", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_outcome_history", lambda *args, **kwargs: [])
+
+    def fake_fetch_all(conn, sql, params=None):
+        normalized_sql = " ".join(sql.split())
+        if "FROM core.asset_master" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "ts_code": "000001.SZ",
+                    "symbol": "000001",
+                    "name": "平安银行",
+                    "exchange": "SZ",
+                    "board": "主板",
+                    "list_date": "1991-04-03",
+                    "is_active": True,
+                    "is_beijing": False,
+                    "is_star": False,
+                    "is_chinext": False,
+                    "region": "深圳",
+                    "source": "test",
+                }
+            ]
+        if "ORDER BY trade_date DESC LIMIT 20" in normalized_sql:
+            return [
+                {
+                    "trade_date": "2026-06-08",
+                    "open": 10.05,
+                    "high": 10.18,
+                    "low": 9.99,
+                    "close": 10.16,
+                    "preclose": 10.05,
+                    "volume": 906889.82,
+                    "amount": 915838.54912,
+                    "turnover_rate": 1.5,
+                    "pct_chg": 1.0945,
+                }
+            ]
+        if "FROM staging.eastmoney_stock_spot_snapshot" in normalized_sql:
+            return []
+        if "FROM finance.share_capital_event" in normalized_sql:
+            return []
+        if "FROM finance.main_business_composition" in normalized_sql:
+            return []
+        if "FROM core.industry_membership" in normalized_sql:
+            return []
+        if "FROM core.concept_membership" in normalized_sql:
+            return []
+        if "FROM factor.factor_daily" in normalized_sql and "factor_name IN" in normalized_sql:
+            return []
+        if "FROM finance.income_statement" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return []
+        if "FROM finance.cash_flow" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return []
+        if "FROM finance.indicator_quarter" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return []
+        if "min(trade_date)" in normalized_sql:
+            return [{"min_date": "2026-06-01", "max_date": "2026-06-08", "row_count": 1}]
+        if "max(trade_date)" in normalized_sql and "factor.factor_daily" in normalized_sql:
+            return [{"latest_factor_date": None, "factor_count": 0}]
+        return []
+
+    monkeypatch.setattr(asset_profile, "fetch_all", fake_fetch_all)
+
+    profile = asset_profile.build_asset_profile(
+        "000001.SZ",
+        "2026-06-08",
+        "2026-06-01",
+        "2026-06-30",
+        service="test",
+    )
+
+    assert profile["company_overview"]["profile_summary"] == "平安银行位于深圳，上市板为主板。"
+    assert profile["company_overview"]["data_status"] == "partial"
+    assert profile["company_overview"]["missing_fields"] == [
+        "industry",
+        "concept_tags",
+        "business_summary",
+        "primary_products",
+    ]

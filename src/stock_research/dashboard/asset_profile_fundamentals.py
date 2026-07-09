@@ -169,14 +169,17 @@ def _build_company_overview(
         "profile_summary": profile_summary,
         "primary_products": primary_products,
     }
-    missing_fields = [
-        field_name
-        for field_name, value in overview.items()
-        if value is None and field_name in {"business_summary", "profile_summary"}
+    required_fields = [
+        "industry",
+        "concept_tags",
+        "business_summary",
+        "primary_products",
+        "profile_summary",
     ]
+    missing_fields = [field_name for field_name in required_fields if _is_missing_overview_value(overview.get(field_name))]
     return {
         **overview,
-        "data_status": "available" if not missing_fields else "partial",
+        "data_status": "available" if not missing_fields else ("missing" if len(missing_fields) == len(required_fields) else "partial"),
         "missing_fields": missing_fields,
     }
 
@@ -219,12 +222,8 @@ def _build_business_composition(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "item_name": str(row.get("item_name") or "").strip(),
             "revenue": _to_float(row.get("revenue")),
             "revenue_ratio": _to_float(row.get("revenue_ratio")),
-            "gross_profit": _to_float(row.get("gross_profit")),
             "gross_margin": _to_float(row.get("gross_margin")),
         }
-        cost = _to_float(row.get("cost"))
-        if cost is not None:
-            item["cost"] = cost
         by_type.setdefault(classify_type, []).append(item)
     for classify_type, items in by_type.items():
         groups.append({"classify_type": classify_type, "items": items})
@@ -310,6 +309,16 @@ def _financial_snapshot_status(**snapshot: Any) -> dict[str, Any]:
         "data_status": status,
         "missing_fields": missing_fields,
     }
+
+
+def _is_missing_overview_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, list):
+        return len(value) == 0
+    return False
 
 
 def _to_float(value: Any) -> float | None:
