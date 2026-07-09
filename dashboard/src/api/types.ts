@@ -148,6 +148,40 @@ export type CompanyProfile = {
   source: string | null;
 };
 
+export type CompanyOverview = {
+  industry: string | null;
+  concept_tags: string[];
+  primary_products: string[];
+};
+
+export type BusinessCompositionItem = {
+  item_name: string;
+  revenue: number | null;
+  revenue_ratio: number | null;
+  cost?: number | null;
+  gross_profit: number | null;
+  gross_margin: number | null;
+};
+
+export type BusinessCompositionGroup = {
+  classify_type: string;
+  items: BusinessCompositionItem[];
+};
+
+export type BusinessCompositionSnapshot = {
+  report_period: string | null;
+  groups: BusinessCompositionGroup[];
+};
+
+export type FinancialSnapshot = {
+  report_period: string | null;
+  announcement_date: string | null;
+  revenue_ttm: number | null;
+  np_parent_ttm: number | null;
+  operating_cash_flow: number | null;
+  roe: number | null;
+};
+
 export type ValuationSnapshot = {
   total_market_cap: number | null;
   float_market_cap: number | null;
@@ -906,6 +940,9 @@ export type AssetProfile = {
   asset: AssetSummary | null;
   quote_snapshot?: AssetQuoteSnapshot | null;
   company_profile?: CompanyProfile | null;
+  company_overview?: CompanyOverview | null;
+  business_composition?: BusinessCompositionSnapshot | null;
+  financial_snapshot?: FinancialSnapshot | null;
   valuation_snapshot?: ValuationSnapshot | null;
   bars: BarPoint[];
   score: ScoreRow | null;

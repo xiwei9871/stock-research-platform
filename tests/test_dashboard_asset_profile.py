@@ -118,3 +118,206 @@ def test_build_asset_profile_includes_quote_and_company_snapshots(monkeypatch):
     assert profile["valuation_snapshot"]["volume_ratio"] == 1.24
     assert profile["valuation_snapshot"]["data_status"] == "available"
     assert profile["valuation_snapshot"]["missing_fields"] == []
+
+
+def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):
+    monkeypatch.setattr(asset_profile, "connect", lambda service: DummyConnection())
+    monkeypatch.setattr(asset_profile, "load_daily_bars", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_detail", lambda *args, **kwargs: None)
+    monkeypatch.setattr(asset_profile, "load_asset_score_for_dashboard", lambda *args, **kwargs: None)
+    monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_decision_history", lambda *args, **kwargs: [])
+    monkeypatch.setattr(asset_profile, "load_asset_outcome_history", lambda *args, **kwargs: [])
+
+    def fake_fetch_all(conn, sql, params=None):
+        normalized_sql = " ".join(sql.split())
+        if "FROM core.asset_master" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "ts_code": "000001.SZ",
+                    "symbol": "000001",
+                    "name": "平安银行",
+                    "exchange": "SZ",
+                    "board": "主板",
+                    "list_date": "1991-04-03",
+                    "is_active": True,
+                    "is_beijing": False,
+                    "is_star": False,
+                    "is_chinext": False,
+                    "region": "深圳",
+                    "source": "test",
+                }
+            ]
+        if "FROM staging.eastmoney_stock_spot_snapshot" in normalized_sql:
+            return [
+                {
+                    "trade_date": "2026-06-29",
+                    "volume_ratio": 1.24,
+                    "turnover_rate": 1.5,
+                    "total_market_cap": 198328483984.0,
+                    "float_market_cap": 198325238674.0,
+                    "pe_ttm": 3.41,
+                    "pb": 0.43,
+                }
+            ]
+        if "FROM finance.share_capital_event" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "total_share": 19405918198,
+                    "float_share": 19405600653,
+                    "event_date": "2025-12-31",
+                }
+            ]
+        if "FROM factor.factor_daily" in normalized_sql and "factor_name IN" in normalized_sql:
+            return [{"factor_name": "pb", "factor_value": 0.44}]
+        if "ORDER BY trade_date DESC LIMIT 20" in normalized_sql:
+            return [
+                {
+                    "trade_date": "2026-06-08",
+                    "open": 10.05,
+                    "high": 10.18,
+                    "low": 9.99,
+                    "close": 10.16,
+                    "preclose": 10.05,
+                    "volume": 906889.82,
+                    "amount": 915838.54912,
+                    "turnover_rate": 1.5,
+                    "pct_chg": 1.0945,
+                }
+            ]
+        if "FROM core.industry_membership" in normalized_sql:
+            return [
+                {
+                    "industry_name": "银行",
+                }
+            ]
+        if "FROM core.concept_membership" in normalized_sql:
+            return [
+                {"concept_name": "中字头"},
+                {"concept_name": "高股息"},
+            ]
+        if "FROM finance.main_business_composition" in normalized_sql:
+            return [
+                {
+                    "report_period": "2025-12-31",
+                    "classify_type": "产品",
+                    "item_name": "公司银行业务",
+                    "revenue": 120000000000.0,
+                    "revenue_ratio": 0.52,
+                    "gross_profit": 50000000000.0,
+                    "gross_margin": 0.42,
+                },
+                {
+                    "report_period": "2025-12-31",
+                    "classify_type": "产品",
+                    "item_name": "零售银行业务",
+                    "revenue": 80000000000.0,
+                    "revenue_ratio": 0.35,
+                    "gross_profit": 32000000000.0,
+                    "gross_margin": 0.40,
+                },
+                {
+                    "report_period": "2025-12-31",
+                    "classify_type": "地区",
+                    "item_name": "华南地区",
+                    "revenue": 60000000000.0,
+                    "revenue_ratio": 0.26,
+                    "gross_profit": 24000000000.0,
+                    "gross_margin": 0.40,
+                },
+            ]
+        if "FROM finance.income_statement" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "report_period": "2025-12-31",
+                    "announcement_date": "2026-03-20",
+                    "revenue": 220000000000.0,
+                    "np_parent": 45000000000.0,
+                }
+            ]
+        if "FROM finance.cash_flow" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "report_period": "2025-12-31",
+                    "announcement_date": "2026-03-20",
+                    "net_operate_cash_flow": 51000000000.0,
+                }
+            ]
+        if "FROM finance.indicator_quarter" in normalized_sql and "announcement_date <=" in normalized_sql:
+            return [
+                {
+                    "asset_id": "CN:SZ:000001",
+                    "report_period": "2025-12-31",
+                    "announcement_date": "2026-03-20",
+                    "roe": 0.1234,
+                }
+            ]
+        if "min(trade_date)" in normalized_sql:
+            return [{"min_date": "2026-06-01", "max_date": "2026-06-08", "row_count": 5}]
+        if "max(trade_date)" in normalized_sql and "factor.factor_daily" in normalized_sql:
+            return [{"latest_factor_date": None, "factor_count": 0}]
+        return []
+
+    monkeypatch.setattr(asset_profile, "fetch_all", fake_fetch_all)
+
+    profile = asset_profile.build_asset_profile(
+        "000001.SZ",
+        "2026-06-08",
+        "2026-06-01",
+        "2026-06-08",
+        service="test",
+    )
+
+    assert profile["company_overview"] == {
+        "industry": "银行",
+        "concept_tags": ["中字头", "高股息"],
+        "primary_products": ["公司银行业务", "零售银行业务"],
+    }
+    assert profile["business_composition"] == {
+        "report_period": "2025-12-31",
+        "groups": [
+            {
+                "classify_type": "产品",
+                "items": [
+                    {
+                        "item_name": "公司银行业务",
+                        "revenue": 120000000000.0,
+                        "revenue_ratio": 0.52,
+                        "gross_profit": 50000000000.0,
+                        "gross_margin": 0.42,
+                    },
+                    {
+                        "item_name": "零售银行业务",
+                        "revenue": 80000000000.0,
+                        "revenue_ratio": 0.35,
+                        "gross_profit": 32000000000.0,
+                        "gross_margin": 0.40,
+                    },
+                ],
+            },
+            {
+                "classify_type": "地区",
+                "items": [
+                    {
+                        "item_name": "华南地区",
+                        "revenue": 60000000000.0,
+                        "revenue_ratio": 0.26,
+                        "gross_profit": 24000000000.0,
+                        "gross_margin": 0.40,
+                    }
+                ],
+            },
+        ],
+    }
+    assert profile["financial_snapshot"] == {
+        "report_period": "2025-12-31",
+        "announcement_date": "2026-03-20",
+        "revenue_ttm": 220000000000.0,
+        "np_parent_ttm": 45000000000.0,
+        "operating_cash_flow": 51000000000.0,
+        "roe": 0.1234,
+    }

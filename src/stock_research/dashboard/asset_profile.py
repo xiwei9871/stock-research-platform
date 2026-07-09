@@ -4,6 +4,9 @@ from stock_research.config import SETTINGS
 from stock_research.dashboard.bars import load_daily_bars, normalize_market_asset_id
 from stock_research.dashboard.decisions import load_asset_decision_history
 from stock_research.dashboard.outcomes import load_asset_outcome_history
+from stock_research.dashboard.asset_profile_fundamentals import (
+    load_asset_profile_fundamentals,
+)
 from stock_research.dashboard.scores import (
     load_asset_detail,
     load_asset_score_for_dashboard,
@@ -24,77 +27,87 @@ def build_asset_profile(
     service: str = SETTINGS.research_service,
 ) -> dict[str, Any]:
     canonical_asset_id = normalize_market_asset_id(asset_id)
-    share_snapshot = _load_share_snapshot(canonical_asset_id, end_date, service=service)
-    spot_snapshot = _load_spot_snapshot(canonical_asset_id, asset_id, end_date, service=service)
-    factor_valuation = _load_factor_valuation(canonical_asset_id, end_date, service=service)
-    quote_snapshot = _load_quote_snapshot(
-        canonical_asset_id,
-        asset_id,
-        end_date,
-        adjust_type,
-        share_snapshot=share_snapshot,
-        service=service,
-    )
-
-    return {
-        "asset_id": asset_id,
-        "canonical_asset_id": canonical_asset_id,
-        "asset": load_asset_detail(
+    with connect(service) as conn:
+        share_snapshot = _load_share_snapshot(canonical_asset_id, end_date, service=service)
+        spot_snapshot = _load_spot_snapshot(canonical_asset_id, asset_id, end_date, service=service)
+        factor_valuation = _load_factor_valuation(canonical_asset_id, end_date, service=service)
+        quote_snapshot = _load_quote_snapshot(
             canonical_asset_id,
-            service=service,
-        )
-        or load_asset_detail(asset_id, service=service),
-        "quote_snapshot": quote_snapshot,
-        "company_profile": _load_company_profile(
-            canonical_asset_id,
-            service=service,
-        ),
-        "valuation_snapshot": _load_valuation_snapshot(
-            quote_snapshot=quote_snapshot,
-            share_snapshot=share_snapshot,
-            spot_snapshot=spot_snapshot,
-            factor_valuation=factor_valuation,
-        ),
-        "bars": load_daily_bars(
             asset_id,
-            start_date,
             end_date,
             adjust_type,
+            share_snapshot=share_snapshot,
             service=service,
-        ),
-        "score": load_asset_score_for_dashboard(
+        )
+        fundamentals = load_asset_profile_fundamentals(
+            conn,
             canonical_asset_id,
-            trade_date,
-            score_version,
-            service=service,
-        ),
-        "signals": load_asset_watchlist_signals_for_dashboard(
-            canonical_asset_id,
-            trade_date,
-            service=service,
-        ),
-        "decisions": load_asset_decision_history(
-            canonical_asset_id,
-            start_date,
             end_date,
-            50,
-            service=service,
-        ),
-        "outcomes": load_asset_outcome_history(
-            canonical_asset_id,
-            start_date,
-            end_date,
-            None,
-            50,
-            service=service,
-        ),
-        "factor_values": _load_factor_values(
-            canonical_asset_id,
-            trade_date,
-            service=service,
-        ),
-        "coverage": _load_data_coverage(canonical_asset_id, service=service),
-    }
+            fetch_all_fn=fetch_all,
+        )
+
+        return {
+            "asset_id": asset_id,
+            "canonical_asset_id": canonical_asset_id,
+            "asset": load_asset_detail(
+                canonical_asset_id,
+                service=service,
+            )
+            or load_asset_detail(asset_id, service=service),
+            "quote_snapshot": quote_snapshot,
+            "company_profile": _load_company_profile(
+                canonical_asset_id,
+                service=service,
+            ),
+            "company_overview": fundamentals["company_overview"],
+            "business_composition": fundamentals["business_composition"],
+            "financial_snapshot": fundamentals["financial_snapshot"],
+            "valuation_snapshot": _load_valuation_snapshot(
+                quote_snapshot=quote_snapshot,
+                share_snapshot=share_snapshot,
+                spot_snapshot=spot_snapshot,
+                factor_valuation=factor_valuation,
+            ),
+            "bars": load_daily_bars(
+                asset_id,
+                start_date,
+                end_date,
+                adjust_type,
+                service=service,
+            ),
+            "score": load_asset_score_for_dashboard(
+                canonical_asset_id,
+                trade_date,
+                score_version,
+                service=service,
+            ),
+            "signals": load_asset_watchlist_signals_for_dashboard(
+                canonical_asset_id,
+                trade_date,
+                service=service,
+            ),
+            "decisions": load_asset_decision_history(
+                canonical_asset_id,
+                start_date,
+                end_date,
+                50,
+                service=service,
+            ),
+            "outcomes": load_asset_outcome_history(
+                canonical_asset_id,
+                start_date,
+                end_date,
+                None,
+                50,
+                service=service,
+            ),
+            "factor_values": _load_factor_values(
+                canonical_asset_id,
+                trade_date,
+                service=service,
+            ),
+            "coverage": _load_data_coverage(canonical_asset_id, service=service),
+        }
 
 
 def _to_float(value: Any) -> float | None:
