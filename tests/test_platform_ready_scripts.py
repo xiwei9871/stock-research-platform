@@ -1,6 +1,10 @@
 import os
+import signal
 import subprocess
+import time
 from pathlib import Path
+
+import pytest
 
 
 def _prepare_fake_guard(fake_root: Path) -> None:
@@ -214,10 +218,17 @@ def test_platform_ready_check_script_emits_heartbeat_while_repair_runs(tmp_path:
     _prepare_fake_guard(fake_root)
     fake_python = tmp_path / "python.sh"
     calls_file = tmp_path / "calls.txt"
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    (log_dir / "platform_ready_check.host.log").write_text(
+        "eod_auto_repair|report|stale-run-report.md\n",
+        encoding="utf-8",
+    )
 
     fake_python.write_text(
         f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" > "{calls_file}"
+echo 'child-detail-line'
 sleep 2
 exit 0
 """,
@@ -231,7 +242,7 @@ exit 0
             "PLATFORM_READY_ROOT": str(fake_root),
             "PLATFORM_READY_PYTHON": str(fake_python),
             "PLATFORM_READY_TRADE_DATE": "2026-06-18",
-            "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_LOG_DIR": str(log_dir),
             "PLATFORM_READY_CHECK_HEARTBEAT_SECONDS": "1",
         }
     )
@@ -245,10 +256,82 @@ exit 0
     )
 
     assert result.returncode == 0
+    assert "platform_ready_check|started|stage=eod_auto_repair|trade_date=2026-06-18" in result.stdout
+    assert "platform_ready_check|heartbeat|stage=eod_auto_repair|trade_date=2026-06-18" in result.stdout
+    assert "elapsed_seconds=" in result.stdout
+    assert "last_progress=waiting" in result.stdout
+    assert "stale-run-report.md" not in result.stdout
     assert "EOD自动修复完成" in result.stdout
-    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" not in result.stdout
-    log_text = (tmp_path / "logs" / "platform_ready_check.host.log").read_text(encoding="utf-8")
-    assert "platform_ready_check|stage|eod_auto_repair|heartbeat|elapsed=" in log_text
+    log_text = (log_dir / "platform_ready_check.host.log").read_text(encoding="utf-8")
+    assert "child-detail-line" in log_text
+
+
+@pytest.mark.parametrize(
+    ("wrapper_signal", "expected_child_signal"),
+    [(signal.SIGTERM, "TERM"), (signal.SIGINT, "TERM")],
+)
+def test_platform_ready_check_script_forwards_signal_and_cleans_up(
+    tmp_path: Path, wrapper_signal: signal.Signals, expected_child_signal: str
+) -> None:
+    fake_root = tmp_path / "root"
+    fake_root.mkdir()
+    _prepare_fake_guard(fake_root)
+    fake_python = tmp_path / "python.sh"
+    child_pid = tmp_path / "child.pid"
+    term_marker = tmp_path / "child.terminated"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [[ \"$*\" == *\"stock_research.stock_cron_guard\"* ]]; then exit 0; fi\n"
+        f"echo $$ > \"{child_pid}\"\n"
+        f"trap 'echo TERM > \"{term_marker}\"; exit 143' TERM\n"
+        f"trap 'echo INT > \"{term_marker}\"; exit 130' INT\n"
+        "while true; do sleep 1; done\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env.update(
+        {
+            "PLATFORM_READY_ROOT": str(fake_root),
+            "PLATFORM_READY_PYTHON": str(fake_python),
+            "PLATFORM_READY_TRADE_DATE": "2026-06-18",
+            "PLATFORM_READY_LOG_DIR": str(tmp_path / "logs"),
+            "PLATFORM_READY_CHECK_HEARTBEAT_SECONDS": "1",
+        }
+    )
+    process = subprocess.Popen(
+        ["scripts/run_platform_ready_check_cron.sh"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    for _ in range(50):
+        if child_pid.exists():
+            break
+        time.sleep(0.1)
+    assert child_pid.exists()
+
+    process.send_signal(wrapper_signal)
+    process.wait(timeout=5)
+
+    assert process.returncode != 0
+    for _ in range(50):
+        if term_marker.exists():
+            break
+        time.sleep(0.1)
+    assert term_marker.exists()
+    assert term_marker.read_text(encoding="utf-8").strip() == expected_child_signal
+    pid = int(child_pid.read_text(encoding="utf-8").strip())
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        os.kill(pid, 15)
+        pytest.fail(f"repair child process {pid} survived wrapper termination")
 
 
 def test_platform_ready_check_script_defaults_to_latest_market_date(tmp_path: Path) -> None:

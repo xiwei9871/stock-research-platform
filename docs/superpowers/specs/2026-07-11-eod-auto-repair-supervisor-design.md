@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-11
 
-**Status:** Approved direction; awaiting written-spec review
+**Status:** Implemented and operationally verified on 2026-07-11
 
 ## Goal
 
@@ -26,7 +26,7 @@ The wrapper will:
 2. Keep the child process's complete stdout and stderr in the existing detail log.
 3. Emit a compact heartbeat to stdout every `PLATFORM_READY_CHECK_HEARTBEAT_SECONDS`, defaulting to 60 seconds.
 4. Include the stage, trade date, elapsed seconds, and latest useful progress line in each heartbeat. If no progress exists, report `waiting`.
-5. Forward `SIGTERM` and `SIGINT` to the repair child.
+5. Handle both `SIGTERM` and `SIGINT` by sending `SIGTERM` to the repair child, which is reliable for background non-interactive processes.
 6. Stop and reap the heartbeat process on success, failure, or interruption.
 7. Wait for the repair child and preserve its real exit code.
 8. Retain the existing compact success/failure summary and detail-log path.
@@ -67,7 +67,7 @@ Verbose Python output remains in `logs/platform_ready_check.host.log` and is not
 ## Error and Signal Handling
 
 - A nonzero Python exit produces the existing failure summary and the same nonzero wrapper exit code.
-- `SIGTERM` or `SIGINT` is forwarded to the child; the wrapper then reaps the heartbeat loop and exits nonzero.
+- `SIGTERM` or `SIGINT` terminates the child through `SIGTERM`; the wrapper then reaps the heartbeat loop and exits nonzero.
 - Cleanup is idempotent so normal completion and the `EXIT` trap cannot leave a heartbeat process behind.
 - The design does not raise the no-output timeout because observable liveness is the correct contract.
 

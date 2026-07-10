@@ -4,6 +4,8 @@
 
 **Goal:** Make the EOD auto-repair wrapper observable to OpenClaw throughout long runs and guarantee child/heartbeat cleanup with truthful exit status.
 
+**Status:** Implemented and operationally verified on 2026-07-11.
+
 **Architecture:** Keep Python repair output in the existing detail log while a Bash supervisor emits compact stdout start and heartbeat records. The wrapper owns the repair child and a separate interruptible heartbeat loop, forwards TERM/INT, reaps both processes, and returns the repair child's exit code.
 
 **Tech Stack:** Bash, Python subprocess-based pytest, OpenClaw command cron.
@@ -57,7 +59,7 @@ Expected: FAIL because the current wrapper writes heartbeat only to `platform_re
 Add a stub child that records its PID, traps TERM, writes a marker, and waits:
 
 ```python
-def test_platform_ready_check_script_forwards_term_and_cleans_up(tmp_path: Path) -> None:
+def test_platform_ready_check_script_forwards_signal_and_cleans_up(tmp_path: Path) -> None:
     fake_root = tmp_path / "root"
     fake_root.mkdir()
     _prepare_fake_guard(fake_root)
@@ -208,7 +210,7 @@ Run:
 ```bash
 rtk .venv/bin/pytest \
   tests/test_platform_ready_scripts.py::test_platform_ready_check_script_emits_heartbeat_while_repair_runs \
-  tests/test_platform_ready_scripts.py::test_platform_ready_check_script_forwards_term_and_cleans_up \
+  tests/test_platform_ready_scripts.py::test_platform_ready_check_script_forwards_signal_and_cleans_up \
   -q
 ```
 
