@@ -1888,6 +1888,9 @@ export type ResearchReportCount = {
 
 export type ResearchReportSummary = {
   total_reports: number;
+  readable_report_count: number;
+  pdf_report_count: number;
+  web_index_report_count: number;
   covered_stocks: number;
   latest_publish_date: string | null;
   latest_feature_date: string | null;

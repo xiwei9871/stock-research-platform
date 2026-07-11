@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchCurrentUser, loginDashboardUser } from '../api/client';
+import { DASHBOARD_AUTH_EXPIRED_EVENT, fetchCurrentUser, loginDashboardUser } from '../api/client';
 import type { CurrentUser } from '../api/types';
 import { AppShell } from './AppShell';
 import { LoginView } from './LoginView';
@@ -11,6 +11,15 @@ export function DashboardAuthRoot() {
 
   useEffect(() => {
     let cancelled = false;
+    const handleAuthExpired = () => {
+      if (!cancelled) {
+        setUser(null);
+        setError('');
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
     fetchCurrentUser()
       .then((payload) => {
         if (!cancelled) setUser(payload.user);
@@ -23,6 +32,7 @@ export function DashboardAuthRoot() {
       });
     return () => {
       cancelled = true;
+      window.removeEventListener(DASHBOARD_AUTH_EXPIRED_EVENT, handleAuthExpired);
     };
   }, []);
 

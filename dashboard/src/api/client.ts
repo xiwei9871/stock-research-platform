@@ -193,6 +193,8 @@ type RequestOptions = {
   csrfToken?: string;
 };
 
+export const DASHBOARD_AUTH_EXPIRED_EVENT = 'dashboard-auth-expired';
+
 function csrfTokenFromCookie() {
   return (
     document.cookie
@@ -1014,6 +1016,7 @@ async function postJson<T>(url: string, request: unknown, options: RequestOption
     body: JSON.stringify(request)
   });
   if (!response.ok) {
+    notifyAuthExpired(url, response.status, options);
     const detail = await responseErrorDetail(response);
     throw new Error(`POST ${url} failed with ${response.status}${detail ? `: ${detail}` : ''}`);
   }
@@ -1043,6 +1046,7 @@ async function patchJson<T>(url: string, request: unknown, options: RequestOptio
     body: JSON.stringify(request)
   });
   if (!response.ok) {
+    notifyAuthExpired(url, response.status, options);
     throw new Error(`PATCH ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
@@ -1051,6 +1055,7 @@ async function patchJson<T>(url: string, request: unknown, options: RequestOptio
 async function getJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const response = options.credentials ? await fetch(url, { credentials: options.credentials }) : await fetch(url);
   if (!response.ok) {
+    notifyAuthExpired(url, response.status, options);
     throw new Error(`GET ${url} failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
@@ -1058,4 +1063,14 @@ async function getJson<T>(url: string, options: RequestOptions = {}): Promise<T>
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function notifyAuthExpired(url: string, status: number, options: RequestOptions) {
+  if (status !== 401 || options.credentials !== 'include' || url === '/api/auth/login') {
+    return;
+  }
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent(DASHBOARD_AUTH_EXPIRED_EVENT));
 }

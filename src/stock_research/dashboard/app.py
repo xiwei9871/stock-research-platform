@@ -164,6 +164,24 @@ from stock_research.dashboard.tech_bottleneck_review_decisions import (
     list_manual_decisions as list_tech_bottleneck_review_decisions,
     record_manual_decision as record_tech_bottleneck_review_decision,
 )
+from stock_research.dashboard.theme_research import (
+    ThemeResearchNotFoundError,
+    get_theme_research_theme,
+    list_theme_research_claims,
+    list_theme_research_companies,
+    list_theme_research_nodes,
+    list_theme_research_sources,
+    list_theme_research_themes,
+)
+from stock_research.theme_research_db_models import ThemeResearchDomainError
+from stock_research.theme_research_store import (
+    list_review_history as list_theme_research_review_history,
+    list_snapshots as list_theme_research_snapshots,
+    review_claim as review_theme_research_claim,
+    review_node as review_theme_research_node,
+    review_source as review_theme_research_source,
+    rollback_theme as rollback_theme_research_theme,
+)
 from stock_research.dashboard.strategy_validation import (
     build_strategy_validation_replay,
     list_strategy_validation_artifacts,
@@ -257,6 +275,20 @@ class AdminResetPasswordPayload(BaseModel):
     password: str
 
 
+class ThemeResearchReviewRequest(BaseModel):
+    to_status: str
+    expected_row_version: int
+    comment: str
+    idempotency_key: str
+
+
+class ThemeResearchRollbackRequest(BaseModel):
+    snapshot_id: str
+    expected_theme_version: int
+    comment: str
+    idempotency_key: str
+
+
 def _set_auth_cookies(response: JSONResponse, session_token: str, csrf_token: str) -> None:
     response.set_cookie(
         SETTINGS.dashboard_session_cookie,
@@ -301,6 +333,26 @@ def _require_csrf(request: Request) -> None:
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _theme_research_http_error(exc: ThemeResearchDomainError) -> HTTPException:
+    if exc.code == "THEME_RESEARCH_VERSION_CONFLICT":
+        status_code = 409
+    elif exc.code in {"THEME_RESEARCH_ADMIN_REQUIRED", "THEME_RESEARCH_REVIEW_ROLE_INVALID"}:
+        status_code = 403
+    elif exc.code in {"THEME_RESEARCH_OBJECT_NOT_FOUND", "THEME_RESEARCH_THEME_NOT_FOUND"}:
+        status_code = 404
+    else:
+        status_code = 400
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "status": "error",
+            "error_code": exc.code,
+            "message": str(exc),
+            "details": exc.details,
+        },
+    )
 
 
 AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
@@ -486,6 +538,152 @@ def create_app() -> FastAPI:
     def data_to_brief_docling_90_review():
         return load_data_to_brief_docling_90_dashboard_payload()
 
+    @app.get("/api/research/theme-decomposition/themes")
+    def theme_research_themes():
+        return list_theme_research_themes()
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}")
+    def theme_research_theme_detail(theme_id: str):
+        try:
+            return get_theme_research_theme(theme_id)
+        except ThemeResearchNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/nodes")
+    def theme_research_theme_nodes(theme_id: str):
+        try:
+            return list_theme_research_nodes(theme_id)
+        except ThemeResearchNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/sources")
+    def theme_research_theme_sources(theme_id: str):
+        try:
+            return list_theme_research_sources(theme_id)
+        except ThemeResearchNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/claims")
+    def theme_research_theme_claims(theme_id: str):
+        try:
+            return list_theme_research_claims(theme_id)
+        except ThemeResearchNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/companies")
+    def theme_research_theme_companies(theme_id: str):
+        try:
+            return list_theme_research_companies(theme_id)
+        except ThemeResearchNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.post("/api/research/theme-decomposition/sources/{source_id}/review")
+    def theme_research_review_source(
+        source_id: str,
+        payload: ThemeResearchReviewRequest,
+        request: Request,
+    ):
+        user = _current_user_or_401(request)
+        _require_csrf(request)
+        try:
+            return review_theme_research_source(
+                source_id=source_id,
+                to_status=payload.to_status,
+                expected_row_version=payload.expected_row_version,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                comment=payload.comment,
+                request_id=str(request.state.request_id),
+                idempotency_key=payload.idempotency_key,
+            )
+        except ThemeResearchDomainError as exc:
+            raise _theme_research_http_error(exc) from exc
+
+    @app.post("/api/research/theme-decomposition/claims/{claim_id}/review")
+    def theme_research_review_claim(
+        claim_id: str,
+        payload: ThemeResearchReviewRequest,
+        request: Request,
+    ):
+        user = _current_user_or_401(request)
+        _require_csrf(request)
+        try:
+            return review_theme_research_claim(
+                claim_id=claim_id,
+                to_status=payload.to_status,
+                expected_row_version=payload.expected_row_version,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                comment=payload.comment,
+                request_id=str(request.state.request_id),
+                idempotency_key=payload.idempotency_key,
+            )
+        except ThemeResearchDomainError as exc:
+            raise _theme_research_http_error(exc) from exc
+
+    @app.post("/api/research/theme-decomposition/nodes/{node_id}/review")
+    def theme_research_review_node(
+        node_id: str,
+        payload: ThemeResearchReviewRequest,
+        request: Request,
+    ):
+        user = _current_user_or_401(request)
+        _require_csrf(request)
+        try:
+            return review_theme_research_node(
+                node_id=node_id,
+                to_status=payload.to_status,
+                expected_row_version=payload.expected_row_version,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                comment=payload.comment,
+                request_id=str(request.state.request_id),
+                idempotency_key=payload.idempotency_key,
+            )
+        except ThemeResearchDomainError as exc:
+            raise _theme_research_http_error(exc) from exc
+
+    @app.get("/api/research/theme-decomposition/history")
+    def theme_research_review_history(
+        request: Request,
+        object_type: str | None = None,
+        object_id: str | None = None,
+        limit: int = 100,
+    ):
+        _current_user_or_401(request)
+        return list_theme_research_review_history(
+            object_type=object_type,
+            object_id=object_id,
+            limit=limit,
+        )
+
+    @app.get("/api/research/theme-decomposition/themes/{theme_id}/snapshots")
+    def theme_research_snapshots(theme_id: str, request: Request, limit: int = 100):
+        _current_user_or_401(request)
+        return list_theme_research_snapshots(theme_id=theme_id, limit=limit)
+
+    @app.post("/api/research/theme-decomposition/themes/{theme_id}/rollback")
+    def theme_research_rollback(
+        theme_id: str,
+        payload: ThemeResearchRollbackRequest,
+        request: Request,
+    ):
+        user = _admin_user_or_403(request)
+        _require_csrf(request)
+        try:
+            return rollback_theme_research_theme(
+                theme_id=theme_id,
+                snapshot_id=payload.snapshot_id,
+                expected_theme_version=payload.expected_theme_version,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                comment=payload.comment,
+                idempotency_key=payload.idempotency_key,
+                request_id=str(request.state.request_id),
+            )
+        except ThemeResearchDomainError as exc:
+            raise _theme_research_http_error(exc) from exc
+
     @app.get("/api/research/tech-bottleneck/review-universe/summary")
     def tech_bottleneck_review_universe_summary():
         return load_review_universe_summary()
@@ -503,6 +701,7 @@ def create_app() -> FastAPI:
         primary_source_supported: str | None = None,
         frontend_review_status: str | None = None,
         reviewer_decision: str | None = None,
+        quality_reassessment_tier: str | None = None,
         q: str | None = None,
         limit: int = 100,
         offset: int = 0,
@@ -519,6 +718,7 @@ def create_app() -> FastAPI:
             primary_source_supported=primary_source_supported,
             frontend_review_status=frontend_review_status,
             reviewer_decision=reviewer_decision,
+            quality_reassessment_tier=quality_reassessment_tier,
             q=q,
             limit=limit,
             offset=offset,

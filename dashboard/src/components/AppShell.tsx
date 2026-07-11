@@ -11,6 +11,7 @@ import { ResearchReportsWorkspace } from './ResearchReportsWorkspace';
 import { ReviewQueueWorkspace } from './ReviewQueueWorkspace';
 import { StockWorkspace, type StockEntryContext } from './StockWorkspace';
 import { StrategyLabWorkspace } from './StrategyLabWorkspace';
+import { ThemeResearchWorkspace } from './ThemeResearchWorkspace';
 import { UserManagementView } from './UserManagementView';
 import { WatchlistWorkspace } from './WatchlistWorkspace';
 import type { SectorType } from './market-monitor/mockData';
@@ -36,6 +37,7 @@ type WorkspaceMode =
   | 'researchReports'
   | 'stock'
   | 'watchlist'
+  | 'themeResearch'
   | 'techBottleneckReviewUniverse'
   | 'dataToBriefDocling90'
   | 'factors'
@@ -84,6 +86,7 @@ const NAV_ITEMS: Array<{ mode: WorkspaceMode; label: string; ariaLabel: string }
   { mode: 'researchReports', label: '研报', ariaLabel: 'Open Research Reports workspace' },
   { mode: 'stock', label: '个股工作台', ariaLabel: 'Open Stock Workspace workspace' },
   { mode: 'watchlist', label: '观察池', ariaLabel: 'Open Watchlist workspace' },
+  { mode: 'themeResearch', label: '主题研究', ariaLabel: 'Open Theme Research workspace' },
   {
     mode: 'dataToBriefDocling90',
     label: 'Docling报告审计',
@@ -108,6 +111,7 @@ const TECH_BOTTLENECK_REVIEW_PATH = '/tech-bottleneck/watchlist-review';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH = '/research/tech-bottleneck/review-universe';
 const TECH_BOTTLENECK_STOCK_PREFIX = '/tech-bottleneck/stock/';
 const DATA_TO_BRIEF_DOCLING_90_PATH = '/research/data-to-brief/docling-90';
+const THEME_RESEARCH_PATH = '/theme-research';
 const TECH_BOTTLENECK_REVIEW_UNIVERSE_SOURCE = 'tech_bottleneck_review_universe_frontend_dataset_v1';
 
 function firstDate(...dates: Array<string | null | undefined>) {
@@ -115,6 +119,7 @@ function firstDate(...dates: Array<string | null | undefined>) {
 }
 
 function workspaceModeFromPath(pathname: string): WorkspaceMode {
+  if (pathname === THEME_RESEARCH_PATH || pathname.startsWith(`${THEME_RESEARCH_PATH}/`)) return 'themeResearch';
   if (pathname === TECH_BOTTLENECK_REVIEW_PATH) return 'techBottleneckReviewUniverse';
   if (pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) return 'techBottleneckReviewUniverse';
   if (pathname === DATA_TO_BRIEF_DOCLING_90_PATH) return 'dataToBriefDocling90';
@@ -266,6 +271,11 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
   const [generatedReportsHandoff, setGeneratedReportsHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [marketHandoff, setMarketHandoff] = useState<WorkspaceHandoff>({ query: '', version: 0 });
   const [stockHandoff, setStockHandoff] = useState<StockHandoff>(initialTechBottleneckStockHandoff ?? { version: 0 });
+  const [themeResearchPathname, setThemeResearchPathname] = useState(() =>
+    typeof window !== 'undefined' && window.location.pathname.startsWith(THEME_RESEARCH_PATH)
+      ? window.location.pathname
+      : THEME_RESEARCH_PATH
+  );
   const [displayTradeDate, setDisplayTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
   const [stockDefaultTradeDate, setStockDefaultTradeDate] = useState(FALLBACK_DISPLAY_TRADE_DATE);
 
@@ -297,6 +307,9 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
         window.history.replaceState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
       }
       const nextMode = workspaceModeFromPath(window.location.pathname);
+      if (nextMode === 'themeResearch') {
+        setThemeResearchPathname(window.location.pathname);
+      }
       if (window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) {
         const techBottleneckHandoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
         if (techBottleneckHandoff?.assetId) {
@@ -373,19 +386,43 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
     }
     if (mode === 'techBottleneckReviewUniverse' && window.location.pathname !== TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH) {
       window.history.pushState({}, '', TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH);
+    } else if (mode === 'themeResearch' && window.location.pathname !== THEME_RESEARCH_PATH) {
+      window.history.pushState({}, '', THEME_RESEARCH_PATH);
+      setThemeResearchPathname(THEME_RESEARCH_PATH);
     } else if (mode === 'dataToBriefDocling90' && window.location.pathname !== DATA_TO_BRIEF_DOCLING_90_PATH) {
       window.history.pushState({}, '', DATA_TO_BRIEF_DOCLING_90_PATH);
     } else if (
       mode !== 'techBottleneckReviewUniverse' &&
+      mode !== 'themeResearch' &&
       mode !== 'dataToBriefDocling90' &&
       (window.location.pathname === TECH_BOTTLENECK_REVIEW_PATH ||
         window.location.pathname === TECH_BOTTLENECK_REVIEW_UNIVERSE_PATH ||
         window.location.pathname === DATA_TO_BRIEF_DOCLING_90_PATH ||
+        window.location.pathname.startsWith(THEME_RESEARCH_PATH) ||
         window.location.pathname.startsWith(TECH_BOTTLENECK_STOCK_PREFIX))
     ) {
       window.history.pushState({}, '', '/');
     }
     setWorkspaceMode(mode);
+  }
+
+  function navigateThemeResearch(path: string) {
+    if (!path.startsWith(THEME_RESEARCH_PATH)) return;
+    if (`${window.location.pathname}${window.location.search}` !== path) {
+      window.history.pushState({}, '', path);
+    }
+    setThemeResearchPathname(window.location.pathname);
+    setWorkspaceMode('themeResearch');
+  }
+
+  function openStockWorkspaceFromThemeResearch(path: string) {
+    if (!path.startsWith(TECH_BOTTLENECK_STOCK_PREFIX)) return;
+    window.history.pushState({}, '', path);
+    const handoff = techBottleneckStockHandoffFromLocation(window.location.pathname, window.location.search);
+    if (!handoff?.assetId) return;
+    setSelectedAssetId(handoff.assetId);
+    setStockHandoff((current) => ({ ...handoff, version: current.version + 1 }));
+    setWorkspaceMode('stock');
   }
 
   function openNewsWorkspaceFromStock(context: StockEntryContext) {
@@ -566,6 +603,13 @@ export function AppShell({ currentUser: _currentUser }: AppShellProps = {}) {
             <WatchlistWorkspace
               defaultTradeDate={displayTradeDate}
               onOpenAsset={(assetId) => openStockWorkspace(assetId, { sourceWorkspace: 'watchlist' })}
+            />
+          ) : null}
+          {workspaceMode === 'themeResearch' ? (
+            <ThemeResearchWorkspace
+              pathname={themeResearchPathname}
+              onNavigate={navigateThemeResearch}
+              onOpenStock={openStockWorkspaceFromThemeResearch}
             />
           ) : null}
           {workspaceMode === 'techBottleneckReviewUniverse' ? (
