@@ -273,6 +273,30 @@ def test_cli_validate_returns_exact_structured_error(tmp_path: Path, capsys):
     }
 
 
+@pytest.mark.parametrize("command", ["validate", "summary"])
+def test_cli_status_errors_are_structured_json_without_traceback(
+    tmp_path: Path,
+    capsys,
+    command: str,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", status=[])
+
+    exit_code = technology_industry_catalog.cli(
+        ["--artifact-dir", str(root), command]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert json.loads(captured.err) == {
+        "error_code": "INVALID_CATALOG_STATUS",
+        "message": "chains[0].status invalid: []",
+        "status": "error",
+    }
+
+
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
@@ -1203,6 +1227,31 @@ def test_malformed_identity_values_raise_domain_errors(
     _mutate_first(root / relative_path, collection_key, **{field: value})
 
     assert _load_error(root).code == "MISSING_REQUIRED_FIELD"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "collection_key", "row_path"),
+    [
+        ("sectors.json", "sectors", "sectors[0]"),
+        ("chains.json", "chains", "chains[0]"),
+        ("nodes/semiconductor_equipment.json", "nodes", "nodes[0]"),
+    ],
+)
+@pytest.mark.parametrize("status", ["invalid", [], {}])
+def test_catalog_row_status_has_stable_error(
+    tmp_path: Path,
+    relative_path: str,
+    collection_key: str,
+    row_path: str,
+    status: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / relative_path, collection_key, status=status)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CATALOG_STATUS"
+    assert str(error) == f"{row_path}.status invalid: {status}"
 
 
 def test_validation_raises_first_error_in_artifact_order(tmp_path: Path):
