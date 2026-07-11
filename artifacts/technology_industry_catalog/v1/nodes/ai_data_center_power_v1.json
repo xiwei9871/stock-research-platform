@@ -1,0 +1,1882 @@
+{
+  "nodes": [
+    {
+      "node_id": "ai_power_load_capacity_planning",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Load Capacity Planning",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering load capacity planning requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_load_capacity_planning"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_energy_supply_resilience",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy Supply Resilience",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering energy supply resilience requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_grid_supply_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Grid Supply for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_supply_service_role",
+      "description": "AI data center application role for grid supply, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_grid_supply_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "bulk_grid_power_supply_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_renewable_procurement_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Renewable Procurement for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_procurement_service_role",
+      "description": "AI data center application role for renewable procurement, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_renewable_procurement_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "renewable_power_procurement_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_distributed_energy_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Distributed Energy for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "generation_system_role",
+      "description": "AI data center application role for distributed energy, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_distributed_energy_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "distributed_energy_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_gas_turbine_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Gas Turbine for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "generation_equipment_role",
+      "description": "AI data center application role for gas turbine, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_gas_turbine_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gas_turbine_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_nuclear_supply_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Nuclear Supply for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_supply_service_role",
+      "description": "AI data center application role for nuclear supply, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_nuclear_supply_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "nuclear_power_supply_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_microgrid_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_supply_resilience",
+      "level": "L4",
+      "node_name": "Microgrid for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "generation_system_role",
+      "description": "AI data center application role for microgrid, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_supply_resilience",
+        "ai_power_microgrid_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "microgrid_generation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_grid_access_substation",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Grid Access Substation",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering grid access substation requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_grid_connection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Grid Connection for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "grid_connection_service_role",
+      "description": "AI data center application role for grid connection, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_grid_connection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "grid_connection_engineering_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_substation_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Substation for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "grid_infrastructure_role",
+      "description": "AI data center application role for substation, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_substation_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_substation_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_transformer_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Transformer for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "grid_equipment_role",
+      "description": "AI data center application role for transformer, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_transformer_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_transformer"
+      ]
+    },
+    {
+      "node_id": "ai_power_switchgear_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Switchgear for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "grid_equipment_role",
+      "description": "AI data center application role for switchgear, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_switchgear_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "medium_voltage_switchgear"
+      ]
+    },
+    {
+      "node_id": "ai_power_relay_protection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Relay Protection for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "grid_protection_role",
+      "description": "AI data center application role for relay protection, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_relay_protection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "relay_protection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_cable_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Cable for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for cable, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_cable_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_cable"
+      ]
+    },
+    {
+      "node_id": "ai_power_busbar_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Busbar for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for busbar, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_busbar_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_busbar"
+      ]
+    },
+    {
+      "node_id": "ai_power_power_quality_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_grid_access_substation",
+      "level": "L4",
+      "node_name": "Power Quality for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_quality_role",
+      "description": "AI data center application role for power quality, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_grid_access_substation",
+        "ai_power_power_quality_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_quality_management_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_backup_power",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Backup Power",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering backup power requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_diesel_generator_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Diesel Generator for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "AI data center application role for diesel generator, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_diesel_generator_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "diesel_generator_set"
+      ]
+    },
+    {
+      "node_id": "ai_power_gas_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Gas Backup for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "AI data center application role for gas backup, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_gas_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gas_fired_backup_generator"
+      ]
+    },
+    {
+      "node_id": "ai_power_fuel_cell_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Fuel Cell Backup for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "backup_generation_role",
+      "description": "AI data center application role for fuel cell backup, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_fuel_cell_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "stationary_fuel_cell_backup_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_battery_backup_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Battery Backup for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "AI data center application role for battery backup, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_battery_backup_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "stationary_battery_backup_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_flywheel_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Flywheel for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "AI data center application role for flywheel, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_flywheel_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "flywheel_backup_energy_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_automatic_transfer_switch_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Automatic Transfer Switch for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_switching_role",
+      "description": "AI data center application role for automatic transfer switch, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_automatic_transfer_switch_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "automatic_transfer_switch"
+      ]
+    },
+    {
+      "node_id": "ai_power_black_start_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_backup_power",
+      "level": "L4",
+      "node_name": "Black Start for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "resilience_service_role",
+      "description": "AI data center application role for black start, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_backup_power",
+        "ai_power_black_start_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "black_start_generation_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_ups_conversion",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "UPS Conversion",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering ups conversion requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_line_frequency_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Line Frequency UPS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "AI data center application role for line frequency ups, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_line_frequency_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "line_frequency_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_high_frequency_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "High Frequency UPS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "AI data center application role for high frequency ups, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_high_frequency_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "high_frequency_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_modular_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Modular UPS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "AI data center application role for modular ups, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_modular_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "modular_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_medium_voltage_ups_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Medium Voltage UPS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "ups_equipment_role",
+      "description": "AI data center application role for medium voltage ups, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_medium_voltage_ups_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "medium_voltage_ups"
+      ]
+    },
+    {
+      "node_id": "ai_power_static_transfer_switch_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Static Transfer Switch for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_switching_role",
+      "description": "AI data center application role for static transfer switch, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_static_transfer_switch_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "static_transfer_switch"
+      ]
+    },
+    {
+      "node_id": "ai_power_rectifier_inverter_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "Rectifier Inverter for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for rectifier inverter, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_rectifier_inverter_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "rectifier_inverter_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_ups_battery_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_ups_conversion",
+      "level": "L4",
+      "node_name": "UPS Battery for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_storage_role",
+      "description": "AI data center application role for ups battery, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_ups_conversion",
+        "ai_power_ups_battery_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "ups_battery_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_hvdc_dc_architecture",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "HVDC DC Architecture",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering hvdc dc architecture requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_240_400v_hvdc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "240 400 V HVDC for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "dc_power_architecture_role",
+      "description": "AI data center application role for 240 400 v hvdc, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_240_400v_hvdc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "240_400v_hvdc_power_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_800vdc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "800 VDC for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "dc_power_architecture_role",
+      "description": "AI data center application role for 800 vdc, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_800vdc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "800vdc_power_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_central_rectifier_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "Central Rectifier for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for central rectifier, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_central_rectifier_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "central_rectifier_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_bus_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Bus for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "dc_distribution_role",
+      "description": "AI data center application role for dc bus, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_bus_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_power_bus_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_solid_state_transformer_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "Solid State Transformer for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for solid state transformer, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_solid_state_transformer_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "solid_state_transformer"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_breaker_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Breaker for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "dc_protection_role",
+      "description": "AI data center application role for dc breaker, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_breaker_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_circuit_breaker"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_protection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_hvdc_dc_architecture",
+      "level": "L4",
+      "node_name": "DC Protection for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "dc_protection_role",
+      "description": "AI data center application role for dc protection, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_hvdc_dc_architecture",
+        "ai_power_dc_protection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_protection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_room_rack_distribution",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Room Rack Distribution",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering room rack distribution requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_pdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "PDU for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "AI data center application role for pdu, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_pdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_power_distribution_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_row_distribution_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Row Distribution for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "AI data center application role for row distribution, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_row_distribution_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "row_level_power_distribution_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_busway_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Busway for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for busway, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_busway_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_busway"
+      ]
+    },
+    {
+      "node_id": "ai_power_intelligent_rack_pdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Intelligent Rack PDU for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_distribution_role",
+      "description": "AI data center application role for intelligent rack pdu, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_intelligent_rack_pdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "intelligent_rack_pdu"
+      ]
+    },
+    {
+      "node_id": "ai_power_power_shelf_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Power Shelf for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for power shelf, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_power_shelf_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "server_power_shelf"
+      ]
+    },
+    {
+      "node_id": "ai_power_high_current_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "High Current Connector for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for high current connector, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_high_current_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "high_current_power_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_hvdc_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "HVDC Connector for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for hvdc connector, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_hvdc_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "hvdc_power_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_copper_flexible_connection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_room_rack_distribution",
+      "level": "L4",
+      "node_name": "Copper Flexible Connection for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_interconnect_role",
+      "description": "AI data center application role for copper flexible connection, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_room_rack_distribution",
+        "ai_power_copper_flexible_connection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "copper_flexible_interconnect"
+      ]
+    },
+    {
+      "node_id": "ai_power_server_board_power",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Server Board Power",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering server board power requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_server_psu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Server PSU for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "server_power_role",
+      "description": "AI data center application role for server psu, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_server_psu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "server_power_supply_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_ac_dc_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "AC DC Module for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for ac dc module, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_ac_dc_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "ac_dc_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_dc_dc_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "DC DC Module for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_conversion_role",
+      "description": "AI data center application role for dc dc module, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_dc_dc_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "dc_dc_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_vrm_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "VRM for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "board_power_role",
+      "description": "AI data center application role for vrm, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_vrm_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "voltage_regulator_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_multiphase_controller_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Multiphase Controller for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_control_role",
+      "description": "AI data center application role for multiphase controller, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_multiphase_controller_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "multiphase_power_controller"
+      ]
+    },
+    {
+      "node_id": "ai_power_mosfet_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "MOSFET for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "AI data center application role for mosfet, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_mosfet_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_mosfet_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_sic_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "SiC for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "AI data center application role for sic, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_sic_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "silicon_carbide_power_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_gan_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "GaN for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_semiconductor_role",
+      "description": "AI data center application role for gan, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_gan_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "gallium_nitride_power_device"
+      ]
+    },
+    {
+      "node_id": "ai_power_magnetic_component_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Magnetic Component for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "passive_component_role",
+      "description": "AI data center application role for magnetic component, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_magnetic_component_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_magnetic_component"
+      ]
+    },
+    {
+      "node_id": "ai_power_capacitor_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_server_board_power",
+      "level": "L4",
+      "node_name": "Capacitor for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "passive_component_role",
+      "description": "AI data center application role for capacitor, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_server_board_power",
+        "ai_power_capacitor_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_capacitor"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_cooling_thermal",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Liquid Cooling Thermal",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering liquid cooling thermal requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_cold_plate_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Cold Plate for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_equipment_role",
+      "description": "AI data center application role for cold plate, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_cold_plate_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_cold_plate"
+      ]
+    },
+    {
+      "node_id": "ai_power_immersion_cooling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Immersion Cooling for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_system_role",
+      "description": "AI data center application role for immersion cooling, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_immersion_cooling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "immersion_cooling_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_spray_cooling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Spray Cooling for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_system_role",
+      "description": "AI data center application role for spray cooling, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_spray_cooling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "spray_cooling_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_cdu_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "CDU for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_equipment_role",
+      "description": "AI data center application role for cdu, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_cdu_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "coolant_distribution_unit"
+      ]
+    },
+    {
+      "node_id": "ai_power_chiller_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Chiller for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_equipment_role",
+      "description": "AI data center application role for chiller, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_chiller_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_chiller"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_pump_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Liquid Pump for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "AI data center application role for liquid pump, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_liquid_pump_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_pump"
+      ]
+    },
+    {
+      "node_id": "ai_power_heat_exchanger_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Heat Exchanger for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_equipment_role",
+      "description": "AI data center application role for heat exchanger, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_heat_exchanger_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_heat_exchanger"
+      ]
+    },
+    {
+      "node_id": "ai_power_quick_connector_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Quick Connector for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "AI data center application role for quick connector, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_quick_connector_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_quick_connector"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_pipe_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Liquid Pipe for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "liquid_cooling_component_role",
+      "description": "AI data center application role for liquid pipe, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_liquid_pipe_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_pipe_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_coolant_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Coolant for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_material_role",
+      "description": "AI data center application role for coolant, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_coolant_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_coolant"
+      ]
+    },
+    {
+      "node_id": "ai_power_leak_detection_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Leak Detection for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_monitoring_role",
+      "description": "AI data center application role for leak detection, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_leak_detection_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_leak_detection_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_waste_heat_recovery_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_liquid_cooling_thermal",
+      "level": "L4",
+      "node_name": "Waste Heat Recovery for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_recovery_role",
+      "description": "AI data center application role for waste heat recovery, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_liquid_cooling_thermal",
+        "ai_power_waste_heat_recovery_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_waste_heat_recovery_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_energy_management_software",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy Management Software",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering energy management software requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_epms_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "EPMS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_management_software_role",
+      "description": "AI data center application role for epms, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_epms_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "electrical_power_monitoring_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_bms_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "BMS for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "facility_management_software_role",
+      "description": "AI data center application role for bms, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_bms_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "building_management_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_dcim_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "DCIM for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "data_center_management_software_role",
+      "description": "AI data center application role for dcim, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_dcim_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_infrastructure_management_platform"
+      ]
+    },
+    {
+      "node_id": "ai_power_distribution_monitoring_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Distribution Monitoring for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_management_software_role",
+      "description": "AI data center application role for distribution monitoring, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_distribution_monitoring_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_distribution_monitoring_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_thermal_control_software_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Thermal Control Software for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_control_software_role",
+      "description": "AI data center application role for thermal control software, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_thermal_control_software_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "thermal_control_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_fault_prediction_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Fault Prediction for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "predictive_maintenance_software_role",
+      "description": "AI data center application role for fault prediction, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_fault_prediction_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "power_fault_prediction_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_compute_energy_scheduling_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Compute Energy Scheduling for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_scheduling_software_role",
+      "description": "AI data center application role for compute energy scheduling, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_compute_energy_scheduling_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "compute_energy_scheduling_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_carbon_energy_cost_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_energy_management_software",
+      "level": "L4",
+      "node_name": "Carbon Energy Cost for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "energy_optimization_software_role",
+      "description": "AI data center application role for carbon energy cost, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_energy_management_software",
+        "ai_power_carbon_energy_cost_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "carbon_energy_cost_optimization_software"
+      ]
+    },
+    {
+      "node_id": "ai_power_design_epc_operations",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Design EPC Operations",
+      "node_kind": "application_role",
+      "node_type": "infrastructure_flow_stage",
+      "description": "AI data center power infrastructure stage covering design epc operations requirements and dependencies.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ai_power_electrical_design_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Electrical Design for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "engineering_service_role",
+      "description": "AI data center application role for electrical design, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_electrical_design_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_electrical_design_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_modular_data_center_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Modular Data Center for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "data_center_system_role",
+      "description": "AI data center application role for modular data center, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_modular_data_center_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "modular_data_center_system"
+      ]
+    },
+    {
+      "node_id": "ai_power_prefabricated_power_module_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Prefabricated Power Module for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "power_system_integration_role",
+      "description": "AI data center application role for prefabricated power module, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_prefabricated_power_module_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "prefabricated_power_module"
+      ]
+    },
+    {
+      "node_id": "ai_power_liquid_cooling_integration_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Liquid Cooling Integration for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "thermal_integration_service_role",
+      "description": "AI data center application role for liquid cooling integration, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_liquid_cooling_integration_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "liquid_cooling_integration_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_data_center_epc_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Data Center EPC for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "epc_service_role",
+      "description": "AI data center application role for data center epc, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_data_center_epc_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_epc_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_commissioning_certification_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Commissioning Certification for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "commissioning_service_role",
+      "description": "AI data center application role for commissioning certification, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_commissioning_certification_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_commissioning_certification_service"
+      ]
+    },
+    {
+      "node_id": "ai_power_facility_operations_role",
+      "chain_id": "ai_data_center_power",
+      "parent_node_id": "ai_power_design_epc_operations",
+      "level": "L4",
+      "node_name": "Facility Operations for AI Data Centers",
+      "node_kind": "application_role",
+      "node_type": "operations_service_role",
+      "description": "AI data center application role for facility operations, defining deployment-specific requirements while canonical ownership remains on the referenced industry node.",
+      "status": "draft",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "ai_data_center_power",
+        "ai_power_design_epc_operations",
+        "ai_power_facility_operations_role"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": [
+        "data_center_facility_operations_service"
+      ]
+    }
+  ]
+}

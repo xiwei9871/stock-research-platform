@@ -1,4 +1,11 @@
-from stock_research.technology_industry_catalog import NODE_FIELDS, load_industry_catalog
+import json
+from pathlib import Path
+
+from stock_research.technology_industry_catalog import (
+    COMPOSITION_FIELDS,
+    NODE_FIELDS,
+    load_industry_catalog,
+)
 
 
 SECTOR_ID = "semiconductor_electronics"
@@ -459,6 +466,356 @@ HUMANOID_ALTERNATIVE_ROUTE_EDGES = {
     ("ankle_joint_module", "linear_joint_assembly"),
 }
 
+AI_POWER_SECTOR_ID = "energy_technology_new_power_system"
+AI_POWER_CHAIN_ID = "ai_data_center_power"
+AI_POWER_EXPECTED_CHILDREN = {
+    "ai_power_load_capacity_planning": [],
+    "ai_power_energy_supply_resilience": [
+        "ai_power_grid_supply_role",
+        "ai_power_renewable_procurement_role",
+        "ai_power_distributed_energy_role",
+        "ai_power_gas_turbine_role",
+        "ai_power_nuclear_supply_role",
+        "ai_power_microgrid_role",
+    ],
+    "ai_power_grid_access_substation": [
+        "ai_power_grid_connection_role",
+        "ai_power_substation_role",
+        "ai_power_transformer_role",
+        "ai_power_switchgear_role",
+        "ai_power_relay_protection_role",
+        "ai_power_cable_role",
+        "ai_power_busbar_role",
+        "ai_power_power_quality_role",
+    ],
+    "ai_power_backup_power": [
+        "ai_power_diesel_generator_role",
+        "ai_power_gas_backup_role",
+        "ai_power_fuel_cell_backup_role",
+        "ai_power_battery_backup_role",
+        "ai_power_flywheel_role",
+        "ai_power_automatic_transfer_switch_role",
+        "ai_power_black_start_role",
+    ],
+    "ai_power_ups_conversion": [
+        "ai_power_line_frequency_ups_role",
+        "ai_power_high_frequency_ups_role",
+        "ai_power_modular_ups_role",
+        "ai_power_medium_voltage_ups_role",
+        "ai_power_static_transfer_switch_role",
+        "ai_power_rectifier_inverter_role",
+        "ai_power_ups_battery_role",
+    ],
+    "ai_power_hvdc_dc_architecture": [
+        "ai_power_240_400v_hvdc_role",
+        "ai_power_800vdc_role",
+        "ai_power_central_rectifier_role",
+        "ai_power_dc_bus_role",
+        "ai_power_solid_state_transformer_role",
+        "ai_power_dc_breaker_role",
+        "ai_power_dc_protection_role",
+    ],
+    "ai_power_room_rack_distribution": [
+        "ai_power_pdu_role",
+        "ai_power_row_distribution_role",
+        "ai_power_busway_role",
+        "ai_power_intelligent_rack_pdu_role",
+        "ai_power_power_shelf_role",
+        "ai_power_high_current_connector_role",
+        "ai_power_hvdc_connector_role",
+        "ai_power_copper_flexible_connection_role",
+    ],
+    "ai_power_server_board_power": [
+        "ai_power_server_psu_role",
+        "ai_power_ac_dc_module_role",
+        "ai_power_dc_dc_module_role",
+        "ai_power_vrm_role",
+        "ai_power_multiphase_controller_role",
+        "ai_power_mosfet_role",
+        "ai_power_sic_role",
+        "ai_power_gan_role",
+        "ai_power_magnetic_component_role",
+        "ai_power_capacitor_role",
+    ],
+    "ai_power_liquid_cooling_thermal": [
+        "ai_power_cold_plate_role",
+        "ai_power_immersion_cooling_role",
+        "ai_power_spray_cooling_role",
+        "ai_power_cdu_role",
+        "ai_power_chiller_role",
+        "ai_power_liquid_pump_role",
+        "ai_power_heat_exchanger_role",
+        "ai_power_quick_connector_role",
+        "ai_power_liquid_pipe_role",
+        "ai_power_coolant_role",
+        "ai_power_leak_detection_role",
+        "ai_power_waste_heat_recovery_role",
+    ],
+    "ai_power_energy_management_software": [
+        "ai_power_epms_role",
+        "ai_power_bms_role",
+        "ai_power_dcim_role",
+        "ai_power_distribution_monitoring_role",
+        "ai_power_thermal_control_software_role",
+        "ai_power_fault_prediction_role",
+        "ai_power_compute_energy_scheduling_role",
+        "ai_power_carbon_energy_cost_role",
+    ],
+    "ai_power_design_epc_operations": [
+        "ai_power_electrical_design_role",
+        "ai_power_modular_data_center_role",
+        "ai_power_prefabricated_power_module_role",
+        "ai_power_liquid_cooling_integration_role",
+        "ai_power_data_center_epc_role",
+        "ai_power_commissioning_certification_role",
+        "ai_power_facility_operations_role",
+    ],
+}
+
+AI_POWER_ROLE_NODE_TYPES = {
+    "ai_power_grid_supply_role": "energy_supply_service_role",
+    "ai_power_renewable_procurement_role": "energy_procurement_service_role",
+    "ai_power_distributed_energy_role": "generation_system_role",
+    "ai_power_gas_turbine_role": "generation_equipment_role",
+    "ai_power_nuclear_supply_role": "energy_supply_service_role",
+    "ai_power_microgrid_role": "generation_system_role",
+    "ai_power_grid_connection_role": "grid_connection_service_role",
+    "ai_power_substation_role": "grid_infrastructure_role",
+    "ai_power_transformer_role": "grid_equipment_role",
+    "ai_power_switchgear_role": "grid_equipment_role",
+    "ai_power_relay_protection_role": "grid_protection_role",
+    "ai_power_cable_role": "power_interconnect_role",
+    "ai_power_busbar_role": "power_interconnect_role",
+    "ai_power_power_quality_role": "power_quality_role",
+    "ai_power_diesel_generator_role": "backup_generation_role",
+    "ai_power_gas_backup_role": "backup_generation_role",
+    "ai_power_fuel_cell_backup_role": "backup_generation_role",
+    "ai_power_battery_backup_role": "energy_storage_role",
+    "ai_power_flywheel_role": "energy_storage_role",
+    "ai_power_automatic_transfer_switch_role": "power_switching_role",
+    "ai_power_black_start_role": "resilience_service_role",
+    "ai_power_line_frequency_ups_role": "ups_equipment_role",
+    "ai_power_high_frequency_ups_role": "ups_equipment_role",
+    "ai_power_modular_ups_role": "ups_equipment_role",
+    "ai_power_medium_voltage_ups_role": "ups_equipment_role",
+    "ai_power_static_transfer_switch_role": "power_switching_role",
+    "ai_power_rectifier_inverter_role": "power_conversion_role",
+    "ai_power_ups_battery_role": "energy_storage_role",
+    "ai_power_240_400v_hvdc_role": "dc_power_architecture_role",
+    "ai_power_800vdc_role": "dc_power_architecture_role",
+    "ai_power_central_rectifier_role": "power_conversion_role",
+    "ai_power_dc_bus_role": "dc_distribution_role",
+    "ai_power_solid_state_transformer_role": "power_conversion_role",
+    "ai_power_dc_breaker_role": "dc_protection_role",
+    "ai_power_dc_protection_role": "dc_protection_role",
+    "ai_power_pdu_role": "power_distribution_role",
+    "ai_power_row_distribution_role": "power_distribution_role",
+    "ai_power_busway_role": "power_interconnect_role",
+    "ai_power_intelligent_rack_pdu_role": "power_distribution_role",
+    "ai_power_power_shelf_role": "power_conversion_role",
+    "ai_power_high_current_connector_role": "power_interconnect_role",
+    "ai_power_hvdc_connector_role": "power_interconnect_role",
+    "ai_power_copper_flexible_connection_role": "power_interconnect_role",
+    "ai_power_server_psu_role": "server_power_role",
+    "ai_power_ac_dc_module_role": "power_conversion_role",
+    "ai_power_dc_dc_module_role": "power_conversion_role",
+    "ai_power_vrm_role": "board_power_role",
+    "ai_power_multiphase_controller_role": "power_control_role",
+    "ai_power_mosfet_role": "power_semiconductor_role",
+    "ai_power_sic_role": "power_semiconductor_role",
+    "ai_power_gan_role": "power_semiconductor_role",
+    "ai_power_magnetic_component_role": "passive_component_role",
+    "ai_power_capacitor_role": "passive_component_role",
+    "ai_power_cold_plate_role": "liquid_cooling_equipment_role",
+    "ai_power_immersion_cooling_role": "liquid_cooling_system_role",
+    "ai_power_spray_cooling_role": "liquid_cooling_system_role",
+    "ai_power_cdu_role": "liquid_cooling_equipment_role",
+    "ai_power_chiller_role": "thermal_equipment_role",
+    "ai_power_liquid_pump_role": "liquid_cooling_component_role",
+    "ai_power_heat_exchanger_role": "thermal_equipment_role",
+    "ai_power_quick_connector_role": "liquid_cooling_component_role",
+    "ai_power_liquid_pipe_role": "liquid_cooling_component_role",
+    "ai_power_coolant_role": "thermal_material_role",
+    "ai_power_leak_detection_role": "thermal_monitoring_role",
+    "ai_power_waste_heat_recovery_role": "thermal_recovery_role",
+    "ai_power_epms_role": "energy_management_software_role",
+    "ai_power_bms_role": "facility_management_software_role",
+    "ai_power_dcim_role": "data_center_management_software_role",
+    "ai_power_distribution_monitoring_role": "energy_management_software_role",
+    "ai_power_thermal_control_software_role": "thermal_control_software_role",
+    "ai_power_fault_prediction_role": "predictive_maintenance_software_role",
+    "ai_power_compute_energy_scheduling_role": "energy_scheduling_software_role",
+    "ai_power_carbon_energy_cost_role": "energy_optimization_software_role",
+    "ai_power_electrical_design_role": "engineering_service_role",
+    "ai_power_modular_data_center_role": "data_center_system_role",
+    "ai_power_prefabricated_power_module_role": "power_system_integration_role",
+    "ai_power_liquid_cooling_integration_role": "thermal_integration_service_role",
+    "ai_power_data_center_epc_role": "epc_service_role",
+    "ai_power_commissioning_certification_role": "commissioning_service_role",
+    "ai_power_facility_operations_role": "operations_service_role",
+}
+
+AI_POWER_CANONICAL_OWNERS = {
+    "ai_power_grid_supply_role": ("bulk_grid_power_supply_service", "power_generation_energy_equipment"),
+    "ai_power_renewable_procurement_role": ("renewable_power_procurement_service", "power_generation_energy_equipment"),
+    "ai_power_distributed_energy_role": ("distributed_energy_generation_system", "power_generation_energy_equipment"),
+    "ai_power_gas_turbine_role": ("gas_turbine_generation_system", "power_generation_energy_equipment"),
+    "ai_power_nuclear_supply_role": ("nuclear_power_supply_service", "power_generation_energy_equipment"),
+    "ai_power_microgrid_role": ("microgrid_generation_system", "power_generation_energy_equipment"),
+    "ai_power_grid_connection_role": ("grid_connection_engineering_service", "new_power_system_smart_grid"),
+    "ai_power_substation_role": ("data_center_substation_system", "new_power_system_smart_grid"),
+    "ai_power_transformer_role": ("power_transformer", "new_power_system_smart_grid"),
+    "ai_power_switchgear_role": ("medium_voltage_switchgear", "new_power_system_smart_grid"),
+    "ai_power_relay_protection_role": ("relay_protection_system", "new_power_system_smart_grid"),
+    "ai_power_cable_role": ("power_cable", "pcb_passives_connectors_interconnect"),
+    "ai_power_busbar_role": ("power_busbar", "pcb_passives_connectors_interconnect"),
+    "ai_power_power_quality_role": ("power_quality_management_system", "new_power_system_smart_grid"),
+    "ai_power_diesel_generator_role": ("diesel_generator_set", "power_generation_energy_equipment"),
+    "ai_power_gas_backup_role": ("gas_fired_backup_generator", "power_generation_energy_equipment"),
+    "ai_power_fuel_cell_backup_role": ("stationary_fuel_cell_backup_system", "hydrogen_fuel_cells"),
+    "ai_power_battery_backup_role": ("stationary_battery_backup_system", "power_batteries_battery_materials"),
+    "ai_power_flywheel_role": ("flywheel_backup_energy_system", "power_batteries_battery_materials"),
+    "ai_power_automatic_transfer_switch_role": ("automatic_transfer_switch", "power_electronics_power_supply_equipment"),
+    "ai_power_black_start_role": ("black_start_generation_service", "power_generation_energy_equipment"),
+    "ai_power_line_frequency_ups_role": ("line_frequency_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_high_frequency_ups_role": ("high_frequency_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_modular_ups_role": ("modular_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_medium_voltage_ups_role": ("medium_voltage_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_static_transfer_switch_role": ("static_transfer_switch", "power_electronics_power_supply_equipment"),
+    "ai_power_rectifier_inverter_role": ("rectifier_inverter_system", "power_electronics_power_supply_equipment"),
+    "ai_power_ups_battery_role": ("ups_battery_system", "power_batteries_battery_materials"),
+    "ai_power_240_400v_hvdc_role": ("240_400v_hvdc_power_system", "power_electronics_power_supply_equipment"),
+    "ai_power_800vdc_role": ("800vdc_power_system", "power_electronics_power_supply_equipment"),
+    "ai_power_central_rectifier_role": ("central_rectifier_system", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_bus_role": ("dc_power_bus_system", "power_electronics_power_supply_equipment"),
+    "ai_power_solid_state_transformer_role": ("solid_state_transformer", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_breaker_role": ("dc_circuit_breaker", "new_power_system_smart_grid"),
+    "ai_power_dc_protection_role": ("dc_protection_system", "new_power_system_smart_grid"),
+    "ai_power_pdu_role": ("data_center_power_distribution_unit", "power_electronics_power_supply_equipment"),
+    "ai_power_row_distribution_role": ("row_level_power_distribution_system", "power_electronics_power_supply_equipment"),
+    "ai_power_busway_role": ("data_center_busway", "pcb_passives_connectors_interconnect"),
+    "ai_power_intelligent_rack_pdu_role": ("intelligent_rack_pdu", "power_electronics_power_supply_equipment"),
+    "ai_power_power_shelf_role": ("server_power_shelf", "power_electronics_power_supply_equipment"),
+    "ai_power_high_current_connector_role": ("high_current_power_connector", "pcb_passives_connectors_interconnect"),
+    "ai_power_hvdc_connector_role": ("hvdc_power_connector", "pcb_passives_connectors_interconnect"),
+    "ai_power_copper_flexible_connection_role": ("copper_flexible_interconnect", "pcb_passives_connectors_interconnect"),
+    "ai_power_server_psu_role": ("server_power_supply_unit", "power_electronics_power_supply_equipment"),
+    "ai_power_ac_dc_module_role": ("ac_dc_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_dc_module_role": ("dc_dc_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_vrm_role": ("voltage_regulator_module", "power_electronics_power_supply_equipment"),
+    "ai_power_multiphase_controller_role": ("multiphase_power_controller", "power_electronics_power_supply_equipment"),
+    "ai_power_mosfet_role": ("power_mosfet_device", "power_semiconductors"),
+    "ai_power_sic_role": ("silicon_carbide_power_device", "power_semiconductors"),
+    "ai_power_gan_role": ("gallium_nitride_power_device", "power_semiconductors"),
+    "ai_power_magnetic_component_role": ("power_magnetic_component", "pcb_passives_connectors_interconnect"),
+    "ai_power_capacitor_role": ("power_capacitor", "pcb_passives_connectors_interconnect"),
+    "ai_power_cold_plate_role": ("data_center_cold_plate", "cloud_data_center_infrastructure"),
+    "ai_power_immersion_cooling_role": ("immersion_cooling_system", "cloud_data_center_infrastructure"),
+    "ai_power_spray_cooling_role": ("spray_cooling_system", "cloud_data_center_infrastructure"),
+    "ai_power_cdu_role": ("coolant_distribution_unit", "cloud_data_center_infrastructure"),
+    "ai_power_chiller_role": ("data_center_chiller", "cloud_data_center_infrastructure"),
+    "ai_power_liquid_pump_role": ("liquid_cooling_pump", "cloud_data_center_infrastructure"),
+    "ai_power_heat_exchanger_role": ("data_center_heat_exchanger", "cloud_data_center_infrastructure"),
+    "ai_power_quick_connector_role": ("liquid_cooling_quick_connector", "cloud_data_center_infrastructure"),
+    "ai_power_liquid_pipe_role": ("liquid_cooling_pipe_system", "cloud_data_center_infrastructure"),
+    "ai_power_coolant_role": ("data_center_coolant", "cloud_data_center_infrastructure"),
+    "ai_power_leak_detection_role": ("liquid_cooling_leak_detection_system", "cloud_data_center_infrastructure"),
+    "ai_power_waste_heat_recovery_role": ("data_center_waste_heat_recovery_system", "cloud_data_center_infrastructure"),
+    "ai_power_epms_role": ("electrical_power_monitoring_software", "industrial_software"),
+    "ai_power_bms_role": ("building_management_software", "industrial_software"),
+    "ai_power_dcim_role": ("data_center_infrastructure_management_platform", "cloud_data_center_infrastructure"),
+    "ai_power_distribution_monitoring_role": ("power_distribution_monitoring_software", "industrial_software"),
+    "ai_power_thermal_control_software_role": ("thermal_control_software", "industrial_software"),
+    "ai_power_fault_prediction_role": ("power_fault_prediction_software", "industrial_software"),
+    "ai_power_compute_energy_scheduling_role": ("compute_energy_scheduling_software", "industrial_software"),
+    "ai_power_carbon_energy_cost_role": ("carbon_energy_cost_optimization_software", "industrial_software"),
+    "ai_power_electrical_design_role": ("data_center_electrical_design_service", "cloud_data_center_infrastructure"),
+    "ai_power_modular_data_center_role": ("modular_data_center_system", "cloud_data_center_infrastructure"),
+    "ai_power_prefabricated_power_module_role": ("prefabricated_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_liquid_cooling_integration_role": ("liquid_cooling_integration_service", "cloud_data_center_infrastructure"),
+    "ai_power_data_center_epc_role": ("data_center_epc_service", "cloud_data_center_infrastructure"),
+    "ai_power_commissioning_certification_role": ("data_center_commissioning_certification_service", "cloud_data_center_infrastructure"),
+    "ai_power_facility_operations_role": ("data_center_facility_operations_service", "cloud_data_center_infrastructure"),
+}
+
+AI_POWER_SUPPORTING_L3_BY_CHAIN = {
+    "power_semiconductors": "power_semiconductor_devices",
+    "pcb_passives_connectors_interconnect": "power_interconnect_passive_components",
+    "cloud_data_center_infrastructure": "data_center_facility_systems_services",
+    "industrial_software": "industrial_energy_facility_software",
+    "new_power_system_smart_grid": "grid_connection_transmission_protection",
+    "power_generation_energy_equipment": "generation_supply_resilience_systems",
+    "power_electronics_power_supply_equipment": "power_conversion_distribution_control",
+    "power_batteries_battery_materials": "stationary_backup_storage_systems",
+    "hydrogen_fuel_cells": "stationary_fuel_cell_systems",
+}
+
+AI_POWER_APPROVED_CHAIN_CONTRACT = {
+    "power_semiconductors": (
+        "semiconductor_electronics",
+        "canonical_industry_chain",
+        "manufacturing_process",
+        "skeleton",
+        5,
+    ),
+    "pcb_passives_connectors_interconnect": (
+        "semiconductor_electronics",
+        "canonical_industry_chain",
+        "manufacturing_process",
+        "skeleton",
+        11,
+    ),
+    "cloud_data_center_infrastructure": (
+        "next_generation_information_technology",
+        "canonical_industry_chain",
+        "infrastructure_flow",
+        "skeleton",
+        3,
+    ),
+    "industrial_software": (
+        "next_generation_information_technology",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        8,
+    ),
+    "new_power_system_smart_grid": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "infrastructure_flow",
+        "skeleton",
+        1,
+    ),
+    "power_generation_energy_equipment": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        2,
+    ),
+    "power_electronics_power_supply_equipment": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        3,
+    ),
+    "ai_data_center_power": (
+        "energy_technology_new_power_system",
+        "application_theme_chain",
+        "infrastructure_flow",
+        "draft",
+        4,
+    ),
+    "hydrogen_fuel_cells": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "technical_route",
+        "skeleton",
+        9,
+    ),
+}
+
 
 def test_semiconductor_manufacturing_equipment_chain_metadata():
     catalog = load_industry_catalog()
@@ -644,7 +1001,17 @@ def test_power_batteries_battery_materials_skeleton_metadata():
 
 def test_power_batteries_battery_materials_skeleton_exact_taxonomy_and_ownership():
     catalog = load_industry_catalog()
-    nodes = [row for row in catalog["nodes"] if row["chain_id"] == BATTERY_CHAIN_ID]
+    original_node_ids = {
+        BATTERY_L3_ID,
+        "battery_high_specific_energy_cell",
+        "battery_management_system_platform",
+    }
+    nodes = [
+        row
+        for row in catalog["nodes"]
+        if row["chain_id"] == BATTERY_CHAIN_ID
+        and row["node_id"] in original_node_ids
+    ]
 
     assert [row["node_id"] for row in nodes] == [
         BATTERY_L3_ID,
@@ -929,3 +1296,179 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "Hip-specific kinematic module that can integrate eligible rotary or linear joint "
         "assembly routes according to the humanoid architecture."
     )
+
+
+def test_ai_data_center_power_exact_taxonomy_and_application_role_contract():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == AI_POWER_CHAIN_ID]
+    l3_nodes = [row for row in nodes if row["level"] == "L3"]
+    role_nodes = [row for row in nodes if row["level"] == "L4"]
+
+    assert len(l3_nodes) == 11
+    assert len(role_nodes) == 80
+    assert [row["node_id"] for row in l3_nodes] == list(AI_POWER_EXPECTED_CHILDREN)
+    assert {
+        parent_id: [
+            row["node_id"]
+            for row in role_nodes
+            if row["parent_node_id"] == parent_id
+        ]
+        for parent_id in AI_POWER_EXPECTED_CHILDREN
+    } == AI_POWER_EXPECTED_CHILDREN
+    assert {row["node_id"]: row["node_type"] for row in role_nodes} == (
+        AI_POWER_ROLE_NODE_TYPES
+    )
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "application_role"
+        assert node["canonical_key"] == ""
+        assert node["status"] == "draft"
+        assert node["node_name"] != node["node_id"]
+        assert "AI data center" in node["description"]
+
+    for node in l3_nodes:
+        assert node["parent_node_id"] is None
+        assert node["node_type"] == "infrastructure_flow_stage"
+        assert node["canonical_node_refs"] == []
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            AI_POWER_CHAIN_ID,
+            node["node_id"],
+        ]
+
+    for node in role_nodes:
+        expected_target, _ = AI_POWER_CANONICAL_OWNERS[node["node_id"]]
+        assert node["canonical_node_refs"] == [expected_target]
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            AI_POWER_CHAIN_ID,
+            node["parent_node_id"],
+            node["node_id"],
+        ]
+
+
+def test_ai_power_approved_chain_metadata_and_battery_order_are_exact():
+    catalog = load_industry_catalog()
+    chains = {row["chain_id"]: row for row in catalog["chains"]}
+
+    for chain_id, expected in AI_POWER_APPROVED_CHAIN_CONTRACT.items():
+        chain = chains[chain_id]
+        assert (
+            chain["sector_id"],
+            chain["chain_kind"],
+            chain["decomposition_method"],
+            chain["status"],
+            chain["order"],
+        ) == expected
+        assert chain["description"]
+        assert chain["scope"]
+        assert chain["exclusions"]
+        assert chain["aliases"]
+
+    assert chains[BATTERY_CHAIN_ID]["order"] == 7
+
+
+def test_ai_data_center_power_compositions_match_roles_without_company_mappings():
+    catalog = load_industry_catalog()
+    compositions = [
+        row
+        for row in catalog["theme_compositions"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    ]
+    roles = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L4"
+    }
+
+    assert len(compositions) == 80
+    assert len({row["composition_id"] for row in compositions}) == 80
+    assert {row["role_node_id"] for row in compositions} == set(roles)
+    for composition in compositions:
+        assert set(composition) == COMPOSITION_FIELDS
+        assert composition["canonical_node_refs"] == roles[
+            composition["role_node_id"]
+        ]["canonical_node_refs"]
+        assert composition["relationship_type"] == "depends_on"
+        assert "company mappings and evidence remain on the canonical target" in (
+            composition["notes"].lower()
+        )
+        assert "company_mappings" not in composition
+
+
+def test_ai_data_center_power_targets_have_exact_canonical_ownership():
+    catalog = load_industry_catalog()
+    nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    chain_kinds = {row["chain_id"]: row["chain_kind"] for row in catalog["chains"]}
+
+    assert set(AI_POWER_CANONICAL_OWNERS) == set(AI_POWER_ROLE_NODE_TYPES)
+    for role_id, (target_id, expected_chain_id) in AI_POWER_CANONICAL_OWNERS.items():
+        role = nodes_by_id[role_id]
+        target = nodes_by_id[target_id]
+        assert role["canonical_node_refs"] == [target_id]
+        assert target["chain_id"] == expected_chain_id
+        assert target["level"] == "L4"
+        assert target["node_kind"] == "canonical"
+        assert target["status"] == "skeleton"
+        assert target["canonical_key"]
+        assert target["canonical_node_refs"] == []
+        assert target["primary_path"] == [
+            target["primary_path"][0],
+            expected_chain_id,
+            target["parent_node_id"],
+            target_id,
+        ]
+        assert chain_kinds[expected_chain_id] == "canonical_industry_chain"
+
+    canonical_keys = [
+        row["canonical_key"]
+        for row in catalog["nodes"]
+        if row["level"] == "L4" and row["canonical_key"]
+    ]
+    assert len(canonical_keys) == len(set(canonical_keys))
+
+
+def test_ai_power_supporting_file_contains_only_required_skeleton_nodes():
+    path = (
+        Path(__file__).parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+        / "nodes"
+        / "ai_power_supporting_canonical_nodes_v1.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    nodes = payload["nodes"]
+    expected_target_ids = {
+        target_id for target_id, _ in AI_POWER_CANONICAL_OWNERS.values()
+    }
+
+    assert len(expected_target_ids) == 80
+    assert len(nodes) == 80 + len(AI_POWER_SUPPORTING_L3_BY_CHAIN)
+    assert {row["node_id"] for row in nodes} == (
+        expected_target_ids | set(AI_POWER_SUPPORTING_L3_BY_CHAIN.values())
+    )
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["status"] == "skeleton"
+        assert node["node_kind"] == "canonical"
+        assert node["canonical_node_refs"] == []
+
+    for chain_id, parent_id in AI_POWER_SUPPORTING_L3_BY_CHAIN.items():
+        chain_nodes = [row for row in nodes if row["chain_id"] == chain_id]
+        assert chain_nodes[0]["node_id"] == parent_id
+        assert chain_nodes[0]["level"] == "L3"
+        assert chain_nodes[0]["parent_node_id"] is None
+        assert chain_nodes[0]["canonical_key"] == ""
+        assert all(
+            row["parent_node_id"] == parent_id
+            for row in chain_nodes[1:]
+        )
+        assert {
+            row["node_id"] for row in chain_nodes[1:]
+        } == {
+            target_id
+            for target_id, owner_chain_id in AI_POWER_CANONICAL_OWNERS.values()
+            if owner_chain_id == chain_id
+        }

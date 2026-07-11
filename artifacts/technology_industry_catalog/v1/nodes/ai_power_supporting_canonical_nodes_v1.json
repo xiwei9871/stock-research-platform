@@ -1,0 +1,1686 @@
+{
+  "nodes": [
+    {
+      "node_id": "power_semiconductor_devices",
+      "chain_id": "power_semiconductors",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Power Semiconductor Devices",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Canonical skeleton family for power semiconductor devices required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "power_semiconductors",
+        "power_semiconductor_devices"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_mosfet_device",
+      "chain_id": "power_semiconductors",
+      "parent_node_id": "power_semiconductor_devices",
+      "level": "L4",
+      "node_name": "Power MOSFET Device",
+      "node_kind": "canonical",
+      "node_type": "power_semiconductor",
+      "description": "Canonical ownership node for power mosfet device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "power_semiconductors",
+        "power_semiconductor_devices",
+        "power_mosfet_device"
+      ],
+      "canonical_key": "power_semiconductors:power_mosfet_device",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "silicon_carbide_power_device",
+      "chain_id": "power_semiconductors",
+      "parent_node_id": "power_semiconductor_devices",
+      "level": "L4",
+      "node_name": "Silicon Carbide Power Device",
+      "node_kind": "canonical",
+      "node_type": "power_semiconductor",
+      "description": "Canonical ownership node for silicon carbide power device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "power_semiconductors",
+        "power_semiconductor_devices",
+        "silicon_carbide_power_device"
+      ],
+      "canonical_key": "power_semiconductors:silicon_carbide_power_device",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "gallium_nitride_power_device",
+      "chain_id": "power_semiconductors",
+      "parent_node_id": "power_semiconductor_devices",
+      "level": "L4",
+      "node_name": "Gallium Nitride Power Device",
+      "node_kind": "canonical",
+      "node_type": "power_semiconductor",
+      "description": "Canonical ownership node for gallium nitride power device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "power_semiconductors",
+        "power_semiconductor_devices",
+        "gallium_nitride_power_device"
+      ],
+      "canonical_key": "power_semiconductors:gallium_nitride_power_device",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_interconnect_passive_components",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Power Interconnect Passive Components",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process_family",
+      "description": "Canonical skeleton family for power interconnect passive components required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_cable",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Power Cable",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for power cable products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "power_cable"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:power_cable",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_busbar",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Power Busbar",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for power busbar products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "power_busbar"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:power_busbar",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_busway",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Data Center Busway",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for data center busway products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "data_center_busway"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:data_center_busway",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "high_current_power_connector",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "High Current Power Connector",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for high current power connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "high_current_power_connector"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:high_current_power_connector",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "hvdc_power_connector",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "HVDC Power Connector",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for hvdc power connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "hvdc_power_connector"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:hvdc_power_connector",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "copper_flexible_interconnect",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Copper Flexible Interconnect",
+      "node_kind": "canonical",
+      "node_type": "power_interconnect",
+      "description": "Canonical ownership node for copper flexible interconnect products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "copper_flexible_interconnect"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:copper_flexible_interconnect",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_magnetic_component",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Power Magnetic Component",
+      "node_kind": "canonical",
+      "node_type": "passive_component",
+      "description": "Canonical ownership node for power magnetic component products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "power_magnetic_component"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:power_magnetic_component",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_capacitor",
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "parent_node_id": "power_interconnect_passive_components",
+      "level": "L4",
+      "node_name": "Power Capacitor",
+      "node_kind": "canonical",
+      "node_type": "passive_component",
+      "description": "Canonical ownership node for power capacitor products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "semiconductor_electronics",
+        "pcb_passives_connectors_interconnect",
+        "power_interconnect_passive_components",
+        "power_capacitor"
+      ],
+      "canonical_key": "pcb_passives_connectors_interconnect:power_capacitor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_facility_systems_services",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Data Center Facility Systems Services",
+      "node_kind": "canonical",
+      "node_type": "infrastructure_flow_stage",
+      "description": "Canonical skeleton family for data center facility systems services required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_cold_plate",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Cold Plate",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_equipment",
+      "description": "Canonical ownership node for data center cold plate products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_cold_plate"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_cold_plate",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "immersion_cooling_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Immersion Cooling System",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_system",
+      "description": "Canonical ownership node for immersion cooling system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "immersion_cooling_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:immersion_cooling_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "spray_cooling_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Spray Cooling System",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_system",
+      "description": "Canonical ownership node for spray cooling system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "spray_cooling_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:spray_cooling_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "coolant_distribution_unit",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Coolant Distribution Unit",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_equipment",
+      "description": "Canonical ownership node for coolant distribution unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "coolant_distribution_unit"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:coolant_distribution_unit",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_chiller",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Chiller",
+      "node_kind": "canonical",
+      "node_type": "thermal_equipment",
+      "description": "Canonical ownership node for data center chiller products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_chiller"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_chiller",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "liquid_cooling_pump",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Liquid Cooling Pump",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_component",
+      "description": "Canonical ownership node for liquid cooling pump products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "liquid_cooling_pump"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:liquid_cooling_pump",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_heat_exchanger",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Heat Exchanger",
+      "node_kind": "canonical",
+      "node_type": "thermal_equipment",
+      "description": "Canonical ownership node for data center heat exchanger products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_heat_exchanger"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_heat_exchanger",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "liquid_cooling_quick_connector",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Liquid Cooling Quick Connector",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_component",
+      "description": "Canonical ownership node for liquid cooling quick connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "liquid_cooling_quick_connector"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:liquid_cooling_quick_connector",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "liquid_cooling_pipe_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Liquid Cooling Pipe System",
+      "node_kind": "canonical",
+      "node_type": "liquid_cooling_component",
+      "description": "Canonical ownership node for liquid cooling pipe system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "liquid_cooling_pipe_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:liquid_cooling_pipe_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_coolant",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Coolant",
+      "node_kind": "canonical",
+      "node_type": "thermal_material",
+      "description": "Canonical ownership node for data center coolant products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_coolant"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_coolant",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "liquid_cooling_leak_detection_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Liquid Cooling Leak Detection System",
+      "node_kind": "canonical",
+      "node_type": "thermal_monitoring",
+      "description": "Canonical ownership node for liquid cooling leak detection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "liquid_cooling_leak_detection_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:liquid_cooling_leak_detection_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_waste_heat_recovery_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Waste Heat Recovery System",
+      "node_kind": "canonical",
+      "node_type": "thermal_recovery",
+      "description": "Canonical ownership node for data center waste heat recovery system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_waste_heat_recovery_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_waste_heat_recovery_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_infrastructure_management_platform",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Infrastructure Management Platform",
+      "node_kind": "canonical",
+      "node_type": "data_center_management_software",
+      "description": "Canonical ownership node for data center infrastructure management platform products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_infrastructure_management_platform"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_infrastructure_management_platform",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_electrical_design_service",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Electrical Design Service",
+      "node_kind": "canonical",
+      "node_type": "engineering_service",
+      "description": "Canonical ownership node for data center electrical design service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_electrical_design_service"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_electrical_design_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "modular_data_center_system",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Modular Data Center System",
+      "node_kind": "canonical",
+      "node_type": "data_center_system",
+      "description": "Canonical ownership node for modular data center system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "modular_data_center_system"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:modular_data_center_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "liquid_cooling_integration_service",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Liquid Cooling Integration Service",
+      "node_kind": "canonical",
+      "node_type": "thermal_integration_service",
+      "description": "Canonical ownership node for liquid cooling integration service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "liquid_cooling_integration_service"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:liquid_cooling_integration_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_epc_service",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center EPC Service",
+      "node_kind": "canonical",
+      "node_type": "epc_service",
+      "description": "Canonical ownership node for data center epc service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_epc_service"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_epc_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_commissioning_certification_service",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Commissioning Certification Service",
+      "node_kind": "canonical",
+      "node_type": "commissioning_service",
+      "description": "Canonical ownership node for data center commissioning certification service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_commissioning_certification_service"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_commissioning_certification_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_facility_operations_service",
+      "chain_id": "cloud_data_center_infrastructure",
+      "parent_node_id": "data_center_facility_systems_services",
+      "level": "L4",
+      "node_name": "Data Center Facility Operations Service",
+      "node_kind": "canonical",
+      "node_type": "operations_service",
+      "description": "Canonical ownership node for data center facility operations service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "cloud_data_center_infrastructure",
+        "data_center_facility_systems_services",
+        "data_center_facility_operations_service"
+      ],
+      "canonical_key": "cloud_data_center_infrastructure:data_center_facility_operations_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "industrial_energy_facility_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Industrial Energy Facility Software",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Canonical skeleton family for industrial energy facility software required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "electrical_power_monitoring_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Electrical Power Monitoring Software",
+      "node_kind": "canonical",
+      "node_type": "energy_management_software",
+      "description": "Canonical ownership node for electrical power monitoring software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "electrical_power_monitoring_software"
+      ],
+      "canonical_key": "industrial_software:electrical_power_monitoring_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "building_management_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Building Management Software",
+      "node_kind": "canonical",
+      "node_type": "facility_management_software",
+      "description": "Canonical ownership node for building management software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "building_management_software"
+      ],
+      "canonical_key": "industrial_software:building_management_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_distribution_monitoring_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Power Distribution Monitoring Software",
+      "node_kind": "canonical",
+      "node_type": "energy_management_software",
+      "description": "Canonical ownership node for power distribution monitoring software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "power_distribution_monitoring_software"
+      ],
+      "canonical_key": "industrial_software:power_distribution_monitoring_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "thermal_control_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Thermal Control Software",
+      "node_kind": "canonical",
+      "node_type": "thermal_control_software",
+      "description": "Canonical ownership node for thermal control software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "thermal_control_software"
+      ],
+      "canonical_key": "industrial_software:thermal_control_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_fault_prediction_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Power Fault Prediction Software",
+      "node_kind": "canonical",
+      "node_type": "predictive_maintenance_software",
+      "description": "Canonical ownership node for power fault prediction software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "power_fault_prediction_software"
+      ],
+      "canonical_key": "industrial_software:power_fault_prediction_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "compute_energy_scheduling_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Compute Energy Scheduling Software",
+      "node_kind": "canonical",
+      "node_type": "energy_scheduling_software",
+      "description": "Canonical ownership node for compute energy scheduling software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "compute_energy_scheduling_software"
+      ],
+      "canonical_key": "industrial_software:compute_energy_scheduling_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "carbon_energy_cost_optimization_software",
+      "chain_id": "industrial_software",
+      "parent_node_id": "industrial_energy_facility_software",
+      "level": "L4",
+      "node_name": "Carbon Energy Cost Optimization Software",
+      "node_kind": "canonical",
+      "node_type": "energy_optimization_software",
+      "description": "Canonical ownership node for carbon energy cost optimization software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "next_generation_information_technology",
+        "industrial_software",
+        "industrial_energy_facility_software",
+        "carbon_energy_cost_optimization_software"
+      ],
+      "canonical_key": "industrial_software:carbon_energy_cost_optimization_software",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "grid_connection_transmission_protection",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Grid Connection Transmission Protection",
+      "node_kind": "canonical",
+      "node_type": "infrastructure_flow_stage",
+      "description": "Canonical skeleton family for grid connection transmission protection required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "grid_connection_engineering_service",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Grid Connection Engineering Service",
+      "node_kind": "canonical",
+      "node_type": "grid_connection_service",
+      "description": "Canonical ownership node for grid connection engineering service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "grid_connection_engineering_service"
+      ],
+      "canonical_key": "new_power_system_smart_grid:grid_connection_engineering_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_substation_system",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Data Center Substation System",
+      "node_kind": "canonical",
+      "node_type": "grid_infrastructure",
+      "description": "Canonical ownership node for data center substation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "data_center_substation_system"
+      ],
+      "canonical_key": "new_power_system_smart_grid:data_center_substation_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_transformer",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Power Transformer",
+      "node_kind": "canonical",
+      "node_type": "grid_equipment",
+      "description": "Canonical ownership node for power transformer products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "power_transformer"
+      ],
+      "canonical_key": "new_power_system_smart_grid:power_transformer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "medium_voltage_switchgear",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Medium Voltage Switchgear",
+      "node_kind": "canonical",
+      "node_type": "grid_equipment",
+      "description": "Canonical ownership node for medium voltage switchgear products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "medium_voltage_switchgear"
+      ],
+      "canonical_key": "new_power_system_smart_grid:medium_voltage_switchgear",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "relay_protection_system",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Relay Protection System",
+      "node_kind": "canonical",
+      "node_type": "grid_protection",
+      "description": "Canonical ownership node for relay protection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "relay_protection_system"
+      ],
+      "canonical_key": "new_power_system_smart_grid:relay_protection_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_quality_management_system",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "Power Quality Management System",
+      "node_kind": "canonical",
+      "node_type": "power_quality",
+      "description": "Canonical ownership node for power quality management system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "power_quality_management_system"
+      ],
+      "canonical_key": "new_power_system_smart_grid:power_quality_management_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dc_circuit_breaker",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "DC Circuit Breaker",
+      "node_kind": "canonical",
+      "node_type": "dc_protection",
+      "description": "Canonical ownership node for dc circuit breaker products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "dc_circuit_breaker"
+      ],
+      "canonical_key": "new_power_system_smart_grid:dc_circuit_breaker",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dc_protection_system",
+      "chain_id": "new_power_system_smart_grid",
+      "parent_node_id": "grid_connection_transmission_protection",
+      "level": "L4",
+      "node_name": "DC Protection System",
+      "node_kind": "canonical",
+      "node_type": "dc_protection",
+      "description": "Canonical ownership node for dc protection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "new_power_system_smart_grid",
+        "grid_connection_transmission_protection",
+        "dc_protection_system"
+      ],
+      "canonical_key": "new_power_system_smart_grid:dc_protection_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "generation_supply_resilience_systems",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Generation Supply Resilience Systems",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Canonical skeleton family for generation supply resilience systems required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "bulk_grid_power_supply_service",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Bulk Grid Power Supply Service",
+      "node_kind": "canonical",
+      "node_type": "energy_supply_service",
+      "description": "Canonical ownership node for bulk grid power supply service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "bulk_grid_power_supply_service"
+      ],
+      "canonical_key": "power_generation_energy_equipment:bulk_grid_power_supply_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "renewable_power_procurement_service",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Renewable Power Procurement Service",
+      "node_kind": "canonical",
+      "node_type": "energy_procurement_service",
+      "description": "Canonical ownership node for renewable power procurement service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "renewable_power_procurement_service"
+      ],
+      "canonical_key": "power_generation_energy_equipment:renewable_power_procurement_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "distributed_energy_generation_system",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Distributed Energy Generation System",
+      "node_kind": "canonical",
+      "node_type": "generation_system",
+      "description": "Canonical ownership node for distributed energy generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "distributed_energy_generation_system"
+      ],
+      "canonical_key": "power_generation_energy_equipment:distributed_energy_generation_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "gas_turbine_generation_system",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Gas Turbine Generation System",
+      "node_kind": "canonical",
+      "node_type": "generation_equipment",
+      "description": "Canonical ownership node for gas turbine generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "gas_turbine_generation_system"
+      ],
+      "canonical_key": "power_generation_energy_equipment:gas_turbine_generation_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "nuclear_power_supply_service",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Nuclear Power Supply Service",
+      "node_kind": "canonical",
+      "node_type": "energy_supply_service",
+      "description": "Canonical ownership node for nuclear power supply service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "nuclear_power_supply_service"
+      ],
+      "canonical_key": "power_generation_energy_equipment:nuclear_power_supply_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "microgrid_generation_system",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Microgrid Generation System",
+      "node_kind": "canonical",
+      "node_type": "generation_system",
+      "description": "Canonical ownership node for microgrid generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "microgrid_generation_system"
+      ],
+      "canonical_key": "power_generation_energy_equipment:microgrid_generation_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "diesel_generator_set",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Diesel Generator Set",
+      "node_kind": "canonical",
+      "node_type": "backup_generation",
+      "description": "Canonical ownership node for diesel generator set products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "diesel_generator_set"
+      ],
+      "canonical_key": "power_generation_energy_equipment:diesel_generator_set",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "gas_fired_backup_generator",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Gas Fired Backup Generator",
+      "node_kind": "canonical",
+      "node_type": "backup_generation",
+      "description": "Canonical ownership node for gas fired backup generator products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "gas_fired_backup_generator"
+      ],
+      "canonical_key": "power_generation_energy_equipment:gas_fired_backup_generator",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "black_start_generation_service",
+      "chain_id": "power_generation_energy_equipment",
+      "parent_node_id": "generation_supply_resilience_systems",
+      "level": "L4",
+      "node_name": "Black Start Generation Service",
+      "node_kind": "canonical",
+      "node_type": "resilience_service",
+      "description": "Canonical ownership node for black start generation service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_generation_energy_equipment",
+        "generation_supply_resilience_systems",
+        "black_start_generation_service"
+      ],
+      "canonical_key": "power_generation_energy_equipment:black_start_generation_service",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "power_conversion_distribution_control",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Power Conversion Distribution Control",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Canonical skeleton family for power conversion distribution control required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "automatic_transfer_switch",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Automatic Transfer Switch",
+      "node_kind": "canonical",
+      "node_type": "power_switching",
+      "description": "Canonical ownership node for automatic transfer switch products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "automatic_transfer_switch"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:automatic_transfer_switch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "line_frequency_ups",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Line Frequency UPS",
+      "node_kind": "canonical",
+      "node_type": "ups_equipment",
+      "description": "Canonical ownership node for line frequency ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "line_frequency_ups"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:line_frequency_ups",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "high_frequency_ups",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "High Frequency UPS",
+      "node_kind": "canonical",
+      "node_type": "ups_equipment",
+      "description": "Canonical ownership node for high frequency ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "high_frequency_ups"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:high_frequency_ups",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "modular_ups",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Modular UPS",
+      "node_kind": "canonical",
+      "node_type": "ups_equipment",
+      "description": "Canonical ownership node for modular ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "modular_ups"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:modular_ups",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "medium_voltage_ups",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Medium Voltage UPS",
+      "node_kind": "canonical",
+      "node_type": "ups_equipment",
+      "description": "Canonical ownership node for medium voltage ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "medium_voltage_ups"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:medium_voltage_ups",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "static_transfer_switch",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Static Transfer Switch",
+      "node_kind": "canonical",
+      "node_type": "power_switching",
+      "description": "Canonical ownership node for static transfer switch products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "static_transfer_switch"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:static_transfer_switch",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rectifier_inverter_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Rectifier Inverter System",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for rectifier inverter system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "rectifier_inverter_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:rectifier_inverter_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "240_400v_hvdc_power_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "240 400 V HVDC Power System",
+      "node_kind": "canonical",
+      "node_type": "dc_power_architecture",
+      "description": "Canonical ownership node for 240 400 v hvdc power system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "240_400v_hvdc_power_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:240_400v_hvdc_power_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "800vdc_power_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "800 VDC Power System",
+      "node_kind": "canonical",
+      "node_type": "dc_power_architecture",
+      "description": "Canonical ownership node for 800 vdc power system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "800vdc_power_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:800vdc_power_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "central_rectifier_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Central Rectifier System",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for central rectifier system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "central_rectifier_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:central_rectifier_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dc_power_bus_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "DC Power Bus System",
+      "node_kind": "canonical",
+      "node_type": "dc_distribution",
+      "description": "Canonical ownership node for dc power bus system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "dc_power_bus_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:dc_power_bus_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "solid_state_transformer",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Solid State Transformer",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for solid state transformer products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "solid_state_transformer"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:solid_state_transformer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "data_center_power_distribution_unit",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Data Center Power Distribution Unit",
+      "node_kind": "canonical",
+      "node_type": "power_distribution",
+      "description": "Canonical ownership node for data center power distribution unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "data_center_power_distribution_unit"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:data_center_power_distribution_unit",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "row_level_power_distribution_system",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Row Level Power Distribution System",
+      "node_kind": "canonical",
+      "node_type": "power_distribution",
+      "description": "Canonical ownership node for row level power distribution system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "row_level_power_distribution_system"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:row_level_power_distribution_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "intelligent_rack_pdu",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Intelligent Rack PDU",
+      "node_kind": "canonical",
+      "node_type": "power_distribution",
+      "description": "Canonical ownership node for intelligent rack pdu products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "intelligent_rack_pdu"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:intelligent_rack_pdu",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "server_power_shelf",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Server Power Shelf",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for server power shelf products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "server_power_shelf"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:server_power_shelf",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "server_power_supply_unit",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Server Power Supply Unit",
+      "node_kind": "canonical",
+      "node_type": "server_power",
+      "description": "Canonical ownership node for server power supply unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "server_power_supply_unit"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:server_power_supply_unit",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ac_dc_power_module",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "AC DC Power Module",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for ac dc power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "ac_dc_power_module"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:ac_dc_power_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dc_dc_power_module",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "DC DC Power Module",
+      "node_kind": "canonical",
+      "node_type": "power_conversion",
+      "description": "Canonical ownership node for dc dc power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "dc_dc_power_module"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:dc_dc_power_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "voltage_regulator_module",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Voltage Regulator Module",
+      "node_kind": "canonical",
+      "node_type": "board_power",
+      "description": "Canonical ownership node for voltage regulator module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "voltage_regulator_module"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:voltage_regulator_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "multiphase_power_controller",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Multiphase Power Controller",
+      "node_kind": "canonical",
+      "node_type": "power_control",
+      "description": "Canonical ownership node for multiphase power controller products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "multiphase_power_controller"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:multiphase_power_controller",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "prefabricated_power_module",
+      "chain_id": "power_electronics_power_supply_equipment",
+      "parent_node_id": "power_conversion_distribution_control",
+      "level": "L4",
+      "node_name": "Prefabricated Power Module",
+      "node_kind": "canonical",
+      "node_type": "power_system_integration",
+      "description": "Canonical ownership node for prefabricated power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_electronics_power_supply_equipment",
+        "power_conversion_distribution_control",
+        "prefabricated_power_module"
+      ],
+      "canonical_key": "power_electronics_power_supply_equipment:prefabricated_power_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "stationary_backup_storage_systems",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Stationary Backup Storage Systems",
+      "node_kind": "canonical",
+      "node_type": "battery_system_family",
+      "description": "Canonical skeleton family for stationary backup storage systems required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "stationary_backup_storage_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "stationary_battery_backup_system",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": "stationary_backup_storage_systems",
+      "level": "L4",
+      "node_name": "Stationary Battery Backup System",
+      "node_kind": "canonical",
+      "node_type": "energy_storage",
+      "description": "Canonical ownership node for stationary battery backup system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "stationary_backup_storage_systems",
+        "stationary_battery_backup_system"
+      ],
+      "canonical_key": "power_batteries_battery_materials:stationary_battery_backup_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "flywheel_backup_energy_system",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": "stationary_backup_storage_systems",
+      "level": "L4",
+      "node_name": "Flywheel Backup Energy System",
+      "node_kind": "canonical",
+      "node_type": "energy_storage",
+      "description": "Canonical ownership node for flywheel backup energy system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "stationary_backup_storage_systems",
+        "flywheel_backup_energy_system"
+      ],
+      "canonical_key": "power_batteries_battery_materials:flywheel_backup_energy_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ups_battery_system",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": "stationary_backup_storage_systems",
+      "level": "L4",
+      "node_name": "UPS Battery System",
+      "node_kind": "canonical",
+      "node_type": "energy_storage",
+      "description": "Canonical ownership node for ups battery system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "stationary_backup_storage_systems",
+        "ups_battery_system"
+      ],
+      "canonical_key": "power_batteries_battery_materials:ups_battery_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "stationary_fuel_cell_systems",
+      "chain_id": "hydrogen_fuel_cells",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Stationary Fuel Cell Systems",
+      "node_kind": "canonical",
+      "node_type": "technical_route_family",
+      "description": "Canonical skeleton family for stationary fuel cell systems required by the AI data center power application chain.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "hydrogen_fuel_cells",
+        "stationary_fuel_cell_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "stationary_fuel_cell_backup_system",
+      "chain_id": "hydrogen_fuel_cells",
+      "parent_node_id": "stationary_fuel_cell_systems",
+      "level": "L4",
+      "node_name": "Stationary Fuel Cell Backup System",
+      "node_kind": "canonical",
+      "node_type": "backup_generation",
+      "description": "Canonical ownership node for stationary fuel cell backup system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "hydrogen_fuel_cells",
+        "stationary_fuel_cell_systems",
+        "stationary_fuel_cell_backup_system"
+      ],
+      "canonical_key": "hydrogen_fuel_cells:stationary_fuel_cell_backup_system",
+      "canonical_node_refs": []
+    }
+  ]
+}

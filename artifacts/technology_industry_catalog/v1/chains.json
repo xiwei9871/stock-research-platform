@@ -1,6 +1,26 @@
 {
   "chains": [
     {
+      "chain_id": "power_semiconductors",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Power Semiconductors",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Canonical industry chain for discrete and integrated semiconductor devices that switch, convert, and control electrical power.",
+      "scope": "Covers silicon MOSFETs, silicon-carbide power devices, gallium-nitride power devices, and their device-level manufacturing routes for power conversion applications.",
+      "exclusions": [
+        "Power-supply equipment, converter assemblies, and application-specific power architectures remain owned by power_electronics_power_supply_equipment.",
+        "Signal-processing, radio-frequency, memory, and logic semiconductors remain owned by their respective semiconductor chains."
+      ],
+      "aliases": [
+        "Power Devices",
+        "Power Semiconductor Devices",
+        "功率半导体"
+      ],
+      "status": "skeleton",
+      "order": 5
+    },
+    {
       "chain_id": "semiconductor_manufacturing_equipment",
       "sector_id": "semiconductor_electronics",
       "chain_name": "Semiconductor Manufacturing Equipment",
@@ -18,6 +38,66 @@
         "半导体制造设备"
       ],
       "status": "draft",
+      "order": 8
+    },
+    {
+      "chain_id": "pcb_passives_connectors_interconnect",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "PCB, Passives, Connectors, and Interconnect",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Canonical industry chain for electrical interconnect products and passive components that route, join, filter, and condition power or signals.",
+      "scope": "Covers power cables, busbars and busways, high-current and HVDC connectors, flexible copper links, magnetic components, capacitors, and related manufacturing processes.",
+      "exclusions": [
+        "Active power semiconductor devices remain owned by power_semiconductors.",
+        "Complete power-conversion and distribution equipment remains owned by power_electronics_power_supply_equipment."
+      ],
+      "aliases": [
+        "Electronic Interconnect and Passives",
+        "PCB and Connector Industry",
+        "印制电路板被动元件与连接互连"
+      ],
+      "status": "skeleton",
+      "order": 11
+    },
+    {
+      "chain_id": "cloud_data_center_infrastructure",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Cloud and Data Center Infrastructure",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Canonical infrastructure chain for data-center facilities, thermal systems, integrated delivery, commissioning, and operations.",
+      "scope": "Covers modular data-center systems, liquid-cooling equipment and loops, facility integration, DCIM platforms, electrical design, EPC, commissioning, certification, and facility operations.",
+      "exclusions": [
+        "Generic utility generation, grid equipment, and power-conversion products remain owned by their primary energy chains.",
+        "Compute chips, servers, storage, and network equipment remain owned by their respective information-technology and semiconductor chains."
+      ],
+      "aliases": [
+        "Data Center Facilities",
+        "Cloud Infrastructure Facilities",
+        "云与数据中心基础设施"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "industrial_software",
+      "sector_id": "next_generation_information_technology",
+      "chain_name": "Industrial Software",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for operational, engineering, monitoring, optimization, and predictive software used in industrial and infrastructure systems.",
+      "scope": "Covers electrical and facility monitoring platforms, building management software, thermal control, fault prediction, compute-energy scheduling, and carbon, energy, and cost optimization software.",
+      "exclusions": [
+        "Physical power, grid, cooling, and data-center facility equipment remains owned by the corresponding equipment or infrastructure chain.",
+        "Generic operating systems, databases, and cybersecurity platforms remain owned by their primary foundational-software chains."
+      ],
+      "aliases": [
+        "Industrial Operations Software",
+        "Industrial Digital Software",
+        "工业软件"
+      ],
+      "status": "skeleton",
       "order": 8
     },
     {
@@ -43,6 +123,86 @@
       "order": 4
     },
     {
+      "chain_id": "new_power_system_smart_grid",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "New Power System and Smart Grid",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Canonical infrastructure chain for connecting, transforming, switching, protecting, monitoring, and maintaining power flows across modern grids.",
+      "scope": "Covers grid-connection engineering, substations, transformers, switchgear, relay protection, power-quality systems, DC breakers, and DC protection systems.",
+      "exclusions": [
+        "Power generation equipment and energy procurement services remain owned by power_generation_energy_equipment.",
+        "Data-center internal UPS, rectification, rack distribution, and server power equipment remain owned by power_electronics_power_supply_equipment."
+      ],
+      "aliases": [
+        "Smart Grid",
+        "Modern Power Grid Infrastructure",
+        "新型电力系统与智能电网"
+      ],
+      "status": "skeleton",
+      "order": 1
+    },
+    {
+      "chain_id": "power_generation_energy_equipment",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Generation and Energy Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for generation systems, power-supply services, distributed energy, microgrids, and generation-based resilience.",
+      "scope": "Covers grid and nuclear supply services, renewable procurement services, distributed generation, gas turbines, microgrids, diesel and gas backup generation, and black-start generation services.",
+      "exclusions": [
+        "Grid connection, substations, transformation, and protection remain owned by new_power_system_smart_grid.",
+        "Fuel-cell and battery storage technologies remain owned by hydrogen_fuel_cells and power_batteries_battery_materials respectively."
+      ],
+      "aliases": [
+        "Generation and Energy Systems",
+        "Power Generation Equipment",
+        "发电与能源装备"
+      ],
+      "status": "skeleton",
+      "order": 2
+    },
+    {
+      "chain_id": "power_electronics_power_supply_equipment",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Electronics and Power Supply Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "system_architecture",
+      "description": "Canonical industry chain for power conversion, transfer, distribution, regulation, and control equipment from facility input through server-board delivery.",
+      "scope": "Covers UPS equipment, transfer switches, rectifiers and inverters, HVDC systems, DC buses, power distribution units, power shelves, server power supplies, AC-DC and DC-DC modules, voltage regulators, and power controllers.",
+      "exclusions": [
+        "Power semiconductor devices and passive interconnect components remain owned by their respective semiconductor and interconnect chains.",
+        "Utility-grid substations, transformers, switchgear, and grid protection remain owned by new_power_system_smart_grid."
+      ],
+      "aliases": [
+        "Power Supply Equipment",
+        "Power Conversion and Distribution Equipment",
+        "电力电子与电源设备"
+      ],
+      "status": "skeleton",
+      "order": 3
+    },
+    {
+      "chain_id": "ai_data_center_power",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "AI Data Center Power",
+      "chain_kind": "application_theme_chain",
+      "decomposition_method": "infrastructure_flow",
+      "description": "Application-chain view of the electrical, thermal, software, engineering, and operational dependencies required to power high-density AI data centers.",
+      "scope": "Covers capacity planning, resilient energy supply, grid access, backup power, UPS and DC conversion, room and rack distribution, server-board power, liquid cooling, energy-management software, and facility delivery and operations for AI data centers.",
+      "exclusions": [
+        "Canonical product, service, technology, company, and evidence ownership remains on the referenced non-application industry-chain nodes.",
+        "Compute accelerators, servers, networking, storage, and AI software workloads are outside this power-application chain except where they define power or cooling requirements."
+      ],
+      "aliases": [
+        "AI Data Center Power Infrastructure",
+        "AI Compute Power and Cooling Chain",
+        "AI数据中心电力基础设施"
+      ],
+      "status": "draft",
+      "order": 4
+    },
+    {
       "chain_id": "power_batteries_battery_materials",
       "sector_id": "energy_technology_new_power_system",
       "chain_name": "Power Batteries and Battery Materials",
@@ -62,6 +222,26 @@
       ],
       "status": "skeleton",
       "order": 7
+    },
+    {
+      "chain_id": "hydrogen_fuel_cells",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Hydrogen and Fuel Cells",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "technical_route",
+      "description": "Canonical technology-route chain for hydrogen conversion and fuel-cell systems used in stationary, mobile, and industrial energy applications.",
+      "scope": "Covers stationary fuel-cell backup systems and their fuel-cell technology route, balance-of-plant integration, and application-neutral product ownership.",
+      "exclusions": [
+        "Hydrogen production, transport, and storage infrastructure outside the fuel-cell system boundary remains owned by dedicated hydrogen supply chains when introduced.",
+        "Application-specific backup-power sizing, redundancy, and facility integration remain owned by the relevant application chain."
+      ],
+      "aliases": [
+        "Fuel Cell Industry",
+        "Hydrogen Energy and Fuel Cells",
+        "氢能与燃料电池"
+      ],
+      "status": "skeleton",
+      "order": 9
     }
   ]
 }

@@ -1,0 +1,804 @@
+{
+  "theme_compositions": [
+    {
+      "composition_id": "ai_power_grid_supply_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_grid_supply_role",
+      "canonical_node_refs": [
+        "bulk_grid_power_supply_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_renewable_procurement_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_renewable_procurement_role",
+      "canonical_node_refs": [
+        "renewable_power_procurement_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_distributed_energy_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_distributed_energy_role",
+      "canonical_node_refs": [
+        "distributed_energy_generation_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_gas_turbine_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_gas_turbine_role",
+      "canonical_node_refs": [
+        "gas_turbine_generation_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_nuclear_supply_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_nuclear_supply_role",
+      "canonical_node_refs": [
+        "nuclear_power_supply_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_microgrid_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_microgrid_role",
+      "canonical_node_refs": [
+        "microgrid_generation_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_grid_connection_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_grid_connection_role",
+      "canonical_node_refs": [
+        "grid_connection_engineering_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_substation_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_substation_role",
+      "canonical_node_refs": [
+        "data_center_substation_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_transformer_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_transformer_role",
+      "canonical_node_refs": [
+        "power_transformer"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_switchgear_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_switchgear_role",
+      "canonical_node_refs": [
+        "medium_voltage_switchgear"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_relay_protection_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_relay_protection_role",
+      "canonical_node_refs": [
+        "relay_protection_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_cable_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_cable_role",
+      "canonical_node_refs": [
+        "power_cable"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_busbar_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_busbar_role",
+      "canonical_node_refs": [
+        "power_busbar"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_power_quality_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_power_quality_role",
+      "canonical_node_refs": [
+        "power_quality_management_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_diesel_generator_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_diesel_generator_role",
+      "canonical_node_refs": [
+        "diesel_generator_set"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_gas_backup_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_gas_backup_role",
+      "canonical_node_refs": [
+        "gas_fired_backup_generator"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_fuel_cell_backup_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_fuel_cell_backup_role",
+      "canonical_node_refs": [
+        "stationary_fuel_cell_backup_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_battery_backup_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_battery_backup_role",
+      "canonical_node_refs": [
+        "stationary_battery_backup_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_flywheel_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_flywheel_role",
+      "canonical_node_refs": [
+        "flywheel_backup_energy_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_automatic_transfer_switch_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_automatic_transfer_switch_role",
+      "canonical_node_refs": [
+        "automatic_transfer_switch"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_black_start_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_black_start_role",
+      "canonical_node_refs": [
+        "black_start_generation_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_line_frequency_ups_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_line_frequency_ups_role",
+      "canonical_node_refs": [
+        "line_frequency_ups"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_high_frequency_ups_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_high_frequency_ups_role",
+      "canonical_node_refs": [
+        "high_frequency_ups"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_modular_ups_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_modular_ups_role",
+      "canonical_node_refs": [
+        "modular_ups"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_medium_voltage_ups_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_medium_voltage_ups_role",
+      "canonical_node_refs": [
+        "medium_voltage_ups"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_static_transfer_switch_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_static_transfer_switch_role",
+      "canonical_node_refs": [
+        "static_transfer_switch"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_rectifier_inverter_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_rectifier_inverter_role",
+      "canonical_node_refs": [
+        "rectifier_inverter_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_ups_battery_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_ups_battery_role",
+      "canonical_node_refs": [
+        "ups_battery_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_240_400v_hvdc_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_240_400v_hvdc_role",
+      "canonical_node_refs": [
+        "240_400v_hvdc_power_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_800vdc_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_800vdc_role",
+      "canonical_node_refs": [
+        "800vdc_power_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_central_rectifier_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_central_rectifier_role",
+      "canonical_node_refs": [
+        "central_rectifier_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_dc_bus_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_dc_bus_role",
+      "canonical_node_refs": [
+        "dc_power_bus_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_solid_state_transformer_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_solid_state_transformer_role",
+      "canonical_node_refs": [
+        "solid_state_transformer"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_dc_breaker_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_dc_breaker_role",
+      "canonical_node_refs": [
+        "dc_circuit_breaker"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_dc_protection_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_dc_protection_role",
+      "canonical_node_refs": [
+        "dc_protection_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_pdu_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_pdu_role",
+      "canonical_node_refs": [
+        "data_center_power_distribution_unit"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_row_distribution_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_row_distribution_role",
+      "canonical_node_refs": [
+        "row_level_power_distribution_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_busway_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_busway_role",
+      "canonical_node_refs": [
+        "data_center_busway"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_intelligent_rack_pdu_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_intelligent_rack_pdu_role",
+      "canonical_node_refs": [
+        "intelligent_rack_pdu"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_power_shelf_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_power_shelf_role",
+      "canonical_node_refs": [
+        "server_power_shelf"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_high_current_connector_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_high_current_connector_role",
+      "canonical_node_refs": [
+        "high_current_power_connector"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_hvdc_connector_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_hvdc_connector_role",
+      "canonical_node_refs": [
+        "hvdc_power_connector"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_copper_flexible_connection_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_copper_flexible_connection_role",
+      "canonical_node_refs": [
+        "copper_flexible_interconnect"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_server_psu_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_server_psu_role",
+      "canonical_node_refs": [
+        "server_power_supply_unit"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_ac_dc_module_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_ac_dc_module_role",
+      "canonical_node_refs": [
+        "ac_dc_power_module"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_dc_dc_module_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_dc_dc_module_role",
+      "canonical_node_refs": [
+        "dc_dc_power_module"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_vrm_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_vrm_role",
+      "canonical_node_refs": [
+        "voltage_regulator_module"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_multiphase_controller_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_multiphase_controller_role",
+      "canonical_node_refs": [
+        "multiphase_power_controller"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_mosfet_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_mosfet_role",
+      "canonical_node_refs": [
+        "power_mosfet_device"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_sic_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_sic_role",
+      "canonical_node_refs": [
+        "silicon_carbide_power_device"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_gan_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_gan_role",
+      "canonical_node_refs": [
+        "gallium_nitride_power_device"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_magnetic_component_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_magnetic_component_role",
+      "canonical_node_refs": [
+        "power_magnetic_component"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_capacitor_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_capacitor_role",
+      "canonical_node_refs": [
+        "power_capacitor"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_cold_plate_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_cold_plate_role",
+      "canonical_node_refs": [
+        "data_center_cold_plate"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_immersion_cooling_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_immersion_cooling_role",
+      "canonical_node_refs": [
+        "immersion_cooling_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_spray_cooling_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_spray_cooling_role",
+      "canonical_node_refs": [
+        "spray_cooling_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_cdu_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_cdu_role",
+      "canonical_node_refs": [
+        "coolant_distribution_unit"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_chiller_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_chiller_role",
+      "canonical_node_refs": [
+        "data_center_chiller"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_liquid_pump_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_liquid_pump_role",
+      "canonical_node_refs": [
+        "liquid_cooling_pump"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_heat_exchanger_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_heat_exchanger_role",
+      "canonical_node_refs": [
+        "data_center_heat_exchanger"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_quick_connector_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_quick_connector_role",
+      "canonical_node_refs": [
+        "liquid_cooling_quick_connector"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_liquid_pipe_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_liquid_pipe_role",
+      "canonical_node_refs": [
+        "liquid_cooling_pipe_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_coolant_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_coolant_role",
+      "canonical_node_refs": [
+        "data_center_coolant"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_leak_detection_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_leak_detection_role",
+      "canonical_node_refs": [
+        "liquid_cooling_leak_detection_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_waste_heat_recovery_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_waste_heat_recovery_role",
+      "canonical_node_refs": [
+        "data_center_waste_heat_recovery_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_epms_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_epms_role",
+      "canonical_node_refs": [
+        "electrical_power_monitoring_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_bms_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_bms_role",
+      "canonical_node_refs": [
+        "building_management_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_dcim_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_dcim_role",
+      "canonical_node_refs": [
+        "data_center_infrastructure_management_platform"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_distribution_monitoring_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_distribution_monitoring_role",
+      "canonical_node_refs": [
+        "power_distribution_monitoring_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_thermal_control_software_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_thermal_control_software_role",
+      "canonical_node_refs": [
+        "thermal_control_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_fault_prediction_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_fault_prediction_role",
+      "canonical_node_refs": [
+        "power_fault_prediction_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_compute_energy_scheduling_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_compute_energy_scheduling_role",
+      "canonical_node_refs": [
+        "compute_energy_scheduling_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_carbon_energy_cost_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_carbon_energy_cost_role",
+      "canonical_node_refs": [
+        "carbon_energy_cost_optimization_software"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_electrical_design_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_electrical_design_role",
+      "canonical_node_refs": [
+        "data_center_electrical_design_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_modular_data_center_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_modular_data_center_role",
+      "canonical_node_refs": [
+        "modular_data_center_system"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_prefabricated_power_module_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_prefabricated_power_module_role",
+      "canonical_node_refs": [
+        "prefabricated_power_module"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_liquid_cooling_integration_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_liquid_cooling_integration_role",
+      "canonical_node_refs": [
+        "liquid_cooling_integration_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_data_center_epc_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_data_center_epc_role",
+      "canonical_node_refs": [
+        "data_center_epc_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_commissioning_certification_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_commissioning_certification_role",
+      "canonical_node_refs": [
+        "data_center_commissioning_certification_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    },
+    {
+      "composition_id": "ai_power_facility_operations_composition",
+      "chain_id": "ai_data_center_power",
+      "role_node_id": "ai_power_facility_operations_role",
+      "canonical_node_refs": [
+        "data_center_facility_operations_service"
+      ],
+      "relationship_type": "depends_on",
+      "notes": "AI data center role depends on the referenced canonical target; company mappings and evidence remain on the canonical target."
+    }
+  ]
+}
