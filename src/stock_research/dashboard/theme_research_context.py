@@ -269,6 +269,9 @@ def build_daily_theme_research_digest(
     )
     mapped_companies = []
     seen_companies: set[str] = set()
+    themes_by_id = {
+        row["theme_id"]: row for row in selected_context["theme_package"]["themes"]
+    }
     for mapping in mappings:
         if mapping["company_code"] in seen_companies:
             continue
@@ -278,6 +281,9 @@ def build_daily_theme_research_digest(
                 "company_code": mapping["company_code"],
                 "company_name": mapping["company_name"],
                 "theme_id": mapping["theme_id"],
+                "theme_name": str(
+                    themes_by_id.get(mapping["theme_id"], {}).get("theme_name") or ""
+                ),
                 "node_id": mapping["node"]["node_id"],
                 "node_name": mapping["node"]["node_name"],
                 "company_research_priority_score": mapping.get(

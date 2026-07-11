@@ -424,6 +424,7 @@ export type DailyThemeResearchDigest = {
     company_code: string;
     company_name: string;
     theme_id: string;
+    theme_name: string;
     node_id: string;
     node_name: string;
     company_research_priority_score: number | null;

@@ -28,6 +28,43 @@ function statusClass(status: string) {
   return 'neutral';
 }
 
+function ThemeResearchDigest({ payload }: { payload: DailyReviewLitePayload }) {
+  const digest = payload.theme_research;
+  if (!digest) return null;
+  const firstCompany = digest.mapped_companies[0];
+  return (
+    <div className="daily-theme-research-detail">
+      {firstCompany ? (
+        <div className="daily-theme-research-row">
+          <a
+            href={firstCompany.theme_dashboard_path}
+            aria-label={`${firstCompany.theme_name}主题详情`}
+          >
+            {firstCompany.company_name} · {firstCompany.node_name}
+          </a>
+          <span className="muted">
+            研究优先级 {firstCompany.company_research_priority_score ?? '-'}
+          </span>
+        </div>
+      ) : (
+        <p className="muted">当前没有满足审核门槛的公司映射。</p>
+      )}
+      {digest.recent_updates.slice(0, 3).map((update) => (
+        <div className="daily-theme-research-row" key={update.update_id}>
+          <span>{update.summary || `${update.object_type} 已审核`}</span>
+          <time dateTime={update.created_at}>{update.created_at.slice(0, 10)}</time>
+        </div>
+      ))}
+      {digest.incomplete_evidence_tracks.length ? (
+        <p className="muted">
+          待补证据：{digest.incomplete_evidence_tracks.join('、')}
+        </p>
+      ) : null}
+      <p className="theme-research-guardrail">仅用于研究，不参与信号或准入</p>
+    </div>
+  );
+}
+
 export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWorkspaceProps) {
   const [tradeDate, setTradeDate] = useState(initialTradeDate || todayDate());
   const [payload, setPayload] = useState<DailyReviewLitePayload | null>(null);
@@ -128,6 +165,7 @@ export function DailyReviewLiteWorkspace({ initialTradeDate }: DailyReviewLiteWo
               ) : (
                 <p className="muted">暂无该部分复盘内容。</p>
               )}
+              {section.key === 'theme_research' ? <ThemeResearchDigest payload={payload} /> : null}
             </article>
           ))}
         </section>

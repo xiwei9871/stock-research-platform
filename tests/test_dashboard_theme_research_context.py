@@ -208,5 +208,6 @@ def test_daily_digest_counts_reviewed_workflow_context() -> None:
     assert digest["recent_reviewed_update_count"] == 2
     assert digest["evidence_gap_count"] == 15
     assert digest["mapped_companies"][0]["company_code"] == "002837.SZ"
+    assert digest["mapped_companies"][0]["theme_name"] == "AI供电产业链：谁在拿走价值量"
     assert digest["research_only"] is True
     assert digest["used_for_admission"] is False

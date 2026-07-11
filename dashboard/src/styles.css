@@ -6444,3 +6444,51 @@ table.data-table td {
     padding-inline: 11px;
   }
 }
+.watchlist-theme-context,
+.daily-theme-research-detail {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.watchlist-theme-context {
+  min-width: 210px;
+}
+
+.watchlist-theme-context a,
+.daily-theme-research-detail a {
+  color: var(--accent-strong, #0f6b5b);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.watchlist-theme-context span,
+.watchlist-theme-context small,
+.daily-theme-research-row span,
+.daily-theme-research-row time {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.watchlist-theme-context small,
+.theme-research-guardrail {
+  color: var(--text-muted, #68726d);
+}
+
+.daily-theme-research-detail {
+  border-top: 1px solid var(--border-subtle, #dfe5e1);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.daily-theme-research-row {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.theme-research-guardrail {
+  font-size: 12px;
+  margin: 4px 0 0;
+}

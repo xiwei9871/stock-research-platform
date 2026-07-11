@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchWatchlistSignals } from '../api/client';
-import type { WatchlistSignalRow } from '../api/types';
+import type { AssetThemeResearchContext, WatchlistSignalRow } from '../api/types';
 
 const DEFAULT_WATCHLIST_ID = 'default';
 const DEFAULT_TRADE_DATE = '2026-06-18';
@@ -28,8 +28,45 @@ function rowMatchesQuery(row: WatchlistSignalRow, query: string) {
     row.stock_name,
     row.primary_signal,
     ...row.signal_tags,
-    ...row.risk_tags
+    ...row.risk_tags,
+    ...(row.theme_research_context?.themes.map((theme) => theme.theme_name) ?? []),
+    ...(row.theme_research_context?.mappings.map((mapping) => mapping.node.node_name) ?? [])
   ].some((value) => value.toLowerCase().includes(needle));
+}
+
+function ThemeResearchCell({ context }: { context?: AssetThemeResearchContext }) {
+  if (!context || context.status === 'unavailable') {
+    return <span className="muted">主题研究暂不可用</span>;
+  }
+  if (context.status === 'evidence_gap') {
+    return (
+      <div className="watchlist-theme-context">
+        <strong>证据待补</strong>
+        <span>{context.evidence_gap_count} 条映射未通过审核门槛</span>
+        <small>不参与信号或准入</small>
+      </div>
+    );
+  }
+  const theme = context.themes[0];
+  const mapping = context.mappings[0];
+  if (!theme || !mapping) {
+    return (
+      <div className="watchlist-theme-context">
+        <span className="muted">未建立审核映射</span>
+        <small>不参与信号或准入</small>
+      </div>
+    );
+  }
+  return (
+    <div className="watchlist-theme-context">
+      <a href={theme.dashboard_path}>{theme.theme_name}</a>
+      <span>
+        {mapping.node.node_name} · 价值量 {mapping.node.value_capture_score}/5 · 卡脖子{' '}
+        {mapping.node.bottleneck_score}/5
+      </span>
+      <small>已审核研究</small>
+    </div>
+  );
 }
 
 export function WatchlistWorkspace({ onOpenAsset, defaultTradeDate = DEFAULT_TRADE_DATE }: WatchlistWorkspaceProps) {
@@ -171,6 +208,7 @@ export function WatchlistWorkspace({ onOpenAsset, defaultTradeDate = DEFAULT_TRA
                   <th>优先级</th>
                   <th>信号</th>
                   <th>风险</th>
+                  <th>主题研究</th>
                   <th>原因</th>
                   <th>下一步</th>
                   <th>操作</th>
@@ -187,6 +225,9 @@ export function WatchlistWorkspace({ onOpenAsset, defaultTradeDate = DEFAULT_TRA
                     <td>{row.priority}</td>
                     <td>{formatTags(row.signal_tags)}</td>
                     <td>{formatTags(row.risk_tags)}</td>
+                    <td>
+                      <ThemeResearchCell context={row.theme_research_context} />
+                    </td>
                     <td>{reasonField(row, 'reason')}</td>
                     <td>{reasonField(row, 'next_action')}</td>
                     <td>
