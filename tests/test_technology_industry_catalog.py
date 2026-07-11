@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from stock_research import cli as stock_research_cli
+from stock_research import technology_industry_catalog
 from stock_research.technology_industry_catalog import (
     IndustryCatalogValidationError,
     get_industry_chain,
@@ -92,6 +94,96 @@ def test_summarize_catalog_counts_one_l3_and_one_l4_in_default_task2_fixture(
         "chains_by_sector": {"semiconductor_electronics": 1},
         "nodes_by_status": {"draft": 2},
     }
+
+
+def test_cli_validate_returns_ok_status_and_summary(tmp_path: Path, capsys):
+    root = _write_catalog_package(tmp_path)
+
+    exit_code = technology_industry_catalog.cli(
+        ["--artifact-dir", str(root), "validate"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert json.loads(captured.out) == {
+        "status": "ok",
+        **summarize_industry_catalog(load_industry_catalog(root)),
+    }
+
+
+def test_cli_summary_returns_catalog_summary(tmp_path: Path, capsys):
+    root = _write_catalog_package(tmp_path)
+
+    exit_code = technology_industry_catalog.cli(
+        ["--artifact-dir", str(root), "summary"]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["chain_count"] == 1
+
+
+def test_cli_show_returns_chain_object(tmp_path: Path, capsys):
+    root = _write_catalog_package(tmp_path)
+
+    exit_code = technology_industry_catalog.cli(
+        [
+            "--artifact-dir",
+            str(root),
+            "show",
+            "--chain",
+            "semiconductor_equipment",
+        ]
+    )
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert payload["chain"]["chain_id"] == "semiconductor_equipment"
+
+
+def test_cli_validate_returns_exact_structured_error(tmp_path: Path, capsys):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", chain_kind="invalid")
+
+    exit_code = technology_industry_catalog.cli(
+        ["--artifact-dir", str(root), "validate"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "error_code": "INVALID_CHAIN_KIND",
+        "message": "chains[0].chain_kind invalid: invalid",
+        "status": "error",
+    }
+
+
+def test_platform_cli_fast_dispatches_technology_industry_catalog(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+):
+    root = _write_catalog_package(tmp_path)
+
+    def fail_if_parser_is_built():
+        raise AssertionError("full platform parser should not be built")
+
+    monkeypatch.setattr(stock_research_cli, "build_parser", fail_if_parser_is_built)
+
+    exit_code = stock_research_cli.main_for_args(
+        ["technology-industry-catalog", "--artifact-dir", str(root), "summary"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    assert json.loads(captured.out)["chain_count"] == 1
 
 
 def test_get_industry_chain_returns_sorted_nodes_and_touching_relationships(

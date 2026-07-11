@@ -118,6 +118,9 @@ from stock_research.research_evidence_backfill import run_research_evidence_back
 from stock_research.research_publication_snapshot_audit import run_research_publication_snapshot_audit
 from stock_research.research_publication_package import run_research_publication_preview
 from stock_research.research_external_delivery import run_research_external_delivery_plan
+from stock_research.technology_industry_catalog import (
+    cli as run_technology_industry_catalog_cli,
+)
 from stock_research.theme_decomposition import cli as run_theme_decomposition_cli
 from stock_research.theme_research_ingestion import cli as run_theme_research_ingestion_cli
 from stock_research.theme_research_db_schema import cli as run_theme_research_db_cli
@@ -1529,6 +1532,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("apply-schema")
     subparsers.add_parser("apply-research-schema")
     subparsers.add_parser("dashboard-auth-init")
+    technology_industry_catalog = subparsers.add_parser("technology-industry-catalog")
+    technology_industry_catalog.add_argument(
+        "technology_industry_catalog_args",
+        nargs=argparse.REMAINDER,
+    )
     theme_decomposition = subparsers.add_parser("theme-decomposition")
     theme_decomposition.add_argument("theme_decomposition_args", nargs=argparse.REMAINDER)
     theme_research_ingestion = subparsers.add_parser("theme-research-ingestion")
@@ -5158,6 +5166,8 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if raw_argv and raw_argv[0] == "technology-industry-catalog":
+        return run_technology_industry_catalog_cli(raw_argv[1:])
     if raw_argv and raw_argv[0] == "theme-decomposition":
         return run_theme_decomposition_cli(raw_argv[1:])
     if raw_argv and raw_argv[0] == "theme-research-ingestion":
@@ -5177,6 +5187,10 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "dashboard-auth-init":
         apply_dashboard_auth_schema()
         print("dashboard_auth_schema_applied")
+    elif args.command == "technology-industry-catalog":
+        return run_technology_industry_catalog_cli(
+            args.technology_industry_catalog_args
+        )
     elif args.command == "theme-decomposition":
         return run_theme_decomposition_cli(args.theme_decomposition_args)
     elif args.command == "theme-research-ingestion":
