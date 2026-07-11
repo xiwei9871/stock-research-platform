@@ -3,7 +3,7 @@
     {
       "source_id": "gov_cn_new_industry_standardization_pilot_2023_2035",
       "title": "New Industry Standardization Pilot Project Implementation Plan (2023-2035)",
-      "publisher": "The State Council of the People's Republic of China",
+      "publisher": "Ministry of Industry and Information Technology, Ministry of Science and Technology, National Energy Administration, and Standardization Administration of China",
       "url": "https://www.gov.cn/zhengce/zhengceku/202308/content_6899527.htm",
       "source_type": "official_policy",
       "notes": "Defines national standardization priorities across emerging and future industries and informs the catalog's top-level scope."
@@ -11,7 +11,7 @@
     {
       "source_id": "gov_cn_future_industry_innovation_implementation_opinions",
       "title": "Implementation Opinions on Promoting Future Industry Innovation and Development",
-      "publisher": "The State Council of the People's Republic of China",
+      "publisher": "Ministry of Industry and Information Technology and six co-issuing departments",
       "url": "https://www.gov.cn/zhengce/zhengceku/202401/content_6929021.htm",
       "source_type": "official_policy",
       "notes": "Provides official future-industry categories spanning manufacturing, information, materials, energy, space, and health."
@@ -42,7 +42,7 @@
     },
     {
       "source_id": "nvidia_800_vdc_architecture",
-      "title": "800 VDC Architecture",
+      "title": "适用于 AI 数据中心的 800 VDC 架构",
       "publisher": "NVIDIA",
       "url": "https://www.nvidia.cn/data-center/technologies/800-vdc-architecture/",
       "source_type": "official_industry",

@@ -19,6 +19,32 @@ from stock_research.technology_industry_catalog import (
 def test_repository_catalog_starts_with_ten_approved_sectors():
     catalog = load_industry_catalog()
 
+    assert {
+        key: catalog[key]
+        for key in (
+            "artifact_version",
+            "catalog_id",
+            "status",
+            "updated_at",
+            "sector_file",
+            "chain_file",
+            "edge_file",
+            "source_file",
+            "node_dir",
+            "theme_composition_dir",
+        )
+    } == {
+        "artifact_version": "technology_industry_catalog_v1",
+        "catalog_id": "technology_industry_catalog_cn_v1",
+        "status": "draft",
+        "updated_at": "2026-07-11",
+        "sector_file": "sectors.json",
+        "chain_file": "chains.json",
+        "edge_file": "edges.json",
+        "source_file": "sources.json",
+        "node_dir": "nodes",
+        "theme_composition_dir": "theme_compositions",
+    }
     assert [row["sector_id"] for row in catalog["sectors"]] == [
         "semiconductor_electronics",
         "next_generation_information_technology",
@@ -31,7 +57,62 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "green_low_carbon_resource_recycling",
         "frontier_future_technology",
     ]
+    assert [row["order"] for row in catalog["sectors"]] == list(range(1, 11))
+    assert [row["status"] for row in catalog["sectors"]] == ["draft"] * 10
+    assert [
+        {
+            key: source[key]
+            for key in ("source_id", "publisher", "url", "source_type")
+        }
+        for source in catalog["sources"]
+    ] == [
+        {
+            "source_id": "gov_cn_new_industry_standardization_pilot_2023_2035",
+            "publisher": "Ministry of Industry and Information Technology, Ministry of Science and Technology, National Energy Administration, and Standardization Administration of China",
+            "url": "https://www.gov.cn/zhengce/zhengceku/202308/content_6899527.htm",
+            "source_type": "official_policy",
+        },
+        {
+            "source_id": "gov_cn_future_industry_innovation_implementation_opinions",
+            "publisher": "Ministry of Industry and Information Technology and six co-issuing departments",
+            "url": "https://www.gov.cn/zhengce/zhengceku/202401/content_6929021.htm",
+            "source_type": "official_policy",
+        },
+        {
+            "source_id": "miit_humanoid_robot_guiding_opinions",
+            "publisher": "Ministry of Industry and Information Technology",
+            "url": "https://www.miit.gov.cn/jgsj/kjs/wjfb/art/2023/art_50316f76a9b1454b898c7bb2a5846b79.html",
+            "source_type": "official_policy",
+        },
+        {
+            "source_id": "asml_how_microchips_are_made",
+            "publisher": "ASML",
+            "url": "https://www.asml.com/en/technology/all-about-microchips/how-microchips-are-made",
+            "source_type": "official_industry",
+        },
+        {
+            "source_id": "lam_research_products",
+            "publisher": "Lam Research",
+            "url": "https://www.lamresearch.com/products/",
+            "source_type": "official_industry",
+        },
+        {
+            "source_id": "nvidia_800_vdc_architecture",
+            "publisher": "NVIDIA",
+            "url": "https://www.nvidia.cn/data-center/technologies/800-vdc-architecture/",
+            "source_type": "official_industry",
+        },
+        {
+            "source_id": "iea_energy_and_ai",
+            "publisher": "International Energy Agency",
+            "url": "https://www.iea.org/reports/energy-and-ai",
+            "source_type": "institutional_report",
+        },
+    ]
     assert catalog["chains"] == []
+    assert catalog["edges"] == []
+    assert catalog["nodes"] == []
+    assert catalog["theme_compositions"] == []
 
 
 def test_load_industry_catalog_composes_package_files(tmp_path: Path):
