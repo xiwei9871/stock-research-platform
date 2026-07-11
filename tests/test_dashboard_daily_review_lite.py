@@ -1,3 +1,4 @@
+from stock_research.dashboard import daily_review_lite
 from stock_research.dashboard.daily_review_lite import _sections
 
 
@@ -77,3 +78,42 @@ def test_theme_research_section_degrades_without_breaking_daily_review() -> None
     theme_research = next(section for section in sections if section["key"] == "theme_research")
     assert theme_research["status"] == "partial"
     assert theme_research["items"][0] == {"label": "已审核主题", "value": "0"}
+
+
+def test_fallback_preserves_theme_research_warning(monkeypatch) -> None:
+    monkeypatch.setattr(
+        daily_review_lite,
+        "load_platform_summary",
+        lambda service: {"latest_market_date": "2026-07-10"},
+    )
+    monkeypatch.setattr(
+        daily_review_lite,
+        "_latest_registered_run",
+        lambda trade_date, service: None,
+    )
+    monkeypatch.setattr(
+        daily_review_lite,
+        "_generate_and_register_run",
+        lambda trade_date, service: (_ for _ in ()).throw(OSError("read-only fixture")),
+    )
+    monkeypatch.setattr(
+        daily_review_lite,
+        "_build_live_daily_review_payload",
+        lambda trade_date, service: {
+            "trade_date": trade_date,
+            "status": "partial",
+            "run": {},
+            "fallback": False,
+            "sections": [],
+            "artifacts": [],
+            "theme_research": {"status": "partial"},
+            "warnings": ["theme_research_digest_unavailable"],
+        },
+    )
+
+    payload = daily_review_lite.build_daily_review_lite(service="test")
+
+    assert payload["warnings"] == [
+        "theme_research_digest_unavailable",
+        "no registered daily review run selected",
+    ]

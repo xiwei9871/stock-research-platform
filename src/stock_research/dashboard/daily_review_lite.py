@@ -68,7 +68,14 @@ def build_daily_review_lite(
     fallback_payload["run"] = _run_payload(None, source="fallback")
     fallback_payload["fallback"] = True
     fallback_payload["status"] = _overall_status(sections=fallback_payload["sections"], fallback=True)
-    fallback_payload["warnings"] = ["no registered daily review run selected"]
+    fallback_payload["warnings"] = list(
+        dict.fromkeys(
+            [
+                *list(fallback_payload.get("warnings") or []),
+                "no registered daily review run selected",
+            ]
+        )
+    )
     return fallback_payload
 
 
