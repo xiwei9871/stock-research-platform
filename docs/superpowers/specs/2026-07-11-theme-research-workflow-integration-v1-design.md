@@ -34,6 +34,8 @@ Eligible workflow context requires all of the following:
 
 Create `stock_research.dashboard.theme_research_context` as a focused read-model service. It reads the authoritative Phase 9 database through the configured runtime PostgreSQL service and returns stable, research-only payloads.
 
+Single-company domain rows come from a scoped PostgreSQL query. Static priority policy and Phase 5 crosswalk metadata are optional scoring support, not prerequisites for reviewed context; their absence produces blank priority fields plus a warning rather than hiding valid DB-backed evidence.
+
 The service exposes four operations:
 
 1. `load_asset_theme_context(asset_id)` returns eligible theme/node/company mappings and supporting evidence for one company.

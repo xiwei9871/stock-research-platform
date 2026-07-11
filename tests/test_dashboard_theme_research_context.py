@@ -287,6 +287,63 @@ def test_reviewed_updates_include_latest_reviewed_theme_revision() -> None:
     ]
 
 
+def test_revision_deduplication_keeps_different_object_types_with_same_id() -> None:
+    revisions = [
+        {
+            "revision_id": "theme-revision",
+            "theme_id": "shared-id",
+            "object_type": "themes",
+            "object_id": "shared-id",
+            "operation": "update",
+            "after_payload": {"status": "reviewed", "theme_name": "Shared"},
+            "created_at": "2026-07-11T12:00:00+08:00",
+        },
+        {
+            "revision_id": "mapping-revision",
+            "theme_id": "shared-id",
+            "object_type": "company_mappings",
+            "object_id": "shared-id",
+            "operation": "update",
+            "after_payload": {
+                "review_status": "reviewed",
+                "relationship_summary": "Mapped",
+            },
+            "created_at": "2026-07-11T13:00:00+08:00",
+        },
+    ]
+
+    payload = build_theme_research_updates([], revisions, limit=10)
+
+    assert {row["object_type"] for row in payload["items"]} == {
+        "theme",
+        "company_mapping",
+    }
+
+
+def test_update_timestamps_are_normalized_to_shanghai_time() -> None:
+    payload = build_theme_research_updates(
+        [
+            {
+                "review_event_id": "utc-event",
+                "theme_id": "ai_power_value_capture_v1",
+                "object_type": "claim",
+                "object_id": "claim-1",
+                "from_status": "draft",
+                "to_status": "reviewed",
+                "decision": "accept",
+                "comment": "reviewed",
+                "created_at": "2026-07-10T17:00:00+00:00",
+            }
+        ],
+        [],
+        since="2026-07-11",
+        until="2026-07-12",
+        limit=10,
+    )
+
+    assert payload["items"][0]["created_at"] == "2026-07-11T01:00:00+08:00"
+
+
 def test_update_window_uses_explicit_end_boundary() -> None:
     events = [
         {
@@ -402,5 +459,5 @@ def test_update_queries_filter_reviewed_rows_before_limit(monkeypatch) -> None:
 
     assert payload["total"] == 0
     assert "DISTINCT ON (object_type, object_id)" in queries[0]
-    assert "DISTINCT ON (object_id)" in queries[1]
+    assert "DISTINCT ON (object_type, object_id)" in queries[1]
     assert all("LIMIT %s" in query for query in queries)

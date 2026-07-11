@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from functools import lru_cache
+import json
 from typing import Any
 
 from stock_research.config import SETTINGS
@@ -155,7 +156,6 @@ def load_asset_db_context(
             else []
         )
 
-    static_context = _static_priority_context()
     mappings = []
     themes_by_id: dict[str, dict[str, Any]] = {}
     nodes_by_id: dict[str, dict[str, Any]] = {}
@@ -223,8 +223,6 @@ def load_asset_db_context(
         )
         mappings.append(mapping)
 
-    mapping_ids = {str(row["mapping_id"]) for row in mappings}
-    node_ids = set(nodes_by_id)
     claims = [
         {
             "claim_id": str(row["claim_id"]),
@@ -242,14 +240,13 @@ def load_asset_db_context(
         }
         for row in claim_rows
     ]
-    company_priorities = [
-        copy.deepcopy(row)
-        for row in static_context["company_priorities"]
-        if row["mapping_id"] in mapping_ids
-    ]
+    priority_context = _build_scoped_priority_context(
+        list(nodes_by_id.values()),
+        mappings,
+    )
     return {
-        "policy": static_context["policy"],
-        "crosswalk_package": static_context["crosswalk_package"],
+        "policy": priority_context["policy"],
+        "priority_status": priority_context["priority_status"],
         "theme_package": {
             "themes": list(themes_by_id.values()),
             "nodes": list(nodes_by_id.values()),
@@ -279,28 +276,94 @@ def load_asset_db_context(
             ],
             "company_mappings": mappings,
         },
-        "node_priorities": [
-            copy.deepcopy(row)
-            for row in static_context["node_priorities"]
-            if row["node_id"] in node_ids
-        ],
-        "company_priorities": company_priorities,
-        "evidence_gap_priorities": [
-            copy.deepcopy(row)
-            for row in static_context["evidence_gap_priorities"]
-            if row["node_id"] in node_ids
-        ],
-        "review_queue": [
-            copy.deepcopy(row)
-            for row in static_context["review_queue"]
-            if row.get("mapping_id") in mapping_ids or row.get("node_id") in node_ids
-        ],
+        "node_priorities": priority_context["node_priorities"],
+        "company_priorities": priority_context["company_priorities"],
+        "evidence_gap_priorities": priority_context["evidence_gap_priorities"],
+        "review_queue": priority_context["review_queue"],
     }
 
 
 @lru_cache(maxsize=1)
-def _static_priority_context() -> dict[str, Any]:
-    return priority.load_theme_research_priority_package()
+def _load_workflow_priority_support() -> dict[str, Any]:
+    policy = priority._load_policy(priority.THEME_RESEARCH_PRIORITY_POLICY_DIR)  # noqa: SLF001
+    integration_by_mapping: dict[str, dict[str, Any]] = {}
+    for path in sorted(priority.TECH_BOTTLENECK_CROSSWALK_DIR.glob("*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for row in payload.get("crosswalks", []):
+            integration_by_mapping[str(row["mapping_id"])] = {
+                "integration_status": "linked_existing_universe",
+                "integration_ref": str(row["crosswalk_id"]),
+                "existing_review_context": {
+                    "status": "pending_review",
+                    "reviewer_decision": "",
+                },
+            }
+        for row in payload.get("coverage_gaps", []):
+            integration_by_mapping[str(row["mapping_id"])] = {
+                "integration_status": "coverage_gap",
+                "integration_ref": str(row["gap_id"]),
+                "existing_review_context": {
+                    "status": "not_in_existing_universe",
+                    "reviewer_decision": "",
+                },
+            }
+    return {"policy": policy, "integration_by_mapping": integration_by_mapping}
+
+
+def _build_scoped_priority_context(
+    nodes: list[dict[str, Any]],
+    mappings: list[dict[str, Any]],
+) -> dict[str, Any]:
+    unavailable = {
+        "policy": None,
+        "node_priorities": [],
+        "company_priorities": [],
+        "evidence_gap_priorities": [],
+        "review_queue": [],
+        "priority_status": "unavailable",
+    }
+    try:
+        support = _load_workflow_priority_support()
+        policy = support["policy"]
+        integration_by_mapping = copy.deepcopy(support["integration_by_mapping"])
+        for mapping in mappings:
+            integration_by_mapping.setdefault(
+                str(mapping["mapping_id"]),
+                {
+                    "integration_status": "coverage_gap",
+                    "integration_ref": f"unmapped:{mapping['mapping_id']}",
+                    "existing_review_context": {
+                        "status": "not_in_existing_universe",
+                        "reviewer_decision": "",
+                    },
+                },
+            )
+        node_priorities = priority._build_node_priorities(nodes, policy)  # noqa: SLF001
+        company_priorities = priority._build_company_priorities(  # noqa: SLF001
+            mappings,
+            node_priorities,
+            integration_by_mapping,
+            policy,
+        )
+        evidence_gaps = priority._build_evidence_gap_priorities(  # noqa: SLF001
+            node_priorities,
+            company_priorities,
+        )
+        review_queue = priority._build_review_queue(  # noqa: SLF001
+            node_priorities,
+            company_priorities,
+            policy,
+        )
+    except Exception:
+        return unavailable
+    return {
+        "policy": policy,
+        "node_priorities": node_priorities,
+        "company_priorities": company_priorities,
+        "evidence_gap_priorities": evidence_gaps,
+        "review_queue": review_queue,
+        "priority_status": "available",
+    }
 
 
 def _theme_package(normalized) -> dict[str, Any]:

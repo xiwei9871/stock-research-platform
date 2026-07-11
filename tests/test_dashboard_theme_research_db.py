@@ -23,6 +23,25 @@ def test_db_context_matches_artifact_context_contract(monkeypatch) -> None:
     assert database == artifact
 
 
+def test_scoped_priority_support_failure_does_not_block_core_context(monkeypatch) -> None:
+    monkeypatch.setattr(
+        theme_research_db,
+        "_load_workflow_priority_support",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("policy unavailable")),
+    )
+
+    result = theme_research_db._build_scoped_priority_context([], [])
+
+    assert result == {
+        "policy": None,
+        "node_priorities": [],
+        "company_priorities": [],
+        "evidence_gap_priorities": [],
+        "review_queue": [],
+        "priority_status": "unavailable",
+    }
+
+
 def test_compare_mode_surfaces_semantic_mismatch(monkeypatch) -> None:
     artifact_context = theme_research._load_artifact_context()
     database_context = copy.deepcopy(artifact_context)

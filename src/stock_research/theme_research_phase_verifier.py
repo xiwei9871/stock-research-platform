@@ -4,24 +4,26 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import tempfile
 from typing import Any, Callable
+
+from fastapi.testclient import TestClient
 
 from stock_research.ai_power_source_pack import (
     load_ai_power_evidence_pack,
     summarize_ai_power_evidence_pack,
 )
 from stock_research.config import SETTINGS
-from stock_research.dashboard.daily_review_lite import _sections
+from stock_research.dashboard.asset_profile import build_asset_profile
+from stock_research.dashboard.daily_review_lite import build_daily_review_lite
 from stock_research.dashboard.theme_research import list_theme_research_themes
 from stock_research.dashboard.theme_research_context import (
-    build_daily_theme_research_digest,
-    enrich_watchlist_rows,
     load_asset_theme_context,
-    list_theme_research_updates,
 )
 from stock_research.dashboard.theme_research_db import load_db_context
+from stock_research.dashboard.watchlist import load_watchlist_signals_for_dashboard
 from stock_research.db import connect, fetch_all
 from stock_research.decomposition_templates import (
     load_decomposition_template_library,
@@ -306,14 +308,15 @@ def _verify_phase_2b() -> dict[str, Any]:
         for row in theme_package["themes"]
         if row["theme_id"] == "humanoid_robotics_head_to_toe_v1"
     )
+    declared_gap_is_valid = not present and robotics_theme["status"] == "draft"
     return {
         "phase": "2B",
         "title": "Humanoid robotics public source pack",
-        "status": "declared_evidence_gap",
+        "status": "declared_evidence_gap" if declared_gap_is_valid else "failed",
         "requirements": [
             {
                 "requirement": "unfinished evidence track is explicit and excluded from reviewed workflows",
-                "status": "declared_gap",
+                "status": "declared_gap" if declared_gap_is_valid else "failed",
                 "evidence": (
                     f"present_source_pack_files={present}; "
                     f"artifact_status={robotics_theme['status']}; "
@@ -574,54 +577,46 @@ def _verify_phase_10(*, runtime_service: str | None = None) -> dict[str, Any]:
     }
     robotics_theme_id = "humanoid_robotics_head_to_toe_v1"
     robotics_excluded = robotics_theme_id not in eligible_theme_ids
-    digest = build_daily_theme_research_digest(
-        "2026-07-11",
-        context=context,
-        updates=list_theme_research_updates(
-            since="2026-07-11T00:00:00+08:00",
-            until="2026-07-12T00:00:00+08:00",
-            limit=100,
-            service=service,
-        ),
-    )
+    daily_payload = build_daily_review_lite("2026-07-11")
     daily_section = next(
-        row
-        for row in _sections(
-            selected_trade_date="2026-07-11",
-            summary={},
-            market={},
-            queue={},
-            artifacts=[],
-            run={},
-            theme_research=digest,
-        )
-        if row["key"] == "theme_research"
+        row for row in daily_payload["sections"] if row["key"] == "theme_research"
     )
-    signal_rows = [
-        {
-            "asset_id": code,
-            "stock_code": code,
-            "signal_score": index + 0.5,
-            "primary_signal": f"signal-{index}",
-        }
-        for index, code in enumerate(mapped_codes)
-    ]
-    enriched_rows = enrich_watchlist_rows(signal_rows, service=service)
+    digest = daily_payload["theme_research"]
+    raw_watchlist_rows = load_watchlist_signals_for_dashboard(
+        "default",
+        "2026-07-10",
+        include_theme_research=False,
+    )
+    enriched_rows = load_watchlist_signals_for_dashboard(
+        "default",
+        "2026-07-10",
+    )
     signal_fields_unchanged = all(
         all(enriched.get(key) == original.get(key) for key in original)
-        for original, enriched in zip(signal_rows, enriched_rows, strict=True)
+        for original, enriched in zip(raw_watchlist_rows, enriched_rows, strict=True)
     )
-    routes = {
-        route.path: route.endpoint
-        for route in create_app().routes
-        if hasattr(route, "path") and hasattr(route, "endpoint")
-    }
-    asset_api_payload = routes["/api/assets/{asset_id}/theme-research-context"](
-        eligible[0]["company_code"]
+    profile = build_asset_profile(
+        eligible[0]["company_code"],
+        "2026-07-10",
+        "2026-07-01",
+        "2026-07-10",
     )
-    updates_api_payload = routes["/api/research/theme-decomposition/updates"](
-        since="2026-07-11", limit="20"
-    )
+    auth_override = os.environ.get("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED")
+    os.environ["STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED"] = "false"
+    try:
+        client = TestClient(create_app())
+        asset_response = client.get(
+            f"/api/assets/{eligible[0]['company_code']}/theme-research-context"
+        )
+        updates_response = client.get(
+            "/api/research/theme-decomposition/updates",
+            params={"since": "2026-07-11", "limit": 20},
+        )
+    finally:
+        if auth_override is None:
+            os.environ.pop("STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED", None)
+        else:
+            os.environ["STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED"] = auth_override
     requirements = [
         _requirement(
             "reviewed company context is available and fail-closed",
@@ -645,19 +640,29 @@ def _verify_phase_10(*, runtime_service: str | None = None) -> dict[str, Any]:
             ),
         ),
         _requirement(
-            "Watchlist enrichment preserves signal fields",
+            "Watchlist and Asset Profile execute their real loaders",
             signal_fields_unchanged
-            and all("theme_research_context" in row for row in enriched_rows),
-            f"rows={len(enriched_rows)}, signal_fields_unchanged={signal_fields_unchanged}",
+            and len(raw_watchlist_rows) == len(enriched_rows)
+            and all("theme_research_context" in row for row in enriched_rows)
+            and profile["theme_research_context"]["status"]
+            == "reviewed_context_available",
+            (
+                f"watchlist_rows={len(enriched_rows)}, "
+                f"signal_fields_unchanged={signal_fields_unchanged}, "
+                f"profile_status={profile['theme_research_context']['status']}"
+            ),
         ),
         _requirement(
-            "read APIs execute the DB-backed context service",
-            asset_api_payload["status"] == "reviewed_context_available"
-            and asset_api_payload["research_only"] is True
-            and updates_api_payload["research_only"] is True,
+            "HTTP read APIs execute the DB-backed context service",
+            asset_response.status_code == 200
+            and asset_response.json()["status"] == "reviewed_context_available"
+            and asset_response.json()["research_only"] is True
+            and updates_response.status_code == 200
+            and updates_response.json()["research_only"] is True,
             (
-                f"asset_api_status={asset_api_payload['status']}, "
-                f"updates={updates_api_payload['total']}"
+                f"asset_http={asset_response.status_code}, "
+                f"updates_http={updates_response.status_code}, "
+                f"updates={updates_response.json().get('total')}"
             ),
         ),
     ]

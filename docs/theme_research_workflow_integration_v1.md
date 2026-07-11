@@ -43,7 +43,7 @@ Invalid `since` or a limit outside `1-500`, including a non-numeric limit, retur
 
 Daily Review contains a `theme_research` section and a structured `theme_research` digest. Persisted historical Daily Review artifacts are enriched at read time, so old registered runs can use current reviewed research context without rewriting the historical report artifact.
 
-The update window is exactly one Asia/Shanghai calendar day: local midnight is inclusive and the following local midnight is exclusive. Historical review dates therefore do not absorb later review events.
+The update window is exactly one Asia/Shanghai calendar day: local midnight is inclusive and the following local midnight is exclusive. Historical review dates therefore do not absorb later review events, and returned update timestamps are normalized to Asia/Shanghai before the frontend renders their date.
 
 If Theme Research is unavailable, Daily Review remains available with a partial Theme Research section and one concise warning.
 
@@ -53,7 +53,7 @@ Each watchlist item includes `theme_research_context`. Batch enrichment loads th
 
 ## Stock Workspace
 
-Single-asset reads use a company-scoped PostgreSQL query rather than rebuilding the full research package. Asset Profile also disables duplicate Theme Research enrichment inside its nested signal rows. Stock Workspace renders:
+Single-asset reads use a company-scoped PostgreSQL query rather than rebuilding the full research package. Node and company priorities are recalculated from the scoped DB rows with separately loaded static policy/crosswalk support; if that optional support is unavailable, reviewed theme context remains available with a priority warning instead of returning HTTP 503. Asset Profile also disables duplicate Theme Research enrichment inside its nested signal rows. Stock Workspace renders:
 
 - theme and independent dashboard link;
 - mapped industry-chain node;
@@ -78,7 +78,7 @@ Run the authoritative P1-P10 verifier:
 scripts/verify_theme_research_p1_p10.sh
 ```
 
-The verifier checks loaders, review gates, AI power source pack, templates, company mappings, tech-bottleneck crosswalk, priority queues, dashboard guardrails, human-gated ingestion, PostgreSQL schema and parity, runtime privileges, rollback evidence, DB-backed asset/API reads, Daily Review, Watchlist signal invariance, and Phase 2B workflow exclusion.
+The verifier checks loaders, review gates, AI power source pack, templates, company mappings, tech-bottleneck crosswalk, priority queues, dashboard guardrails, human-gated ingestion, PostgreSQL schema and parity, runtime privileges, rollback evidence, HTTP DB-backed reads, the real Daily Review/Watchlist/Asset Profile loaders, signal invariance, and Phase 2B workflow exclusion.
 
 Phase 2B is reported as `declared_evidence_gap`; therefore the accepted overall result is:
 

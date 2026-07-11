@@ -161,13 +161,13 @@ def list_theme_research_updates(
             conn,
             f"""
             WITH latest_revisions AS (
-                SELECT DISTINCT ON (object_id)
+                SELECT DISTINCT ON (object_type, object_id)
                        revision_id, theme_id, object_type, object_id, operation,
                        after_payload, created_at
                 FROM research.theme_research_object_revision
                 WHERE {' AND '.join(conditions)}
                   AND object_type IN ('company_mappings', 'themes')
-                ORDER BY object_id, created_at DESC, revision_id DESC
+                ORDER BY object_type, object_id, created_at DESC, revision_id DESC
             )
             SELECT revision_id, theme_id, object_type, object_id, operation,
                    after_payload, created_at
@@ -236,7 +236,10 @@ def build_theme_research_updates(
         )
     latest_revisions = _latest_rows(
         revisions,
-        key=lambda row: (str(row.get("object_id") or ""),),
+        key=lambda row: (
+            str(row.get("object_type") or ""),
+            str(row.get("object_id") or ""),
+        ),
     )
     for row in latest_revisions:
         after_payload = row.get("after_payload")
@@ -383,7 +386,11 @@ def build_daily_theme_research_digest(
         "used_for_signal": False,
         "used_for_admission": False,
         "source": "research.theme_research_company_mapping",
-        "warnings": [],
+        "warnings": (
+            ["theme_research_priority_unavailable"]
+            if selected_context.get("priority_status") == "unavailable"
+            else []
+        ),
     }
 
 
@@ -554,7 +561,11 @@ def build_asset_theme_context(
         "used_for_signal": False,
         "used_for_admission": False,
         "source": "research.theme_research_company_mapping",
-        "warnings": [],
+        "warnings": (
+            ["theme_research_priority_unavailable"]
+            if context.get("priority_status") == "unavailable"
+            else []
+        ),
     }
 
 
@@ -713,6 +724,7 @@ def _coerce_datetime(value: Any) -> datetime | None:
 
 
 def _datetime_text(value: Any) -> str:
-    if isinstance(value, datetime):
-        return value.isoformat()
+    candidate = _coerce_datetime(value)
+    if candidate is not None:
+        return candidate.astimezone(_SHANGHAI_TZ).isoformat()
     return str(value or "")
