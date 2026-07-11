@@ -116,9 +116,12 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
             "source_type": "institutional_report",
         },
     ]
-    assert catalog["chains"] == []
+    assert [row["chain_id"] for row in catalog["chains"]] == [
+        "semiconductor_manufacturing_equipment"
+    ]
     assert catalog["edges"] == []
-    assert catalog["nodes"] == []
+    assert sum(row["level"] == "L3" for row in catalog["nodes"]) == 10
+    assert sum(row["level"] == "L4" for row in catalog["nodes"]) == 69
     assert catalog["theme_compositions"] == []
 
 
