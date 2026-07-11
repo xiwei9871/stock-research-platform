@@ -14,6 +14,15 @@ Phase 9 is productionized on 2026-07-11. PostgreSQL is authoritative for Theme R
 
 Runtime connections are rejected unless the login is a runtime member, is not an owner member, and has neither superuser nor CREATEROLE privileges.
 
+PostgreSQL integration tests must use dedicated services whose database name ends in `_test`:
+
+```text
+THEME_RESEARCH_POSTGRES_TEST_SERVICE=theme_research_test_migration
+THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE=theme_research_test_runtime
+```
+
+The tests fail closed when pointed at the production database.
+
 ## Schema And Bootstrap
 
 Local operator credentials are supplied through environment variables. They are not stored in the repository.
@@ -62,6 +71,8 @@ Each successful transition writes one transaction containing:
 - affected theme-version increment;
 - committed change set.
 
+Every canonical write, including review and rollback, advances the global store generation. This prevents a bootstrap request prepared before a human review from overwriting that review with a stale generation.
+
 Version conflicts return HTTP 409 with the current row version.
 
 ## Export And Rollback
@@ -83,6 +94,8 @@ python -m stock_research.theme_research_db_schema rollback \
 ```
 
 Exports are validated by the existing artifact loader before atomic rename. Rollback restores a complete normalized snapshot as a new theme version; prior snapshots, revisions, review events, and change sets remain immutable.
+
+Idempotency keys are bound to a canonical request fingerprint. Reusing a key for a different object, target state, package, snapshot, expected version, or output path is rejected.
 
 ## Recovery
 

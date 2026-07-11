@@ -313,12 +313,22 @@ def bootstrap_package(
         idempotency_key=idempotency_key,
     )
     desired = package_for_theme(package, replace_theme) if replace_theme else package
+    request_fingerprint = _request_fingerprint(
+        {
+            "change_type": "bootstrap_import",
+            "package_sha256": desired.package_sha256,
+            "replace_theme": replace_theme or "",
+            "expected_generation": expected_generation,
+        }
+    )
     with connect(service) as conn:
         with conn.cursor() as cur:
             cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             _assert_runtime_connection(cur)
             cur.execute("SELECT pg_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
-            replay = _load_idempotent_result(cur, actor_user_id, idempotency_key)
+            replay = _load_idempotent_result(
+                cur, actor_user_id, idempotency_key, request_fingerprint
+            )
             if replay is not None:
                 return replay
             cur.execute(
@@ -381,6 +391,7 @@ def bootstrap_package(
                     actor_user_id=actor_user_id,
                     actor_role=actor_role,
                     idempotency_key=idempotency_key,
+                    request_fingerprint=request_fingerprint,
                     result=result,
                     diff=diff,
                 )
@@ -401,7 +412,12 @@ def bootstrap_package(
                     actor_user_id,
                     actor_role,
                     idempotency_key,
-                    Jsonb({"package_sha256": desired.package_sha256}),
+                    Jsonb(
+                        {
+                            "package_sha256": desired.package_sha256,
+                            "request_fingerprint": request_fingerprint,
+                        }
+                    ),
                 ),
             )
             current_theme_ids = {row["theme_id"] for row in current_scope.themes}
@@ -546,7 +562,12 @@ def bootstrap_package(
                 """,
                 (
                     max(resulting_versions.values(), default=None),
-                    Jsonb({"result": result}),
+                    Jsonb(
+                        {
+                            "request_fingerprint": request_fingerprint,
+                            "result": result,
+                        }
+                    ),
                     change_set_id,
                 ),
             )
@@ -708,76 +729,120 @@ def export_theme(
             "actor and idempotency key are required",
             code="THEME_RESEARCH_EXPORT_REQUEST_INVALID",
         )
-    package = load_database_package(service=service)
-    payload = build_theme_artifact_from_package(package, theme_id)
-    canonical = _canonical_json(payload) + "\n"
-    payload_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
     final_path = output_root / f"{theme_id}.json"
+    request_fingerprint = _request_fingerprint(
+        {
+            "change_type": "export",
+            "theme_id": theme_id,
+            "output_path": str(final_path.resolve()),
+        }
+    )
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+            _assert_runtime_connection(cur)
+            cur.execute("SELECT pg_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
+            replay = _load_idempotent_result(
+                cur, actor_user_id, idempotency_key, request_fingerprint
+            )
+            if replay is not None:
+                cur.execute(
+                    "SELECT payload FROM research.theme_research_snapshot WHERE snapshot_id = %s",
+                    (replay["snapshot_id"],),
+                )
+                snapshot = cur.fetchone()
+                if not snapshot:
+                    raise ThemeResearchDomainError(
+                        "export snapshot is missing",
+                        code="THEME_RESEARCH_EXPORT_SNAPSHOT_MISSING",
+                    )
+                external_payload = dict(snapshot["payload"])
+                external_payload.pop("_database_extensions", None)
+                replay["payload_sha256"] = _publish_export_payload(
+                    external_payload, final_path
+                )
+                return replay
+            package = _load_database_package(cur)
+            theme = _theme_row(cur, theme_id)
+            payload = build_theme_artifact_from_package(package, theme_id)
+            snapshot_payload = build_theme_snapshot_payload(package, theme_id)
+            change_set_id = f"change-{uuid.uuid4()}"
+            cur.execute(
+                """
+                INSERT INTO research.theme_research_change_set (
+                    change_set_id, change_type, theme_id, actor_user_id, actor_role,
+                    idempotency_key, status, metadata
+                ) VALUES (%s, 'export', %s, %s, %s, %s, 'prepared', %s)
+                """,
+                (
+                    change_set_id,
+                    theme_id,
+                    actor_user_id,
+                    actor_role,
+                    idempotency_key,
+                    Jsonb(
+                        {
+                            "output_path": str(final_path),
+                            "request_fingerprint": request_fingerprint,
+                        }
+                    ),
+                ),
+            )
+            snapshot_id = create_snapshot(
+                cur,
+                theme_id=theme_id,
+                theme_version=int(theme["theme_version"]),
+                snapshot_type="export",
+                payload=snapshot_payload,
+                change_set_id=change_set_id,
+                actor_user_id=actor_user_id,
+            )
+            payload_sha256 = _publish_export_payload(payload, final_path)
+            result = {
+                "status": "exported",
+                "theme_id": theme_id,
+                "theme_version": int(theme["theme_version"]),
+                "snapshot_id": snapshot_id,
+                "path": str(final_path),
+                "payload_sha256": payload_sha256,
+            }
+            cur.execute(
+                """
+                UPDATE research.theme_research_change_set
+                SET status = 'committed', committed_at = now(), metadata = %s
+                WHERE change_set_id = %s
+                """,
+                (
+                    Jsonb(
+                        {
+                            "request_fingerprint": request_fingerprint,
+                            "result": result,
+                        }
+                    ),
+                    change_set_id,
+                ),
+            )
+            return result
+
+
+def _publish_export_payload(payload: dict[str, Any], final_path: Path) -> str:
+    canonical = _canonical_json(payload) + "\n"
+    payload_sha256 = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if final_path.is_file() and hashlib.sha256(final_path.read_bytes()).hexdigest() == payload_sha256:
+        return payload_sha256
     with tempfile.TemporaryDirectory(prefix="theme-research-export-") as temp_dir:
         validation_path = Path(temp_dir) / final_path.name
         validation_path.write_text(canonical, encoding="utf-8")
         load_theme_package(temp_dir)
-        staged_path = output_root / f".{final_path.name}.{uuid.uuid4().hex}.tmp"
+    staged_path = final_path.parent / f".{final_path.name}.{uuid.uuid4().hex}.tmp"
+    try:
         staged_path.write_text(canonical, encoding="utf-8")
-        try:
-            with connect(service) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-                    _assert_runtime_connection(cur)
-                    cur.execute("SELECT pg_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
-                    replay = _load_idempotent_result(cur, actor_user_id, idempotency_key)
-                    if replay is not None:
-                        staged_path.unlink(missing_ok=True)
-                        return replay
-                    theme = _theme_row(cur, theme_id)
-                    change_set_id = f"change-{uuid.uuid4()}"
-                    cur.execute(
-                        """
-                        INSERT INTO research.theme_research_change_set (
-                            change_set_id, change_type, theme_id, actor_user_id, actor_role,
-                            idempotency_key, status, metadata
-                        ) VALUES (%s, 'export', %s, %s, %s, %s, 'prepared', %s)
-                        """,
-                        (
-                            change_set_id,
-                            theme_id,
-                            actor_user_id,
-                            actor_role,
-                            idempotency_key,
-                            Jsonb({"output_path": str(final_path)}),
-                        ),
-                    )
-                    snapshot_id = create_snapshot(
-                        cur,
-                        theme_id=theme_id,
-                        theme_version=int(theme["theme_version"]),
-                        snapshot_type="export",
-                        payload=payload,
-                        change_set_id=change_set_id,
-                        actor_user_id=actor_user_id,
-                    )
-                    result = {
-                        "status": "exported",
-                        "theme_id": theme_id,
-                        "theme_version": int(theme["theme_version"]),
-                        "snapshot_id": snapshot_id,
-                        "path": str(final_path),
-                        "payload_sha256": payload_sha256,
-                    }
-                    cur.execute(
-                        """
-                        UPDATE research.theme_research_change_set
-                        SET status = 'committed', committed_at = now(), metadata = %s
-                        WHERE change_set_id = %s
-                        """,
-                        (Jsonb({"result": result}), change_set_id),
-                    )
-            os.replace(staged_path, final_path)
-        finally:
-            staged_path.unlink(missing_ok=True)
-    return result
+        os.replace(staged_path, final_path)
+    finally:
+        staged_path.unlink(missing_ok=True)
+    return payload_sha256
 
 
 def rollback_theme(
@@ -798,12 +863,23 @@ def rollback_theme(
             "actor, idempotency key, and comment are required",
             code="THEME_RESEARCH_ROLLBACK_REQUEST_INVALID",
         )
+    request_fingerprint = _request_fingerprint(
+        {
+            "change_type": "rollback",
+            "theme_id": theme_id,
+            "snapshot_id": snapshot_id,
+            "expected_theme_version": expected_theme_version,
+        }
+    )
     with connect(service) as conn:
         with conn.cursor() as cur:
             cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             _assert_runtime_connection(cur)
             cur.execute("SELECT pg_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
-            replay = _load_idempotent_result(cur, actor_user_id, idempotency_key)
+            generation = _lock_store_generation(cur)
+            replay = _load_idempotent_result(
+                cur, actor_user_id, idempotency_key, request_fingerprint
+            )
             if replay is not None:
                 return replay
             cur.execute(
@@ -849,6 +925,13 @@ def rollback_theme(
             current_package = _load_database_package(cur)
             current_scope = package_for_theme(current_package, theme_id)
             diff = semantic_diff(current_scope, target)
+            _assert_rollback_has_no_shared_source_changes(
+                cur,
+                theme_id=theme_id,
+                source_ids=set(diff["families"]["sources"]["insert"])
+                | set(diff["families"]["sources"]["update"])
+                | set(diff["families"]["sources"]["deactivate"]),
+            )
             change_set_id = f"change-{uuid.uuid4()}"
             cur.execute(
                 """
@@ -865,7 +948,12 @@ def rollback_theme(
                     request_id,
                     idempotency_key,
                     expected_theme_version,
-                    Jsonb({"snapshot_id": snapshot_id}),
+                    Jsonb(
+                        {
+                            "snapshot_id": snapshot_id,
+                            "request_fingerprint": request_fingerprint,
+                        }
+                    ),
                 ),
             )
             create_snapshot(
@@ -906,6 +994,11 @@ def rollback_theme(
             )
             restored_package = _load_database_package(cur)
             restored_scope = package_for_theme(restored_package, theme_id)
+            resulting_generation = _advance_store_generation(
+                cur,
+                package=restored_package,
+                actor_user_id=actor_user_id,
+            )
             _append_restore_revisions(
                 cur,
                 current=current_scope,
@@ -959,6 +1052,8 @@ def rollback_theme(
                 "restored_from_snapshot_id": snapshot_id,
                 "snapshot_id": post_snapshot_id,
                 "semantic_diff": diff,
+                "generation": generation,
+                "resulting_generation": resulting_generation,
             }
             cur.execute(
                 """
@@ -967,7 +1062,16 @@ def rollback_theme(
                     committed_at = now(), metadata = %s
                 WHERE change_set_id = %s
                 """,
-                (resulting_version, Jsonb({"result": result}), change_set_id),
+                (
+                    resulting_version,
+                    Jsonb(
+                        {
+                            "request_fingerprint": request_fingerprint,
+                            "result": result,
+                        }
+                    ),
+                    change_set_id,
+                ),
             )
             return result
 
@@ -1009,6 +1113,37 @@ def _package_from_snapshot_payload(
     return package_for_theme(package, theme_id)
 
 
+def _assert_rollback_has_no_shared_source_changes(
+    cur,
+    *,
+    theme_id: str,
+    source_ids: set[str],
+) -> None:
+    if not source_ids:
+        return
+    cur.execute(
+        """
+        SELECT ts.source_id, array_agg(DISTINCT ts.theme_id ORDER BY ts.theme_id) AS theme_ids
+        FROM research.theme_research_theme_source ts
+        JOIN research.theme_research_theme t ON t.theme_id = ts.theme_id
+        WHERE ts.source_id = ANY(%s) AND t.is_active = true
+        GROUP BY ts.source_id
+        """,
+        (sorted(source_ids),),
+    )
+    conflicts = {
+        str(row["source_id"]): list(row["theme_ids"])
+        for row in cur.fetchall()
+        if any(owner != theme_id for owner in row["theme_ids"])
+    }
+    if conflicts:
+        raise ThemeResearchDomainError(
+            "single-theme rollback would modify a source shared by another active theme",
+            code="THEME_RESEARCH_SHARED_SOURCE_ROLLBACK_REQUIRES_MULTI_THEME",
+            details={"shared_sources": conflicts},
+        )
+
+
 def _review_object(
     *,
     object_type: str,
@@ -1037,6 +1172,15 @@ def _review_object(
             "review comment is required",
             code="THEME_RESEARCH_REVIEW_COMMENT_REQUIRED",
         )
+    request_fingerprint = _request_fingerprint(
+        {
+            "change_type": "review_transition",
+            "object_type": object_type,
+            "object_id": object_id,
+            "to_status": to_status,
+            "expected_row_version": expected_row_version,
+        }
+    )
     config = {
         "source": (
             "theme_research_source_item",
@@ -1060,7 +1204,10 @@ def _review_object(
             cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             _assert_runtime_connection(cur)
             cur.execute("SELECT pg_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
-            replay = _load_idempotent_result(cur, actor_user_id, idempotency_key)
+            generation = _lock_store_generation(cur)
+            replay = _load_idempotent_result(
+                cur, actor_user_id, idempotency_key, request_fingerprint
+            )
             if replay is not None:
                 return replay
             cur.execute(
@@ -1115,7 +1262,13 @@ def _review_object(
                     actor_role,
                     request_id,
                     idempotency_key,
-                    Jsonb({"object_type": object_type, "object_id": object_id}),
+                    Jsonb(
+                        {
+                            "object_type": object_type,
+                            "object_id": object_id,
+                            "request_fingerprint": request_fingerprint,
+                        }
+                    ),
                 ),
             )
             for theme_id in theme_ids:
@@ -1206,6 +1359,11 @@ def _review_object(
             cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
             cur.execute("SET CONSTRAINTS ALL DEFERRED")
             after_package = _load_database_package(cur)
+            resulting_generation = _advance_store_generation(
+                cur,
+                package=after_package,
+                actor_user_id=actor_user_id,
+            )
             for theme_id in theme_ids:
                 create_snapshot(
                     cur,
@@ -1227,6 +1385,8 @@ def _review_object(
                 "to_status": to_status,
                 "row_version": int(after["row_version"]),
                 "theme_versions": theme_versions,
+                "generation": generation,
+                "resulting_generation": resulting_generation,
             }
             cur.execute(
                 """
@@ -1234,7 +1394,15 @@ def _review_object(
                 SET status = 'committed', committed_at = now(), metadata = %s
                 WHERE change_set_id = %s
                 """,
-                (Jsonb({"result": result}), change_set_id),
+                (
+                    Jsonb(
+                        {
+                            "request_fingerprint": request_fingerprint,
+                            "result": result,
+                        }
+                    ),
+                    change_set_id,
+                ),
             )
             return result
 
@@ -1445,7 +1613,16 @@ def _empty_package(artifact_version: str) -> NormalizedThemeResearchPackage:
     )
 
 
-def _load_idempotent_result(cur, actor_user_id: str, idempotency_key: str) -> dict[str, Any] | None:
+def _request_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def _load_idempotent_result(
+    cur,
+    actor_user_id: str,
+    idempotency_key: str,
+    request_fingerprint: str,
+) -> dict[str, Any] | None:
     cur.execute(
         """
         SELECT metadata
@@ -1457,7 +1634,49 @@ def _load_idempotent_result(cur, actor_user_id: str, idempotency_key: str) -> di
     row = cur.fetchone()
     if not row:
         return None
-    return copy.deepcopy((row.get("metadata") or {}).get("result"))
+    metadata = row.get("metadata") or {}
+    if metadata.get("request_fingerprint") != request_fingerprint:
+        raise ThemeResearchDomainError(
+            "idempotency key was already used for a different request",
+            code="THEME_RESEARCH_IDEMPOTENCY_KEY_REUSED",
+            details={"idempotency_key": idempotency_key},
+        )
+    return copy.deepcopy(metadata.get("result"))
+
+
+def _lock_store_generation(cur) -> int:
+    cur.execute(
+        """
+        SELECT generation
+        FROM research.theme_research_store_state
+        WHERE state_id = true
+        FOR UPDATE
+        """
+    )
+    row = cur.fetchone()
+    return int(row["generation"])
+
+
+def _advance_store_generation(
+    cur,
+    *,
+    package: NormalizedThemeResearchPackage,
+    actor_user_id: str,
+) -> int:
+    cur.execute(
+        """
+        UPDATE research.theme_research_store_state
+        SET generation = generation + 1,
+            package_sha256 = %s,
+            artifact_version = %s,
+            updated_at = now(),
+            updated_by = %s
+        WHERE state_id = true
+        RETURNING generation
+        """,
+        (package.package_sha256, package.artifact_version, actor_user_id),
+    )
+    return int(cur.fetchone()["generation"])
 
 
 def _delete_relationships(cur, desired: NormalizedThemeResearchPackage) -> None:
@@ -1825,6 +2044,7 @@ def _record_no_change_import(
     actor_user_id: str,
     actor_role: str,
     idempotency_key: str,
+    request_fingerprint: str,
     result: dict[str, Any],
     diff: dict[str, Any],
 ) -> None:
@@ -1841,7 +2061,12 @@ def _record_no_change_import(
             actor_user_id,
             actor_role,
             idempotency_key,
-            Jsonb({"result": result}),
+            Jsonb(
+                {
+                    "request_fingerprint": request_fingerprint,
+                    "result": result,
+                }
+            ),
         ),
     )
     cur.execute(

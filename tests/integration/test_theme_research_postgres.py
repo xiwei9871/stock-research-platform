@@ -16,18 +16,24 @@ from stock_research import theme_research_store as store
 
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("THEME_RESEARCH_POSTGRES_TEST") != "1",
-    reason="set THEME_RESEARCH_POSTGRES_TEST=1 for configured PostgreSQL integration tests",
+    os.getenv("THEME_RESEARCH_POSTGRES_TEST") != "1"
+    or not os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE"),
+    reason="set THEME_RESEARCH_POSTGRES_TEST=1 and dedicated test services",
 )
+
+TEST_MIGRATION_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
 
 
 @pytest.fixture
 def conn():
     connection = psycopg.connect(
-        f"service={SETTINGS.research_service}",
+        f"service={TEST_MIGRATION_SERVICE}",
         row_factory=dict_row,
     )
     try:
+        database_name = connection.execute("SELECT current_database()").fetchone()["current_database"]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
         connection.execute(THEME_RESEARCH_SCHEMA_SQL)
         connection.execute("SET LOCAL session_replication_role = replica")
         connection.execute(
@@ -182,6 +188,31 @@ def test_bootstrap_current_artifacts_is_transactional_and_idempotent(
     assert review["status"] == "reviewed"
     assert review["row_version"] == 2
     assert review["theme_versions"]["ai_power_value_capture_v1"] == 2
+    assert review["generation"] == 1
+    assert review["resulting_generation"] == 2
+    with pytest.raises(ThemeResearchDomainError) as reused_key:
+        store.review_source(
+            source_id="ai_power_video_claim_lead",
+            to_status="rejected",
+            expected_row_version=2,
+            actor_user_id="reviewer-integration",
+            actor_role="user",
+            comment="Different request with reused key.",
+            request_id="request-review-reused",
+            idempotency_key="review-source-1",
+            service="integration",
+        )
+    assert reused_key.value.code == "THEME_RESEARCH_IDEMPOTENCY_KEY_REUSED"
+    with pytest.raises(ThemeResearchDomainError) as stale_generation:
+        store.bootstrap_package(
+            package,
+            actor_user_id="admin-integration",
+            actor_role="admin",
+            expected_generation=1,
+            idempotency_key="bootstrap-after-review-stale",
+            service="integration",
+        )
+    assert stale_generation.value.code == "THEME_RESEARCH_GENERATION_CONFLICT"
     history = store.list_review_history(
         object_type="source",
         object_id="ai_power_video_claim_lead",
@@ -230,6 +261,8 @@ def test_bootstrap_current_artifacts_is_transactional_and_idempotent(
     )
     assert rollback["status"] == "rolled_back"
     assert rollback["theme_version"] == 3
+    assert rollback["generation"] == 2
+    assert rollback["resulting_generation"] == 3
     restored = store.load_database_package(service="integration")
     restored_source = next(
         row for row in restored.sources if row["source_id"] == "ai_power_video_claim_lead"
@@ -248,6 +281,17 @@ def test_bootstrap_current_artifacts_is_transactional_and_idempotent(
     export_path = tmp_path / "ai_power_value_capture_v1.json"
     assert export_path.exists()
     assert exported["payload_sha256"] == hashlib.sha256(export_path.read_bytes()).hexdigest()
+    export_path.unlink()
+    replayed_export = store.export_theme(
+        "ai_power_value_capture_v1",
+        output_dir=tmp_path,
+        actor_user_id="admin-integration",
+        actor_role="admin",
+        idempotency_key="export-integration-1",
+        service="integration",
+    )
+    assert replayed_export["snapshot_id"] == exported["snapshot_id"]
+    assert export_path.exists()
 
 
 def test_bootstrap_rejects_generation_conflict(store_connection) -> None:

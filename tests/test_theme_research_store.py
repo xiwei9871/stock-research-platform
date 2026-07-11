@@ -9,6 +9,7 @@ from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_import import normalize_artifact_package
 from stock_research.theme_research_store import (
     _assert_runtime_connection,
+    _assert_rollback_has_no_shared_source_changes,
     create_snapshot,
     package_for_theme,
     rollback_theme,
@@ -33,6 +34,19 @@ class _RoleCursor:
 
     def fetchone(self):
         return self.row
+
+
+class _SharedSourceCursor:
+    def execute(self, sql, params) -> None:
+        pass
+
+    def fetchall(self):
+        return [
+            {
+                "source_id": "shared-source",
+                "theme_ids": ["theme-1", "theme-2"],
+            }
+        ]
 
 
 def test_validate_bootstrap_request_requires_actor_and_idempotency_key() -> None:
@@ -131,3 +145,17 @@ def test_non_admin_cannot_rollback() -> None:
         )
 
     assert exc_info.value.code == "THEME_RESEARCH_ADMIN_REQUIRED"
+
+
+def test_single_theme_rollback_rejects_shared_source_changes() -> None:
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        _assert_rollback_has_no_shared_source_changes(
+            _SharedSourceCursor(),
+            theme_id="theme-1",
+            source_ids={"shared-source"},
+        )
+
+    assert (
+        exc_info.value.code
+        == "THEME_RESEARCH_SHARED_SOURCE_ROLLBACK_REQUIRES_MULTI_THEME"
+    )

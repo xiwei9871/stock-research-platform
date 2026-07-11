@@ -13,15 +13,22 @@ from stock_research.theme_research_db_schema import (
 
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("THEME_RESEARCH_POSTGRES_TEST") != "1",
-    reason="set THEME_RESEARCH_POSTGRES_TEST=1 for configured PostgreSQL integration tests",
+    os.getenv("THEME_RESEARCH_POSTGRES_TEST") != "1"
+    or not os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE"),
+    reason="set THEME_RESEARCH_POSTGRES_TEST=1 and dedicated test services",
 )
+
+TEST_MIGRATION_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_SERVICE", "")
+TEST_RUNTIME_SERVICE = os.getenv("THEME_RESEARCH_POSTGRES_TEST_RUNTIME_SERVICE", "")
 
 
 @pytest.fixture
 def conn():
-    connection = psycopg.connect(f"service={SETTINGS.research_service}")
+    connection = psycopg.connect(f"service={TEST_MIGRATION_SERVICE}")
     try:
+        database_name = connection.execute("SELECT current_database()").fetchone()[0]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
         connection.execute(THEME_RESEARCH_SCHEMA_SQL)
         yield connection
     finally:
@@ -380,8 +387,19 @@ def test_runtime_role_cannot_mutate_history_or_disable_triggers(conn) -> None:
 
 
 def test_runtime_login_is_constrained_without_set_role() -> None:
-    runtime = psycopg.connect(f"service={SETTINGS.theme_research_runtime_service}")
+    if not TEST_RUNTIME_SERVICE:
+        pytest.skip("dedicated runtime test service is required")
+    migration = psycopg.connect(f"service={TEST_MIGRATION_SERVICE}")
     try:
+        migration.execute(THEME_RESEARCH_SCHEMA_SQL)
+        migration.commit()
+    finally:
+        migration.close()
+    runtime = psycopg.connect(f"service={TEST_RUNTIME_SERVICE}")
+    try:
+        database_name = runtime.execute("SELECT current_database()").fetchone()[0]
+        if not database_name.endswith("_test"):
+            pytest.fail(f"refusing to run integration tests against {database_name}")
         row = runtime.execute(
             """
             SELECT
