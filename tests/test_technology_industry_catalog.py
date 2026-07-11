@@ -117,11 +117,44 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         },
     ]
     assert [row["chain_id"] for row in catalog["chains"]] == [
-        "semiconductor_manufacturing_equipment"
+        "semiconductor_manufacturing_equipment",
+        "humanoid_robots_embodied_intelligence",
     ]
-    assert catalog["edges"] == []
-    assert sum(row["level"] == "L3" for row in catalog["nodes"]) == 10
-    assert sum(row["level"] == "L4" for row in catalog["nodes"]) == 69
+    assert len(catalog["nodes"]) == 188
+    assert sum(
+        row["chain_id"] == "semiconductor_manufacturing_equipment"
+        for row in catalog["nodes"]
+    ) == 79
+    assert sum(
+        row["chain_id"] == "humanoid_robots_embodied_intelligence"
+        for row in catalog["nodes"]
+    ) == 109
+    assert sum(row["level"] == "L3" for row in catalog["nodes"]) == 22
+    assert sum(row["level"] == "L4" for row in catalog["nodes"]) == 166
+    assert len(catalog["edges"]) == 21
+    assert {row["edge_id"] for row in catalog["edges"]} == {
+        "rotary_joint_assembly_uses_frameless_torque_motor",
+        "rotary_joint_assembly_uses_harmonic_reducer",
+        "rotary_joint_assembly_uses_precision_planetary_reducer",
+        "rotary_joint_assembly_uses_joint_encoder_module",
+        "rotary_joint_assembly_uses_joint_brake",
+        "rotary_joint_assembly_uses_joint_bearing",
+        "linear_joint_assembly_uses_planetary_roller_screw",
+        "linear_joint_assembly_uses_ball_screw",
+        "linear_joint_assembly_uses_linear_motor",
+        "linear_joint_assembly_uses_screw_support_bearing",
+        "linear_joint_assembly_uses_linear_displacement_sensor",
+        "shoulder_joint_module_uses_rotary_joint_assembly",
+        "elbow_joint_module_uses_rotary_joint_assembly",
+        "wrist_joint_module_uses_rotary_joint_assembly",
+        "hip_joint_module_uses_rotary_joint_assembly",
+        "knee_joint_module_uses_rotary_joint_assembly",
+        "ankle_joint_module_uses_rotary_joint_assembly",
+        "dexterous_hand_assembly_uses_finger_micro_actuator",
+        "dexterous_hand_assembly_uses_micro_reducer_transmission",
+        "dexterous_hand_assembly_uses_tendon_flexible_transmission",
+        "dexterous_hand_assembly_uses_fingertip_tactile_force_control",
+    }
     assert catalog["theme_compositions"] == []
 
 

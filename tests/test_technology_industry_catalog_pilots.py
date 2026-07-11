@@ -168,6 +168,257 @@ EXPECTED_L4_NODE_TYPES = {
     "facility_monitoring_control": "factory_system",
 }
 
+HUMANOID_SECTOR_ID = "high_end_equipment_intelligent_manufacturing"
+HUMANOID_CHAIN_ID = "humanoid_robots_embodied_intelligence"
+
+HUMANOID_EXPECTED_CHILDREN = {
+    "humanoid_embodied_ai_brain": [
+        "multimodal_perception_model",
+        "vision_language_action_model",
+        "task_understanding_planning",
+        "long_term_memory_world_model",
+        "autonomous_decision_exception_handling",
+        "human_robot_interaction_model",
+        "edge_cloud_inference",
+    ],
+    "humanoid_motion_control_cerebellum": [
+        "whole_body_control",
+        "biped_gait_control",
+        "arm_motion_planning",
+        "dexterous_hand_control",
+        "force_position_hybrid_control",
+        "model_predictive_control",
+        "reinforcement_learning_motion_policy",
+        "realtime_motion_control_system",
+    ],
+    "humanoid_data_training_simulation": [
+        "teleoperation_motion_capture",
+        "embodied_training_dataset",
+        "robot_data_clean_label_replay",
+        "robot_simulation",
+        "digital_twin",
+        "synthetic_robot_data",
+        "sim_to_real",
+        "robot_training_evaluation_toolchain",
+    ],
+    "humanoid_perception": [
+        "rgb_vision_module",
+        "depth_camera",
+        "lidar_sensor",
+        "imu_sensor",
+        "joint_encoder",
+        "joint_torque_sensor",
+        "six_axis_force_sensor",
+        "tactile_sensor",
+        "microphone_array",
+        "robot_state_sensor",
+    ],
+    "humanoid_compute_control_hardware": [
+        "robot_ai_compute_chip",
+        "robot_ai_compute_module",
+        "main_controller",
+        "motion_controller",
+        "realtime_mcu",
+        "motor_driver",
+        "sensor_signal_conditioning",
+        "realtime_communication_bus",
+    ],
+    "humanoid_rotary_actuation": [
+        "rotary_joint_assembly",
+        "frameless_torque_motor",
+        "harmonic_reducer",
+        "rv_reducer",
+        "precision_planetary_reducer",
+        "joint_encoder_module",
+        "joint_brake",
+        "joint_bearing",
+    ],
+    "humanoid_linear_actuation": [
+        "linear_joint_assembly",
+        "planetary_roller_screw",
+        "ball_screw",
+        "trapezoidal_screw",
+        "linear_motor",
+        "screw_support_bearing",
+        "linear_displacement_sensor",
+    ],
+    "humanoid_upper_limb_dexterous_hand": [
+        "shoulder_joint_module",
+        "elbow_joint_module",
+        "wrist_joint_module",
+        "humanoid_robotic_arm",
+        "dexterous_hand_assembly",
+        "finger_micro_actuator",
+        "micro_reducer_transmission",
+        "tendon_flexible_transmission",
+        "fingertip_tactile_force_control",
+    ],
+    "humanoid_lower_limb_locomotion": [
+        "hip_joint_module",
+        "knee_joint_module",
+        "ankle_joint_module",
+        "leg_structure",
+        "foot_buffer_structure",
+        "foot_force_pressure_sensing",
+        "dynamic_balance_safety_mechanism",
+    ],
+    "humanoid_body_structure_lightweighting": [
+        "torso_load_bearing_structure",
+        "lightweight_skeleton",
+        "aluminum_magnesium_structure",
+        "carbon_fiber_structure",
+        "precision_cast_machined_parts",
+        "robot_wiring_harness",
+        "protective_shell_soft_cover",
+        "robot_sealing_protection",
+    ],
+    "humanoid_energy_thermal_management": [
+        "robot_battery_pack",
+        "high_specific_energy_cell",
+        "battery_management_system",
+        "robot_power_management_dcdc",
+        "autonomous_charging",
+        "robot_thermal_management",
+        "robot_power_budget_control",
+        "emergency_power_cutoff",
+    ],
+    "humanoid_manufacturing_test_integration": [
+        "humanoid_robot_complete_unit",
+        "joint_module_assembly",
+        "whole_robot_calibration",
+        "motion_performance_test",
+        "robot_reliability_test",
+        "robot_safety_test",
+        "robot_remote_operations",
+        "industrial_scenario_integration",
+        "service_scenario_integration",
+    ],
+}
+
+HUMANOID_EXPECTED_L4_NODE_TYPES = {
+    "multimodal_perception_model": "ai_model",
+    "vision_language_action_model": "ai_model",
+    "task_understanding_planning": "ai_model",
+    "long_term_memory_world_model": "ai_model",
+    "autonomous_decision_exception_handling": "control_software",
+    "human_robot_interaction_model": "ai_model",
+    "edge_cloud_inference": "inference_system",
+    "whole_body_control": "motion_control_software",
+    "biped_gait_control": "motion_control_software",
+    "arm_motion_planning": "motion_control_software",
+    "dexterous_hand_control": "motion_control_software",
+    "force_position_hybrid_control": "motion_control_software",
+    "model_predictive_control": "motion_control_software",
+    "reinforcement_learning_motion_policy": "motion_control_model",
+    "realtime_motion_control_system": "realtime_control_software",
+    "teleoperation_motion_capture": "data_acquisition_system",
+    "embodied_training_dataset": "dataset",
+    "robot_data_clean_label_replay": "data_toolchain",
+    "robot_simulation": "simulation_software",
+    "digital_twin": "simulation_software",
+    "synthetic_robot_data": "dataset",
+    "sim_to_real": "training_method",
+    "robot_training_evaluation_toolchain": "software_toolchain",
+    "rgb_vision_module": "sensor_module",
+    "depth_camera": "sensor",
+    "lidar_sensor": "sensor",
+    "imu_sensor": "sensor",
+    "joint_encoder": "sensor",
+    "joint_torque_sensor": "sensor",
+    "six_axis_force_sensor": "sensor",
+    "tactile_sensor": "sensor",
+    "microphone_array": "sensor_module",
+    "robot_state_sensor": "sensor",
+    "robot_ai_compute_chip": "compute_component",
+    "robot_ai_compute_module": "compute_module",
+    "main_controller": "controller",
+    "motion_controller": "controller",
+    "realtime_mcu": "control_component",
+    "motor_driver": "power_electronics_component",
+    "sensor_signal_conditioning": "electronic_subsystem",
+    "realtime_communication_bus": "communication_subsystem",
+    "rotary_joint_assembly": "actuation_assembly",
+    "frameless_torque_motor": "actuation_component",
+    "harmonic_reducer": "transmission_component",
+    "rv_reducer": "transmission_component",
+    "precision_planetary_reducer": "transmission_component",
+    "joint_encoder_module": "sensor_module",
+    "joint_brake": "safety_component",
+    "joint_bearing": "mechanical_component",
+    "linear_joint_assembly": "actuation_assembly",
+    "planetary_roller_screw": "transmission_component",
+    "ball_screw": "transmission_component",
+    "trapezoidal_screw": "transmission_component",
+    "linear_motor": "actuation_component",
+    "screw_support_bearing": "mechanical_component",
+    "linear_displacement_sensor": "sensor",
+    "shoulder_joint_module": "body_joint_module",
+    "elbow_joint_module": "body_joint_module",
+    "wrist_joint_module": "body_joint_module",
+    "humanoid_robotic_arm": "limb_assembly",
+    "dexterous_hand_assembly": "end_effector_assembly",
+    "finger_micro_actuator": "actuation_component",
+    "micro_reducer_transmission": "transmission_component",
+    "tendon_flexible_transmission": "transmission_component",
+    "fingertip_tactile_force_control": "sensing_control_subsystem",
+    "hip_joint_module": "body_joint_module",
+    "knee_joint_module": "body_joint_module",
+    "ankle_joint_module": "body_joint_module",
+    "leg_structure": "limb_structure",
+    "foot_buffer_structure": "mechanical_structure",
+    "foot_force_pressure_sensing": "sensor_module",
+    "dynamic_balance_safety_mechanism": "safety_subsystem",
+    "torso_load_bearing_structure": "mechanical_structure",
+    "lightweight_skeleton": "mechanical_structure",
+    "aluminum_magnesium_structure": "structural_component",
+    "carbon_fiber_structure": "structural_component",
+    "precision_cast_machined_parts": "mechanical_component",
+    "robot_wiring_harness": "electrical_component",
+    "protective_shell_soft_cover": "protective_component",
+    "robot_sealing_protection": "protective_subsystem",
+    "robot_battery_pack": "energy_system",
+    "high_specific_energy_cell": "energy_component",
+    "battery_management_system": "power_control_system",
+    "robot_power_management_dcdc": "power_electronics_subsystem",
+    "autonomous_charging": "charging_system",
+    "robot_thermal_management": "thermal_management_system",
+    "robot_power_budget_control": "power_control_software",
+    "emergency_power_cutoff": "safety_subsystem",
+    "humanoid_robot_complete_unit": "complete_robot",
+    "joint_module_assembly": "manufacturing_process",
+    "whole_robot_calibration": "manufacturing_process",
+    "motion_performance_test": "test_process",
+    "robot_reliability_test": "test_process",
+    "robot_safety_test": "test_process",
+    "robot_remote_operations": "operations_service",
+    "industrial_scenario_integration": "integration_service",
+    "service_scenario_integration": "integration_service",
+}
+
+HUMANOID_EXPECTED_EDGES = {
+    ("rotary_joint_assembly", "frameless_torque_motor"),
+    ("rotary_joint_assembly", "harmonic_reducer"),
+    ("rotary_joint_assembly", "precision_planetary_reducer"),
+    ("rotary_joint_assembly", "joint_encoder_module"),
+    ("rotary_joint_assembly", "joint_brake"),
+    ("rotary_joint_assembly", "joint_bearing"),
+    ("linear_joint_assembly", "planetary_roller_screw"),
+    ("linear_joint_assembly", "ball_screw"),
+    ("linear_joint_assembly", "linear_motor"),
+    ("linear_joint_assembly", "screw_support_bearing"),
+    ("linear_joint_assembly", "linear_displacement_sensor"),
+    ("shoulder_joint_module", "rotary_joint_assembly"),
+    ("elbow_joint_module", "rotary_joint_assembly"),
+    ("wrist_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "rotary_joint_assembly"),
+    ("knee_joint_module", "rotary_joint_assembly"),
+    ("ankle_joint_module", "rotary_joint_assembly"),
+    ("dexterous_hand_assembly", "finger_micro_actuator"),
+    ("dexterous_hand_assembly", "micro_reducer_transmission"),
+    ("dexterous_hand_assembly", "tendon_flexible_transmission"),
+    ("dexterous_hand_assembly", "fingertip_tactile_force_control"),
+}
+
 
 def test_semiconductor_manufacturing_equipment_chain_metadata():
     catalog = load_industry_catalog()
@@ -300,3 +551,157 @@ def test_semiconductor_manufacturing_equipment_representative_nodes_are_research
         "Software that analyzes fab data to monitor yield and control process excursions."
     )
     assert nodes["ultrapure_water_system"]["node_name"] == "Ultrapure Water Systems"
+
+
+def test_humanoid_robots_embodied_intelligence_chain_metadata():
+    catalog = load_industry_catalog()
+    chain = next(
+        row for row in catalog["chains"] if row["chain_id"] == HUMANOID_CHAIN_ID
+    )
+
+    assert chain == {
+        "chain_id": HUMANOID_CHAIN_ID,
+        "sector_id": HUMANOID_SECTOR_ID,
+        "chain_name": "Humanoid Robots and Embodied Intelligence",
+        "chain_kind": "canonical_industry_chain",
+        "decomposition_method": "system_architecture",
+        "description": (
+            "Humanoid robot systems spanning embodied intelligence, motion control, "
+            "training and simulation, sensing, compute and control hardware, actuation, "
+            "body modules, energy systems, manufacturing, testing, and deployment."
+        ),
+        "scope": (
+            "Covers robot-specific models and software, integrated sensing and control "
+            "modules, reusable electromechanical components, complete humanoid robots, "
+            "and their manufacturing, test, operations, and scenario integration."
+        ),
+        "exclusions": [
+            (
+                "General-purpose AI foundation models remain owned by their primary AI "
+                "chain; this chain covers robot-adapted embodied models and inference."
+            ),
+            (
+                "General semiconductor chips remain owned by semiconductor chains; this "
+                "chain covers robot-selected compute components and integrated modules."
+            ),
+            (
+                "General industrial robots, machine tools, and factory automation remain "
+                "owned by their primary equipment chains unless humanoid-specific."
+            ),
+        ],
+        "aliases": [
+            "Humanoid Robotics",
+            "Embodied Intelligence Robots",
+            "人形机器人与具身智能",
+        ],
+        "status": "draft",
+        "order": 4,
+    }
+
+
+def test_humanoid_robots_embodied_intelligence_exact_taxonomy_and_contract():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == HUMANOID_CHAIN_ID]
+    l3_nodes = [row for row in nodes if row["level"] == "L3"]
+    l4_nodes = [row for row in nodes if row["level"] == "L4"]
+
+    assert len(l3_nodes) == 12
+    assert len(l4_nodes) == 97
+    assert [row["node_id"] for row in l3_nodes] == list(HUMANOID_EXPECTED_CHILDREN)
+    assert {
+        parent_id: [
+            row["node_id"]
+            for row in l4_nodes
+            if row["parent_node_id"] == parent_id
+        ]
+        for parent_id in HUMANOID_EXPECTED_CHILDREN
+    } == HUMANOID_EXPECTED_CHILDREN
+    assert {row["node_id"]: row["node_type"] for row in l4_nodes} == (
+        HUMANOID_EXPECTED_L4_NODE_TYPES
+    )
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "canonical"
+        assert node["status"] == "draft"
+        assert node["canonical_node_refs"] == []
+        assert node["node_name"] != node["node_id"]
+        assert node["description"]
+
+    for node in l3_nodes:
+        assert node["parent_node_id"] is None
+        assert node["node_type"] == "system_architecture_family"
+        assert node["canonical_key"] == ""
+        assert node["primary_path"] == [
+            HUMANOID_SECTOR_ID,
+            HUMANOID_CHAIN_ID,
+            node["node_id"],
+        ]
+
+    for node in l4_nodes:
+        assert node["canonical_key"] == f"humanoid_robotics:{node['node_id']}"
+        assert node["primary_path"] == [
+            HUMANOID_SECTOR_ID,
+            HUMANOID_CHAIN_ID,
+            node["parent_node_id"],
+            node["node_id"],
+        ]
+
+
+def test_humanoid_robots_embodied_intelligence_exact_uses_edges():
+    catalog = load_industry_catalog()
+    humanoid_node_ids = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+    edges = [
+        row
+        for row in catalog["edges"]
+        if row["source_node_id"] in humanoid_node_ids
+        or row["target_node_id"] in humanoid_node_ids
+    ]
+
+    assert len(edges) == 21
+    assert len({row["edge_id"] for row in edges}) == 21
+    assert {
+        (row["source_node_id"], row["target_node_id"]) for row in edges
+    } == HUMANOID_EXPECTED_EDGES
+    for edge in edges:
+        assert edge["relationship_type"] == "uses"
+        assert edge["notes"]
+        assert edge["source_ids"] == []
+
+
+def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research_usable():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+
+    assert nodes["humanoid_embodied_ai_brain"]["node_name"] == (
+        "Embodied AI Brain"
+    )
+    assert nodes["vision_language_action_model"]["description"] == (
+        "Robot-adapted vision-language-action models that map multimodal observations "
+        "and instructions to executable action representations; general foundation "
+        "models remain owned by the primary AI chain."
+    )
+    assert nodes["robot_ai_compute_chip"]["description"] == (
+        "Processors selected and configured for onboard robot AI workloads; the generic "
+        "chip categories remain owned by semiconductor chains."
+    )
+    assert nodes["rotary_joint_assembly"]["description"] == (
+        "Integrated rotary actuation assembly combining reusable motor, transmission, "
+        "feedback, braking, and bearing components for humanoid joint modules."
+    )
+    assert nodes["shoulder_joint_module"]["description"] == (
+        "Shoulder-specific kinematic module that integrates shared rotary joint "
+        "assemblies into the humanoid upper limb."
+    )
+    assert nodes["frameless_torque_motor"]["description"] == (
+        "Reusable frameless high-torque motor component for compact robot actuation, "
+        "not duplicated by body location."
+    )
