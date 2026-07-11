@@ -16,6 +16,24 @@ from stock_research.technology_industry_catalog import (
 )
 
 
+def test_repository_catalog_starts_with_ten_approved_sectors():
+    catalog = load_industry_catalog()
+
+    assert [row["sector_id"] for row in catalog["sectors"]] == [
+        "semiconductor_electronics",
+        "next_generation_information_technology",
+        "high_end_equipment_intelligent_manufacturing",
+        "energy_technology_new_power_system",
+        "advanced_materials",
+        "intelligent_vehicles_advanced_transportation",
+        "aerospace_low_altitude_ocean_technology",
+        "life_sciences_medical_technology",
+        "green_low_carbon_resource_recycling",
+        "frontier_future_technology",
+    ]
+    assert catalog["chains"] == []
+
+
 def test_load_industry_catalog_composes_package_files(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
 
