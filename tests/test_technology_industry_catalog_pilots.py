@@ -572,6 +572,73 @@ AI_POWER_EXPECTED_CHILDREN = {
     ],
 }
 
+AI_POWER_L3_DISPLAY_NAMES = {
+    "ai_power_load_capacity_planning": "Load and Capacity Planning",
+    "ai_power_energy_supply_resilience": "Energy Supply and Resilience",
+    "ai_power_grid_access_substation": "Grid Access and Substations",
+    "ai_power_backup_power": "Backup Power",
+    "ai_power_ups_conversion": "UPS and Power Conversion",
+    "ai_power_hvdc_dc_architecture": "HVDC and DC Architecture",
+    "ai_power_room_rack_distribution": "Room and Rack Distribution",
+    "ai_power_server_board_power": "Server and Board-Level Power",
+    "ai_power_liquid_cooling_thermal": "Liquid Cooling and Thermal Management",
+    "ai_power_energy_management_software": "Energy Management Software",
+    "ai_power_design_epc_operations": "Design, EPC, and Operations",
+}
+
+AI_POWER_L3_STAGE_TERMS = {
+    "ai_power_load_capacity_planning": ("rack density", "pue", "wue"),
+    "ai_power_energy_supply_resilience": ("supply portfolio", "firm capacity", "resilience"),
+    "ai_power_grid_access_substation": ("interconnection", "substation", "protection"),
+    "ai_power_backup_power": ("ride-through", "standby", "transfer"),
+    "ai_power_ups_conversion": ("conditioned power", "rectification", "inversion"),
+    "ai_power_hvdc_dc_architecture": ("dc voltage", "rectification", "protection"),
+    "ai_power_room_rack_distribution": ("pdu", "busway", "rack"),
+    "ai_power_server_board_power": ("server psu", "dc-dc", "voltage regulation"),
+    "ai_power_liquid_cooling_thermal": ("cdu", "coolant", "heat rejection"),
+    "ai_power_energy_management_software": ("monitoring", "control", "scheduling"),
+    "ai_power_design_epc_operations": ("design", "commissioning", "operations"),
+}
+
+AI_POWER_SUPPLY_ROLE_BOUNDARIES = {
+    "ai_power_grid_supply_role": (
+        ("utility-delivered service capacity",),
+        ("excludes onsite generation", "procurement instruments"),
+    ),
+    "ai_power_renewable_procurement_role": (
+        ("ppa", "green tariffs", "certificates"),
+        ("excludes physical generation", "microgrid control"),
+    ),
+    "ai_power_distributed_energy_role": (
+        ("onsite/local generation assets",),
+        ("gas-turbine-specific route", "microgrid orchestration"),
+    ),
+    "ai_power_gas_turbine_role": (
+        ("turbine equipment", "fuel", "dispatch"),
+        ("excludes generic distributed resources",),
+    ),
+    "ai_power_nuclear_supply_role": (
+        ("nuclear-backed ppa", "co-location", "supply"),
+        ("excludes generic grid supply",),
+    ),
+    "ai_power_microgrid_role": (
+        ("orchestration", "islanding", "control"),
+        ("excludes ownership of generation assets",),
+    ),
+}
+
+AI_POWER_SUPPORTING_L3_TERMS = {
+    "power_semiconductor_devices": ("switching", "rectification", "voltage regulation"),
+    "power_interconnect_passive_components": ("cables", "busbars", "connectors"),
+    "data_center_facility_systems_services": ("facility-level", "power", "cooling"),
+    "industrial_energy_facility_software": ("electrical distribution", "thermal plant", "facility operations"),
+    "grid_connection_transmission_protection": ("interconnection", "substation", "protection"),
+    "generation_supply_resilience_systems": ("generation", "procurement", "microgrid"),
+    "power_conversion_distribution_control": ("ups", "dc", "distribution"),
+    "stationary_backup_storage_systems": ("standby", "ride-through", "black-start"),
+    "stationary_fuel_cell_systems": ("fuel-cell", "stacks", "balance of plant"),
+}
+
 AI_POWER_ROLE_NODE_TYPES = {
     "ai_power_grid_supply_role": "energy_supply_service_role",
     "ai_power_renewable_procurement_role": "energy_procurement_service_role",
@@ -1472,6 +1539,58 @@ def test_ai_power_supporting_file_contains_only_required_skeleton_nodes():
             for target_id, owner_chain_id in AI_POWER_CANONICAL_OWNERS.values()
             if owner_chain_id == chain_id
         }
+
+
+def test_ai_power_l3_names_and_descriptions_define_distinct_stages():
+    catalog = load_industry_catalog()
+    stages = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L3"
+    }
+
+    assert {node_id: row["node_name"] for node_id, row in stages.items()} == (
+        AI_POWER_L3_DISPLAY_NAMES
+    )
+    for node_id, terms in AI_POWER_L3_STAGE_TERMS.items():
+        description = stages[node_id]["description"].lower()
+        assert all(term in description for term in terms)
+
+
+def test_ai_power_supply_roles_have_mutually_exclusive_boundaries():
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+
+    for node_id, (required_terms, excluded_terms) in AI_POWER_SUPPLY_ROLE_BOUNDARIES.items():
+        description = nodes[node_id]["description"].lower()
+        assert all(term in description for term in required_terms)
+        assert all(term in description for term in excluded_terms)
+
+
+def test_ai_power_supporting_l3_definitions_are_reusable_and_non_ai_specific():
+    path = (
+        Path(__file__).parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+        / "nodes"
+        / "ai_power_supporting_canonical_nodes_v1.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    l3_descriptions = {
+        row["node_id"]: row["description"].lower()
+        for row in payload["nodes"]
+        if row["level"] == "L3"
+    }
+
+    assert set(l3_descriptions) == set(AI_POWER_SUPPORTING_L3_TERMS)
+    for node_id, terms in AI_POWER_SUPPORTING_L3_TERMS.items():
+        description = l3_descriptions[node_id]
+        assert all(term in description for term in terms)
+        assert not any(
+            term in description
+            for term in ("ai ", "ai-", "ai_", "theme", "application")
+        )
 
 
 def _description_specific_terms(node_id: str) -> list[str]:
