@@ -1059,6 +1059,20 @@ def test_dashboard_api_cli_parser_accepts_host_and_port():
     assert args.port == 9999
 
 
+def test_dashboard_api_cli_parser_does_not_resolve_unrelated_artifacts(monkeypatch):
+    from stock_research import mid_trend_strategy_validation
+
+    monkeypatch.setattr(
+        mid_trend_strategy_validation,
+        "resolve_default_current_regime_path",
+        lambda path=None: (_ for _ in ()).throw(FileNotFoundError("missing")),
+    )
+
+    args = cli.build_parser().parse_args(["dashboard-api"])
+
+    assert args.command == "dashboard-api"
+
+
 def test_dashboard_api_cli_dispatches_to_runner(monkeypatch):
     captured = {}
 

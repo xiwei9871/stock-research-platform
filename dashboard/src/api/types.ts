@@ -403,6 +403,7 @@ export type ThemeResearchUpdatesPayload = {
   items: ThemeResearchUpdate[];
   by_object_type: Record<string, number>;
   since: string;
+  until: string;
   limit: number;
   research_only: true;
   used_for_signal: false;

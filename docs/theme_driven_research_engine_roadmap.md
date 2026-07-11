@@ -463,7 +463,7 @@ Implementation result:
 
 ## Phase 10: Research Workflow Integration
 
-Purpose: make reviewed theme context available to Daily Review, Watchlist, tech bottleneck research, company research, theme tracking, anomaly explanation, and report update reminders.
+Purpose: make reviewed theme context available to Daily Review, Watchlist, tech bottleneck research, company research, and theme tracking. Phase 10 provides conservative anomaly context and reviewed-source update reminders inside these workflows; it does not claim automated causal attribution or add a separate push-reminder scheduler.
 
 The target daily-review answer is:
 
@@ -478,13 +478,14 @@ Is the move theme-driven or company-fundamental-driven?
 Implementation result:
 
 - one PostgreSQL-backed `Theme Research Context Service` supplies all workflow consumers;
-- company context fails closed unless the company mapping and node are reviewed and mapping evidence uses accepted sources;
+- company context fails closed unless the theme, company mapping, and node are reviewed and mapping evidence uses accepted sources;
 - Daily Review reports reviewed theme coverage, mapped companies, recent reviewed changes, evidence gaps, and incomplete evidence tracks;
 - Watchlist rows retain their original ordering and signal fields while adding compact theme/node context;
 - Stock Workspace shows the theme, mapped node, value-capture and bottleneck scores, business relationship, and evidence counts;
 - `GET /api/assets/:asset_id/theme-research-context` and `GET /api/research/theme-decomposition/updates` expose the same read model;
 - all workflow payloads remain `research_only=true`, `used_for_signal=false`, and `used_for_admission=false`;
 - driver assessment remains conservative and uses `mixed_or_uncertain` or `insufficient_evidence` when causality is not proven;
+- Daily Review's recent reviewed changes are the v1 report-update reminder surface; proactive push delivery is outside Phase 10;
 - Phase 2B humanoid robotics remains an explicit evidence gap and is excluded from reviewed workflow context;
 - `theme-research verify-p1-p10` produces requirement-level JSON and Markdown verification reports.
 

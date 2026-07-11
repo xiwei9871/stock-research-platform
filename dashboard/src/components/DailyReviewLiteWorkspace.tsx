@@ -31,21 +31,31 @@ function statusClass(status: string) {
 function ThemeResearchDigest({ payload }: { payload: DailyReviewLitePayload }) {
   const digest = payload.theme_research;
   if (!digest) return null;
-  const firstCompany = digest.mapped_companies[0];
   return (
     <div className="daily-theme-research-detail">
-      {firstCompany ? (
-        <div className="daily-theme-research-row">
-          <a
-            href={firstCompany.theme_dashboard_path}
-            aria-label={`${firstCompany.theme_name}主题详情`}
-          >
-            {firstCompany.company_name} · {firstCompany.node_name}
-          </a>
-          <span className="muted">
-            研究优先级 {firstCompany.company_research_priority_score ?? '-'}
-          </span>
-        </div>
+      {digest.mapped_companies.length ? (
+        digest.mapped_companies.map((company) => (
+          <div className="daily-theme-research-row" key={`${company.theme_id}:${company.company_code}`}>
+            <span>
+              <a
+                href={company.theme_dashboard_path}
+                aria-label={`${company.theme_name}主题详情`}
+              >
+                {company.company_name} · {company.node_name}
+              </a>
+              {' · '}
+              <a
+                href={company.stock_workspace_path}
+                aria-label={`打开${company.company_name}个股工作台`}
+              >
+                个股
+              </a>
+            </span>
+            <span className="muted">
+              研究优先级 {company.company_research_priority_score ?? '-'}
+            </span>
+          </div>
+        ))
       ) : (
         <p className="muted">当前没有满足审核门槛的公司映射。</p>
       )}

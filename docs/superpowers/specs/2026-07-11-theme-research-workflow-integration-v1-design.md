@@ -23,6 +23,7 @@ AI power is the first fully reviewed workflow theme. The humanoid-robotics sampl
 
 Eligible workflow context requires all of the following:
 
+- theme `status` is `reviewed` or `published`;
 - company mapping `review_status=reviewed`;
 - mapped node `node_review_status=reviewed`;
 - at least one mapping evidence item;
@@ -134,4 +135,3 @@ The overall result distinguishes `complete`, `complete_with_declared_evidence_ga
 - writing Theme Research decisions from Daily Review, Watchlist, or Stock Workspace;
 - merging the Theme Research and tech-bottleneck review dashboards;
 - changing existing score, strategy, watchlist, or admission logic.
-

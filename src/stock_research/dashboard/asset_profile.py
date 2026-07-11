@@ -88,6 +88,7 @@ def build_asset_profile(
                 canonical_asset_id,
                 trade_date,
                 service=service,
+                include_theme_research=False,
             ),
             "decisions": load_asset_decision_history(
                 canonical_asset_id,

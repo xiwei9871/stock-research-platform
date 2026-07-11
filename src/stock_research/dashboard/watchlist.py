@@ -39,6 +39,8 @@ def load_asset_watchlist_signals_for_dashboard(
     asset_id: str,
     trade_date: str,
     service: str = SETTINGS.research_service,
+    *,
+    include_theme_research: bool = True,
 ) -> list[dict[str, Any]]:
     sql = """
     SELECT
@@ -61,7 +63,8 @@ def load_asset_watchlist_signals_for_dashboard(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [asset_id, trade_date])
-    return enrich_watchlist_rows([_signal_row(row).to_dict() for row in rows])
+    signal_rows = [_signal_row(row).to_dict() for row in rows]
+    return enrich_watchlist_rows(signal_rows) if include_theme_research else signal_rows
 
 
 def _signal_row(row: dict[str, Any]) -> WatchlistSignalRow:

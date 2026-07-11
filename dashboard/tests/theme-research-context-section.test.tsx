@@ -19,7 +19,7 @@ function reviewedContext(): AssetThemeResearchContext {
         theme_name: 'AI供电产业链',
         theme_type: 'ai_power',
         summary: 'AI power delivery chain',
-        status: 'draft',
+        status: 'reviewed',
         dashboard_path: '/theme-research/ai_power_value_capture_v1',
         research_only: true,
         used_for_signal: false,
@@ -148,4 +148,3 @@ describe('ThemeResearchContextSection', () => {
     expect(screen.getByText('主题研究上下文暂不可用。')).toBeInTheDocument();
   });
 });
-

@@ -24,7 +24,7 @@ const reviewedThemeContext = {
       theme_name: 'AI供电产业链',
       theme_type: 'ai_power',
       summary: 'reviewed context',
-      status: 'draft',
+      status: 'reviewed',
       dashboard_path: '/theme-research/ai_power_value_capture_v1',
       research_only: true as const,
       used_for_signal: false as const,

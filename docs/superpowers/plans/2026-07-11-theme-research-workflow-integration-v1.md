@@ -4,6 +4,8 @@
 
 **Goal:** Complete Phase 10 by exposing one reviewed, research-only Theme Research context in Daily Review, Watchlist, and Stock Workspace, then verify Phases 1-10 against authoritative evidence.
 
+**Status:** Completed on 2026-07-11. Final review added theme-level fail-closed eligibility, company-scoped DB reads, revocation-aware updates, Asia/Shanghai daily windows, structured read errors, and clean-checkout verification.
+
 **Architecture:** Add a focused PostgreSQL-backed read-model service and reuse it in existing backend payloads. Keep Theme Research independent from scoring and the tech-bottleneck dashboard, fail closed on review eligibility, and add a machine-readable P1-P10 verifier.
 
 **Tech Stack:** Python 3.12, FastAPI, psycopg, PostgreSQL, pytest, React, TypeScript, Vitest, Playwright.
@@ -135,4 +137,3 @@
 - [ ] Request independent code review; fix High and Medium findings through failing tests first.
 - [ ] Run the final P1-P10 verifier and preserve its JSON and Markdown output under the documented reports directory.
 - [ ] Commit verified fixes and final evidence without staging unrelated user changes.
-

@@ -7,6 +7,7 @@ from stock_research.dashboard.theme_research_context import (
     build_daily_theme_research_digest,
     build_asset_theme_context,
     build_theme_research_updates,
+    load_asset_theme_context,
     list_theme_research_updates,
     normalize_theme_research_company_code,
 )
@@ -26,6 +27,29 @@ def test_company_code_normalization_supports_platform_asset_identifiers() -> Non
     assert normalize_theme_research_company_code("CN:SH:600000") == "600000.SH"
     assert normalize_theme_research_company_code("830799.BJ") == "830799.BJ"
     assert normalize_theme_research_company_code("missing") == ""
+
+
+def test_asset_context_uses_company_scoped_database_loader(monkeypatch) -> None:
+    context = _context()
+    captured = {}
+
+    def scoped_loader(company_code, *, service=None):
+        captured["call"] = {"company_code": company_code, "service": service}
+        return context
+
+    monkeypatch.setattr(theme_research_context, "load_asset_db_context", scoped_loader)
+    monkeypatch.setattr(
+        theme_research_context,
+        "load_db_context",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("asset context must not load the full database package")
+        ),
+    )
+
+    payload = load_asset_theme_context("CN:SZ:002837", service="runtime")
+
+    assert payload["status"] == "reviewed_context_available"
+    assert captured["call"] == {"company_code": "002837.SZ", "service": "runtime"}
 
 
 def test_reviewed_mapping_builds_evidence_backed_research_context() -> None:
@@ -91,6 +115,22 @@ def test_mapping_eligibility_fails_closed_with_explicit_reasons() -> None:
             "reasons": ["mapping_not_reviewed"],
         }
     ]
+
+
+def test_draft_theme_is_excluded_even_when_mapping_node_and_evidence_are_reviewed() -> None:
+    context = _context()
+    theme = next(
+        row
+        for row in context["theme_package"]["themes"]
+        if row["theme_id"] == "ai_power_value_capture_v1"
+    )
+    theme["status"] = "draft"
+
+    payload = build_asset_theme_context("002837.SZ", context)
+
+    assert payload["status"] == "evidence_gap"
+    assert payload["mappings"] == []
+    assert payload["excluded_mappings"][0]["reasons"] == ["theme_not_reviewed"]
 
 
 def test_mapping_with_unaccepted_evidence_source_is_excluded() -> None:
@@ -176,6 +216,114 @@ def test_reviewed_updates_filter_status_date_and_sort_stably() -> None:
     assert payload["used_for_signal"] is False
 
 
+def test_reviewed_updates_drop_stale_approval_after_later_revocation() -> None:
+    review_events = [
+        {
+            "review_event_id": "accepted",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "source",
+            "object_id": "source-1",
+            "from_status": "unknown",
+            "to_status": "accepted",
+            "decision": "accept",
+            "comment": "accepted",
+            "created_at": "2026-07-11T09:00:00+08:00",
+        },
+        {
+            "review_event_id": "rejected",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "source",
+            "object_id": "source-1",
+            "from_status": "accepted",
+            "to_status": "rejected",
+            "decision": "reject",
+            "comment": "revoked",
+            "created_at": "2026-07-11T10:00:00+08:00",
+        },
+    ]
+
+    payload = build_theme_research_updates(
+        review_events,
+        [],
+        since="2026-07-11",
+        until="2026-07-12",
+        limit=10,
+    )
+
+    assert payload["items"] == []
+    assert payload["total"] == 0
+
+
+def test_reviewed_updates_include_latest_reviewed_theme_revision() -> None:
+    revisions = [
+        {
+            "revision_id": "theme-review",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "themes",
+            "object_id": "ai_power_value_capture_v1",
+            "operation": "update",
+            "after_payload": {
+                "status": "reviewed",
+                "theme_name": "AI供电产业链：谁在拿走价值量",
+            },
+            "created_at": "2026-07-11T12:00:00+08:00",
+        }
+    ]
+
+    payload = build_theme_research_updates([], revisions, limit=10)
+
+    assert payload["items"] == [
+        {
+            "update_id": "theme-review",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "theme",
+            "object_id": "ai_power_value_capture_v1",
+            "from_status": "",
+            "to_status": "reviewed",
+            "decision": "update",
+            "summary": "AI供电产业链：谁在拿走价值量",
+            "created_at": "2026-07-11T12:00:00+08:00",
+        }
+    ]
+
+
+def test_update_window_uses_explicit_end_boundary() -> None:
+    events = [
+        {
+            "review_event_id": "inside",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "claim",
+            "object_id": "claim-1",
+            "from_status": "draft",
+            "to_status": "reviewed",
+            "decision": "accept",
+            "comment": "inside",
+            "created_at": "2026-07-11T23:59:59+08:00",
+        },
+        {
+            "review_event_id": "outside",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "claim",
+            "object_id": "claim-2",
+            "from_status": "draft",
+            "to_status": "reviewed",
+            "decision": "accept",
+            "comment": "outside",
+            "created_at": "2026-07-12T00:00:00+08:00",
+        },
+    ]
+
+    payload = build_theme_research_updates(
+        events,
+        [],
+        since="2026-07-11",
+        until="2026-07-12",
+        limit=10,
+    )
+
+    assert [row["update_id"] for row in payload["items"]] == ["inside"]
+
+
 def test_updates_reject_invalid_since_and_limit() -> None:
     for since, limit in (("not-a-date", 10), (None, 0), (None, 501)):
         try:
@@ -215,6 +363,24 @@ def test_daily_digest_counts_reviewed_workflow_context() -> None:
     assert digest["used_for_admission"] is False
 
 
+def test_daily_digest_requests_one_shanghai_calendar_day(monkeypatch) -> None:
+    captured = {}
+
+    def updates_loader(*, since=None, until=None, limit=100, service=None):
+        captured.update({"since": since, "until": until, "limit": limit})
+        return {"total": 0, "items": []}
+
+    monkeypatch.setattr(theme_research_context, "list_theme_research_updates", updates_loader)
+
+    build_daily_theme_research_digest("2026-07-11", context=_context())
+
+    assert captured == {
+        "since": "2026-07-11T00:00:00+08:00",
+        "until": "2026-07-12T00:00:00+08:00",
+        "limit": 100,
+    }
+
+
 def test_update_queries_filter_reviewed_rows_before_limit(monkeypatch) -> None:
     queries = []
 
@@ -235,7 +401,6 @@ def test_update_queries_filter_reviewed_rows_before_limit(monkeypatch) -> None:
     payload = list_theme_research_updates(since="2026-07-01", limit=20, service="test")
 
     assert payload["total"] == 0
-    assert "object_type = 'source' AND to_status = 'accepted'" in queries[0]
-    assert "object_type IN ('claim', 'node') AND to_status = 'reviewed'" in queries[0]
-    assert "after_payload ->> 'review_status' = 'reviewed'" in queries[1]
+    assert "DISTINCT ON (object_type, object_id)" in queries[0]
+    assert "DISTINCT ON (object_id)" in queries[1]
     assert all("LIMIT %s" in query for query in queries)

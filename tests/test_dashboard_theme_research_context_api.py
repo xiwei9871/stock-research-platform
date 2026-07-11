@@ -52,3 +52,32 @@ def test_theme_research_updates_endpoint_validates_query(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["items"][0]["created_at"] == "2026-07-10"
     assert response.json()["limit"] == 20
+
+
+def test_theme_research_updates_endpoint_returns_400_for_non_numeric_limit() -> None:
+    response = TestClient(dashboard_app.create_app()).get(
+        "/api/research/theme-decomposition/updates?limit=abc"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "theme_research_limit_invalid"
+
+
+def test_theme_research_read_endpoints_return_structured_service_errors(monkeypatch) -> None:
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(dashboard_app, "load_asset_theme_context", unavailable)
+    monkeypatch.setattr(dashboard_app, "list_theme_research_updates", unavailable)
+    client = TestClient(dashboard_app.create_app(), raise_server_exceptions=False)
+
+    asset_response = client.get("/api/assets/CN:SZ:002837/theme-research-context")
+    updates_response = client.get("/api/research/theme-decomposition/updates")
+
+    for response in (asset_response, updates_response):
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "status": "error",
+            "error_code": "theme_research_service_unavailable",
+            "message": "Theme Research read service is unavailable",
+        }

@@ -61,7 +61,18 @@ beforeEach(() => {
           node_id: 'liquid_cooling',
           node_name: '液冷',
           company_research_priority_score: 78.8,
-          stock_workspace_path: '/stocks/002837.SZ?source=theme_research',
+          stock_workspace_path: '/tech-bottleneck/stock/002837.SZ?source=theme_research',
+          theme_dashboard_path: '/theme-research/ai_power_value_capture_v1'
+        },
+        {
+          company_code: '300274.SZ',
+          company_name: '阳光电源',
+          theme_id: 'ai_power_value_capture_v1',
+          theme_name: 'AI供电产业链',
+          node_id: 'ups',
+          node_name: 'UPS',
+          company_research_priority_score: 76.2,
+          stock_workspace_path: '/tech-bottleneck/stock/300274.SZ?source=theme_research',
           theme_dashboard_path: '/theme-research/ai_power_value_capture_v1'
         }
       ],
@@ -112,11 +123,19 @@ describe('DailyReviewLiteWorkspace', () => {
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
     }
-    expect(screen.getByRole('link', { name: 'AI供电产业链主题详情' })).toHaveAttribute(
-      'href',
-      '/theme-research/ai_power_value_capture_v1'
-    );
+    expect(screen.getAllByRole('link', { name: 'AI供电产业链主题详情' })).toHaveLength(2);
+    for (const link of screen.getAllByRole('link', { name: 'AI供电产业链主题详情' })) {
+      expect(link).toHaveAttribute('href', '/theme-research/ai_power_value_capture_v1');
+    }
     expect(screen.getByText('英维克 · 液冷')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '打开英维克个股工作台' })).toHaveAttribute(
+      'href',
+      '/tech-bottleneck/stock/002837.SZ?source=theme_research'
+    );
+    expect(screen.getByRole('link', { name: '打开阳光电源个股工作台' })).toHaveAttribute(
+      'href',
+      '/tech-bottleneck/stock/300274.SZ?source=theme_research'
+    );
     expect(screen.getByText('完成公开证据复核')).toBeInTheDocument();
     expect(screen.getByText('仅用于研究，不参与信号或准入')).toBeInTheDocument();
   });

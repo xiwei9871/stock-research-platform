@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
-import inspect
 import json
 from pathlib import Path
 import tempfile
@@ -17,10 +16,12 @@ from stock_research.config import SETTINGS
 from stock_research.dashboard.daily_review_lite import _sections
 from stock_research.dashboard.theme_research import list_theme_research_themes
 from stock_research.dashboard.theme_research_context import (
-    build_asset_theme_context,
     build_daily_theme_research_digest,
+    enrich_watchlist_rows,
+    load_asset_theme_context,
+    list_theme_research_updates,
 )
-from stock_research.dashboard import asset_profile, watchlist
+from stock_research.dashboard.theme_research_db import load_db_context
 from stock_research.db import connect, fetch_all
 from stock_research.decomposition_templates import (
     load_decomposition_template_library,
@@ -89,7 +90,11 @@ def verify_theme_research_phases(
             )
         )
     phases.append(
-        _run_probe("10", "Investment research workflow integration", _verify_phase_10)
+        _run_probe(
+            "10",
+            "Investment research workflow integration",
+            lambda: _verify_phase_10(runtime_service=runtime_service),
+        )
     )
     phases.sort(key=lambda row: PHASE_ORDER.index(row["phase"]))
     return build_verification_report(phases)
@@ -295,6 +300,12 @@ def _verify_phase_2b() -> dict[str, Any]:
         source_pack_root / "humanoid_robotics_node_evidence_matrix_v1.json",
     ]
     present = [path.name for path in expected if path.exists()]
+    theme_package = load_theme_package()
+    robotics_theme = next(
+        row
+        for row in theme_package["themes"]
+        if row["theme_id"] == "humanoid_robotics_head_to_toe_v1"
+    )
     return {
         "phase": "2B",
         "title": "Humanoid robotics public source pack",
@@ -304,7 +315,9 @@ def _verify_phase_2b() -> dict[str, Any]:
                 "requirement": "unfinished evidence track is explicit and excluded from reviewed workflows",
                 "status": "declared_gap",
                 "evidence": (
-                    f"present_source_pack_files={present}; expected files remain an explicit Phase 2B task"
+                    f"present_source_pack_files={present}; "
+                    f"artifact_status={robotics_theme['status']}; "
+                    "expected files remain an explicit Phase 2B task"
                 ),
             }
         ],
@@ -533,23 +546,43 @@ def _verify_phase_9(
     return _phase_result("9", "Database productionization", requirements)
 
 
-def _verify_phase_10() -> dict[str, Any]:
-    context = load_theme_research_priority_package()
+def _verify_phase_10(*, runtime_service: str | None = None) -> dict[str, Any]:
+    from stock_research.dashboard.app import create_app
+
+    service = runtime_service or SETTINGS.theme_research_runtime_service
+    context = load_db_context(service=service)
     mapped_codes = sorted(
         {row["company_code"] for row in context["mapping_package"]["company_mappings"]}
     )
-    asset_contexts = [build_asset_theme_context(code, context) for code in mapped_codes]
+    asset_contexts = [
+        load_asset_theme_context(code, service=service) for code in mapped_codes
+    ]
     eligible = [row for row in asset_contexts if row["status"] == "reviewed_context_available"]
+    reviewed_theme_ids = {
+        row["theme_id"]
+        for row in context["theme_package"]["themes"]
+        if row["status"] in {"reviewed", "published"}
+    }
     guarded = all(
         row["research_only"] is True
         and row["used_for_signal"] is False
         and row["used_for_admission"] is False
         for row in asset_contexts
     )
+    eligible_theme_ids = {
+        theme["theme_id"] for row in eligible for theme in row["themes"]
+    }
+    robotics_theme_id = "humanoid_robotics_head_to_toe_v1"
+    robotics_excluded = robotics_theme_id not in eligible_theme_ids
     digest = build_daily_theme_research_digest(
         "2026-07-11",
         context=context,
-        updates={"total": 0, "items": []},
+        updates=list_theme_research_updates(
+            since="2026-07-11T00:00:00+08:00",
+            until="2026-07-12T00:00:00+08:00",
+            limit=100,
+            service=service,
+        ),
     )
     daily_section = next(
         row
@@ -564,47 +597,68 @@ def _verify_phase_10() -> dict[str, Any]:
         )
         if row["key"] == "theme_research"
     )
-    backend_sources = "\n".join(
-        [inspect.getsource(watchlist), inspect.getsource(asset_profile)]
-    )
-    frontend_files = [
-        REPOSITORY_ROOT / "dashboard" / "src" / "components" / "DailyReviewLiteWorkspace.tsx",
-        REPOSITORY_ROOT / "dashboard" / "src" / "components" / "WatchlistWorkspace.tsx",
-        REPOSITORY_ROOT
-        / "dashboard"
-        / "src"
-        / "components"
-        / "stock-workspace"
-        / "ThemeResearchContextSection.tsx",
-        REPOSITORY_ROOT / "dashboard" / "src" / "components" / "StockWorkspace.tsx",
+    signal_rows = [
+        {
+            "asset_id": code,
+            "stock_code": code,
+            "signal_score": index + 0.5,
+            "primary_signal": f"signal-{index}",
+        }
+        for index, code in enumerate(mapped_codes)
     ]
-    frontend_text = "\n".join(path.read_text(encoding="utf-8") for path in frontend_files)
+    enriched_rows = enrich_watchlist_rows(signal_rows, service=service)
+    signal_fields_unchanged = all(
+        all(enriched.get(key) == original.get(key) for key in original)
+        for original, enriched in zip(signal_rows, enriched_rows, strict=True)
+    )
+    routes = {
+        route.path: route.endpoint
+        for route in create_app().routes
+        if hasattr(route, "path") and hasattr(route, "endpoint")
+    }
+    asset_api_payload = routes["/api/assets/{asset_id}/theme-research-context"](
+        eligible[0]["company_code"]
+    )
+    updates_api_payload = routes["/api/research/theme-decomposition/updates"](
+        since="2026-07-11", limit="20"
+    )
     requirements = [
         _requirement(
             "reviewed company context is available and fail-closed",
-            len(eligible) == 2 and guarded,
-            f"eligible_companies={len(eligible)}, mapped_candidates={len(asset_contexts)}",
+            bool(eligible)
+            and guarded
+            and eligible_theme_ids <= reviewed_theme_ids
+            and robotics_excluded,
+            (
+                f"eligible_companies={len(eligible)}, "
+                f"reviewed_themes={sorted(reviewed_theme_ids)}, "
+                f"robotics_excluded={robotics_excluded}"
+            ),
         ),
         _requirement(
             "Daily Review consumes the shared digest",
-            daily_section["status"] == "ready" and digest["mapped_company_count"] == 2,
+            daily_section["status"] == "ready"
+            and digest["mapped_company_count"] == len(eligible),
             (
                 f"daily_section={daily_section['status']}, "
                 f"mapped_companies={digest['mapped_company_count']}"
             ),
         ),
         _requirement(
-            "Watchlist and asset profile consume one context service",
-            "enrich_watchlist_rows" in backend_sources
-            and "load_asset_theme_context_for_workflow" in backend_sources,
-            "watchlist enrichment and asset profile use theme_research_context",
+            "Watchlist enrichment preserves signal fields",
+            signal_fields_unchanged
+            and all("theme_research_context" in row for row in enriched_rows),
+            f"rows={len(enriched_rows)}, signal_fields_unchanged={signal_fields_unchanged}",
         ),
         _requirement(
-            "all three dashboard workflows render research-only context",
-            "ThemeResearchContextSection" in frontend_text
-            and "theme_research" in frontend_text
-            and "不参与信号或准入" in frontend_text,
-            "Daily Review, Watchlist, and Stock Workspace frontend consumers are present",
+            "read APIs execute the DB-backed context service",
+            asset_api_payload["status"] == "reviewed_context_available"
+            and asset_api_payload["research_only"] is True
+            and updates_api_payload["research_only"] is True,
+            (
+                f"asset_api_status={asset_api_payload['status']}, "
+                f"updates={updates_api_payload['total']}"
+            ),
         ),
     ]
     return _phase_result("10", "Investment research workflow integration", requirements)

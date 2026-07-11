@@ -5,9 +5,9 @@
     "theme_name": "AI供电产业链：谁在拿走价值量",
     "theme_type": "ai_power",
     "summary": "A read-only baseline that decomposes AI power infrastructure from compute demand to grid connection, power conversion, rack distribution, cooling, and integration. Phase 2A adds traceable public evidence while preserving unresolved value-capture and localization gaps.",
-    "status": "draft",
+    "status": "reviewed",
     "created_from": "mixed",
-    "last_updated": "2026-07-10"
+    "last_updated": "2026-07-11"
   },
   "evidence_policy": {
     "accepted_source_ids": [

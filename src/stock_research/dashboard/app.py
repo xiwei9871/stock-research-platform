@@ -359,6 +359,17 @@ def _theme_research_http_error(exc: ThemeResearchDomainError) -> HTTPException:
     )
 
 
+def _theme_research_read_http_error() -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={
+            "status": "error",
+            "error_code": "theme_research_service_unavailable",
+            "message": "Theme Research read service is unavailable",
+        },
+    )
+
+
 AUTH_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
 
 
@@ -547,11 +558,19 @@ def create_app() -> FastAPI:
         return list_theme_research_themes()
 
     @app.get("/api/research/theme-decomposition/updates")
-    def theme_research_updates(since: str | None = None, limit: int = 100):
+    def theme_research_updates(since: str | None = None, limit: str = "100"):
         try:
-            return list_theme_research_updates(since=since, limit=limit)
+            parsed_limit = int(limit)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400, detail="theme_research_limit_invalid"
+            ) from exc
+        try:
+            return list_theme_research_updates(since=since, limit=parsed_limit)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise _theme_research_read_http_error() from exc
 
     @app.get("/api/research/theme-decomposition/themes/{theme_id}")
     def theme_research_theme_detail(theme_id: str):
@@ -590,7 +609,10 @@ def create_app() -> FastAPI:
 
     @app.get("/api/assets/{asset_id}/theme-research-context")
     def asset_theme_research_context(asset_id: str):
-        return load_asset_theme_context(asset_id)
+        try:
+            return load_asset_theme_context(asset_id)
+        except Exception as exc:
+            raise _theme_research_read_http_error() from exc
 
     @app.post("/api/research/theme-decomposition/sources/{source_id}/review")
     def theme_research_review_source(

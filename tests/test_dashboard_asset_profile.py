@@ -17,7 +17,13 @@ def test_build_asset_profile_includes_quote_and_company_snapshots(monkeypatch):
     monkeypatch.setattr(asset_profile, "load_daily_bars", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_detail", lambda *args, **kwargs: None)
     monkeypatch.setattr(asset_profile, "load_asset_score_for_dashboard", lambda *args, **kwargs: None)
-    monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", lambda *args, **kwargs: [])
+    signal_calls = []
+
+    def load_signals(*args, **kwargs):
+        signal_calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", load_signals)
     monkeypatch.setattr(asset_profile, "load_asset_decision_history", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_outcome_history", lambda *args, **kwargs: [])
     theme_context = {
@@ -132,6 +138,7 @@ def test_build_asset_profile_includes_quote_and_company_snapshots(monkeypatch):
     assert profile["valuation_snapshot"]["data_status"] == "available"
     assert profile["valuation_snapshot"]["missing_fields"] == []
     assert profile["theme_research_context"] == theme_context
+    assert signal_calls == [{"service": "test", "include_theme_research": False}]
 
 
 def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):

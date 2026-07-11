@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from stock_research.config import SETTINGS
 from stock_research.db import connect, fetch_all
-from stock_research.dashboard.theme_research_db import load_db_context
+from stock_research.dashboard.theme_research_db import (
+    load_asset_db_context,
+    load_db_context,
+)
 
 
 _COMPANY_CODE = re.compile(r"^(?P<symbol>\d{6})\.(?P<exchange>SZ|SH|BJ)$")
@@ -15,6 +19,7 @@ _PREFIXED_CODE = re.compile(r"^(?P<exchange>SZ|SH|BJ)(?P<symbol>\d{6})$")
 _PLATFORM_ASSET_ID = re.compile(
     r"^(?:CN:)?(?P<exchange>SZ|SH|BJ):(?P<symbol>\d{6})$"
 )
+_SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 def normalize_theme_research_company_code(value: Any) -> str:
@@ -42,7 +47,11 @@ def load_asset_theme_context(
     *,
     service: str | None = None,
 ) -> dict[str, Any]:
-    return build_asset_theme_context(asset_id, load_db_context(service=service))
+    company_code = normalize_theme_research_company_code(asset_id)
+    return build_asset_theme_context(
+        asset_id,
+        load_asset_db_context(company_code, service=service),
+    )
 
 
 def load_asset_theme_context_for_workflow(
@@ -107,31 +116,42 @@ def unavailable_asset_theme_context(asset_id: str) -> dict[str, Any]:
 def list_theme_research_updates(
     *,
     since: str | None = None,
+    until: str | None = None,
     limit: int = 100,
     service: str | None = None,
 ) -> dict[str, Any]:
     parsed_since = _parse_since(since)
+    parsed_until = _parse_since(until)
+    _validate_window(parsed_since, parsed_until)
     bounded_limit = _validate_limit(limit)
     conditions = ["true"]
     params: list[Any] = []
     if parsed_since is not None:
         conditions.append("created_at >= %s")
         params.append(parsed_since)
+    if parsed_until is not None:
+        conditions.append("created_at < %s")
+        params.append(parsed_until)
     params.append(bounded_limit)
     selected_service = service or SETTINGS.theme_research_runtime_service
     with connect(selected_service) as conn:
         review_events = fetch_all(
             conn,
             f"""
+            WITH latest_events AS (
+                SELECT DISTINCT ON (object_type, object_id)
+                       review_event_id, theme_id, object_type, object_id,
+                       from_status, to_status, decision, comment, created_at
+                FROM research.theme_research_review_event
+                WHERE {' AND '.join(conditions)}
+                ORDER BY object_type, object_id, created_at DESC, review_event_id DESC
+            )
             SELECT review_event_id, theme_id, object_type, object_id,
                    from_status, to_status, decision, comment, created_at
-            FROM research.theme_research_review_event
-            WHERE {' AND '.join(conditions)}
-              AND (
-                    (object_type = 'source' AND to_status = 'accepted')
-                 OR (object_type IN ('claim', 'node') AND to_status = 'reviewed')
-                 OR (object_type = 'theme' AND to_status IN ('reviewed', 'published'))
-              )
+            FROM latest_events
+            WHERE (object_type = 'source' AND to_status = 'accepted')
+               OR (object_type IN ('claim', 'node') AND to_status = 'reviewed')
+               OR (object_type = 'theme' AND to_status IN ('reviewed', 'published'))
             ORDER BY created_at DESC, review_event_id DESC
             LIMIT %s
             """,
@@ -140,12 +160,22 @@ def list_theme_research_updates(
         revisions = fetch_all(
             conn,
             f"""
+            WITH latest_revisions AS (
+                SELECT DISTINCT ON (object_id)
+                       revision_id, theme_id, object_type, object_id, operation,
+                       after_payload, created_at
+                FROM research.theme_research_object_revision
+                WHERE {' AND '.join(conditions)}
+                  AND object_type IN ('company_mappings', 'themes')
+                ORDER BY object_id, created_at DESC, revision_id DESC
+            )
             SELECT revision_id, theme_id, object_type, object_id, operation,
                    after_payload, created_at
-            FROM research.theme_research_object_revision
-            WHERE {' AND '.join(conditions)}
-              AND object_type = 'company_mappings'
-              AND after_payload ->> 'review_status' = 'reviewed'
+            FROM latest_revisions
+            WHERE (object_type = 'company_mappings'
+                   AND after_payload ->> 'review_status' = 'reviewed')
+               OR (object_type = 'themes'
+                   AND after_payload ->> 'status' IN ('reviewed', 'published'))
             ORDER BY created_at DESC, revision_id DESC
             LIMIT %s
             """,
@@ -155,6 +185,7 @@ def list_theme_research_updates(
         review_events,
         revisions,
         since=since,
+        until=until,
         limit=bounded_limit,
     )
 
@@ -164,9 +195,12 @@ def build_theme_research_updates(
     revisions: list[dict[str, Any]],
     *,
     since: str | None = None,
+    until: str | None = None,
     limit: int = 100,
 ) -> dict[str, Any]:
     parsed_since = _parse_since(since)
+    parsed_until = _parse_since(until)
+    _validate_window(parsed_since, parsed_until)
     bounded_limit = _validate_limit(limit)
     items: list[dict[str, Any]] = []
     accepted_statuses = {
@@ -175,13 +209,17 @@ def build_theme_research_updates(
         "node": {"reviewed"},
         "theme": {"reviewed", "published"},
     }
-    for row in review_events:
+    latest_review_events = _latest_rows(
+        review_events,
+        key=lambda row: (str(row.get("object_type") or ""), str(row.get("object_id") or "")),
+    )
+    for row in latest_review_events:
         object_type = str(row.get("object_type") or "")
         if str(row.get("to_status") or "") not in accepted_statuses.get(
             object_type, set()
         ):
             continue
-        if not _created_at_in_range(row.get("created_at"), parsed_since):
+        if not _created_at_in_range(row.get("created_at"), parsed_since, parsed_until):
             continue
         items.append(
             {
@@ -196,26 +234,43 @@ def build_theme_research_updates(
                 "created_at": _datetime_text(row.get("created_at")),
             }
         )
-    for row in revisions:
+    latest_revisions = _latest_rows(
+        revisions,
+        key=lambda row: (str(row.get("object_id") or ""),),
+    )
+    for row in latest_revisions:
         after_payload = row.get("after_payload")
         if not isinstance(after_payload, dict):
             continue
-        if row.get("object_type") not in {"company_mapping", "company_mappings"}:
+        object_type = str(row.get("object_type") or "")
+        if object_type not in {"company_mapping", "company_mappings", "theme", "themes"}:
             continue
-        if after_payload.get("review_status") != "reviewed":
+        is_theme = object_type in {"theme", "themes"}
+        to_status = (
+            str(after_payload.get("status") or "")
+            if is_theme
+            else str(after_payload.get("review_status") or "")
+        )
+        if (is_theme and to_status not in {"reviewed", "published"}) or (
+            not is_theme and to_status != "reviewed"
+        ):
             continue
-        if not _created_at_in_range(row.get("created_at"), parsed_since):
+        if not _created_at_in_range(row.get("created_at"), parsed_since, parsed_until):
             continue
         items.append(
             {
                 "update_id": str(row["revision_id"]),
                 "theme_id": str(row["theme_id"]),
-                "object_type": "company_mapping",
+                "object_type": "theme" if is_theme else "company_mapping",
                 "object_id": str(row["object_id"]),
                 "from_status": "",
-                "to_status": "reviewed",
+                "to_status": to_status,
                 "decision": str(row.get("operation") or "update"),
-                "summary": str(after_payload.get("relationship_summary") or ""),
+                "summary": str(
+                    (after_payload.get("theme_name") or "")
+                    if is_theme
+                    else (after_payload.get("relationship_summary") or "")
+                ),
                 "created_at": _datetime_text(row.get("created_at")),
             }
         )
@@ -227,6 +282,7 @@ def build_theme_research_updates(
         "items": items,
         "by_object_type": {key: counts[key] for key in sorted(counts)},
         "since": since or "",
+        "until": until or "",
         "limit": bounded_limit,
         "research_only": True,
         "used_for_signal": False,
@@ -243,10 +299,13 @@ def build_daily_theme_research_digest(
     updates: dict[str, Any] | None = None,
     service: str | None = None,
 ) -> dict[str, Any]:
-    _parse_since(trade_date)
+    trade_day = date.fromisoformat(trade_date)
+    day_start = datetime.combine(trade_day, time.min, tzinfo=_SHANGHAI_TZ)
+    day_end = day_start + timedelta(days=1)
     selected_context = context or load_db_context(service=service)
     selected_updates = updates or list_theme_research_updates(
-        since=trade_date,
+        since=day_start.isoformat(),
+        until=day_end.isoformat(),
         limit=100,
         service=service,
     )
@@ -296,7 +355,8 @@ def build_daily_theme_research_digest(
                     "company_research_priority_score"
                 ),
                 "stock_workspace_path": (
-                    f"/stocks/{mapping['company_code']}?source=theme_research"
+                    f"/tech-bottleneck/stock/{mapping['company_code']}"
+                    "?source=theme_research"
                 ),
                 "theme_dashboard_path": f"/theme-research/{mapping['theme_id']}",
             }
@@ -379,7 +439,12 @@ def build_asset_theme_context(
     for mapping in sorted(candidates, key=lambda row: row["mapping_id"]):
         node_id = str(mapping["mapped_node_id"])
         node = nodes_by_id.get(node_id)
+        theme = themes_by_id.get(str(mapping["theme_id"]))
         reasons: list[str] = []
+        if theme is None:
+            reasons.append("theme_missing")
+        elif theme.get("status") not in {"reviewed", "published"}:
+            reasons.append("theme_not_reviewed")
         if mapping.get("review_status") != "reviewed":
             reasons.append("mapping_not_reviewed")
         if node is None:
@@ -583,28 +648,68 @@ def _parse_since(value: str | None) -> datetime | None:
     text = str(value).strip()
     try:
         if len(text) == 10:
-            return datetime.combine(date.fromisoformat(text), time.min, tzinfo=timezone.utc)
+            return datetime.combine(date.fromisoformat(text), time.min, tzinfo=_SHANGHAI_TZ)
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("theme_research_since_invalid") from exc
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=_SHANGHAI_TZ)
     return parsed
 
 
-def _created_at_in_range(value: Any, since: datetime | None) -> bool:
-    if since is None:
+def _validate_window(since: datetime | None, until: datetime | None) -> None:
+    if since is not None and until is not None and until <= since:
+        raise ValueError("theme_research_update_window_invalid")
+
+
+def _created_at_in_range(
+    value: Any,
+    since: datetime | None,
+    until: datetime | None,
+) -> bool:
+    if since is None and until is None:
         return True
+    candidate = _coerce_datetime(value)
+    if candidate is None:
+        return False
+    return (since is None or candidate >= since) and (until is None or candidate < until)
+
+
+def _latest_rows(rows: list[dict[str, Any]], *, key) -> list[dict[str, Any]]:
+    latest: dict[tuple[str, ...], dict[str, Any]] = {}
+    for row in rows:
+        row_key = key(row)
+        current = latest.get(row_key)
+        row_created_at = _coerce_datetime(row.get("created_at"))
+        current_created_at = _coerce_datetime(current.get("created_at")) if current else None
+        row_rank = (
+            row_created_at.astimezone(timezone.utc) if row_created_at else datetime.min.replace(tzinfo=timezone.utc),
+            str(row.get("review_event_id") or row.get("revision_id") or ""),
+        )
+        current_rank = (
+            current_created_at.astimezone(timezone.utc)
+            if current_created_at
+            else datetime.min.replace(tzinfo=timezone.utc),
+            str(current.get("review_event_id") or current.get("revision_id") or "")
+            if current
+            else "",
+        )
+        if current is None or row_rank > current_rank:
+            latest[row_key] = row
+    return list(latest.values())
+
+
+def _coerce_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         candidate = value
     else:
         try:
             candidate = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         except ValueError:
-            return False
+            return None
     if candidate.tzinfo is None:
-        candidate = candidate.replace(tzinfo=timezone.utc)
-    return candidate >= since
+        candidate = candidate.replace(tzinfo=_SHANGHAI_TZ)
+    return candidate
 
 
 def _datetime_text(value: Any) -> str:

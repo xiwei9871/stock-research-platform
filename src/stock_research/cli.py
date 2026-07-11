@@ -3277,15 +3277,15 @@ def build_parser() -> argparse.ArgumentParser:
     mid_trend_validation.add_argument("--end-date", required=True)
     mid_trend_validation.add_argument(
         "--current-regime-path",
-        default=str(resolve_default_current_regime_path()),
+        default=None,
     )
     mid_trend_validation.add_argument(
         "--funnel-detail-path",
-        default=str(resolve_default_funnel_detail_path()),
+        default=None,
     )
     mid_trend_validation.add_argument(
         "--shadow-top10-path",
-        default=str(resolve_default_shadow_top10_path()),
+        default=None,
     )
     mid_trend_validation.add_argument(
         "--output-dir",

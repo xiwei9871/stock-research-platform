@@ -14,7 +14,7 @@ const themeContext = {
       theme_name: 'AI供电产业链',
       theme_type: 'ai_power',
       summary: 'AI power delivery chain',
-      status: 'draft',
+          status: 'reviewed',
       dashboard_path: '/theme-research/ai_power_value_capture_v1',
       research_only: true,
       used_for_signal: false,
@@ -168,7 +168,7 @@ async function mockWorkflowApi(page: Page) {
               node_id: 'liquid_cooling',
               node_name: '液冷',
               company_research_priority_score: 78.8,
-              stock_workspace_path: '/stocks/002837.SZ?source=theme_research',
+              stock_workspace_path: '/tech-bottleneck/stock/002837.SZ?source=theme_research',
               theme_dashboard_path: '/theme-research/ai_power_value_capture_v1'
             }
           ],

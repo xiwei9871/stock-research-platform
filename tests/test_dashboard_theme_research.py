@@ -50,7 +50,7 @@ def test_theme_detail_contains_priority_and_evidence_distributions():
     detail = get_theme_research_theme(AI_POWER_THEME_ID)
 
     assert detail["theme"]["theme_name"] == "AI供电产业链：谁在拿走价值量"
-    assert detail["theme"]["status"] == "draft"
+    assert detail["theme"]["status"] == "reviewed"
     assert detail["node_summary"] == {
         "total": 13,
         "by_priority_class": {
