@@ -127,6 +127,11 @@ def list_theme_research_updates(
                    from_status, to_status, decision, comment, created_at
             FROM research.theme_research_review_event
             WHERE {' AND '.join(conditions)}
+              AND (
+                    (object_type = 'source' AND to_status = 'accepted')
+                 OR (object_type IN ('claim', 'node') AND to_status = 'reviewed')
+                 OR (object_type = 'theme' AND to_status IN ('reviewed', 'published'))
+              )
             ORDER BY created_at DESC, review_event_id DESC
             LIMIT %s
             """,
@@ -140,6 +145,7 @@ def list_theme_research_updates(
             FROM research.theme_research_object_revision
             WHERE {' AND '.join(conditions)}
               AND object_type = 'company_mappings'
+              AND after_payload ->> 'review_status' = 'reviewed'
             ORDER BY created_at DESC, revision_id DESC
             LIMIT %s
             """,

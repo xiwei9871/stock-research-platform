@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from stock_research.dashboard import theme_research_context
 from stock_research.dashboard.theme_research_context import (
     build_daily_theme_research_digest,
     build_asset_theme_context,
     build_theme_research_updates,
+    list_theme_research_updates,
     normalize_theme_research_company_code,
 )
 from stock_research.theme_research_priority import (
@@ -211,3 +213,29 @@ def test_daily_digest_counts_reviewed_workflow_context() -> None:
     assert digest["mapped_companies"][0]["theme_name"] == "AI供电产业链：谁在拿走价值量"
     assert digest["research_only"] is True
     assert digest["used_for_admission"] is False
+
+
+def test_update_queries_filter_reviewed_rows_before_limit(monkeypatch) -> None:
+    queries = []
+
+    class ConnectionContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_fetch_all(conn, sql, params):
+        queries.append(" ".join(sql.split()))
+        return []
+
+    monkeypatch.setattr(theme_research_context, "connect", lambda service: ConnectionContext())
+    monkeypatch.setattr(theme_research_context, "fetch_all", fake_fetch_all)
+
+    payload = list_theme_research_updates(since="2026-07-01", limit=20, service="test")
+
+    assert payload["total"] == 0
+    assert "object_type = 'source' AND to_status = 'accepted'" in queries[0]
+    assert "object_type IN ('claim', 'node') AND to_status = 'reviewed'" in queries[0]
+    assert "after_payload ->> 'review_status' = 'reviewed'" in queries[1]
+    assert all("LIMIT %s" in query for query in queries)
