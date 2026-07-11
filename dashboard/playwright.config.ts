@@ -1,9 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const dashboardPort = Number(process.env.PLAYWRIGHT_DASHBOARD_PORT ?? '5174');
+const apiPort = Number(process.env.PLAYWRIGHT_API_PORT ?? '8766');
+const reuseExistingServer =
+  process.env.PLAYWRIGHT_REUSE_EXISTING === 'false' ? false : !process.env.CI;
+const dashboardCommand =
+  process.env.PLAYWRIGHT_USE_PREVIEW === 'true'
+    ? `pnpm exec vite preview --host 127.0.0.1 --port ${dashboardPort}`
+    : `VITE_API_PROXY_TARGET=http://127.0.0.1:${apiPort} pnpm exec vite --host 127.0.0.1 --port ${dashboardPort}`;
+
 export default defineConfig({
   testDir: './tests',
   use: {
-    baseURL: 'http://127.0.0.1:5174',
+    baseURL: `http://127.0.0.1:${dashboardPort}`,
     trace: 'on-first-retry'
   },
   projects: [
@@ -14,17 +23,17 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm dev',
-      url: 'http://127.0.0.1:5174',
-      reuseExistingServer: !process.env.CI,
+      command: dashboardCommand,
+      url: `http://127.0.0.1:${dashboardPort}`,
+      reuseExistingServer,
       timeout: 120000
     },
     {
       command:
-        'env STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED=false STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED=false .venv/bin/uvicorn stock_research.dashboard.app:app --host 127.0.0.1 --port 8766',
+        `env STOCK_RESEARCH_DASHBOARD_AUTH_REQUIRED=false STOCK_RESEARCH_NEWS_SCHEDULER_ENABLED=false .venv/bin/uvicorn stock_research.dashboard.app:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: '..',
-      url: 'http://127.0.0.1:8766/openapi.json',
-      reuseExistingServer: !process.env.CI,
+      url: `http://127.0.0.1:${apiPort}/openapi.json`,
+      reuseExistingServer,
       timeout: 120000
     }
   ]
