@@ -98,6 +98,15 @@ class IndustryCatalogValidationError(ValueError):
         self.code = code
 
 
+class IndustryCatalogCliUsageError(ValueError):
+    pass
+
+
+class _IndustryCatalogArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise IndustryCatalogCliUsageError(message)
+
+
 def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, Any]:
     root = Path(artifact_dir) if artifact_dir is not None else CATALOG_DIR
     if not root.is_dir():
@@ -202,16 +211,16 @@ def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]
 
 
 def cli(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="technology-industry-catalog")
+    parser = _IndustryCatalogArgumentParser(prog="technology-industry-catalog")
     parser.add_argument("--artifact-dir", default=str(CATALOG_DIR))
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("validate")
     subparsers.add_parser("summary")
     show = subparsers.add_parser("show")
     show.add_argument("--chain", required=True)
-    args = parser.parse_args(argv)
 
     try:
+        args = parser.parse_args(argv)
         catalog = load_industry_catalog(args.artifact_dir)
         if args.command == "validate":
             payload = {"status": "ok", **summarize_industry_catalog(catalog)}
@@ -225,6 +234,20 @@ def cli(argv: list[str] | None = None) -> int:
             payload = get_industry_chain(catalog, args.chain)
             print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
+    except IndustryCatalogCliUsageError as exc:
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error_code": "INVALID_CLI_ARGUMENTS",
+                    "message": str(exc),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
     except IndustryCatalogValidationError as exc:
         print(
             json.dumps(
@@ -734,3 +757,7 @@ def _require_reference_string(value: Any, path: str, *, code: str) -> str:
             code=code,
         )
     return value
+
+
+if __name__ == "__main__":
+    main()

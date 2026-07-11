@@ -1534,8 +1534,22 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("dashboard-auth-init")
     technology_industry_catalog = subparsers.add_parser("technology-industry-catalog")
     technology_industry_catalog.add_argument(
-        "technology_industry_catalog_args",
-        nargs=argparse.REMAINDER,
+        "--artifact-dir",
+        dest="technology_industry_catalog_artifact_dir",
+    )
+    technology_industry_catalog_commands = technology_industry_catalog.add_subparsers(
+        dest="technology_industry_catalog_command",
+        required=True,
+    )
+    technology_industry_catalog_commands.add_parser("validate")
+    technology_industry_catalog_commands.add_parser("summary")
+    technology_industry_catalog_show = technology_industry_catalog_commands.add_parser(
+        "show"
+    )
+    technology_industry_catalog_show.add_argument(
+        "--chain",
+        dest="technology_industry_catalog_chain",
+        required=True,
     )
     theme_decomposition = subparsers.add_parser("theme-decomposition")
     theme_decomposition.add_argument("theme_decomposition_args", nargs=argparse.REMAINDER)
@@ -5164,6 +5178,18 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
     return versions == {DIAGNOSTICS_RULE_VERSION}
 
 
+def _run_technology_industry_catalog_fallback(args: argparse.Namespace) -> int:
+    nested_argv = []
+    if args.technology_industry_catalog_artifact_dir is not None:
+        nested_argv.extend(
+            ["--artifact-dir", args.technology_industry_catalog_artifact_dir]
+        )
+    nested_argv.append(args.technology_industry_catalog_command)
+    if args.technology_industry_catalog_command == "show":
+        nested_argv.extend(["--chain", args.technology_industry_catalog_chain])
+    return run_technology_industry_catalog_cli(nested_argv)
+
+
 def main_for_args(argv: list[str] | None = None) -> int | None:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     if raw_argv and raw_argv[0] == "technology-industry-catalog":
@@ -5188,9 +5214,7 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         apply_dashboard_auth_schema()
         print("dashboard_auth_schema_applied")
     elif args.command == "technology-industry-catalog":
-        return run_technology_industry_catalog_cli(
-            args.technology_industry_catalog_args
-        )
+        return _run_technology_industry_catalog_fallback(args)
     elif args.command == "theme-decomposition":
         return run_theme_decomposition_cli(args.theme_decomposition_args)
     elif args.command == "theme-research-ingestion":
