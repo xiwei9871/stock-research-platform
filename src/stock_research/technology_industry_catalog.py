@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +139,68 @@ def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, A
     }
     _validate_catalog(catalog)
     return catalog
+
+
+def summarize_industry_catalog(catalog: dict[str, Any]) -> dict[str, Any]:
+    chains = catalog["chains"]
+    nodes = catalog["nodes"]
+    return {
+        "sector_count": len(catalog["sectors"]),
+        "chain_count": len(chains),
+        "l3_node_count": sum(node["level"] == "L3" for node in nodes),
+        "l4_node_count": sum(node["level"] == "L4" for node in nodes),
+        "edge_count": len(catalog["edges"]),
+        "theme_composition_count": len(catalog["theme_compositions"]),
+        "chains_by_kind": _sorted_counts(chain["chain_kind"] for chain in chains),
+        "chains_by_status": _sorted_counts(chain["status"] for chain in chains),
+        "chains_by_sector": _sorted_counts(chain["sector_id"] for chain in chains),
+        "nodes_by_status": _sorted_counts(node["status"] for node in nodes),
+    }
+
+
+def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]:
+    chain = next(
+        (chain for chain in catalog["chains"] if chain["chain_id"] == chain_id),
+        None,
+    )
+    if chain is None:
+        raise IndustryCatalogValidationError(
+            f"chain not found: {chain_id}",
+            code="CHAIN_NOT_FOUND",
+        )
+
+    nodes = sorted(
+        (node for node in catalog["nodes"] if node["chain_id"] == chain_id),
+        key=lambda node: (node["level"], node["node_id"]),
+    )
+    node_ids = {node["node_id"] for node in nodes}
+    edges = sorted(
+        (
+            edge
+            for edge in catalog["edges"]
+            if edge["source_node_id"] in node_ids
+            or edge["target_node_id"] in node_ids
+        ),
+        key=lambda edge: edge["edge_id"],
+    )
+    theme_compositions = sorted(
+        (
+            composition
+            for composition in catalog["theme_compositions"]
+            if composition["chain_id"] == chain_id
+        ),
+        key=lambda composition: composition["composition_id"],
+    )
+    return {
+        "chain": chain,
+        "nodes": nodes,
+        "edges": edges,
+        "theme_compositions": theme_compositions,
+    }
+
+
+def _sorted_counts(values: Iterable[str]) -> dict[str, int]:
+    return dict(sorted(Counter(values).items()))
 
 
 def _load_json_object(
