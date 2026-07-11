@@ -117,9 +117,18 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         },
     ]
     expected_chain_ids = [
+        "power_semiconductors",
         "semiconductor_manufacturing_equipment",
+        "pcb_passives_connectors_interconnect",
+        "cloud_data_center_infrastructure",
+        "industrial_software",
         "humanoid_robots_embodied_intelligence",
+        "new_power_system_smart_grid",
+        "power_generation_energy_equipment",
+        "power_electronics_power_supply_equipment",
+        "ai_data_center_power",
         "power_batteries_battery_materials",
+        "hydrogen_fuel_cells",
     ]
     assert [row["chain_id"] for row in catalog["chains"]] == expected_chain_ids
     assert {row["chain_id"] for row in catalog["nodes"]} == set(
@@ -134,7 +143,16 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "humanoid_robots_embodied_intelligence",
         "power_batteries_battery_materials",
     }
-    assert catalog["theme_compositions"] == []
+    assert len(catalog["theme_compositions"]) == 80
+    assert {
+        row["chain_id"] for row in catalog["theme_compositions"]
+    } == {"ai_data_center_power"}
+    canonical_keys = [
+        row["canonical_key"]
+        for row in catalog["nodes"]
+        if row["level"] == "L4" and row["canonical_key"]
+    ]
+    assert len(canonical_keys) == len(set(canonical_keys))
 
 
 def test_load_industry_catalog_composes_package_files(tmp_path: Path):
