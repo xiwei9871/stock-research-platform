@@ -17,7 +17,8 @@ Use the non-trading-day BaoStock request allowance to complete the remaining 202
 - QFQ status: 33,840 successful and 28,668 pending.
 - Raw progress is complete through 2020-05-29; 2020-06-01 is the current partial trade date.
 - Active BaoStock assets used for quota planning: 5,209.
-- Non-trading-day safe request budget: 45,454 requests after the 1.1 safety multiplier.
+- Non-trading-day theoretical safe request budget: 45,454 requests after the 1.1 safety multiplier.
+- The existing dedicated runner conservatively reserves 5,209 requests for one current-day raw pass, leaving an effective backfill budget of 40,245; this still exceeds the 28,667 requested jobs.
 - No active minute-backfill process or launchd watchdog was found before planning.
 
 ## Execution Strategy
@@ -50,8 +51,8 @@ Raw jobs are claimed from PostgreSQL before execution. Each successful raw job i
 
 ## Quota Contract
 
-- Today is treated as a non-trading day, so no current-day minute request reservation is required.
 - The safe daily ceiling remains 45,454 rather than the nominal 50,000.
+- The existing runner conservatively applies a 5,209-request current-day reservation even on this weekend run; no code change is introduced solely to reclaim that unused headroom.
 - The requested allocation is 28,667, matching the observed remaining raw jobs.
 - The ledger finalizer converts only attempted requests into consumed requests and releases unused reservations on normal or exceptional exit.
 - If the observed pending count changes between planning and claiming, the runner processes only the jobs actually claimed; unused quota is released.
