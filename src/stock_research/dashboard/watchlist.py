@@ -2,6 +2,7 @@ from typing import Any
 
 from stock_research.config import SETTINGS
 from stock_research.dashboard.schemas import WatchlistSignalRow
+from stock_research.dashboard.theme_research_context import enrich_watchlist_rows
 from stock_research.db import connect, fetch_all
 
 
@@ -31,7 +32,7 @@ def load_watchlist_signals_for_dashboard(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [watchlist_id, trade_date])
-    return [_signal_row(row).to_dict() for row in rows]
+    return enrich_watchlist_rows([_signal_row(row).to_dict() for row in rows])
 
 
 def load_asset_watchlist_signals_for_dashboard(
@@ -60,7 +61,7 @@ def load_asset_watchlist_signals_for_dashboard(
     """
     with connect(service) as conn:
         rows = fetch_all(conn, sql, [asset_id, trade_date])
-    return [_signal_row(row).to_dict() for row in rows]
+    return enrich_watchlist_rows([_signal_row(row).to_dict() for row in rows])
 
 
 def _signal_row(row: dict[str, Any]) -> WatchlistSignalRow:

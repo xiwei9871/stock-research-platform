@@ -14,6 +14,9 @@ from stock_research.dashboard.scores import (
 from stock_research.dashboard.watchlist import (
     load_asset_watchlist_signals_for_dashboard,
 )
+from stock_research.dashboard.theme_research_context import (
+    load_asset_theme_context_for_workflow,
+)
 from stock_research.db import connect, fetch_all
 
 
@@ -107,6 +110,9 @@ def build_asset_profile(
                 service=service,
             ),
             "coverage": _load_data_coverage(canonical_asset_id, service=service),
+            "theme_research_context": load_asset_theme_context_for_workflow(
+                canonical_asset_id,
+            ),
         }
 
 

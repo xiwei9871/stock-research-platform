@@ -20,6 +20,17 @@ def test_build_asset_profile_includes_quote_and_company_snapshots(monkeypatch):
     monkeypatch.setattr(asset_profile, "load_asset_watchlist_signals_for_dashboard", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_decision_history", lambda *args, **kwargs: [])
     monkeypatch.setattr(asset_profile, "load_asset_outcome_history", lambda *args, **kwargs: [])
+    theme_context = {
+        "status": "not_mapped",
+        "research_only": True,
+        "used_for_signal": False,
+        "used_for_admission": False,
+    }
+    monkeypatch.setattr(
+        asset_profile,
+        "load_asset_theme_context_for_workflow",
+        lambda *args, **kwargs: theme_context,
+    )
 
     def fake_fetch_all(conn, sql, params):
       normalized_sql = " ".join(sql.split())
@@ -120,6 +131,7 @@ def test_build_asset_profile_includes_quote_and_company_snapshots(monkeypatch):
     assert profile["valuation_snapshot"]["volume_ratio"] == 1.24
     assert profile["valuation_snapshot"]["data_status"] == "available"
     assert profile["valuation_snapshot"]["missing_fields"] == []
+    assert profile["theme_research_context"] == theme_context
 
 
 def test_build_asset_profile_includes_fundamentals_contract(monkeypatch):

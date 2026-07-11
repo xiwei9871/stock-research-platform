@@ -41,6 +41,65 @@ def load_asset_theme_context(
     return build_asset_theme_context(asset_id, load_db_context(service=service))
 
 
+def load_asset_theme_context_for_workflow(
+    asset_id: str,
+    *,
+    service: str | None = None,
+) -> dict[str, Any]:
+    try:
+        return load_asset_theme_context(asset_id, service=service)
+    except Exception:
+        return unavailable_asset_theme_context(asset_id)
+
+
+def enrich_watchlist_rows(
+    rows: list[dict[str, Any]],
+    *,
+    service: str | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        context = load_db_context(service=service)
+    except Exception:
+        return [
+            {
+                **row,
+                "theme_research_context": unavailable_asset_theme_context(
+                    str(row.get("asset_id") or row.get("stock_code") or "")
+                ),
+            }
+            for row in rows
+        ]
+    return [
+        {
+            **row,
+            "theme_research_context": build_asset_theme_context(
+                str(row.get("asset_id") or row.get("stock_code") or ""), context
+            ),
+        }
+        for row in rows
+    ]
+
+
+def unavailable_asset_theme_context(asset_id: str) -> dict[str, Any]:
+    return {
+        "asset_id": str(asset_id),
+        "company_code": normalize_theme_research_company_code(asset_id),
+        "status": "unavailable",
+        "driver_assessment": "insufficient_evidence",
+        "theme_count": 0,
+        "mapping_count": 0,
+        "evidence_gap_count": 0,
+        "themes": [],
+        "mappings": [],
+        "excluded_mappings": [],
+        "research_only": True,
+        "used_for_signal": False,
+        "used_for_admission": False,
+        "source": "research.theme_research_company_mapping",
+        "warnings": ["theme_research_context_unavailable"],
+    }
+
+
 def build_asset_theme_context(
     asset_id: str,
     context: dict[str, Any],
@@ -257,4 +316,3 @@ def _node_read_model(node: dict[str, Any]) -> dict[str, Any]:
             "node_review_status",
         )
     }
-

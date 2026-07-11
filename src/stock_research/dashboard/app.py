@@ -173,6 +173,7 @@ from stock_research.dashboard.theme_research import (
     list_theme_research_sources,
     list_theme_research_themes,
 )
+from stock_research.dashboard.theme_research_context import load_asset_theme_context
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_store import (
     list_review_history as list_theme_research_review_history,
@@ -576,6 +577,10 @@ def create_app() -> FastAPI:
             return list_theme_research_companies(theme_id)
         except ThemeResearchNotFoundError as exc:
             raise HTTPException(status_code=404, detail="theme_not_found") from exc
+
+    @app.get("/api/assets/{asset_id}/theme-research-context")
+    def asset_theme_research_context(asset_id: str):
+        return load_asset_theme_context(asset_id)
 
     @app.post("/api/research/theme-decomposition/sources/{source_id}/review")
     def theme_research_review_source(
