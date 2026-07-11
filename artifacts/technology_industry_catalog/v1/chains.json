@@ -1,3 +1,24 @@
 {
-  "chains": []
+  "chains": [
+    {
+      "chain_id": "semiconductor_manufacturing_equipment",
+      "sector_id": "semiconductor_electronics",
+      "chain_name": "Semiconductor Manufacturing Equipment",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Equipment and factory systems used to execute, control, and support front-end semiconductor wafer manufacturing.",
+      "scope": "Covers wafer-fabrication process equipment, inspection and metrology, wafer automation, vacuum and process delivery, and fab utility systems.",
+      "exclusions": [
+        "Semiconductor materials are owned by the semiconductor materials chain.",
+        "Semiconductor packaging and test equipment are owned by the packaging and test chain."
+      ],
+      "aliases": [
+        "Semiconductor Equipment",
+        "Wafer Fab Equipment",
+        "半导体制造设备"
+      ],
+      "status": "draft",
+      "order": 8
+    }
+  ]
 }
