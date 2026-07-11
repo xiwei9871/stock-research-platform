@@ -239,60 +239,66 @@ def _validate_catalog(catalog: dict[str, Any]) -> None:
     sectors_by_id = _validate_sectors(catalog["sectors"])
     chains_by_id = _validate_chains(catalog["chains"], sectors_by_id)
     nodes_by_id = _validate_nodes(catalog["nodes"], chains_by_id)
-    _validate_edges(catalog["edges"], nodes_by_id)
+    sources_by_id = _validate_sources(catalog["sources"])
+    _validate_edges(catalog["edges"], nodes_by_id, sources_by_id)
     _validate_theme_compositions(
         catalog["theme_compositions"],
         chains_by_id,
         nodes_by_id,
     )
-    for index, source in enumerate(catalog["sources"]):
-        path = f"sources[{index}]"
-        _require_fields(source, SOURCE_FIELDS, path)
-        _require_non_empty_string(source, "source_id", path)
 
 
 def _validate_sectors(sectors: list[Any]) -> dict[str, dict[str, Any]]:
-    sectors_by_id: dict[str, dict[str, Any]] = {}
-    for index, sector in enumerate(sectors):
-        path = f"sectors[{index}]"
-        _require_fields(sector, SECTOR_FIELDS, path)
-        sector_id = _require_non_empty_string(sector, "sector_id", path)
-        _require_non_empty_string(sector, "sector_name", path)
-        if sector_id in sectors_by_id:
-            raise IndustryCatalogValidationError(
-                f"{path}.sector_id duplicated: {sector_id}",
-                code="DUPLICATE_SECTOR_ID",
-            )
-        sectors_by_id[sector_id] = sector
-    return sectors_by_id
+    return _index_unique_rows(
+        sectors,
+        fields=SECTOR_FIELDS,
+        id_field="sector_id",
+        duplicate_code="DUPLICATE_SECTOR_ID",
+        path="sectors",
+        name_field="sector_name",
+    )
 
 
 def _validate_chains(
     chains: list[Any],
     sectors_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    chains_by_id: dict[str, dict[str, Any]] = {}
+    chains_by_id = _index_unique_rows(
+        chains,
+        fields=CHAIN_FIELDS,
+        id_field="chain_id",
+        duplicate_code="DUPLICATE_CHAIN_ID",
+        path="chains",
+        name_field="chain_name",
+    )
     for index, chain in enumerate(chains):
         path = f"chains[{index}]"
-        _require_fields(chain, CHAIN_FIELDS, path)
-        chain_id = _require_non_empty_string(chain, "chain_id", path)
-        _require_non_empty_string(chain, "chain_name", path)
-        if chain["sector_id"] not in sectors_by_id:
+        sector_id = _require_reference_string(
+            chain["sector_id"],
+            f"{path}.sector_id",
+            code="ORPHAN_CHAIN_SECTOR",
+        )
+        if sector_id not in sectors_by_id:
             raise IndustryCatalogValidationError(
-                f"{path}.sector_id references missing sector: {chain['sector_id']}",
+                f"{path}.sector_id references missing sector: {sector_id}",
                 code="ORPHAN_CHAIN_SECTOR",
             )
-        if chain["chain_kind"] not in CHAIN_KINDS:
+        if (
+            not isinstance(chain["chain_kind"], str)
+            or chain["chain_kind"] not in CHAIN_KINDS
+        ):
             raise IndustryCatalogValidationError(
                 f"{path}.chain_kind invalid: {chain['chain_kind']}",
                 code="INVALID_CHAIN_KIND",
             )
-        if chain["decomposition_method"] not in DECOMPOSITION_METHODS:
+        if (
+            not isinstance(chain["decomposition_method"], str)
+            or chain["decomposition_method"] not in DECOMPOSITION_METHODS
+        ):
             raise IndustryCatalogValidationError(
                 f"{path}.decomposition_method invalid: {chain['decomposition_method']}",
                 code="INVALID_DECOMPOSITION_METHOD",
             )
-        chains_by_id[chain_id] = chain
     return chains_by_id
 
 
@@ -300,15 +306,14 @@ def _validate_nodes(
     nodes: list[Any],
     chains_by_id: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    nodes_by_id: dict[str, dict[str, Any]] = {}
-    for node in nodes:
-        if (
-            isinstance(node, dict)
-            and isinstance(node.get("node_id"), str)
-            and node["node_id"].strip()
-        ):
-            nodes_by_id.setdefault(node["node_id"], node)
-    seen_node_ids: set[str] = set()
+    nodes_by_id = _index_unique_rows(
+        nodes,
+        fields=NODE_FIELDS,
+        id_field="node_id",
+        duplicate_code="DUPLICATE_NODE_ID",
+        path="nodes",
+        name_field="node_name",
+    )
     canonical_owners: set[str] = set()
     expected_kind_by_chain = {
         "canonical_industry_chain": "canonical",
@@ -318,23 +323,19 @@ def _validate_nodes(
 
     for index, node in enumerate(nodes):
         path = f"nodes[{index}]"
-        _require_fields(node, NODE_FIELDS, path)
-        node_id = _require_non_empty_string(node, "node_id", path)
-        _require_non_empty_string(node, "node_name", path)
-        if node_id in seen_node_ids:
-            raise IndustryCatalogValidationError(
-                f"{path}.node_id duplicated: {node_id}",
-                code="DUPLICATE_NODE_ID",
-            )
-        seen_node_ids.add(node_id)
-
-        chain = chains_by_id.get(node["chain_id"])
+        node_id = node["node_id"]
+        chain_id = _require_reference_string(
+            node["chain_id"],
+            f"{path}.chain_id",
+            code="ORPHAN_NODE_CHAIN",
+        )
+        chain = chains_by_id.get(chain_id)
         if chain is None:
             raise IndustryCatalogValidationError(
-                f"{path}.chain_id references missing chain: {node['chain_id']}",
+                f"{path}.chain_id references missing chain: {chain_id}",
                 code="ORPHAN_NODE_CHAIN",
             )
-        if node["level"] not in NODE_LEVELS:
+        if not isinstance(node["level"], str) or node["level"] not in NODE_LEVELS:
             raise IndustryCatalogValidationError(
                 f"{path}.level invalid: {node['level']}",
                 code="INVALID_NODE_LEVEL",
@@ -345,7 +346,13 @@ def _validate_nodes(
                 f"{path}.node_kind must be {expected_kind} for {chain['chain_kind']}",
                 code="INVALID_NODE_KIND_FOR_CHAIN",
             )
-        if node["node_kind"] == "application_role" and node["canonical_key"]:
+        canonical_key = node["canonical_key"]
+        if not isinstance(canonical_key, str):
+            raise IndustryCatalogValidationError(
+                f"{path}.canonical_key must be a string",
+                code="INVALID_CANONICAL_OWNERSHIP",
+            )
+        if node["node_kind"] == "application_role" and canonical_key:
             raise IndustryCatalogValidationError(
                 f"{path}.canonical_key is not allowed for application roles",
                 code="INVALID_NODE_KIND_FOR_CHAIN",
@@ -358,11 +365,16 @@ def _validate_nodes(
                     code="ORPHAN_NODE_PARENT",
                 )
         else:
-            parent = nodes_by_id.get(node["parent_node_id"])
+            parent_node_id = _require_reference_string(
+                node["parent_node_id"],
+                f"{path}.parent_node_id",
+                code="ORPHAN_NODE_PARENT",
+            )
+            parent = nodes_by_id.get(parent_node_id)
             if (
                 parent is None
                 or parent.get("level") != "L3"
-                or parent.get("chain_id") != node["chain_id"]
+                or parent.get("chain_id") != chain_id
             ):
                 raise IndustryCatalogValidationError(
                     f"{path}.parent_node_id must reference an L3 node in the same chain",
@@ -372,7 +384,7 @@ def _validate_nodes(
         if node["node_kind"] == "canonical" and node["level"] == "L4":
             expected_path = [
                 chain["sector_id"],
-                node["chain_id"],
+                chain_id,
                 node["parent_node_id"],
                 node_id,
             ]
@@ -382,7 +394,6 @@ def _validate_nodes(
                     code="INVALID_PRIMARY_PATH",
                 )
 
-        canonical_key = node["canonical_key"]
         if canonical_key:
             if canonical_key in canonical_owners:
                 raise IndustryCatalogValidationError(
@@ -403,21 +414,39 @@ def _validate_nodes(
 def _validate_edges(
     edges: list[Any],
     nodes_by_id: dict[str, dict[str, Any]],
+    sources_by_id: dict[str, dict[str, Any]],
 ) -> None:
+    _index_unique_rows(
+        edges,
+        fields=EDGE_FIELDS,
+        id_field="edge_id",
+        duplicate_code="DUPLICATE_EDGE_ID",
+        path="edges",
+    )
     for index, edge in enumerate(edges):
         path = f"edges[{index}]"
-        _require_fields(edge, EDGE_FIELDS, path)
-        _require_non_empty_string(edge, "edge_id", path)
-        if edge["source_node_id"] not in nodes_by_id:
+        source_node_id = _require_reference_string(
+            edge["source_node_id"],
+            f"{path}.source_node_id",
+            code="ORPHAN_EDGE_SOURCE",
+        )
+        if source_node_id not in nodes_by_id:
             raise IndustryCatalogValidationError(
-                f"{path}.source_node_id references missing node: {edge['source_node_id']}",
+                f"{path}.source_node_id references missing node: {source_node_id}",
                 code="ORPHAN_EDGE_SOURCE",
             )
-        if edge["target_node_id"] not in nodes_by_id:
+        target_node_id = _require_reference_string(
+            edge["target_node_id"],
+            f"{path}.target_node_id",
+            code="ORPHAN_EDGE_TARGET",
+        )
+        if target_node_id not in nodes_by_id:
             raise IndustryCatalogValidationError(
-                f"{path}.target_node_id references missing node: {edge['target_node_id']}",
+                f"{path}.target_node_id references missing node: {target_node_id}",
                 code="ORPHAN_EDGE_TARGET",
             )
+        _validate_relationship_type(edge["relationship_type"], path)
+        _validate_source_refs(edge["source_ids"], sources_by_id, f"{path}.source_ids")
 
 
 def _validate_theme_compositions(
@@ -425,36 +454,62 @@ def _validate_theme_compositions(
     chains_by_id: dict[str, dict[str, Any]],
     nodes_by_id: dict[str, dict[str, Any]],
 ) -> None:
+    _index_unique_rows(
+        compositions,
+        fields=COMPOSITION_FIELDS,
+        id_field="composition_id",
+        duplicate_code="DUPLICATE_COMPOSITION_ID",
+        path="theme_compositions",
+    )
     for index, composition in enumerate(compositions):
         path = f"theme_compositions[{index}]"
-        _require_fields(composition, COMPOSITION_FIELDS, path)
-        _require_non_empty_string(composition, "composition_id", path)
-        chain = chains_by_id.get(composition["chain_id"])
+        chain_id = _require_reference_string(
+            composition["chain_id"],
+            f"{path}.chain_id",
+            code="ORPHAN_COMPOSITION_CHAIN",
+        )
+        chain = chains_by_id.get(chain_id)
         if chain is None:
             raise IndustryCatalogValidationError(
-                f"{path}.chain_id references missing chain: {composition['chain_id']}",
+                f"{path}.chain_id references missing chain: {chain_id}",
                 code="ORPHAN_COMPOSITION_CHAIN",
             )
-        role = nodes_by_id.get(composition["role_node_id"])
+        role_node_id = _require_reference_string(
+            composition["role_node_id"],
+            f"{path}.role_node_id",
+            code="ORPHAN_COMPOSITION_ROLE",
+        )
+        role = nodes_by_id.get(role_node_id)
         if role is None:
             raise IndustryCatalogValidationError(
-                f"{path}.role_node_id references missing node: {composition['role_node_id']}",
+                f"{path}.role_node_id references missing node: {role_node_id}",
                 code="ORPHAN_COMPOSITION_ROLE",
             )
         if (
             chain["chain_kind"] != "application_theme_chain"
             or role.get("node_kind") != "application_role"
-            or role.get("chain_id") != composition["chain_id"]
+            or role.get("chain_id") != chain_id
         ):
             raise IndustryCatalogValidationError(
                 f"{path}.role_node_id must reference an application role in the same chain",
                 code="INVALID_COMPOSITION_ROLE",
             )
+        _validate_relationship_type(composition["relationship_type"], path)
         _validate_canonical_node_refs(
             composition["canonical_node_refs"],
             nodes_by_id,
             f"{path}.canonical_node_refs",
         )
+
+
+def _validate_sources(sources: list[Any]) -> dict[str, dict[str, Any]]:
+    return _index_unique_rows(
+        sources,
+        fields=SOURCE_FIELDS,
+        id_field="source_id",
+        duplicate_code="DUPLICATE_SOURCE_ID",
+        path="sources",
+    )
 
 
 def _validate_canonical_node_refs(
@@ -467,13 +522,78 @@ def _validate_canonical_node_refs(
             f"{path} must be a list",
             code="INVALID_CANONICAL_NODE_REFERENCE",
         )
-    for node_id in references:
+    for index, value in enumerate(references):
+        node_id = _require_reference_string(
+            value,
+            f"{path}[{index}]",
+            code="INVALID_CANONICAL_NODE_REFERENCE",
+        )
         node = nodes_by_id.get(node_id)
-        if node is None or node.get("node_kind") != "canonical" or node.get("level") != "L4":
+        if (
+            node is None
+            or node.get("node_kind") != "canonical"
+            or node.get("level") != "L4"
+        ):
             raise IndustryCatalogValidationError(
                 f"{path} references non-canonical L4 node: {node_id}",
                 code="INVALID_CANONICAL_NODE_REFERENCE",
             )
+
+
+def _validate_source_refs(
+    references: Any,
+    sources_by_id: dict[str, dict[str, Any]],
+    path: str,
+) -> None:
+    if not isinstance(references, list):
+        raise IndustryCatalogValidationError(
+            f"{path} must be a list",
+            code="INVALID_SOURCE_REFERENCE",
+        )
+    for index, value in enumerate(references):
+        source_id = _require_reference_string(
+            value,
+            f"{path}[{index}]",
+            code="INVALID_SOURCE_REFERENCE",
+        )
+        if source_id not in sources_by_id:
+            raise IndustryCatalogValidationError(
+                f"{path} references missing source: {source_id}",
+                code="INVALID_SOURCE_REFERENCE",
+            )
+
+
+def _validate_relationship_type(value: Any, path: str) -> None:
+    if not isinstance(value, str) or value not in EDGE_TYPES:
+        raise IndustryCatalogValidationError(
+            f"{path}.relationship_type invalid: {value}",
+            code="INVALID_RELATIONSHIP_TYPE",
+        )
+
+
+def _index_unique_rows(
+    rows: list[Any],
+    *,
+    fields: set[str],
+    id_field: str,
+    duplicate_code: str,
+    path: str,
+    name_field: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    for index, row in enumerate(rows):
+        row_path = f"{path}[{index}]"
+        _require_fields(row, fields, row_path)
+        row_id = _require_non_empty_string(row, id_field, row_path)
+        if name_field is not None:
+            _require_non_empty_string(row, name_field, row_path)
+        if row_id in rows_by_id:
+            raise IndustryCatalogValidationError(
+                f"{row_path}.{id_field} duplicated: {row_id}",
+                code=duplicate_code,
+            )
+        rows_by_id[row_id] = row
+    return rows_by_id
 
 
 def _require_fields(row: Any, fields: set[str], path: str) -> None:
@@ -496,5 +616,14 @@ def _require_non_empty_string(row: dict[str, Any], field: str, path: str) -> str
         raise IndustryCatalogValidationError(
             f"{path}.{field} must be a non-empty string",
             code="MISSING_REQUIRED_FIELD",
+        )
+    return value
+
+
+def _require_reference_string(value: Any, path: str, *, code: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise IndustryCatalogValidationError(
+            f"{path} must be a non-empty string",
+            code=code,
         )
     return value
