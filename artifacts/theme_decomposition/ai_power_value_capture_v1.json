@@ -1,0 +1,764 @@
+{
+  "artifact_version": "theme_decomposition_v1_5",
+  "theme": {
+    "theme_id": "ai_power_value_capture_v1",
+    "theme_name": "AI供电产业链：谁在拿走价值量",
+    "theme_type": "ai_power",
+    "summary": "A read-only baseline that decomposes AI power infrastructure from compute demand to grid connection, power conversion, rack distribution, cooling, and integration. Phase 2A adds traceable public evidence while preserving unresolved value-capture and localization gaps.",
+    "status": "draft",
+    "created_from": "mixed",
+    "last_updated": "2026-07-10"
+  },
+  "evidence_policy": {
+    "accepted_source_ids": [
+      "ai_power_doe_data_center_demand_2024",
+      "ai_power_jpm_powering_ai_2026",
+      "ai_power_jpm_grid_resilience_2026",
+      "ai_power_jpm_data_center_surge_2025",
+      "ai_power_nvidia_gb200_nvl72_2026",
+      "ai_power_nvidia_800v_architecture_2026",
+      "ai_power_nvidia_800v_ecosystem_blog_2025"
+    ],
+    "needs_full_text_source_ids": [
+      "ai_power_ocp_power_architecture",
+      "ai_power_company_filing_template",
+      "ai_power_domestic_broker_report_lead"
+    ],
+    "lead_only_source_ids": [
+      "ai_power_media_secondary_lead",
+      "ai_power_video_claim_lead",
+      "ai_power_social_stock_mapping_unverified"
+    ],
+    "rejected_source_ids": [],
+    "oral_claim_source_ids": [
+      "ai_power_video_claim_lead"
+    ],
+    "not_adopted_source_ids": [
+      "ai_power_video_claim_lead",
+      "ai_power_social_stock_mapping_unverified"
+    ],
+    "policy_notes": "Phase 2A accepts only public pages or transcripts reviewed at section level. Vendor technical material can validate a declared architecture but cannot by itself validate market value capture, adoption timing, localization, or company mapping."
+  },
+  "sources": [
+    {
+      "source_id": "ai_power_doe_data_center_demand_2024",
+      "source_type": "official_article",
+      "title": "DOE Releases New Report Evaluating Increase in Electricity Demand from Data Centers",
+      "publisher": "U.S. Department of Energy",
+      "author": "",
+      "publish_date": "2024-12-20",
+      "url_or_ref": "https://www.energy.gov/articles/doe-releases-new-report-evaluating-increase-electricity-demand-data-centers",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for quantified U.S. data-center electricity demand and system-level generation, transmission, storage, and flexibility context."
+    },
+    {
+      "source_id": "ai_power_jpm_powering_ai_2026",
+      "source_type": "official_article",
+      "title": "Powering the AI Revolution",
+      "publisher": "J.P. Morgan",
+      "author": "",
+      "publish_date": "2026-06-25",
+      "url_or_ref": "https://www.jpmorgan.com/insights/technology/artificial-intelligence/powering-the-ai-revolution",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for the AI infrastructure, reliable-power, and grid-capacity research framing; not used for company conclusions."
+    },
+    {
+      "source_id": "ai_power_jpm_grid_resilience_2026",
+      "source_type": "official_article",
+      "title": "Grid Resilience: Neglected No More",
+      "publisher": "J.P. Morgan",
+      "author": "",
+      "publish_date": "2026-03-26",
+      "url_or_ref": "https://www.jpmorgan.com/insights/sustainability/climate/grid-resilience-neglected-no-more",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for grid buildout, infrastructure aging, and multi-year transmission development constraints."
+    },
+    {
+      "source_id": "ai_power_jpm_data_center_surge_2025",
+      "source_type": "official_article",
+      "title": "The data center surge: Building the backbone of the digital age",
+      "publisher": "J.P. Morgan",
+      "author": "Fahmi Enam and Scott Wilcoxen",
+      "publish_date": "2025-09-23",
+      "url_or_ref": "https://www.jpmorgan.com/insights/podcast-hub/making-sense/data-center-surge",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted as an attributable public transcript on power-denominated data-center capacity, AI workloads, and power constraints."
+    },
+    {
+      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "source_type": "official_article",
+      "title": "NVIDIA GB200 NVL72",
+      "publisher": "NVIDIA",
+      "author": "",
+      "publish_date": "2026-01-15",
+      "url_or_ref": "https://www.nvidia.com/en-us/data-center/gb200-nvl72/",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for rack-scale and liquid-cooled product architecture only; vendor economics and performance claims are not generalized."
+    },
+    {
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "source_type": "official_article",
+      "title": "NVIDIA 800 VDC Architecture",
+      "publisher": "NVIDIA",
+      "author": "",
+      "publish_date": "2026-07-08",
+      "url_or_ref": "https://www.nvidia.com/en-us/data-center/technologies/800-vdc-architecture.md",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for NVIDIA's declared 800 VDC technical route and its intended reduction in conversion stages, current, copper use, and cable bulk."
+    },
+    {
+      "source_id": "ai_power_nvidia_800v_ecosystem_blog_2025",
+      "source_type": "official_article",
+      "title": "Building the 800 VDC Ecosystem for Efficient, Scalable AI Factories",
+      "publisher": "NVIDIA Technical Blog",
+      "author": "Neeraj Srivastava",
+      "publish_date": "2025-10-13",
+      "url_or_ref": "https://developer.nvidia.com/blog/building-the-800-vdc-ecosystem-for-efficient-scalable-ai-factories/",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "accepted",
+      "notes": "Accepted for rack power-density, grid-interconnection, and 800 VDC route analysis; commercial adoption and profit pools remain unverified."
+    },
+    {
+      "source_id": "ai_power_ocp_power_architecture",
+      "source_type": "official_report",
+      "title": "Open Compute Project power architecture materials",
+      "publisher": "Open Compute Project",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "https://www.opencompute.org/wiki/Power",
+      "access_level": "public",
+      "reliability_level": "S1",
+      "review_status": "needs_full_text",
+      "notes": "The official page was access-blocked; exact specification revision and sections still need review."
+    },
+    {
+      "source_id": "ai_power_company_filing_template",
+      "source_type": "company_filing",
+      "title": "Company filing or annual-report slot for power equipment supplier mapping",
+      "publisher": "Listed company",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "template:attach_company_filing_before_company_mapping",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "needs_full_text",
+      "notes": "An actual filing excerpt is required before any company mapping is accepted."
+    },
+    {
+      "source_id": "ai_power_domestic_broker_report_lead",
+      "source_type": "broker_report",
+      "title": "Domestic broker AI data-center power, liquid-cooling, and HVDC report lead",
+      "publisher": "Unconfirmed broker source",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "private_claimed:exact_report_not_attached",
+      "access_level": "gated",
+      "reliability_level": "S2",
+      "review_status": "needs_full_text",
+      "notes": "Cannot support BOM, value capture, localization, or company mapping until exact full text and excerpts are attached."
+    },
+    {
+      "source_id": "ai_power_media_secondary_lead",
+      "source_type": "media_article",
+      "title": "Secondary reporting on AI power-chain beneficiaries",
+      "publisher": "Unverified media source",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "pending:secondary_source_url",
+      "access_level": "public",
+      "reliability_level": "S3",
+      "review_status": "lead_only",
+      "notes": "Discovery lead only; no traceable original report or filing is attached."
+    },
+    {
+      "source_id": "ai_power_video_claim_lead",
+      "source_type": "video_claim",
+      "title": "老郑说AI前瞻：AI供电产业链口播线索",
+      "publisher": "老郑说AI前瞻",
+      "author": "老郑说AI前瞻",
+      "publish_date": "",
+      "url_or_ref": "manual:douyin_video_observed_by_user",
+      "access_level": "private_claimed",
+      "reliability_level": "S4",
+      "review_status": "lead_only",
+      "notes": "Oral claim only; retained as a decomposition prompt and never used as formal evidence."
+    },
+    {
+      "source_id": "ai_power_social_stock_mapping_unverified",
+      "source_type": "social_post",
+      "title": "Unverified social stock mapping for AI power beneficiaries",
+      "publisher": "Social platform",
+      "author": "",
+      "publish_date": "",
+      "url_or_ref": "manual:not_adopted_stock_mapping",
+      "access_level": "unknown",
+      "reliability_level": "S4",
+      "review_status": "lead_only",
+      "notes": "Explicitly not adopted; company mapping requires filings, product evidence, customer evidence, or reliable full-text reports."
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "ai_power_claim_demand_growth",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_doe_data_center_demand_2024",
+      "claim_text": "AI and data-center expansion are creating a material increase in electricity demand.",
+      "claim_type": "demand_shock",
+      "confidence": 0.9,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_data_center_surge_2025"
+      ],
+      "affected_theme_nodes": [
+        "power_generation",
+        "grid_connection",
+        "ai_server_integration"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_grid_bottleneck",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_doe_data_center_demand_2024",
+      "claim_text": "Grid capacity and interconnection are material constraints on AI data-center deployment.",
+      "claim_type": "bottleneck",
+      "confidence": 0.86,
+      "evidence_status": "verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_grid_resilience_2026",
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "grid_connection",
+        "transformer",
+        "switchgear"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_rack_power_density",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "claim_text": "AI rack-scale systems are increasing power density and forcing changes in power delivery and facility design.",
+      "claim_type": "supply_constraint",
+      "confidence": 0.82,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "ai_server_integration",
+        "server_power_supply",
+        "rack_power_distribution",
+        "liquid_cooling"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_800v_architecture",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "claim_text": "800 VDC is an emerging technical route for reducing conversion stages and supporting denser future AI racks.",
+      "claim_type": "tech_route",
+      "confidence": 0.78,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "hvdc_power",
+        "server_power_supply",
+        "rack_power_distribution",
+        "switchgear",
+        "transformer",
+        "ups"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_liquid_cooling",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_gb200_nvl72_2026",
+      "claim_text": "High-density rack-scale AI systems can require liquid cooling to manage density and floor-space constraints.",
+      "claim_type": "tech_route",
+      "confidence": 0.8,
+      "evidence_status": "partially_verified",
+      "platform_use_status": "reviewed",
+      "supporting_source_ids": [
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "affected_theme_nodes": [
+        "liquid_cooling",
+        "ai_server_integration"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_copper_value_blanket",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "claim_text": "Higher AI rack power necessarily means copper interconnect captures more value across all architectures.",
+      "claim_type": "value_capture",
+      "confidence": 0.84,
+      "evidence_status": "contradicted",
+      "platform_use_status": "blocked",
+      "supporting_source_ids": [
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "copper_interconnect",
+        "rack_power_distribution",
+        "hvdc_power"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_all_equipment_value_blanket",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_nvidia_800v_architecture_2026",
+      "claim_text": "All transformers, switchgear, UPS, PDU, and power-conversion suppliers benefit uniformly from the 800 VDC transition.",
+      "claim_type": "value_capture",
+      "confidence": 0.82,
+      "evidence_status": "contradicted",
+      "platform_use_status": "blocked",
+      "supporting_source_ids": [
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "affected_theme_nodes": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "rack_power_distribution",
+        "server_power_supply",
+        "hvdc_power"
+      ]
+    },
+    {
+      "claim_id": "ai_power_claim_localization",
+      "theme_id": "ai_power_value_capture_v1",
+      "source_id": "ai_power_video_claim_lead",
+      "claim_text": "Specific AI power nodes have material China localization gaps that create investable domestic substitution opportunities.",
+      "claim_type": "localization",
+      "confidence": 0.3,
+      "evidence_status": "unverified",
+      "platform_use_status": "research_lead",
+      "supporting_source_ids": [
+        "ai_power_domestic_broker_report_lead",
+        "ai_power_media_secondary_lead"
+      ],
+      "affected_theme_nodes": [
+        "transformer",
+        "switchgear",
+        "ups",
+        "hvdc_power",
+        "server_power_supply",
+        "liquid_cooling",
+        "sic_gan_power_semiconductor"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "power_generation",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "",
+      "node_name": "Power Generation",
+      "node_type": "infrastructure",
+      "description": "Generation capacity, power procurement, and energy mix constraints behind AI data-center growth.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 1,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "PPA availability",
+        "generation capacity",
+        "electricity price"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "draft"
+    },
+    {
+      "node_id": "grid_connection",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "power_generation",
+      "node_name": "Grid Connection",
+      "node_type": "infrastructure",
+      "description": "Grid access, substation capacity, permitting, and power-delivery scheduling for data centers.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 1,
+      "supply_tightness_score": 4,
+      "evidence_strength": 3,
+      "key_metrics": [
+        "grid connection lead time",
+        "substation capacity",
+        "interconnection backlog"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "transformer",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "Transformer",
+      "node_type": "equipment",
+      "description": "High-voltage and medium-voltage transformer equipment for utility and data-center power delivery.",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 4,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "delivery lead time",
+        "MVA capacity",
+        "gross margin",
+        "order backlog"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "switchgear",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "Switchgear",
+      "node_type": "equipment",
+      "description": "Medium and low-voltage switchgear used in data-center power distribution.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "voltage level",
+        "delivery time",
+        "certification"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "ups",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "UPS",
+      "node_type": "subsystem",
+      "description": "Uninterruptible power supply systems for data-center reliability.",
+      "value_capture_score": 4,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "power rating",
+        "conversion efficiency",
+        "battery configuration"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "hvdc_power",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "HVDC Power",
+      "node_type": "subsystem",
+      "description": "High-voltage DC architecture that may reduce conversion stages in high-density deployments.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "key_metrics": [
+        "conversion efficiency",
+        "deployment maturity",
+        "rack compatibility"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "ai_server_integration",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "AI Server Integration",
+      "node_type": "subsystem",
+      "description": "AI rack and server integration where compute, power, cooling, and networking constraints meet.",
+      "value_capture_score": 4,
+      "bottleneck_score": 3,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 3,
+      "key_metrics": [
+        "rack power",
+        "GPU count",
+        "customer certification",
+        "integration margin"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "server_power_supply",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "ai_server_integration",
+      "node_name": "Server Power Supply",
+      "node_type": "core_component",
+      "description": "Power supply units and modules inside AI servers and racks.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "Watt rating",
+        "efficiency",
+        "ASP",
+        "customer qualification"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "rack_power_distribution",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "ai_server_integration",
+      "node_name": "Rack Power Distribution",
+      "node_type": "subsystem",
+      "description": "Rack-level distribution, busbar, PDU, and monitoring architecture.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "rack current",
+        "thermal rise",
+        "monitoring coverage"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "liquid_cooling",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "ai_server_integration",
+      "node_name": "Liquid Cooling",
+      "node_type": "subsystem",
+      "description": "Cold plate, CDU, manifold, and liquid-cooling deployment for high-density AI racks.",
+      "value_capture_score": 5,
+      "bottleneck_score": 4,
+      "localization_gap_score": 3,
+      "supply_tightness_score": 4,
+      "evidence_strength": 3,
+      "key_metrics": [
+        "cooling capacity",
+        "leakage control",
+        "customer certification",
+        "gross margin"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "reviewed"
+    },
+    {
+      "node_id": "copper_interconnect",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "ai_server_integration",
+      "node_name": "Copper Interconnect",
+      "node_type": "core_component",
+      "description": "Copper busbar, cable, connector, and high-current interconnect material requirements.",
+      "value_capture_score": 4,
+      "bottleneck_score": 3,
+      "localization_gap_score": 2,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "copper intensity",
+        "current rating",
+        "connector ASP"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "sic_gan_power_semiconductor",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "server_power_supply",
+      "node_name": "SiC/GaN Power Semiconductor",
+      "node_type": "core_component",
+      "description": "Wide-bandgap power semiconductors that can improve conversion efficiency in selected power architectures.",
+      "value_capture_score": 4,
+      "bottleneck_score": 4,
+      "localization_gap_score": 4,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "efficiency",
+        "device reliability",
+        "module ASP",
+        "qualification cycle"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    },
+    {
+      "node_id": "data_center_epc",
+      "theme_id": "ai_power_value_capture_v1",
+      "parent_node_id": "grid_connection",
+      "node_name": "Data Center EPC",
+      "node_type": "service",
+      "description": "Engineering, procurement, and construction capability for high-density data-center deployment.",
+      "value_capture_score": 3,
+      "bottleneck_score": 3,
+      "localization_gap_score": 1,
+      "supply_tightness_score": 3,
+      "evidence_strength": 2,
+      "key_metrics": [
+        "project backlog",
+        "delivery time",
+        "integration capability"
+      ],
+      "overseas_leaders": [],
+      "domestic_players": [],
+      "related_stock_codes": [],
+      "node_review_status": "needs_evidence"
+    }
+  ],
+  "value_capture_assessments": [
+    {
+      "node_id": "grid_connection",
+      "value_basis": "capacity_constraint",
+      "assessment_text": "Grid connection is a reviewed system bottleneck, but its value capture still needs regional interconnection cost, queue, and ownership evidence.",
+      "rank": 1,
+      "evidence_ids": [
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_doe_data_center_demand_2024"
+      ],
+      "uncertainty": "medium"
+    },
+    {
+      "node_id": "hvdc_power",
+      "value_basis": "integration_control",
+      "assessment_text": "800 VDC is a reviewed technical route; adoption maturity, standards, and supplier allocation remain unverified before value scoring can be confirmed.",
+      "rank": 2,
+      "evidence_ids": [
+        "ai_power_claim_800v_architecture",
+        "ai_power_nvidia_800v_architecture_2026"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "ai_server_integration",
+      "value_basis": "integration_control",
+      "assessment_text": "Rack-scale compute, power delivery, networking, and cooling are coupled integration problems, but the split of value among platform, ODM, and subsystem suppliers remains unresolved.",
+      "rank": 3,
+      "evidence_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "liquid_cooling",
+      "value_basis": "customer_certification",
+      "assessment_text": "Liquid cooling has a reviewed technical role in a high-density rack-scale product, while BOM share, certification scarcity, and supplier economics still require independent evidence.",
+      "rank": 4,
+      "evidence_ids": [
+        "ai_power_claim_liquid_cooling",
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "transformer",
+      "value_basis": "capacity_constraint",
+      "assessment_text": "Transformer relevance is supported by grid buildout, but future 800 VDC designs may remove or relocate some transformer stages; the current high value-capture score remains provisional.",
+      "rank": 5,
+      "evidence_ids": [
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "uncertainty": "high"
+    },
+    {
+      "node_id": "copper_interconnect",
+      "value_basis": "BOM_share",
+      "assessment_text": "Aggregate buildout may increase total copper demand, but 800 VDC is explicitly designed to reduce copper intensity and cable bulk; a blanket value-capture conclusion is blocked.",
+      "rank": 6,
+      "evidence_ids": [
+        "ai_power_claim_copper_value_blanket",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "uncertainty": "high"
+    }
+  ],
+  "decomposition_templates": [
+    {
+      "template_id": "ai_power_value_capture_template_v1",
+      "theme_type": "ai_power",
+      "steps": [
+        "Start from AI training and inference demand growth.",
+        "Translate compute growth into server and rack power-density pressure.",
+        "Trace constraints outward from rack power to data-center power delivery and grid connection.",
+        "Separate value basis: BOM share, ASP, gross margin, scarcity, certification, capacity, and technology barrier.",
+        "Mark bottlenecks and localization gaps at node level before any company mapping.",
+        "Attach source_item and content_claim evidence before publishing a platform view."
+      ],
+      "required_dimensions": [
+        "source reliability",
+        "node value_capture_score",
+        "node bottleneck_score",
+        "value_basis",
+        "evidence_status"
+      ],
+      "optional_dimensions": [
+        "company mapping",
+        "order backlog",
+        "margin trend",
+        "customer certification"
+      ],
+      "output_schema": "theme_decomposition_v1_5"
+    }
+  ]
+}

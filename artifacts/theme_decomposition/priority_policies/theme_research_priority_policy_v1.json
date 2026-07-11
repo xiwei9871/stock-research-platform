@@ -1,0 +1,79 @@
+{
+  "policy_version": "theme_research_priority_policy_v1",
+  "score_scale": {
+    "component_min": 0,
+    "component_max": 5,
+    "normalized_max": 100
+  },
+  "node_deep_research_weights": {
+    "value_capture_score": 0.25,
+    "bottleneck_score": 0.25,
+    "localization_gap_score": 0.1,
+    "supply_tightness_score": 0.1,
+    "evidence_strength": 0.3
+  },
+  "node_evidence_gap_weights": {
+    "value_capture_score": 0.2,
+    "bottleneck_score": 0.25,
+    "localization_gap_score": 0.1,
+    "supply_tightness_score": 0.1,
+    "evidence_gap_score": 0.35
+  },
+  "company_priority_weights": {
+    "value_capture_score": 0.15,
+    "bottleneck_score": 0.2,
+    "localization_gap_score": 0.1,
+    "supply_tightness_score": 0.1,
+    "evidence_strength": 0.1,
+    "company_relevance_score": 0.2,
+    "business_materiality": 0.15
+  },
+  "business_materiality_scores": {
+    "core_business": 5,
+    "meaningful_segment": 4,
+    "emerging_segment": 3,
+    "reserve_only": 1,
+    "concept_only": 0,
+    "unknown": 1
+  },
+  "priority_bands": {
+    "high_min": 75,
+    "medium_min": 60
+  },
+  "classification_thresholds": {
+    "evidence_collection_min": 68,
+    "deep_research_min": 70,
+    "low_evidence_max": 2,
+    "strong_evidence_min": 3,
+    "company_queue_min": 65
+  },
+  "allowed_dimensions": [
+    "value_capture_score",
+    "bottleneck_score",
+    "localization_gap_score",
+    "supply_tightness_score",
+    "evidence_strength",
+    "evidence_gap_score",
+    "company_relevance_score",
+    "business_materiality"
+  ],
+  "forbidden_dimensions": [
+    "price",
+    "valuation",
+    "return",
+    "momentum",
+    "freshness",
+    "low_position",
+    "technical_signal",
+    "entry_timing"
+  ],
+  "guardrails": {
+    "research_only": true,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "auto_reviewer_decision": false,
+    "database_write_enabled": false,
+    "price_inputs_allowed": false,
+    "market_position_inputs_allowed": false
+  }
+}

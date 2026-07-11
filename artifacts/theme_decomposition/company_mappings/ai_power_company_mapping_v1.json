@@ -1,0 +1,270 @@
+{
+  "artifact_version": "theme_company_mapping_v1",
+  "theme_id": "ai_power_value_capture_v1",
+  "as_of_date": "2026-07-10",
+  "review_policy": {
+    "reviewed_mapping_requires": [
+      "accepted S0 or S1 source",
+      "excerpt-level direct product or service relationship evidence",
+      "explicit business stage",
+      "explicit revenue relevance",
+      "confidence at least 0.7"
+    ],
+    "prohibited_promotions": [
+      "company mention only",
+      "concept exposure promoted to reviewed",
+      "reserve-stage activity described as material revenue",
+      "theme popularity used as business materiality"
+    ]
+  },
+  "sources": [
+    {
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳市英维克科技股份有限公司2025年年度报告",
+      "publisher": "深圳市英维克科技股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131813.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited product and revenue pages."
+    },
+    {
+      "source_id": "ai_power_kehua_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "科华数据股份有限公司2025年年度报告",
+      "publisher": "科华数据股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-27",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-27/1225194937.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited UPS, AIDC power, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_honor_electronic_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "深圳欧陆通电子股份有限公司2025年年度报告",
+      "publisher": "深圳欧陆通电子股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-22",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-22/1225135602.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited server-power product, customer, and segment-revenue pages."
+    },
+    {
+      "source_id": "ai_power_zhongheng_2025_annual_report",
+      "source_type": "company_filing",
+      "title": "杭州中恒电气股份有限公司2025年年度报告",
+      "publisher": "杭州中恒电气股份有限公司",
+      "author": "",
+      "publish_date": "2026-04-21",
+      "url_or_ref": "https://static.cninfo.com.cn/finalpage/2026-04-21/1225131190.PDF",
+      "access_level": "public",
+      "reliability_level": "S0",
+      "review_status": "accepted",
+      "notes": "CNINFO original filing reviewed at the cited HVDC product, deployment, and segment-revenue pages."
+    }
+  ],
+  "evidence_items": [
+    {
+      "evidence_id": "ai_power_envicool_liquid_product_2025",
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report page 9, principal business: data-center cooling and Coolinside full-chain liquid-cooling products",
+      "evidence_summary": "The filing places data-center and computing-equipment cooling inside the company's principal business and lists an end-to-end liquid-cooling portfolio including cold plates, quick connectors, manifolds, CDU, cabinets, coolant, piping, and cooling sources.",
+      "related_company_codes": [
+        "002837.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_envicool_liquid_revenue_scope_2025",
+      "source_id": "ai_power_envicool_2025_annual_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "Annual report pages 15-16, product revenue table",
+      "evidence_summary": "Machine-room temperature-control products generated about RMB 3.448 billion, or 56.83% of company revenue. Liquid cooling is included in this broader product family but is not separately disclosed, so exact liquid-cooling revenue remains undisclosed.",
+      "related_company_codes": [
+        "002837.SZ"
+      ],
+      "related_node_ids": [
+        "liquid_cooling"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_kehua_ups_product_2025",
+      "source_id": "ai_power_kehua_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report pages 11-13, AIDC power supply and UPS products",
+      "evidence_summary": "The filing describes mass-market modular UPS products, a 1.2MW UPS certification, deployed prefabricated power modules, and jointly developed UPS products for high-density data-center scenarios.",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "ups"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_kehua_ups_revenue_scope_2025",
+      "source_id": "ai_power_kehua_2025_annual_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "Annual report page 20, revenue composition",
+      "evidence_summary": "Data-center products generated about RMB 2.239 billion, or 27.44% of company revenue. The filing does not disclose UPS-only revenue inside that broader product category.",
+      "related_company_codes": [
+        "002335.SZ"
+      ],
+      "related_node_ids": [
+        "ups"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_honor_server_power_product_2025",
+      "source_id": "ai_power_honor_electronic_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report pages 20-21, data-center power products and customers",
+      "evidence_summary": "The filing lists air-cooled and immersion-cooled CRPS power supplies, customized GPU power supplies, and centralized power systems, and reports shipments or cooperation with major server-system and cloud customers.",
+      "related_company_codes": [
+        "300870.SZ"
+      ],
+      "related_node_ids": [
+        "server_power_supply"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_honor_server_power_revenue_2025",
+      "source_id": "ai_power_honor_electronic_2025_annual_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "Annual report pages 20 and 22-23, data-center power revenue",
+      "evidence_summary": "Data-center power revenue was about RMB 2.015 billion, representing 45.17% of company revenue; high-power data-center power revenue was about RMB 1.299 billion within that segment.",
+      "related_company_codes": [
+        "300870.SZ"
+      ],
+      "related_node_ids": [
+        "server_power_supply"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_zhongheng_hvdc_product_2025",
+      "source_id": "ai_power_zhongheng_2025_annual_report",
+      "evidence_type": "product_relationship",
+      "excerpt_locator": "Annual report pages 11-12, AIDC key power and HVDC systems",
+      "evidence_summary": "The filing describes 240V, 336V, and 800V HVDC systems, states that the products have been scaled in cloud, intelligent-computing, and colocation data centers, and presents an end-to-end data-center power product matrix.",
+      "related_company_codes": [
+        "002364.SZ"
+      ],
+      "related_node_ids": [
+        "hvdc_power"
+      ]
+    },
+    {
+      "evidence_id": "ai_power_zhongheng_hvdc_revenue_2025",
+      "source_id": "ai_power_zhongheng_2025_annual_report",
+      "evidence_type": "revenue_materiality",
+      "excerpt_locator": "Annual report page 25, product revenue composition",
+      "evidence_summary": "Data-center power revenue was about RMB 775.8 million, representing 36.30% of company revenue. The filing does not split HVDC-only revenue from the broader data-center power category.",
+      "related_company_codes": [
+        "002364.SZ"
+      ],
+      "related_node_ids": [
+        "hvdc_power"
+      ]
+    }
+  ],
+  "company_mappings": [
+    {
+      "mapping_id": "ai_power_liquid_cooling_002837_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "002837.SZ",
+      "company_name": "英维克",
+      "market": "CN",
+      "mapped_node_id": "liquid_cooling",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.94,
+      "evidence_ids": [
+        "ai_power_envicool_liquid_product_2025",
+        "ai_power_envicool_liquid_revenue_scope_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "emerging_segment",
+      "product_or_service": "End-to-end data-center liquid-cooling products and delivery, including cold plates, CDU, manifolds, cabinets, coolant, piping, and cooling sources.",
+      "relationship_summary": "The company directly supplies products covering the liquid-cooling node. The broader machine-room temperature-control segment is material, but liquid-cooling revenue is not separately disclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. It does not imply valuation, recommendation, order visibility, or future revenue growth."
+    },
+    {
+      "mapping_id": "ai_power_ups_002335_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "002335.SZ",
+      "company_name": "科华数据",
+      "market": "CN",
+      "mapped_node_id": "ups",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.92,
+      "evidence_ids": [
+        "ai_power_kehua_ups_product_2025",
+        "ai_power_kehua_ups_revenue_scope_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "Modular and high-density UPS products, prefabricated power modules, and AIDC power-supply solutions.",
+      "relationship_summary": "UPS is a directly disclosed product and part of the company's data-center infrastructure offering. Data-center product revenue is disclosed, but UPS-only revenue is not.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Market-share statements in the filing are not used as independent value-capture proof."
+    },
+    {
+      "mapping_id": "ai_power_server_power_300870_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "300870.SZ",
+      "company_name": "欧陆通",
+      "market": "CN",
+      "mapped_node_id": "server_power_supply",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.98,
+      "evidence_ids": [
+        "ai_power_honor_server_power_product_2025",
+        "ai_power_honor_server_power_revenue_2025"
+      ],
+      "revenue_relevance": "material",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "Server power supplies and centralized power systems for general and high-power AI server applications.",
+      "relationship_summary": "The company directly supplies server-power products and separately discloses data-center power revenue representing 45.17% of company revenue.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Customer and revenue evidence establish relevance, not future growth or investment merit."
+    },
+    {
+      "mapping_id": "ai_power_hvdc_002364_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "company_code": "002364.SZ",
+      "company_name": "中恒电气",
+      "market": "CN",
+      "mapped_node_id": "hvdc_power",
+      "mapping_type": "direct_product",
+      "business_stage": "primary_business",
+      "confidence": 0.96,
+      "evidence_ids": [
+        "ai_power_zhongheng_hvdc_product_2025",
+        "ai_power_zhongheng_hvdc_revenue_2025"
+      ],
+      "revenue_relevance": "undisclosed",
+      "bottleneck_relevance": "core",
+      "business_materiality": "meaningful_segment",
+      "product_or_service": "240V, 336V, and 800V data-center HVDC systems and integrated AIDC power modules.",
+      "relationship_summary": "The company directly supplies HVDC systems and reports data-center power revenue representing 36.30% of company revenue, while HVDC-only revenue is not separately disclosed.",
+      "review_status": "reviewed",
+      "notes": "Research mapping only. Technical deployment evidence does not establish profit-pool leadership or stock attractiveness."
+    }
+  ]
+}

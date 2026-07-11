@@ -1,0 +1,208 @@
+{
+  "artifact_version": "decomposition_template_v1",
+  "template": {
+    "template_id": "manufacturing_process_v1",
+    "template_name": "Manufacturing Process Decomposition",
+    "template_family": "manufacturing_process",
+    "description": "Decompose a manufacturing theme by process flow, key equipment, materials, process control, yield bottlenecks, localization, and customer verification cycles.",
+    "compatible_theme_types": [
+      "semiconductor_equipment",
+      "other"
+    ],
+    "steps": [
+      {
+        "step_id": "define_process_flow",
+        "order": 1,
+        "title": "Define manufacturing process flow",
+        "purpose": "Set the product boundary and order the process stages from input material to qualified output.",
+        "required_inputs": ["product definition", "process flow", "output specification"],
+        "output_dimensions": ["process stages", "stage sequence", "process boundary"],
+        "quality_gates": ["The process sequence must cover every stage required for qualified output."]
+      },
+      {
+        "step_id": "map_key_equipment",
+        "order": 2,
+        "title": "Map key equipment",
+        "purpose": "Identify the equipment controlling throughput, precision, reliability, contamination, or process stability at each stage.",
+        "required_inputs": ["process stages", "equipment list", "throughput requirements"],
+        "output_dimensions": ["equipment nodes", "stage-equipment links", "capacity metrics"],
+        "quality_gates": ["Equipment relevance must be tied to a named process stage and function."]
+      },
+      {
+        "step_id": "map_key_materials",
+        "order": 3,
+        "title": "Map key materials",
+        "purpose": "Identify materials, consumables, components, and purity requirements that determine process output.",
+        "required_inputs": ["material inputs", "purity specifications", "consumption rates"],
+        "output_dimensions": ["material nodes", "consumption metric", "qualification requirements"],
+        "quality_gates": ["Material claims must state specification and process use, not only category names."]
+      },
+      {
+        "step_id": "map_process_control",
+        "order": 4,
+        "title": "Map process control and software",
+        "purpose": "Identify inspection, metrology, control software, recipes, and data systems that stabilize production.",
+        "required_inputs": ["control points", "inspection requirements", "process recipes"],
+        "output_dimensions": ["control nodes", "measurement metrics", "software role"],
+        "quality_gates": ["Process-control value must link to yield, throughput, reliability, or qualification evidence."]
+      },
+      {
+        "step_id": "locate_yield_bottleneck",
+        "order": 5,
+        "title": "Locate yield and throughput bottlenecks",
+        "purpose": "Find the stages where defect rate, precision, throughput, uptime, or process window limits qualified output.",
+        "required_inputs": ["yield", "throughput", "uptime", "defect data"],
+        "output_dimensions": ["bottleneck stage", "constraint metric", "bottleneck_score"],
+        "quality_gates": ["A high bottleneck score requires a measurable yield, throughput, or qualification constraint."]
+      },
+      {
+        "step_id": "assess_value_capture",
+        "order": 6,
+        "title": "Assess value capture and overseas control",
+        "purpose": "Separate BOM, ASP, margin, installed base, service, certification, capacity, and technology-barrier value pools.",
+        "required_inputs": ["BOM", "ASP", "margin", "installed base", "supplier concentration"],
+        "output_dimensions": ["value_capture_score", "value_basis", "overseas leaders"],
+        "quality_gates": ["Every value-capture conclusion must state its value basis and evidence IDs."]
+      },
+      {
+        "step_id": "assess_localization_and_verification",
+        "order": 7,
+        "title": "Assess localization and customer verification",
+        "purpose": "Compare domestic performance, scale production, customer qualification, replacement risk, and verification time.",
+        "required_inputs": ["domestic product data", "customer qualification", "verification cycle"],
+        "output_dimensions": ["localization_gap_score", "verification status", "replacement path"],
+        "quality_gates": ["Localization requires product-level performance and customer-verification evidence."]
+      },
+      {
+        "step_id": "prepare_company_mapping",
+        "order": 8,
+        "title": "Prepare company mapping queue",
+        "purpose": "Prepare later mapping from equipment, material, software, and service nodes to companies with explicit evidence and business materiality.",
+        "required_inputs": ["reviewed nodes", "product evidence", "revenue relevance"],
+        "output_dimensions": ["mapping type", "mapping confidence", "evidence requirements"],
+        "quality_gates": ["A report mention alone cannot create a company mapping."]
+      }
+    ],
+    "required_dimensions": [
+      "source reliability",
+      "process boundary",
+      "process stage",
+      "node hierarchy",
+      "yield metric",
+      "throughput metric",
+      "value_capture_score",
+      "bottleneck_score",
+      "localization_gap_score",
+      "evidence_strength",
+      "customer verification",
+      "value_basis"
+    ],
+    "optional_dimensions": [
+      "company mapping",
+      "revenue relevance",
+      "installed base",
+      "service revenue",
+      "order backlog",
+      "process recipe ownership"
+    ],
+    "node_archetypes": [
+      {
+        "archetype_id": "process_stage",
+        "parent_archetype_id": "",
+        "label": "Process Stage",
+        "purpose": "A sequenced manufacturing stage producing an intermediate or qualified output.",
+        "allowed_node_types": ["service", "equipment"],
+        "required_metrics": ["throughput", "yield"]
+      },
+      {
+        "archetype_id": "key_equipment",
+        "parent_archetype_id": "process_stage",
+        "label": "Key Equipment",
+        "purpose": "Equipment controlling precision, throughput, reliability, or contamination.",
+        "allowed_node_types": ["equipment"],
+        "required_metrics": ["throughput", "uptime", "ASP"]
+      },
+      {
+        "archetype_id": "key_material",
+        "parent_archetype_id": "process_stage",
+        "label": "Key Material",
+        "purpose": "Material or consumable whose specification affects process output.",
+        "allowed_node_types": ["upstream_material", "core_component"],
+        "required_metrics": ["purity", "consumption", "qualification cycle"]
+      },
+      {
+        "archetype_id": "process_control",
+        "parent_archetype_id": "process_stage",
+        "label": "Process Control",
+        "purpose": "Inspection, metrology, recipe, software, or control layer stabilizing production.",
+        "allowed_node_types": ["software", "equipment", "subsystem"],
+        "required_metrics": ["measurement accuracy", "control latency"]
+      },
+      {
+        "archetype_id": "yield_bottleneck",
+        "parent_archetype_id": "process_stage",
+        "label": "Yield Bottleneck",
+        "purpose": "The equipment, material, or control function limiting qualified output.",
+        "allowed_node_types": ["equipment", "core_component", "software"],
+        "required_metrics": ["defect rate", "yield loss", "capacity"]
+      },
+      {
+        "archetype_id": "verification_gate",
+        "parent_archetype_id": "yield_bottleneck",
+        "label": "Customer Verification Gate",
+        "purpose": "The customer test, certification, or production-validation cycle controlling adoption.",
+        "allowed_node_types": ["service", "subsystem"],
+        "required_metrics": ["verification duration", "pass criteria"]
+      },
+      {
+        "archetype_id": "localization_candidate",
+        "parent_archetype_id": "process_stage",
+        "label": "Localization Candidate",
+        "purpose": "A domestic equipment, material, component, or software route intended to replace an incumbent.",
+        "allowed_node_types": ["equipment", "upstream_material", "core_component", "software"],
+        "required_metrics": ["performance gap", "scale capacity", "customer status"]
+      }
+    ],
+    "claim_types": [
+      "tech_route",
+      "bottleneck",
+      "supply_constraint",
+      "localization",
+      "value_capture",
+      "cost_structure"
+    ],
+    "value_bases": [
+      "BOM_share",
+      "ASP",
+      "gross_margin",
+      "scarcity",
+      "integration_control",
+      "customer_certification",
+      "capacity_constraint",
+      "technology_barrier"
+    ],
+    "source_requirements": [
+      {
+        "use_case": "reviewed process, equipment, or material role",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "reviewed yield, localization, or customer-verification claim",
+        "minimum_reliability_level": "S1",
+        "allowed_review_statuses": ["accepted"]
+      },
+      {
+        "use_case": "research lead discovery",
+        "minimum_reliability_level": "S4",
+        "allowed_review_statuses": ["needs_full_text", "lead_only"]
+      }
+    ],
+    "initialization_defaults": {
+      "status": "draft",
+      "created_from": "manual"
+    },
+    "output_schema": "theme_decomposition_v1_5",
+    "example_theme_ids": []
+  }
+}

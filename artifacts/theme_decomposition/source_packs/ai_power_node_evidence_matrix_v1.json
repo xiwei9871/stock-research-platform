@@ -1,0 +1,357 @@
+{
+  "artifact_version": "ai_power_node_evidence_matrix_v1",
+  "theme_id": "ai_power_value_capture_v1",
+  "as_of_date": "2026-07-10",
+  "node_evidence_matrix": [
+    {
+      "node_id": "power_generation",
+      "accepted_source_ids": [
+        "ai_power_doe_data_center_demand_2024",
+        "ai_power_jpm_powering_ai_2026"
+      ],
+      "pending_source_ids": [
+        "ai_power_lbnl_data_center_energy_report_2024",
+        "ai_power_iea_energy_and_ai_2025"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "capacity_constraint"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Demand growth and the need for additional generation are supported, but the pack does not establish which generation technologies or owners capture superior value.",
+      "next_evidence_needed": "Add regional generation queues, power-price structures, onsite generation economics, and technology-specific capacity constraints."
+    },
+    {
+      "node_id": "grid_connection",
+      "accepted_source_ids": [
+        "ai_power_doe_data_center_demand_2024",
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_grid_resilience_2026",
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_lbnl_data_center_energy_report_2024",
+        "ai_power_iea_energy_and_ai_2025"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_grid_bottleneck"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "confirmed",
+      "value_bases": [
+        "capacity_constraint",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "Public sources converge on grid capacity, interconnection, and long infrastructure development cycles as real constraints.",
+      "next_evidence_needed": "Quantify interconnection wait times, upgrade costs, and regional scarcity before assigning a reviewed value-capture score."
+    },
+    {
+      "node_id": "transformer",
+      "accepted_source_ids": [
+        "ai_power_jpm_grid_resilience_2026",
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "capacity_constraint",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Grid investment supports transformer relevance, while a future native 800 VDC architecture may remove or relocate some transformer stages. The current score cannot be confirmed from this pack.",
+      "next_evidence_needed": "Obtain transformer lead-time, voltage-class, pricing, capacity, qualification, and data-center BOM evidence."
+    },
+    {
+      "node_id": "switchgear",
+      "accepted_source_ids": [
+        "ai_power_jpm_grid_resilience_2026",
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_grid_bottleneck",
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "customer_certification",
+        "technology_barrier"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Switchgear remains relevant to grid and facility design, but NVIDIA's future architecture describes fewer or more compact switchgear layers. Net value transfer is unresolved.",
+      "next_evidence_needed": "Compare AC, hybrid DC, and native DC switchgear content, certification requirements, ASP, and supplier capacity."
+    },
+    {
+      "node_id": "ups",
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "unsupported",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Current data centers use AC UPS stages, while the proposed 800 VDC route changes storage placement and can simplify the AC power train. A blanket UPS beneficiary conclusion is blocked.",
+      "next_evidence_needed": "Establish transition-architecture BOM, storage integration, UPS replacement cycles, and operator qualification requirements."
+    },
+    {
+      "node_id": "hvdc_power",
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture",
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_copper_value_blanket",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "technology_barrier",
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "The 800 VDC technical route and its intended efficiency and density benefits are directly documented by NVIDIA. Adoption and profit-pool evidence remain pending.",
+      "next_evidence_needed": "Acquire standards, operator deployments, conversion-efficiency data, supplier qualification, and BOM allocation."
+    },
+    {
+      "node_id": "ai_server_integration",
+      "accepted_source_ids": [
+        "ai_power_jpm_data_center_surge_2025",
+        "ai_power_nvidia_gb200_nvl72_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth",
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_liquid_cooling"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "integration_control",
+        "customer_certification"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "Rack-scale integration, dense GPU domains, power delivery, and liquid cooling are documented as a coupled system design problem.",
+      "next_evidence_needed": "Separate platform-owner value capture from ODM, subsystem, and facility-integration economics."
+    },
+    {
+      "node_id": "server_power_supply",
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture",
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "unsupported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification",
+        "BOM_share"
+      ],
+      "evidence_gap_status": "technical_route_only",
+      "node_review_status": "needs_evidence",
+      "rationale": "Late-stage conversion remains part of the NVIDIA route, but voltage levels and conversion topology change. No accepted source quantifies PSU content, margins, or supplier scarcity.",
+      "next_evidence_needed": "Add reference-design BOM, efficiency and power-density requirements, qualification cycles, and supplier disclosures."
+    },
+    {
+      "node_id": "rack_power_distribution",
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_ocp_power_architecture",
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_800v_architecture",
+        "ai_power_claim_copper_value_blanket",
+        "ai_power_claim_all_equipment_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "BOM_share",
+        "technology_barrier",
+        "integration_control"
+      ],
+      "evidence_gap_status": "technical_route_only",
+      "node_review_status": "needs_evidence",
+      "rationale": "Power distribution is structurally important, but the route shifts from AC and 54 VDC layers toward direct 800 VDC distribution. Component winners cannot be inferred without BOM evidence.",
+      "next_evidence_needed": "Acquire OCP specifications, busway/PDU reference designs, current ratings, safety standards, and disclosed supplier allocations."
+    },
+    {
+      "node_id": "liquid_cooling",
+      "accepted_source_ids": [
+        "ai_power_nvidia_gb200_nvl72_2026"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_rack_power_density",
+        "ai_power_claim_liquid_cooling"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 3,
+      "value_capture_score_review_status": "provisional",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "BOM_share",
+        "customer_certification",
+        "integration_control"
+      ],
+      "evidence_gap_status": "supported",
+      "node_review_status": "reviewed",
+      "rationale": "A reviewed rack-scale product directly uses liquid cooling and links it to density and space efficiency. The technical role is supported, while value capture remains unconfirmed.",
+      "next_evidence_needed": "Add independent deployment data, coolant-distribution BOM, reliability requirements, certification, service content, and supplier economics."
+    },
+    {
+      "node_id": "copper_interconnect",
+      "accepted_source_ids": [
+        "ai_power_nvidia_800v_architecture_2026",
+        "ai_power_nvidia_800v_ecosystem_blog_2025"
+      ],
+      "pending_source_ids": [],
+      "supported_claim_ids": [
+        "ai_power_claim_copper_value_blanket"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "conflicted",
+      "bottleneck_score_review_status": "unsupported",
+      "value_bases": [
+        "BOM_share",
+        "scarcity"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Higher total capacity can increase aggregate copper demand, but higher-voltage architecture reduces copper intensity per delivered unit of power. The current value-capture score is not confirmed.",
+      "next_evidence_needed": "Model copper intensity and total demand under AC, 54 VDC, and 800 VDC scenarios, including busways and networking copper."
+    },
+    {
+      "node_id": "sic_gan_power_semiconductor",
+      "accepted_source_ids": [],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead",
+        "ai_power_media_secondary_lead",
+        "ai_power_video_claim_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_localization"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "unsupported",
+      "value_bases": [
+        "technology_barrier",
+        "customer_certification",
+        "gross_margin"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "The pack has no accepted source tying a specific SiC or GaN device class to a reviewed AI data-center architecture, qualification barrier, localization gap, or value pool.",
+      "next_evidence_needed": "Add reference-design device requirements, vendor datasheets, qualification evidence, market share, and China product-level substitution data."
+    },
+    {
+      "node_id": "data_center_epc",
+      "accepted_source_ids": [
+        "ai_power_jpm_powering_ai_2026",
+        "ai_power_jpm_data_center_surge_2025"
+      ],
+      "pending_source_ids": [
+        "ai_power_domestic_broker_report_lead"
+      ],
+      "supported_claim_ids": [
+        "ai_power_claim_demand_growth"
+      ],
+      "evidence_strength_before": 2,
+      "evidence_strength_after": 2,
+      "value_capture_score_review_status": "unsupported",
+      "bottleneck_score_review_status": "provisional",
+      "value_bases": [
+        "integration_control",
+        "customer_certification",
+        "capacity_constraint"
+      ],
+      "evidence_gap_status": "evidence_gap",
+      "node_review_status": "needs_evidence",
+      "rationale": "Large, power-constrained data-center builds require engineering and operational expertise, but the pack does not establish EPC margin, capacity scarcity, or China company exposure.",
+      "next_evidence_needed": "Add project disclosures, backlog, execution capacity, power-connection responsibility, margin structure, and customer qualification evidence."
+    }
+  ]
+}

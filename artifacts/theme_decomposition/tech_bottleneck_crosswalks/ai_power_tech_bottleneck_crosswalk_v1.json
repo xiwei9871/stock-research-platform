@@ -1,0 +1,95 @@
+{
+  "artifact_version": "theme_tech_bottleneck_crosswalk_v1",
+  "theme_id": "ai_power_value_capture_v1",
+  "universe_snapshot": {
+    "dataset_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_dataset.csv",
+    "dataset_sha256": "39939794ac8fdf5ede6b07ab42456727d6ce11ed6537018d6c0511767d55356b",
+    "evidence_index_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_evidence_index.csv",
+    "evidence_index_sha256": "d9a3ccd2d38e477135fafffda9d01ecb9df3c92c97fc3e21f716a5257d760483",
+    "source_index_path": "outputs/research/tech_bottleneck_review_universe_frontend_dataset_v1/tech_bottleneck_review_universe_frontend_source_index.csv",
+    "source_index_sha256": "0385da59393793784529e683ce5b56f323aefed44de6783a3f64a4493423863a",
+    "expected_universe_count": 378
+  },
+  "crosswalks": [
+    {
+      "crosswalk_id": "ai_power_liquid_cooling_002837_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "liquid_cooling",
+      "company_code": "002837.SZ",
+      "company_name": "英维克",
+      "mapping_id": "ai_power_liquid_cooling_002837_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:002837",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:002837:a5e33567f1fe8f42d33e46f7",
+        "tech_bottleneck_evidence_v1:002837:fa2cf33b2b52efcfae9e724a"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_envicool_liquid_product_2025",
+        "ai_power_envicool_liquid_revenue_scope_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.98,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds liquid-cooling node context to the existing research row. It does not alter the row's pending review or admission state."
+    },
+    {
+      "crosswalk_id": "ai_power_ups_002335_to_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "ups",
+      "company_code": "002335.SZ",
+      "company_name": "科华数据",
+      "mapping_id": "ai_power_ups_002335_v1",
+      "existing_review_universe_id": "tech_bottleneck_review_universe_v1:002335",
+      "existing_evidence_ids": [
+        "tech_bottleneck_evidence_v1:002335:4eb911fc24e811bb275f99ba"
+      ],
+      "new_theme_evidence_ids": [
+        "ai_power_kehua_ups_product_2025",
+        "ai_power_kehua_ups_revenue_scope_2025"
+      ],
+      "relationship_type": "evidence_context_enrichment",
+      "confidence": 0.96,
+      "review_status": "reviewed",
+      "notes": "The crosswalk adds the UPS node and filing evidence while preserving the existing pending-review record unchanged."
+    }
+  ],
+  "coverage_gaps": [
+    {
+      "gap_id": "ai_power_server_power_300870_not_in_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "server_power_supply",
+      "company_code": "300870.SZ",
+      "company_name": "欧陆通",
+      "mapping_id": "ai_power_server_power_300870_v1",
+      "new_theme_evidence_ids": [
+        "ai_power_honor_server_power_product_2025",
+        "ai_power_honor_server_power_revenue_2025"
+      ],
+      "reason": "company_not_in_existing_review_universe",
+      "notes": "Absence is a coverage observation only and does not imply rejection or admission."
+    },
+    {
+      "gap_id": "ai_power_hvdc_002364_not_in_tech_bottleneck_v1",
+      "theme_id": "ai_power_value_capture_v1",
+      "theme_node_id": "hvdc_power",
+      "company_code": "002364.SZ",
+      "company_name": "中恒电气",
+      "mapping_id": "ai_power_hvdc_002364_v1",
+      "new_theme_evidence_ids": [
+        "ai_power_zhongheng_hvdc_product_2025",
+        "ai_power_zhongheng_hvdc_revenue_2025"
+      ],
+      "reason": "company_not_in_existing_review_universe",
+      "notes": "Absence is a coverage observation only and does not imply rejection or admission."
+    }
+  ],
+  "guardrails": {
+    "readonly": true,
+    "database_write_enabled": false,
+    "csv_writeback_enabled": false,
+    "manual_review_write_enabled": false,
+    "used_for_signal": false,
+    "used_for_admission": false,
+    "auto_added_to_quality_pool": false
+  }
+}
