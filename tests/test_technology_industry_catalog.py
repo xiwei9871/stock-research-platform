@@ -254,22 +254,41 @@ def test_platform_cli_fast_dispatches_technology_industry_catalog(
     assert json.loads(captured.out)["chain_count"] == 1
 
 
-def test_platform_parser_fallback_forwards_catalog_argv_in_module_order(
+def test_platform_parser_uses_shared_catalog_grammar(monkeypatch):
+    configure_parser = technology_industry_catalog.configure_industry_catalog_parser
+    calls = []
+
+    def track_configuration(parser, *, dest_prefix: str = ""):
+        calls.append(dest_prefix)
+        return configure_parser(parser, dest_prefix=dest_prefix)
+
+    monkeypatch.setattr(
+        stock_research_cli,
+        "configure_industry_catalog_parser",
+        track_configuration,
+    )
+
+    stock_research_cli.build_parser()
+
+    assert calls == ["technology_industry_catalog_"]
+
+
+def test_platform_fallback_uses_shared_parsed_command_executor(
     tmp_path: Path,
     monkeypatch,
 ):
     root = _write_catalog_package(tmp_path)
-    received_argv = None
+    received = None
 
-    def capture_catalog_argv(argv: list[str]) -> int:
-        nonlocal received_argv
-        received_argv = argv
+    def capture_execution(args, *, dest_prefix: str = "") -> int:
+        nonlocal received
+        received = (args, dest_prefix)
         return 17
 
     monkeypatch.setattr(
         stock_research_cli,
-        "run_technology_industry_catalog_cli",
-        capture_catalog_argv,
+        "execute_parsed_catalog_command",
+        capture_execution,
     )
     args = stock_research_cli.build_parser().parse_args(
         [
@@ -283,7 +302,55 @@ def test_platform_parser_fallback_forwards_catalog_argv_in_module_order(
     exit_code = stock_research_cli._run_technology_industry_catalog_fallback(args)
 
     assert exit_code == 17
-    assert received_argv == ["--artifact-dir", str(root), "summary"]
+    assert received == (args, "technology_industry_catalog_")
+
+
+@pytest.mark.parametrize(
+    "command_argv",
+    [
+        ["validate"],
+        ["summary"],
+        ["show", "--chain", "semiconductor_equipment"],
+        ["show", "--chain", "missing_chain"],
+    ],
+)
+def test_platform_fallback_matches_module_cli_for_all_catalog_commands(
+    tmp_path: Path,
+    capsys,
+    command_argv: list[str],
+):
+    root = _write_catalog_package(tmp_path)
+    module_argv = ["--artifact-dir", str(root), *command_argv]
+
+    module_exit_code = technology_industry_catalog.cli(module_argv)
+    module_output = capsys.readouterr()
+    platform_args = stock_research_cli.build_parser().parse_args(
+        ["technology-industry-catalog", *module_argv]
+    )
+    fallback_exit_code = stock_research_cli._run_technology_industry_catalog_fallback(
+        platform_args
+    )
+    fallback_output = capsys.readouterr()
+
+    assert fallback_exit_code == module_exit_code
+    assert fallback_output == module_output
+
+
+def test_platform_parser_rejects_show_without_chain(tmp_path: Path, capsys):
+    root = _write_catalog_package(tmp_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        stock_research_cli.build_parser().parse_args(
+            [
+                "technology-industry-catalog",
+                "--artifact-dir",
+                str(root),
+                "show",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "the following arguments are required: --chain" in capsys.readouterr().err
 
 
 def test_get_industry_chain_returns_sorted_nodes_and_touching_relationships(

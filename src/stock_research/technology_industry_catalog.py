@@ -210,59 +210,80 @@ def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]
     }
 
 
-def cli(argv: list[str] | None = None) -> int:
-    parser = _IndustryCatalogArgumentParser(prog="technology-industry-catalog")
-    parser.add_argument("--artifact-dir", default=str(CATALOG_DIR))
-    subparsers = parser.add_subparsers(dest="command", required=True)
+def configure_industry_catalog_parser(
+    parser: argparse.ArgumentParser,
+    *,
+    dest_prefix: str = "",
+) -> argparse.ArgumentParser:
+    parser.add_argument(
+        "--artifact-dir",
+        dest=f"{dest_prefix}artifact_dir",
+        default=str(CATALOG_DIR),
+    )
+    subparsers = parser.add_subparsers(
+        dest=f"{dest_prefix}command",
+        required=True,
+    )
     subparsers.add_parser("validate")
     subparsers.add_parser("summary")
     show = subparsers.add_parser("show")
-    show.add_argument("--chain", required=True)
+    show.add_argument("--chain", dest=f"{dest_prefix}chain", required=True)
+    return parser
 
+
+def execute_parsed_catalog_command(
+    args: argparse.Namespace,
+    *,
+    dest_prefix: str = "",
+) -> int:
+    artifact_dir = getattr(args, f"{dest_prefix}artifact_dir")
+    command = getattr(args, f"{dest_prefix}command")
     try:
-        args = parser.parse_args(argv)
-        catalog = load_industry_catalog(args.artifact_dir)
-        if args.command == "validate":
+        catalog = load_industry_catalog(artifact_dir)
+        if command == "validate":
             payload = {"status": "ok", **summarize_industry_catalog(catalog)}
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
             return 0
-        if args.command == "summary":
+        if command == "summary":
             payload = summarize_industry_catalog(catalog)
             print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-        if args.command == "show":
-            payload = get_industry_chain(catalog, args.chain)
+        if command == "show":
+            chain = getattr(args, f"{dest_prefix}chain")
+            payload = get_industry_chain(catalog, chain)
             print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
-    except IndustryCatalogCliUsageError as exc:
-        print(
-            json.dumps(
-                {
-                    "status": "error",
-                    "error_code": "INVALID_CLI_ARGUMENTS",
-                    "message": str(exc),
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
-            file=sys.stderr,
-        )
-        return 2
     except IndustryCatalogValidationError as exc:
-        print(
-            json.dumps(
-                {"status": "error", "error_code": exc.code, "message": str(exc)},
-                ensure_ascii=False,
-                sort_keys=True,
-            ),
-            file=sys.stderr,
-        )
+        _print_cli_error(exc.code, str(exc))
         return 2
-    raise AssertionError(f"unhandled command: {args.command}")
+    raise AssertionError(f"unhandled command: {command}")
+
+
+def cli(argv: list[str] | None = None) -> int:
+    parser = configure_industry_catalog_parser(
+        _IndustryCatalogArgumentParser(prog="technology-industry-catalog")
+    )
+    try:
+        args = parser.parse_args(argv)
+    except IndustryCatalogCliUsageError as exc:
+        _print_cli_error("INVALID_CLI_ARGUMENTS", str(exc))
+        return 2
+    return execute_parsed_catalog_command(args)
 
 
 def main() -> None:
     raise SystemExit(cli())
+
+
+def _print_cli_error(error_code: str, message: str) -> None:
+    print(
+        json.dumps(
+            {"status": "error", "error_code": error_code, "message": message},
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+        file=sys.stderr,
+    )
 
 
 def _sorted_counts(values: Iterable[str]) -> dict[str, int]:

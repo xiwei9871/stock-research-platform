@@ -120,6 +120,8 @@ from stock_research.research_publication_package import run_research_publication
 from stock_research.research_external_delivery import run_research_external_delivery_plan
 from stock_research.technology_industry_catalog import (
     cli as run_technology_industry_catalog_cli,
+    configure_industry_catalog_parser,
+    execute_parsed_catalog_command,
 )
 from stock_research.theme_decomposition import cli as run_theme_decomposition_cli
 from stock_research.theme_research_ingestion import cli as run_theme_research_ingestion_cli
@@ -1533,23 +1535,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("apply-research-schema")
     subparsers.add_parser("dashboard-auth-init")
     technology_industry_catalog = subparsers.add_parser("technology-industry-catalog")
-    technology_industry_catalog.add_argument(
-        "--artifact-dir",
-        dest="technology_industry_catalog_artifact_dir",
-    )
-    technology_industry_catalog_commands = technology_industry_catalog.add_subparsers(
-        dest="technology_industry_catalog_command",
-        required=True,
-    )
-    technology_industry_catalog_commands.add_parser("validate")
-    technology_industry_catalog_commands.add_parser("summary")
-    technology_industry_catalog_show = technology_industry_catalog_commands.add_parser(
-        "show"
-    )
-    technology_industry_catalog_show.add_argument(
-        "--chain",
-        dest="technology_industry_catalog_chain",
-        required=True,
+    configure_industry_catalog_parser(
+        technology_industry_catalog,
+        dest_prefix="technology_industry_catalog_",
     )
     theme_decomposition = subparsers.add_parser("theme-decomposition")
     theme_decomposition.add_argument("theme_decomposition_args", nargs=argparse.REMAINDER)
@@ -5179,15 +5167,10 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
 
 
 def _run_technology_industry_catalog_fallback(args: argparse.Namespace) -> int:
-    nested_argv = []
-    if args.technology_industry_catalog_artifact_dir is not None:
-        nested_argv.extend(
-            ["--artifact-dir", args.technology_industry_catalog_artifact_dir]
-        )
-    nested_argv.append(args.technology_industry_catalog_command)
-    if args.technology_industry_catalog_command == "show":
-        nested_argv.extend(["--chain", args.technology_industry_catalog_chain])
-    return run_technology_industry_catalog_cli(nested_argv)
+    return execute_parsed_catalog_command(
+        args,
+        dest_prefix="technology_industry_catalog_",
+    )
 
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
