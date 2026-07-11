@@ -5,7 +5,9 @@ import pytest
 
 from stock_research.technology_industry_catalog import (
     IndustryCatalogValidationError,
+    get_industry_chain,
     load_industry_catalog,
+    summarize_industry_catalog,
 )
 
 
@@ -71,6 +73,90 @@ def test_load_industry_catalog_flattens_sorted_package_files(tmp_path: Path):
         "application_role_composition",
         "zeta_composition",
     ]
+
+
+def test_summarize_catalog_counts_one_l3_and_one_l4_in_default_task2_fixture(
+    tmp_path: Path,
+):
+    catalog = load_industry_catalog(_write_catalog_package(tmp_path))
+
+    assert summarize_industry_catalog(catalog) == {
+        "sector_count": 1,
+        "chain_count": 1,
+        "l3_node_count": 1,
+        "l4_node_count": 1,
+        "edge_count": 0,
+        "theme_composition_count": 0,
+        "chains_by_kind": {"canonical_industry_chain": 1},
+        "chains_by_status": {"draft": 1},
+        "chains_by_sector": {"semiconductor_electronics": 1},
+        "nodes_by_status": {"draft": 2},
+    }
+
+
+def test_get_industry_chain_returns_sorted_nodes_and_touching_relationships(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    node_path = root / "nodes" / "semiconductor_equipment.json"
+    node_payload = _read_json(node_path)
+    node_payload["nodes"].append(_canonical_l3_node("alignment"))
+    node_payload["nodes"].reverse()
+    _write_json(node_path, node_payload)
+    edge_path = root / "edges.json"
+    edge_payload = _read_json(edge_path)
+    edge_payload["edges"].append(
+        {
+            "edge_id": "application_role_depends_on_stage",
+            "source_node_id": "application_role",
+            "target_node_id": "application_stage",
+            "relationship_type": "depends_on",
+            "notes": "Unrelated valid fixture edge.",
+            "source_ids": ["asml_chip_manufacturing"],
+        }
+    )
+    _write_json(edge_path, edge_payload)
+    catalog = load_industry_catalog(root)
+    catalog_before = json.loads(json.dumps(catalog))
+
+    result = get_industry_chain(catalog, "semiconductor_equipment")
+
+    assert result == {
+        "chain": catalog["chains"][0],
+        "nodes": [
+            next(row for row in catalog["nodes"] if row["node_id"] == "alignment"),
+            next(row for row in catalog["nodes"] if row["node_id"] == "lithography"),
+            next(row for row in catalog["nodes"] if row["node_id"] == "duv_lithography"),
+        ],
+        "edges": [
+            next(
+                row
+                for row in catalog["edges"]
+                if row["edge_id"] == "application_uses_duv"
+            )
+        ],
+        "theme_compositions": [],
+    }
+    assert catalog == catalog_before
+
+
+def test_get_industry_chain_includes_matching_theme_compositions(tmp_path: Path):
+    catalog = load_industry_catalog(
+        _write_catalog_package(tmp_path, include_relationships=True)
+    )
+
+    result = get_industry_chain(catalog, "application_theme")
+
+    assert result["theme_compositions"] == catalog["theme_compositions"]
+
+
+def test_get_industry_chain_missing_id_has_stable_error(tmp_path: Path):
+    catalog = load_industry_catalog(_write_catalog_package(tmp_path))
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        get_industry_chain(catalog, "missing_chain")
+
+    assert exc_info.value.code == "CHAIN_NOT_FOUND"
 
 
 def test_missing_artifact_directory_has_stable_error(tmp_path: Path):
