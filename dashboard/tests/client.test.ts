@@ -15,6 +15,7 @@ import {
   fetchAssetNews,
   fetchAssetOutcomes,
   fetchAssetResearchReports,
+  fetchAssetThemeResearchContext,
   fetchDailyReviewLite,
   fetchExperimentProposals,
   fetchExperimentReplay,
@@ -48,6 +49,7 @@ import {
   fetchMarketAnomalyContext,
   fetchStockHeatmap,
   fetchStockMarketContextHeatmap,
+  fetchThemeResearchUpdates,
   fetchEvidenceDigestSnapshot,
   fetchEvidenceDigestSnapshots,
   fetchReviewQueue,
@@ -679,6 +681,54 @@ describe('dashboard API client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/daily-review-lite?trade_date=2026-06-18');
     expect(result.trade_date).toBe('2026-06-18');
+  });
+
+  it('fetches reviewed theme research context for an asset', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        asset_id: 'CN:SZ:002837',
+        company_code: '002837.SZ',
+        status: 'reviewed_context_available',
+        themes: [],
+        mappings: [],
+        research_only: true,
+        used_for_signal: false,
+        used_for_admission: false
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchAssetThemeResearchContext('CN:SZ:002837');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assets/CN%3ASZ%3A002837/theme-research-context');
+    expect(result.company_code).toBe('002837.SZ');
+    expect(result.used_for_signal).toBe(false);
+  });
+
+  it('fetches reviewed theme research updates with bounded filters', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        total: 1,
+        items: [{ update_id: 'review-1', object_type: 'claim' }],
+        by_object_type: { claim: 1 },
+        since: '2026-07-10',
+        limit: 20,
+        research_only: true,
+        used_for_signal: false,
+        used_for_admission: false,
+        warnings: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchThemeResearchUpdates({ since: '2026-07-10', limit: 20 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/research/theme-decomposition/updates?since=2026-07-10&limit=20'
+    );
+    expect(result.total).toBe(1);
   });
 
   it('fetches market overview for a trade date', async () => {

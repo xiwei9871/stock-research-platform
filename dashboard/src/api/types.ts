@@ -269,6 +269,173 @@ export type WatchlistSignalRow = {
   risk_tags: string[];
   must_watch: boolean;
   reason_json: Record<string, unknown>;
+  theme_research_context?: AssetThemeResearchContext;
+};
+
+export type ThemeResearchContextNode = {
+  node_id: string;
+  theme_id: string;
+  parent_node_id: string | null;
+  node_name: string;
+  node_type: string;
+  description: string;
+  value_capture_score: number;
+  bottleneck_score: number;
+  localization_gap_score: number;
+  supply_tightness_score: number;
+  evidence_strength: number;
+  node_review_status: string;
+};
+
+export type ThemeResearchContextSource = {
+  source_id: string;
+  source_type: string;
+  title: string;
+  publisher: string;
+  publish_date: string | null;
+  url_or_ref: string;
+  access_level: string;
+  reliability_level: string;
+  review_status: string;
+};
+
+export type ThemeResearchContextEvidence = {
+  evidence_id: string;
+  source_id: string;
+  evidence_type: string;
+  excerpt_locator: string;
+  evidence_summary: string;
+  related_company_codes: string[];
+  related_node_ids: string[];
+  source: ThemeResearchContextSource;
+};
+
+export type ThemeResearchContextClaim = {
+  claim_id: string;
+  claim_text: string;
+  claim_type: string;
+  confidence: number;
+  evidence_status: string;
+  platform_use_status: string;
+  supporting_source_ids: string[];
+};
+
+export type ThemeResearchContextTheme = {
+  theme_id: string;
+  theme_name: string;
+  theme_type: string;
+  summary: string;
+  status: string;
+  dashboard_path: string;
+  research_only: true;
+  used_for_signal: false;
+  used_for_admission: false;
+};
+
+export type ThemeResearchContextMapping = {
+  mapping_id: string;
+  theme_id: string;
+  company_code: string;
+  company_name: string;
+  mapping_type: string;
+  confidence: number;
+  revenue_relevance: string;
+  bottleneck_relevance: string;
+  business_materiality: string;
+  business_stage: string;
+  product_or_service: string;
+  relationship_summary: string;
+  review_status: string;
+  node: ThemeResearchContextNode;
+  evidence_items: ThemeResearchContextEvidence[];
+  reviewed_claims: ThemeResearchContextClaim[];
+  company_relevance_score: number | null;
+  company_research_priority_score: number | null;
+  priority_band: string;
+  recommended_action: string;
+  research_only: true;
+  used_for_signal: false;
+  used_for_admission: false;
+};
+
+export type AssetThemeResearchContext = {
+  asset_id: string;
+  company_code: string;
+  status: 'reviewed_context_available' | 'evidence_gap' | 'not_mapped' | 'unavailable' | string;
+  driver_assessment:
+    | 'theme_supported'
+    | 'company_specific_supported'
+    | 'mixed_or_uncertain'
+    | 'insufficient_evidence'
+    | string;
+  theme_count: number;
+  mapping_count: number;
+  evidence_gap_count: number;
+  themes: ThemeResearchContextTheme[];
+  mappings: ThemeResearchContextMapping[];
+  excluded_mappings: Array<{
+    mapping_id: string;
+    theme_id: string;
+    node_id: string;
+    reasons: string[];
+  }>;
+  research_only: true;
+  used_for_signal: false;
+  used_for_admission: false;
+  source: string;
+  warnings: string[];
+};
+
+export type ThemeResearchUpdate = {
+  update_id: string;
+  theme_id: string;
+  object_type: string;
+  object_id: string;
+  from_status: string;
+  to_status: string;
+  decision: string;
+  summary: string;
+  created_at: string;
+};
+
+export type ThemeResearchUpdatesPayload = {
+  total: number;
+  items: ThemeResearchUpdate[];
+  by_object_type: Record<string, number>;
+  since: string;
+  limit: number;
+  research_only: true;
+  used_for_signal: false;
+  used_for_admission: false;
+  source: string;
+  warnings: string[];
+};
+
+export type DailyThemeResearchDigest = {
+  trade_date: string;
+  status: string;
+  reviewed_theme_count: number;
+  mapped_company_count: number;
+  reviewed_mapping_count: number;
+  recent_reviewed_update_count: number;
+  evidence_gap_count: number;
+  incomplete_evidence_tracks: string[];
+  mapped_companies: Array<{
+    company_code: string;
+    company_name: string;
+    theme_id: string;
+    node_id: string;
+    node_name: string;
+    company_research_priority_score: number | null;
+    stock_workspace_path: string;
+    theme_dashboard_path: string;
+  }>;
+  recent_updates: ThemeResearchUpdate[];
+  research_only: true;
+  used_for_signal: false;
+  used_for_admission: false;
+  source: string;
+  warnings: string[];
 };
 
 export type WatchlistResponse = {
@@ -1502,6 +1669,7 @@ export type AssetProfile = {
   outcomes: DecisionOutcomeRow[];
   factor_values: Array<Record<string, unknown>>;
   coverage: Record<string, unknown>;
+  theme_research_context?: AssetThemeResearchContext;
 };
 
 export type BacktestRunRequest = {
@@ -1985,6 +2153,7 @@ export type DailyReviewLitePayload = {
   sections: DailyReviewLiteSection[];
   artifacts: DailyReviewLiteArtifact[];
   warnings: string[];
+  theme_research?: DailyThemeResearchDigest;
 };
 
 export type AssetResearchReportSummary = {

@@ -4,6 +4,7 @@ import type {
   AdminUserActionResponse,
   AdminUsersResponse,
   AssetProfile,
+  AssetThemeResearchContext,
   AssetResearchReportResponse,
   AuthMeResponse,
   BarPoint,
@@ -83,6 +84,7 @@ import type {
   StrategySignal,
   StrategyTrade,
   StrategyValidationRun,
+  ThemeResearchUpdatesPayload,
   UpdateOperatorDecisionRequest,
   WatchlistResponse,
   WatchlistSignalRow
@@ -150,6 +152,11 @@ type ReviewQueueParams = {
 
 type DailyReviewLiteParams = {
   tradeDate?: string;
+};
+
+type ThemeResearchUpdatesParams = {
+  since?: string;
+  limit?: number;
 };
 
 type ResearchCaseParams = {
@@ -464,6 +471,26 @@ export async function fetchDailyReviewLite(
   if (params.tradeDate) searchParams.set('trade_date', params.tradeDate);
   const query = searchParams.toString();
   return getJson(query ? `/api/daily-review-lite?${query}` : '/api/daily-review-lite');
+}
+
+export async function fetchAssetThemeResearchContext(
+  assetId: string
+): Promise<AssetThemeResearchContext> {
+  return getJson(`/api/assets/${encodeURIComponent(assetId)}/theme-research-context`);
+}
+
+export async function fetchThemeResearchUpdates(
+  params: ThemeResearchUpdatesParams = {}
+): Promise<ThemeResearchUpdatesPayload> {
+  const searchParams = new URLSearchParams();
+  if (params.since) searchParams.set('since', params.since);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  const query = searchParams.toString();
+  return getJson(
+    query
+      ? `/api/research/theme-decomposition/updates?${query}`
+      : '/api/research/theme-decomposition/updates'
+  );
 }
 
 export async function fetchStrategyScoreAudit(tradeDate: string): Promise<StrategyScoreAuditSummary> {
