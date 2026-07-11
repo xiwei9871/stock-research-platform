@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from collections.abc import Iterable
 from collections import Counter
 from pathlib import Path
@@ -197,6 +199,47 @@ def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]
         "edges": edges,
         "theme_compositions": theme_compositions,
     }
+
+
+def cli(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="technology-industry-catalog")
+    parser.add_argument("--artifact-dir", default=str(CATALOG_DIR))
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("validate")
+    subparsers.add_parser("summary")
+    show = subparsers.add_parser("show")
+    show.add_argument("--chain", required=True)
+    args = parser.parse_args(argv)
+
+    try:
+        catalog = load_industry_catalog(args.artifact_dir)
+        if args.command == "validate":
+            payload = {"status": "ok", **summarize_industry_catalog(catalog)}
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            return 0
+        if args.command == "summary":
+            payload = summarize_industry_catalog(catalog)
+            print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "show":
+            payload = get_industry_chain(catalog, args.chain)
+            print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+    except IndustryCatalogValidationError as exc:
+        print(
+            json.dumps(
+                {"status": "error", "error_code": exc.code, "message": str(exc)},
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+    raise AssertionError(f"unhandled command: {args.command}")
+
+
+def main() -> None:
+    raise SystemExit(cli())
 
 
 def _sorted_counts(values: Iterable[str]) -> dict[str, int]:
