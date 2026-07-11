@@ -1,5 +1,9 @@
 # Theme-driven Research Engine Roadmap
 
+## Phase 9 Status
+
+Phase 9 database productionization completed on 2026-07-11. PostgreSQL is authoritative, Dashboard reads are cut over to DB, controlled review writes are versioned, and export/rollback drills have passed. Artifact mode remains the documented emergency fallback.
+
 Updated: 2026-07-11
 
 ## Mission

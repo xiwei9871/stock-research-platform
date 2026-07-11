@@ -117,6 +117,14 @@ def test_schema_is_idempotent_and_non_destructive() -> None:
     assert "CREATE INDEX IF NOT EXISTS" in sql
 
 
+def test_business_schema_does_not_create_or_alter_roles() -> None:
+    sql = schema.THEME_RESEARCH_SCHEMA_SQL.upper()
+
+    assert "CREATE ROLE" not in sql
+    assert "ALTER ROLE" not in sql
+    assert "GRANT THEME_RESEARCH_OWNER TO" not in sql
+
+
 def test_ddl_sha256_is_stable() -> None:
     first = schema.ddl_sha256()
     second = schema.ddl_sha256()
@@ -232,7 +240,15 @@ def test_schema_cli_apply_and_status(monkeypatch, capsys) -> None:
     )
     assert (
         schema.cli(
-            ["--service", "test", "apply-schema", "--admin-username", "admin"]
+            [
+                "--migration-service",
+                "test",
+                "--auth-service",
+                "auth-test",
+                "apply-schema",
+                "--admin-username",
+                "admin",
+            ]
         )
         == 0
     )
@@ -243,7 +259,7 @@ def test_schema_cli_apply_and_status(monkeypatch, capsys) -> None:
         "theme_research_schema_status",
         lambda service: {"status": "current", "schema_version": "v1", "ddl_matches": True},
     )
-    assert schema.cli(["--service", "test", "schema-status"]) == 0
+    assert schema.cli(["--migration-service", "test", "schema-status"]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "current"
 
 
@@ -261,6 +277,44 @@ def test_shared_cli_delegates_theme_research_db(monkeypatch) -> None:
 
     assert result == 0
     assert captured == [["--service", "test", "schema-status"]]
+
+
+def test_schema_cli_import_dry_run(monkeypatch, capsys) -> None:
+    package = SimpleNamespace(package_sha256="package-1")
+    monkeypatch.setattr(
+        "stock_research.theme_research_import.normalize_artifact_package",
+        lambda **kwargs: package,
+    )
+    monkeypatch.setattr(
+        "stock_research.theme_research_store.dry_run_package",
+        lambda value, replace_theme, service: {
+            "status": "dry_run",
+            "package_sha256": value.package_sha256,
+        },
+    )
+
+    assert schema.cli(["--runtime-service", "test", "import", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "dry_run"
+
+
+def test_schema_cli_import_execute_requires_generation(capsys) -> None:
+    assert (
+        schema.cli(
+            [
+                "--runtime-service",
+                "test",
+                "import",
+                "--execute",
+                "--admin-username",
+                "admin",
+                "--idempotency-key",
+                "key-1",
+            ]
+        )
+        == 2
+    )
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["error_code"] == "THEME_RESEARCH_IMPORT_REQUEST_INVALID"
 
 
 def test_apply_schema_rejects_existing_drift_without_overwriting_migration(monkeypatch) -> None:

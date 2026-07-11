@@ -1,5 +1,7 @@
 # Theme Decomposition Research Baseline v1
 
+> Phase 9 update (2026-07-11): artifacts remain the validated interchange and recovery format; PostgreSQL is now the authoritative production store. See `docs/theme_research_database_v1.md`.
+
 ## 1. Why This Module Exists
 
 Short videos, public articles, and research reports can surface useful industry-research prompts, but they are not equally reliable. This module turns a prompt such as "AI power value capture" or "humanoid robotics from head to toe" into a read-only, traceable research baseline.

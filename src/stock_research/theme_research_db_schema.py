@@ -8,6 +8,8 @@ import sys
 from datetime import datetime
 from typing import Any
 
+from psycopg import sql
+
 from stock_research.config import SETTINGS
 from stock_research.dashboard.auth_service import authenticate_user
 from stock_research.db import connect
@@ -18,22 +20,6 @@ THEME_RESEARCH_DB_SCHEMA_VERSION = "theme_research_db_v1"
 
 THEME_RESEARCH_SCHEMA_SQL = r"""
 CREATE SCHEMA IF NOT EXISTS research;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
-        CREATE ROLE theme_research_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_runtime') THEN
-        CREATE ROLE theme_research_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-    END IF;
-    EXECUTE format('GRANT theme_research_owner TO %I', current_user);
-    EXECUTE format('GRANT theme_research_runtime TO %I', current_user);
-END;
-$$;
-
-ALTER ROLE theme_research_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT;
-ALTER ROLE theme_research_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT;
 
 CREATE TABLE IF NOT EXISTS research.theme_research_schema_migration (
     schema_version text PRIMARY KEY,
@@ -92,6 +78,7 @@ CREATE TABLE IF NOT EXISTS research.theme_research_theme (
     theme_version bigint NOT NULL DEFAULT 1 CHECK (theme_version >= 1),
     row_version bigint NOT NULL DEFAULT 1 CHECK (row_version >= 1),
     content_sha256 text NOT NULL,
+    artifact_metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     is_active boolean NOT NULL DEFAULT true,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -255,6 +242,9 @@ CREATE TABLE IF NOT EXISTS research.theme_research_company_mapping (
     revenue_relevance text NOT NULL,
     bottleneck_relevance text NOT NULL,
     business_materiality text NOT NULL DEFAULT '',
+    business_stage text NOT NULL DEFAULT '',
+    product_or_service text NOT NULL DEFAULT '',
+    relationship_summary text NOT NULL DEFAULT '',
     review_status text NOT NULL DEFAULT 'draft' CHECK (
         review_status IN ('draft', 'reviewed', 'needs_evidence', 'blocked')
     ),
@@ -1325,12 +1315,69 @@ REQUIRED_TRIGGERS = {
 }
 
 EXPECTED_THEME_RESEARCH_CATALOG_SHA256 = (
-    "7001a046baf4c847efad4bcdb7e3f2e8032a8377e7c7527c0c8d24e7416361d6"
+    "296c75c60f86b1606306d9599c04c4e25a5f06480184ec78f3cefbbf48a409b7"
 )
 
 
 def ddl_sha256() -> str:
     return hashlib.sha256(THEME_RESEARCH_SCHEMA_SQL.encode("utf-8")).hexdigest()
+
+
+def provision_theme_research_roles(
+    *,
+    runtime_password: str,
+    service: str = SETTINGS.theme_research_migration_service,
+) -> dict[str, Any]:
+    if not runtime_password:
+        raise ThemeResearchDomainError(
+            "runtime password is required",
+            code="THEME_RESEARCH_RUNTIME_PASSWORD_REQUIRED",
+        )
+    with connect(service) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_user AS role_name")
+            migration_login = str(cur.fetchone()["role_name"])
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_owner') THEN
+                        CREATE ROLE theme_research_owner NOLOGIN;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_runtime') THEN
+                        CREATE ROLE theme_research_runtime NOLOGIN;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'theme_research_app') THEN
+                        CREATE ROLE theme_research_app LOGIN;
+                    END IF;
+                END;
+                $$
+                """
+            )
+            cur.execute(
+                "ALTER ROLE theme_research_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT"
+            )
+            cur.execute(
+                "ALTER ROLE theme_research_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION INHERIT"
+            )
+            cur.execute(
+                sql.SQL(
+                    "ALTER ROLE theme_research_app LOGIN NOSUPERUSER NOCREATEDB "
+                    "NOCREATEROLE NOREPLICATION INHERIT PASSWORD {}"
+                ).format(sql.Literal(runtime_password))
+            )
+            cur.execute(
+                sql.SQL("GRANT theme_research_owner TO {}").format(
+                    sql.Identifier(migration_login)
+                )
+            )
+            cur.execute("GRANT theme_research_runtime TO theme_research_app")
+            cur.execute("REVOKE theme_research_owner FROM theme_research_app")
+    return {
+        "status": "ok",
+        "migration_login": migration_login,
+        "runtime_login": "theme_research_app",
+    }
 
 
 def _row_value(row: Any, key: str, index: int = 0) -> Any:
@@ -1458,8 +1505,40 @@ def _load_theme_research_catalog_contract(cur) -> dict[str, Any]:
                 'schema_usage', has_schema_privilege(rolname, 'research', 'USAGE')
             )::text AS item
             FROM pg_roles
-            WHERE rolname IN ('theme_research_owner', 'theme_research_runtime')
+            WHERE rolname IN (
+                'theme_research_owner', 'theme_research_runtime', 'theme_research_app'
+            )
             ORDER BY rolname
+        """,
+        "memberships": """
+            SELECT jsonb_build_object(
+                'member', member_role.rolname,
+                'role', granted_role.rolname,
+                'admin_option', membership.admin_option,
+                'inherit_option', membership.inherit_option,
+                'set_option', membership.set_option
+            )::text AS item
+            FROM pg_auth_members membership
+            JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
+            JOIN pg_roles member_role ON member_role.oid = membership.member
+            WHERE member_role.rolname = 'theme_research_app'
+               OR (
+                    granted_role.rolname IN ('theme_research_owner', 'theme_research_runtime')
+                    AND member_role.rolname = 'theme_research_app'
+               )
+            ORDER BY member_role.rolname, granted_role.rolname
+        """,
+        "schema_privileges": """
+            SELECT jsonb_build_object(
+                'schema', n.nspname,
+                'owner', pg_get_userbyid(n.nspowner),
+                'runtime_usage', has_schema_privilege('theme_research_app', n.oid, 'USAGE'),
+                'runtime_create', has_schema_privilege('theme_research_app', n.oid, 'CREATE'),
+                'group_usage', has_schema_privilege('theme_research_runtime', n.oid, 'USAGE'),
+                'group_create', has_schema_privilege('theme_research_runtime', n.oid, 'CREATE')
+            )::text AS item
+            FROM pg_namespace n
+            WHERE n.nspname = 'research'
         """,
     }
     contract: dict[str, Any] = {}
@@ -1571,7 +1650,7 @@ def _load_applied_migration(cur) -> dict[str, Any] | None:
 
 
 def apply_theme_research_schema(
-    service: str = SETTINGS.research_service,
+    service: str = SETTINGS.theme_research_migration_service,
     *,
     actor_user_id: str,
     actor_role: str,
@@ -1630,7 +1709,7 @@ def apply_theme_research_schema(
 
 
 def theme_research_schema_status(
-    service: str = SETTINGS.research_service,
+    service: str = SETTINGS.theme_research_migration_service,
 ) -> dict[str, Any]:
     digest = ddl_sha256()
     with connect(service) as conn:
@@ -1667,8 +1746,26 @@ def theme_research_schema_status(
 
 def cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="theme-research-db")
-    parser.add_argument("--service", default=SETTINGS.research_service)
+    parser.add_argument(
+        "--migration-service",
+        default=SETTINGS.theme_research_migration_service,
+    )
+    parser.add_argument("--auth-service", default=SETTINGS.research_service)
+    parser.add_argument(
+        "--runtime-service",
+        default=SETTINGS.theme_research_runtime_service,
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    provision_parser = subparsers.add_parser("provision-roles")
+    provision_parser.add_argument("--admin-username", required=True)
+    provision_parser.add_argument(
+        "--admin-password-env",
+        default="THEME_RESEARCH_ADMIN_PASSWORD",
+    )
+    provision_parser.add_argument(
+        "--runtime-password-env",
+        default="THEME_RESEARCH_RUNTIME_PASSWORD",
+    )
     apply_parser = subparsers.add_parser("apply-schema")
     apply_parser.add_argument("--admin-username", required=True)
     apply_parser.add_argument(
@@ -1676,28 +1773,194 @@ def cli(argv: list[str] | None = None) -> int:
         default="THEME_RESEARCH_ADMIN_PASSWORD",
     )
     subparsers.add_parser("schema-status")
+    import_parser = subparsers.add_parser("import")
+    import_mode = import_parser.add_mutually_exclusive_group(required=True)
+    import_mode.add_argument("--dry-run", action="store_true")
+    import_mode.add_argument("--execute", action="store_true")
+    import_parser.add_argument("--expected-generation", type=int)
+    import_parser.add_argument("--admin-username")
+    import_parser.add_argument("--password-env", default="THEME_RESEARCH_ADMIN_PASSWORD")
+    import_parser.add_argument("--idempotency-key", default="")
+    import_parser.add_argument("--replace-theme")
+    import_parser.add_argument("--artifact-dir")
+    import_parser.add_argument("--company-mapping-dir")
+    compare_parser = subparsers.add_parser("compare")
+    compare_parser.add_argument("--artifact-dir")
+    compare_parser.add_argument("--company-mapping-dir")
+    export_parser = subparsers.add_parser("export")
+    export_parser.add_argument("--theme", required=True)
+    export_parser.add_argument("--output-dir", required=True)
+    export_parser.add_argument("--admin-username", required=True)
+    export_parser.add_argument("--password-env", default="THEME_RESEARCH_ADMIN_PASSWORD")
+    export_parser.add_argument("--idempotency-key", required=True)
+    rollback_parser = subparsers.add_parser("rollback")
+    rollback_parser.add_argument("--theme", required=True)
+    rollback_parser.add_argument("--snapshot", required=True)
+    rollback_parser.add_argument("--expected-version", required=True, type=int)
+    rollback_parser.add_argument("--admin-username", required=True)
+    rollback_parser.add_argument("--password-env", default="THEME_RESEARCH_ADMIN_PASSWORD")
+    rollback_parser.add_argument("--comment", required=True)
+    rollback_parser.add_argument("--idempotency-key", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "apply-schema":
+        if args.command == "provision-roles":
+            admin_password = os.getenv(args.admin_password_env, "")
+            runtime_password = os.getenv(args.runtime_password_env, "")
+            if not admin_password:
+                raise ThemeResearchDomainError(
+                    f"administrator password environment variable is empty: {args.admin_password_env}",
+                    code="THEME_RESEARCH_ADMIN_PASSWORD_REQUIRED",
+                )
+            user = authenticate_user(
+                args.admin_username,
+                admin_password,
+                service=args.auth_service,
+            )
+            require_admin(user.role)
+            payload = provision_theme_research_roles(
+                runtime_password=runtime_password,
+                service=args.migration_service,
+            )
+        elif args.command == "apply-schema":
             password = os.getenv(args.password_env, "")
             if not password:
                 raise ThemeResearchDomainError(
                     f"administrator password environment variable is empty: {args.password_env}",
                     code="THEME_RESEARCH_ADMIN_PASSWORD_REQUIRED",
                 )
-            user = authenticate_user(args.admin_username, password, service=args.service)
+            user = authenticate_user(
+                args.admin_username,
+                password,
+                service=args.auth_service,
+            )
             require_admin(user.role)
             payload = apply_theme_research_schema(
-                args.service,
+                args.migration_service,
                 actor_user_id=user.user_id,
                 actor_role=user.role,
             )
         elif args.command == "schema-status":
-            payload = theme_research_schema_status(args.service)
+            payload = theme_research_schema_status(args.migration_service)
+        elif args.command == "import":
+            from stock_research.theme_research_import import normalize_artifact_package
+            from stock_research.theme_research_store import bootstrap_package, dry_run_package
+
+            package = normalize_artifact_package(
+                theme_artifact_dir=args.artifact_dir,
+                company_mapping_dir=args.company_mapping_dir,
+            )
+            if args.dry_run:
+                payload = dry_run_package(
+                    package,
+                    replace_theme=args.replace_theme,
+                    service=args.runtime_service,
+                )
+            else:
+                if args.expected_generation is None:
+                    raise ThemeResearchDomainError(
+                        "--expected-generation is required with --execute",
+                        code="THEME_RESEARCH_IMPORT_REQUEST_INVALID",
+                    )
+                if not args.admin_username:
+                    raise ThemeResearchDomainError(
+                        "--admin-username is required with --execute",
+                        code="THEME_RESEARCH_IMPORT_REQUEST_INVALID",
+                    )
+                password = os.getenv(args.password_env, "")
+                if not password:
+                    raise ThemeResearchDomainError(
+                        f"administrator password environment variable is empty: {args.password_env}",
+                        code="THEME_RESEARCH_ADMIN_PASSWORD_REQUIRED",
+                    )
+                user = authenticate_user(
+                    args.admin_username,
+                    password,
+                    service=args.auth_service,
+                )
+                require_admin(user.role)
+                payload = bootstrap_package(
+                    package,
+                    actor_user_id=user.user_id,
+                    actor_role=user.role,
+                    expected_generation=args.expected_generation,
+                    idempotency_key=args.idempotency_key,
+                    replace_theme=args.replace_theme,
+                    service=args.runtime_service,
+                )
+        elif args.command == "compare":
+            from stock_research.theme_research_import import (
+                normalize_artifact_package,
+                semantic_diff,
+            )
+            from stock_research.theme_research_store import load_database_package
+
+            artifact_package = normalize_artifact_package(
+                theme_artifact_dir=args.artifact_dir,
+                company_mapping_dir=args.company_mapping_dir,
+            )
+            database_package = load_database_package(service=args.runtime_service)
+            diff = semantic_diff(database_package, artifact_package)
+            payload = {
+                "status": "match" if not diff["has_changes"] else "mismatch",
+                "artifact_package_sha256": artifact_package.package_sha256,
+                "database_package_sha256": database_package.package_sha256,
+                "semantic_diff": diff,
+            }
+        elif args.command == "export":
+            from stock_research.theme_research_store import export_theme
+
+            password = os.getenv(args.password_env, "")
+            if not password:
+                raise ThemeResearchDomainError(
+                    f"administrator password environment variable is empty: {args.password_env}",
+                    code="THEME_RESEARCH_ADMIN_PASSWORD_REQUIRED",
+                )
+            user = authenticate_user(
+                args.admin_username,
+                password,
+                service=args.auth_service,
+            )
+            require_admin(user.role)
+            payload = export_theme(
+                args.theme,
+                output_dir=args.output_dir,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                idempotency_key=args.idempotency_key,
+                service=args.runtime_service,
+            )
+        elif args.command == "rollback":
+            from stock_research.theme_research_store import rollback_theme
+
+            password = os.getenv(args.password_env, "")
+            if not password:
+                raise ThemeResearchDomainError(
+                    f"administrator password environment variable is empty: {args.password_env}",
+                    code="THEME_RESEARCH_ADMIN_PASSWORD_REQUIRED",
+                )
+            user = authenticate_user(
+                args.admin_username,
+                password,
+                service=args.auth_service,
+            )
+            require_admin(user.role)
+            payload = rollback_theme(
+                theme_id=args.theme,
+                snapshot_id=args.snapshot,
+                expected_theme_version=args.expected_version,
+                actor_user_id=user.user_id,
+                actor_role=user.role,
+                comment=args.comment,
+                idempotency_key=args.idempotency_key,
+                service=args.runtime_service,
+            )
         else:  # pragma: no cover
             raise AssertionError(f"unhandled command: {args.command}")
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
-        return 0 if payload.get("status") in {"ok", "current"} else 2
+        return 0 if payload.get("status") in {
+            "ok", "current", "dry_run", "committed", "no_changes", "exported",
+            "rolled_back", "match",
+        } else 2
     except Exception as exc:
         code = getattr(exc, "code", "THEME_RESEARCH_SCHEMA_ERROR")
         print(

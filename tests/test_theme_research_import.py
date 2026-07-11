@@ -10,6 +10,7 @@ from stock_research.theme_research_import import (
     NormalizedThemeResearchPackage,
     normalize_artifact_package,
     semantic_diff,
+    validate_package_integrity,
 )
 
 
@@ -119,3 +120,13 @@ def test_package_rejects_orphan_relationships() -> None:
         )
 
     assert exc_info.value.code == "THEME_RESEARCH_ORPHAN_RELATIONSHIP"
+
+
+def test_package_integrity_detects_mutation_after_hashing() -> None:
+    package = normalize_artifact_package()
+    package.nodes[0]["description"] = "mutated after hashing"
+
+    with pytest.raises(ThemeResearchDomainError) as exc_info:
+        validate_package_integrity(package)
+
+    assert exc_info.value.code == "THEME_RESEARCH_PACKAGE_HASH_MISMATCH"

@@ -127,14 +127,26 @@ def normalize_artifact_package(
     artifact_version = str(theme_package["artifact_versions"][0])
 
     themes = []
+    artifact_by_theme_id: dict[str, dict[str, Any]] = {}
+    for path in sorted(Path(theme_package["artifact_dir"]).glob("*.json")):
+        artifact = json.loads(path.read_text(encoding="utf-8"))
+        artifact_by_theme_id[artifact["theme"]["theme_id"]] = artifact
     for theme in theme_package["themes"]:
         row = copy.deepcopy(theme)
         row["content_sha256"] = _content_sha256(theme)
+        artifact = artifact_by_theme_id[theme["theme_id"]]
+        row["artifact_metadata"] = {
+            "evidence_policy": copy.deepcopy(artifact.get("evidence_policy", {})),
+            "decomposition_templates": copy.deepcopy(
+                artifact.get("decomposition_templates", [])
+            ),
+        }
         themes.append(row)
 
     sources_by_id: dict[str, dict[str, Any]] = {}
     for source in [*theme_package["sources"], *mapping_package["sources"]]:
         row = copy.deepcopy(source)
+        row["publish_date"] = row.get("publish_date") or None
         row.setdefault("content_sha256", _content_sha256(source))
         row.setdefault("provenance", {})
         existing = sources_by_id.get(row["source_id"])
@@ -279,6 +291,36 @@ def semantic_diff(
         "summary": totals,
         "families": families,
     }
+
+
+def validate_package_integrity(
+    package: NormalizedThemeResearchPackage,
+) -> NormalizedThemeResearchPackage:
+    rebuilt = NormalizedThemeResearchPackage.build(
+        artifact_version=package.artifact_version,
+        themes=package.themes,
+        nodes=package.nodes,
+        sources=package.sources,
+        theme_sources=package.theme_sources,
+        claims=package.claims,
+        claim_sources=package.claim_sources,
+        claim_nodes=package.claim_nodes,
+        assessments=package.assessments,
+        assessment_evidence=package.assessment_evidence,
+        company_mappings=package.company_mappings,
+        mapping_evidence_items=package.mapping_evidence_items,
+        company_mapping_evidence=package.company_mapping_evidence,
+    )
+    if rebuilt.package_sha256 != package.package_sha256:
+        raise ThemeResearchDomainError(
+            "normalized package content does not match its package hash",
+            code="THEME_RESEARCH_PACKAGE_HASH_MISMATCH",
+            details={
+                "declared_package_sha256": package.package_sha256,
+                "actual_package_sha256": rebuilt.package_sha256,
+            },
+        )
+    return rebuilt
 
 
 def _assessment_id(theme_id: str, row: dict[str, Any]) -> str:

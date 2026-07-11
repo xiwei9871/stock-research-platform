@@ -377,3 +377,41 @@ def test_runtime_role_cannot_mutate_history_or_disable_triggers(conn) -> None:
         conn.execute(
             "ALTER TABLE research.theme_research_snapshot DISABLE TRIGGER trg_theme_research_snapshot_append_only"
         )
+
+
+def test_runtime_login_is_constrained_without_set_role() -> None:
+    runtime = psycopg.connect(f"service={SETTINGS.theme_research_runtime_service}")
+    try:
+        row = runtime.execute(
+            """
+            SELECT
+                current_user,
+                r.rolsuper,
+                r.rolcreaterole,
+                pg_has_role(current_user, 'theme_research_runtime', 'member'),
+                pg_has_role(current_user, 'theme_research_owner', 'member'),
+                has_table_privilege(current_user, 'research.theme_research_snapshot', 'UPDATE'),
+                has_table_privilege(current_user, 'research.theme_research_snapshot', 'TRUNCATE'),
+                has_schema_privilege(current_user, 'research', 'CREATE')
+            FROM pg_roles r
+            WHERE r.rolname = current_user
+            """
+        ).fetchone()
+        assert row == (
+            "theme_research_app",
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        )
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            runtime.execute(
+                "ALTER TABLE research.theme_research_snapshot "
+                "DISABLE TRIGGER trg_theme_research_snapshot_append_only"
+            )
+    finally:
+        runtime.rollback()
+        runtime.close()
