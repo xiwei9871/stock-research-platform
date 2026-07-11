@@ -10,7 +10,7 @@
       "scope": "Covers wafer-fabrication process equipment, inspection and metrology, wafer automation, vacuum and process delivery, and fab utility systems.",
       "exclusions": [
         "Semiconductor materials are owned by the semiconductor materials chain.",
-        "Semiconductor packaging and test equipment are owned by the packaging and test chain."
+        "Semiconductor packaging and test equipment are owned by the packaging and test chain, except wafer_thinning is temporarily canonical here and may be referenced by advanced packaging."
       ],
       "aliases": [
         "Semiconductor Equipment",
