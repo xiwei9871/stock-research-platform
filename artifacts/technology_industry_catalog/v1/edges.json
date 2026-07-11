@@ -5,7 +5,7 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "frameless_torque_motor",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable frameless_torque_motor capability represented by the target canonical node.",
+      "notes": "Eligible motor route: a rotary joint assembly may use a frameless torque motor when selected for the design; the edge does not require that motor in every assembly.",
       "source_ids": []
     },
     {
@@ -13,7 +13,15 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "harmonic_reducer",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable harmonic_reducer capability represented by the target canonical node.",
+      "notes": "Eligible alternative transmission route: a rotary joint assembly may use a harmonic reducer; selection among harmonic, RV, and precision planetary reducers is architecture-dependent, not a simultaneous BOM requirement.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_rv_reducer",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "rv_reducer",
+      "relationship_type": "uses",
+      "notes": "Eligible alternative transmission route: a rotary joint assembly may use an RV reducer; selection among harmonic, RV, and precision planetary reducers is architecture-dependent, not a simultaneous BOM requirement.",
       "source_ids": []
     },
     {
@@ -21,7 +29,7 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "precision_planetary_reducer",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable precision_planetary_reducer capability represented by the target canonical node.",
+      "notes": "Eligible alternative transmission route: a rotary joint assembly may use a precision planetary reducer; selection among harmonic, RV, and precision planetary reducers is architecture-dependent, not a simultaneous BOM requirement.",
       "source_ids": []
     },
     {
@@ -29,7 +37,7 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "joint_encoder_module",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_encoder_module capability represented by the target canonical node.",
+      "notes": "Eligible feedback route: a rotary joint assembly may integrate a joint encoder module when required by its sensing architecture; the edge does not require simultaneous use of every eligible component.",
       "source_ids": []
     },
     {
@@ -37,7 +45,7 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "joint_brake",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_brake capability represented by the target canonical node.",
+      "notes": "Eligible safety route: a rotary joint assembly may integrate a joint brake where holding or emergency restraint is required; the edge does not make a brake universal.",
       "source_ids": []
     },
     {
@@ -45,7 +53,7 @@
       "source_node_id": "rotary_joint_assembly",
       "target_node_id": "joint_bearing",
       "relationship_type": "uses",
-      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_bearing capability represented by the target canonical node.",
+      "notes": "Eligible support route: a rotary joint assembly may use a shared joint-bearing design selected for its load and packaging requirements; the edge does not prescribe one universal bearing configuration.",
       "source_ids": []
     },
     {
@@ -53,7 +61,7 @@
       "source_node_id": "linear_joint_assembly",
       "target_node_id": "planetary_roller_screw",
       "relationship_type": "uses",
-      "notes": "linear_joint_assembly integrates or depends on the reusable planetary_roller_screw capability represented by the target canonical node.",
+      "notes": "Eligible alternative linear-drive route: a linear joint assembly may use a planetary roller screw; screw and direct-drive alternatives are architecture-dependent, not simultaneous BOM requirements.",
       "source_ids": []
     },
     {
@@ -61,7 +69,15 @@
       "source_node_id": "linear_joint_assembly",
       "target_node_id": "ball_screw",
       "relationship_type": "uses",
-      "notes": "linear_joint_assembly integrates or depends on the reusable ball_screw capability represented by the target canonical node.",
+      "notes": "Eligible alternative linear-drive route: a linear joint assembly may use a ball screw; screw and direct-drive alternatives are architecture-dependent, not simultaneous BOM requirements.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_trapezoidal_screw",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "trapezoidal_screw",
+      "relationship_type": "uses",
+      "notes": "Eligible alternative linear-drive route: a linear joint assembly may use a trapezoidal screw; screw and direct-drive alternatives are architecture-dependent, not simultaneous BOM requirements.",
       "source_ids": []
     },
     {
@@ -69,7 +85,7 @@
       "source_node_id": "linear_joint_assembly",
       "target_node_id": "linear_motor",
       "relationship_type": "uses",
-      "notes": "linear_joint_assembly integrates or depends on the reusable linear_motor capability represented by the target canonical node.",
+      "notes": "Eligible alternative linear-drive route: a linear joint assembly may use a direct-drive linear motor instead of a screw transmission; alternatives are architecture-dependent, not simultaneous BOM requirements.",
       "source_ids": []
     },
     {
@@ -77,7 +93,7 @@
       "source_node_id": "linear_joint_assembly",
       "target_node_id": "screw_support_bearing",
       "relationship_type": "uses",
-      "notes": "linear_joint_assembly integrates or depends on the reusable screw_support_bearing capability represented by the target canonical node.",
+      "notes": "Eligible support route: a screw-driven linear joint assembly may use a screw support bearing selected for its load and speed requirements; direct-drive routes may not require it.",
       "source_ids": []
     },
     {
@@ -85,7 +101,7 @@
       "source_node_id": "linear_joint_assembly",
       "target_node_id": "linear_displacement_sensor",
       "relationship_type": "uses",
-      "notes": "linear_joint_assembly integrates or depends on the reusable linear_displacement_sensor capability represented by the target canonical node.",
+      "notes": "Eligible feedback route: a linear joint assembly may use a linear displacement sensor when direct extension feedback is required; the edge does not make it universal.",
       "source_ids": []
     },
     {
@@ -93,7 +109,7 @@
       "source_node_id": "shoulder_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "shoulder_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible upper-limb actuation route: a shoulder module may integrate shared rotary joint assemblies selected for its degrees of freedom and load requirements.",
       "source_ids": []
     },
     {
@@ -101,7 +117,7 @@
       "source_node_id": "elbow_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "elbow_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible upper-limb actuation route: an elbow module may integrate a shared rotary joint assembly selected for its kinematic and load requirements.",
       "source_ids": []
     },
     {
@@ -109,7 +125,7 @@
       "source_node_id": "wrist_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "wrist_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible upper-limb actuation route: a wrist module may integrate shared rotary joint assemblies selected for compact multi-axis motion.",
       "source_ids": []
     },
     {
@@ -117,7 +133,15 @@
       "source_node_id": "hip_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "hip_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible lower-limb actuation route: a hip module may use rotary joint assemblies; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "hip_joint_module_uses_linear_joint_assembly",
+      "source_node_id": "hip_joint_module",
+      "target_node_id": "linear_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "Eligible lower-limb actuation route: a hip module may use linear joint assemblies; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
       "source_ids": []
     },
     {
@@ -125,7 +149,15 @@
       "source_node_id": "knee_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "knee_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible lower-limb actuation route: a knee module may use a rotary joint assembly; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "knee_joint_module_uses_linear_joint_assembly",
+      "source_node_id": "knee_joint_module",
+      "target_node_id": "linear_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "Eligible lower-limb actuation route: a knee module may use a linear joint assembly; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
       "source_ids": []
     },
     {
@@ -133,7 +165,15 @@
       "source_node_id": "ankle_joint_module",
       "target_node_id": "rotary_joint_assembly",
       "relationship_type": "uses",
-      "notes": "ankle_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "notes": "Eligible lower-limb actuation route: an ankle module may use rotary joint assemblies; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "ankle_joint_module_uses_linear_joint_assembly",
+      "source_node_id": "ankle_joint_module",
+      "target_node_id": "linear_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "Eligible lower-limb actuation route: an ankle module may use linear joint assemblies; rotary and linear routes are architecture-dependent and this edge does not fix the design.",
       "source_ids": []
     },
     {
@@ -141,7 +181,7 @@
       "source_node_id": "dexterous_hand_assembly",
       "target_node_id": "finger_micro_actuator",
       "relationship_type": "uses",
-      "notes": "dexterous_hand_assembly integrates or depends on the reusable finger_micro_actuator capability represented by the target canonical node.",
+      "notes": "Eligible hand-actuation route: a dexterous hand assembly may use finger micro-actuators when compact distributed actuation is selected; the edge does not make the route universal.",
       "source_ids": []
     },
     {
@@ -149,7 +189,7 @@
       "source_node_id": "dexterous_hand_assembly",
       "target_node_id": "micro_reducer_transmission",
       "relationship_type": "uses",
-      "notes": "dexterous_hand_assembly integrates or depends on the reusable micro_reducer_transmission capability represented by the target canonical node.",
+      "notes": "Eligible hand-transmission route: a dexterous hand assembly may use micro-reducer transmissions where local torque multiplication is selected; the edge does not require every hand to use them.",
       "source_ids": []
     },
     {
@@ -157,7 +197,7 @@
       "source_node_id": "dexterous_hand_assembly",
       "target_node_id": "tendon_flexible_transmission",
       "relationship_type": "uses",
-      "notes": "dexterous_hand_assembly integrates or depends on the reusable tendon_flexible_transmission capability represented by the target canonical node.",
+      "notes": "Eligible alternative hand-transmission route: a dexterous hand assembly may use tendon or flexible transmission when remote actuation is selected; the edge does not require simultaneous use with micro-reducers.",
       "source_ids": []
     },
     {
@@ -165,7 +205,7 @@
       "source_node_id": "dexterous_hand_assembly",
       "target_node_id": "fingertip_tactile_force_control",
       "relationship_type": "uses",
-      "notes": "dexterous_hand_assembly integrates or depends on the reusable fingertip_tactile_force_control capability represented by the target canonical node.",
+      "notes": "Eligible sensing-control route: a dexterous hand assembly may integrate fingertip tactile-force control when the manipulation requirements justify it; the edge does not make it universal.",
       "source_ids": []
     }
   ]

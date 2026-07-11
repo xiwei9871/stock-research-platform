@@ -26,11 +26,12 @@
       "chain_name": "Humanoid Robots and Embodied Intelligence",
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "system_architecture",
-      "description": "Humanoid robot systems spanning embodied intelligence, motion control, training and simulation, sensing, compute and control hardware, actuation, body modules, energy systems, manufacturing, testing, and deployment.",
-      "scope": "Covers robot-specific models and software, integrated sensing and control modules, reusable electromechanical components, complete humanoid robots, and their manufacturing, test, operations, and scenario integration.",
+      "description": "A primarily system-architecture decomposition of humanoid robots spanning embodied intelligence, control, sensing, compute, actuation, body, and energy subsystems, with one explicit supplementary lifecycle and value-chain family.",
+      "scope": "Covers robot-specific models and software, integrated sensing and control modules, reusable electromechanical components, complete humanoid robots, and their manufacturing, test, operations, and scenario integration. Under the approved mixed-template rule, humanoid_manufacturing_test_integration supplements the primary system architecture with lifecycle coverage.",
       "exclusions": [
         "General-purpose AI foundation models remain owned by their primary AI chain; this chain covers robot-adapted embodied models and inference.",
         "General semiconductor chips remain owned by semiconductor chains; this chain covers robot-selected compute components and integrated modules.",
+        "Generic battery cells, battery management systems, and battery materials remain owned by power_batteries_battery_materials; this chain covers humanoid-specific selection, integration, and control requirements.",
         "General industrial robots, machine tools, and factory automation remain owned by their primary equipment chains unless humanoid-specific."
       ],
       "aliases": [
