@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -164,6 +167,71 @@ def test_cli_validate_returns_exact_structured_error(tmp_path: Path, capsys):
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (
+            ["invalid-command"],
+            "argument command: invalid choice: 'invalid-command' "
+            "(choose from validate, summary, show)",
+        ),
+        (["show"], "the following arguments are required: --chain"),
+        (
+            ["summary", "--artifact-dir", "/tmp/catalog"],
+            "unrecognized arguments: --artifact-dir /tmp/catalog",
+        ),
+    ],
+)
+def test_cli_usage_errors_are_structured_json(
+    argv: list[str],
+    message: str,
+    capsys,
+):
+    exit_code = technology_industry_catalog.cli(argv)
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert json.loads(captured.err) == {
+        "error_code": "INVALID_CLI_ARGUMENTS",
+        "message": message,
+        "status": "error",
+    }
+
+
+def test_module_cli_usage_error_is_exact_json_subprocess():
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+    }
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "stock_research.technology_industry_catalog",
+            "invalid-command",
+        ],
+        capture_output=True,
+        check=False,
+        env=env,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == ""
+    assert completed.stderr == json.dumps(
+        {
+            "error_code": "INVALID_CLI_ARGUMENTS",
+            "message": "argument command: invalid choice: 'invalid-command' "
+            "(choose from validate, summary, show)",
+            "status": "error",
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    ) + "\n"
+
+
 def test_platform_cli_fast_dispatches_technology_industry_catalog(
     tmp_path: Path,
     capsys,
@@ -184,6 +252,38 @@ def test_platform_cli_fast_dispatches_technology_industry_catalog(
     assert exit_code == 0
     assert captured.err == ""
     assert json.loads(captured.out)["chain_count"] == 1
+
+
+def test_platform_parser_fallback_forwards_catalog_argv_in_module_order(
+    tmp_path: Path,
+    monkeypatch,
+):
+    root = _write_catalog_package(tmp_path)
+    received_argv = None
+
+    def capture_catalog_argv(argv: list[str]) -> int:
+        nonlocal received_argv
+        received_argv = argv
+        return 17
+
+    monkeypatch.setattr(
+        stock_research_cli,
+        "run_technology_industry_catalog_cli",
+        capture_catalog_argv,
+    )
+    args = stock_research_cli.build_parser().parse_args(
+        [
+            "technology-industry-catalog",
+            "--artifact-dir",
+            str(root),
+            "summary",
+        ]
+    )
+
+    exit_code = stock_research_cli._run_technology_industry_catalog_fallback(args)
+
+    assert exit_code == 17
+    assert received_argv == ["--artifact-dir", str(root), "summary"]
 
 
 def test_get_industry_chain_returns_sorted_nodes_and_touching_relationships(
