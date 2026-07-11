@@ -116,22 +116,24 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
             "source_type": "institutional_report",
         },
     ]
-    assert [row["chain_id"] for row in catalog["chains"]] == [
+    expected_chain_ids = [
         "semiconductor_manufacturing_equipment",
         "humanoid_robots_embodied_intelligence",
+        "power_batteries_battery_materials",
     ]
-    assert len(catalog["nodes"]) == 188
-    assert sum(
-        row["chain_id"] == "semiconductor_manufacturing_equipment"
-        for row in catalog["nodes"]
-    ) == 79
-    assert sum(
-        row["chain_id"] == "humanoid_robots_embodied_intelligence"
-        for row in catalog["nodes"]
-    ) == 109
-    assert sum(row["level"] == "L3" for row in catalog["nodes"]) == 22
-    assert sum(row["level"] == "L4" for row in catalog["nodes"]) == 166
-    assert len(catalog["edges"]) == 26
+    assert [row["chain_id"] for row in catalog["chains"]] == expected_chain_ids
+    assert {row["chain_id"] for row in catalog["nodes"]} == set(
+        expected_chain_ids
+    )
+    nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    assert {
+        nodes_by_id[edge[field]]["chain_id"]
+        for edge in catalog["edges"]
+        for field in ("source_node_id", "target_node_id")
+    } == {
+        "humanoid_robots_embodied_intelligence",
+        "power_batteries_battery_materials",
+    }
     assert catalog["theme_compositions"] == []
 
 

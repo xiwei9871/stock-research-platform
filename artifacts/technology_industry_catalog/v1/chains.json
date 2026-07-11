@@ -41,6 +41,27 @@
       ],
       "status": "draft",
       "order": 4
+    },
+    {
+      "chain_id": "power_batteries_battery_materials",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "Power Batteries and Battery Materials",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "manufacturing_process",
+      "description": "Primary canonical ownership skeleton for power-battery cells, battery management platforms, pack and system integration, and battery materials across the manufacturing value chain.",
+      "scope": "This skeleton establishes canonical ownership for generic high-specific-energy power-battery cells and battery management system platforms. Later expansion may add cell manufacturing, pack integration, recycling, and battery-material process families without changing application-chain ownership.",
+      "exclusions": [
+        "Humanoid-specific cell selection, BMS integration, robot battery packs, and robot power controls remain owned by humanoid_robots_embodied_intelligence.",
+        "Stationary energy-storage systems and grid integration remain owned by their primary energy-storage and power-system chains.",
+        "Vehicle-specific battery installation and vehicle energy management remain owned by intelligent-vehicle chains; generic battery products remain canonical here."
+      ],
+      "aliases": [
+        "Power Battery Industry",
+        "Traction Batteries and Materials",
+        "动力电池与电池材料"
+      ],
+      "status": "skeleton",
+      "order": 7
     }
   ]
 }
