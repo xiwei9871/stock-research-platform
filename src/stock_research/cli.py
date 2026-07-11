@@ -91,7 +91,9 @@ from stock_research.industry_regime_gated_backtest import (
 )
 from stock_research.market_profile_backfill import (
     audit_market_profile_gaps,
+    sync_eastmoney_core_conceptions_for_gap_assets,
     sync_em_profit_sheet_gap_assets,
+    sync_regions_from_eastmoney_company_survey,
     sync_regions_from_tushare,
 )
 from stock_research.stock_metadata_db_hydration import sync_concept_memberships_for_service
@@ -116,6 +118,9 @@ from stock_research.research_evidence_backfill import run_research_evidence_back
 from stock_research.research_publication_snapshot_audit import run_research_publication_snapshot_audit
 from stock_research.research_publication_package import run_research_publication_preview
 from stock_research.research_external_delivery import run_research_external_delivery_plan
+from stock_research.theme_decomposition import cli as run_theme_decomposition_cli
+from stock_research.theme_research_ingestion import cli as run_theme_research_ingestion_cli
+from stock_research.theme_research_db_schema import cli as run_theme_research_db_cli
 from stock_research.research_external_delivery_attempts import run_research_external_delivery_attempt_audit
 from stock_research.research_queue_publish import publish_research_queue
 from stock_research.research_queue_refresh import run_research_queue_refresh
@@ -1521,6 +1526,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("apply-schema")
     subparsers.add_parser("apply-research-schema")
     subparsers.add_parser("dashboard-auth-init")
+    theme_decomposition = subparsers.add_parser("theme-decomposition")
+    theme_decomposition.add_argument("theme_decomposition_args", nargs=argparse.REMAINDER)
+    theme_research_ingestion = subparsers.add_parser("theme-research-ingestion")
+    theme_research_ingestion.add_argument("theme_research_ingestion_args", nargs=argparse.REMAINDER)
+    theme_research_db = subparsers.add_parser("theme-research-db")
+    theme_research_db.add_argument("theme_research_db_args", nargs=argparse.REMAINDER)
     dashboard_admin_create = subparsers.add_parser("dashboard-admin-create")
     dashboard_admin_create.add_argument("--username", required=True)
     dashboard_admin_create.add_argument("--password", required=True)
@@ -1641,14 +1652,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("finance-audit")
     subparsers.add_parser("market-profile-audit")
-    subparsers.add_parser("sync-market-profile-regions")
+    market_profile_regions = subparsers.add_parser("sync-market-profile-regions")
+    market_profile_regions.add_argument("--fallback-limit", type=int, default=200)
+    market_profile_regions.add_argument("--workers", type=int, default=1)
+    market_profile_regions.add_argument("--batch-size", type=int, default=50)
+    market_profile_regions_eastmoney = subparsers.add_parser("sync-market-profile-regions-eastmoney")
+    market_profile_regions_eastmoney.add_argument("--limit", type=int, default=200)
+    market_profile_regions_eastmoney.add_argument("--offset", type=int, default=0)
+    market_profile_regions_eastmoney.add_argument("--service", default=SETTINGS.research_service)
+    market_profile_regions_eastmoney.add_argument("--workers", type=int, default=1)
+    market_profile_regions_eastmoney.add_argument("--batch-size", type=int, default=50)
     market_profile_concepts = subparsers.add_parser("sync-market-profile-concepts")
     market_profile_concepts.add_argument("--trade-date", required=True)
     market_profile_concepts.add_argument("--service", default=SETTINGS.research_service)
     market_profile_concepts.add_argument("--max-concepts", type=int)
+    market_profile_concepts.add_argument("--offset", type=int, default=0)
+    market_profile_concepts.add_argument("--concept-system", choices=["em", "ths"], default="em")
+    market_profile_stock_concepts = subparsers.add_parser("sync-market-profile-stock-concepts")
+    market_profile_stock_concepts.add_argument("--trade-date", required=True)
+    market_profile_stock_concepts.add_argument("--limit", required=True, type=int)
+    market_profile_stock_concepts.add_argument("--offset", type=int, default=0)
+    market_profile_stock_concepts.add_argument("--service", default=SETTINGS.research_service)
     market_profile_np_parent = subparsers.add_parser("sync-market-profile-np-parent")
     market_profile_np_parent.add_argument("--limit", required=True, type=int)
     market_profile_np_parent.add_argument("--offset", type=int, default=0)
+    market_profile_np_parent.add_argument("--workers", type=int, default=1)
 
     news_source_backfill = subparsers.add_parser("news-source-backfill")
     news_source_backfill.add_argument("--start-date", required=True)
@@ -5124,7 +5152,14 @@ def _has_matching_watchlist_diagnostics_cache(*, output_dir: str | Path, trade_d
 
 
 def main_for_args(argv: list[str] | None = None) -> int | None:
-    args = build_parser().parse_args(argv)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if raw_argv and raw_argv[0] == "theme-decomposition":
+        return run_theme_decomposition_cli(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "theme-research-ingestion":
+        return run_theme_research_ingestion_cli(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "theme-research-db":
+        return run_theme_research_db_cli(raw_argv[1:])
+    args = build_parser().parse_args(raw_argv)
 
     if args.command == "apply-schema":
         apply_schema()
@@ -5135,6 +5170,12 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
     elif args.command == "dashboard-auth-init":
         apply_dashboard_auth_schema()
         print("dashboard_auth_schema_applied")
+    elif args.command == "theme-decomposition":
+        return run_theme_decomposition_cli(args.theme_decomposition_args)
+    elif args.command == "theme-research-ingestion":
+        return run_theme_research_ingestion_cli(args.theme_research_ingestion_args)
+    elif args.command == "theme-research-db":
+        return run_theme_research_db_cli(args.theme_research_db_args)
     elif args.command == "dashboard-admin-create":
         user = create_dashboard_user(
             args.username,
@@ -5282,13 +5323,44 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             "market_profile_audit|"
             f"active_assets|{summary['active_assets']}|"
             f"region_present|{summary['region_present']}|"
+            f"region_gap|{summary['region_gap']}|"
             f"concept_present|{summary['concept_present']}|"
-            f"np_parent_present|{summary['np_parent_present']}"
+            f"concept_gap|{summary['concept_gap']}|"
+            f"np_parent_present|{summary['np_parent_present']}|"
+            f"np_parent_gap|{summary['np_parent_gap']}"
         )
     elif args.command == "sync-market-profile-regions":
-        summary = sync_regions_from_tushare()
+        try:
+            summary = sync_regions_from_tushare(
+                fallback_limit=args.fallback_limit,
+                workers=args.workers,
+                batch_size=args.batch_size,
+            )
+        except Exception as exc:  # noqa: BLE001 - external source failures should be readable in cron.
+            print(f"market_profile_regions_synced|status|failed|error|{exc}")
+            return 1
         print(
             "market_profile_regions_synced|"
+            f"source|{summary['source']}|"
+            f"source_rows|{summary['source_rows']}|"
+            f"region_rows|{summary['region_rows']}|"
+            f"updated_rows|{summary['updated_rows']}"
+        )
+    elif args.command == "sync-market-profile-regions-eastmoney":
+        try:
+            summary = sync_regions_from_eastmoney_company_survey(
+                limit=args.limit,
+                offset=args.offset,
+                service=args.service,
+                workers=args.workers,
+                batch_size=args.batch_size,
+            )
+        except Exception as exc:  # noqa: BLE001 - external source failures should be readable in cron.
+            print(f"market_profile_regions_eastmoney_synced|status|failed|error|{exc}")
+            return 1
+        print(
+            "market_profile_regions_eastmoney_synced|"
+            f"source|{summary['source']}|"
             f"source_rows|{summary['source_rows']}|"
             f"region_rows|{summary['region_rows']}|"
             f"updated_rows|{summary['updated_rows']}"
@@ -5298,6 +5370,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             trade_date=args.trade_date,
             service=args.service,
             max_concepts=args.max_concepts,
+            offset=args.offset,
+            concept_system=args.concept_system,
         )
         print(
             "market_profile_concepts_synced|"
@@ -5305,8 +5379,22 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
             f"memberships|{summary['memberships']}|"
             f"failed_concepts|{len(summary.get('failed_concepts', []))}"
         )
+    elif args.command == "sync-market-profile-stock-concepts":
+        summary = sync_eastmoney_core_conceptions_for_gap_assets(
+            trade_date=args.trade_date,
+            limit=args.limit,
+            offset=args.offset,
+            service=args.service,
+        )
+        print(
+            "market_profile_stock_concepts_synced|"
+            f"assets|{summary['assets']}|"
+            f"concepts|{summary['concepts']}|"
+            f"memberships|{summary['memberships']}|"
+            f"failed_assets|{summary['failed_assets']}"
+        )
     elif args.command == "sync-market-profile-np-parent":
-        summary = sync_em_profit_sheet_gap_assets(limit=args.limit, offset=args.offset)
+        summary = sync_em_profit_sheet_gap_assets(limit=args.limit, offset=args.offset, workers=args.workers)
         print(
             "market_profile_np_parent_synced|"
             f"assets|{summary['assets']}|"
