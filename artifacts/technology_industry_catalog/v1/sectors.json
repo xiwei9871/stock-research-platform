@@ -1,0 +1,74 @@
+{
+  "sectors": [
+    {
+      "sector_id": "semiconductor_electronics",
+      "sector_name": "Semiconductor and Electronic Core Industries",
+      "description": "Semiconductor design, manufacturing, equipment, materials, packaging, and core electronic components.",
+      "status": "draft",
+      "order": 1
+    },
+    {
+      "sector_id": "next_generation_information_technology",
+      "sector_name": "Next-Generation Information Technology",
+      "description": "Artificial intelligence, computing infrastructure, communications, software, cybersecurity, and data systems.",
+      "status": "draft",
+      "order": 2
+    },
+    {
+      "sector_id": "high_end_equipment_intelligent_manufacturing",
+      "sector_name": "High-End Equipment and Intelligent Manufacturing",
+      "description": "Advanced industrial equipment, automation, robotics, scientific instruments, and intelligent production systems.",
+      "status": "draft",
+      "order": 3
+    },
+    {
+      "sector_id": "energy_technology_new_power_system",
+      "sector_name": "Energy Technology and New Power Systems",
+      "description": "Power generation, grids, storage, electrification, and technologies supporting resilient low-carbon energy systems.",
+      "status": "draft",
+      "order": 4
+    },
+    {
+      "sector_id": "advanced_materials",
+      "sector_name": "Advanced Materials",
+      "description": "High-performance structural, functional, electronic, chemical, and composite materials for technology industries.",
+      "status": "draft",
+      "order": 5
+    },
+    {
+      "sector_id": "intelligent_vehicles_advanced_transportation",
+      "sector_name": "Intelligent Vehicles and Advanced Transportation",
+      "description": "Intelligent electric vehicles, transportation equipment, autonomous systems, and supporting infrastructure.",
+      "status": "draft",
+      "order": 6
+    },
+    {
+      "sector_id": "aerospace_low_altitude_ocean_technology",
+      "sector_name": "Aerospace, Low-Altitude, and Ocean Technology",
+      "description": "Aerospace systems, low-altitude aviation, satellites, marine engineering, and ocean technology.",
+      "status": "draft",
+      "order": 7
+    },
+    {
+      "sector_id": "life_sciences_medical_technology",
+      "sector_name": "Life Sciences and Medical Technology",
+      "description": "Biotechnology, pharmaceuticals, medical devices, diagnostics, and digital health technologies.",
+      "status": "draft",
+      "order": 8
+    },
+    {
+      "sector_id": "green_low_carbon_resource_recycling",
+      "sector_name": "Green Low-Carbon and Resource Recycling",
+      "description": "Environmental protection, decarbonization, circular economy, resource recovery, and recycling technologies.",
+      "status": "draft",
+      "order": 9
+    },
+    {
+      "sector_id": "frontier_future_technology",
+      "sector_name": "Frontier and Future Technology",
+      "description": "Emerging scientific and engineering fields with long-term industrial potential and strategic importance.",
+      "status": "draft",
+      "order": 10
+    }
+  ]
+}
