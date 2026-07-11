@@ -293,6 +293,24 @@ def test_duplicate_sector_id_has_stable_error(tmp_path: Path):
     assert _load_error(root).code == "DUPLICATE_SECTOR_ID"
 
 
+@pytest.mark.parametrize("reverse_rows", [False, True])
+def test_duplicate_chain_id_is_order_independent(
+    tmp_path: Path,
+    reverse_rows: bool,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "chains.json"
+    payload = _read_json(path)
+    duplicate = dict(payload["chains"][0])
+    duplicate["chain_kind"] = ["malformed"]
+    payload["chains"].append(duplicate)
+    if reverse_rows:
+        payload["chains"].reverse()
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "DUPLICATE_CHAIN_ID"
+
+
 def test_orphan_chain_sector_has_stable_error(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
     _mutate_first(root / "chains.json", "chains", sector_id="missing_sector")
@@ -322,6 +340,33 @@ def test_duplicate_node_id_has_stable_error(tmp_path: Path):
     _write_json(path, payload)
 
     assert _load_error(root).code == "DUPLICATE_NODE_ID"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "collection_key", "code"),
+    [
+        ("edges.json", "edges", "DUPLICATE_EDGE_ID"),
+        (
+            "theme_compositions/compositions.json",
+            "theme_compositions",
+            "DUPLICATE_COMPOSITION_ID",
+        ),
+        ("sources.json", "sources", "DUPLICATE_SOURCE_ID"),
+    ],
+)
+def test_duplicate_relationship_and_source_ids_have_stable_errors(
+    tmp_path: Path,
+    relative_path: str,
+    collection_key: str,
+    code: str,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / relative_path
+    payload = _read_json(path)
+    payload[collection_key].append(dict(payload[collection_key][0]))
+    _write_json(path, payload)
+
+    assert _load_error(root).code == code
 
 
 def test_orphan_node_chain_has_stable_error(tmp_path: Path):
@@ -449,6 +494,63 @@ def test_edge_endpoints_have_stable_errors(tmp_path: Path, field: str, code: str
     assert _load_error(root).code == code
 
 
+@pytest.mark.parametrize(
+    ("relative_path", "collection_key"),
+    [
+        ("edges.json", "edges"),
+        ("theme_compositions/compositions.json", "theme_compositions"),
+    ],
+)
+@pytest.mark.parametrize("relationship_type", ["invalid", ["uses"]])
+def test_relationship_types_have_stable_errors(
+    tmp_path: Path,
+    relative_path: str,
+    collection_key: str,
+    relationship_type: object,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    _mutate_first(
+        root / relative_path,
+        collection_key,
+        relationship_type=relationship_type,
+    )
+
+    assert _load_error(root).code == "INVALID_RELATIONSHIP_TYPE"
+
+
+@pytest.mark.parametrize(
+    "source_ids",
+    [
+        None,
+        {},
+        "asml_chip_manufacturing",
+        [""],
+        [None],
+        [["asml_chip_manufacturing"]],
+        ["missing_source"],
+    ],
+)
+def test_edge_source_references_have_stable_errors(
+    tmp_path: Path,
+    source_ids: object,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    _mutate_first(root / "edges.json", "edges", source_ids=source_ids)
+
+    assert _load_error(root).code == "INVALID_SOURCE_REFERENCE"
+
+
+def test_source_identity_validation_precedes_edge_semantics(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    sources_path = root / "sources.json"
+    sources = _read_json(sources_path)
+    sources["sources"].append(dict(sources["sources"][0]))
+    _write_json(sources_path, sources)
+    _mutate_first(root / "edges.json", "edges", source_node_id="missing_node")
+
+    assert _load_error(root).code == "DUPLICATE_SOURCE_ID"
+
+
 @pytest.mark.parametrize("reference", ["missing_node", "lithography", "application_role"])
 def test_node_canonical_refs_must_resolve_to_canonical_l4_nodes(
     tmp_path: Path,
@@ -505,6 +607,151 @@ def test_composition_chain_must_resolve(tmp_path: Path):
     )
 
     assert _load_error(root).code == "ORPHAN_COMPOSITION_CHAIN"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "collection_key", "field", "value", "code"),
+    [
+        ("chains.json", "chains", "sector_id", [], "ORPHAN_CHAIN_SECTOR"),
+        ("chains.json", "chains", "chain_kind", [], "INVALID_CHAIN_KIND"),
+        (
+            "chains.json",
+            "chains",
+            "decomposition_method",
+            {},
+            "INVALID_DECOMPOSITION_METHOD",
+        ),
+        (
+            "nodes/semiconductor_equipment.json",
+            "nodes",
+            "chain_id",
+            [],
+            "ORPHAN_NODE_CHAIN",
+        ),
+        (
+            "nodes/semiconductor_equipment.json",
+            "nodes",
+            "level",
+            {},
+            "INVALID_NODE_LEVEL",
+        ),
+        (
+            "nodes/semiconductor_equipment.json",
+            "nodes",
+            "parent_node_id",
+            [],
+            "ORPHAN_NODE_PARENT",
+        ),
+        ("edges.json", "edges", "source_node_id", [], "ORPHAN_EDGE_SOURCE"),
+        ("edges.json", "edges", "target_node_id", {}, "ORPHAN_EDGE_TARGET"),
+        (
+            "theme_compositions/compositions.json",
+            "theme_compositions",
+            "chain_id",
+            [],
+            "ORPHAN_COMPOSITION_CHAIN",
+        ),
+        (
+            "theme_compositions/compositions.json",
+            "theme_compositions",
+            "role_node_id",
+            {},
+            "ORPHAN_COMPOSITION_ROLE",
+        ),
+    ],
+)
+def test_malformed_reference_values_raise_domain_errors(
+    tmp_path: Path,
+    relative_path: str,
+    collection_key: str,
+    field: str,
+    value: object,
+    code: str,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    _mutate_first(root / relative_path, collection_key, **{field: value})
+
+    assert _load_error(root).code == code
+
+
+@pytest.mark.parametrize("parent_node_id", [None, [], {}])
+def test_l4_malformed_parent_values_raise_domain_error(
+    tmp_path: Path,
+    parent_node_id: object,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["parent_node_id"] = parent_node_id
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "ORPHAN_NODE_PARENT"
+
+
+@pytest.mark.parametrize("canonical_key", [None, [], {}])
+def test_canonical_key_malformed_types_raise_domain_error(
+    tmp_path: Path,
+    canonical_key: object,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["canonical_key"] = canonical_key
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "INVALID_CANONICAL_OWNERSHIP"
+
+
+@pytest.mark.parametrize(
+    "canonical_node_refs",
+    [None, {}, "duv_lithography", [None], [[]], [{}], [""]],
+)
+def test_canonical_reference_values_must_be_non_empty_strings(
+    tmp_path: Path,
+    canonical_node_refs: object,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "nodes" / "application_theme.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["canonical_node_refs"] = canonical_node_refs
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "INVALID_CANONICAL_NODE_REFERENCE"
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "sector_id",
+        "chain_id",
+        "node_id",
+        "edge_id",
+        "composition_id",
+        "source_id",
+    ],
+)
+@pytest.mark.parametrize("value", [None, [], {}])
+def test_malformed_identity_values_raise_domain_errors(
+    tmp_path: Path,
+    field: str,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    locations = {
+        "sector_id": ("sectors.json", "sectors"),
+        "chain_id": ("chains.json", "chains"),
+        "node_id": ("nodes/semiconductor_equipment.json", "nodes"),
+        "edge_id": ("edges.json", "edges"),
+        "composition_id": (
+            "theme_compositions/compositions.json",
+            "theme_compositions",
+        ),
+        "source_id": ("sources.json", "sources"),
+    }
+    relative_path, collection_key = locations[field]
+    _mutate_first(root / relative_path, collection_key, **{field: value})
+
+    assert _load_error(root).code == "MISSING_REQUIRED_FIELD"
 
 
 def test_validation_raises_first_error_in_artifact_order(tmp_path: Path):
