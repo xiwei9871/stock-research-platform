@@ -476,7 +476,12 @@ def _verify_phase_9(
                    has_table_privilege(current_user, 'research.theme_research_theme', 'INSERT') AS can_insert,
                    has_table_privilege(current_user, 'research.theme_research_theme', 'UPDATE') AS can_update,
                    has_table_privilege(current_user, 'research.theme_research_theme', 'DELETE') AS can_delete,
-                   has_table_privilege(current_user, 'research.theme_research_theme', 'TRUNCATE') AS can_truncate
+                   has_table_privilege(current_user, 'research.theme_research_theme', 'TRUNCATE') AS can_truncate,
+                   has_schema_privilege(current_user, 'research', 'CREATE') AS can_create_schema_objects,
+                   has_table_privilege(current_user, 'research.theme_research_review_event', 'UPDATE') AS history_update,
+                   has_table_privilege(current_user, 'research.theme_research_review_event', 'TRUNCATE') AS history_truncate,
+                   has_table_privilege(current_user, 'research.theme_research_snapshot', 'UPDATE') AS snapshot_update,
+                   has_table_privilege(current_user, 'research.theme_research_snapshot', 'TRUNCATE') AS snapshot_truncate
             """,
             [],
         )[0]
@@ -490,10 +495,7 @@ def _verify_phase_9(
             """,
             [],
         )[0]
-    runtime_read_only = bool(privilege["can_select"]) and not any(
-        bool(privilege[key])
-        for key in ("can_insert", "can_update", "can_delete", "can_truncate")
-    )
+    runtime_constrained = _runtime_privileges_are_constrained(privilege)
     requirements = [
         _requirement(
             "database schema is current",
@@ -510,9 +512,13 @@ def _verify_phase_9(
             ),
         ),
         _requirement(
-            "runtime role is read-only",
-            runtime_read_only,
-            f"runtime_user={privilege['user_name']}, select={privilege['can_select']}",
+            "runtime role permits controlled reviews but protects canonical deletion and history",
+            runtime_constrained,
+            (
+                f"runtime_user={privilege['user_name']}, select={privilege['can_select']}, "
+                f"insert={privilege['can_insert']}, update={privilege['can_update']}, "
+                f"delete={privilege['can_delete']}, truncate={privilege['can_truncate']}"
+            ),
         ),
         _requirement(
             "versioned snapshots and rollback evidence exist",
@@ -646,6 +652,26 @@ def _phase_result(
         "status": status,
         "requirements": requirements,
     }
+
+
+def _runtime_privileges_are_constrained(privilege: dict[str, Any]) -> bool:
+    return (
+        bool(privilege.get("can_select"))
+        and bool(privilege.get("can_insert"))
+        and bool(privilege.get("can_update"))
+        and not any(
+            bool(privilege.get(key))
+            for key in (
+                "can_delete",
+                "can_truncate",
+                "can_create_schema_objects",
+                "history_update",
+                "history_truncate",
+                "snapshot_update",
+                "snapshot_truncate",
+            )
+        )
+    )
 
 
 def _requirement(requirement: str, passed: bool, evidence: str) -> dict[str, str]:

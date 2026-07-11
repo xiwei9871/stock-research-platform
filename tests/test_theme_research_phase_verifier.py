@@ -5,6 +5,7 @@ from pathlib import Path
 
 from stock_research import cli as stock_research_cli
 from stock_research.theme_research_phase_verifier import (
+    _runtime_privileges_are_constrained,
     build_verification_report,
     render_verification_markdown,
     verify_theme_research_phases,
@@ -99,3 +100,22 @@ def test_shared_cli_delegates_theme_research_verifier(monkeypatch) -> None:
     assert result == 0
     assert calls == [["verify-p1-p10", "--output-dir", "/tmp/theme-report"]]
 
+
+def test_runtime_privilege_check_allows_controlled_review_writes_only() -> None:
+    allowed = {
+        "can_select": True,
+        "can_insert": True,
+        "can_update": True,
+        "can_delete": False,
+        "can_truncate": False,
+        "can_create_schema_objects": False,
+        "history_update": False,
+        "history_truncate": False,
+        "snapshot_update": False,
+        "snapshot_truncate": False,
+    }
+
+    assert _runtime_privileges_are_constrained(allowed) is True
+    assert _runtime_privileges_are_constrained({**allowed, "can_delete": True}) is False
+    assert _runtime_privileges_are_constrained({**allowed, "history_update": True}) is False
+    assert _runtime_privileges_are_constrained({**allowed, "can_create_schema_objects": True}) is False
