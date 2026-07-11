@@ -149,6 +149,7 @@ Semiconductors remain an independent L1 because their design, manufacturing, equ
 
 - new power systems and smart grids
 - power-generation and energy equipment
+- power electronics and power-supply equipment
 - AI data-center power
 - solar power
 - wind power
