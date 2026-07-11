@@ -377,8 +377,8 @@ HUMANOID_EXPECTED_L4_NODE_TYPES = {
     "protective_shell_soft_cover": "protective_component",
     "robot_sealing_protection": "protective_subsystem",
     "robot_battery_pack": "energy_system",
-    "high_specific_energy_cell": "energy_component",
-    "battery_management_system": "power_control_system",
+    "high_specific_energy_cell": "energy_integration_requirement",
+    "battery_management_system": "power_control_requirement",
     "robot_power_management_dcdc": "power_electronics_subsystem",
     "autonomous_charging": "charging_system",
     "robot_thermal_management": "thermal_management_system",
@@ -395,15 +395,26 @@ HUMANOID_EXPECTED_L4_NODE_TYPES = {
     "service_scenario_integration": "integration_service",
 }
 
+HUMANOID_EXPECTED_L3_NODE_TYPES = {
+    node_id: (
+        "lifecycle_value_chain_family"
+        if node_id == "humanoid_manufacturing_test_integration"
+        else "system_architecture_family"
+    )
+    for node_id in HUMANOID_EXPECTED_CHILDREN
+}
+
 HUMANOID_EXPECTED_EDGES = {
     ("rotary_joint_assembly", "frameless_torque_motor"),
     ("rotary_joint_assembly", "harmonic_reducer"),
+    ("rotary_joint_assembly", "rv_reducer"),
     ("rotary_joint_assembly", "precision_planetary_reducer"),
     ("rotary_joint_assembly", "joint_encoder_module"),
     ("rotary_joint_assembly", "joint_brake"),
     ("rotary_joint_assembly", "joint_bearing"),
     ("linear_joint_assembly", "planetary_roller_screw"),
     ("linear_joint_assembly", "ball_screw"),
+    ("linear_joint_assembly", "trapezoidal_screw"),
     ("linear_joint_assembly", "linear_motor"),
     ("linear_joint_assembly", "screw_support_bearing"),
     ("linear_joint_assembly", "linear_displacement_sensor"),
@@ -411,12 +422,31 @@ HUMANOID_EXPECTED_EDGES = {
     ("elbow_joint_module", "rotary_joint_assembly"),
     ("wrist_joint_module", "rotary_joint_assembly"),
     ("hip_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "linear_joint_assembly"),
     ("knee_joint_module", "rotary_joint_assembly"),
+    ("knee_joint_module", "linear_joint_assembly"),
     ("ankle_joint_module", "rotary_joint_assembly"),
+    ("ankle_joint_module", "linear_joint_assembly"),
     ("dexterous_hand_assembly", "finger_micro_actuator"),
     ("dexterous_hand_assembly", "micro_reducer_transmission"),
     ("dexterous_hand_assembly", "tendon_flexible_transmission"),
     ("dexterous_hand_assembly", "fingertip_tactile_force_control"),
+}
+
+HUMANOID_ALTERNATIVE_ROUTE_EDGES = {
+    ("rotary_joint_assembly", "harmonic_reducer"),
+    ("rotary_joint_assembly", "rv_reducer"),
+    ("rotary_joint_assembly", "precision_planetary_reducer"),
+    ("linear_joint_assembly", "planetary_roller_screw"),
+    ("linear_joint_assembly", "ball_screw"),
+    ("linear_joint_assembly", "trapezoidal_screw"),
+    ("linear_joint_assembly", "linear_motor"),
+    ("hip_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "linear_joint_assembly"),
+    ("knee_joint_module", "rotary_joint_assembly"),
+    ("knee_joint_module", "linear_joint_assembly"),
+    ("ankle_joint_module", "rotary_joint_assembly"),
+    ("ankle_joint_module", "linear_joint_assembly"),
 }
 
 
@@ -566,14 +596,16 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
         "chain_kind": "canonical_industry_chain",
         "decomposition_method": "system_architecture",
         "description": (
-            "Humanoid robot systems spanning embodied intelligence, motion control, "
-            "training and simulation, sensing, compute and control hardware, actuation, "
-            "body modules, energy systems, manufacturing, testing, and deployment."
+            "A primarily system-architecture decomposition of humanoid robots spanning "
+            "embodied intelligence, control, sensing, compute, actuation, body, and energy "
+            "subsystems, with one explicit supplementary lifecycle and value-chain family."
         ),
         "scope": (
             "Covers robot-specific models and software, integrated sensing and control "
             "modules, reusable electromechanical components, complete humanoid robots, "
-            "and their manufacturing, test, operations, and scenario integration."
+            "and their manufacturing, test, operations, and scenario integration. Under "
+            "the approved mixed-template rule, humanoid_manufacturing_test_integration "
+            "supplements the primary system architecture with lifecycle coverage."
         ),
         "exclusions": [
             (
@@ -583,6 +615,11 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
             (
                 "General semiconductor chips remain owned by semiconductor chains; this "
                 "chain covers robot-selected compute components and integrated modules."
+            ),
+            (
+                "Generic battery cells, battery management systems, and battery materials "
+                "remain owned by power_batteries_battery_materials; this chain covers "
+                "humanoid-specific selection, integration, and control requirements."
             ),
             (
                 "General industrial robots, machine tools, and factory automation remain "
@@ -630,7 +667,7 @@ def test_humanoid_robots_embodied_intelligence_exact_taxonomy_and_contract():
 
     for node in l3_nodes:
         assert node["parent_node_id"] is None
-        assert node["node_type"] == "system_architecture_family"
+        assert node["node_type"] == HUMANOID_EXPECTED_L3_NODE_TYPES[node["node_id"]]
         assert node["canonical_key"] == ""
         assert node["primary_path"] == [
             HUMANOID_SECTOR_ID,
@@ -662,15 +699,26 @@ def test_humanoid_robots_embodied_intelligence_exact_uses_edges():
         or row["target_node_id"] in humanoid_node_ids
     ]
 
-    assert len(edges) == 21
-    assert len({row["edge_id"] for row in edges}) == 21
-    assert {
+    edge_tuples = [
         (row["source_node_id"], row["target_node_id"]) for row in edges
-    } == HUMANOID_EXPECTED_EDGES
+    ]
+
+    assert len(edges) == 26
+    assert len({row["edge_id"] for row in edges}) == 26
+    assert len(edge_tuples) == len(set(edge_tuples))
+    assert all(
+        source_node_id != target_node_id
+        for source_node_id, target_node_id in edge_tuples
+    )
+    assert set(edge_tuples) == HUMANOID_EXPECTED_EDGES
     for edge in edges:
         assert edge["relationship_type"] == "uses"
         assert edge["notes"]
         assert edge["source_ids"] == []
+        edge_tuple = (edge["source_node_id"], edge["target_node_id"])
+        if edge_tuple in HUMANOID_ALTERNATIVE_ROUTE_EDGES:
+            assert "eligible" in edge["notes"].lower()
+            assert "route" in edge["notes"].lower()
 
 
 def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research_usable():
@@ -694,8 +742,9 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "chip categories remain owned by semiconductor chains."
     )
     assert nodes["rotary_joint_assembly"]["description"] == (
-        "Integrated rotary actuation assembly combining reusable motor, transmission, "
-        "feedback, braking, and bearing components for humanoid joint modules."
+        "Integrated rotary actuation assembly combining selected reusable motor, "
+        "transmission, feedback, braking, and bearing components for humanoid joint "
+        "modules."
     )
     assert nodes["shoulder_joint_module"]["description"] == (
         "Shoulder-specific kinematic module that integrates shared rotary joint "
@@ -704,4 +753,40 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
     assert nodes["frameless_torque_motor"]["description"] == (
         "Reusable frameless high-torque motor component for compact robot actuation, "
         "not duplicated by body location."
+    )
+    assert nodes["high_specific_energy_cell"]["node_name"] == (
+        "Humanoid High-Specific-Energy Cell Selection"
+    )
+    assert nodes["high_specific_energy_cell"]["description"] == (
+        "Humanoid-specific cell selection and integration requirements for runtime, "
+        "mass, packaging, discharge, and safety; generic cell chemistry and manufacturing "
+        "remain owned by power_batteries_battery_materials."
+    )
+    assert nodes["battery_management_system"]["node_name"] == (
+        "Humanoid Battery Management Integration and Control"
+    )
+    assert nodes["battery_management_system"]["description"] == (
+        "Humanoid-specific BMS integration, interfaces, limits, state estimation, and "
+        "fault-control requirements; generic BMS products and technology remain owned by "
+        "power_batteries_battery_materials."
+    )
+    assert nodes["robot_state_sensor"]["node_name"] == (
+        "Residual Robot Operating-State Sensors"
+    )
+    assert nodes["robot_state_sensor"]["description"] == (
+        "Residual sensors for internal robot operating states such as limits, temperature, "
+        "current, or discrete health signals; excludes IMUs, joint encoders, force-torque, "
+        "tactile, vision, and every other enumerated sensor node."
+    )
+    assert nodes["humanoid_manufacturing_test_integration"]["node_type"] == (
+        "lifecycle_value_chain_family"
+    )
+    assert nodes["humanoid_manufacturing_test_integration"]["description"] == (
+        "Supplementary lifecycle and value-chain coverage for complete humanoid products, "
+        "manufacturing, calibration, testing, operations, and scenario integration under "
+        "the approved mixed-template rule."
+    )
+    assert nodes["hip_joint_module"]["description"] == (
+        "Hip-specific kinematic module that can integrate eligible rotary or linear joint "
+        "assembly routes according to the humanoid architecture."
     )
