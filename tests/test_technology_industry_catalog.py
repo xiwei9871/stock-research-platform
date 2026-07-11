@@ -97,6 +97,15 @@ def test_invalid_json_has_stable_error(tmp_path: Path):
     assert error.code == "INVALID_JSON"
 
 
+def test_invalid_utf8_has_stable_json_error(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    (root / "chains.json").write_bytes(b"\xff")
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_JSON"
+
+
 def test_json_root_must_be_object(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
     _write_json(root / "sources.json", [])
