@@ -40,8 +40,8 @@ It does not copy short-video opinions, generate automatic recommendations, produ
 | 6 | Research priority scoring and review workflow | Complete | Node, company, and evidence-gap priorities are reviewable |
 | 7 | Read-only dashboard | Complete | Reviewed/draft/lead/gap states are visible without writeback |
 | 8 | Automated ingestion and update | Complete | Extraction feeds a human review queue, never the formal store directly |
-| 9 | Database productionization | Planned | Versioned schema, review history, rollback, and APIs are stable |
-| 10 | Investment research workflow integration | Planned | Daily Review and Watchlist consume reviewed theme context |
+| 9 | Database productionization | Complete | Versioned schema, review history, rollback, and APIs are stable |
+| 10 | Investment research workflow integration | Complete | Daily Review, Watchlist, and Stock Workspace consume one reviewed context |
 
 ## Phase 0: Direction And Boundaries
 
@@ -451,6 +451,16 @@ Production requirements:
 - rollback;
 - read APIs and controlled write APIs.
 
+Implementation result:
+
+- PostgreSQL is authoritative and the Dashboard reads through `THEME_RESEARCH_READ_SOURCE=db`;
+- owner, migration, runtime-group, and runtime-login roles separate schema ownership from application reads;
+- canonical objects, relationships, revisions, review events, snapshots, imports, and store generation are versioned;
+- source, claim, and node reviews use optimistic row versions, idempotency keys, immutable history, and evidence gates;
+- artifact/DB semantic parity, export, rollback, runtime privilege isolation, and production cutover were verified;
+- artifact mode remains an explicit emergency read fallback, not a dual-write path;
+- operations and recovery are documented in `docs/theme_research_database_v1.md`.
+
 ## Phase 10: Research Workflow Integration
 
 Purpose: make reviewed theme context available to Daily Review, Watchlist, tech bottleneck research, company research, theme tracking, anomaly explanation, and report update reminders.
@@ -465,6 +475,19 @@ What source or claim changed recently?
 Is the move theme-driven or company-fundamental-driven?
 ```
 
+Implementation result:
+
+- one PostgreSQL-backed `Theme Research Context Service` supplies all workflow consumers;
+- company context fails closed unless the company mapping and node are reviewed and mapping evidence uses accepted sources;
+- Daily Review reports reviewed theme coverage, mapped companies, recent reviewed changes, evidence gaps, and incomplete evidence tracks;
+- Watchlist rows retain their original ordering and signal fields while adding compact theme/node context;
+- Stock Workspace shows the theme, mapped node, value-capture and bottleneck scores, business relationship, and evidence counts;
+- `GET /api/assets/:asset_id/theme-research-context` and `GET /api/research/theme-decomposition/updates` expose the same read model;
+- all workflow payloads remain `research_only=true`, `used_for_signal=false`, and `used_for_admission=false`;
+- driver assessment remains conservative and uses `mixed_or_uncertain` or `insufficient_evidence` when causality is not proven;
+- Phase 2B humanoid robotics remains an explicit evidence gap and is excluded from reviewed workflow context;
+- `theme-research verify-p1-p10` produces requirement-level JSON and Markdown verification reports.
+
 ## Near-term Execution Order
 
-Phase 8 is complete as an artifact-first staging boundary. Phase 9 database productionization remains deferred until ingestion runs and review decisions have enough real operating history to stabilize table and transition semantics. Phase 2B remains a separate unfinished evidence task and should use the Phase 8 queue instead of bypassing it.
+Phases 9 and 10 are complete for reviewed research objects. The next evidence task is Phase 2B: build the humanoid-robotics public source pack through the Phase 8 human-review queue. Until that evidence track is complete, its sample structure remains visible in Theme Research but cannot enter Daily Review, Watchlist, or Stock Workspace as reviewed context.

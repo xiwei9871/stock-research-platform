@@ -118,3 +118,18 @@ The 2026-07-11 cutover verified:
 - review and rollback drill restored canonical parity as theme version 3;
 - exported AI power artifact validates with the existing loader;
 - research-only guardrails remain unchanged: no signal or admission coupling.
+
+The cross-phase verifier reruns schema, package parity, runtime privilege, rollback-evidence, and workflow checks:
+
+```bash
+scripts/verify_theme_research_p1_p10.sh
+```
+
+Reports are written to:
+
+```text
+outputs/research/theme_research_phase_verification/theme_research_p1_p10_verification.json
+outputs/research/theme_research_phase_verification/theme_research_p1_p10_verification.md
+```
+
+The successful result is `complete_with_declared_evidence_gap` while Phase 2B remains unfinished. A `failed` result is required for schema drift, package mismatch, unsafe runtime privileges, missing rollback evidence, or a broken workflow contract.
