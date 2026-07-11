@@ -1,0 +1,2063 @@
+{
+  "nodes": [
+    {
+      "node_id": "humanoid_embodied_ai_brain",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Embodied AI Brain",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Robot-specific perception, cognition, planning, interaction, and inference functions that convert observations and instructions into executable behavior.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "multimodal_perception_model",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Multimodal Perception Models",
+      "node_kind": "canonical",
+      "node_type": "ai_model",
+      "description": "Robot-adapted models that fuse vision, audio, touch, proprioception, and other observations; general multimodal foundation models remain owned by the primary AI chain.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "multimodal_perception_model"
+      ],
+      "canonical_key": "humanoid_robotics:multimodal_perception_model",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "vision_language_action_model",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Vision-Language-Action Models",
+      "node_kind": "canonical",
+      "node_type": "ai_model",
+      "description": "Robot-adapted vision-language-action models that map multimodal observations and instructions to executable action representations; general foundation models remain owned by the primary AI chain.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "vision_language_action_model"
+      ],
+      "canonical_key": "humanoid_robotics:vision_language_action_model",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "task_understanding_planning",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Task Understanding and Planning",
+      "node_kind": "canonical",
+      "node_type": "ai_model",
+      "description": "Embodied models and software that decompose operator goals into robot-feasible tasks, constraints, and action plans.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "task_understanding_planning"
+      ],
+      "canonical_key": "humanoid_robotics:task_understanding_planning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "long_term_memory_world_model",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Long-Term Memory and World Models",
+      "node_kind": "canonical",
+      "node_type": "ai_model",
+      "description": "Robot-adapted memory and environment models that maintain object, spatial, task, and interaction state across operations.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "long_term_memory_world_model"
+      ],
+      "canonical_key": "humanoid_robotics:long_term_memory_world_model",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "autonomous_decision_exception_handling",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Autonomous Decision and Exception Handling",
+      "node_kind": "canonical",
+      "node_type": "control_software",
+      "description": "Robot decision software that selects actions, detects execution exceptions, and invokes recovery or escalation policies.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "autonomous_decision_exception_handling"
+      ],
+      "canonical_key": "humanoid_robotics:autonomous_decision_exception_handling",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "human_robot_interaction_model",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Human-Robot Interaction Models",
+      "node_kind": "canonical",
+      "node_type": "ai_model",
+      "description": "Robot-adapted models for speech, gesture, intent, and social interaction without claiming ownership of general conversational AI.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "human_robot_interaction_model"
+      ],
+      "canonical_key": "humanoid_robotics:human_robot_interaction_model",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "edge_cloud_inference",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_embodied_ai_brain",
+      "level": "L4",
+      "node_name": "Edge-Cloud Robot Inference",
+      "node_kind": "canonical",
+      "node_type": "inference_system",
+      "description": "Deployment architecture that partitions robot inference between onboard compute and remote services under latency, safety, and connectivity constraints.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_embodied_ai_brain",
+        "edge_cloud_inference"
+      ],
+      "canonical_key": "humanoid_robotics:edge_cloud_inference",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_motion_control_cerebellum",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Motion-Control Cerebellum",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Motion planning and control functions that translate robot tasks into stable, coordinated, real-time body movement.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "whole_body_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Whole-Body Control",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Control software that coordinates floating-base posture, contacts, limbs, and center-of-mass motion across the complete humanoid body.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "whole_body_control"
+      ],
+      "canonical_key": "humanoid_robotics:whole_body_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "biped_gait_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Biped Gait Control",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Locomotion control software for step timing, foot placement, support transitions, and disturbance recovery in biped walking.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "biped_gait_control"
+      ],
+      "canonical_key": "humanoid_robotics:biped_gait_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "arm_motion_planning",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Arm Motion Planning",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Collision-aware trajectory planning for coordinated shoulder, elbow, wrist, and end-effector movement.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "arm_motion_planning"
+      ],
+      "canonical_key": "humanoid_robotics:arm_motion_planning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dexterous_hand_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Dexterous Hand Control",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Control software for coordinated finger position, force, contact, and manipulation sequences.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "dexterous_hand_control"
+      ],
+      "canonical_key": "humanoid_robotics:dexterous_hand_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "force_position_hybrid_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Force-Position Hybrid Control",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Control methods that regulate force along constrained directions while tracking position along complementary directions.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "force_position_hybrid_control"
+      ],
+      "canonical_key": "humanoid_robotics:force_position_hybrid_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "model_predictive_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Model Predictive Control",
+      "node_kind": "canonical",
+      "node_type": "motion_control_software",
+      "description": "Receding-horizon robot control that optimizes motion subject to dynamics, contact, actuator, and safety constraints.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "model_predictive_control"
+      ],
+      "canonical_key": "humanoid_robotics:model_predictive_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "reinforcement_learning_motion_policy",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Reinforcement-Learning Motion Policies",
+      "node_kind": "canonical",
+      "node_type": "motion_control_model",
+      "description": "Robot motion policies trained through reinforcement learning for locomotion, manipulation, or recovery behaviors.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "reinforcement_learning_motion_policy"
+      ],
+      "canonical_key": "humanoid_robotics:reinforcement_learning_motion_policy",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "realtime_motion_control_system",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_motion_control_cerebellum",
+      "level": "L4",
+      "node_name": "Real-Time Motion-Control System",
+      "node_kind": "canonical",
+      "node_type": "realtime_control_software",
+      "description": "Deterministic software runtime that executes synchronized joint control loops, safety checks, and command updates.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_motion_control_cerebellum",
+        "realtime_motion_control_system"
+      ],
+      "canonical_key": "humanoid_robotics:realtime_motion_control_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_data_training_simulation",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Data, Training, and Simulation",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Systems and assets for collecting robot experience, preparing embodied datasets, simulating behavior, and evaluating trained policies.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "teleoperation_motion_capture",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Teleoperation and Motion Capture",
+      "node_kind": "canonical",
+      "node_type": "data_acquisition_system",
+      "description": "Systems that capture human or operator demonstrations and map them into robot-compatible motion and action records.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "teleoperation_motion_capture"
+      ],
+      "canonical_key": "humanoid_robotics:teleoperation_motion_capture",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "embodied_training_dataset",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Embodied Training Datasets",
+      "node_kind": "canonical",
+      "node_type": "dataset",
+      "description": "Curated robot observation, action, contact, language, and outcome records used to train embodied models and policies.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "embodied_training_dataset"
+      ],
+      "canonical_key": "humanoid_robotics:embodied_training_dataset",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_data_clean_label_replay",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Robot Data Cleaning, Labeling, and Replay",
+      "node_kind": "canonical",
+      "node_type": "data_toolchain",
+      "description": "Tooling that validates, annotates, segments, indexes, and replays robot trajectories and interaction data.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "robot_data_clean_label_replay"
+      ],
+      "canonical_key": "humanoid_robotics:robot_data_clean_label_replay",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_simulation",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Robot Simulation",
+      "node_kind": "canonical",
+      "node_type": "simulation_software",
+      "description": "Physics-based software for testing robot mechanisms, sensors, controls, tasks, and environments before physical execution.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "robot_simulation"
+      ],
+      "canonical_key": "humanoid_robotics:robot_simulation",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "digital_twin",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Humanoid Robot Digital Twins",
+      "node_kind": "canonical",
+      "node_type": "simulation_software",
+      "description": "Parameterized virtual representations of specific humanoid platforms used for engineering analysis, calibration, and operational monitoring.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "digital_twin"
+      ],
+      "canonical_key": "humanoid_robotics:digital_twin",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "synthetic_robot_data",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Synthetic Robot Data",
+      "node_kind": "canonical",
+      "node_type": "dataset",
+      "description": "Simulated observations, trajectories, contacts, and labels generated to augment physical robot training data.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "synthetic_robot_data"
+      ],
+      "canonical_key": "humanoid_robotics:synthetic_robot_data",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "sim_to_real",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Simulation-to-Reality Transfer",
+      "node_kind": "canonical",
+      "node_type": "training_method",
+      "description": "Methods that transfer policies and models from simulation to physical robots through randomization, adaptation, and calibration.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "sim_to_real"
+      ],
+      "canonical_key": "humanoid_robotics:sim_to_real",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_training_evaluation_toolchain",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_data_training_simulation",
+      "level": "L4",
+      "node_name": "Robot Training and Evaluation Toolchain",
+      "node_kind": "canonical",
+      "node_type": "software_toolchain",
+      "description": "Integrated tools for embodied model training, experiment tracking, benchmark execution, regression analysis, and release qualification.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_data_training_simulation",
+        "robot_training_evaluation_toolchain"
+      ],
+      "canonical_key": "humanoid_robotics:robot_training_evaluation_toolchain",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_perception",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Humanoid Perception",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Onboard sensing modules and reusable sensors that observe the environment, body state, contact, force, motion, and human commands.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rgb_vision_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "RGB Vision Modules",
+      "node_kind": "canonical",
+      "node_type": "sensor_module",
+      "description": "Integrated visible-light camera modules configured for humanoid perception, synchronization, calibration, and onboard data transport.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "rgb_vision_module"
+      ],
+      "canonical_key": "humanoid_robotics:rgb_vision_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "depth_camera",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Depth Cameras",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable cameras that estimate scene depth for obstacle detection, manipulation, mapping, and human interaction.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "depth_camera"
+      ],
+      "canonical_key": "humanoid_robotics:depth_camera",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "lidar_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "LiDAR Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable laser-ranging sensors for robot localization, mapping, obstacle detection, and safety monitoring.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "lidar_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:lidar_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "imu_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Inertial Measurement Units",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable accelerometer and gyroscope sensors that measure body acceleration, angular velocity, and orientation changes.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "imu_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:imu_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_encoder",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Joint Encoders",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable position and velocity sensors for measuring robot joint motion; integrated joint packaging is represented separately by joint_encoder_module.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "joint_encoder"
+      ],
+      "canonical_key": "humanoid_robotics:joint_encoder",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_torque_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Joint Torque Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Sensors that measure joint output torque for compliant control, load monitoring, and collision response.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "joint_torque_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:joint_torque_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "six_axis_force_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Six-Axis Force-Torque Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Sensors that measure three-axis force and three-axis torque at wrists, ankles, or other robot interfaces.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "six_axis_force_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:six_axis_force_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "tactile_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Tactile Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable contact sensors that detect touch, pressure distribution, shear, slip, or texture at robot surfaces.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "tactile_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:tactile_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "microphone_array",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Microphone Arrays",
+      "node_kind": "canonical",
+      "node_type": "sensor_module",
+      "description": "Integrated multi-microphone modules for sound localization, speech capture, and acoustic event detection on robots.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "microphone_array"
+      ],
+      "canonical_key": "humanoid_robotics:microphone_array",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_state_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_perception",
+      "level": "L4",
+      "node_name": "Robot State Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Robot-specific auxiliary sensors for limits, temperature, current, posture, contact, and other internal operating states.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_perception",
+        "robot_state_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:robot_state_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_compute_control_hardware",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Compute and Control Hardware",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Onboard compute, controllers, electronics, and deterministic communication hardware integrated for humanoid robot execution.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_ai_compute_chip",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Robot AI Compute Chips",
+      "node_kind": "canonical",
+      "node_type": "compute_component",
+      "description": "Processors selected and configured for onboard robot AI workloads; the generic chip categories remain owned by semiconductor chains.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "robot_ai_compute_chip"
+      ],
+      "canonical_key": "humanoid_robotics:robot_ai_compute_chip",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_ai_compute_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Robot AI Compute Modules",
+      "node_kind": "canonical",
+      "node_type": "compute_module",
+      "description": "Integrated boards or modules combining selected processors, memory, power, interfaces, and thermal design for robot AI workloads.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "robot_ai_compute_module"
+      ],
+      "canonical_key": "humanoid_robotics:robot_ai_compute_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "main_controller",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Robot Main Controllers",
+      "node_kind": "canonical",
+      "node_type": "controller",
+      "description": "Central robot control units that coordinate perception, planning, motion commands, diagnostics, and system state.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "main_controller"
+      ],
+      "canonical_key": "humanoid_robotics:main_controller",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "motion_controller",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Motion Controllers",
+      "node_kind": "canonical",
+      "node_type": "controller",
+      "description": "Dedicated control units that calculate and distribute synchronized actuator commands for robot joints.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "motion_controller"
+      ],
+      "canonical_key": "humanoid_robotics:motion_controller",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "realtime_mcu",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Real-Time Microcontroller Units",
+      "node_kind": "canonical",
+      "node_type": "control_component",
+      "description": "Microcontroller components selected for deterministic robot control, safety supervision, and low-level device management.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "realtime_mcu"
+      ],
+      "canonical_key": "humanoid_robotics:realtime_mcu",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "motor_driver",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Motor Drivers",
+      "node_kind": "canonical",
+      "node_type": "power_electronics_component",
+      "description": "Reusable power-electronics components that regulate phase current and voltage for robot electric motors.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "motor_driver"
+      ],
+      "canonical_key": "humanoid_robotics:motor_driver",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "sensor_signal_conditioning",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Sensor Signal Conditioning",
+      "node_kind": "canonical",
+      "node_type": "electronic_subsystem",
+      "description": "Analog and digital electronics that amplify, filter, isolate, convert, and synchronize robot sensor signals.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "sensor_signal_conditioning"
+      ],
+      "canonical_key": "humanoid_robotics:sensor_signal_conditioning",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "realtime_communication_bus",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_compute_control_hardware",
+      "level": "L4",
+      "node_name": "Real-Time Communication Buses",
+      "node_kind": "canonical",
+      "node_type": "communication_subsystem",
+      "description": "Deterministic wired communication subsystems linking robot controllers, drives, sensors, and safety devices.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_compute_control_hardware",
+        "realtime_communication_bus"
+      ],
+      "canonical_key": "humanoid_robotics:realtime_communication_bus",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_rotary_actuation",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Rotary Actuation",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Integrated rotary joint assemblies and reusable motor, transmission, sensing, braking, and bearing components.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rotary_joint_assembly",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Rotary Joint Assemblies",
+      "node_kind": "canonical",
+      "node_type": "actuation_assembly",
+      "description": "Integrated rotary actuation assembly combining reusable motor, transmission, feedback, braking, and bearing components for humanoid joint modules.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "rotary_joint_assembly"
+      ],
+      "canonical_key": "humanoid_robotics:rotary_joint_assembly",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "frameless_torque_motor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Frameless Torque Motors",
+      "node_kind": "canonical",
+      "node_type": "actuation_component",
+      "description": "Reusable frameless high-torque motor component for compact robot actuation, not duplicated by body location.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "frameless_torque_motor"
+      ],
+      "canonical_key": "humanoid_robotics:frameless_torque_motor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "harmonic_reducer",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Harmonic Reducers",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable strain-wave gearing components that provide compact high-ratio transmission with low backlash.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "harmonic_reducer"
+      ],
+      "canonical_key": "humanoid_robotics:harmonic_reducer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "rv_reducer",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "RV Reducers",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable cycloidal precision reducers for robot joints requiring high rigidity, load capacity, and repeatability.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "rv_reducer"
+      ],
+      "canonical_key": "humanoid_robotics:rv_reducer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "precision_planetary_reducer",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Precision Planetary Reducers",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable low-backlash planetary gearing components for compact robot rotary actuation.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "precision_planetary_reducer"
+      ],
+      "canonical_key": "humanoid_robotics:precision_planetary_reducer",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_encoder_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Joint Encoder Modules",
+      "node_kind": "canonical",
+      "node_type": "sensor_module",
+      "description": "Integrated feedback modules that package joint position sensing, interfaces, and calibration for rotary actuation assemblies.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "joint_encoder_module"
+      ],
+      "canonical_key": "humanoid_robotics:joint_encoder_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_brake",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Joint Brakes",
+      "node_kind": "canonical",
+      "node_type": "safety_component",
+      "description": "Reusable holding or emergency braking components that restrain robot joints when commanded or unpowered.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "joint_brake"
+      ],
+      "canonical_key": "humanoid_robotics:joint_brake",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_bearing",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_rotary_actuation",
+      "level": "L4",
+      "node_name": "Joint Bearings",
+      "node_kind": "canonical",
+      "node_type": "mechanical_component",
+      "description": "Reusable precision bearings that support radial, axial, and moment loads in compact robot joints.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_rotary_actuation",
+        "joint_bearing"
+      ],
+      "canonical_key": "humanoid_robotics:joint_bearing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_linear_actuation",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Linear Actuation",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Integrated linear joint assemblies and reusable screw, motor, bearing, and displacement-sensing components.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "linear_joint_assembly",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Linear Joint Assemblies",
+      "node_kind": "canonical",
+      "node_type": "actuation_assembly",
+      "description": "Integrated linear actuation assembly combining reusable drive, transmission, support, and feedback components for humanoid mechanisms.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "linear_joint_assembly"
+      ],
+      "canonical_key": "humanoid_robotics:linear_joint_assembly",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "planetary_roller_screw",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Planetary Roller Screws",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable high-load screw transmissions that convert rotary motion into precise linear motion.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "planetary_roller_screw"
+      ],
+      "canonical_key": "humanoid_robotics:planetary_roller_screw",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ball_screw",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Ball Screws",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable recirculating-ball screw transmissions for efficient and precise linear robot actuation.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "ball_screw"
+      ],
+      "canonical_key": "humanoid_robotics:ball_screw",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "trapezoidal_screw",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Trapezoidal Lead Screws",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable sliding-contact lead screws for lower-speed linear positioning and self-locking applications.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "trapezoidal_screw"
+      ],
+      "canonical_key": "humanoid_robotics:trapezoidal_screw",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "linear_motor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Linear Motors",
+      "node_kind": "canonical",
+      "node_type": "actuation_component",
+      "description": "Reusable direct-drive motors that generate linear force without a rotary-to-linear screw transmission.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "linear_motor"
+      ],
+      "canonical_key": "humanoid_robotics:linear_motor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "screw_support_bearing",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Screw Support Bearings",
+      "node_kind": "canonical",
+      "node_type": "mechanical_component",
+      "description": "Reusable bearing sets that locate and support precision screws under combined axial and radial loads.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "screw_support_bearing"
+      ],
+      "canonical_key": "humanoid_robotics:screw_support_bearing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "linear_displacement_sensor",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_linear_actuation",
+      "level": "L4",
+      "node_name": "Linear Displacement Sensors",
+      "node_kind": "canonical",
+      "node_type": "sensor",
+      "description": "Reusable sensors that measure actuator extension or linear joint position for feedback and calibration.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_linear_actuation",
+        "linear_displacement_sensor"
+      ],
+      "canonical_key": "humanoid_robotics:linear_displacement_sensor",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_upper_limb_dexterous_hand",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Upper Limbs and Dexterous Hands",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Humanoid-specific arm and hand modules that integrate shared actuation, transmission, sensing, and control components.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "shoulder_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Shoulder Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Shoulder-specific kinematic module that integrates shared rotary joint assemblies into the humanoid upper limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "shoulder_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:shoulder_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "elbow_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Elbow Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Elbow-specific kinematic module that integrates shared rotary joint assemblies into the humanoid upper limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "elbow_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:elbow_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "wrist_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Wrist Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Wrist-specific kinematic module that integrates shared rotary joint assemblies into the humanoid upper limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "wrist_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:wrist_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_robotic_arm",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Humanoid Robotic Arms",
+      "node_kind": "canonical",
+      "node_type": "limb_assembly",
+      "description": "Integrated humanoid upper-limb assembly combining shoulder, elbow, wrist, structure, cabling, sensing, and control interfaces.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "humanoid_robotic_arm"
+      ],
+      "canonical_key": "humanoid_robotics:humanoid_robotic_arm",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dexterous_hand_assembly",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Dexterous Hand Assemblies",
+      "node_kind": "canonical",
+      "node_type": "end_effector_assembly",
+      "description": "Integrated multi-finger end-effector combining compact actuation, transmission, tactile-force sensing, and hand control interfaces.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "dexterous_hand_assembly"
+      ],
+      "canonical_key": "humanoid_robotics:dexterous_hand_assembly",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "finger_micro_actuator",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Finger Micro-Actuators",
+      "node_kind": "canonical",
+      "node_type": "actuation_component",
+      "description": "Reusable compact actuators sized for dexterous finger joints and high-density hand packaging.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "finger_micro_actuator"
+      ],
+      "canonical_key": "humanoid_robotics:finger_micro_actuator",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "micro_reducer_transmission",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Micro-Reducer Transmissions",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable miniature reduction transmissions that increase torque within compact finger and hand mechanisms.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "micro_reducer_transmission"
+      ],
+      "canonical_key": "humanoid_robotics:micro_reducer_transmission",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "tendon_flexible_transmission",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Tendon and Flexible Transmissions",
+      "node_kind": "canonical",
+      "node_type": "transmission_component",
+      "description": "Reusable cable, tendon, or flexible transmission components that route actuator force through compact articulated hands.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "tendon_flexible_transmission"
+      ],
+      "canonical_key": "humanoid_robotics:tendon_flexible_transmission",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "fingertip_tactile_force_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_upper_limb_dexterous_hand",
+      "level": "L4",
+      "node_name": "Fingertip Tactile-Force Control",
+      "node_kind": "canonical",
+      "node_type": "sensing_control_subsystem",
+      "description": "Integrated fingertip sensing and local control subsystem for contact detection, grip-force regulation, and slip response.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_upper_limb_dexterous_hand",
+        "fingertip_tactile_force_control"
+      ],
+      "canonical_key": "humanoid_robotics:fingertip_tactile_force_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_lower_limb_locomotion",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Lower Limbs and Locomotion",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Humanoid-specific leg, foot, balance, and safety modules that integrate shared actuation and sensing components for biped mobility.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "hip_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Hip Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Hip-specific kinematic module that integrates shared rotary joint assemblies into the humanoid lower limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "hip_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:hip_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "knee_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Knee Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Knee-specific kinematic module that integrates shared rotary joint assemblies into the humanoid lower limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "knee_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:knee_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "ankle_joint_module",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Ankle Joint Modules",
+      "node_kind": "canonical",
+      "node_type": "body_joint_module",
+      "description": "Ankle-specific kinematic module that integrates shared rotary joint assemblies into the humanoid lower limb.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "ankle_joint_module"
+      ],
+      "canonical_key": "humanoid_robotics:ankle_joint_module",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "leg_structure",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Humanoid Leg Structures",
+      "node_kind": "canonical",
+      "node_type": "limb_structure",
+      "description": "Load-bearing lower-limb structure that locates hip, knee, ankle, cabling, covers, and interfaces for biped locomotion.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "leg_structure"
+      ],
+      "canonical_key": "humanoid_robotics:leg_structure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "foot_buffer_structure",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Foot Buffer Structures",
+      "node_kind": "canonical",
+      "node_type": "mechanical_structure",
+      "description": "Compliant or energy-absorbing foot structures that moderate impact and improve ground contact during walking.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "foot_buffer_structure"
+      ],
+      "canonical_key": "humanoid_robotics:foot_buffer_structure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "foot_force_pressure_sensing",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Foot Force and Pressure Sensing",
+      "node_kind": "canonical",
+      "node_type": "sensor_module",
+      "description": "Integrated plantar sensing modules that measure ground reaction force, pressure distribution, and contact state.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "foot_force_pressure_sensing"
+      ],
+      "canonical_key": "humanoid_robotics:foot_force_pressure_sensing",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "dynamic_balance_safety_mechanism",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_lower_limb_locomotion",
+      "level": "L4",
+      "node_name": "Dynamic Balance Safety Mechanisms",
+      "node_kind": "canonical",
+      "node_type": "safety_subsystem",
+      "description": "Robot safety mechanisms that monitor stability margins and trigger protective posture, support, or shutdown responses.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_lower_limb_locomotion",
+        "dynamic_balance_safety_mechanism"
+      ],
+      "canonical_key": "humanoid_robotics:dynamic_balance_safety_mechanism",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_body_structure_lightweighting",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Body Structure and Lightweighting",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Load-bearing structures, reusable structural parts, routing, covers, and environmental protection for the humanoid body.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "torso_load_bearing_structure",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Torso Load-Bearing Structures",
+      "node_kind": "canonical",
+      "node_type": "mechanical_structure",
+      "description": "Central humanoid structure that carries upper-body, lower-body, battery, compute, and payload loads.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "torso_load_bearing_structure"
+      ],
+      "canonical_key": "humanoid_robotics:torso_load_bearing_structure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "lightweight_skeleton",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Lightweight Robot Skeletons",
+      "node_kind": "canonical",
+      "node_type": "mechanical_structure",
+      "description": "System-level skeletal architecture optimized for stiffness, mass distribution, manufacturability, and service access.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "lightweight_skeleton"
+      ],
+      "canonical_key": "humanoid_robotics:lightweight_skeleton",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "aluminum_magnesium_structure",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Aluminum and Magnesium Structures",
+      "node_kind": "canonical",
+      "node_type": "structural_component",
+      "description": "Reusable lightweight metal structural components produced from aluminum or magnesium alloys for robot frames and housings.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "aluminum_magnesium_structure"
+      ],
+      "canonical_key": "humanoid_robotics:aluminum_magnesium_structure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "carbon_fiber_structure",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Carbon-Fiber Structures",
+      "node_kind": "canonical",
+      "node_type": "structural_component",
+      "description": "Reusable composite structural components used where high specific stiffness and low mass justify added manufacturing complexity.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "carbon_fiber_structure"
+      ],
+      "canonical_key": "humanoid_robotics:carbon_fiber_structure",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "precision_cast_machined_parts",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Precision Cast and Machined Parts",
+      "node_kind": "canonical",
+      "node_type": "mechanical_component",
+      "description": "Reusable structural and interface parts produced by precision casting, forging, machining, or combined processes.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "precision_cast_machined_parts"
+      ],
+      "canonical_key": "humanoid_robotics:precision_cast_machined_parts",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_wiring_harness",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Robot Wiring Harnesses",
+      "node_kind": "canonical",
+      "node_type": "electrical_component",
+      "description": "Integrated cable assemblies that distribute power, communications, sensor signals, grounding, and safety circuits through the robot.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "robot_wiring_harness"
+      ],
+      "canonical_key": "humanoid_robotics:robot_wiring_harness",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "protective_shell_soft_cover",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Protective Shells and Soft Covers",
+      "node_kind": "canonical",
+      "node_type": "protective_component",
+      "description": "External rigid or compliant covers that protect mechanisms and users while preserving joint motion and serviceability.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "protective_shell_soft_cover"
+      ],
+      "canonical_key": "humanoid_robotics:protective_shell_soft_cover",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_sealing_protection",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_body_structure_lightweighting",
+      "level": "L4",
+      "node_name": "Robot Sealing and Environmental Protection",
+      "node_kind": "canonical",
+      "node_type": "protective_subsystem",
+      "description": "Seals, barriers, and enclosure features that protect robot systems from dust, moisture, debris, and accidental contact.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_body_structure_lightweighting",
+        "robot_sealing_protection"
+      ],
+      "canonical_key": "humanoid_robotics:robot_sealing_protection",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_energy_thermal_management",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Energy and Thermal Management",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Robot-integrated energy storage, power conversion, charging, thermal control, budgeting, and emergency isolation systems.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_battery_pack",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Robot Battery Packs",
+      "node_kind": "canonical",
+      "node_type": "energy_system",
+      "description": "Integrated rechargeable energy-storage packs configured for humanoid voltage, current, packaging, safety, and service requirements.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "robot_battery_pack"
+      ],
+      "canonical_key": "humanoid_robotics:robot_battery_pack",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "high_specific_energy_cell",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "High-Specific-Energy Cells",
+      "node_kind": "canonical",
+      "node_type": "energy_component",
+      "description": "Rechargeable cells selected for robot runtime and mass targets; generic battery-cell technology remains owned by its primary energy chain.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "high_specific_energy_cell"
+      ],
+      "canonical_key": "humanoid_robotics:high_specific_energy_cell",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "battery_management_system",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Battery Management Systems",
+      "node_kind": "canonical",
+      "node_type": "power_control_system",
+      "description": "Electronics and software that estimate battery state, balance cells, enforce limits, and manage charging and faults.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "battery_management_system"
+      ],
+      "canonical_key": "humanoid_robotics:battery_management_system",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_power_management_dcdc",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Robot Power Management and DC-DC",
+      "node_kind": "canonical",
+      "node_type": "power_electronics_subsystem",
+      "description": "Integrated conversion and distribution subsystem that supplies regulated robot power rails from the battery bus.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "robot_power_management_dcdc"
+      ],
+      "canonical_key": "humanoid_robotics:robot_power_management_dcdc",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "autonomous_charging",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Autonomous Robot Charging",
+      "node_kind": "canonical",
+      "node_type": "charging_system",
+      "description": "Robot-integrated docking, alignment, communication, and charging functions for unattended energy replenishment.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "autonomous_charging"
+      ],
+      "canonical_key": "humanoid_robotics:autonomous_charging",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_thermal_management",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Robot Thermal Management",
+      "node_kind": "canonical",
+      "node_type": "thermal_management_system",
+      "description": "Cooling, heat spreading, sensing, and control for batteries, compute modules, drives, motors, and enclosed robot spaces.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "robot_thermal_management"
+      ],
+      "canonical_key": "humanoid_robotics:robot_thermal_management",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_power_budget_control",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Robot Power-Budget Control",
+      "node_kind": "canonical",
+      "node_type": "power_control_software",
+      "description": "Supervisory software that allocates limited electrical and thermal capacity across compute, actuation, sensing, and auxiliary loads.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "robot_power_budget_control"
+      ],
+      "canonical_key": "humanoid_robotics:robot_power_budget_control",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "emergency_power_cutoff",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_energy_thermal_management",
+      "level": "L4",
+      "node_name": "Emergency Power Cutoff",
+      "node_kind": "canonical",
+      "node_type": "safety_subsystem",
+      "description": "Independent safety function that rapidly isolates hazardous robot power paths after faults or emergency commands.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_energy_thermal_management",
+        "emergency_power_cutoff"
+      ],
+      "canonical_key": "humanoid_robotics:emergency_power_cutoff",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_manufacturing_test_integration",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Manufacturing, Test, and Integration",
+      "node_kind": "canonical",
+      "node_type": "system_architecture_family",
+      "description": "Complete humanoid products and the assembly, calibration, qualification, operations, and scenario-integration activities required for deployment.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "humanoid_robot_complete_unit",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Complete Humanoid Robots",
+      "node_kind": "canonical",
+      "node_type": "complete_robot",
+      "description": "Integrated humanoid robot products combining embodied software, controls, sensing, actuation, body modules, energy systems, and safety functions.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "humanoid_robot_complete_unit"
+      ],
+      "canonical_key": "humanoid_robotics:humanoid_robot_complete_unit",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "joint_module_assembly",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Joint Module Assembly",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process",
+      "description": "Manufacturing process for assembling, fastening, lubricating, wiring, programming, and tracing integrated robot joint modules.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "joint_module_assembly"
+      ],
+      "canonical_key": "humanoid_robotics:joint_module_assembly",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "whole_robot_calibration",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Whole-Robot Calibration",
+      "node_kind": "canonical",
+      "node_type": "manufacturing_process",
+      "description": "System process that calibrates kinematics, sensors, actuators, timing, coordinate frames, and payload parameters on the complete robot.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "whole_robot_calibration"
+      ],
+      "canonical_key": "humanoid_robotics:whole_robot_calibration",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "motion_performance_test",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Motion Performance Testing",
+      "node_kind": "canonical",
+      "node_type": "test_process",
+      "description": "Test process for joint accuracy, repeatability, speed, torque, gait, balance, manipulation, and dynamic response.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "motion_performance_test"
+      ],
+      "canonical_key": "humanoid_robotics:motion_performance_test",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_reliability_test",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Robot Reliability Testing",
+      "node_kind": "canonical",
+      "node_type": "test_process",
+      "description": "Qualification process covering endurance, duty cycles, environmental exposure, wear, fault recurrence, and maintainability.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "robot_reliability_test"
+      ],
+      "canonical_key": "humanoid_robotics:robot_reliability_test",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_safety_test",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Robot Safety Testing",
+      "node_kind": "canonical",
+      "node_type": "test_process",
+      "description": "Verification process for limits, collision response, emergency functions, electrical safety, stability, and human-contact risks.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "robot_safety_test"
+      ],
+      "canonical_key": "humanoid_robotics:robot_safety_test",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "robot_remote_operations",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Robot Remote Operations",
+      "node_kind": "canonical",
+      "node_type": "operations_service",
+      "description": "Operational capability for fleet monitoring, diagnostics, software deployment, tele-assistance, incident handling, and service support.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "robot_remote_operations"
+      ],
+      "canonical_key": "humanoid_robotics:robot_remote_operations",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "industrial_scenario_integration",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Industrial Scenario Integration",
+      "node_kind": "canonical",
+      "node_type": "integration_service",
+      "description": "Engineering service that adapts humanoid robots to industrial tasks, tools, workcells, safety systems, and production workflows.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "industrial_scenario_integration"
+      ],
+      "canonical_key": "humanoid_robotics:industrial_scenario_integration",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "service_scenario_integration",
+      "chain_id": "humanoid_robots_embodied_intelligence",
+      "parent_node_id": "humanoid_manufacturing_test_integration",
+      "level": "L4",
+      "node_name": "Service Scenario Integration",
+      "node_kind": "canonical",
+      "node_type": "integration_service",
+      "description": "Engineering service that adapts humanoid robots to commercial, public, household, or care workflows and operating constraints.",
+      "status": "draft",
+      "primary_path": [
+        "high_end_equipment_intelligent_manufacturing",
+        "humanoid_robots_embodied_intelligence",
+        "humanoid_manufacturing_test_integration",
+        "service_scenario_integration"
+      ],
+      "canonical_key": "humanoid_robotics:service_scenario_integration",
+      "canonical_node_refs": []
+    }
+  ]
+}

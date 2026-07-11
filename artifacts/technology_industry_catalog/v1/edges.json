@@ -1,3 +1,172 @@
 {
-  "edges": []
+  "edges": [
+    {
+      "edge_id": "rotary_joint_assembly_uses_frameless_torque_motor",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "frameless_torque_motor",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable frameless_torque_motor capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_harmonic_reducer",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "harmonic_reducer",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable harmonic_reducer capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_precision_planetary_reducer",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "precision_planetary_reducer",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable precision_planetary_reducer capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_joint_encoder_module",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "joint_encoder_module",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_encoder_module capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_joint_brake",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "joint_brake",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_brake capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "rotary_joint_assembly_uses_joint_bearing",
+      "source_node_id": "rotary_joint_assembly",
+      "target_node_id": "joint_bearing",
+      "relationship_type": "uses",
+      "notes": "rotary_joint_assembly integrates or depends on the reusable joint_bearing capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_planetary_roller_screw",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "planetary_roller_screw",
+      "relationship_type": "uses",
+      "notes": "linear_joint_assembly integrates or depends on the reusable planetary_roller_screw capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_ball_screw",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "ball_screw",
+      "relationship_type": "uses",
+      "notes": "linear_joint_assembly integrates or depends on the reusable ball_screw capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_linear_motor",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "linear_motor",
+      "relationship_type": "uses",
+      "notes": "linear_joint_assembly integrates or depends on the reusable linear_motor capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_screw_support_bearing",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "screw_support_bearing",
+      "relationship_type": "uses",
+      "notes": "linear_joint_assembly integrates or depends on the reusable screw_support_bearing capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "linear_joint_assembly_uses_linear_displacement_sensor",
+      "source_node_id": "linear_joint_assembly",
+      "target_node_id": "linear_displacement_sensor",
+      "relationship_type": "uses",
+      "notes": "linear_joint_assembly integrates or depends on the reusable linear_displacement_sensor capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "shoulder_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "shoulder_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "shoulder_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "elbow_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "elbow_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "elbow_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "wrist_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "wrist_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "wrist_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "hip_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "hip_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "hip_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "knee_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "knee_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "knee_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "ankle_joint_module_uses_rotary_joint_assembly",
+      "source_node_id": "ankle_joint_module",
+      "target_node_id": "rotary_joint_assembly",
+      "relationship_type": "uses",
+      "notes": "ankle_joint_module integrates or depends on the reusable rotary_joint_assembly capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "dexterous_hand_assembly_uses_finger_micro_actuator",
+      "source_node_id": "dexterous_hand_assembly",
+      "target_node_id": "finger_micro_actuator",
+      "relationship_type": "uses",
+      "notes": "dexterous_hand_assembly integrates or depends on the reusable finger_micro_actuator capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "dexterous_hand_assembly_uses_micro_reducer_transmission",
+      "source_node_id": "dexterous_hand_assembly",
+      "target_node_id": "micro_reducer_transmission",
+      "relationship_type": "uses",
+      "notes": "dexterous_hand_assembly integrates or depends on the reusable micro_reducer_transmission capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "dexterous_hand_assembly_uses_tendon_flexible_transmission",
+      "source_node_id": "dexterous_hand_assembly",
+      "target_node_id": "tendon_flexible_transmission",
+      "relationship_type": "uses",
+      "notes": "dexterous_hand_assembly integrates or depends on the reusable tendon_flexible_transmission capability represented by the target canonical node.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "dexterous_hand_assembly_uses_fingertip_tactile_force_control",
+      "source_node_id": "dexterous_hand_assembly",
+      "target_node_id": "fingertip_tactile_force_control",
+      "relationship_type": "uses",
+      "notes": "dexterous_hand_assembly integrates or depends on the reusable fingertip_tactile_force_control capability represented by the target canonical node.",
+      "source_ids": []
+    }
+  ]
 }
