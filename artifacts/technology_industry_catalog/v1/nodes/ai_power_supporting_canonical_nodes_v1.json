@@ -26,7 +26,7 @@
       "node_name": "Power MOSFET Device",
       "node_kind": "canonical",
       "node_type": "power_semiconductor",
-      "description": "Canonical ownership node for power mosfet device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power MOSFET device is a silicon field-effect transistor optimized for efficient switching or conduction in power-conversion circuits. This canonical node covers device structure, die technology, electrical ratings, packaging interface, and manufacturing ownership; it excludes SiC and GaN power devices and complete converter modules. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -45,7 +45,7 @@
       "node_name": "Silicon Carbide Power Device",
       "node_kind": "canonical",
       "node_type": "power_semiconductor",
-      "description": "Canonical ownership node for silicon carbide power device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A silicon carbide power device is a SiC diode or transistor designed for high-voltage, high-frequency, or high-temperature power conversion. This canonical node covers SiC substrate and epitaxy dependent device technology, die design, electrical ratings, and device manufacturing; it excludes silicon MOSFETs and GaN devices. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -64,7 +64,7 @@
       "node_name": "Gallium Nitride Power Device",
       "node_kind": "canonical",
       "node_type": "power_semiconductor",
-      "description": "Canonical ownership node for gallium nitride power device products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A gallium nitride power device is a GaN transistor or integrated power device optimized for high-frequency, high-efficiency switching. This canonical node covers GaN device structure, die technology, electrical ratings, packaging interface, and manufacturing; it excludes silicon MOSFET and SiC device categories. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -101,7 +101,7 @@
       "node_name": "Power Cable",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for power cable products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power cable is an insulated conductor assembly that transmits electrical energy between fixed equipment or distribution points. This canonical node covers conductors, insulation, shielding, armor, jackets, terminations, and rated installation configurations; it excludes rigid busbars and equipment-internal flexible copper links. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -120,7 +120,7 @@
       "node_name": "Power Busbar",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for power busbar products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power busbar is a rigid conductive bar or laminated assembly used for high-current connection within switchboards, equipment, or compact distribution systems. This canonical node covers conductor geometry, insulation, joints, supports, plating, and thermal-current ratings; it excludes enclosed building busway and flexible copper connections. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -139,7 +139,7 @@
       "node_name": "Data Center Busway",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for data center busway products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center busway is an enclosed, prefabricated conductor system that distributes high-current power along a facility route using defined tap-off points. This canonical node covers housing, conductors, insulation, joints, tap boxes, supports, and current ratings; it differs from bare busbars and cable-based feeders. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -158,7 +158,7 @@
       "node_name": "High Current Power Connector",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for high current power connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A high-current power connector is a separable electromechanical interface engineered to carry high continuous or peak current between power assemblies. This canonical node covers contacts, plating, housing, locking, insulation, thermal performance, and mating-cycle ratings; it excludes signal connectors and fixed busbar joints. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -177,7 +177,7 @@
       "node_name": "HVDC Power Connector",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for hvdc power connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An HVDC power connector is a separable connector rated for high-voltage direct-current distribution with controlled insulation, creepage, clearance, and touch safety. This canonical node covers contacts, housing, keying, arc and disconnect behavior, thermal ratings, and mating interfaces; it excludes low-voltage high-current connectors. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -196,7 +196,7 @@
       "node_name": "Copper Flexible Interconnect",
       "node_kind": "canonical",
       "node_type": "power_interconnect",
-      "description": "Canonical ownership node for copper flexible interconnect products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A copper flexible interconnect is a laminated foil, braid, or flexible conductor assembly that carries high current while accommodating movement, tolerance, or vibration. This canonical node covers copper conductor construction, terminations, insulation, geometry, fatigue, and thermal-current capability; it excludes rigid busbars and cable harnesses. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -215,7 +215,7 @@
       "node_name": "Power Magnetic Component",
       "node_kind": "canonical",
       "node_type": "passive_component",
-      "description": "Canonical ownership node for power magnetic component products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power magnetic component is an inductor, transformer, choke, or coupled magnetic used to store energy, provide isolation, or filter power-conversion waveforms. This canonical node covers core material, winding, insulation, loss, saturation, thermal design, and component manufacturing; it excludes complete converter modules and capacitors. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -234,7 +234,7 @@
       "node_name": "Power Capacitor",
       "node_kind": "canonical",
       "node_type": "passive_component",
-      "description": "Canonical ownership node for power capacitor products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power capacitor stores and releases electrical charge for DC-link buffering, filtering, snubbing, compensation, or pulse-power duty. This canonical node covers dielectric technology, electrodes, packaging, voltage and ripple ratings, lifetime, and thermal behavior; it excludes magnetic components and battery storage. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -271,7 +271,7 @@
       "node_name": "Data Center Cold Plate",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_equipment",
-      "description": "Canonical ownership node for data center cold plate products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center cold plate is a liquid-cooled heat-transfer component mounted directly to a processor, accelerator, memory device, or other heat source. This canonical node covers internal flow channels, thermal interface, materials, pressure drop, sealing, mounting, and heat-flux performance; it excludes CDUs and room-level heat exchangers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -290,7 +290,7 @@
       "node_name": "Immersion Cooling System",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_system",
-      "description": "Canonical ownership node for immersion cooling system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An immersion cooling system removes heat by submerging electronic equipment in a dielectric fluid using single-phase or two-phase heat transfer. This canonical node covers tanks, fluid management, heat rejection interfaces, equipment compatibility, controls, and service procedures; it excludes cold-plate loops and spray cooling. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -309,7 +309,7 @@
       "node_name": "Spray Cooling System",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_system",
-      "description": "Canonical ownership node for spray cooling system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A spray cooling system removes heat by directing controlled droplets or jets of coolant onto heat-transfer surfaces or electronic assemblies. This canonical node covers nozzles, pumps, fluid collection, filtration, heat rejection, controls, and enclosure integration; it excludes full immersion tanks and closed cold plates. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -328,7 +328,7 @@
       "node_name": "Coolant Distribution Unit",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_equipment",
-      "description": "Canonical ownership node for coolant distribution unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A coolant distribution unit separates and controls facility-water and technology-cooling loops while delivering conditioned coolant to IT equipment. This canonical node covers heat exchanger, pumps, valves, filtration, sensors, controls, redundancy, and secondary-loop connections; it excludes chillers and endpoint cold plates. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -347,7 +347,7 @@
       "node_name": "Data Center Chiller",
       "node_kind": "canonical",
       "node_type": "thermal_equipment",
-      "description": "Canonical ownership node for data center chiller products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center chiller produces chilled water or another cooling medium by transferring heat through a refrigeration or equivalent thermodynamic cycle. This canonical node covers compressors or alternative prime movers, evaporators, condensers, controls, pumps where integral, and rated cooling performance; it excludes CDUs and dry coolers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -366,7 +366,7 @@
       "node_name": "Liquid Cooling Pump",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_component",
-      "description": "Canonical ownership node for liquid cooling pump products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A liquid cooling pump provides controlled coolant flow and pressure within a cooling loop. This canonical node covers pump hydraulic design, motor, seals or magnetic coupling, controls, cavitation limits, reliability, and operating envelope; it excludes complete CDUs and chillers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -385,7 +385,7 @@
       "node_name": "Data Center Heat Exchanger",
       "node_kind": "canonical",
       "node_type": "thermal_equipment",
-      "description": "Canonical ownership node for data center heat exchanger products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center heat exchanger transfers thermal energy between two fluid or air streams without mixing them. This canonical node covers plate, shell-and-tube, coil, or equivalent exchanger construction, approach temperature, pressure drop, materials, and fouling limits; it excludes refrigeration chillers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -404,7 +404,7 @@
       "node_name": "Liquid Cooling Quick Connector",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_component",
-      "description": "Canonical ownership node for liquid cooling quick connector products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A liquid cooling quick connector provides repeatable, low-leak, serviceable coupling of coolant lines to equipment or manifolds. This canonical node covers valves, seals, materials, pressure and flow ratings, dripless behavior, keying, and mating durability; it excludes electrical connectors and permanent pipe joints. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -423,7 +423,7 @@
       "node_name": "Liquid Cooling Pipe System",
       "node_kind": "canonical",
       "node_type": "liquid_cooling_component",
-      "description": "Canonical ownership node for liquid cooling pipe system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A liquid cooling pipe system conveys coolant between heat sources, distribution units, and heat-rejection equipment through fixed or flexible fluid paths. This canonical node covers pipes or hoses, manifolds, fittings, supports, insulation, pressure rating, cleanliness, and routing; it excludes pumps, quick connectors, and heat exchangers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -442,7 +442,7 @@
       "node_name": "Data Center Coolant",
       "node_kind": "canonical",
       "node_type": "thermal_material",
-      "description": "Canonical ownership node for data center coolant products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Data center coolant is the engineered heat-transfer fluid used in direct-liquid, immersion, or facility cooling loops. This canonical node covers base fluid, dielectric properties where required, corrosion control, material compatibility, viscosity, thermal capacity, stability, and maintenance limits; it excludes cooling hardware. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -461,7 +461,7 @@
       "node_name": "Liquid Cooling Leak Detection System",
       "node_kind": "canonical",
       "node_type": "thermal_monitoring",
-      "description": "Canonical ownership node for liquid cooling leak detection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A liquid cooling leak detection system identifies, locates, and alarms unintended coolant release before it damages equipment or interrupts service. This canonical node covers point sensors, sensing cable, pressure or flow analytics, controllers, alarm interfaces, and test functions; it excludes general facility monitoring and fluid containment. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -480,7 +480,7 @@
       "node_name": "Data Center Waste Heat Recovery System",
       "node_kind": "canonical",
       "node_type": "thermal_recovery",
-      "description": "Canonical ownership node for data center waste heat recovery system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center waste heat recovery system captures rejected thermal energy and conditions it for reuse in heating, industrial processes, or energy conversion. This canonical node covers heat capture, temperature upgrading where needed, storage or transfer interfaces, controls, and delivery integration; it excludes primary equipment cooling duty. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -499,7 +499,7 @@
       "node_name": "Data Center Infrastructure Management Platform",
       "node_kind": "canonical",
       "node_type": "data_center_management_software",
-      "description": "Canonical ownership node for data center infrastructure management platform products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center infrastructure management platform integrates facility asset, capacity, power, cooling, alarm, and workflow information for operational oversight. This canonical node covers DCIM data models, device integration, visualization, capacity planning, change management, and reporting; it differs from building controls and electrical-only monitoring. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -518,7 +518,7 @@
       "node_name": "Data Center Electrical Design Service",
       "node_kind": "canonical",
       "node_type": "engineering_service",
-      "description": "Canonical ownership node for data center electrical design service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Data center electrical design service produces the engineered power topology and construction documents for a data center facility. This canonical node covers load studies, one-line diagrams, equipment selection criteria, protection coordination, grounding, layouts, specifications, and design assurance; it excludes EPC construction execution. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -537,7 +537,7 @@
       "node_name": "Modular Data Center System",
       "node_kind": "canonical",
       "node_type": "data_center_system",
-      "description": "Canonical ownership node for modular data center system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A modular data center system is a factory-engineered facility block that integrates defined combinations of IT space, power, cooling, controls, and enclosure systems. This canonical node covers module architecture, interfaces, transportable construction, factory testing, and site assembly; it excludes a power-only prefabricated module. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -556,7 +556,7 @@
       "node_name": "Liquid Cooling Integration Service",
       "node_kind": "canonical",
       "node_type": "thermal_integration_service",
-      "description": "Canonical ownership node for liquid cooling integration service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Liquid cooling integration service engineers and connects cooling equipment, controls, piping, coolant, and IT interfaces into an operable data center thermal system. This canonical node covers system design, compatibility, installation, flushing, controls integration, testing, and handover; it excludes ownership of individual cold plates, CDUs, or chillers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -575,7 +575,7 @@
       "node_name": "Data Center EPC Service",
       "node_kind": "canonical",
       "node_type": "epc_service",
-      "description": "Canonical ownership node for data center epc service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Data center EPC service delivers engineering, procurement, and construction responsibility for a defined facility scope under an integrated project contract. This canonical node covers design management, sourcing, construction, schedule, cost, quality, safety, integration, and handover; it differs from standalone design and commissioning services. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -594,7 +594,7 @@
       "node_name": "Data Center Commissioning Certification Service",
       "node_kind": "canonical",
       "node_type": "commissioning_service",
-      "description": "Canonical ownership node for data center commissioning certification service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Data center commissioning and certification service verifies that installed facility systems meet design intent, performance criteria, safety requirements, and selected standards. This canonical node covers inspection, functional testing, integrated systems testing, documentation, issue closure, and certification support; it excludes routine facility operations. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -613,7 +613,7 @@
       "node_name": "Data Center Facility Operations Service",
       "node_kind": "canonical",
       "node_type": "operations_service",
-      "description": "Canonical ownership node for data center facility operations service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Data center facility operations service runs and maintains electrical, cooling, control, safety, and physical infrastructure after handover. This canonical node covers staffing, procedures, monitoring, preventive maintenance, incident response, change control, spares, and service-level performance; it excludes construction and commissioning. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -650,7 +650,7 @@
       "node_name": "Electrical Power Monitoring Software",
       "node_kind": "canonical",
       "node_type": "energy_management_software",
-      "description": "Canonical ownership node for electrical power monitoring software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Electrical power monitoring software collects, normalizes, analyzes, alarms, and reports electrical measurements across facility distribution assets. This canonical node covers EPMS device integration, event capture, waveform and trend analysis, dashboards, alarms, and reporting; it excludes closed-loop building control and broad DCIM workflows. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -669,7 +669,7 @@
       "node_name": "Building Management Software",
       "node_kind": "canonical",
       "node_type": "facility_management_software",
-      "description": "Canonical ownership node for building management software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Building management software supervises and controls facility mechanical and electrical systems through schedules, setpoints, alarms, and automation logic. This canonical node covers BMS integration for HVAC, pumps, valves, environmental sensors, and selected electrical interfaces; it differs from DCIM and electrical-only EPMS platforms. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -688,7 +688,7 @@
       "node_name": "Power Distribution Monitoring Software",
       "node_kind": "canonical",
       "node_type": "energy_management_software",
-      "description": "Canonical ownership node for power distribution monitoring software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Power distribution monitoring software tracks circuit loading, status, alarms, and capacity from distribution boards through branch or rack feeds. This canonical node covers device telemetry, circuit hierarchy, thresholds, branch analytics, alarm routing, and capacity views; it excludes waveform-focused EPMS analysis and equipment control. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -707,7 +707,7 @@
       "node_name": "Thermal Control Software",
       "node_kind": "canonical",
       "node_type": "thermal_control_software",
-      "description": "Canonical ownership node for thermal control software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Thermal control software coordinates cooling equipment and loop setpoints to maintain temperature, flow, pressure, humidity, and efficiency targets. This canonical node covers sensor fusion, control sequences, optimization, equipment staging, limits, and operator interfaces; it excludes physical cooling equipment and general BMS scope. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -726,7 +726,7 @@
       "node_name": "Power Fault Prediction Software",
       "node_kind": "canonical",
       "node_type": "predictive_maintenance_software",
-      "description": "Canonical ownership node for power fault prediction software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Power fault prediction software uses condition, event, and operating data to estimate degradation or failure risk in electrical assets. This canonical node covers feature processing, anomaly detection, prognostics, risk scoring, alerts, and maintenance recommendations; it excludes protection relays that trip faults in real time. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -745,7 +745,7 @@
       "node_name": "Compute Energy Scheduling Software",
       "node_kind": "canonical",
       "node_type": "energy_scheduling_software",
-      "description": "Canonical ownership node for compute energy scheduling software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Compute-energy scheduling software coordinates workload timing or placement with power availability, capacity, price, emissions, or thermal constraints. This canonical node covers forecast inputs, optimization, policy constraints, scheduler interfaces, dispatch recommendations, and feedback; it excludes the compute scheduler core and physical power equipment. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -764,7 +764,7 @@
       "node_name": "Carbon Energy Cost Optimization Software",
       "node_kind": "canonical",
       "node_type": "energy_optimization_software",
-      "description": "Canonical ownership node for carbon energy cost optimization software products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Carbon, energy, and cost optimization software measures and optimizes electricity expense, energy use, demand charges, and emissions attributes. This canonical node covers tariffs, contracts, meter data, carbon factors, forecasts, scenario analysis, optimization, and reporting; it excludes renewable procurement execution and equipment controls. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -801,7 +801,7 @@
       "node_name": "Grid Connection Engineering Service",
       "node_kind": "canonical",
       "node_type": "grid_connection_service",
-      "description": "Canonical ownership node for grid connection engineering service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Grid connection engineering service develops and secures the technical connection between a customer facility and the serving utility network. This canonical node covers load studies, interconnection applications, utility coordination, connection design, energization requirements, and acceptance; it excludes construction of internal facility distribution. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -820,7 +820,7 @@
       "node_name": "Data Center Substation System",
       "node_kind": "canonical",
       "node_type": "grid_infrastructure",
-      "description": "Canonical ownership node for data center substation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center substation system receives utility voltage and transforms, switches, protects, and meters power for downstream facility distribution. This canonical node covers substation primary equipment, protection, control, metering, grounding, and physical integration; it excludes room-level PDUs and server power conversion. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -839,7 +839,7 @@
       "node_name": "Power Transformer",
       "node_kind": "canonical",
       "node_type": "grid_equipment",
-      "description": "Canonical ownership node for power transformer products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power transformer is electromagnetic equipment that transfers AC power between voltage levels while providing specified insulation and impedance characteristics. This canonical node covers the transformer active part, tank or enclosure, cooling, bushings, tap changing, monitoring, and accessories; it excludes switchgear and solid-state transformers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -858,7 +858,7 @@
       "node_name": "Medium Voltage Switchgear",
       "node_kind": "canonical",
       "node_type": "grid_equipment",
-      "description": "Canonical ownership node for medium voltage switchgear products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Medium voltage switchgear is an enclosed assembly that switches, isolates, protects, and meters medium-voltage circuits. This canonical node covers circuit breakers, disconnects, bus, instrument transformers, protection interfaces, and interlocks; it excludes transformers and low-voltage rack distribution. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -877,7 +877,7 @@
       "node_name": "Relay Protection System",
       "node_kind": "canonical",
       "node_type": "grid_protection",
-      "description": "Canonical ownership node for relay protection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A relay protection system detects abnormal electrical conditions and commands selective isolation of affected grid or substation circuits. This canonical node covers protective relays, measurement inputs, logic, communications, trip outputs, settings, and coordination; it excludes power-quality correction and DC device protection. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -896,7 +896,7 @@
       "node_name": "Power Quality Management System",
       "node_kind": "canonical",
       "node_type": "power_quality",
-      "description": "Canonical ownership node for power quality management system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A power quality management system measures and mitigates voltage variation, harmonics, flicker, imbalance, transients, and reactive-power issues. This canonical node covers monitoring, analytics, filters, compensators, control logic, and compliance reporting; it excludes relay protection and ordinary energy metering. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -915,7 +915,7 @@
       "node_name": "DC Circuit Breaker",
       "node_kind": "canonical",
       "node_type": "dc_protection",
-      "description": "Canonical ownership node for dc circuit breaker products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A DC circuit breaker interrupts direct-current faults and isolates DC feeders or buses under rated voltage, current, and fault-energy conditions. This canonical node covers mechanical, hybrid, or solid-state interruption hardware with detection and isolation interfaces; it excludes AC switchgear and system-level DC protection coordination. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -934,7 +934,7 @@
       "node_name": "DC Protection System",
       "node_kind": "canonical",
       "node_type": "dc_protection",
-      "description": "Canonical ownership node for dc protection system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A DC protection system coordinates detection, selectivity, isolation, grounding response, and recovery across a direct-current network. This canonical node covers sensors, protection algorithms, relay logic, breaker coordination, fault location, and protection settings; it excludes the standalone DC breaker product. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -971,7 +971,7 @@
       "node_name": "Bulk Grid Power Supply Service",
       "node_kind": "canonical",
       "node_type": "energy_supply_service",
-      "description": "Canonical ownership node for bulk grid power supply service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Bulk grid power supply service is the contracted delivery of utility-scale electricity from an interconnected transmission or distribution grid to a customer meter. This canonical node covers firm-energy terms, delivery intervals, curtailment conditions, and settlement interfaces; it excludes onsite generation and physical grid-connection equipment. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -990,7 +990,7 @@
       "node_name": "Renewable Power Procurement Service",
       "node_kind": "canonical",
       "node_type": "energy_procurement_service",
-      "description": "Canonical ownership node for renewable power procurement service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Renewable power procurement service arranges traceable electricity supply through power-purchase agreements, green tariffs, certificates, or direct market contracts. This canonical node covers contract structuring, attribute matching, volume shaping, and supplier performance; it excludes ownership of renewable generation assets and ordinary grid supply. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1009,7 +1009,7 @@
       "node_name": "Distributed Energy Generation System",
       "node_kind": "canonical",
       "node_type": "generation_system",
-      "description": "Canonical ownership node for distributed energy generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A distributed energy generation system is an onsite or near-site generation plant connected behind or close to the customer interconnection point. This canonical node covers prime movers, generators, controls, fuel interfaces, and electrical balance of plant; it excludes utility grid supply and dedicated standby-only generators. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1028,7 +1028,7 @@
       "node_name": "Gas Turbine Generation System",
       "node_kind": "canonical",
       "node_type": "generation_equipment",
-      "description": "Canonical ownership node for gas turbine generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A gas turbine generation system converts gaseous fuel into continuous or dispatchable electrical output through a turbine-generator package. This canonical node covers the turbine, generator, inlet and exhaust systems, fuel conditioning, controls, and balance of plant; it excludes reciprocating gas backup sets and grid procurement. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1047,7 +1047,7 @@
       "node_name": "Nuclear Power Supply Service",
       "node_kind": "canonical",
       "node_type": "energy_supply_service",
-      "description": "Canonical ownership node for nuclear power supply service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Nuclear power supply service is the commercial delivery of electricity or capacity sourced from licensed nuclear generating units. This canonical node covers supply contracting, availability obligations, scheduling, and delivered-energy settlement; it excludes nuclear plant equipment ownership and onsite generation integration. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1066,7 +1066,7 @@
       "node_name": "Microgrid Generation System",
       "node_kind": "canonical",
       "node_type": "generation_system",
-      "description": "Canonical ownership node for microgrid generation system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A microgrid generation system coordinates local generation, storage, loads, and an optional grid connection as a controllable electrical island. This canonical node covers microgrid controls, dispatch interfaces, islanding logic, synchronization, and integrated generation resources; it excludes standalone generators and utility protection equipment. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1085,7 +1085,7 @@
       "node_name": "Diesel Generator Set",
       "node_kind": "canonical",
       "node_type": "backup_generation",
-      "description": "Canonical ownership node for diesel generator set products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A diesel generator set is an engine-driven alternator package designed to provide standby or prime electrical power using diesel fuel. This canonical node covers engine, alternator, starting system, controls, cooling, exhaust, and packaged auxiliaries; it excludes gas-fired generators and automatic transfer switches. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1104,7 +1104,7 @@
       "node_name": "Gas Fired Backup Generator",
       "node_kind": "canonical",
       "node_type": "backup_generation",
-      "description": "Canonical ownership node for gas fired backup generator products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A gas-fired backup generator is a standby engine-generator or turbine-generator package fueled by natural gas or another gaseous fuel. This canonical node covers generator package, fuel train, starting, controls, cooling, and exhaust for backup duty; it excludes continuous gas-turbine plants and diesel generator sets. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1123,7 +1123,7 @@
       "node_name": "Black Start Generation Service",
       "node_kind": "canonical",
       "node_type": "resilience_service",
-      "description": "Canonical ownership node for black start generation service products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "Black start generation service restores an electrical island or facility bus from a de-energized state without relying on the normal incoming supply. This canonical node covers start sequencing, auxiliary energization, synchronization, and restoration procedures backed by eligible generation; it excludes ordinary standby generation operation. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1160,7 +1160,7 @@
       "node_name": "Automatic Transfer Switch",
       "node_kind": "canonical",
       "node_type": "power_switching",
-      "description": "Canonical ownership node for automatic transfer switch products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An automatic transfer switch transfers a load between normal and alternate AC sources when source conditions or operating commands require a changeover. This canonical node covers source sensing, transfer mechanism, controls, interlocks, bypass options, and transition mode; it excludes static transfer switches and generator controls. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1176,10 +1176,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "Line Frequency UPS",
+      "node_name": "Line-Frequency UPS",
       "node_kind": "canonical",
       "node_type": "ups_equipment",
-      "description": "Canonical ownership node for line frequency ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A line-frequency UPS uses transformer-based low-frequency power conversion to provide conditioned, uninterrupted AC output. This canonical node covers rectifier, inverter, transformer, static bypass, controls, and system interfaces; it excludes high-frequency transformerless and modular UPS architectures. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1195,10 +1195,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "High Frequency UPS",
+      "node_name": "High-Frequency UPS",
       "node_kind": "canonical",
       "node_type": "ups_equipment",
-      "description": "Canonical ownership node for high frequency ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A high-frequency UPS uses high-frequency switching conversion, typically without a line-frequency output transformer, to provide uninterrupted AC power. This canonical node covers power stages, bypass, controls, filters, and cabinet integration; it excludes transformer-based line-frequency and modular frame-based UPS products. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1217,7 +1217,7 @@
       "node_name": "Modular UPS",
       "node_kind": "canonical",
       "node_type": "ups_equipment",
-      "description": "Canonical ownership node for modular ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A modular UPS is a scalable uninterruptible power system assembled from parallel, replaceable power modules within a common frame and control architecture. This canonical node covers power modules, frames, bypass, redundancy management, controls, and hot-service interfaces; it excludes monolithic line-frequency and high-frequency UPS units. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1233,10 +1233,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "Medium Voltage UPS",
+      "node_name": "Medium-Voltage UPS",
       "node_kind": "canonical",
       "node_type": "ups_equipment",
-      "description": "Canonical ownership node for medium voltage ups products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A medium-voltage UPS provides uninterrupted conditioned power directly at medium-voltage distribution levels. This canonical node covers medium-voltage conversion stages, transformers where used, switchgear interfaces, bypass, protection, and controls; it excludes low-voltage UPS equipment. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1255,7 +1255,7 @@
       "node_name": "Static Transfer Switch",
       "node_kind": "canonical",
       "node_type": "power_switching",
-      "description": "Canonical ownership node for static transfer switch products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A static transfer switch uses semiconductor switching devices to transfer a critical AC load rapidly between independent sources. This canonical node covers source qualification, synchronized transfer logic, thyristor or equivalent switches, controls, and bypass; it excludes electromechanical automatic transfer switches. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1271,10 +1271,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "Rectifier Inverter System",
+      "node_name": "Rectifier and Inverter System",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for rectifier inverter system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A rectifier-inverter system converts AC to DC and DC to AC as coordinated power-conversion stages for controlled bidirectional or unidirectional energy flow. This canonical node covers rectifier and inverter bridges, filters, DC link, controls, protection, and interfaces; it excludes the complete UPS function and standalone central rectifiers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1290,10 +1290,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "240 400 V HVDC Power System",
+      "node_name": "240-400 V HVDC Power System",
       "node_kind": "canonical",
       "node_type": "dc_power_architecture",
-      "description": "Canonical ownership node for 240 400 v hvdc power system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A 240-400 V HVDC power system distributes direct current at nominal voltages within the 240 V to 400 V class from centralized conversion to downstream loads. This canonical node covers rectification, DC distribution interfaces, grounding, protection, controls, and rated equipment compatibility; it excludes 800 VDC architectures and server-board conversion. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1312,7 +1312,7 @@
       "node_name": "800 VDC Power System",
       "node_kind": "canonical",
       "node_type": "dc_power_architecture",
-      "description": "Canonical ownership node for 800 vdc power system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An 800VDC power system distributes direct current around an 800 V nominal architecture to reduce current and conductor requirements at high power. This canonical node covers central conversion, 800 VDC buses, insulation coordination, protection, controls, and downstream conversion interfaces; it excludes 240-400 V HVDC systems. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1331,7 +1331,7 @@
       "node_name": "Central Rectifier System",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for central rectifier system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A central rectifier system converts incoming AC power to a shared DC output for multiple downstream distribution branches or loads. This canonical node covers rectifier cabinets, filters, controls, redundancy, protection, and DC output interfaces; it excludes downstream DC-DC modules and complete UPS systems. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1350,7 +1350,7 @@
       "node_name": "DC Power Bus System",
       "node_kind": "canonical",
       "node_type": "dc_distribution",
-      "description": "Canonical ownership node for dc power bus system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A DC power bus system is the shared conductive and controlled distribution backbone that carries direct current between conversion and load stages. This canonical node covers bus conductors, sectionalization, monitoring, grounding interfaces, connection points, and rated topology; it excludes the rectifier source and individual DC breakers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1366,10 +1366,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "Solid State Transformer",
+      "node_name": "Solid-State Transformer",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for solid state transformer products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A solid-state transformer uses power semiconductors and high-frequency isolation to convert voltage and control power flow between electrical domains. This canonical node covers converter stages, isolation magnetics, controls, cooling, protection, and communications; it excludes conventional electromagnetic power transformers. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1388,7 +1388,7 @@
       "node_name": "Data Center Power Distribution Unit",
       "node_kind": "canonical",
       "node_type": "power_distribution",
-      "description": "Canonical ownership node for data center power distribution unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A data center power distribution unit receives facility power and distributes protected branch circuits to downstream room or row loads. This canonical node covers input switching, transformation where included, panelboards, branch protection, metering, and output feeders; it excludes row-distribution cabinets and rack PDUs. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1404,10 +1404,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "Row Level Power Distribution System",
+      "node_name": "Row-Level Power Distribution System",
       "node_kind": "canonical",
       "node_type": "power_distribution",
-      "description": "Canonical ownership node for row level power distribution system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A row-level power distribution system allocates and protects power for a defined group of equipment racks between room distribution and individual rack feeds. This canonical node covers row cabinets, branch switching, metering, protection, connectors, and feeder management; it excludes upstream PDUs and outlet-level intelligent rack PDUs. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1426,7 +1426,7 @@
       "node_name": "Intelligent Rack PDU",
       "node_kind": "canonical",
       "node_type": "power_distribution",
-      "description": "Canonical ownership node for intelligent rack pdu products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An intelligent rack PDU distributes power to equipment outlets within one rack while measuring and optionally switching power at inlet, branch, or outlet level. This canonical node covers rack-mounted outlets, metering, remote switching, environmental inputs, communications, and alarms; it excludes room PDUs and row distribution systems. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1445,7 +1445,7 @@
       "node_name": "Server Power Shelf",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for server power shelf products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A server power shelf is a rack-level assembly of parallel power-conversion modules that supplies a shared DC output to one or more compute trays. This canonical node covers shelf mechanics, hot-swappable modules, current sharing, control, telemetry, bus interfaces, and redundancy; it excludes individual server PSUs and room PDUs. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1464,7 +1464,7 @@
       "node_name": "Server Power Supply Unit",
       "node_kind": "canonical",
       "node_type": "server_power",
-      "description": "Canonical ownership node for server power supply unit products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A server power supply unit converts facility or rack input power into regulated DC rails for a server or compute chassis. This canonical node covers input filtering, AC-DC or DC-DC conversion, power-factor correction where applicable, protection, cooling, telemetry, and chassis interfaces; it excludes rack power shelves. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1480,10 +1480,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "AC DC Power Module",
+      "node_name": "AC-DC Power Module",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for ac dc power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "An AC-DC power module converts alternating-current input into an isolated or non-isolated regulated direct-current output as a component of power equipment. This canonical node covers rectification, power-factor correction where used, switching conversion, isolation, control, protection, and module interfaces; it excludes complete server PSUs. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1499,10 +1499,10 @@
       "chain_id": "power_electronics_power_supply_equipment",
       "parent_node_id": "power_conversion_distribution_control",
       "level": "L4",
-      "node_name": "DC DC Power Module",
+      "node_name": "DC-DC Power Module",
       "node_kind": "canonical",
       "node_type": "power_conversion",
-      "description": "Canonical ownership node for dc dc power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A DC-DC power module converts one direct-current voltage to another regulated DC output for intermediate-bus or point-of-load applications. This canonical node covers switching stage, magnetics where used, control, protection, thermal design, and module interfaces; it excludes AC input conversion and board-level VRMs. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1521,7 +1521,7 @@
       "node_name": "Voltage Regulator Module",
       "node_kind": "canonical",
       "node_type": "board_power",
-      "description": "Canonical ownership node for voltage regulator module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A voltage regulator module is a board-level point-of-load converter that supplies tightly regulated low-voltage, high-current power to processors or memory. This canonical node covers multiphase power stages, drivers, inductors, capacitors, sensing, control interfaces, and thermal limits; it excludes upstream DC-DC modules. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1540,7 +1540,7 @@
       "node_name": "Multiphase Power Controller",
       "node_kind": "canonical",
       "node_type": "power_control",
-      "description": "Canonical ownership node for multiphase power controller products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A multiphase power controller coordinates phase timing, current sharing, voltage regulation, protection, and telemetry for multiphase point-of-load converters. This canonical node covers control IC functions and gate-drive coordination; it excludes the MOSFET power stages, magnetic components, capacitors, and complete VRM assembly. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1559,7 +1559,7 @@
       "node_name": "Prefabricated Power Module",
       "node_kind": "canonical",
       "node_type": "power_system_integration",
-      "description": "Canonical ownership node for prefabricated power module products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A prefabricated power module is a factory-integrated enclosure containing selected switching, conversion, protection, control, and distribution equipment for site installation. This canonical node covers module engineering, enclosure, internal equipment integration, wiring, testing, and external interfaces; it excludes the complete modular data center facility. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1596,7 +1596,7 @@
       "node_name": "Stationary Battery Backup System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "Canonical ownership node for stationary battery backup system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A stationary battery backup system stores electrical energy in fixed battery assemblies and releases it to support critical loads during source interruption or constraint. This canonical node covers cells, modules, racks, protection, thermal interfaces, controls, and system integration; it excludes flywheel storage and application-specific UPS architecture. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1615,7 +1615,7 @@
       "node_name": "Flywheel Backup Energy System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "Canonical ownership node for flywheel backup energy system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A flywheel backup energy system stores energy mechanically in a rotating mass and delivers short-duration electrical support through a motor-generator and power converter. This canonical node covers rotor, bearings, containment, vacuum system, converter, controls, and protection; it excludes electrochemical batteries and standby generators. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1634,7 +1634,7 @@
       "node_name": "UPS Battery System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "Canonical ownership node for ups battery system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A UPS battery system is the electrochemical storage assembly engineered to supply the DC energy input required by an uninterruptible power system. This canonical node covers battery strings or cabinets, interconnects, protection, monitoring, thermal provisions, and UPS interfaces; it excludes the UPS conversion equipment and general stationary storage. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1671,7 +1671,7 @@
       "node_name": "Stationary Fuel Cell Backup System",
       "node_kind": "canonical",
       "node_type": "backup_generation",
-      "description": "Canonical ownership node for stationary fuel cell backup system products, systems, software, materials, or services; AI data center deployment requirements reference this node.",
+      "description": "A stationary fuel-cell backup system converts stored or delivered fuel into electricity for standby support of fixed critical loads. This canonical node covers fuel-cell stacks, fuel processing where required, air and thermal systems, power conditioning, controls, and enclosure; it excludes batteries and combustion generators. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",

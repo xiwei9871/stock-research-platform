@@ -1472,3 +1472,139 @@ def test_ai_power_supporting_file_contains_only_required_skeleton_nodes():
             for target_id, owner_chain_id in AI_POWER_CANONICAL_OWNERS.values()
             if owner_chain_id == chain_id
         }
+
+
+def _description_specific_terms(node_id: str) -> list[str]:
+    ignored = {
+        "ai",
+        "power",
+        "role",
+        "system",
+        "service",
+        "data",
+        "center",
+        "equipment",
+        "software",
+    }
+    return [
+        token
+        for token in node_id.lower().replace("_", " ").split()
+        if token not in ignored
+    ]
+
+
+def test_ai_power_descriptions_are_specific_and_not_placeholder_templates():
+    catalog = load_industry_catalog()
+    nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    roles = [
+        row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L4"
+    ]
+    targets = [
+        nodes_by_id[target_id]
+        for target_id, _ in AI_POWER_CANONICAL_OWNERS.values()
+    ]
+    forbidden_phrases = {
+        "products, systems, software, materials, or services",
+        "defining deployment-specific requirements while canonical ownership remains",
+        "canonical ownership node for",
+    }
+
+    assert len({row["description"] for row in roles}) == 80
+    assert len({row["description"] for row in targets}) == 80
+    for node in roles:
+        description = node["description"].lower()
+        assert len(node["description"]) >= 160
+        assert not any(phrase in description for phrase in forbidden_phrases)
+        terms = _description_specific_terms(node["node_id"])
+        required_matches = min(2, len(terms))
+        assert sum(term in description for term in terms) >= required_matches
+        assert "ai data center" in description
+        assert "covers" in description
+        assert "canonical" in description
+
+    for node in targets:
+        description = node["description"].lower()
+        assert len(node["description"]) >= 120
+        assert not any(phrase in description for phrase in forbidden_phrases)
+        terms = _description_specific_terms(node["node_id"])
+        required_matches = min(2, len(terms))
+        assert sum(term in description for term in terms) >= required_matches
+        if node["chain_id"] != "cloud_data_center_infrastructure":
+            assert "ai data center" not in description
+            assert "ai-theme" not in description
+            assert "application chain" not in description
+
+
+def test_ai_power_load_capacity_planning_is_non_compositional_metrics_stage():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    }
+    stage = nodes["ai_power_load_capacity_planning"]
+    children = [
+        row for row in nodes.values() if row["parent_node_id"] == stage["node_id"]
+    ]
+    description = stage["description"].lower()
+
+    assert children == []
+    assert "non-compositional metrics and planning stage" in description
+    for metric in ("rack density", "capacity", "redundancy", "pue", "wue"):
+        assert metric in description
+    assert "metrics rather than products" in description
+
+
+def test_ai_power_names_avoid_acronym_and_repetition_artifacts():
+    catalog = load_industry_catalog()
+    names = {
+        row["node_id"]: row["node_name"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    }
+    forbidden_names = {
+        "HVDC DC Architecture",
+        "Modular Data Center for AI Data Centers",
+        "Carbon Energy Cost for AI Data Centers",
+        "240 400 V HVDC for AI Data Centers",
+        "AC DC Power Module for AI Data Centers",
+        "DC DC Power Module for AI Data Centers",
+        "Line Frequency UPS",
+        "High Frequency UPS",
+        "Medium Voltage UPS",
+        "Rectifier Inverter",
+        "Solid State Transformer",
+    }
+
+    assert not (set(names.values()) & forbidden_names)
+    assert names["ai_power_hvdc_dc_architecture"] == "HVDC and DC Architecture"
+    assert names["ai_power_modular_data_center_role"] == (
+        "Modular Data Center Delivery"
+    )
+    assert names["ai_power_carbon_energy_cost_role"] == (
+        "Carbon and Energy Cost Management"
+    )
+    assert names["ai_power_ac_dc_module_role"] == "AC-DC Power Modules"
+    assert names["ai_power_dc_dc_module_role"] == "DC-DC Power Modules"
+
+
+def test_ai_power_composition_notes_are_unique_role_specific_and_reviewable():
+    catalog = load_industry_catalog()
+    compositions = [
+        row
+        for row in catalog["theme_compositions"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    ]
+
+    assert len(compositions) == 80
+    assert len({row["notes"] for row in compositions}) == 80
+    for composition in compositions:
+        assert composition["role_node_id"] in composition["notes"]
+        for target_id in composition["canonical_node_refs"]:
+            assert target_id in composition["notes"]
+        assert "because" in composition["notes"].lower()
+        assert "company mappings and evidence remain on the canonical target" in (
+            composition["notes"].lower()
+        )
