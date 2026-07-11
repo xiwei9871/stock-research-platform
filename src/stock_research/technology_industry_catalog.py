@@ -105,6 +105,11 @@ def _load_json_object(
             f"package file not found: {path}",
             code=missing_code,
         ) from exc
+    except UnicodeDecodeError as exc:
+        raise IndustryCatalogValidationError(
+            f"invalid JSON in package file {path}: {exc}",
+            code="INVALID_JSON",
+        ) from exc
     except OSError as exc:
         raise IndustryCatalogValidationError(
             f"unable to read package file {path}: {exc}",
@@ -113,7 +118,7 @@ def _load_json_object(
 
     try:
         payload = json.loads(text)
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except json.JSONDecodeError as exc:
         raise IndustryCatalogValidationError(
             f"invalid JSON in package file {path}: {exc}",
             code="INVALID_JSON",
