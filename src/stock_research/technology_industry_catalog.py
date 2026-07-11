@@ -400,7 +400,7 @@ def _validate_catalog(catalog: dict[str, Any]) -> None:
 
 
 def _validate_sectors(sectors: list[Any]) -> dict[str, dict[str, Any]]:
-    return _index_unique_rows(
+    sectors_by_id = _index_unique_rows(
         sectors,
         fields=SECTOR_FIELDS,
         id_field="sector_id",
@@ -408,6 +408,9 @@ def _validate_sectors(sectors: list[Any]) -> dict[str, dict[str, Any]]:
         path="sectors",
         name_field="sector_name",
     )
+    for index, sector in enumerate(sectors):
+        _validate_catalog_status(sector["status"], f"sectors[{index}]")
+    return sectors_by_id
 
 
 def _validate_chains(
@@ -424,6 +427,7 @@ def _validate_chains(
     )
     for index, chain in enumerate(chains):
         path = f"chains[{index}]"
+        _validate_catalog_status(chain["status"], path)
         sector_id = _require_reference_string(
             chain["sector_id"],
             f"{path}.sector_id",
@@ -474,6 +478,7 @@ def _validate_nodes(
 
     for index, node in enumerate(nodes):
         path = f"nodes[{index}]"
+        _validate_catalog_status(node["status"], path)
         node_id = node["node_id"]
         chain_id = _require_reference_string(
             node["chain_id"],
@@ -719,6 +724,14 @@ def _validate_relationship_type(value: Any, path: str) -> None:
         raise IndustryCatalogValidationError(
             f"{path}.relationship_type invalid: {value}",
             code="INVALID_RELATIONSHIP_TYPE",
+        )
+
+
+def _validate_catalog_status(value: Any, path: str) -> None:
+    if not isinstance(value, str) or value not in CATALOG_STATUSES:
+        raise IndustryCatalogValidationError(
+            f"{path}.status invalid: {value}",
+            code="INVALID_CATALOG_STATUS",
         )
 
 
