@@ -29,3 +29,26 @@ def test_asset_theme_research_context_endpoint_uses_read_model(monkeypatch) -> N
     assert response.status_code == 200
     assert response.json() == expected
 
+
+def test_theme_research_updates_endpoint_validates_query(monkeypatch) -> None:
+    monkeypatch.setattr(
+        dashboard_app,
+        "list_theme_research_updates",
+        lambda since=None, limit=100: {
+            "total": 1,
+            "items": [{"update_id": "review-1", "created_at": since}],
+            "limit": limit,
+            "research_only": True,
+            "used_for_signal": False,
+            "used_for_admission": False,
+        },
+    )
+    client = TestClient(dashboard_app.create_app())
+
+    response = client.get(
+        "/api/research/theme-decomposition/updates?since=2026-07-10&limit=20"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["created_at"] == "2026-07-10"
+    assert response.json()["limit"] == 20

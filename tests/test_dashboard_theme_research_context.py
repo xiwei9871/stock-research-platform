@@ -3,7 +3,9 @@ from __future__ import annotations
 from copy import deepcopy
 
 from stock_research.dashboard.theme_research_context import (
+    build_daily_theme_research_digest,
     build_asset_theme_context,
+    build_theme_research_updates,
     normalize_theme_research_company_code,
 )
 from stock_research.theme_research_priority import (
@@ -105,3 +107,106 @@ def test_mapping_with_unaccepted_evidence_source_is_excluded() -> None:
     assert payload["excluded_mappings"][0]["reasons"] == [
         "mapping_evidence_source_not_accepted"
     ]
+
+
+def test_reviewed_updates_filter_status_date_and_sort_stably() -> None:
+    review_events = [
+        {
+            "review_event_id": "review-2",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "claim",
+            "object_id": "claim-reviewed",
+            "from_status": "draft",
+            "to_status": "reviewed",
+            "decision": "accept",
+            "comment": "verified",
+            "created_at": "2026-07-11T09:00:00+08:00",
+        },
+        {
+            "review_event_id": "review-1",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "source",
+            "object_id": "source-lead",
+            "from_status": "unknown",
+            "to_status": "lead_only",
+            "decision": "lead",
+            "comment": "not evidence",
+            "created_at": "2026-07-11T10:00:00+08:00",
+        },
+        {
+            "review_event_id": "review-old",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "node",
+            "object_id": "old-node",
+            "from_status": "draft",
+            "to_status": "reviewed",
+            "decision": "accept",
+            "comment": "old",
+            "created_at": "2026-07-09T10:00:00+08:00",
+        },
+    ]
+    revisions = [
+        {
+            "revision_id": "revision-1",
+            "theme_id": "ai_power_value_capture_v1",
+            "object_type": "company_mapping",
+            "object_id": "mapping-reviewed",
+            "operation": "update",
+            "after_payload": {"review_status": "reviewed"},
+            "created_at": "2026-07-11T11:00:00+08:00",
+        }
+    ]
+
+    payload = build_theme_research_updates(
+        review_events,
+        revisions,
+        since="2026-07-10",
+        limit=10,
+    )
+
+    assert [row["update_id"] for row in payload["items"]] == [
+        "revision-1",
+        "review-2",
+    ]
+    assert payload["total"] == 2
+    assert payload["by_object_type"] == {"claim": 1, "company_mapping": 1}
+    assert payload["research_only"] is True
+    assert payload["used_for_signal"] is False
+
+
+def test_updates_reject_invalid_since_and_limit() -> None:
+    for since, limit in (("not-a-date", 10), (None, 0), (None, 501)):
+        try:
+            build_theme_research_updates([], [], since=since, limit=limit)
+        except ValueError as exc:
+            assert str(exc) in {"theme_research_since_invalid", "theme_research_limit_invalid"}
+        else:
+            raise AssertionError("invalid update request must fail")
+
+
+def test_daily_digest_counts_reviewed_workflow_context() -> None:
+    updates = {
+        "total": 2,
+        "items": [],
+        "by_object_type": {"claim": 1, "node": 1},
+        "research_only": True,
+        "used_for_signal": False,
+        "used_for_admission": False,
+        "warnings": [],
+    }
+
+    digest = build_daily_theme_research_digest(
+        "2026-07-11",
+        context=_context(),
+        updates=updates,
+    )
+
+    assert digest["status"] == "ready"
+    assert digest["reviewed_theme_count"] == 1
+    assert digest["mapped_company_count"] == 2
+    assert digest["reviewed_mapping_count"] == 2
+    assert digest["recent_reviewed_update_count"] == 2
+    assert digest["evidence_gap_count"] == 15
+    assert digest["mapped_companies"][0]["company_code"] == "002837.SZ"
+    assert digest["research_only"] is True
+    assert digest["used_for_admission"] is False

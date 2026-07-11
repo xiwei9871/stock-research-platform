@@ -173,7 +173,10 @@ from stock_research.dashboard.theme_research import (
     list_theme_research_sources,
     list_theme_research_themes,
 )
-from stock_research.dashboard.theme_research_context import load_asset_theme_context
+from stock_research.dashboard.theme_research_context import (
+    list_theme_research_updates,
+    load_asset_theme_context,
+)
 from stock_research.theme_research_db_models import ThemeResearchDomainError
 from stock_research.theme_research_store import (
     list_review_history as list_theme_research_review_history,
@@ -542,6 +545,13 @@ def create_app() -> FastAPI:
     @app.get("/api/research/theme-decomposition/themes")
     def theme_research_themes():
         return list_theme_research_themes()
+
+    @app.get("/api/research/theme-decomposition/updates")
+    def theme_research_updates(since: str | None = None, limit: int = 100):
+        try:
+            return list_theme_research_updates(since=since, limit=limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/research/theme-decomposition/themes/{theme_id}")
     def theme_research_theme_detail(theme_id: str):

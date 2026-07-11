@@ -12,6 +12,10 @@ from stock_research.dashboard.market_monitor import build_market_monitor_eod
 from stock_research.dashboard.platform import load_platform_summary
 from stock_research.dashboard.reports import load_report_links
 from stock_research.dashboard.review_queue import build_review_queue
+from stock_research.dashboard.theme_research_context import (
+    build_daily_theme_research_digest,
+    unavailable_daily_theme_research_digest,
+)
 from stock_research.db import connect, fetch_all
 from stock_research.report_run_store import apply_report_run_schema, record_report_run
 
@@ -20,6 +24,7 @@ SECTION_ORDER = [
     ("data_readiness", "Data Readiness"),
     ("market_review", "Market Review"),
     ("strategy_summaries", "Strategy Summaries"),
+    ("theme_research", "Theme Research"),
     ("holding_review", "Holding Review"),
     ("operator_plan", "Operator Plan"),
     ("next_day_checklist", "Next-day Checklist"),
@@ -36,6 +41,7 @@ def build_daily_review_lite(
     summary = _safe_call(lambda: load_platform_summary(service=service), default={})
     selected_trade_date = str(trade_date or summary.get("latest_market_date") or "")[:10]
     if not selected_trade_date:
+        theme_research = unavailable_daily_theme_research_digest("")
         return _payload(
             trade_date="",
             status="empty",
@@ -44,6 +50,7 @@ def build_daily_review_lite(
             sections=_empty_sections(),
             artifacts=[],
             warnings=["no display trade date available"],
+            theme_research=theme_research,
         )
 
     run = _latest_registered_run(selected_trade_date, service=service)
@@ -74,6 +81,7 @@ def _build_live_daily_review_payload(
     market = _safe_call(lambda: build_market_monitor_eod(trade_date=selected_trade_date), default={})
     queue = _safe_call(lambda: build_review_queue(trade_date=selected_trade_date, limit=10), default={})
     reports = _safe_call(lambda: load_report_links(selected_trade_date), default=[])
+    theme_research = _load_theme_research_digest(selected_trade_date)
     artifacts = _artifact_payloads(None, reports)
     sections = _sections(
         selected_trade_date=selected_trade_date,
@@ -82,6 +90,7 @@ def _build_live_daily_review_payload(
         queue=queue,
         artifacts=artifacts,
         run={},
+        theme_research=theme_research,
     )
     return _payload(
         trade_date=selected_trade_date,
@@ -90,7 +99,8 @@ def _build_live_daily_review_payload(
         fallback=False,
         sections=sections,
         artifacts=artifacts,
-        warnings=[],
+        warnings=list(theme_research.get("warnings") or []),
+        theme_research=theme_research,
     )
 
 
@@ -136,6 +146,15 @@ def _load_payload_from_run(run: dict[str, Any], *, selected_trade_date: str) -> 
     payload["fallback"] = False
     payload["artifacts"] = _artifact_payloads(run, reports)
     payload["warnings"] = list(payload.get("warnings") or [])
+    theme_research = _load_theme_research_digest(selected_trade_date)
+    payload["theme_research"] = theme_research
+    payload["sections"] = _upsert_theme_research_section(
+        list(payload.get("sections") or []),
+        theme_research,
+    )
+    for warning in theme_research.get("warnings") or []:
+        if warning not in payload["warnings"]:
+            payload["warnings"].append(warning)
     return payload
 
 
@@ -180,6 +199,7 @@ def _sections(
     queue: dict[str, Any],
     artifacts: list[dict[str, Any]],
     run: dict[str, Any] | None,
+    theme_research: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     market_items = [
         _item("复盘日", selected_trade_date),
@@ -219,10 +239,27 @@ def _sections(
         for group in groups
     ]
     artifact_items = [_item(artifact["label"], artifact.get("url") or artifact.get("path")) for artifact in artifacts]
+    theme_digest = theme_research or unavailable_daily_theme_research_digest(
+        selected_trade_date
+    )
+    incomplete_tracks = list(theme_digest.get("incomplete_evidence_tracks") or [])
+    theme_research_items = [
+        _item("已审核主题", theme_digest.get("reviewed_theme_count", 0)),
+        _item("映射公司", theme_digest.get("mapped_company_count", 0)),
+        _item("近期审核更新", theme_digest.get("recent_reviewed_update_count", 0)),
+        _item("证据缺口", theme_digest.get("evidence_gap_count", 0)),
+        _item("未完成证据轨道", " / ".join(incomplete_tracks)),
+    ]
     return [
         _section("data_readiness", "Data Readiness", "ready" if summary else "partial", market_items),
         _section("market_review", "Market Review", "ready" if market else "partial", market_review_items),
         _section("strategy_summaries", "Strategy Summaries", "ready" if strategy_items else "empty", strategy_items),
+        _section(
+            "theme_research",
+            "Theme Research",
+            "ready" if theme_digest.get("status") == "ready" else "partial",
+            theme_research_items,
+        ),
         _section("holding_review", "Holding Review", "partial" if groups else "empty", []),
         _section("operator_plan", "Operator Plan", "ready" if run else "empty", []),
         _section("next_day_checklist", "Next-day Checklist", "ready" if run else "empty", []),
@@ -345,6 +382,7 @@ def _payload(
     sections: list[dict[str, Any]],
     artifacts: list[dict[str, Any]],
     warnings: list[str],
+    theme_research: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "trade_date": trade_date,
@@ -354,6 +392,7 @@ def _payload(
         "sections": sections,
         "artifacts": artifacts,
         "warnings": warnings,
+        "theme_research": theme_research,
     }
 
 
@@ -362,3 +401,39 @@ def _safe_call(callable_obj, *, default):
         return callable_obj()
     except Exception:
         return default
+
+
+def _load_theme_research_digest(trade_date: str) -> dict[str, Any]:
+    return _safe_call(
+        lambda: build_daily_theme_research_digest(trade_date),
+        default=unavailable_daily_theme_research_digest(trade_date),
+    )
+
+
+def _upsert_theme_research_section(
+    sections: list[dict[str, Any]],
+    theme_research: dict[str, Any],
+) -> list[dict[str, Any]]:
+    replacement = next(
+        section
+        for section in _sections(
+            selected_trade_date=str(theme_research.get("trade_date") or ""),
+            summary={},
+            market={},
+            queue={},
+            artifacts=[],
+            run={},
+            theme_research=theme_research,
+        )
+        if section["key"] == "theme_research"
+    )
+    by_key = {str(section.get("key") or ""): section for section in sections}
+    by_key["theme_research"] = replacement
+    ordered = [by_key[key] for key, _ in SECTION_ORDER if key in by_key]
+    known_keys = {key for key, _ in SECTION_ORDER}
+    ordered.extend(
+        section
+        for section in sections
+        if str(section.get("key") or "") not in known_keys
+    )
+    return ordered
