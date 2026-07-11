@@ -139,7 +139,7 @@ def list_theme_research_updates(
                    after_payload, created_at
             FROM research.theme_research_object_revision
             WHERE {' AND '.join(conditions)}
-              AND object_type = 'company_mapping'
+              AND object_type = 'company_mappings'
             ORDER BY created_at DESC, revision_id DESC
             LIMIT %s
             """,
@@ -194,7 +194,7 @@ def build_theme_research_updates(
         after_payload = row.get("after_payload")
         if not isinstance(after_payload, dict):
             continue
-        if row.get("object_type") != "company_mapping":
+        if row.get("object_type") not in {"company_mapping", "company_mappings"}:
             continue
         if after_payload.get("review_status") != "reviewed":
             continue

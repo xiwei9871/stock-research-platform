@@ -149,7 +149,7 @@ def test_reviewed_updates_filter_status_date_and_sort_stably() -> None:
         {
             "revision_id": "revision-1",
             "theme_id": "ai_power_value_capture_v1",
-            "object_type": "company_mapping",
+            "object_type": "company_mappings",
             "object_id": "mapping-reviewed",
             "operation": "update",
             "after_payload": {"review_status": "reviewed"},
