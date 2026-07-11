@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-11
 
-**Status:** Approved direction; awaiting written-spec review
+**Status:** Running since 2026-07-11 15:16 Asia/Shanghai
 
 ## Goal
 
@@ -119,3 +119,15 @@ Stop or interrupt the run if any of these occur:
 - Work is serial, checkpointed, and resumable.
 - Progress and quota usage remain observable for the full run.
 - The final raw/qfq status and database coverage are explicitly audited.
+
+## Operational Launch
+
+- launchd label: `com.stockresearch.baostock-2020-minute5-backfill-20260711`
+- launch PID at start: `65770`
+- stdout log: `logs/baostock_2020_minute5_backfill_20260711_20260711_151629.log`
+- stderr/progress log: `logs/baostock_2020_minute5_backfill_20260711_20260711_151629.err.log`
+- quota allocation: 28,667 requests from an effective budget of 40,245
+- baseline: raw success 33,840 / pending 28,667; qfq success 33,840 / pending 28,668
+- first checkpoint: 50 raw jobs attempted, 50 raw successes, 50 local qfq successes, 0 failures, 35,040 rows
+- observed throughput: approximately 5.4 seconds per raw job
+- first-checkpoint ETA: approximately 42 hours 53 minutes, projecting completion on 2026-07-13 before the 17:00 daily minute task
