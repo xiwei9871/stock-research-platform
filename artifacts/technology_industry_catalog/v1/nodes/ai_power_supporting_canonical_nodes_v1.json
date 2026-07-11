@@ -8,7 +8,7 @@
       "node_name": "Power Semiconductor Devices",
       "node_kind": "canonical",
       "node_type": "manufacturing_process_family",
-      "description": "Reusable family for discrete and integrated power semiconductor devices that perform switching, rectification, and voltage regulation. It covers silicon MOSFET, silicon carbide, and gallium nitride device technology, ratings, die design, and package interfaces; it excludes complete converter modules and passive components.",
+      "description": "Reusable family for silicon MOSFET, silicon carbide, and gallium nitride power semiconductor devices that perform switching, rectification, and voltage regulation. It covers device technology, ratings, die design, and package interfaces; it excludes complete converter modules and passive components.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -83,7 +83,7 @@
       "node_name": "Power Interconnect Passive Components",
       "node_kind": "canonical",
       "node_type": "manufacturing_process_family",
-      "description": "Reusable family for cables, busbars, connectors, magnetic components, and capacitors that conduct, connect, filter, or store electrical energy in power paths. It covers conductor assemblies, interconnect interfaces, and passive electrical components; it excludes active semiconductor devices and complete power-conversion equipment.",
+      "description": "Reusable family for power cables, busbars, busway, high-current and HVDC connectors, copper flexible interconnects, magnetic components, and capacitors that conduct, connect, filter, or store electrical energy. It excludes active semiconductor devices and complete power-conversion equipment.",
       "status": "skeleton",
       "primary_path": [
         "semiconductor_electronics",
@@ -253,7 +253,7 @@
       "node_name": "Data Center Facility Systems Services",
       "node_kind": "canonical",
       "node_type": "infrastructure_flow_stage",
-      "description": "Reusable family for facility-level power, cooling, physical infrastructure, and delivery services used to build and operate data-center facilities. It covers thermal equipment, coolant distribution, facility integration, commissioning, and operations; it excludes grid-owned infrastructure and server or board-level electrical components.",
+      "description": "Reusable family for facility-level thermal systems, coolant distribution, facility management platform software, and delivery services used to build and operate data-center facilities. It covers cold plates, immersion and spray systems, chillers, pumps, heat exchangers, leak detection, waste-heat recovery, electrical design, modular delivery, EPC, commissioning, and operations; it excludes grid-owned infrastructure and server or board-level electrical components.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -632,7 +632,7 @@
       "node_name": "Industrial Energy Facility Software",
       "node_kind": "canonical",
       "node_type": "system_architecture_family",
-      "description": "Reusable family for software that monitors, controls, schedules, and optimizes electrical distribution, thermal plant, and facility operations. It covers electrical power monitoring, building management, distribution monitoring, thermal control, fault prediction, and energy-cost optimization; it excludes the field hardware that produces, converts, or distributes power.",
+      "description": "Reusable family for software that monitors, controls, schedules, and optimizes electrical distribution, thermal plant, and facility operations. It covers electrical power monitoring, building management, distribution monitoring, thermal control, fault prediction, compute scheduling, and carbon-energy cost optimization; it excludes the field hardware that produces, converts, or distributes power.",
       "status": "skeleton",
       "primary_path": [
         "next_generation_information_technology",
@@ -783,7 +783,7 @@
       "node_name": "Grid Connection Transmission Protection",
       "node_kind": "canonical",
       "node_type": "infrastructure_flow_stage",
-      "description": "Reusable family for utility interconnection, substation, transformation, switchgear, transmission interfaces, and protection at the grid-facing electrical boundary. It covers connection engineering, transformers, medium-voltage switchgear, relay protection, and power-quality systems; it excludes customer-side backup, UPS, and room distribution equipment.",
+      "description": "Reusable family for utility interconnection, substations, transformation, switchgear, and protection at the grid-facing electrical boundary. It covers connection engineering, data-center substations, transformers, medium-voltage switchgear, relay protection, power-quality management, DC circuit breakers, and DC protection; it excludes customer-side backup, UPS, and room distribution equipment.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -953,7 +953,7 @@
       "node_name": "Generation Supply Resilience Systems",
       "node_kind": "canonical",
       "node_type": "system_architecture_family",
-      "description": "Reusable family for generation, supply procurement, and microgrid coordination that provides primary electrical energy and resilience. It covers bulk grid supply, renewable procurement, distributed generation, gas turbines, nuclear supply, and microgrid control; it excludes downstream backup-only equipment and facility power conversion.",
+      "description": "Reusable family for utility and contracted supply, renewable procurement, local generation, gas turbines, nuclear supply, and microgrid coordination that provides primary electrical energy and resilience. It covers diesel and gas backup generation plus black-start generation where those sources are dispatched. It excludes grid transformation and distribution, power conversion, and storage media owned elsewhere.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1142,7 +1142,7 @@
       "node_name": "Power Conversion Distribution Control",
       "node_kind": "canonical",
       "node_type": "system_architecture_family",
-      "description": "Reusable family for UPS, rectification and inversion, DC architectures, distribution units, and control equipment that convert, protect, and route electrical power. It covers power conversion from medium-voltage intake through DC and room distribution; it excludes server-board regulators and generation assets.",
+      "description": "Reusable family for facility conversion and distribution plus server and board conversion, voltage regulation, and control. It covers automatic transfer switches, UPS, static transfer, rectification and inversion, HVDC and DC buses, distribution units, server power supplies, AC-DC and DC-DC modules, voltage regulator modules, multiphase controllers, and prefabricated power modules. It excludes semiconductor devices, passive interconnect components, and generation or storage media.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1578,7 +1578,7 @@
       "node_name": "Stationary Backup Storage Systems",
       "node_kind": "canonical",
       "node_type": "battery_system_family",
-      "description": "Reusable family for stationary standby and ride-through systems that sustain critical loads during source interruption. It covers diesel and gas backup generators, stationary batteries, flywheels, automatic transfer switches, and black-start services; it excludes primary grid supply and continuously dispatched generation.",
+      "description": "Reusable family for stationary battery, flywheel, and UPS energy storage that provides ride-through during source interruption. It covers stationary batteries, flywheels, and UPS energy storage systems only. It excludes generators, automatic transfer switches, fuel cells, and black-start controls.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1653,7 +1653,7 @@
       "node_name": "Stationary Fuel Cell Systems",
       "node_kind": "canonical",
       "node_type": "technical_route_family",
-      "description": "Reusable family for stationary fuel-cell systems that provide backup or onsite electrical output. It covers fuel processing, electrochemical stacks, balance of plant, power conditioning, and stationary system integration; it excludes mobile fuel-cell propulsion systems and non-fuel-cell backup technologies.",
+      "description": "Reusable family for stationary fuel-cell backup systems that provide onsite electrical output. It covers fuel processing, electrochemical stacks, balance of plant, power conditioning, and stationary system integration; it excludes mobile fuel-cell propulsion systems, diesel and gas generator sets, and battery or flywheel storage media.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
