@@ -121,6 +121,9 @@ from stock_research.research_external_delivery import run_research_external_deli
 from stock_research.theme_decomposition import cli as run_theme_decomposition_cli
 from stock_research.theme_research_ingestion import cli as run_theme_research_ingestion_cli
 from stock_research.theme_research_db_schema import cli as run_theme_research_db_cli
+from stock_research.theme_research_phase_verifier import (
+    cli as run_theme_research_phase_verifier_cli,
+)
 from stock_research.research_external_delivery_attempts import run_research_external_delivery_attempt_audit
 from stock_research.research_queue_publish import publish_research_queue
 from stock_research.research_queue_refresh import run_research_queue_refresh
@@ -1532,6 +1535,8 @@ def build_parser() -> argparse.ArgumentParser:
     theme_research_ingestion.add_argument("theme_research_ingestion_args", nargs=argparse.REMAINDER)
     theme_research_db = subparsers.add_parser("theme-research-db")
     theme_research_db.add_argument("theme_research_db_args", nargs=argparse.REMAINDER)
+    theme_research = subparsers.add_parser("theme-research")
+    theme_research.add_argument("theme_research_args", nargs=argparse.REMAINDER)
     dashboard_admin_create = subparsers.add_parser("dashboard-admin-create")
     dashboard_admin_create.add_argument("--username", required=True)
     dashboard_admin_create.add_argument("--password", required=True)
@@ -5159,6 +5164,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         return run_theme_research_ingestion_cli(raw_argv[1:])
     if raw_argv and raw_argv[0] == "theme-research-db":
         return run_theme_research_db_cli(raw_argv[1:])
+    if raw_argv and raw_argv[0] == "theme-research":
+        return run_theme_research_phase_verifier_cli(raw_argv[1:])
     args = build_parser().parse_args(raw_argv)
 
     if args.command == "apply-schema":
@@ -5176,6 +5183,8 @@ def main_for_args(argv: list[str] | None = None) -> int | None:
         return run_theme_research_ingestion_cli(args.theme_research_ingestion_args)
     elif args.command == "theme-research-db":
         return run_theme_research_db_cli(args.theme_research_db_args)
+    elif args.command == "theme-research":
+        return run_theme_research_phase_verifier_cli(args.theme_research_args)
     elif args.command == "dashboard-admin-create":
         user = create_dashboard_user(
             args.username,
