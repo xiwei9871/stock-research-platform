@@ -26,7 +26,7 @@
       "node_name": "Energy Supply and Resilience",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering energy supply resilience requirements and dependencies.",
+      "description": "AI data center stage for choosing and coordinating external and local energy supply portfolios, firm capacity, renewable attributes, generation options, and resilience targets before grid access and backup design.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -44,7 +44,7 @@
       "node_name": "Utility Grid Supply Strategy",
       "node_kind": "application_role",
       "node_type": "energy_supply_service_role",
-      "description": "For an AI data center, the Utility Grid Supply Strategy decision sets firm grid supply volume, tariff exposure, delivery profile, curtailment rights, ramp limits, and utility service obligations. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Bulk Grid Power Supply Service by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Utility Grid Supply Strategy decision secures utility-delivered service capacity, firm grid volume, tariff exposure, delivery profile, curtailment rights, ramp limits, and utility service obligations. This role covers utility-provided energy service at the point of delivery and excludes onsite generation and procurement instruments such as PPAs, green tariffs, and certificates. It composes the canonical Bulk Grid Power Supply Service by selecting contracted service capacity, delivery terms, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -65,7 +65,7 @@
       "node_name": "Renewable Energy Procurement",
       "node_kind": "application_role",
       "node_type": "energy_procurement_service_role",
-      "description": "For an AI data center, the Renewable Energy Procurement decision sets renewable procurement instrument, hourly or annual matching, contract tenor, shaped volume, certificate treatment, and residual supply. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Renewable Power Procurement Service by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Renewable Energy Procurement decision specifies PPA structures, green tariffs, certificates, hourly or annual matching, contract tenor, shaped volume, and residual supply. This role covers contractual environmental and energy procurement instruments and excludes physical generation and microgrid control. It composes the canonical Renewable Power Procurement Service by selecting contract form, matching standard, volume profile, and residual-supply treatment around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -86,7 +86,7 @@
       "node_name": "Distributed Energy Deployment",
       "node_kind": "application_role",
       "node_type": "generation_system_role",
-      "description": "For an AI data center, the Distributed Energy Deployment decision sets distributed energy capacity, behind-the-meter location, dispatch duty, grid-parallel behavior, fuel or resource limits, and resilience contribution. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Distributed Energy Generation System by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Distributed Energy Deployment decision configures onsite/local generation assets, capacity, siting, resource or fuel envelope, grid-parallel operation, and resilience contribution. This role covers physical distributed resources other than a dedicated gas turbine system and excludes the gas-turbine-specific route and microgrid orchestration. It composes the canonical Distributed Energy Generation System by selecting asset scale, operating envelope, site interface, and resilience duty around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -107,7 +107,7 @@
       "node_name": "Gas Turbine Generation",
       "node_kind": "application_role",
       "node_type": "generation_equipment_role",
-      "description": "For an AI data center, the Gas Turbine Generation decision sets gas turbine capacity, duty cycle, fuel firmness, emissions limits, ramping, heat recovery, maintenance interval, and continuous-supply role. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Gas Turbine Generation System by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Gas Turbine Generation decision sets turbine equipment configuration, fuel firmness, dispatch schedule, capacity, duty cycle, emissions limits, ramping, heat recovery, and maintenance interval. This role covers gas turbine plant equipment and operation for an explicitly turbine-based supply route and excludes generic distributed resources. It composes the canonical Gas Turbine Generation System by selecting turbine duty, fuel assurance, dispatch constraints, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -128,7 +128,7 @@
       "node_name": "Nuclear Power Supply",
       "node_kind": "application_role",
       "node_type": "energy_supply_service_role",
-      "description": "For an AI data center, the Nuclear Power Supply decision sets nuclear supply contract availability, firm-energy profile, delivery path, settlement terms, and fit with a variable compute load. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Nuclear Power Supply Service by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Nuclear Power Supply decision sets nuclear-backed PPA terms, co-location arrangements, dedicated supply availability, firm-energy profile, delivery path, settlement terms, and fit with variable compute load. This role covers a nuclear-backed PPA, nuclear co-location, or another dedicated nuclear supply arrangement and excludes generic grid supply. It composes the canonical Nuclear Power Supply Service by selecting supply structure, delivery path, firmness, and settlement terms around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -149,7 +149,7 @@
       "node_name": "Microgrid Architecture",
       "node_kind": "application_role",
       "node_type": "generation_system_role",
-      "description": "For an AI data center, the Microgrid Architecture decision sets microgrid islanding boundary, local resource dispatch, critical-load priority, synchronization, restoration logic, and grid-connected operating modes. This role covers the external and onsite supply portfolio from contracted energy through local generation and islanding. It composes the canonical Microgrid Generation System by selecting the site portfolio, contract, dispatch duty, and resilience contribution around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
+      "description": "For an AI data center, the Microgrid Architecture decision establishes microgrid orchestration, islanding boundaries, control logic, critical-load priority, synchronization, restoration logic, and grid-connected operating modes. This role covers control and operating modes across available resources and excludes ownership of generation assets. It composes the canonical Microgrid Generation System by selecting islanding policy, control hierarchy, restoration sequence, and resilience duty around that reusable capability; canonical technology, company mapping, and evidence ownership remain with that target.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -170,7 +170,7 @@
       "node_name": "Grid Access and Substations",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering grid access substation requirements and dependencies.",
+      "description": "AI data center stage for utility interconnection, substation topology, transformation, switchgear, and protection from the transmission handoff through medium-voltage distribution.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -356,7 +356,7 @@
       "node_name": "Backup Power",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering backup power requirements and dependencies.",
+      "description": "AI data center stage for ride-through and standby power design, including generator and storage capacity, transfer sequencing, black-start recovery, and critical-load autonomy.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -521,7 +521,7 @@
       "node_name": "UPS and Power Conversion",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering ups conversion requirements and dependencies.",
+      "description": "AI data center stage for conditioned power between source and IT loads, covering UPS selection, rectification, inversion, energy storage, and static-transfer coordination.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -686,7 +686,7 @@
       "node_name": "HVDC and DC Architecture",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering hvdc dc architecture requirements and dependencies.",
+      "description": "AI data center stage for selecting DC voltage architectures, AC-to-DC rectification, DC buses, breakers, and protection routes to deliver high-current power.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -851,7 +851,7 @@
       "node_name": "Room and Rack Distribution",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering room rack distribution requirements and dependencies.",
+      "description": "AI data center stage for moving conditioned power through PDUs, row distribution, busway, rack PDUs, power shelves, and high-current connectors.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1034,10 +1034,10 @@
       "chain_id": "ai_data_center_power",
       "parent_node_id": null,
       "level": "L3",
-      "node_name": "Server and Board Power",
+      "node_name": "Server and Board-Level Power",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering server board power requirements and dependencies.",
+      "description": "AI data center stage for server PSU conversion, AC-DC and DC-DC modules, voltage regulation, controllers, semiconductors, and board-level power integrity.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1265,7 +1265,7 @@
       "node_name": "Liquid Cooling and Thermal Management",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering liquid cooling thermal requirements and dependencies.",
+      "description": "AI data center stage for liquid cooling and thermal management across cold plates, immersion loops, CDUs, coolant distribution, heat rejection, leak detection, and heat recovery.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1535,7 +1535,7 @@
       "node_name": "Energy Management Software",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering energy management software requirements and dependencies.",
+      "description": "AI data center stage for energy management software that combines electrical and thermal monitoring, control, fault prediction, compute scheduling, and carbon-energy cost optimization.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
@@ -1721,7 +1721,7 @@
       "node_name": "Design, EPC, and Operations",
       "node_kind": "application_role",
       "node_type": "infrastructure_flow_stage",
-      "description": "AI data center power infrastructure stage covering design epc operations requirements and dependencies.",
+      "description": "AI data center stage for electrical design, modular and prefabricated integration, EPC delivery, commissioning, certification, and facility operations.",
       "status": "draft",
       "primary_path": [
         "energy_technology_new_power_system",
