@@ -170,6 +170,9 @@ EXPECTED_L4_NODE_TYPES = {
 
 HUMANOID_SECTOR_ID = "high_end_equipment_intelligent_manufacturing"
 HUMANOID_CHAIN_ID = "humanoid_robots_embodied_intelligence"
+BATTERY_SECTOR_ID = "energy_technology_new_power_system"
+BATTERY_CHAIN_ID = "power_batteries_battery_materials"
+BATTERY_L3_ID = "battery_cell_and_management_systems"
 
 HUMANOID_EXPECTED_CHILDREN = {
     "humanoid_embodied_ai_brain": [
@@ -404,6 +407,11 @@ HUMANOID_EXPECTED_L3_NODE_TYPES = {
     for node_id in HUMANOID_EXPECTED_CHILDREN
 }
 
+HUMANOID_EXPECTED_CANONICAL_REFS = {
+    "high_specific_energy_cell": ["battery_high_specific_energy_cell"],
+    "battery_management_system": ["battery_management_system_platform"],
+}
+
 HUMANOID_EXPECTED_EDGES = {
     ("rotary_joint_assembly", "frameless_torque_motor"),
     ("rotary_joint_assembly", "harmonic_reducer"),
@@ -431,6 +439,8 @@ HUMANOID_EXPECTED_EDGES = {
     ("dexterous_hand_assembly", "micro_reducer_transmission"),
     ("dexterous_hand_assembly", "tendon_flexible_transmission"),
     ("dexterous_hand_assembly", "fingertip_tactile_force_control"),
+    ("robot_battery_pack", "battery_high_specific_energy_cell"),
+    ("robot_battery_pack", "battery_management_system_platform"),
 }
 
 HUMANOID_ALTERNATIVE_ROUTE_EDGES = {
@@ -583,6 +593,111 @@ def test_semiconductor_manufacturing_equipment_representative_nodes_are_research
     assert nodes["ultrapure_water_system"]["node_name"] == "Ultrapure Water Systems"
 
 
+def test_power_batteries_battery_materials_skeleton_metadata():
+    catalog = load_industry_catalog()
+    chain = next(
+        row for row in catalog["chains"] if row["chain_id"] == BATTERY_CHAIN_ID
+    )
+
+    assert chain == {
+        "chain_id": BATTERY_CHAIN_ID,
+        "sector_id": BATTERY_SECTOR_ID,
+        "chain_name": "Power Batteries and Battery Materials",
+        "chain_kind": "canonical_industry_chain",
+        "decomposition_method": "manufacturing_process",
+        "description": (
+            "Primary canonical ownership skeleton for power-battery cells, battery "
+            "management platforms, pack and system integration, and battery materials "
+            "across the manufacturing value chain."
+        ),
+        "scope": (
+            "This skeleton establishes canonical ownership for generic high-specific-energy "
+            "power-battery cells and battery management system platforms. Later expansion "
+            "may add cell manufacturing, pack integration, recycling, and battery-material "
+            "process families without changing application-chain ownership."
+        ),
+        "exclusions": [
+            (
+                "Humanoid-specific cell selection, BMS integration, robot battery packs, "
+                "and robot power controls remain owned by "
+                "humanoid_robots_embodied_intelligence."
+            ),
+            (
+                "Stationary energy-storage systems and grid integration remain owned by "
+                "their primary energy-storage and power-system chains."
+            ),
+            (
+                "Vehicle-specific battery installation and vehicle energy management "
+                "remain owned by intelligent-vehicle chains; generic battery products "
+                "remain canonical here."
+            ),
+        ],
+        "aliases": [
+            "Power Battery Industry",
+            "Traction Batteries and Materials",
+            "动力电池与电池材料",
+        ],
+        "status": "skeleton",
+        "order": 7,
+    }
+
+
+def test_power_batteries_battery_materials_skeleton_exact_taxonomy_and_ownership():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == BATTERY_CHAIN_ID]
+
+    assert [row["node_id"] for row in nodes] == [
+        BATTERY_L3_ID,
+        "battery_high_specific_energy_cell",
+        "battery_management_system_platform",
+    ]
+    assert {row["node_id"]: row["node_type"] for row in nodes} == {
+        BATTERY_L3_ID: "battery_system_family",
+        "battery_high_specific_energy_cell": "battery_cell_product",
+        "battery_management_system_platform": "battery_control_platform",
+    }
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "canonical"
+        assert node["status"] == "skeleton"
+        assert node["canonical_node_refs"] == []
+        assert node["description"]
+
+    l3_node = nodes[0]
+    assert l3_node["parent_node_id"] is None
+    assert l3_node["canonical_key"] == ""
+    assert l3_node["primary_path"] == [
+        BATTERY_SECTOR_ID,
+        BATTERY_CHAIN_ID,
+        BATTERY_L3_ID,
+    ]
+
+    for node in nodes[1:]:
+        assert node["parent_node_id"] == BATTERY_L3_ID
+        assert node["level"] == "L4"
+        assert node["canonical_key"] == f"battery_industry:{node['node_id']}"
+        assert node["primary_path"] == [
+            BATTERY_SECTOR_ID,
+            BATTERY_CHAIN_ID,
+            BATTERY_L3_ID,
+            node["node_id"],
+        ]
+
+    assert nodes[1]["node_name"] == "High-Specific-Energy Power Battery Cells"
+    assert nodes[1]["description"] == (
+        "Canonical generic power-battery cell products optimized for high specific energy; "
+        "owns cell technology and manufacturing independently of application-specific "
+        "selection requirements."
+    )
+    assert nodes[2]["node_name"] == "Battery Management System Platforms"
+    assert nodes[2]["description"] == (
+        "Canonical generic battery management hardware and software platforms for state "
+        "estimation, balancing, protection, charging, diagnostics, and system interfaces; "
+        "application-specific integration requirements reference this node."
+    )
+
+
 def test_humanoid_robots_embodied_intelligence_chain_metadata():
     catalog = load_industry_catalog()
     chain = next(
@@ -661,7 +776,9 @@ def test_humanoid_robots_embodied_intelligence_exact_taxonomy_and_contract():
         assert set(node) == NODE_FIELDS
         assert node["node_kind"] == "canonical"
         assert node["status"] == "draft"
-        assert node["canonical_node_refs"] == []
+        assert node["canonical_node_refs"] == HUMANOID_EXPECTED_CANONICAL_REFS.get(
+            node["node_id"], []
+        )
         assert node["node_name"] != node["node_id"]
         assert node["description"]
 
@@ -703,14 +820,17 @@ def test_humanoid_robots_embodied_intelligence_exact_uses_edges():
         (row["source_node_id"], row["target_node_id"]) for row in edges
     ]
 
-    assert len(edges) == 26
-    assert len({row["edge_id"] for row in edges}) == 26
+    assert len(edges) == 28
+    assert len({row["edge_id"] for row in edges}) == 28
     assert len(edge_tuples) == len(set(edge_tuples))
     assert all(
         source_node_id != target_node_id
         for source_node_id, target_node_id in edge_tuples
     )
     assert set(edge_tuples) == HUMANOID_EXPECTED_EDGES
+    edges_by_tuple = {
+        (row["source_node_id"], row["target_node_id"]): row for row in edges
+    }
     for edge in edges:
         assert edge["relationship_type"] == "uses"
         assert edge["notes"]
@@ -719,6 +839,13 @@ def test_humanoid_robots_embodied_intelligence_exact_uses_edges():
         if edge_tuple in HUMANOID_ALTERNATIVE_ROUTE_EDGES:
             assert "eligible" in edge["notes"].lower()
             assert "route" in edge["notes"].lower()
+
+    for edge_tuple in (
+        ("robot_battery_pack", "battery_high_specific_energy_cell"),
+        ("robot_battery_pack", "battery_management_system_platform"),
+    ):
+        assert "eligible" in edges_by_tuple[edge_tuple]["notes"].lower()
+        assert "primary canonical" in edges_by_tuple[edge_tuple]["notes"].lower()
 
 
 def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research_usable():
@@ -762,6 +889,12 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "mass, packaging, discharge, and safety; generic cell chemistry and manufacturing "
         "remain owned by power_batteries_battery_materials."
     )
+    assert nodes["high_specific_energy_cell"]["canonical_key"] == (
+        "humanoid_robotics:high_specific_energy_cell"
+    )
+    assert nodes["high_specific_energy_cell"]["canonical_node_refs"] == [
+        "battery_high_specific_energy_cell"
+    ]
     assert nodes["battery_management_system"]["node_name"] == (
         "Humanoid Battery Management Integration and Control"
     )
@@ -770,6 +903,12 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "fault-control requirements; generic BMS products and technology remain owned by "
         "power_batteries_battery_materials."
     )
+    assert nodes["battery_management_system"]["canonical_key"] == (
+        "humanoid_robotics:battery_management_system"
+    )
+    assert nodes["battery_management_system"]["canonical_node_refs"] == [
+        "battery_management_system_platform"
+    ]
     assert nodes["robot_state_sensor"]["node_name"] == (
         "Residual Robot Operating-State Sensors"
     )

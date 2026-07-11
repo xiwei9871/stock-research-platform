@@ -207,6 +207,22 @@
       "relationship_type": "uses",
       "notes": "Eligible sensing-control route: a dexterous hand assembly may integrate fingertip tactile-force control when the manipulation requirements justify it; the edge does not make it universal.",
       "source_ids": []
+    },
+    {
+      "edge_id": "robot_battery_pack_uses_battery_high_specific_energy_cell",
+      "source_node_id": "robot_battery_pack",
+      "target_node_id": "battery_high_specific_energy_cell",
+      "relationship_type": "uses",
+      "notes": "Eligible cross-chain dependency: a humanoid robot battery pack may select cells owned by the primary canonical battery_high_specific_energy_cell node; robot requirements do not transfer generic cell ownership.",
+      "source_ids": []
+    },
+    {
+      "edge_id": "robot_battery_pack_uses_battery_management_system_platform",
+      "source_node_id": "robot_battery_pack",
+      "target_node_id": "battery_management_system_platform",
+      "relationship_type": "uses",
+      "notes": "Eligible cross-chain dependency: a humanoid robot battery pack may integrate a platform owned by the primary canonical battery_management_system_platform node; robot requirements do not transfer generic BMS ownership.",
+      "source_ids": []
     }
   ]
 }

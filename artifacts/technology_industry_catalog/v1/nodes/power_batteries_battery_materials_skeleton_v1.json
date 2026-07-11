@@ -1,0 +1,60 @@
+{
+  "nodes": [
+    {
+      "node_id": "battery_cell_and_management_systems",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": null,
+      "level": "L3",
+      "node_name": "Battery Cells and Management Systems",
+      "node_kind": "canonical",
+      "node_type": "battery_system_family",
+      "description": "Canonical generic power-battery cell products and BMS platforms across design, manufacturing, and system integration; application-specific requirements reference the L4 nodes.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "battery_cell_and_management_systems"
+      ],
+      "canonical_key": "",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "battery_high_specific_energy_cell",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": "battery_cell_and_management_systems",
+      "level": "L4",
+      "node_name": "High-Specific-Energy Power Battery Cells",
+      "node_kind": "canonical",
+      "node_type": "battery_cell_product",
+      "description": "Canonical generic power-battery cell products optimized for high specific energy; owns cell technology and manufacturing independently of application-specific selection requirements.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "battery_cell_and_management_systems",
+        "battery_high_specific_energy_cell"
+      ],
+      "canonical_key": "battery_industry:battery_high_specific_energy_cell",
+      "canonical_node_refs": []
+    },
+    {
+      "node_id": "battery_management_system_platform",
+      "chain_id": "power_batteries_battery_materials",
+      "parent_node_id": "battery_cell_and_management_systems",
+      "level": "L4",
+      "node_name": "Battery Management System Platforms",
+      "node_kind": "canonical",
+      "node_type": "battery_control_platform",
+      "description": "Canonical generic battery management hardware and software platforms for state estimation, balancing, protection, charging, diagnostics, and system interfaces; application-specific integration requirements reference this node.",
+      "status": "skeleton",
+      "primary_path": [
+        "energy_technology_new_power_system",
+        "power_batteries_battery_materials",
+        "battery_cell_and_management_systems",
+        "battery_management_system_platform"
+      ],
+      "canonical_key": "battery_industry:battery_management_system_platform",
+      "canonical_node_refs": []
+    }
+  ]
+}

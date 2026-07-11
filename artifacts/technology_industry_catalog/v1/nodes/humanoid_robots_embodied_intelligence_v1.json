@@ -1754,7 +1754,9 @@
         "high_specific_energy_cell"
       ],
       "canonical_key": "humanoid_robotics:high_specific_energy_cell",
-      "canonical_node_refs": []
+      "canonical_node_refs": [
+        "battery_high_specific_energy_cell"
+      ]
     },
     {
       "node_id": "battery_management_system",
@@ -1773,7 +1775,9 @@
         "battery_management_system"
       ],
       "canonical_key": "humanoid_robotics:battery_management_system",
-      "canonical_node_refs": []
+      "canonical_node_refs": [
+        "battery_management_system_platform"
+      ]
     },
     {
       "node_id": "robot_power_management_dcdc",
