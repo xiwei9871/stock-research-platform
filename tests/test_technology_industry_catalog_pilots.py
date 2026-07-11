@@ -627,15 +627,92 @@ AI_POWER_SUPPLY_ROLE_BOUNDARIES = {
     ),
 }
 
+AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS = {
+    "ai_power_grid_supply_role": (
+        "utility-delivered service capacity",
+        "firm grid volume",
+    ),
+    "ai_power_renewable_procurement_role": (
+        "ppa structures",
+        "green tariffs",
+        "certificates",
+    ),
+    "ai_power_distributed_energy_role": (
+        "onsite/local generation assets",
+        "grid-parallel operation",
+    ),
+    "ai_power_gas_turbine_role": (
+        "turbine equipment configuration",
+        "fuel firmness",
+        "dispatch schedule",
+    ),
+    "ai_power_nuclear_supply_role": (
+        "nuclear-backed ppa terms",
+        "nuclear co-location",
+        "dedicated nuclear supply",
+    ),
+    "ai_power_microgrid_role": (
+        "microgrid orchestration",
+        "islanding boundaries",
+        "control logic",
+    ),
+}
+
+AI_POWER_SUPPLY_ROLE_FORBIDDEN_ROUTE_MARKERS = {
+    role_id: tuple(
+        marker
+        for other_role_id, markers in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS.items()
+        if other_role_id != role_id
+        for marker in markers
+    )
+    for role_id in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS
+}
+
 AI_POWER_SUPPORTING_L3_TERMS = {
-    "power_semiconductor_devices": ("switching", "rectification", "voltage regulation"),
-    "power_interconnect_passive_components": ("cables", "busbars", "connectors"),
-    "data_center_facility_systems_services": ("facility-level", "power", "cooling"),
-    "industrial_energy_facility_software": ("electrical distribution", "thermal plant", "facility operations"),
-    "grid_connection_transmission_protection": ("interconnection", "substation", "protection"),
-    "generation_supply_resilience_systems": ("generation", "procurement", "microgrid"),
-    "power_conversion_distribution_control": ("ups", "dc", "distribution"),
-    "stationary_backup_storage_systems": ("standby", "ride-through", "black-start"),
+    "power_semiconductor_devices": (
+        "mosfet",
+        "silicon carbide",
+        "gallium nitride",
+    ),
+    "power_interconnect_passive_components": (
+        "cables",
+        "busbars",
+        "connectors",
+        "magnetic components",
+        "capacitors",
+    ),
+    "data_center_facility_systems_services": (
+        "coolant distribution",
+        "facility management platform",
+        "commissioning",
+    ),
+    "industrial_energy_facility_software": (
+        "electrical power monitoring",
+        "building management",
+        "compute scheduling",
+    ),
+    "grid_connection_transmission_protection": (
+        "transformers",
+        "relay protection",
+        "dc circuit breakers",
+        "dc protection",
+    ),
+    "generation_supply_resilience_systems": (
+        "contracted supply",
+        "local generation",
+        "diesel",
+        "black-start",
+    ),
+    "power_conversion_distribution_control": (
+        "automatic transfer switches",
+        "server and board",
+        "voltage regulator",
+    ),
+    "stationary_backup_storage_systems": (
+        "stationary batteries",
+        "flywheels",
+        "ups energy storage",
+    ),
     "stationary_fuel_cell_systems": ("fuel-cell", "stacks", "balance of plant"),
 }
 
@@ -1560,11 +1637,34 @@ def test_ai_power_l3_names_and_descriptions_define_distinct_stages():
 def test_ai_power_supply_roles_have_mutually_exclusive_boundaries():
     catalog = load_industry_catalog()
     nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    positive_markers_by_role = {}
 
     for node_id, (required_terms, excluded_terms) in AI_POWER_SUPPLY_ROLE_BOUNDARIES.items():
         description = nodes[node_id]["description"].lower()
         assert all(term in description for term in required_terms)
         assert all(term in description for term in excluded_terms)
+
+        positive_scope, exclusion_clause, excluded_scope = description.partition("excludes")
+        assert exclusion_clause == "excludes"
+        assert all(
+            marker in positive_scope
+            for marker in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS[node_id]
+        )
+        for marker in AI_POWER_SUPPLY_ROLE_FORBIDDEN_ROUTE_MARKERS[node_id]:
+            assert marker not in positive_scope
+            if marker in description:
+                assert marker in excluded_scope
+        positive_markers_by_role[node_id] = frozenset(
+            marker
+            for marker in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS[node_id]
+            if marker in positive_scope
+        )
+
+    assert len(set(positive_markers_by_role.values())) == len(positive_markers_by_role)
+    for node_id, markers in positive_markers_by_role.items():
+        for other_role_id, other_markers in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS.items():
+            if other_role_id != node_id:
+                assert not (markers & set(other_markers))
 
 
 def test_ai_power_supporting_l3_definitions_are_reusable_and_non_ai_specific():
