@@ -6492,3 +6492,45 @@ table.data-table td {
   font-size: 12px;
   margin: 4px 0 0;
 }
+
+.stock-theme-research-table-wrap {
+  overflow-x: auto;
+}
+
+.stock-theme-research-table {
+  border-collapse: collapse;
+  min-width: 780px;
+  width: 100%;
+}
+
+.stock-theme-research-table th,
+.stock-theme-research-table td {
+  border-bottom: 1px solid var(--border-subtle, #dfe5e1);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.stock-theme-research-table th {
+  color: var(--text-muted, #68726d);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.stock-theme-research-table td > span,
+.stock-theme-research-table td > small {
+  display: block;
+  line-height: 1.45;
+}
+
+.stock-theme-research-table td > small {
+  color: var(--text-muted, #68726d);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.stock-theme-research-table a {
+  color: var(--accent-strong, #0f6b5b);
+  font-weight: 650;
+  text-decoration: none;
+}

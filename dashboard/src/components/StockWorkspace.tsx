@@ -24,6 +24,7 @@ import { OperatorDecisionPanel } from './OperatorDecisionPanel';
 import { BusinessQualitySection } from './stock-workspace/BusinessQualitySection';
 import { CompanyBasicsSection } from './stock-workspace/CompanyBasicsSection';
 import { StockMarketContextHeatmap } from './stock-workspace/StockMarketContextHeatmap';
+import { ThemeResearchContextSection } from './stock-workspace/ThemeResearchContextSection';
 import { readableTechBottleneckOptionLabel } from './techBottleneck/TechBottleneckFilterBar';
 import type { SectorType } from './market-monitor/mockData';
 import type { TechBottleneckStockEntryContext } from '../features/techBottleneckWatchlistReview/types';
@@ -1174,6 +1175,8 @@ export function StockWorkspace({
             businessComposition={businessComposition}
             financialSnapshot={financialSnapshot}
           />
+
+          <ThemeResearchContextSection context={profile.theme_research_context} />
 
           <section className="workspace-band stock-price-behavior" role="region" aria-label="今日价格行为">
             <div className="section-heading">
