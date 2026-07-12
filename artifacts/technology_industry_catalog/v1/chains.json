@@ -218,10 +218,11 @@
       "chain_name": "Display Panels and Optoelectronic Components",
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "manufacturing_process",
-      "description": "Optoelectronics chain for flat-panel displays and light-emitting, imaging, and optical components used in electronic products.",
-      "scope": "Covers LCD, OLED, MicroLED, display modules, backplanes, LEDs, laser components, and optical sensing or illumination components.",
+      "description": "Canonical commercial optoelectronics chain for mass-production display panels and qualified light-emitting, imaging, and optical components used in electronic products.",
+      "scope": "Covers commercial and mass-production LCD, OLED, qualified MicroLED, display modules, backplanes, LEDs, laser components, and optical sensing or illumination components.",
       "exclusions": [
-        "Medical imaging systems remain owned by medical_imaging_diagnostic_equipment, not component-level optoelectronics."
+        "Medical imaging systems remain owned by medical_imaging_diagnostic_equipment, not component-level optoelectronics.",
+        "Pre-commercial display concepts and emerging technical routes remain owned by future_displays until they reach repeatable commercial mass-production; mature commercialization and manufacturing belong here."
       ],
       "aliases": [
         "Display and Optoelectronics",
@@ -647,7 +648,7 @@
       "description": "Application-chain view of the electrical, thermal, software, engineering, and operational dependencies required to power high-density AI data centers.",
       "scope": "Covers capacity planning, resilient energy supply, grid access, backup power, UPS and DC conversion, room and rack distribution, server-board power, liquid cooling, energy-management software, and facility delivery and operations for AI data centers.",
       "exclusions": [
-        "Canonical product, service, technology, company, and evidence ownership remains on the referenced non-application industry-chain nodes.",
+        "Canonical grid equipment, power-conversion and distribution products, and data-center facilities remain owned by new_power_system_smart_grid, power_electronics_power_supply_equipment, and cloud_data_center_infrastructure respectively; company and evidence ownership stays on referenced canonical nodes.",
         "Compute accelerators, servers, networking, storage, and AI software workloads are outside this power-application chain except where they define power or cooling requirements."
       ],
       "aliases": [
@@ -879,9 +880,10 @@
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "manufacturing_process",
       "description": "Functional-materials chain for membranes and separation media that selectively filter, purify, concentrate, or recover gases and liquids.",
-      "scope": "Covers reverse-osmosis, ultrafiltration, ion-exchange, gas-separation, battery-separator, and catalytic membrane materials and manufacturing.",
+      "scope": "Covers industrial and environmental reverse-osmosis, ultrafiltration, ion-exchange, gas-separation, and catalytic membrane materials and their manufacturing processes.",
       "exclusions": [
-        "Complete municipal and industrial water-treatment systems remain owned by water_treatment_resource_technology."
+        "Complete municipal and industrial water-treatment systems remain owned by water_treatment_resource_technology.",
+        "Battery separators remain owned by power_batteries_battery_materials; this chain is limited to industrial and environmental separation membranes."
       ],
       "aliases": [
         "Separation Membranes",
@@ -1011,14 +1013,16 @@
       "chain_name": "Intelligent Transport Vehicle-Road-Cloud",
       "chain_kind": "application_theme_chain",
       "decomposition_method": "infrastructure_flow",
-      "description": "Application chain for coordinated vehicle, roadside, cloud, and network services that improve transport safety, efficiency, and fleet operations.",
-      "scope": "Covers roadside sensing, V2X links, traffic control platforms, vehicle-cloud coordination, digital roads, fleet dispatch, and mobility operations.",
+      "description": "Application chain for cross-chain orchestration, service delivery, and data flow across vehicles, roadside systems, cloud platforms, and transport operations.",
+      "scope": "Covers cross-chain service and data flow for V2X coordination, traffic-control applications, vehicle-cloud orchestration, digital-road services, fleet dispatch, and mobility operations.",
       "exclusions": [
-        "Canonical vehicle subsystems remain owned by the relevant vehicle chains; this row maps their transport application dependencies."
+        "Vehicle hardware and subsystems remain owned by new_energy_vehicle_architecture_platforms, intelligent_driving_smart_cockpit, automotive_electronics_chip_applications, and electric_drive_chassis_by_wire_thermal_management.",
+        "Roadside and network hardware remain owned by network_equipment_edge_iot.",
+        "Cloud and data-center infrastructure remain owned by cloud_data_center_infrastructure."
       ],
       "aliases": [
         "Vehicle-Road-Cloud Integration",
-        "Smart Transportation",
+        "Cooperative Vehicle-Road-Cloud Services",
         "车路云一体化"
       ],
       "status": "skeleton",
@@ -1074,7 +1078,7 @@
         "Ground network equipment remains owned by network_equipment_edge_iot and optical_communications_data_center_interconnect; downstream communications, navigation, and remote-sensing applications are outside this manufacturing boundary."
       ],
       "aliases": [
-        "Satellite Industry",
+        "Satellite Platform Manufacturing",
         "Space Infrastructure",
         "卫星制造与空间基础设施"
       ],
@@ -1087,10 +1091,11 @@
       "chain_name": "Satellite Communications, Navigation, and Remote Sensing",
       "chain_kind": "application_theme_chain",
       "decomposition_method": "infrastructure_flow",
-      "description": "Application chain for space-enabled communications, positioning, navigation, timing, remote-sensing data, and downstream information services.",
-      "scope": "Covers satellite broadband, GNSS services, earth-observation data flows, ground terminals, navigation applications, and remote-sensing service delivery.",
+      "description": "Application chain for cross-chain orchestration, service delivery, and data flow across satellite communications, positioning, navigation, timing, and remote sensing.",
+      "scope": "Covers cross-chain service and data flow for satellite broadband, GNSS applications, earth-observation delivery, navigation services, and remote-sensing information products.",
       "exclusions": [
-        "Satellite platform manufacturing remains owned by satellite_manufacturing_space_infrastructure; this row captures service and data flow."
+        "Satellite platforms and ground-terminal hardware remain owned by satellite_manufacturing_space_infrastructure.",
+        "Terrestrial network infrastructure remains owned by network_equipment_edge_iot and optical_communications_data_center_interconnect."
       ],
       "aliases": [
         "Satellite Applications",
@@ -1188,7 +1193,7 @@
         "Cell and gene therapies remain owned by cell_gene_therapy, while prophylactic vaccines remain owned by vaccines."
       ],
       "aliases": [
-        "Biopharmaceuticals",
+        "Antibody and Protein Therapeutics",
         "Antibody Therapeutics",
         "生物药与抗体药"
       ],
@@ -1239,10 +1244,11 @@
       "chain_name": "Synthetic Biology and Biomanufacturing",
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "manufacturing_process",
-      "description": "Biomanufacturing chain for engineered organisms, fermentation platforms, and biological production processes that make chemicals, materials, food, and medicines.",
-      "scope": "Covers strain engineering, DNA synthesis, fermentation, bioreactors, downstream processing, industrial enzymes, and bio-based product manufacturing.",
+      "description": "Biomanufacturing chain for enabling production platforms, engineered organisms, and biological processes that make non-pharmaceutical chemicals, materials, food, and industrial products.",
+      "scope": "Covers enabling production platforms for strain engineering, DNA synthesis, fermentation, bioreactors, downstream processing, industrial enzymes, and non-pharmaceutical bio-based manufacturing.",
       "exclusions": [
-        "Clinical cell and gene therapies remain owned by cell_gene_therapy."
+        "Clinical cell and gene therapies remain owned by cell_gene_therapy.",
+        "Therapeutic drug products remain owned by biologic_antibody_drugs and small_molecule_innovative_drugs; this chain owns enabling platforms rather than pharmaceutical products."
       ],
       "aliases": [
         "Synthetic Biology",
@@ -1359,7 +1365,7 @@
         "Carbon dioxide capture and storage routes remain owned by carbon_capture_utilization_storage."
       ],
       "aliases": [
-        "Environmental Pollution Control",
+        "Air, Soil, and Industrial Emissions Control",
         "Air and Soil Remediation",
         "大气、土壤与工业污染治理"
       ],
@@ -1543,10 +1549,10 @@
       "chain_name": "Future Displays",
       "chain_kind": "frontier_technology_chain",
       "decomposition_method": "technical_route",
-      "description": "Frontier display route for emerging visual technologies that improve brightness, form factor, efficiency, interaction, and perceptual realism beyond established panels.",
-      "scope": "Covers MicroLED, quantum-dot display routes, holographic displays, flexible and transparent displays, light-field systems, and advanced display integration.",
+      "description": "Frontier display route for pre-commercial visual technologies and emerging technical routes that improve form factor, efficiency, interaction, and perceptual realism beyond established panels.",
+      "scope": "Covers pre-commercial emerging technical routes for MicroLED, quantum-dot, holographic, flexible, transparent, and light-field displays plus experimental display integration.",
       "exclusions": [
-        "Current mass-production display panels remain owned by display_panels_optoelectronic_components."
+        "Commercialized products, repeatable mass-production processes, and mature display manufacturing remain owned by display_panels_optoelectronic_components."
       ],
       "aliases": [
         "Emerging Displays",

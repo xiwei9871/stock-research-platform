@@ -197,6 +197,47 @@ EXPECTED_CHAIN_CONTRACT = {
 }
 
 
+EXPECTED_APPLICATION_CANONICAL_DEFERRALS = {
+    "ai_data_center_power": {
+        "new_power_system_smart_grid",
+        "power_electronics_power_supply_equipment",
+        "cloud_data_center_infrastructure",
+    },
+    "intelligent_transport_vehicle_road_cloud": {
+        "new_energy_vehicle_architecture_platforms",
+        "intelligent_driving_smart_cockpit",
+        "automotive_electronics_chip_applications",
+        "electric_drive_chassis_by_wire_thermal_management",
+        "network_equipment_edge_iot",
+        "cloud_data_center_infrastructure",
+    },
+    "satellite_communications_navigation_remote_sensing": {
+        "satellite_manufacturing_space_infrastructure",
+        "network_equipment_edge_iot",
+        "optical_communications_data_center_interconnect",
+    },
+}
+
+REQUIRED_ALIAS_REPLACEMENTS = {
+    "intelligent_transport_vehicle_road_cloud": (
+        "Smart Transportation",
+        "Cooperative Vehicle-Road-Cloud Services",
+    ),
+    "satellite_manufacturing_space_infrastructure": (
+        "Satellite Industry",
+        "Satellite Platform Manufacturing",
+    ),
+    "biologic_antibody_drugs": (
+        "Biopharmaceuticals",
+        "Antibody and Protein Therapeutics",
+    ),
+    "air_soil_industrial_pollution_control": (
+        "Environmental Pollution Control",
+        "Air, Soil, and Industrial Emissions Control",
+    ),
+}
+
+
 EXISTING_CHAIN_IDS = {
     "power_semiconductors",
     "semiconductor_manufacturing_equipment",
@@ -219,6 +260,10 @@ def _chains_by_id():
         chain["chain_id"]: chain
         for chain in load_industry_catalog()["chains"]
     }
+
+
+def _normalized(value):
+    return value.strip().casefold()
 
 
 
@@ -338,6 +383,145 @@ def test_exclusions_never_assign_canonical_ownership_to_application_chains():
         for chain_id, application_chain_ids in violations.items()
         if application_chain_ids
     }
+
+
+def test_display_chains_have_an_explicit_commercial_maturity_boundary():
+    chains_by_id = _chains_by_id()
+    commercial = chains_by_id["display_panels_optoelectronic_components"]
+    frontier = chains_by_id["future_displays"]
+    commercial_text = " ".join(
+        [commercial["description"], commercial["scope"], *commercial["exclusions"]]
+    ).casefold()
+    frontier_text = " ".join(
+        [frontier["description"], frontier["scope"], *frontier["exclusions"]]
+    ).casefold()
+
+    assert "commercial" in commercial_text
+    assert "mass-production" in commercial_text
+    assert "future_displays" in commercial_text
+    assert "pre-commercial" in frontier_text
+    assert "emerging technical routes" in frontier_text
+    assert "display_panels_optoelectronic_components" in frontier_text
+
+
+def test_membrane_chain_defers_battery_separators_to_battery_chain():
+    chain = _chains_by_id()["membrane_separation_materials"]
+    scope = chain["scope"].casefold()
+    exclusions = " ".join(chain["exclusions"]).casefold()
+
+    assert "battery-separator" not in scope
+    assert "battery separator" in exclusions
+    assert "power_batteries_battery_materials" in exclusions
+    assert "industrial" in scope
+    assert "environmental" in scope
+
+
+def test_synthetic_biology_defers_therapeutic_products_to_drug_chains():
+    chain = _chains_by_id()["synthetic_biology_biomanufacturing"]
+    owned_scope = " ".join([chain["description"], chain["scope"]]).casefold()
+    exclusions = " ".join(chain["exclusions"]).casefold()
+
+    assert "enabling production platforms" in owned_scope
+    assert "non-pharmaceutical" in owned_scope
+    assert "therapeutic drug products" in exclusions
+    assert "biologic_antibody_drugs" in exclusions
+    assert "small_molecule_innovative_drugs" in exclusions
+
+
+def test_application_chains_name_all_required_canonical_owner_deferrals():
+    chains_by_id = _chains_by_id()
+    actual_application_ids = {
+        chain_id
+        for chain_id, chain in chains_by_id.items()
+        if chain["chain_kind"] == "application_theme_chain"
+    }
+
+    assert actual_application_ids == set(EXPECTED_APPLICATION_CANONICAL_DEFERRALS)
+    assert all(
+        chains_by_id[owner_id]["chain_kind"] == "canonical_industry_chain"
+        for owner_ids in EXPECTED_APPLICATION_CANONICAL_DEFERRALS.values()
+        for owner_id in owner_ids
+    )
+    missing_deferrals = {
+        chain_id: sorted(
+            owner_id
+            for owner_id in expected_owner_ids
+            if owner_id not in " ".join(chains_by_id[chain_id]["exclusions"])
+        )
+        for chain_id, expected_owner_ids in EXPECTED_APPLICATION_CANONICAL_DEFERRALS.items()
+    }
+
+    assert not {
+        chain_id: owner_ids
+        for chain_id, owner_ids in missing_deferrals.items()
+        if owner_ids
+    }, f"missing canonical owner deferrals: {missing_deferrals}"
+
+    for chain_id in (
+        "intelligent_transport_vehicle_road_cloud",
+        "satellite_communications_navigation_remote_sensing",
+    ):
+        application_text = " ".join(
+            [chains_by_id[chain_id]["description"], chains_by_id[chain_id]["scope"]]
+        ).casefold()
+        assert "cross-chain" in application_text
+        assert "service" in application_text
+        assert "data flow" in application_text
+
+
+def test_broad_aliases_are_replaced_with_owner_specific_synonyms():
+    chains_by_id = _chains_by_id()
+
+    for chain_id, (removed_alias, replacement_alias) in REQUIRED_ALIAS_REPLACEMENTS.items():
+        aliases = chains_by_id[chain_id]["aliases"]
+        assert removed_alias not in aliases
+        assert replacement_alias in aliases
+
+
+def test_chain_names_are_globally_unique_after_normalization():
+    names_by_normalized_value = defaultdict(list)
+    for chain_id, chain in _chains_by_id().items():
+        names_by_normalized_value[_normalized(chain["chain_name"])].append(chain_id)
+
+    collisions = {
+        normalized_name: sorted(chain_ids)
+        for normalized_name, chain_ids in names_by_normalized_value.items()
+        if len(chain_ids) > 1
+    }
+
+    assert not collisions, f"normalized chain-name collisions: {collisions}"
+
+
+def test_aliases_are_globally_unique_after_normalization():
+    alias_owners = defaultdict(list)
+    for chain_id, chain in _chains_by_id().items():
+        for alias in chain["aliases"]:
+            alias_owners[_normalized(alias)].append((chain_id, alias))
+
+    collisions = {
+        normalized_alias: owners
+        for normalized_alias, owners in alias_owners.items()
+        if len(owners) > 1
+    }
+
+    assert not collisions, f"normalized alias collisions: {collisions}"
+
+
+def test_aliases_do_not_collide_with_another_chain_name_or_id():
+    chains_by_id = _chains_by_id()
+    identity_owners = defaultdict(set)
+    for chain_id, chain in chains_by_id.items():
+        identity_owners[_normalized(chain_id)].add(chain_id)
+        identity_owners[_normalized(chain["chain_name"])].add(chain_id)
+
+    collisions = {}
+    for chain_id, chain in chains_by_id.items():
+        for alias in chain["aliases"]:
+            other_owners = identity_owners[_normalized(alias)] - {chain_id}
+            if other_owners:
+                collisions[(chain_id, alias)] = sorted(other_owners)
+
+    assert not collisions, f"aliases colliding with other chain names or IDs: {collisions}"
 
 
 def test_chain_names_are_unique_within_each_sector():
