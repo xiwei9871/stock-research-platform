@@ -274,11 +274,15 @@ def find_industry_chain(catalog: dict[str, Any], query: object) -> dict[str, Any
         if chain["chain_name"].strip().casefold() == normalized_query:
             return chain
 
-    alias_matches = [
-        chain
-        for chain in chains
-        if any(alias.strip().casefold() == normalized_query for alias in chain["aliases"])
-    ]
+    alias_matches = []
+    for index, chain in enumerate(chains):
+        aliases = _require_unique_non_empty_string_list(
+            chain.get("aliases"),
+            f"chains[{index}].aliases",
+            code="INVALID_CHAIN_ALIASES",
+        )
+        if any(alias.strip().casefold() == normalized_query for alias in aliases):
+            alias_matches.append(chain)
     if len(alias_matches) == 1:
         return alias_matches[0]
     if len(alias_matches) > 1:
@@ -714,7 +718,18 @@ def _validate_sectors(sectors: list[Any]) -> dict[str, dict[str, Any]]:
         name_field="sector_name",
     )
     for index, sector in enumerate(sectors):
-        _validate_catalog_status(sector["status"], f"sectors[{index}]")
+        path = f"sectors[{index}]"
+        _validate_catalog_status(sector["status"], path)
+        _require_non_empty_string_value(
+            sector["description"],
+            f"{path}.description",
+            code="INVALID_SECTOR_DESCRIPTION",
+        )
+        _require_positive_integer(
+            sector["order"],
+            f"{path}.order",
+            code="INVALID_SECTOR_ORDER",
+        )
     return sectors_by_id
 
 
@@ -759,6 +774,31 @@ def _validate_chains(
                 f"{path}.decomposition_method invalid: {chain['decomposition_method']}",
                 code="INVALID_DECOMPOSITION_METHOD",
             )
+        _require_non_empty_string_value(
+            chain["description"],
+            f"{path}.description",
+            code="INVALID_CHAIN_DESCRIPTION",
+        )
+        _require_non_empty_string_value(
+            chain["scope"],
+            f"{path}.scope",
+            code="INVALID_CHAIN_SCOPE",
+        )
+        _require_unique_non_empty_string_list(
+            chain["exclusions"],
+            f"{path}.exclusions",
+            code="INVALID_CHAIN_EXCLUSIONS",
+        )
+        _require_unique_non_empty_string_list(
+            chain["aliases"],
+            f"{path}.aliases",
+            code="INVALID_CHAIN_ALIASES",
+        )
+        _require_positive_integer(
+            chain["order"],
+            f"{path}.order",
+            code="INVALID_CHAIN_ORDER",
+        )
     return chains_by_id
 
 
@@ -807,6 +847,21 @@ def _validate_nodes(
                 f"{path}.node_kind must be {expected_kind} for {chain['chain_kind']}",
                 code="INVALID_NODE_KIND_FOR_CHAIN",
             )
+        _require_non_empty_string_value(
+            node["node_type"],
+            f"{path}.node_type",
+            code="INVALID_NODE_TYPE",
+        )
+        _require_non_empty_string_value(
+            node["description"],
+            f"{path}.description",
+            code="INVALID_NODE_DESCRIPTION",
+        )
+        if not isinstance(node["primary_path"], list):
+            raise IndustryCatalogValidationError(
+                f"{path}.primary_path must be a list",
+                code="INVALID_PRIMARY_PATH",
+            )
         canonical_key = node["canonical_key"]
         if not isinstance(canonical_key, str):
             raise IndustryCatalogValidationError(
@@ -817,6 +872,15 @@ def _validate_nodes(
             raise IndustryCatalogValidationError(
                 f"{path}.canonical_key is not allowed for application roles",
                 code="INVALID_NODE_KIND_FOR_CHAIN",
+            )
+        if (
+            node["node_kind"] == "canonical"
+            and node["level"] == "L4"
+            and not canonical_key.strip()
+        ):
+            raise IndustryCatalogValidationError(
+                f"{path}.canonical_key must be a non-empty string for canonical L4 nodes",
+                code="INVALID_CANONICAL_OWNERSHIP",
             )
 
         if node["level"] == "L3":
@@ -1265,11 +1329,52 @@ def _require_non_empty_string(row: dict[str, Any], field: str, path: str) -> str
 
 
 def _require_reference_string(value: Any, path: str, *, code: str) -> str:
+    return _require_non_empty_string_value(value, path, code=code)
+
+
+def _require_non_empty_string_value(value: Any, path: str, *, code: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise IndustryCatalogValidationError(
             f"{path} must be a non-empty string",
             code=code,
         )
+    return value
+
+
+def _require_positive_integer(value: Any, path: str, *, code: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise IndustryCatalogValidationError(
+            f"{path} must be a positive integer",
+            code=code,
+        )
+    return value
+
+
+def _require_unique_non_empty_string_list(
+    value: Any,
+    path: str,
+    *,
+    code: str,
+) -> list[str]:
+    if not isinstance(value, list):
+        raise IndustryCatalogValidationError(
+            f"{path} must be a list",
+            code=code,
+        )
+    normalized_values: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise IndustryCatalogValidationError(
+                f"{path}[{index}] must be a non-empty string",
+                code=code,
+            )
+        normalized = item.strip().casefold()
+        if normalized in normalized_values:
+            raise IndustryCatalogValidationError(
+                f"{path} contains a duplicate after strip+casefold: {item}",
+                code=code,
+            )
+        normalized_values.add(normalized)
     return value
 
 
