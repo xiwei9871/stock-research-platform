@@ -345,6 +345,50 @@ def test_find_industry_chain_rejects_shared_alias():
     assert exc_info.value.code == "AMBIGUOUS_CHAIN_ALIAS"
 
 
+@pytest.mark.parametrize("aliases", [42, True, {}, "scalar"])
+def test_find_industry_chain_rejects_non_list_aliases_with_domain_error(aliases):
+    catalog = {
+        "chains": [
+            {"chain_id": "first", "chain_name": "First", "aliases": aliases},
+        ]
+    }
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(catalog, "unknown")
+
+    assert exc_info.value.code == "INVALID_CHAIN_ALIASES"
+    assert str(exc_info.value) == "chains[0].aliases must be a list"
+
+
+@pytest.mark.parametrize("alias", [None, True, {}, "   "])
+def test_find_industry_chain_rejects_malformed_alias_entries_with_domain_error(alias):
+    catalog = {
+        "chains": [
+            {"chain_id": "first", "chain_name": "First", "aliases": [alias]},
+        ]
+    }
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(catalog, "unknown")
+
+    assert exc_info.value.code == "INVALID_CHAIN_ALIASES"
+    assert str(exc_info.value) == "chains[0].aliases[0] must be a non-empty string"
+
+
+@pytest.mark.parametrize("query", ["target-id", "Target Name"])
+def test_find_industry_chain_preserves_direct_lookup_before_alias_validation(query):
+    catalog = {
+        "chains": [
+            {"chain_id": "first", "chain_name": "First", "aliases": 42},
+            {"chain_id": "target-id", "chain_name": "Target Name", "aliases": []},
+        ]
+    }
+
+    chain = find_industry_chain(catalog, query)
+
+    assert chain["chain_id"] == "target-id"
+
+
 @pytest.mark.parametrize(
     "query",
     [

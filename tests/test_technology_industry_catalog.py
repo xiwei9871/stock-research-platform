@@ -1202,6 +1202,125 @@ def test_ids_and_names_must_be_non_empty(
     assert field in str(error)
 
 
+@pytest.mark.parametrize("value", [None, "", "   ", [], {}])
+def test_sector_description_must_be_a_non_empty_string(
+    tmp_path: Path,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "sectors.json", "sectors", description=value)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_SECTOR_DESCRIPTION"
+    assert str(error) == "sectors[0].description must be a non-empty string"
+
+
+@pytest.mark.parametrize("value", ["first", True, 0, -1])
+def test_sector_order_must_be_a_positive_integer(
+    tmp_path: Path,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "sectors.json", "sectors", order=value)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_SECTOR_ORDER"
+    assert str(error) == "sectors[0].order must be a positive integer"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("description", "", "INVALID_CHAIN_DESCRIPTION"),
+        ("description", None, "INVALID_CHAIN_DESCRIPTION"),
+        ("scope", "   ", "INVALID_CHAIN_SCOPE"),
+        ("scope", {}, "INVALID_CHAIN_SCOPE"),
+    ],
+)
+def test_chain_text_metadata_must_be_non_empty_strings(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    code: str,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", **{field: value})
+
+    error = _load_error(root)
+
+    assert error.code == code
+    assert str(error) == f"chains[0].{field} must be a non-empty string"
+
+
+@pytest.mark.parametrize("value", ["first", True, 0, -1])
+def test_chain_order_must_be_a_positive_integer(
+    tmp_path: Path,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", order=value)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CHAIN_ORDER"
+    assert str(error) == "chains[0].order must be a positive integer"
+
+
+@pytest.mark.parametrize("field", ["exclusions", "aliases"])
+@pytest.mark.parametrize("value", [42, True, {}, "scalar"])
+def test_chain_string_list_metadata_must_be_lists(
+    tmp_path: Path,
+    field: str,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", **{field: value})
+
+    error = _load_error(root)
+
+    assert error.code == f"INVALID_CHAIN_{field.upper()}"
+    assert str(error) == f"chains[0].{field} must be a list"
+
+
+@pytest.mark.parametrize("field", ["exclusions", "aliases"])
+@pytest.mark.parametrize("value", [None, False, {}, "   "])
+def test_chain_string_list_metadata_rejects_malformed_entries(
+    tmp_path: Path,
+    field: str,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "chains.json", "chains", **{field: [value]})
+
+    error = _load_error(root)
+
+    assert error.code == f"INVALID_CHAIN_{field.upper()}"
+    assert str(error) == f"chains[0].{field}[0] must be a non-empty string"
+
+
+@pytest.mark.parametrize("field", ["exclusions", "aliases"])
+def test_chain_string_list_metadata_rejects_normalized_duplicates(
+    tmp_path: Path,
+    field: str,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(
+        root / "chains.json",
+        "chains",
+        **{field: ["Stable Value", "  stable value  "]},
+    )
+
+    error = _load_error(root)
+
+    assert error.code == f"INVALID_CHAIN_{field.upper()}"
+    assert str(error) == (
+        f"chains[0].{field} contains a duplicate after strip+casefold: "
+        "  stable value  "
+    )
+
+
 def test_duplicate_sector_id_has_stable_error(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
     payload = _read_json(root / "sectors.json")
@@ -1370,6 +1489,25 @@ def test_application_roles_cannot_own_canonical_key(tmp_path: Path):
     assert _load_error(root).code == "INVALID_NODE_KIND_FOR_CHAIN"
 
 
+@pytest.mark.parametrize("canonical_key", ["", "   "])
+def test_canonical_l4_nodes_require_a_non_empty_canonical_key(
+    tmp_path: Path,
+    canonical_key: str,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["canonical_key"] = canonical_key
+    _write_json(path, payload)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CANONICAL_OWNERSHIP"
+    assert str(error) == (
+        "nodes[1].canonical_key must be a non-empty string for canonical L4 nodes"
+    )
+
+
 def test_duplicate_canonical_ownership_has_stable_error(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
     path = root / "nodes" / "semiconductor_equipment.json"
@@ -1406,6 +1544,23 @@ def test_application_role_l4_primary_path_has_stable_error(tmp_path: Path):
     _write_json(path, payload)
 
     assert _load_error(root).code == "INVALID_PRIMARY_PATH"
+
+
+@pytest.mark.parametrize("primary_path", [None, {}, "not-a-list", True])
+def test_node_primary_path_must_be_a_list_before_path_validation(
+    tmp_path: Path,
+    primary_path: object,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["primary_path"] = primary_path
+    _write_json(path, payload)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_PRIMARY_PATH"
+    assert str(error) == "nodes[1].primary_path must be a list"
 
 
 @pytest.mark.parametrize("canonical_node_refs", [[], ["lithography"]])
@@ -1783,6 +1938,33 @@ def test_canonical_key_malformed_types_raise_domain_error(
     _write_json(path, payload)
 
     assert _load_error(root).code == "INVALID_CANONICAL_OWNERSHIP"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    [
+        ("node_type", "", "INVALID_NODE_TYPE"),
+        ("node_type", None, "INVALID_NODE_TYPE"),
+        ("description", "   ", "INVALID_NODE_DESCRIPTION"),
+        ("description", {}, "INVALID_NODE_DESCRIPTION"),
+    ],
+)
+def test_node_basic_text_metadata_must_be_non_empty_strings(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    code: str,
+):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][0][field] = value
+    _write_json(path, payload)
+
+    error = _load_error(root)
+
+    assert error.code == code
+    assert str(error) == f"nodes[0].{field} must be a non-empty string"
 
 
 @pytest.mark.parametrize(
