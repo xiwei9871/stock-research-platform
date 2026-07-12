@@ -479,7 +479,8 @@
       "aliases": [
         "Humanoid Robotics",
         "Embodied Intelligence Robots",
-        "人形机器人与具身智能"
+        "人形机器人与具身智能",
+        "人形机器人"
       ],
       "status": "draft",
       "order": 4
@@ -657,7 +658,8 @@
       "aliases": [
         "AI Data Center Power Infrastructure",
         "AI Compute Power and Cooling Chain",
-        "AI数据中心电力基础设施"
+        "AI数据中心电力基础设施",
+        "AI数据中心供电"
       ],
       "status": "draft",
       "order": 4

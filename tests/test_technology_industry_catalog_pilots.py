@@ -1517,6 +1517,7 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
             "Humanoid Robotics",
             "Embodied Intelligence Robots",
             "人形机器人与具身智能",
+            "人形机器人",
         ],
         "status": "draft",
         "order": 4,
