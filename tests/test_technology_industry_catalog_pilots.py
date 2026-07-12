@@ -632,6 +632,32 @@ HUMANOID_EXPECTED_CANONICAL_REFS = {
     "battery_management_system": ["battery_management_system_platform"],
 }
 
+HUMANOID_SENSOR_BOUNDARY_NODE_IDS = {
+    "depth_camera",
+    "lidar_sensor",
+    "imu_sensor",
+    "joint_encoder",
+    "joint_torque_sensor",
+    "six_axis_force_sensor",
+    "tactile_sensor",
+    "joint_encoder_module",
+    "linear_displacement_sensor",
+    "robot_state_sensor",
+}
+
+HUMANOID_MECHANICAL_BOUNDARY_NODE_IDS = {
+    "harmonic_reducer",
+    "rv_reducer",
+    "precision_planetary_reducer",
+    "joint_bearing",
+    "planetary_roller_screw",
+    "ball_screw",
+    "trapezoidal_screw",
+    "screw_support_bearing",
+    "micro_reducer_transmission",
+    "tendon_flexible_transmission",
+}
+
 HUMANOID_EXPECTED_EDGES = {
     ("rotary_joint_assembly", "frameless_torque_motor"),
     ("rotary_joint_assembly", "harmonic_reducer"),
@@ -1488,11 +1514,13 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
             "subsystems, with one explicit supplementary lifecycle and value-chain family."
         ),
         "scope": (
-            "Covers robot-specific models and software, integrated sensing and control "
-            "modules, reusable electromechanical components, complete humanoid robots, "
-            "and their manufacturing, test, operations, and scenario integration. Under "
-            "the approved mixed-template rule, humanoid_manufacturing_test_integration "
-            "supplements the primary system architecture with lifecycle coverage."
+            "Covers robot-specific models and software; humanoid-specific requirements, "
+            "qualification, packaging, calibration, selection, joint and module "
+            "integration, and system use of sensing, compute, actuation, body, and energy "
+            "components; complete humanoid robots; and their manufacturing, test, "
+            "operations, and scenario integration. Under the approved mixed-template "
+            "rule, humanoid_manufacturing_test_integration supplements the primary system "
+            "architecture with lifecycle coverage."
         ),
         "exclusions": [
             (
@@ -1509,6 +1537,20 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
                 "humanoid-specific selection, integration, and control requirements."
             ),
             (
+                "Standalone and general-purpose MEMS and intelligent sensing devices, "
+                "sensor dies and components, fabrication, and related evidence and company "
+                "ownership remain with mems_intelligent_sensors; this chain covers "
+                "humanoid-specific requirements, qualification, packaging, calibration, "
+                "selection, module integration, and system use."
+            ),
+            (
+                "Standalone and general-purpose bearings, gears and reducers, screws and "
+                "linear guides, precision transmission components, and related evidence "
+                "and company ownership remain with core_mechanical_components; this chain "
+                "covers humanoid joint and module requirements, qualification, selection, "
+                "packaging, integration, and system use."
+            ),
+            (
                 "General industrial robots, machine tools, and factory automation remain "
                 "owned by their primary equipment chains unless humanoid-specific."
             ),
@@ -1522,6 +1564,34 @@ def test_humanoid_robots_embodied_intelligence_chain_metadata():
         "status": "draft",
         "order": 4,
     }
+
+
+def test_humanoid_component_ownership_boundary_is_reciprocal_and_explicit():
+    catalog = load_industry_catalog()
+    chains = {row["chain_id"]: row for row in catalog["chains"]}
+
+    assert chains["mems_intelligent_sensors"]["scope"] == (
+        "Covers standalone and general-purpose MEMS and intelligent sensing devices, "
+        "sensor dies and components, and fabrication across inertial, pressure, acoustic, "
+        "environmental, optical, force, position, and tactile sensing."
+    )
+    assert (
+        "Humanoid-specific sensor requirements, qualification, packaging, calibration, "
+        "selection, robot-module integration, and system use remain owned by "
+        "humanoid_robots_embodied_intelligence."
+        in chains["mems_intelligent_sensors"]["exclusions"]
+    )
+    assert chains["core_mechanical_components"]["scope"] == (
+        "Covers standalone and general-purpose bearings, gears and reducers, screws and "
+        "linear guides, hydraulic and pneumatic components, seals, and precision "
+        "transmission components and assemblies."
+    )
+    assert (
+        "Humanoid-specific joint and module requirements, qualification, selection, "
+        "packaging, integration, and system use remain owned by "
+        "humanoid_robots_embodied_intelligence."
+        in chains["core_mechanical_components"]["exclusions"]
+    )
 
 
 def test_humanoid_robots_embodied_intelligence_exact_taxonomy_and_contract():
@@ -1642,9 +1712,9 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "chip categories remain owned by semiconductor chains."
     )
     assert nodes["rotary_joint_assembly"]["description"] == (
-        "Integrated rotary actuation assembly combining selected reusable motor, "
-        "transmission, feedback, braking, and bearing components for humanoid joint "
-        "modules."
+        "Humanoid rotary-joint module integrating qualified motor, transmission, feedback, "
+        "braking, and bearing components against joint packaging, load, lifetime, thermal, "
+        "and control requirements."
     )
     assert nodes["shoulder_joint_module"]["description"] == (
         "Shoulder-specific kinematic module that integrates shared rotary joint "
@@ -1683,12 +1753,13 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "battery_management_system_platform"
     ]
     assert nodes["robot_state_sensor"]["node_name"] == (
-        "Residual Robot Operating-State Sensors"
+        "Humanoid Residual Operating-State Sensing"
     )
     assert nodes["robot_state_sensor"]["description"] == (
-        "Residual sensors for internal robot operating states such as limits, temperature, "
-        "current, or discrete health signals; excludes IMUs, joint encoders, force-torque, "
-        "tactile, vision, and every other enumerated sensor node."
+        "Humanoid-specific selection and integration requirements for residual "
+        "operating-state sensing such as limits, temperature, current, and discrete health "
+        "signals; excludes every separately enumerated sensor node, while standalone "
+        "sensor devices and fabrication remain owned by mems_intelligent_sensors."
     )
     assert nodes["humanoid_manufacturing_test_integration"]["node_type"] == (
         "lifecycle_value_chain_family"
@@ -1702,6 +1773,88 @@ def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research
         "Hip-specific kinematic module that can integrate eligible rotary or linear joint "
         "assembly routes according to the humanoid architecture."
     )
+
+
+def test_humanoid_component_nodes_defer_standalone_sensor_and_mechanical_ownership():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+
+    assert nodes["humanoid_perception"]["description"] == (
+        "Humanoid-specific sensing requirements, qualification, packaging, calibration, "
+        "selection, module integration, and system use across environment, body-state, "
+        "contact, force, motion, and command sensing; standalone sensor devices and "
+        "fabrication remain owned by mems_intelligent_sensors."
+    )
+    assert nodes["humanoid_rotary_actuation"]["node_name"] == (
+        "Humanoid Rotary Joint Actuation"
+    )
+    assert nodes["humanoid_rotary_actuation"]["description"] == (
+        "Humanoid rotary-joint requirements, qualification, selection, packaging, and "
+        "integration of eligible motor, transmission, sensing, braking, and bearing "
+        "components; standalone mechanical components remain owned by "
+        "core_mechanical_components."
+    )
+    assert nodes["humanoid_linear_actuation"]["node_name"] == (
+        "Humanoid Linear Joint Actuation"
+    )
+    assert nodes["humanoid_linear_actuation"]["description"] == (
+        "Humanoid linear-joint requirements, qualification, selection, packaging, and "
+        "integration of eligible drive, screw, bearing, and displacement-sensing "
+        "components; standalone mechanical components remain owned by "
+        "core_mechanical_components."
+    )
+
+    assert nodes["imu_sensor"]["node_name"] == (
+        "Humanoid IMU Qualification and Integration"
+    )
+    assert nodes["imu_sensor"]["description"] == (
+        "Humanoid-specific selection, packaging, calibration, synchronization, and "
+        "qualification requirements for eligible IMUs used in body-state estimation; "
+        "standalone IMU devices, sensor components, and fabrication remain owned by "
+        "mems_intelligent_sensors."
+    )
+    assert nodes["joint_encoder"]["node_name"] == (
+        "Humanoid Joint-Encoder Selection and Calibration"
+    )
+    assert nodes["six_axis_force_sensor"]["node_name"] == (
+        "Humanoid Six-Axis Force-Torque Sensing Integration"
+    )
+    assert nodes["tactile_sensor"]["node_name"] == (
+        "Humanoid Tactile-Sensing Integration"
+    )
+
+    assert nodes["harmonic_reducer"]["node_name"] == (
+        "Humanoid Harmonic-Reducer Qualification"
+    )
+    assert nodes["harmonic_reducer"]["description"] == (
+        "Humanoid rotary-joint selection and qualification requirements for eligible "
+        "strain-wave reducers, including ratio, backlash, rigidity, life, packaging, and "
+        "thermal compatibility; standalone reducer products and manufacturing remain "
+        "owned by core_mechanical_components."
+    )
+    assert nodes["joint_bearing"]["node_name"] == (
+        "Humanoid Joint-Bearing Qualification"
+    )
+    assert nodes["planetary_roller_screw"]["node_name"] == (
+        "Humanoid Planetary-Roller-Screw Qualification"
+    )
+    assert nodes["screw_support_bearing"]["node_name"] == (
+        "Humanoid Screw-Support-Bearing Qualification"
+    )
+
+    for node_id in HUMANOID_SENSOR_BOUNDARY_NODE_IDS:
+        ownership_text = f"{nodes[node_id]['node_name']} {nodes[node_id]['description']}"
+        assert "reusable" not in ownership_text.lower()
+        assert "mems_intelligent_sensors" in nodes[node_id]["description"]
+
+    for node_id in HUMANOID_MECHANICAL_BOUNDARY_NODE_IDS:
+        ownership_text = f"{nodes[node_id]['node_name']} {nodes[node_id]['description']}"
+        assert "reusable" not in ownership_text.lower()
+        assert "core_mechanical_components" in nodes[node_id]["description"]
 
 
 def test_ai_data_center_power_exact_taxonomy_and_application_role_contract():
