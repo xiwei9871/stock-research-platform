@@ -77,25 +77,25 @@ from stock_research.technology_industry_catalog import (
 )
 
 catalog = load_industry_catalog()
-chain = find_industry_chain(catalog, "AI data-center power")
+chain = find_industry_chain(catalog, "AI数据中心供电")
 detail = get_industry_chain(catalog, chain["chain_id"])
 ```
 
-Chain lookup compares IDs, names, and aliases with `strip()` plus `casefold()`. It does not use fuzzy matching. A matching alias on more than one chain raises `AMBIGUOUS_CHAIN_ALIAS`; an absent or blank lookup raises `CHAIN_NOT_FOUND`.
+Chain lookup precedence is: exact normalized `chain_id`, then exact normalized `chain_name`, then a unique exact normalized alias. Normalization applies only `strip()` plus `casefold()`; it does not normalize punctuation or internal whitespace and does not use fuzzy matching. A matching alias on more than one chain raises `AMBIGUOUS_CHAIN_ALIAS`; an absent or blank lookup raises `CHAIN_NOT_FOUND`.
 
 ## Adding an L2 Skeleton
 
-1. Edit `artifacts/technology_industry_catalog/v1/chains.json` and add the L2 record with a stable `chain_id`, `sector_id`, `chain_name`, `chain_kind`, and `decomposition_method`.
-2. Set the intended `order` and lifecycle `status`; describe the chain boundary through `scope` and `exclusions`, and add exact aliases in `aliases`.
+1. Edit `artifacts/technology_industry_catalog/v1/chains.json` and add all required L2 fields: `chain_id`, `sector_id`, `chain_name`, `chain_kind`, `decomposition_method`, `description`, `scope`, `exclusions`, `aliases`, `status`, and `order`.
+2. Use a stable ID; set the intended `order` and lifecycle `status`; describe the chain boundary through `description`, `scope`, and `exclusions`; and add exact aliases in `aliases`.
 3. Keep the chain independently researchable. Do not add a chain solely because it is a component, market label, or a different view of an existing canonical object.
 4. Update the relevant catalog tests, including `tests/test_technology_industry_catalog_skeleton.py` when its inventory or expected skeleton metadata changes.
 5. Run catalog validation and summary to confirm the chain is accepted and reported as intended.
 
 ## Expanding L3 and L4
 
-Add nodes in a chain artifact under `artifacts/technology_industry_catalog/v1/nodes/`. Each node must carry the required `chain_id`, `parent_node_id`, `level`, `node_kind`, and `status` fields. L3 nodes have a null parent; L4 nodes name an L3 parent in the same chain. Canonical L4 nodes use one unique `canonical_key` and the required `primary_path`.
+Add nodes in a chain artifact under `artifacts/technology_industry_catalog/v1/nodes/`. Every node record must include all required fields: `node_id`, `chain_id`, `parent_node_id`, `level`, `node_name`, `node_kind`, `node_type`, `description`, `status`, `primary_path`, `canonical_key`, and `canonical_node_refs`. L3 nodes have a null parent; L4 nodes name an L3 parent in the same chain. Canonical L4 nodes use one unique `canonical_key` and the required `primary_path`.
 
-For an application theme, create `application_role` nodes with `canonical_node_refs` that point to existing canonical nodes, then add the matching composition entry in `theme_compositions/`. Do not recreate the referenced component. Add a row to `edges.json` only for a real typed relationship and ensure its node and source references resolve. Run `validate` after every artifact change; validation rejects duplicate canonical ownership, invalid parents, incompatible node kinds, unresolved references, and application roles without a matching composition.
+`canonical_node_refs` is always a list. It may be empty where the node has no canonical projection; each non-empty entry must resolve to a canonical L4 node. An L4 `application_role` must provide non-empty references, and its matching `theme_compositions/` entry must contain the same references. Do not recreate the referenced component. Add a row to `edges.json` only for a real typed relationship and ensure its node and source references resolve. Run `validate` after every artifact change; validation rejects duplicate canonical ownership, invalid parents, incompatible node kinds, unresolved references, and application roles without a matching composition.
 
 ## v1 Boundary
 
