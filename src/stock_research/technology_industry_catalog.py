@@ -95,7 +95,6 @@ _REQUIRED_MANIFEST_PATH_KEYS = (
     "chain_file",
     "edge_file",
     "source_file",
-    "theme_link_file",
     "node_dir",
     "theme_composition_dir",
 )
@@ -135,9 +134,13 @@ def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, A
     chains = _load_collection(_package_file(root, manifest, "chain_file"), "chains")
     edges = _load_collection(_package_file(root, manifest, "edge_file"), "edges")
     sources = _load_collection(_package_file(root, manifest, "source_file"), "sources")
-    theme_links = _load_collection(
-        _package_file(root, manifest, "theme_link_file"),
-        "theme_links",
+    theme_links = (
+        _load_collection(
+            _package_file(root, manifest, "theme_link_file"),
+            "theme_links",
+        )
+        if "theme_link_file" in manifest
+        else []
     )
     node_dir = _package_directory(root, manifest, "node_dir")
     composition_dir = _package_directory(root, manifest, "theme_composition_dir")
@@ -231,10 +234,15 @@ def project_theme_to_catalog(
     theme_artifact_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     resolved_catalog = catalog if catalog is not None else load_industry_catalog()
+    if not isinstance(resolved_catalog, dict):
+        raise _theme_link_invalid("catalog must be an object")
+    theme_links = resolved_catalog.get("theme_links")
+    if not isinstance(theme_links, list):
+        raise _theme_link_invalid("catalog.theme_links must be a list")
     theme_link = next(
         (
             link
-            for link in resolved_catalog.get("theme_links", [])
+            for link in theme_links
             if isinstance(link, dict) and link.get("theme_id") == theme_id
         ),
         None,
@@ -245,14 +253,32 @@ def project_theme_to_catalog(
             code="THEME_CATALOG_LINK_NOT_FOUND",
         )
 
-    from stock_research.theme_decomposition import load_theme
+    _validate_projection_theme_link(theme_link, theme_id)
+    chain_id = theme_link["chain_id"]
+    catalog_chains = resolved_catalog.get("chains")
+    if not isinstance(catalog_chains, list):
+        raise _theme_link_invalid("catalog.chains must be a list")
+    catalog_nodes = resolved_catalog.get("nodes")
+    if not isinstance(catalog_nodes, list):
+        raise _theme_catalog_node_link_error("catalog.nodes must be a list")
 
-    source_theme = load_theme(theme_id, artifact_dir=theme_artifact_dir)
-    chain_id = theme_link.get("chain_id")
+    from stock_research.theme_decomposition import (
+        ThemeDecompositionValidationError,
+        load_theme,
+    )
+
+    try:
+        source_theme = load_theme(theme_id, artifact_dir=theme_artifact_dir)
+    except ThemeDecompositionValidationError as exc:
+        raise IndustryCatalogValidationError(
+            f"theme artifact invalid: {exc}",
+            code="THEME_ARTIFACT_INVALID",
+        ) from exc
+    theme, theme_nodes = _validate_theme_detail(source_theme, theme_id)
     catalog_chain = next(
         (
             chain
-            for chain in resolved_catalog.get("chains", [])
+            for chain in catalog_chains
             if isinstance(chain, dict) and chain.get("chain_id") == chain_id
         ),
         None,
@@ -264,15 +290,13 @@ def project_theme_to_catalog(
         )
 
     theme_nodes_by_id = {
-        node["node_id"]
-        : node
-        for node in source_theme.get("nodes", [])
-        if isinstance(node, dict) and isinstance(node.get("node_id"), str)
+        node["node_id"]: node
+        for node in theme_nodes
     }
     catalog_nodes_by_id = {
         node["node_id"]
         : node
-        for node in resolved_catalog.get("nodes", [])
+        for node in catalog_nodes
         if isinstance(node, dict) and isinstance(node.get("node_id"), str)
     }
     node_projections = []
@@ -282,7 +306,7 @@ def project_theme_to_catalog(
         raise _theme_catalog_node_link_error("node_links must be a list")
     for index, node_link in enumerate(node_links):
         link_path = f"theme_links[{theme_id}].node_links[{index}]"
-        _require_fields(node_link, NODE_LINK_FIELDS, link_path)
+        _validate_projection_node_link(node_link, link_path)
         source_node_id = _require_reference_string(
             node_link["theme_node_id"],
             f"{link_path}.theme_node_id",
@@ -300,6 +324,7 @@ def project_theme_to_catalog(
             or theme_node is None
             or catalog_node is None
             or catalog_node.get("level") not in NODE_LEVELS
+            or catalog_node.get("chain_id") != chain_id
         ):
             raise _theme_catalog_node_link_error(
                 f"invalid node link: {source_node_id} -> {catalog_node_id}"
@@ -332,7 +357,7 @@ def project_theme_to_catalog(
     return copy.deepcopy(
         {
             "theme_id": theme_id,
-            "theme_status": source_theme["theme"]["status"],
+            "theme_status": theme["status"],
             "chain_id": chain_id,
             "catalog_chain": catalog_chain,
             "node_projections": node_projections,
@@ -361,6 +386,81 @@ def configure_industry_catalog_parser(
     show = subparsers.add_parser("show")
     show.add_argument("--chain", dest=f"{dest_prefix}chain", required=True)
     return parser
+
+
+def _validate_projection_theme_link(theme_link: Any, theme_id: str) -> None:
+    if not isinstance(theme_link, dict):
+        raise _theme_link_invalid("selected theme link must be an object")
+    for field in sorted(THEME_LINK_FIELDS):
+        if field not in theme_link:
+            raise _theme_link_invalid(f"selected theme link.{field} is required")
+    linked_theme_id = _require_reference_string(
+        theme_link["theme_id"],
+        "selected theme link.theme_id",
+        code="THEME_LINK_INVALID",
+    )
+    if linked_theme_id != theme_id:
+        raise _theme_link_invalid(
+            f"selected theme link.theme_id does not match: {linked_theme_id}"
+        )
+    _require_reference_string(
+        theme_link["chain_id"],
+        "selected theme link.chain_id",
+        code="THEME_LINK_INVALID",
+    )
+
+
+def _validate_projection_node_link(node_link: Any, path: str) -> None:
+    if not isinstance(node_link, dict):
+        raise _theme_catalog_node_link_error(f"{path} must be an object")
+    for field in sorted(NODE_LINK_FIELDS):
+        if field not in node_link:
+            raise _theme_catalog_node_link_error(f"{path}.{field} is required")
+
+
+def _validate_theme_detail(
+    source_theme: Any,
+    theme_id: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    if not isinstance(source_theme, dict):
+        raise _theme_artifact_invalid("theme detail must be an object")
+    theme = source_theme.get("theme")
+    nodes = source_theme.get("nodes")
+    if not isinstance(theme, dict) or not isinstance(nodes, list):
+        raise _theme_artifact_invalid(
+            "theme detail must contain theme object and nodes list"
+        )
+    if theme.get("theme_id") != theme_id:
+        raise _theme_artifact_invalid(
+            f"theme detail has unexpected theme_id: {theme.get('theme_id')}"
+        )
+    if not isinstance(theme.get("status"), str) or not theme["status"].strip():
+        raise _theme_artifact_invalid(
+            "theme detail.theme.status must be a non-empty string"
+        )
+
+    theme_nodes: list[dict[str, Any]] = []
+    theme_node_ids: set[str] = set()
+    for index, node in enumerate(nodes):
+        path = f"theme detail.nodes[{index}]"
+        if not isinstance(node, dict):
+            raise _theme_artifact_invalid(f"{path} must be an object")
+        node_id = node.get("node_id")
+        if not isinstance(node_id, str) or not node_id.strip():
+            raise _theme_artifact_invalid(f"{path}.node_id must be a non-empty string")
+        if node_id in theme_node_ids:
+            raise _theme_artifact_invalid(f"{path}.node_id duplicated: {node_id}")
+        theme_node_ids.add(node_id)
+        theme_nodes.append(node)
+    return theme, theme_nodes
+
+
+def _theme_link_invalid(message: str) -> IndustryCatalogValidationError:
+    return IndustryCatalogValidationError(message, code="THEME_LINK_INVALID")
+
+
+def _theme_artifact_invalid(message: str) -> IndustryCatalogValidationError:
+    return IndustryCatalogValidationError(message, code="THEME_ARTIFACT_INVALID")
 
 
 def execute_parsed_catalog_command(
@@ -477,6 +577,14 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
                 f"manifest.{key} must be a non-empty string",
                 code="INVALID_MANIFEST_PATH",
             )
+    if "theme_link_file" in manifest and (
+        not isinstance(manifest["theme_link_file"], str)
+        or not manifest["theme_link_file"]
+    ):
+        raise IndustryCatalogValidationError(
+            "manifest.theme_link_file must be a non-empty string",
+            code="INVALID_MANIFEST_PATH",
+        )
 
 
 def _package_file(root: Path, manifest: dict[str, Any], key: str) -> Path:
@@ -823,6 +931,7 @@ def _validate_theme_links(
         linked_theme_node_ids = _validate_node_links(
             theme_link["node_links"],
             nodes_by_id,
+            chain_id,
             f"{path}.node_links",
         )
         _validate_unmapped_theme_node_ids(
@@ -835,6 +944,7 @@ def _validate_theme_links(
 def _validate_node_links(
     node_links: Any,
     nodes_by_id: dict[str, dict[str, Any]],
+    chain_id: str,
     path: str,
 ) -> set[str]:
     if not isinstance(node_links, list):
@@ -859,6 +969,7 @@ def _validate_node_links(
             theme_node_id in theme_node_ids
             or catalog_node is None
             or catalog_node.get("level") not in NODE_LEVELS
+            or catalog_node.get("chain_id") != chain_id
         ):
             raise _theme_catalog_node_link_error(
                 f"{node_link_path} invalid: {theme_node_id} -> {catalog_node_id}"

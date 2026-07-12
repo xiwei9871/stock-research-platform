@@ -843,7 +843,6 @@ def test_unsupported_artifact_version_has_stable_error(tmp_path: Path):
         "chain_file",
         "edge_file",
         "source_file",
-        "theme_link_file",
         "node_dir",
         "theme_composition_dir",
     ],
@@ -922,6 +921,21 @@ def test_theme_link_collection_is_required(tmp_path: Path):
     _write_json(root / "theme_links.json", {})
 
     assert _load_error(root).code == "MISSING_COLLECTION_KEY"
+
+
+def test_legacy_manifest_without_theme_link_file_loads_empty_links(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    manifest = _read_json(root / "manifest.json")
+    del manifest["theme_link_file"]
+    _write_json(root / "manifest.json", manifest)
+    (root / "theme_links.json").unlink()
+
+    catalog = load_industry_catalog(root)
+
+    assert catalog["theme_links"] == []
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+    assert exc_info.value.code == "THEME_CATALOG_LINK_NOT_FOUND"
 
 
 @pytest.mark.parametrize(

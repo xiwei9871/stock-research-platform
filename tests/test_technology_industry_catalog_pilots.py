@@ -1,11 +1,87 @@
 import json
+import shutil
 from pathlib import Path
+
+import pytest
 
 from stock_research.technology_industry_catalog import (
     COMPOSITION_FIELDS,
+    IndustryCatalogValidationError,
     NODE_FIELDS,
     load_industry_catalog,
+    project_theme_to_catalog,
 )
+def test_theme_links_reject_cross_chain_catalog_targets(tmp_path: Path):
+    source_dir = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+    )
+    artifact_dir = tmp_path / "technology_industry_catalog"
+    shutil.copytree(source_dir, artifact_dir)
+    link_path = artifact_dir / "theme_links.json"
+    payload = json.loads(link_path.read_text(encoding="utf-8"))
+    payload["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+    link_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        load_industry_catalog(artifact_dir)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_projection_rejects_cross_chain_catalog_targets_defensively():
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_project_theme_to_catalog_normalizes_theme_artifact_errors(tmp_path: Path):
+    missing_artifact_dir = tmp_path / "missing_theme_artifacts"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=missing_artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+    assert "artifact_dir not found" in str(exc_info.value)
+
+
+def test_project_theme_to_catalog_rejects_malformed_selected_link():
+    catalog = load_industry_catalog()
+    catalog["theme_links"] = [
+        {
+            "theme_id": "ai_power_value_capture_v1",
+            "node_links": [],
+            "unmapped_theme_node_ids": [],
+        }
+    ]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_LINK_INVALID"
+
+
+def test_project_theme_to_catalog_rejects_malformed_theme_detail(monkeypatch):
+    from stock_research import theme_decomposition
+
+    monkeypatch.setattr(
+        theme_decomposition,
+        "load_theme",
+        lambda *_args, **_kwargs: {"theme": {}, "nodes": {}},
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1")
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
 
 
 SECTOR_ID = "semiconductor_electronics"
