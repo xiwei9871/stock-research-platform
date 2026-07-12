@@ -345,6 +345,46 @@ def test_find_industry_chain_rejects_shared_alias():
     assert exc_info.value.code == "AMBIGUOUS_CHAIN_ALIAS"
 
 
+def test_find_industry_chain_rejects_duplicate_normalized_names():
+    catalog = {
+        "chains": [
+            {"chain_id": "first", "chain_name": "Shared Name", "aliases": []},
+            {
+                "chain_id": "second",
+                "chain_name": "  shared name  ",
+                "aliases": [],
+            },
+        ]
+    }
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(catalog, "SHARED NAME")
+
+    assert exc_info.value.code == "AMBIGUOUS_CHAIN_NAME"
+    assert str(exc_info.value) == "ambiguous chain name: SHARED NAME"
+
+
+def test_find_industry_chain_id_wins_over_duplicate_normalized_names():
+    catalog = {
+        "chains": [
+            {
+                "chain_id": "first",
+                "chain_name": "Duplicate Name",
+                "aliases": [],
+            },
+            {
+                "chain_id": "target-id",
+                "chain_name": "  duplicate name  ",
+                "aliases": [],
+            },
+        ]
+    }
+
+    chain = find_industry_chain(catalog, "target-id")
+
+    assert chain["chain_id"] == "target-id"
+
+
 @pytest.mark.parametrize("aliases", [42, True, {}, "scalar"])
 def test_find_industry_chain_rejects_non_list_aliases_with_domain_error(aliases):
     catalog = {

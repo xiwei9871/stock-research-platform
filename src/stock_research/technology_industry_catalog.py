@@ -6,6 +6,7 @@ import json
 import sys
 from collections.abc import Iterable
 from collections import Counter
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -270,9 +271,18 @@ def find_industry_chain(catalog: dict[str, Any], query: object) -> dict[str, Any
     for chain in chains:
         if chain["chain_id"].strip().casefold() == normalized_query:
             return chain
-    for chain in chains:
-        if chain["chain_name"].strip().casefold() == normalized_query:
-            return chain
+    name_matches = [
+        chain
+        for chain in chains
+        if chain["chain_name"].strip().casefold() == normalized_query
+    ]
+    if len(name_matches) == 1:
+        return name_matches[0]
+    if len(name_matches) > 1:
+        raise IndustryCatalogValidationError(
+            f"ambiguous chain name: {query}",
+            code="AMBIGUOUS_CHAIN_NAME",
+        )
 
     alias_matches = []
     for index, chain in enumerate(chains):
@@ -630,6 +640,19 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
             "manifest.artifact_version is required",
             code="MISSING_ARTIFACT_VERSION",
         )
+    for key in ("catalog_id", "status", "updated_at"):
+        if key not in manifest:
+            raise IndustryCatalogValidationError(
+                f"manifest.{key} is required",
+                code="MISSING_MANIFEST_KEY",
+            )
+    _require_non_empty_string_value(
+        manifest["catalog_id"],
+        "manifest.catalog_id",
+        code="INVALID_CATALOG_ID",
+    )
+    _validate_catalog_status(manifest["status"], "manifest")
+    _validate_manifest_updated_at(manifest["updated_at"])
     for key in _REQUIRED_MANIFEST_PATH_KEYS:
         if key not in manifest:
             raise IndustryCatalogValidationError(
@@ -649,6 +672,21 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
             "manifest.theme_link_file must be a non-empty string",
             code="INVALID_MANIFEST_PATH",
         )
+
+
+def _validate_manifest_updated_at(value: Any) -> None:
+    message = "manifest.updated_at must be an ISO date in YYYY-MM-DD format"
+    if not isinstance(value, str) or not value:
+        raise IndustryCatalogValidationError(message, code="INVALID_UPDATED_AT")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise IndustryCatalogValidationError(
+            message,
+            code="INVALID_UPDATED_AT",
+        ) from exc
+    if parsed.isoformat() != value:
+        raise IndustryCatalogValidationError(message, code="INVALID_UPDATED_AT")
 
 
 def _package_file(root: Path, manifest: dict[str, Any], key: str) -> Path:
@@ -745,6 +783,16 @@ def _validate_chains(
         path="chains",
         name_field="chain_name",
     )
+    normalized_names: set[str] = set()
+    for index, chain in enumerate(chains):
+        normalized_name = chain["chain_name"].strip().casefold()
+        if normalized_name in normalized_names:
+            raise IndustryCatalogValidationError(
+                f"chains[{index}].chain_name duplicated after strip+casefold: "
+                f"{chain['chain_name']}",
+                code="DUPLICATE_CHAIN_NAME",
+            )
+        normalized_names.add(normalized_name)
     for index, chain in enumerate(chains):
         path = f"chains[{index}]"
         _validate_catalog_status(chain["status"], path)
@@ -868,16 +916,24 @@ def _validate_nodes(
                 f"{path}.canonical_key must be a string",
                 code="INVALID_CANONICAL_OWNERSHIP",
             )
+        owns_canonical_key = (
+            node["node_kind"] == "canonical" and node["level"] == "L4"
+        )
         if node["node_kind"] == "application_role" and canonical_key:
             raise IndustryCatalogValidationError(
                 f"{path}.canonical_key is not allowed for application roles",
                 code="INVALID_NODE_KIND_FOR_CHAIN",
             )
         if (
-            node["node_kind"] == "canonical"
-            and node["level"] == "L4"
-            and not canonical_key.strip()
+            node["node_kind"] != "application_role"
+            and not owns_canonical_key
+            and canonical_key
         ):
+            raise IndustryCatalogValidationError(
+                f"{path}.canonical_key must be empty unless node is canonical L4",
+                code="INVALID_CANONICAL_OWNERSHIP",
+            )
+        if owns_canonical_key and not canonical_key.strip():
             raise IndustryCatalogValidationError(
                 f"{path}.canonical_key must be a non-empty string for canonical L4 nodes",
                 code="INVALID_CANONICAL_OWNERSHIP",
@@ -1203,6 +1259,15 @@ def _theme_catalog_node_link_error(message: str) -> IndustryCatalogValidationErr
 
 
 def _validate_sources(sources: list[Any]) -> dict[str, dict[str, Any]]:
+    for index, source in enumerate(sources):
+        path = f"sources[{index}]"
+        _require_fields(source, SOURCE_FIELDS, path)
+        for field in sorted(SOURCE_FIELDS - {"source_id"}):
+            _require_non_empty_string_value(
+                source[field],
+                f"{path}.{field}",
+                code="INVALID_SOURCE_METADATA",
+            )
     return _index_unique_rows(
         sources,
         fields=SOURCE_FIELDS,
