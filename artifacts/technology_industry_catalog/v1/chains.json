@@ -103,9 +103,10 @@
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "manufacturing_process",
       "description": "Sensor-industry chain for MEMS devices and intelligent sensing components that convert physical phenomena into usable electronic data.",
-      "scope": "Covers MEMS inertial, pressure, acoustic, environmental, optical, and integrated intelligent sensor devices and their fabrication.",
+      "scope": "Covers standalone and general-purpose MEMS and intelligent sensing devices, sensor dies and components, and fabrication across inertial, pressure, acoustic, environmental, optical, force, position, and tactile sensing.",
       "exclusions": [
-        "Industrial inspection systems remain owned by industrial_inspection_metrology_machine_vision."
+        "Industrial inspection systems remain owned by industrial_inspection_metrology_machine_vision.",
+        "Humanoid-specific sensor requirements, qualification, packaging, calibration, selection, robot-module integration, and system use remain owned by humanoid_robots_embodied_intelligence."
       ],
       "aliases": [
         "MEMS Sensors",
@@ -469,11 +470,13 @@
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "system_architecture",
       "description": "A primarily system-architecture decomposition of humanoid robots spanning embodied intelligence, control, sensing, compute, actuation, body, and energy subsystems, with one explicit supplementary lifecycle and value-chain family.",
-      "scope": "Covers robot-specific models and software, integrated sensing and control modules, reusable electromechanical components, complete humanoid robots, and their manufacturing, test, operations, and scenario integration. Under the approved mixed-template rule, humanoid_manufacturing_test_integration supplements the primary system architecture with lifecycle coverage.",
+      "scope": "Covers robot-specific models and software; humanoid-specific requirements, qualification, packaging, calibration, selection, joint and module integration, and system use of sensing, compute, actuation, body, and energy components; complete humanoid robots; and their manufacturing, test, operations, and scenario integration. Under the approved mixed-template rule, humanoid_manufacturing_test_integration supplements the primary system architecture with lifecycle coverage.",
       "exclusions": [
         "General-purpose AI foundation models remain owned by their primary AI chain; this chain covers robot-adapted embodied models and inference.",
         "General semiconductor chips remain owned by semiconductor chains; this chain covers robot-selected compute components and integrated modules.",
         "Generic battery cells, battery management systems, and battery materials remain owned by power_batteries_battery_materials; this chain covers humanoid-specific selection, integration, and control requirements.",
+        "Standalone and general-purpose MEMS and intelligent sensing devices, sensor dies and components, fabrication, and related evidence and company ownership remain with mems_intelligent_sensors; this chain covers humanoid-specific requirements, qualification, packaging, calibration, selection, module integration, and system use.",
+        "Standalone and general-purpose bearings, gears and reducers, screws and linear guides, precision transmission components, and related evidence and company ownership remain with core_mechanical_components; this chain covers humanoid joint and module requirements, qualification, selection, packaging, integration, and system use.",
         "General industrial robots, machine tools, and factory automation remain owned by their primary equipment chains unless humanoid-specific."
       ],
       "aliases": [
@@ -549,9 +552,10 @@
       "chain_kind": "canonical_industry_chain",
       "decomposition_method": "system_architecture",
       "description": "Component-system chain for high-performance mechanical elements that transmit motion, force, fluid power, and structural load in equipment.",
-      "scope": "Covers bearings, gears, reducers, screws, linear guides, hydraulic and pneumatic components, seals, and precision transmission assemblies.",
+      "scope": "Covers standalone and general-purpose bearings, gears and reducers, screws and linear guides, hydraulic and pneumatic components, seals, and precision transmission components and assemblies.",
       "exclusions": [
-        "Complete robots and machine tools remain owned by industrial_robots and industrial_machine_tools_cnc."
+        "Complete robots and machine tools remain owned by industrial_robots and industrial_machine_tools_cnc.",
+        "Humanoid-specific joint and module requirements, qualification, selection, packaging, integration, and system use remain owned by humanoid_robots_embodied_intelligence."
       ],
       "aliases": [
         "Mechanical Basic Parts",
