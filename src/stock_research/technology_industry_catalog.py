@@ -172,17 +172,43 @@ def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, A
 def summarize_industry_catalog(catalog: dict[str, Any]) -> dict[str, Any]:
     chains = catalog["chains"]
     nodes = catalog["nodes"]
+    node_levels_by_chain = {chain["chain_id"]: set() for chain in chains}
+    for node in nodes:
+        chain_levels = node_levels_by_chain.get(node["chain_id"])
+        if chain_levels is not None:
+            chain_levels.add(node["level"])
+    unexpanded_chain_ids = sorted(
+        chain_id
+        for chain_id, levels in node_levels_by_chain.items()
+        if not {"L3", "L4"} <= levels
+    )
+    detailed_chain_count = sum(
+        {"L3", "L4"} <= levels for levels in node_levels_by_chain.values()
+    )
+    chain_count = len(chains)
     return {
         "sector_count": len(catalog["sectors"]),
-        "chain_count": len(chains),
+        "chain_count": chain_count,
         "l3_node_count": sum(node["level"] == "L3" for node in nodes),
         "l4_node_count": sum(node["level"] == "L4" for node in nodes),
         "edge_count": len(catalog["edges"]),
         "theme_composition_count": len(catalog["theme_compositions"]),
         "chains_by_kind": _sorted_counts(chain["chain_kind"] for chain in chains),
+        "chains_by_decomposition_method": _sorted_counts(
+            chain["decomposition_method"] for chain in chains
+        ),
         "chains_by_status": _sorted_counts(chain["status"] for chain in chains),
         "chains_by_sector": _sorted_counts(chain["sector_id"] for chain in chains),
         "nodes_by_status": _sorted_counts(node["status"] for node in nodes),
+        "detailed_chain_count": detailed_chain_count,
+        "skeleton_chain_count": chain_count - detailed_chain_count,
+        "structural_completeness_percent": round(
+            detailed_chain_count / chain_count * 100,
+            2,
+        )
+        if chain_count
+        else 0.0,
+        "unexpanded_chain_ids": unexpanded_chain_ids,
     }
 
 
