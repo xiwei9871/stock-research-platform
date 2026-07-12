@@ -1572,17 +1572,17 @@
     },
     {
       "node_id": "stationary_backup_storage_systems",
-      "chain_id": "power_batteries_battery_materials",
+      "chain_id": "new_energy_storage",
       "parent_node_id": null,
       "level": "L3",
       "node_name": "Stationary Backup Storage Systems",
       "node_kind": "canonical",
-      "node_type": "battery_system_family",
-      "description": "Reusable family for stationary battery, flywheel, and UPS energy storage that provides ride-through during source interruption. It covers stationary batteries, flywheels, and UPS energy storage systems only. It excludes generators, automatic transfer switches, fuel cells, and black-start controls.",
+      "node_type": "energy_storage_system_family",
+      "description": "Reusable stationary energy-storage family for battery, flywheel, and UPS systems that provide ride-through during source interruption. It covers stationary batteries, flywheels, and UPS energy storage systems only. It excludes generators, automatic transfer switches, fuel cells, and black-start controls.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
-        "power_batteries_battery_materials",
+        "new_energy_storage",
         "stationary_backup_storage_systems"
       ],
       "canonical_key": "",
@@ -1590,59 +1590,59 @@
     },
     {
       "node_id": "stationary_battery_backup_system",
-      "chain_id": "power_batteries_battery_materials",
+      "chain_id": "new_energy_storage",
       "parent_node_id": "stationary_backup_storage_systems",
       "level": "L4",
       "node_name": "Stationary Battery Backup System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "A stationary battery backup system stores electrical energy in fixed battery assemblies and releases it to support critical loads during source interruption or constraint. This canonical node covers cells, modules, racks, protection, thermal interfaces, controls, and system integration; it excludes flywheel storage and application-specific UPS architecture. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
+      "description": "A stationary battery backup system stores electrical energy in fixed battery assemblies and releases it to support critical loads during source interruption or constraint. This new-energy-storage canonical node covers cells, modules, racks, protection, thermal interfaces, controls, and system integration; it excludes flywheel storage and application-specific UPS architecture. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
-        "power_batteries_battery_materials",
+        "new_energy_storage",
         "stationary_backup_storage_systems",
         "stationary_battery_backup_system"
       ],
-      "canonical_key": "power_batteries_battery_materials:stationary_battery_backup_system",
+      "canonical_key": "new_energy_storage:stationary_battery_backup_system",
       "canonical_node_refs": []
     },
     {
       "node_id": "flywheel_backup_energy_system",
-      "chain_id": "power_batteries_battery_materials",
+      "chain_id": "new_energy_storage",
       "parent_node_id": "stationary_backup_storage_systems",
       "level": "L4",
       "node_name": "Flywheel Backup Energy System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "A flywheel backup energy system stores energy mechanically in a rotating mass and delivers short-duration electrical support through a motor-generator and power converter. This canonical node covers rotor, bearings, containment, vacuum system, converter, controls, and protection; it excludes electrochemical batteries and standby generators. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
+      "description": "A flywheel backup energy system stores energy mechanically in a rotating mass and delivers short-duration electrical support through a motor-generator and power converter. This new-energy-storage canonical node covers rotor, bearings, containment, vacuum system, converter, controls, and protection; it excludes electrochemical batteries and standby generators. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
-        "power_batteries_battery_materials",
+        "new_energy_storage",
         "stationary_backup_storage_systems",
         "flywheel_backup_energy_system"
       ],
-      "canonical_key": "power_batteries_battery_materials:flywheel_backup_energy_system",
+      "canonical_key": "new_energy_storage:flywheel_backup_energy_system",
       "canonical_node_refs": []
     },
     {
       "node_id": "ups_battery_system",
-      "chain_id": "power_batteries_battery_materials",
+      "chain_id": "new_energy_storage",
       "parent_node_id": "stationary_backup_storage_systems",
       "level": "L4",
       "node_name": "UPS Battery System",
       "node_kind": "canonical",
       "node_type": "energy_storage",
-      "description": "A UPS battery system is the electrochemical storage assembly engineered to supply the DC energy input required by an uninterruptible power system. This canonical node covers battery strings or cabinets, interconnects, protection, monitoring, thermal provisions, and UPS interfaces; it excludes the UPS conversion equipment and general stationary storage. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
+      "description": "A UPS battery system is the electrochemical storage assembly engineered to supply the DC energy input required by an uninterruptible power system. This new-energy-storage canonical node covers battery strings or cabinets, interconnects, protection, monitoring, thermal provisions, and UPS interfaces; it excludes the UPS conversion equipment and general stationary storage. Application-specific sizing, topology, redundancy, procurement, and operating policy remain with the consuming solution.",
       "status": "skeleton",
       "primary_path": [
         "energy_technology_new_power_system",
-        "power_batteries_battery_materials",
+        "new_energy_storage",
         "stationary_backup_storage_systems",
         "ups_battery_system"
       ],
-      "canonical_key": "power_batteries_battery_materials:ups_battery_system",
+      "canonical_key": "new_energy_storage:ups_battery_system",
       "canonical_node_refs": []
     },
     {

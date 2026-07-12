@@ -764,7 +764,10 @@ def _validate_nodes(
                     code="ORPHAN_NODE_PARENT",
                 )
 
-        if node["node_kind"] == "canonical" and node["level"] == "L4":
+        if (
+            node["level"] == "L4"
+            and node["node_kind"] in {"canonical", "application_role"}
+        ):
             expected_path = [
                 chain["sector_id"],
                 chain_id,
@@ -790,6 +793,15 @@ def _validate_nodes(
             nodes_by_id,
             f"{path}.canonical_node_refs",
         )
+        if (
+            node["node_kind"] == "application_role"
+            and node["level"] == "L4"
+            and not node["canonical_node_refs"]
+        ):
+            raise IndustryCatalogValidationError(
+                f"{path}.canonical_node_refs must not be empty for application roles",
+                code="INVALID_CANONICAL_NODE_REFERENCE",
+            )
 
     return nodes_by_id
 
@@ -844,6 +856,7 @@ def _validate_theme_compositions(
         duplicate_code="DUPLICATE_COMPOSITION_ID",
         path="theme_compositions",
     )
+    compositions_by_role_id: dict[str, dict[str, Any]] = {}
     for index, composition in enumerate(compositions):
         path = f"theme_compositions[{index}]"
         chain_id = _require_reference_string(
@@ -871,11 +884,15 @@ def _validate_theme_compositions(
         if (
             chain["chain_kind"] != "application_theme_chain"
             or role.get("node_kind") != "application_role"
-            or role.get("chain_id") != chain_id
         ):
             raise IndustryCatalogValidationError(
-                f"{path}.role_node_id must reference an application role in the same chain",
+                f"{path}.role_node_id must reference an application role",
                 code="INVALID_COMPOSITION_ROLE",
+            )
+        if role.get("chain_id") != chain_id:
+            raise IndustryCatalogValidationError(
+                f"{path}.chain_id must match {role_node_id}.chain_id",
+                code="COMPOSITION_REFERENCE_MISMATCH",
             )
         _validate_relationship_type(composition["relationship_type"], path)
         _validate_canonical_node_refs(
@@ -883,6 +900,34 @@ def _validate_theme_compositions(
             nodes_by_id,
             f"{path}.canonical_node_refs",
         )
+        if role_node_id in compositions_by_role_id:
+            raise IndustryCatalogValidationError(
+                f"{path}.role_node_id has multiple compositions: {role_node_id}",
+                code="DUPLICATE_ROLE_COMPOSITION",
+            )
+        role_refs = role["canonical_node_refs"]
+        composition_refs = composition["canonical_node_refs"]
+        if (
+            len(role_refs) != len(set(role_refs))
+            or len(composition_refs) != len(set(composition_refs))
+            or set(role_refs) != set(composition_refs)
+        ):
+            raise IndustryCatalogValidationError(
+                f"{path}.canonical_node_refs must match {role_node_id}.canonical_node_refs",
+                code="COMPOSITION_REFERENCE_MISMATCH",
+            )
+        compositions_by_role_id[role_node_id] = composition
+
+    for node_id, node in nodes_by_id.items():
+        if (
+            node["node_kind"] == "application_role"
+            and node["level"] == "L4"
+            and node_id not in compositions_by_role_id
+        ):
+            raise IndustryCatalogValidationError(
+                f"application role requires a composition: {node_id}",
+                code="APPLICATION_ROLE_REQUIRES_COMPOSITION",
+            )
 
 
 def _validate_theme_links(
