@@ -1,9 +1,14 @@
 from collections import defaultdict
 from collections import Counter
+from copy import deepcopy
 import re
+
+import pytest
 
 from stock_research.technology_industry_catalog import (
     CHAIN_FIELDS,
+    IndustryCatalogValidationError,
+    find_industry_chain,
     load_industry_catalog,
     summarize_industry_catalog,
 )
@@ -264,6 +269,123 @@ def _chains_by_id():
 def _normalized(value):
     return value.strip().casefold()
 
+
+def test_find_industry_chain_resolves_repository_chain_id():
+    catalog = load_industry_catalog()
+    catalog_before = deepcopy(catalog)
+
+    chain = find_industry_chain(catalog, "semiconductor_manufacturing_equipment")
+
+    assert chain["chain_id"] == "semiconductor_manufacturing_equipment"
+    assert chain is next(
+        row
+        for row in catalog["chains"]
+        if row["chain_id"] == "semiconductor_manufacturing_equipment"
+    )
+    assert catalog == catalog_before
+
+
+def test_find_industry_chain_resolves_repository_chain_name():
+    catalog = load_industry_catalog()
+
+    chain = find_industry_chain(catalog, "Semiconductor Manufacturing Equipment")
+
+    assert chain["chain_id"] == "semiconductor_manufacturing_equipment"
+
+
+@pytest.mark.parametrize(
+    ("query", "chain_id"),
+    [
+        ("人形机器人与具身智能", "humanoid_robots_embodied_intelligence"),
+        ("AI数据中心电力基础设施", "ai_data_center_power"),
+    ],
+)
+def test_find_industry_chain_resolves_repository_alias(query, chain_id):
+    catalog = load_industry_catalog()
+
+    chain = find_industry_chain(catalog, query)
+
+    assert chain["chain_id"] == chain_id
+
+
+def test_find_industry_chain_strips_and_casefolds_query():
+    catalog = load_industry_catalog()
+
+    chain = find_industry_chain(catalog, "  sEmIcOnDuCtOr MaNuFaCtUrInG eQuIpMeNt  ")
+
+    assert chain["chain_id"] == "semiconductor_manufacturing_equipment"
+
+
+@pytest.mark.parametrize("query", [None, 1, "", "   "])
+def test_find_industry_chain_rejects_invalid_query_as_not_found(query):
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain({"chains": []}, query)
+
+    assert exc_info.value.code == "CHAIN_NOT_FOUND"
+
+
+def test_find_industry_chain_rejects_unknown_query():
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(load_industry_catalog(), "unknown chain")
+
+    assert exc_info.value.code == "CHAIN_NOT_FOUND"
+
+
+def test_find_industry_chain_rejects_shared_alias():
+    catalog = {
+        "chains": [
+            {"chain_id": "first", "chain_name": "First", "aliases": ["shared"]},
+            {"chain_id": "second", "chain_name": "Second", "aliases": ["shared"]},
+        ]
+    }
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(catalog, "shared")
+
+    assert exc_info.value.code == "AMBIGUOUS_CHAIN_ALIAS"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "人形机器人",
+        "人形机器人 与具身智能",
+        "人形机器人与具身智能!",
+    ],
+)
+def test_find_industry_chain_does_not_normalize_substrings_or_punctuation(query):
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        find_industry_chain(load_industry_catalog(), query)
+
+    assert exc_info.value.code == "CHAIN_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_chain_id"),
+    [("shared-id", "shared-id"), ("shared name", "shared-id")],
+)
+def test_find_industry_chain_prioritizes_ids_and_names_over_aliases(
+    query,
+    expected_chain_id,
+):
+    catalog = {
+        "chains": [
+            {
+                "chain_id": "alias_owner",
+                "chain_name": "Alias Owner",
+                "aliases": ["shared-id", "shared name"],
+            },
+            {
+                "chain_id": "shared-id",
+                "chain_name": "Shared Name",
+                "aliases": [],
+            },
+        ]
+    }
+
+    chain = find_industry_chain(catalog, query)
+
+    assert chain["chain_id"] == expected_chain_id
 
 
 
