@@ -296,8 +296,8 @@ def test_find_industry_chain_resolves_repository_chain_name():
 @pytest.mark.parametrize(
     ("query", "chain_id"),
     [
-        ("人形机器人与具身智能", "humanoid_robots_embodied_intelligence"),
-        ("AI数据中心电力基础设施", "ai_data_center_power"),
+        ("人形机器人", "humanoid_robots_embodied_intelligence"),
+        ("AI数据中心供电", "ai_data_center_power"),
     ],
 )
 def test_find_industry_chain_resolves_repository_alias(query, chain_id):
@@ -348,9 +348,9 @@ def test_find_industry_chain_rejects_shared_alias():
 @pytest.mark.parametrize(
     "query",
     [
-        "人形机器人",
-        "人形机器人 与具身智能",
-        "人形机器人与具身智能!",
+        "机器人",
+        "人形 机器人",
+        "人形机器人!",
     ],
 )
 def test_find_industry_chain_does_not_normalize_substrings_or_punctuation(query):
