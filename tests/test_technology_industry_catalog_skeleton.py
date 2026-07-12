@@ -2,7 +2,11 @@ from collections import defaultdict
 from collections import Counter
 import re
 
-from stock_research.technology_industry_catalog import CHAIN_FIELDS, load_industry_catalog
+from stock_research.technology_industry_catalog import (
+    CHAIN_FIELDS,
+    load_industry_catalog,
+    summarize_industry_catalog,
+)
 
 
 EXPECTED_CHAINS_BY_SECTOR = {
@@ -312,6 +316,90 @@ def test_every_chain_matches_the_approved_metadata_contract():
 
     assert actual_contract == EXPECTED_CHAIN_CONTRACT
     assert all(set(chain) == CHAIN_FIELDS for chain in chains_by_id.values())
+
+
+def test_catalog_summary_reports_structural_completeness_from_loaded_nodes():
+    catalog = load_industry_catalog()
+    summary = summarize_industry_catalog(catalog)
+    node_levels_by_chain = defaultdict(set)
+    for node in catalog["nodes"]:
+        node_levels_by_chain[node["chain_id"]].add(node["level"])
+    expected_unexpanded_chain_ids = sorted(
+        chain["chain_id"]
+        for chain in catalog["chains"]
+        if not {"L3", "L4"} <= node_levels_by_chain[chain["chain_id"]]
+    )
+
+    assert summary["sector_count"] == 10
+    assert summary["chain_count"] == 82
+    assert summary["chains_by_decomposition_method"] == {
+        "infrastructure_flow": 12,
+        "manufacturing_process": 28,
+        "system_architecture": 32,
+        "technical_route": 10,
+    }
+    assert summary["detailed_chain_count"] == 13
+    assert summary["skeleton_chain_count"] == 69
+    assert summary["detailed_chain_count"] + summary["skeleton_chain_count"] == 82
+    assert summary["structural_completeness_percent"] == 15.85
+    assert summary["unexpanded_chain_ids"] == expected_unexpanded_chain_ids
+    assert "evidence_completeness_percent" not in summary
+    assert "company_coverage_percent" not in summary
+
+
+def test_catalog_summary_requires_both_levels_regardless_of_status():
+    catalog = {
+        "sectors": [],
+        "chains": [
+            {
+                "chain_id": "detailed_despite_skeleton_status",
+                "chain_kind": "canonical_industry_chain",
+                "decomposition_method": "manufacturing_process",
+                "status": "skeleton",
+                "sector_id": "sector",
+            },
+            {
+                "chain_id": "l3_only",
+                "chain_kind": "canonical_industry_chain",
+                "decomposition_method": "system_architecture",
+                "status": "published",
+                "sector_id": "sector",
+            },
+            {
+                "chain_id": "l4_only",
+                "chain_kind": "canonical_industry_chain",
+                "decomposition_method": "technical_route",
+                "status": "draft",
+                "sector_id": "sector",
+            },
+        ],
+        "nodes": [
+            {
+                "chain_id": "detailed_despite_skeleton_status",
+                "level": "L3",
+                "status": "skeleton",
+            },
+            {
+                "chain_id": "detailed_despite_skeleton_status",
+                "level": "L4",
+                "status": "skeleton",
+            },
+            {"chain_id": "l3_only", "level": "L3", "status": "published"},
+            {"chain_id": "l4_only", "level": "L4", "status": "draft"},
+        ],
+        "edges": [],
+        "theme_compositions": [],
+    }
+
+    summary = summarize_industry_catalog(catalog)
+
+    assert summary["detailed_chain_count"] == 1
+    assert summary["skeleton_chain_count"] == 2
+    assert summary["structural_completeness_percent"] == 33.33
+    assert summary["unexpanded_chain_ids"] == ["l3_only", "l4_only"]
+    assert summarize_industry_catalog({**catalog, "chains": [], "nodes": []})[
+        "structural_completeness_percent"
+    ] == 0.0
 
 
 def test_chain_descriptions_and_scopes_are_specific_and_not_reused():
