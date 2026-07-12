@@ -274,6 +274,8 @@ def project_theme_to_catalog(
         json.JSONDecodeError,
         UnicodeDecodeError,
         OSError,
+        KeyError,
+        TypeError,
     ) as exc:
         raise IndustryCatalogValidationError(
             f"theme artifact invalid: {exc}",
@@ -386,7 +388,16 @@ def _validate_projection_theme_link(
         chains_by_id,
         nodes_by_id,
         "selected theme link",
+        projection=True,
     )
+
+
+def _validate_projection_node_link(node_link: Any, path: str) -> None:
+    if not isinstance(node_link, dict):
+        raise _theme_catalog_node_link_error(f"{path} must be an object")
+    for field in sorted(NODE_LINK_FIELDS):
+        if field not in node_link:
+            raise _theme_catalog_node_link_error(f"{path}.{field} is required")
 
 
 def _validate_theme_detail(
@@ -901,6 +912,8 @@ def _validate_theme_link_contents(
     chains_by_id: dict[str, dict[str, Any]],
     nodes_by_id: dict[str, dict[str, Any]],
     path: str,
+    *,
+    projection: bool = False,
 ) -> str:
     chain_id = _require_reference_string(
         theme_link["chain_id"],
@@ -918,6 +931,7 @@ def _validate_theme_link_contents(
         nodes_by_id,
         chain_id,
         f"{path}.node_links",
+        projection=projection,
     )
     _validate_unmapped_theme_node_ids(
         theme_link["unmapped_theme_node_ids"],
@@ -932,6 +946,8 @@ def _validate_node_links(
     nodes_by_id: dict[str, dict[str, Any]],
     chain_id: str,
     path: str,
+    *,
+    projection: bool = False,
 ) -> set[str]:
     if not isinstance(node_links, list):
         raise _theme_catalog_node_link_error(f"{path} must be a list")
@@ -939,7 +955,10 @@ def _validate_node_links(
     theme_node_ids: set[str] = set()
     for index, node_link in enumerate(node_links):
         node_link_path = f"{path}[{index}]"
-        _require_fields(node_link, NODE_LINK_FIELDS, node_link_path)
+        if projection:
+            _validate_projection_node_link(node_link, node_link_path)
+        else:
+            _require_fields(node_link, NODE_LINK_FIELDS, node_link_path)
         theme_node_id = _require_reference_string(
             node_link["theme_node_id"],
             f"{node_link_path}.theme_node_id",

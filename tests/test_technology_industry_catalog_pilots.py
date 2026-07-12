@@ -41,6 +41,63 @@ def test_projection_validates_missing_chain_before_theme_loading(tmp_path: Path)
     assert exc_info.value.code == "THEME_LINK_CHAIN_NOT_FOUND"
 
 
+@pytest.mark.parametrize(
+    "node_link",
+    [
+        {"theme_node_id": "grid_connection"},
+        ["grid_connection", "ai_power_grid_connection_role"],
+    ],
+)
+def test_projection_normalizes_malformed_nested_node_links(node_link: object):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"] = [node_link]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    [
+        {"artifact_version": "theme_decomposition_v1_5"},
+        {"artifact_version": "theme_decomposition_v1_5", "theme": None},
+        {
+            "artifact_version": "theme_decomposition_v1_5",
+            "theme": {
+                "theme_id": "ai_power_value_capture_v1",
+                "theme_name": "Test theme",
+                "theme_type": "ai_power",
+                "summary": "Test theme artifact.",
+                "status": "reviewed",
+                "created_from": "manual",
+                "last_updated": "2026-07-12",
+            },
+            "nodes": "invalid",
+        },
+    ],
+)
+def test_project_theme_to_catalog_normalizes_malformed_theme_artifact_shapes(
+    tmp_path: Path,
+    artifact: dict[str, object],
+):
+    artifact_dir = tmp_path / "theme_artifacts"
+    artifact_dir.mkdir()
+    (artifact_dir / "theme.json").write_text(
+        json.dumps(artifact),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+
+
 def test_project_theme_to_catalog_normalizes_invalid_json_theme_artifact(
     tmp_path: Path,
 ):
