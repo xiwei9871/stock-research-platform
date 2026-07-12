@@ -62,9 +62,9 @@ A `skeleton` chain can have structural detail, and a `draft`, `reviewed`, or `pu
 Run these commands from the repository root:
 
 ```bash
-.venv/bin/python -m stock_research.cli technology-industry-catalog validate
-.venv/bin/python -m stock_research.cli technology-industry-catalog summary
-.venv/bin/python -m stock_research.cli technology-industry-catalog show --chain ai_data_center_power
+PYTHONPATH=src .venv/bin/python -m stock_research.technology_industry_catalog validate
+PYTHONPATH=src .venv/bin/python -m stock_research.technology_industry_catalog summary
+PYTHONPATH=src .venv/bin/python -m stock_research.technology_industry_catalog show --chain ai_data_center_power
 ```
 
 For programmatic lookup, load once and use the exact-match helper:
@@ -81,7 +81,7 @@ chain = find_industry_chain(catalog, "AI数据中心供电")
 detail = get_industry_chain(catalog, chain["chain_id"])
 ```
 
-Chain lookup precedence is: exact normalized `chain_id`, then exact normalized `chain_name`, then a unique exact normalized alias. Normalization applies only `strip()` plus `casefold()`; it does not normalize punctuation or internal whitespace and does not use fuzzy matching. A matching alias on more than one chain raises `AMBIGUOUS_CHAIN_ALIAS`; an absent or blank lookup raises `CHAIN_NOT_FOUND`.
+Chain lookup precedence is: exact normalized `chain_id`, then exact normalized `chain_name`, then a unique exact normalized alias. Normalization applies only `strip()` plus `casefold()`; it does not normalize punctuation or internal whitespace and does not use fuzzy matching. Loaded packages reject duplicate normalized names with `DUPLICATE_CHAIN_NAME`; direct unvalidated catalogs raise `AMBIGUOUS_CHAIN_NAME` when more than one name matches. A matching alias on more than one chain raises `AMBIGUOUS_CHAIN_ALIAS`; an absent or blank lookup raises `CHAIN_NOT_FOUND`.
 
 ## Adding an L2 Skeleton
 
@@ -93,7 +93,7 @@ Chain lookup precedence is: exact normalized `chain_id`, then exact normalized `
 
 ## Expanding L3 and L4
 
-Add nodes in a chain artifact under `artifacts/technology_industry_catalog/v1/nodes/`. Every node record must include all required fields: `node_id`, `chain_id`, `parent_node_id`, `level`, `node_name`, `node_kind`, `node_type`, `description`, `status`, `primary_path`, `canonical_key`, and `canonical_node_refs`. L3 nodes have a null parent; L4 nodes name an L3 parent in the same chain. Canonical L4 nodes use one unique `canonical_key` and the required `primary_path`.
+Add nodes in a chain artifact under `artifacts/technology_industry_catalog/v1/nodes/`. Every node record must include all required fields: `node_id`, `chain_id`, `parent_node_id`, `level`, `node_name`, `node_kind`, `node_type`, `description`, `status`, `primary_path`, `canonical_key`, and `canonical_node_refs`. L3 nodes have a null parent; L4 nodes name an L3 parent in the same chain. Canonical L4 nodes require one unique non-empty `canonical_key` and the required `primary_path`; canonical L3, `application_role`, and `frontier_route` nodes must use an empty `canonical_key`.
 
 `canonical_node_refs` is always a list. It may be empty where the node has no canonical projection; each non-empty entry must resolve to a canonical L4 node. An L4 `application_role` must provide non-empty references, and its matching `theme_compositions/` entry must contain the same references. Do not recreate the referenced component. Add a row to `edges.json` only for a real typed relationship and ensure its node and source references resolve. Run `validate` after every artifact change; validation rejects duplicate canonical ownership, invalid parents, incompatible node kinds, unresolved references, and application roles without a matching composition.
 

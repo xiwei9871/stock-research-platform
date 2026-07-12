@@ -596,6 +596,28 @@ def test_cli_validate_returns_exact_structured_error(tmp_path: Path, capsys):
     }
 
 
+def test_cli_validate_rejects_malformed_source_metadata_as_structured_json(
+    tmp_path: Path,
+    capsys,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "sources.json", "sources", source_type={})
+
+    exit_code = technology_industry_catalog.cli(
+        ["--artifact-dir", str(root), "validate"]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert json.loads(captured.err) == {
+        "error_code": "INVALID_SOURCE_METADATA",
+        "message": "sources[0].source_type must be a non-empty string",
+        "status": "error",
+    }
+
+
 @pytest.mark.parametrize("command", ["validate", "summary"])
 def test_cli_status_errors_are_structured_json_without_traceback(
     tmp_path: Path,
@@ -942,6 +964,75 @@ def test_unsupported_artifact_version_has_stable_error(tmp_path: Path):
     error = _load_error(root)
 
     assert error.code == "UNSUPPORTED_ARTIFACT_VERSION"
+
+
+@pytest.mark.parametrize("manifest_key", ["catalog_id", "status", "updated_at"])
+def test_missing_manifest_identity_key_has_stable_error(
+    tmp_path: Path,
+    manifest_key: str,
+):
+    root = _write_catalog_package(tmp_path)
+    manifest = _read_json(root / "manifest.json")
+    del manifest[manifest_key]
+    _write_json(root / "manifest.json", manifest)
+
+    error = _load_error(root)
+
+    assert error.code == "MISSING_MANIFEST_KEY"
+    assert str(error) == f"manifest.{manifest_key} is required"
+
+
+@pytest.mark.parametrize("catalog_id", [None, [], {}, 42, "", "   "])
+def test_manifest_catalog_id_must_be_a_non_empty_string(
+    tmp_path: Path,
+    catalog_id: object,
+):
+    root = _write_catalog_package(tmp_path)
+    manifest = _read_json(root / "manifest.json")
+    manifest["catalog_id"] = catalog_id
+    _write_json(root / "manifest.json", manifest)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CATALOG_ID"
+    assert str(error) == "manifest.catalog_id must be a non-empty string"
+
+
+@pytest.mark.parametrize("status", ["archived", None, [], {}])
+def test_manifest_status_must_be_a_catalog_status(
+    tmp_path: Path,
+    status: object,
+):
+    root = _write_catalog_package(tmp_path)
+    manifest = _read_json(root / "manifest.json")
+    manifest["status"] = status
+    _write_json(root / "manifest.json", manifest)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CATALOG_STATUS"
+    assert str(error) == f"manifest.status invalid: {status}"
+
+
+@pytest.mark.parametrize(
+    "updated_at",
+    [None, [], {}, 42, "", "   ", "20260713", "2026-02-30", "13-07-2026"],
+)
+def test_manifest_updated_at_must_be_an_iso_calendar_date(
+    tmp_path: Path,
+    updated_at: object,
+):
+    root = _write_catalog_package(tmp_path)
+    manifest = _read_json(root / "manifest.json")
+    manifest["updated_at"] = updated_at
+    _write_json(root / "manifest.json", manifest)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_UPDATED_AT"
+    assert str(error) == (
+        "manifest.updated_at must be an ISO date in YYYY-MM-DD format"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1330,6 +1421,38 @@ def test_duplicate_sector_id_has_stable_error(tmp_path: Path):
     assert _load_error(root).code == "DUPLICATE_SECTOR_ID"
 
 
+def test_chain_names_must_be_globally_unique_after_normalization(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    sectors_path = root / "sectors.json"
+    sectors = _read_json(sectors_path)
+    sectors["sectors"].append(
+        {
+            "sector_id": "advanced_materials",
+            "sector_name": "Advanced materials",
+            "description": "Advanced material industries.",
+            "status": "draft",
+            "order": 2,
+        }
+    )
+    _write_json(sectors_path, sectors)
+    _add_chain(root, "second_chain", "canonical_industry_chain")
+    chains_path = root / "chains.json"
+    chains = _read_json(chains_path)
+    chains["chains"][1]["sector_id"] = "advanced_materials"
+    chains["chains"][1]["chain_name"] = (
+        "  SEMICONDUCTOR MANUFACTURING EQUIPMENT  "
+    )
+    _write_json(chains_path, chains)
+
+    error = _load_error(root)
+
+    assert error.code == "DUPLICATE_CHAIN_NAME"
+    assert str(error) == (
+        "chains[1].chain_name duplicated after strip+casefold: "
+        "  SEMICONDUCTOR MANUFACTURING EQUIPMENT  "
+    )
+
+
 @pytest.mark.parametrize("reverse_rows", [False, True])
 def test_duplicate_chain_id_is_order_independent(
     tmp_path: Path,
@@ -1404,6 +1527,30 @@ def test_duplicate_relationship_and_source_ids_have_stable_errors(
     _write_json(path, payload)
 
     assert _load_error(root).code == code
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["source_id", "title", "publisher", "url", "source_type", "notes"],
+)
+@pytest.mark.parametrize("value", [None, [], {}, 42, "   "])
+def test_source_metadata_fields_must_be_non_empty_strings(
+    tmp_path: Path,
+    field: str,
+    value: object,
+):
+    root = _write_catalog_package(tmp_path)
+    _mutate_first(root / "sources.json", "sources", **{field: value})
+
+    error = _load_error(root)
+
+    expected_code = (
+        "MISSING_REQUIRED_FIELD"
+        if field == "source_id"
+        else "INVALID_SOURCE_METADATA"
+    )
+    assert error.code == expected_code
+    assert str(error) == f"sources[0].{field} must be a non-empty string"
 
 
 def test_orphan_node_chain_has_stable_error(tmp_path: Path):
@@ -1487,6 +1634,68 @@ def test_application_roles_cannot_own_canonical_key(tmp_path: Path):
     _write_json(path, payload)
 
     assert _load_error(root).code == "INVALID_NODE_KIND_FOR_CHAIN"
+
+
+def test_canonical_l3_nodes_cannot_own_canonical_key(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"][0]["canonical_key"] = "semiconductor_equipment.lithography"
+    _write_json(path, payload)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CANONICAL_OWNERSHIP"
+    assert str(error) == (
+        "nodes[0].canonical_key must be empty unless node is canonical L4"
+    )
+
+
+def test_frontier_l4_nodes_cannot_own_canonical_key(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    _add_chain(root, "frontier_chain", "frontier_technology_chain")
+    path = root / "nodes" / "semiconductor_equipment.json"
+    payload = _read_json(path)
+    payload["nodes"].extend(
+        [
+            {
+                "node_id": "frontier_stage",
+                "chain_id": "frontier_chain",
+                "parent_node_id": None,
+                "level": "L3",
+                "node_name": "Frontier stage",
+                "node_kind": "frontier_route",
+                "node_type": "technical_route_stage",
+                "description": "Frontier route grouping.",
+                "status": "draft",
+                "primary_path": [],
+                "canonical_key": "",
+                "canonical_node_refs": [],
+            },
+            {
+                "node_id": "frontier_route",
+                "chain_id": "frontier_chain",
+                "parent_node_id": "frontier_stage",
+                "level": "L4",
+                "node_name": "Frontier route",
+                "node_kind": "frontier_route",
+                "node_type": "technical_route",
+                "description": "Specific frontier route.",
+                "status": "draft",
+                "primary_path": [],
+                "canonical_key": "frontier_chain.frontier_route",
+                "canonical_node_refs": [],
+            },
+        ]
+    )
+    _write_json(path, payload)
+
+    error = _load_error(root)
+
+    assert error.code == "INVALID_CANONICAL_OWNERSHIP"
+    assert str(error) == (
+        "nodes[3].canonical_key must be empty unless node is canonical L4"
+    )
 
 
 @pytest.mark.parametrize("canonical_key", ["", "   "])
@@ -2070,6 +2279,7 @@ def _write_catalog_package(
             "artifact_version": "technology_industry_catalog_v1",
             "catalog_id": "test_catalog",
             "status": "draft",
+            "updated_at": "2026-07-13",
             "sector_file": "sectors.json",
             "chain_file": "chains.json",
         "edge_file": "edges.json",
