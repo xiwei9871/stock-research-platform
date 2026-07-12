@@ -1566,22 +1566,30 @@ def test_composition_canonical_refs_must_resolve_to_canonical_l4_nodes(tmp_path:
 
 
 @pytest.mark.parametrize(
-    ("role_node_id", "code"),
+    ("role_node_id", "chain_id", "code"),
     [
-        ("missing_role", "ORPHAN_COMPOSITION_ROLE"),
-        ("duv_lithography", "INVALID_COMPOSITION_ROLE"),
+        ("missing_role", None, "ORPHAN_COMPOSITION_ROLE"),
+        (
+            "duv_lithography",
+            "semiconductor_equipment",
+            "INVALID_COMPOSITION_ROLE",
+        ),
     ],
 )
 def test_composition_role_must_resolve_to_application_role(
     tmp_path: Path,
     role_node_id: str,
+    chain_id: str | None,
     code: str,
 ):
     root = _write_catalog_package(tmp_path, include_relationships=True)
+    changes: dict[str, str] = {"role_node_id": role_node_id}
+    if chain_id is not None:
+        changes["chain_id"] = chain_id
     _mutate_first(
         root / "theme_compositions" / "compositions.json",
         "theme_compositions",
-        role_node_id=role_node_id,
+        **changes,
     )
 
     assert _load_error(root).code == code

@@ -134,6 +134,40 @@ def test_theme_links_reject_cross_chain_catalog_targets(tmp_path: Path):
     assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
 
 
+def test_ai_power_composition_chain_mismatch_precedes_chain_kind_validation(
+    tmp_path: Path,
+):
+    source_dir = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+    )
+    artifact_dir = tmp_path / "technology_industry_catalog"
+    shutil.copytree(source_dir, artifact_dir)
+    composition_path = (
+        artifact_dir
+        / "theme_compositions"
+        / "ai_data_center_power_v1.json"
+    )
+    payload = json.loads(composition_path.read_text(encoding="utf-8"))
+    composition = next(
+        row
+        for row in payload["theme_compositions"]
+        if row["role_node_id"] == "ai_power_battery_backup_role"
+    )
+    composition["chain_id"] = "new_energy_storage"
+    composition_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        load_industry_catalog(artifact_dir)
+
+    assert exc_info.value.code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
 def test_projection_rejects_cross_chain_catalog_targets_defensively():
     catalog = load_industry_catalog()
     catalog["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
