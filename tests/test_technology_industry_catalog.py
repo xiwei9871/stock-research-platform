@@ -1,3 +1,5 @@
+import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -10,10 +12,42 @@ from stock_research import cli as stock_research_cli
 from stock_research import technology_industry_catalog
 from stock_research.technology_industry_catalog import (
     IndustryCatalogValidationError,
+    NODE_LINK_FIELDS,
+    THEME_LINK_FIELDS,
     get_industry_chain,
     load_industry_catalog,
+    project_theme_to_catalog,
     summarize_industry_catalog,
 )
+from stock_research.theme_decomposition import load_theme
+
+
+def _theme_link(
+    *,
+    theme_id: str = "test_theme",
+    chain_id: str = "semiconductor_equipment",
+    node_links: object | None = None,
+    unmapped_theme_node_ids: object | None = None,
+) -> dict:
+    return {
+        "theme_id": theme_id,
+        "chain_id": chain_id,
+        "node_links": (
+            [
+                {
+                    "theme_node_id": "theme_lithography",
+                    "catalog_node_id": "lithography",
+                }
+            ]
+            if node_links is None
+            else node_links
+        ),
+        "unmapped_theme_node_ids": (
+            ["unmapped_theme_node"]
+            if unmapped_theme_node_ids is None
+            else unmapped_theme_node_ids
+        ),
+    }
 
 
 def test_repository_catalog_starts_with_ten_approved_sectors():
@@ -30,6 +64,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
             "chain_file",
             "edge_file",
             "source_file",
+            "theme_link_file",
             "node_dir",
             "theme_composition_dir",
         )
@@ -42,6 +77,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "chain_file": "chains.json",
         "edge_file": "edges.json",
         "source_file": "sources.json",
+        "theme_link_file": "theme_links.json",
         "node_dir": "nodes",
         "theme_composition_dir": "theme_compositions",
     }
@@ -155,6 +191,141 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
     assert len(canonical_keys) == len(set(canonical_keys))
 
 
+def test_repository_catalog_has_exact_theme_research_links():
+    catalog = load_industry_catalog()
+
+    assert catalog["theme_links"] == [
+        {
+            "theme_id": "ai_power_value_capture_v1",
+            "chain_id": "ai_data_center_power",
+            "node_links": [
+                {"theme_node_id": "grid_connection", "catalog_node_id": "ai_power_grid_connection_role"},
+                {"theme_node_id": "transformer", "catalog_node_id": "ai_power_transformer_role"},
+                {"theme_node_id": "switchgear", "catalog_node_id": "ai_power_switchgear_role"},
+                {"theme_node_id": "server_power_supply", "catalog_node_id": "ai_power_server_psu_role"},
+                {"theme_node_id": "copper_interconnect", "catalog_node_id": "ai_power_copper_flexible_connection_role"},
+                {"theme_node_id": "data_center_epc", "catalog_node_id": "ai_power_data_center_epc_role"},
+                {"theme_node_id": "power_generation", "catalog_node_id": "ai_power_energy_supply_resilience"},
+                {"theme_node_id": "ups", "catalog_node_id": "ai_power_ups_conversion"},
+                {"theme_node_id": "hvdc_power", "catalog_node_id": "ai_power_hvdc_dc_architecture"},
+                {"theme_node_id": "rack_power_distribution", "catalog_node_id": "ai_power_room_rack_distribution"},
+                {"theme_node_id": "liquid_cooling", "catalog_node_id": "ai_power_liquid_cooling_thermal"},
+            ],
+            "unmapped_theme_node_ids": [
+                "ai_server_integration",
+                "sic_gan_power_semiconductor",
+            ],
+        },
+        {
+            "theme_id": "humanoid_robotics_head_to_toe_v1",
+            "chain_id": "humanoid_robots_embodied_intelligence",
+            "node_links": [
+                {"theme_node_id": "head_vision", "catalog_node_id": "rgb_vision_module"},
+                {"theme_node_id": "brain_ai_compute", "catalog_node_id": "humanoid_compute_control_hardware"},
+                {"theme_node_id": "torso_structure", "catalog_node_id": "torso_load_bearing_structure"},
+                {"theme_node_id": "arm_actuator", "catalog_node_id": "humanoid_robotic_arm"},
+                {"theme_node_id": "hand_dexterous", "catalog_node_id": "dexterous_hand_assembly"},
+                {"theme_node_id": "hip_joint", "catalog_node_id": "hip_joint_module"},
+                {"theme_node_id": "knee_joint", "catalog_node_id": "knee_joint_module"},
+                {"theme_node_id": "ankle_joint", "catalog_node_id": "ankle_joint_module"},
+                {"theme_node_id": "frameless_motor", "catalog_node_id": "frameless_torque_motor"},
+                {"theme_node_id": "harmonic_reducer", "catalog_node_id": "harmonic_reducer"},
+                {"theme_node_id": "planetary_roller_screw", "catalog_node_id": "planetary_roller_screw"},
+                {"theme_node_id": "encoder", "catalog_node_id": "joint_encoder"},
+                {"theme_node_id": "torque_sensor", "catalog_node_id": "joint_torque_sensor"},
+                {"theme_node_id": "six_axis_force_sensor", "catalog_node_id": "six_axis_force_sensor"},
+                {"theme_node_id": "tactile_sensor", "catalog_node_id": "tactile_sensor"},
+                {"theme_node_id": "imu", "catalog_node_id": "imu_sensor"},
+                {"theme_node_id": "battery_bms", "catalog_node_id": "humanoid_energy_thermal_management"},
+                {"theme_node_id": "wiring_harness", "catalog_node_id": "robot_wiring_harness"},
+                {"theme_node_id": "controller", "catalog_node_id": "main_controller"},
+                {"theme_node_id": "bearing", "catalog_node_id": "joint_bearing"},
+                {"theme_node_id": "lightweight_materials", "catalog_node_id": "lightweight_skeleton"},
+            ],
+            "unmapped_theme_node_ids": [],
+        },
+    ]
+
+
+def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
+    catalog = load_industry_catalog()
+    source_path = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "theme_decomposition"
+        / "ai_power_value_capture_v1.json"
+    )
+    source_sha_before = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    source_theme = load_theme("ai_power_value_capture_v1")
+    catalog_before = copy.deepcopy(catalog)
+
+    projection = project_theme_to_catalog(
+        "ai_power_value_capture_v1",
+        catalog=catalog,
+    )
+
+    assert projection["theme_id"] == "ai_power_value_capture_v1"
+    assert projection["theme_status"] == "reviewed"
+    assert projection["chain_id"] == "ai_data_center_power"
+    assert projection["unmapped_theme_node_ids"] == [
+        "ai_server_integration",
+        "sic_gan_power_semiconductor",
+    ]
+    assert {
+        item["theme_node"]["node_id"]: item["catalog_node"]["node_id"]
+        for item in projection["node_projections"]
+    } == {
+        item["theme_node_id"]: item["catalog_node_id"]
+        for item in catalog["theme_links"][0]["node_links"]
+    }
+    assert projection["source_theme"] == source_theme
+    assert projection["source_theme"]["sources"][0]["review_status"]
+    assert projection["source_theme"]["claims"][0]["evidence_status"]
+
+    projection["catalog_chain"]["chain_name"] = "mutated"
+    projection["node_projections"][0]["theme_node"]["node_name"] = "mutated"
+    projection["node_projections"][0]["catalog_node"]["node_name"] = "mutated"
+    projection["source_theme"]["sources"][0]["review_status"] = "mutated"
+
+    assert catalog == catalog_before
+    assert load_theme("ai_power_value_capture_v1") == source_theme
+    assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source_sha_before
+
+
+def test_project_theme_to_catalog_projects_humanoid_draft_theme():
+    projection = project_theme_to_catalog("humanoid_robotics_head_to_toe_v1")
+
+    assert projection["theme_status"] == "draft"
+    assert projection["chain_id"] == "humanoid_robots_embodied_intelligence"
+    assert projection["unmapped_theme_node_ids"] == []
+    assert {
+        item["theme_node"]["node_id"]: item["catalog_node"]["node_id"]
+        for item in projection["node_projections"]
+    } == {
+        "head_vision": "rgb_vision_module",
+        "brain_ai_compute": "humanoid_compute_control_hardware",
+        "torso_structure": "torso_load_bearing_structure",
+        "arm_actuator": "humanoid_robotic_arm",
+        "hand_dexterous": "dexterous_hand_assembly",
+        "hip_joint": "hip_joint_module",
+        "knee_joint": "knee_joint_module",
+        "ankle_joint": "ankle_joint_module",
+        "frameless_motor": "frameless_torque_motor",
+        "harmonic_reducer": "harmonic_reducer",
+        "planetary_roller_screw": "planetary_roller_screw",
+        "encoder": "joint_encoder",
+        "torque_sensor": "joint_torque_sensor",
+        "six_axis_force_sensor": "six_axis_force_sensor",
+        "tactile_sensor": "tactile_sensor",
+        "imu": "imu_sensor",
+        "battery_bms": "humanoid_energy_thermal_management",
+        "wiring_harness": "robot_wiring_harness",
+        "controller": "main_controller",
+        "bearing": "joint_bearing",
+        "lightweight_materials": "lightweight_skeleton",
+    }
+
+
 def test_load_industry_catalog_composes_package_files(tmp_path: Path):
     root = _write_catalog_package(tmp_path)
 
@@ -166,6 +337,7 @@ def test_load_industry_catalog_composes_package_files(tmp_path: Path):
     assert [row["node_id"] for row in catalog["nodes"]] == ["lithography", "duv_lithography"]
     assert catalog["edges"] == []
     assert catalog["theme_compositions"] == []
+    assert catalog["theme_links"] == []
     assert [row["source_id"] for row in catalog["sources"]] == ["asml_chip_manufacturing"]
 
 
@@ -236,6 +408,16 @@ def test_summarize_catalog_counts_one_l3_and_one_l4_in_default_task2_fixture(
         "chains_by_sector": {"semiconductor_electronics": 1},
         "nodes_by_status": {"draft": 2},
     }
+
+
+def test_theme_link_field_contracts_are_explicit():
+    assert THEME_LINK_FIELDS == {
+        "theme_id",
+        "chain_id",
+        "node_links",
+        "unmapped_theme_node_ids",
+    }
+    assert NODE_LINK_FIELDS == {"theme_node_id", "catalog_node_id"}
 
 
 def test_cli_validate_returns_ok_status_and_summary(tmp_path: Path, capsys):
@@ -661,6 +843,7 @@ def test_unsupported_artifact_version_has_stable_error(tmp_path: Path):
         "chain_file",
         "edge_file",
         "source_file",
+        "theme_link_file",
         "node_dir",
         "theme_composition_dir",
     ],
@@ -707,6 +890,7 @@ def test_missing_named_directory_has_stable_error(tmp_path: Path, directory_name
         ("chains.json", "chains"),
         ("edges.json", "edges"),
         ("sources.json", "sources"),
+        ("theme_links.json", "theme_links"),
         ("nodes/semiconductor_equipment.json", "nodes"),
         ("theme_compositions/compositions.json", "theme_compositions"),
     ],
@@ -731,6 +915,110 @@ def test_missing_package_collection_key_has_stable_error(tmp_path: Path):
     error = _load_error(root)
 
     assert error.code == "MISSING_COLLECTION_KEY"
+
+
+def test_theme_link_collection_is_required(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    _write_json(root / "theme_links.json", {})
+
+    assert _load_error(root).code == "MISSING_COLLECTION_KEY"
+
+
+@pytest.mark.parametrize(
+    ("theme_links", "code"),
+    [
+        ([None], "MISSING_REQUIRED_FIELD"),
+        ([{"theme_id": "theme"}], "MISSING_REQUIRED_FIELD"),
+        ([_theme_link(theme_id="   ")], "MISSING_REQUIRED_FIELD"),
+        ([_theme_link(chain_id="missing_chain")], "THEME_LINK_CHAIN_NOT_FOUND"),
+        ([_theme_link(node_links={})], "THEME_CATALOG_NODE_LINK_INVALID"),
+        (
+            [
+                _theme_link(
+                    node_links=[
+                        {
+                            "theme_node_id": "theme_lithography",
+                            "catalog_node_id": "missing_node",
+                        }
+                    ]
+                )
+            ],
+            "THEME_CATALOG_NODE_LINK_INVALID",
+        ),
+        (
+            [
+                _theme_link(
+                    node_links=[
+                        {
+                            "theme_node_id": "theme_lithography",
+                            "catalog_node_id": "lithography",
+                        },
+                        {
+                            "theme_node_id": "theme_lithography",
+                            "catalog_node_id": "duv_lithography",
+                        },
+                    ]
+                )
+            ],
+            "THEME_CATALOG_NODE_LINK_INVALID",
+        ),
+        ([_theme_link(unmapped_theme_node_ids={})], "THEME_CATALOG_NODE_LINK_INVALID"),
+        (
+            [_theme_link(unmapped_theme_node_ids=["unmapped", "unmapped"])],
+            "THEME_CATALOG_NODE_LINK_INVALID",
+        ),
+        (
+            [
+                _theme_link(
+                    unmapped_theme_node_ids=["theme_lithography"],
+                )
+            ],
+            "THEME_CATALOG_NODE_LINK_INVALID",
+        ),
+    ],
+)
+def test_theme_link_validation_has_stable_domain_errors(
+    tmp_path: Path,
+    theme_links: list[object],
+    code: str,
+):
+    root = _write_catalog_package(tmp_path)
+    _write_json(root / "theme_links.json", {"theme_links": theme_links})
+
+    assert _load_error(root).code == code
+
+
+def test_duplicate_theme_link_has_stable_error(tmp_path: Path):
+    root = _write_catalog_package(tmp_path)
+    link = _theme_link()
+    _write_json(root / "theme_links.json", {"theme_links": [link, copy.deepcopy(link)]})
+
+    assert _load_error(root).code == "DUPLICATE_THEME_LINK"
+
+
+def test_project_theme_to_catalog_missing_link_has_stable_error():
+    catalog = load_industry_catalog()
+    catalog["theme_links"] = []
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_LINK_NOT_FOUND"
+
+
+@pytest.mark.parametrize("location", ["node_links", "unmapped_theme_node_ids"])
+def test_project_theme_to_catalog_rejects_missing_source_theme_nodes(location: str):
+    catalog = load_industry_catalog()
+    link = catalog["theme_links"][0]
+    if location == "node_links":
+        link["node_links"][0]["theme_node_id"] = "missing_theme_node"
+    else:
+        link["unmapped_theme_node_ids"] = ["missing_theme_node"]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
 
 
 @pytest.mark.parametrize(
@@ -1315,12 +1603,14 @@ def _write_catalog_package(
             "status": "draft",
             "sector_file": "sectors.json",
             "chain_file": "chains.json",
-            "edge_file": "edges.json",
-            "source_file": "sources.json",
-            "node_dir": "nodes",
+        "edge_file": "edges.json",
+        "source_file": "sources.json",
+        "theme_link_file": "theme_links.json",
+        "node_dir": "nodes",
             "theme_composition_dir": "theme_compositions",
         },
     )
+    _write_json(root / "theme_links.json", {"theme_links": []})
     _write_json(
         root / "sectors.json",
         {
