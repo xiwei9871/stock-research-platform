@@ -648,7 +648,10 @@
       "description": "Application-chain view of the electrical, thermal, software, engineering, and operational dependencies required to power high-density AI data centers.",
       "scope": "Covers capacity planning, resilient energy supply, grid access, backup power, UPS and DC conversion, room and rack distribution, server-board power, liquid cooling, energy-management software, and facility delivery and operations for AI data centers.",
       "exclusions": [
-        "Canonical grid equipment, power-conversion and distribution products, and data-center facilities remain owned by new_power_system_smart_grid, power_electronics_power_supply_equipment, and cloud_data_center_infrastructure respectively; company and evidence ownership stays on referenced canonical nodes.",
+        "Energy-supply, generation, hydrogen backup, stationary storage, and grid products remain canonically owned by power_generation_energy_equipment, hydrogen_fuel_cells, new_energy_storage, and new_power_system_smart_grid respectively.",
+        "Power-conversion equipment, passive and interconnect products, and power-semiconductor devices remain canonically owned by power_electronics_power_supply_equipment, pcb_passives_connectors_interconnect, and power_semiconductors respectively.",
+        "Data-center facility systems and industrial energy-management software remain canonically owned by cloud_data_center_infrastructure and industrial_software respectively.",
+        "Product, company, and evidence ownership remains on these canonical chains and referenced canonical nodes; this application chain only maps AI data-center dependencies.",
         "Compute accelerators, servers, networking, storage, and AI software workloads are outside this power-application chain except where they define power or cooling requirements."
       ],
       "aliases": [

@@ -197,12 +197,7 @@ EXPECTED_CHAIN_CONTRACT = {
 }
 
 
-EXPECTED_APPLICATION_CANONICAL_DEFERRALS = {
-    "ai_data_center_power": {
-        "new_power_system_smart_grid",
-        "power_electronics_power_supply_equipment",
-        "cloud_data_center_infrastructure",
-    },
+EXPECTED_SKELETON_APPLICATION_CANONICAL_DEFERRALS = {
     "intelligent_transport_vehicle_road_cloud": {
         "new_energy_vehicle_architecture_platforms",
         "intelligent_driving_smart_cockpit",
@@ -409,7 +404,8 @@ def test_membrane_chain_defers_battery_separators_to_battery_chain():
     scope = chain["scope"].casefold()
     exclusions = " ".join(chain["exclusions"]).casefold()
 
-    assert "battery-separator" not in scope
+    assert "battery separator" not in scope.replace("-", " ")
+    assert "battery-separator" not in exclusions
     assert "battery separator" in exclusions
     assert "power_batteries_battery_materials" in exclusions
     assert "industrial" in scope
@@ -428,18 +424,45 @@ def test_synthetic_biology_defers_therapeutic_products_to_drug_chains():
     assert "small_molecule_innovative_drugs" in exclusions
 
 
-def test_application_chains_name_all_required_canonical_owner_deferrals():
-    chains_by_id = _chains_by_id()
+def test_application_chains_defer_all_composed_and_skeleton_canonical_owners():
+    catalog = load_industry_catalog()
+    chains_by_id = {chain["chain_id"]: chain for chain in catalog["chains"]}
+    nodes_by_id = {node["node_id"]: node for node in catalog["nodes"]}
+    compositions_by_chain = defaultdict(list)
+    for composition in catalog["theme_compositions"]:
+        compositions_by_chain[composition["chain_id"]].append(composition)
+
     actual_application_ids = {
         chain_id
         for chain_id, chain in chains_by_id.items()
         if chain["chain_kind"] == "application_theme_chain"
     }
+    detailed_application_ids = {
+        chain_id
+        for chain_id in actual_application_ids
+        if compositions_by_chain[chain_id]
+    }
+    skeleton_application_ids = actual_application_ids - detailed_application_ids
 
-    assert actual_application_ids == set(EXPECTED_APPLICATION_CANONICAL_DEFERRALS)
+    assert skeleton_application_ids == set(
+        EXPECTED_SKELETON_APPLICATION_CANONICAL_DEFERRALS
+    )
+    required_owner_ids_by_chain = {
+        chain_id: {
+            nodes_by_id[canonical_node_id]["chain_id"]
+            for composition in compositions_by_chain[chain_id]
+            for canonical_node_id in composition["canonical_node_refs"]
+        }
+        for chain_id in detailed_application_ids
+    }
+    required_owner_ids_by_chain.update(
+        EXPECTED_SKELETON_APPLICATION_CANONICAL_DEFERRALS
+    )
+
+    assert set(required_owner_ids_by_chain) == actual_application_ids
     assert all(
         chains_by_id[owner_id]["chain_kind"] == "canonical_industry_chain"
-        for owner_ids in EXPECTED_APPLICATION_CANONICAL_DEFERRALS.values()
+        for owner_ids in required_owner_ids_by_chain.values()
         for owner_id in owner_ids
     )
     missing_deferrals = {
@@ -448,7 +471,7 @@ def test_application_chains_name_all_required_canonical_owner_deferrals():
             for owner_id in expected_owner_ids
             if owner_id not in " ".join(chains_by_id[chain_id]["exclusions"])
         )
-        for chain_id, expected_owner_ids in EXPECTED_APPLICATION_CANONICAL_DEFERRALS.items()
+        for chain_id, expected_owner_ids in required_owner_ids_by_chain.items()
     }
 
     assert not {
