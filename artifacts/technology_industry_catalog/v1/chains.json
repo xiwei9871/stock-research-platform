@@ -152,7 +152,7 @@
       "scope": "Covers grid and nuclear supply services, renewable procurement services, distributed generation, gas turbines, microgrids, diesel and gas backup generation, and black-start generation services.",
       "exclusions": [
         "Grid connection, substations, transformation, and protection remain owned by new_power_system_smart_grid.",
-        "Fuel-cell and battery storage technologies remain owned by hydrogen_fuel_cells and power_batteries_battery_materials respectively."
+        "Fuel-cell and stationary energy-storage technologies remain owned by hydrogen_fuel_cells and new_energy_storage respectively."
       ],
       "aliases": [
         "Generation and Energy Systems",
