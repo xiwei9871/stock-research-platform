@@ -7,6 +7,7 @@
   "chain_file": "chains.json",
   "edge_file": "edges.json",
   "source_file": "sources.json",
+  "theme_link_file": "theme_links.json",
   "node_dir": "nodes",
   "theme_composition_dir": "theme_compositions"
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from collections.abc import Iterable
@@ -80,6 +81,13 @@ COMPOSITION_FIELDS = {
     "relationship_type",
     "notes",
 }
+THEME_LINK_FIELDS = {
+    "theme_id",
+    "chain_id",
+    "node_links",
+    "unmapped_theme_node_ids",
+}
+NODE_LINK_FIELDS = {"theme_node_id", "catalog_node_id"}
 SOURCE_FIELDS = {"source_id", "title", "publisher", "url", "source_type", "notes"}
 
 _REQUIRED_MANIFEST_PATH_KEYS = (
@@ -87,6 +95,7 @@ _REQUIRED_MANIFEST_PATH_KEYS = (
     "chain_file",
     "edge_file",
     "source_file",
+    "theme_link_file",
     "node_dir",
     "theme_composition_dir",
 )
@@ -126,6 +135,10 @@ def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, A
     chains = _load_collection(_package_file(root, manifest, "chain_file"), "chains")
     edges = _load_collection(_package_file(root, manifest, "edge_file"), "edges")
     sources = _load_collection(_package_file(root, manifest, "source_file"), "sources")
+    theme_links = _load_collection(
+        _package_file(root, manifest, "theme_link_file"),
+        "theme_links",
+    )
     node_dir = _package_directory(root, manifest, "node_dir")
     composition_dir = _package_directory(root, manifest, "theme_composition_dir")
     nodes = [
@@ -147,6 +160,7 @@ def load_industry_catalog(artifact_dir: str | Path | None = None) -> dict[str, A
         "edges": edges,
         "sources": sources,
         "theme_compositions": theme_compositions,
+        "theme_links": theme_links,
     }
     _validate_catalog(catalog)
     return catalog
@@ -208,6 +222,124 @@ def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]
         "edges": edges,
         "theme_compositions": theme_compositions,
     }
+
+
+def project_theme_to_catalog(
+    theme_id: str,
+    *,
+    catalog: dict[str, Any] | None = None,
+    theme_artifact_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    resolved_catalog = catalog if catalog is not None else load_industry_catalog()
+    theme_link = next(
+        (
+            link
+            for link in resolved_catalog.get("theme_links", [])
+            if isinstance(link, dict) and link.get("theme_id") == theme_id
+        ),
+        None,
+    )
+    if theme_link is None:
+        raise IndustryCatalogValidationError(
+            f"theme catalog link not found: {theme_id}",
+            code="THEME_CATALOG_LINK_NOT_FOUND",
+        )
+
+    from stock_research.theme_decomposition import load_theme
+
+    source_theme = load_theme(theme_id, artifact_dir=theme_artifact_dir)
+    chain_id = theme_link.get("chain_id")
+    catalog_chain = next(
+        (
+            chain
+            for chain in resolved_catalog.get("chains", [])
+            if isinstance(chain, dict) and chain.get("chain_id") == chain_id
+        ),
+        None,
+    )
+    if catalog_chain is None:
+        raise IndustryCatalogValidationError(
+            f"theme link chain not found: {chain_id}",
+            code="THEME_LINK_CHAIN_NOT_FOUND",
+        )
+
+    theme_nodes_by_id = {
+        node["node_id"]
+        : node
+        for node in source_theme.get("nodes", [])
+        if isinstance(node, dict) and isinstance(node.get("node_id"), str)
+    }
+    catalog_nodes_by_id = {
+        node["node_id"]
+        : node
+        for node in resolved_catalog.get("nodes", [])
+        if isinstance(node, dict) and isinstance(node.get("node_id"), str)
+    }
+    node_projections = []
+    linked_theme_node_ids: set[str] = set()
+    node_links = theme_link.get("node_links")
+    if not isinstance(node_links, list):
+        raise _theme_catalog_node_link_error("node_links must be a list")
+    for index, node_link in enumerate(node_links):
+        link_path = f"theme_links[{theme_id}].node_links[{index}]"
+        _require_fields(node_link, NODE_LINK_FIELDS, link_path)
+        source_node_id = _require_reference_string(
+            node_link["theme_node_id"],
+            f"{link_path}.theme_node_id",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        catalog_node_id = _require_reference_string(
+            node_link["catalog_node_id"],
+            f"{link_path}.catalog_node_id",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        theme_node = theme_nodes_by_id.get(source_node_id)
+        catalog_node = catalog_nodes_by_id.get(catalog_node_id)
+        if (
+            source_node_id in linked_theme_node_ids
+            or theme_node is None
+            or catalog_node is None
+            or catalog_node.get("level") not in NODE_LEVELS
+        ):
+            raise _theme_catalog_node_link_error(
+                f"invalid node link: {source_node_id} -> {catalog_node_id}"
+            )
+        linked_theme_node_ids.add(source_node_id)
+        node_projections.append(
+            {"theme_node": theme_node, "catalog_node": catalog_node}
+        )
+
+    unmapped_theme_node_ids = theme_link.get("unmapped_theme_node_ids")
+    if not isinstance(unmapped_theme_node_ids, list):
+        raise _theme_catalog_node_link_error("unmapped_theme_node_ids must be a list")
+    seen_unmapped_theme_node_ids: set[str] = set()
+    for index, source_node_id in enumerate(unmapped_theme_node_ids):
+        source_node_id = _require_reference_string(
+            source_node_id,
+            f"theme_links[{theme_id}].unmapped_theme_node_ids[{index}]",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        if (
+            source_node_id in seen_unmapped_theme_node_ids
+            or source_node_id in linked_theme_node_ids
+            or source_node_id not in theme_nodes_by_id
+        ):
+            raise _theme_catalog_node_link_error(
+                f"invalid unmapped theme node: {source_node_id}"
+            )
+        seen_unmapped_theme_node_ids.add(source_node_id)
+
+    return copy.deepcopy(
+        {
+            "theme_id": theme_id,
+            "theme_status": source_theme["theme"]["status"],
+            "chain_id": chain_id,
+            "catalog_chain": catalog_chain,
+            "node_projections": node_projections,
+            "unmapped_theme_node_ids": unmapped_theme_node_ids,
+            "source_theme": source_theme,
+        }
+    )
 
 
 def configure_industry_catalog_parser(
@@ -394,6 +526,11 @@ def _validate_catalog(catalog: dict[str, Any]) -> None:
     _validate_edges(catalog["edges"], nodes_by_id, sources_by_id)
     _validate_theme_compositions(
         catalog["theme_compositions"],
+        chains_by_id,
+        nodes_by_id,
+    )
+    _validate_theme_links(
+        catalog["theme_links"],
         chains_by_id,
         nodes_by_id,
     )
@@ -656,6 +793,110 @@ def _validate_theme_compositions(
             nodes_by_id,
             f"{path}.canonical_node_refs",
         )
+
+
+def _validate_theme_links(
+    theme_links: list[Any],
+    chains_by_id: dict[str, dict[str, Any]],
+    nodes_by_id: dict[str, dict[str, Any]],
+) -> None:
+    _index_unique_rows(
+        theme_links,
+        fields=THEME_LINK_FIELDS,
+        id_field="theme_id",
+        duplicate_code="DUPLICATE_THEME_LINK",
+        path="theme_links",
+    )
+    for index, theme_link in enumerate(theme_links):
+        path = f"theme_links[{index}]"
+        chain_id = _require_reference_string(
+            theme_link["chain_id"],
+            f"{path}.chain_id",
+            code="THEME_LINK_CHAIN_NOT_FOUND",
+        )
+        if chain_id not in chains_by_id:
+            raise IndustryCatalogValidationError(
+                f"{path}.chain_id references missing chain: {chain_id}",
+                code="THEME_LINK_CHAIN_NOT_FOUND",
+            )
+
+        linked_theme_node_ids = _validate_node_links(
+            theme_link["node_links"],
+            nodes_by_id,
+            f"{path}.node_links",
+        )
+        _validate_unmapped_theme_node_ids(
+            theme_link["unmapped_theme_node_ids"],
+            linked_theme_node_ids,
+            f"{path}.unmapped_theme_node_ids",
+        )
+
+
+def _validate_node_links(
+    node_links: Any,
+    nodes_by_id: dict[str, dict[str, Any]],
+    path: str,
+) -> set[str]:
+    if not isinstance(node_links, list):
+        raise _theme_catalog_node_link_error(f"{path} must be a list")
+
+    theme_node_ids: set[str] = set()
+    for index, node_link in enumerate(node_links):
+        node_link_path = f"{path}[{index}]"
+        _require_fields(node_link, NODE_LINK_FIELDS, node_link_path)
+        theme_node_id = _require_reference_string(
+            node_link["theme_node_id"],
+            f"{node_link_path}.theme_node_id",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        catalog_node_id = _require_reference_string(
+            node_link["catalog_node_id"],
+            f"{node_link_path}.catalog_node_id",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        catalog_node = nodes_by_id.get(catalog_node_id)
+        if (
+            theme_node_id in theme_node_ids
+            or catalog_node is None
+            or catalog_node.get("level") not in NODE_LEVELS
+        ):
+            raise _theme_catalog_node_link_error(
+                f"{node_link_path} invalid: {theme_node_id} -> {catalog_node_id}"
+            )
+        theme_node_ids.add(theme_node_id)
+    return theme_node_ids
+
+
+def _validate_unmapped_theme_node_ids(
+    unmapped_theme_node_ids: Any,
+    linked_theme_node_ids: set[str],
+    path: str,
+) -> None:
+    if not isinstance(unmapped_theme_node_ids, list):
+        raise _theme_catalog_node_link_error(f"{path} must be a list")
+
+    seen_theme_node_ids: set[str] = set()
+    for index, theme_node_id in enumerate(unmapped_theme_node_ids):
+        theme_node_id = _require_reference_string(
+            theme_node_id,
+            f"{path}[{index}]",
+            code="THEME_CATALOG_NODE_LINK_INVALID",
+        )
+        if (
+            theme_node_id in seen_theme_node_ids
+            or theme_node_id in linked_theme_node_ids
+        ):
+            raise _theme_catalog_node_link_error(
+                f"{path}[{index}] duplicates a linked or unmapped node: {theme_node_id}"
+            )
+        seen_theme_node_ids.add(theme_node_id)
+
+
+def _theme_catalog_node_link_error(message: str) -> IndustryCatalogValidationError:
+    return IndustryCatalogValidationError(
+        message,
+        code="THEME_CATALOG_NODE_LINK_INVALID",
+    )
 
 
 def _validate_sources(sources: list[Any]) -> dict[str, dict[str, Any]]:
