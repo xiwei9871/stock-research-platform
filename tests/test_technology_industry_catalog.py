@@ -164,6 +164,7 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "power_electronics_power_supply_equipment",
         "ai_data_center_power",
         "power_batteries_battery_materials",
+        "new_energy_storage",
         "hydrogen_fuel_cells",
     ]
     assert [row["chain_id"] for row in catalog["chains"]] == expected_chain_ids
@@ -344,6 +345,20 @@ def test_load_industry_catalog_composes_package_files(tmp_path: Path):
 def test_load_industry_catalog_flattens_sorted_package_files(tmp_path: Path):
     root = _write_catalog_package(tmp_path, include_relationships=True)
     node_dir = root / "nodes"
+    application_path = node_dir / "application_theme.json"
+    application = _read_json(application_path)
+    for role_node_id in (
+        "alpha_application_role",
+        "beta_application_role",
+        "zeta_application_role",
+    ):
+        role = dict(application["nodes"][1])
+        role["node_id"] = role_node_id
+        role["node_name"] = role_node_id.replace("_", " ").title()
+        role["primary_path"] = list(role["primary_path"])
+        role["primary_path"][-1] = role_node_id
+        application["nodes"].append(role)
+    _write_json(application_path, application)
     _write_json(
         node_dir / "z_first_written.json",
         {"nodes": [_canonical_l3_node("zeta_node")]},
@@ -360,14 +375,18 @@ def test_load_industry_catalog_flattens_sorted_package_files(tmp_path: Path):
     composition_dir = root / "theme_compositions"
     _write_json(
         composition_dir / "z_first_written.json",
-        {"theme_compositions": [_theme_composition("zeta_composition")]},
+        {
+            "theme_compositions": [
+                _theme_composition("zeta_composition", "zeta_application_role")
+            ]
+        },
     )
     _write_json(
         composition_dir / "a_second_written.json",
         {
             "theme_compositions": [
-                _theme_composition("alpha_composition"),
-                _theme_composition("beta_composition"),
+                _theme_composition("alpha_composition", "alpha_application_role"),
+                _theme_composition("beta_composition", "beta_application_role"),
             ]
         },
     )
@@ -379,6 +398,9 @@ def test_load_industry_catalog_flattens_sorted_package_files(tmp_path: Path):
         "beta_node",
         "application_stage",
         "application_role",
+        "alpha_application_role",
+        "beta_application_role",
+        "zeta_application_role",
         "lithography",
         "duv_lithography",
         "zeta_node",
@@ -1290,6 +1312,163 @@ def test_canonical_l4_primary_path_has_stable_error(tmp_path: Path):
     assert _load_error(root).code == "INVALID_PRIMARY_PATH"
 
 
+def test_application_role_l4_primary_path_has_stable_error(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "nodes" / "application_theme.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["primary_path"] = ["wrong"]
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "INVALID_PRIMARY_PATH"
+
+
+@pytest.mark.parametrize("canonical_node_refs", [[], ["lithography"]])
+def test_application_role_l4_requires_canonical_l4_references(
+    tmp_path: Path,
+    canonical_node_refs: list[str],
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "nodes" / "application_theme.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["canonical_node_refs"] = canonical_node_refs
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "INVALID_CANONICAL_NODE_REFERENCE"
+
+
+def test_application_l3_does_not_require_a_composition(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+
+    catalog = load_industry_catalog(root)
+
+    assert catalog["nodes"][2]["level"] == "L3"
+
+
+def test_application_role_requires_exactly_one_composition(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "theme_compositions" / "compositions.json"
+    payload = _read_json(path)
+    payload["theme_compositions"] = []
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "APPLICATION_ROLE_REQUIRES_COMPOSITION"
+
+
+def test_application_role_rejects_duplicate_compositions(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "theme_compositions" / "compositions.json"
+    payload = _read_json(path)
+    duplicate = dict(payload["theme_compositions"][0])
+    duplicate["composition_id"] = "second_application_role_composition"
+    payload["theme_compositions"].append(duplicate)
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "DUPLICATE_ROLE_COMPOSITION"
+
+
+def test_application_role_composition_chain_must_match_role(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    _add_chain(root, "other_application_theme", "application_theme_chain")
+    path = root / "theme_compositions" / "compositions.json"
+    payload = _read_json(path)
+    payload["theme_compositions"][0]["chain_id"] = "other_application_theme"
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
+@pytest.mark.parametrize(
+    "composition_refs",
+    [[], ["duv_lithography", "duv_lithography"]],
+)
+def test_application_role_composition_references_must_match_without_duplicates(
+    tmp_path: Path,
+    composition_refs: list[str],
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "theme_compositions" / "compositions.json"
+    payload = _read_json(path)
+    payload["theme_compositions"][0]["canonical_node_refs"] = composition_refs
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
+def test_application_role_composition_references_must_target_the_same_nodes(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    nodes_path = root / "nodes" / "semiconductor_equipment.json"
+    nodes = _read_json(nodes_path)
+    second_target = dict(nodes["nodes"][1])
+    second_target["node_id"] = "second_duv_lithography"
+    second_target["primary_path"] = list(second_target["primary_path"])
+    second_target["primary_path"][-1] = "second_duv_lithography"
+    second_target["canonical_key"] = "semiconductor_equipment.second_duv_lithography"
+    nodes["nodes"].append(second_target)
+    _write_json(nodes_path, nodes)
+
+    composition_path = root / "theme_compositions" / "compositions.json"
+    compositions = _read_json(composition_path)
+    compositions["theme_compositions"][0]["canonical_node_refs"] = [
+        "second_duv_lithography"
+    ]
+    _write_json(composition_path, compositions)
+
+    assert _load_error(root).code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
+def test_application_role_and_composition_reference_sets_are_order_insensitive(
+    tmp_path: Path,
+):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    nodes_path = root / "nodes" / "semiconductor_equipment.json"
+    nodes = _read_json(nodes_path)
+    second_target = dict(nodes["nodes"][1])
+    second_target["node_id"] = "second_duv_lithography"
+    second_target["primary_path"] = list(second_target["primary_path"])
+    second_target["primary_path"][-1] = "second_duv_lithography"
+    second_target["canonical_key"] = "semiconductor_equipment.second_duv_lithography"
+    nodes["nodes"].append(second_target)
+    _write_json(nodes_path, nodes)
+
+    application_path = root / "nodes" / "application_theme.json"
+    application = _read_json(application_path)
+    application["nodes"][1]["canonical_node_refs"] = [
+        "duv_lithography",
+        "second_duv_lithography",
+    ]
+    _write_json(application_path, application)
+
+    composition_path = root / "theme_compositions" / "compositions.json"
+    compositions = _read_json(composition_path)
+    compositions["theme_compositions"][0]["canonical_node_refs"] = [
+        "second_duv_lithography",
+        "duv_lithography",
+    ]
+    _write_json(composition_path, compositions)
+
+    catalog = load_industry_catalog(root)
+
+    assert catalog["theme_compositions"][0]["canonical_node_refs"] == [
+        "second_duv_lithography",
+        "duv_lithography",
+    ]
+
+
+def test_application_role_references_cannot_contain_duplicates(tmp_path: Path):
+    root = _write_catalog_package(tmp_path, include_relationships=True)
+    path = root / "nodes" / "application_theme.json"
+    payload = _read_json(path)
+    payload["nodes"][1]["canonical_node_refs"] = [
+        "duv_lithography",
+        "duv_lithography",
+    ]
+    _write_json(path, payload)
+
+    assert _load_error(root).code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
 @pytest.mark.parametrize(
     ("field", "code"),
     [
@@ -1815,11 +1994,14 @@ def _canonical_l3_node(node_id: str, *, chain_id: str = "semiconductor_equipment
     }
 
 
-def _theme_composition(composition_id: str) -> dict:
+def _theme_composition(
+    composition_id: str,
+    role_node_id: str = "application_role",
+) -> dict:
     return {
         "composition_id": composition_id,
         "chain_id": "application_theme",
-        "role_node_id": "application_role",
+        "role_node_id": role_node_id,
         "canonical_node_refs": ["duv_lithography"],
         "relationship_type": "uses",
         "notes": "Valid sorted composition fixture.",

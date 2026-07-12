@@ -224,6 +224,27 @@
       "order": 7
     },
     {
+      "chain_id": "new_energy_storage",
+      "sector_id": "energy_technology_new_power_system",
+      "chain_name": "New Energy Storage",
+      "chain_kind": "canonical_industry_chain",
+      "decomposition_method": "technical_route",
+      "description": "Canonical technology-route chain for stationary energy-storage systems that provide resilient electrical power through battery, flywheel, and UPS storage technologies.",
+      "scope": "Covers stationary battery backup systems, flywheel backup energy systems, UPS battery systems, and their application-neutral energy-storage technology routes and system ownership.",
+      "exclusions": [
+        "Generic high-specific-energy power-battery cells and battery management system platforms remain owned by power_batteries_battery_materials.",
+        "Application-specific backup-power sizing, redundancy, facility integration, procurement, and operating policy remain owned by the relevant application chain.",
+        "Backup generators, automatic transfer switches, fuel-cell systems, and black-start controls remain owned by their primary generation, power-conversion, and hydrogen chains."
+      ],
+      "aliases": [
+        "Energy Storage Industry",
+        "Stationary Energy Storage",
+        "新型储能"
+      ],
+      "status": "skeleton",
+      "order": 8
+    },
+    {
       "chain_id": "hydrogen_fuel_cells",
       "sector_id": "energy_technology_new_power_system",
       "chain_name": "Hydrogen and Fuel Cells",

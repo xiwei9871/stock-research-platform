@@ -996,8 +996,8 @@ AI_POWER_CANONICAL_OWNERS = {
     "ai_power_diesel_generator_role": ("diesel_generator_set", "power_generation_energy_equipment"),
     "ai_power_gas_backup_role": ("gas_fired_backup_generator", "power_generation_energy_equipment"),
     "ai_power_fuel_cell_backup_role": ("stationary_fuel_cell_backup_system", "hydrogen_fuel_cells"),
-    "ai_power_battery_backup_role": ("stationary_battery_backup_system", "power_batteries_battery_materials"),
-    "ai_power_flywheel_role": ("flywheel_backup_energy_system", "power_batteries_battery_materials"),
+    "ai_power_battery_backup_role": ("stationary_battery_backup_system", "new_energy_storage"),
+    "ai_power_flywheel_role": ("flywheel_backup_energy_system", "new_energy_storage"),
     "ai_power_automatic_transfer_switch_role": ("automatic_transfer_switch", "power_electronics_power_supply_equipment"),
     "ai_power_black_start_role": ("black_start_generation_service", "power_generation_energy_equipment"),
     "ai_power_line_frequency_ups_role": ("line_frequency_ups", "power_electronics_power_supply_equipment"),
@@ -1006,7 +1006,7 @@ AI_POWER_CANONICAL_OWNERS = {
     "ai_power_medium_voltage_ups_role": ("medium_voltage_ups", "power_electronics_power_supply_equipment"),
     "ai_power_static_transfer_switch_role": ("static_transfer_switch", "power_electronics_power_supply_equipment"),
     "ai_power_rectifier_inverter_role": ("rectifier_inverter_system", "power_electronics_power_supply_equipment"),
-    "ai_power_ups_battery_role": ("ups_battery_system", "power_batteries_battery_materials"),
+    "ai_power_ups_battery_role": ("ups_battery_system", "new_energy_storage"),
     "ai_power_240_400v_hvdc_role": ("240_400v_hvdc_power_system", "power_electronics_power_supply_equipment"),
     "ai_power_800vdc_role": ("800vdc_power_system", "power_electronics_power_supply_equipment"),
     "ai_power_central_rectifier_role": ("central_rectifier_system", "power_electronics_power_supply_equipment"),
@@ -1069,7 +1069,7 @@ AI_POWER_SUPPORTING_L3_BY_CHAIN = {
     "new_power_system_smart_grid": "grid_connection_transmission_protection",
     "power_generation_energy_equipment": "generation_supply_resilience_systems",
     "power_electronics_power_supply_equipment": "power_conversion_distribution_control",
-    "power_batteries_battery_materials": "stationary_backup_storage_systems",
+    "new_energy_storage": "stationary_backup_storage_systems",
     "hydrogen_fuel_cells": "stationary_fuel_cell_systems",
 }
 
@@ -1129,6 +1129,13 @@ AI_POWER_APPROVED_CHAIN_CONTRACT = {
         "infrastructure_flow",
         "draft",
         4,
+    ),
+    "new_energy_storage": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "technical_route",
+        "skeleton",
+        8,
     ),
     "hydrogen_fuel_cells": (
         "energy_technology_new_power_system",
@@ -1341,6 +1348,11 @@ def test_power_batteries_battery_materials_skeleton_exact_taxonomy_and_ownership
         "battery_high_specific_energy_cell",
         "battery_management_system_platform",
     ]
+    assert {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == BATTERY_CHAIN_ID
+    } == original_node_ids
     assert {row["node_id"]: row["node_type"] for row in nodes} == {
         BATTERY_L3_ID: "battery_system_family",
         "battery_high_specific_energy_cell": "battery_cell_product",
@@ -1386,6 +1398,42 @@ def test_power_batteries_battery_materials_skeleton_exact_taxonomy_and_ownership
         "estimation, balancing, protection, charging, diagnostics, and system interfaces; "
         "application-specific integration requirements reference this node."
     )
+
+
+def test_new_energy_storage_skeleton_owns_stationary_backup_systems():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == "new_energy_storage"
+    }
+
+    assert set(nodes) == {
+        "stationary_backup_storage_systems",
+        "stationary_battery_backup_system",
+        "flywheel_backup_energy_system",
+        "ups_battery_system",
+    }
+    assert nodes["stationary_backup_storage_systems"]["level"] == "L3"
+    assert nodes["stationary_backup_storage_systems"]["primary_path"] == [
+        AI_POWER_SECTOR_ID,
+        "new_energy_storage",
+        "stationary_backup_storage_systems",
+    ]
+    for node_id in (
+        "stationary_battery_backup_system",
+        "flywheel_backup_energy_system",
+        "ups_battery_system",
+    ):
+        node = nodes[node_id]
+        assert node["parent_node_id"] == "stationary_backup_storage_systems"
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            "new_energy_storage",
+            "stationary_backup_storage_systems",
+            node_id,
+        ]
+        assert node["canonical_key"] == f"new_energy_storage:{node_id}"
 
 
 def test_humanoid_robots_embodied_intelligence_chain_metadata():

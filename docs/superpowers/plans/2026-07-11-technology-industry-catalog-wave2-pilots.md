@@ -383,6 +383,16 @@ rg -n "INSERT|UPDATE|DELETE|theme_research_store|apply_schema" src/stock_researc
 
 Expected: no database write or schema-migration calls.
 
+### Final review validation codes
+
+Application-role ownership is enforced with stable loader codes:
+
+- `INVALID_PRIMARY_PATH`: an application-role L4 primary path is not exactly `[sector_id, chain_id, parent_node_id, node_id]`.
+- `INVALID_CANONICAL_NODE_REFERENCE`: an application-role L4 has no canonical references, or a reference is not a canonical L4 node.
+- `APPLICATION_ROLE_REQUIRES_COMPOSITION`: an application-role L4 has no composition. Application L3 nodes do not require one.
+- `DUPLICATE_ROLE_COMPOSITION`: more than one composition claims the same application-role L4.
+- `COMPOSITION_REFERENCE_MISMATCH`: a composition chain does not match its role, the role and composition references differ ignoring order, or either reference list has duplicates.
+
 ## Appendix A: Exact Pilot L4 Contracts
 
 These lists are the Wave 2 v1 acceptance contract. Tests must compare each L3 child set exactly; do not satisfy the count by inventing additional nodes.
