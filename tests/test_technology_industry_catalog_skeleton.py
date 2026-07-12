@@ -115,20 +115,71 @@ def test_repository_catalog_matches_frozen_l2_registry():
     for chain in catalog["chains"]:
         chains_by_sector[chain["sector_id"]].append(chain)
 
-    actual_chains_by_sector = {
-        sector_id: [
-            chain["chain_id"]
-            for chain in sorted(chains, key=lambda chain: (chain["order"], chain["chain_id"]))
-        ]
+    actual_ordered_chains_by_sector = {
+        sector_id: sorted(
+            chains,
+            key=lambda chain: (chain["order"], chain["chain_id"]),
+        )
         for sector_id, chains in chains_by_sector.items()
     }
+    actual_chain_orders_by_sector = {
+        sector_id: [
+            (chain["order"], chain["chain_id"])
+            for chain in chains
+        ]
+        for sector_id, chains in actual_ordered_chains_by_sector.items()
+    }
+    expected_chain_orders_by_sector = {
+        sector_id: list(enumerate(chain_ids, start=1))
+        for sector_id, chain_ids in EXPECTED_CHAINS_BY_SECTOR.items()
+    }
+    actual_chain_ids_by_sector = {
+        sector_id: [chain_id for _, chain_id in chain_orders]
+        for sector_id, chain_orders in actual_chain_orders_by_sector.items()
+    }
+    missing_chain_ids_by_sector = {
+        sector_id: [
+            chain_id
+            for chain_id in expected_chain_ids
+            if chain_id not in actual_chain_ids_by_sector.get(sector_id, [])
+        ]
+        for sector_id, expected_chain_ids in EXPECTED_CHAINS_BY_SECTOR.items()
+    }
+    unexpected_chain_ids_by_sector = {
+        sector_id: [
+            chain_id
+            for chain_id in actual_chain_ids
+            if chain_id not in EXPECTED_CHAINS_BY_SECTOR.get(sector_id, [])
+        ]
+        for sector_id, actual_chain_ids in actual_chain_ids_by_sector.items()
+    }
+
+    assert actual_chain_orders_by_sector == expected_chain_orders_by_sector, (
+        "missing_chain_ids_by_sector="
+        f"{missing_chain_ids_by_sector}; "
+        "unexpected_chain_ids_by_sector="
+        f"{unexpected_chain_ids_by_sector}"
+    )
+
+    for sector_id, expected_chain_ids in EXPECTED_CHAINS_BY_SECTOR.items():
+        actual_orders = [
+            chain["order"]
+            for chain in actual_ordered_chains_by_sector[sector_id]
+        ]
+        actual_chain_ids = [
+            chain["chain_id"]
+            for chain in actual_ordered_chains_by_sector[sector_id]
+        ]
+
+        assert actual_orders == list(range(1, len(expected_chain_ids) + 1))
+        assert len(actual_orders) == len(set(actual_orders))
+        assert actual_chain_ids == expected_chain_ids
+
     actual_chain_ids = [
-        chain_id
-        for chain_ids in actual_chains_by_sector.values()
-        for chain_id in chain_ids
+        chain["chain_id"]
+        for chains in actual_ordered_chains_by_sector.values()
+        for chain in chains
     ]
 
     assert len(actual_chain_ids) == 82
     assert len(actual_chain_ids) == len(set(actual_chain_ids))
-    assert set(actual_chains_by_sector) == set(EXPECTED_CHAINS_BY_SECTOR)
-    assert actual_chains_by_sector == EXPECTED_CHAINS_BY_SECTOR
