@@ -295,6 +295,85 @@ def test_project_theme_to_catalog_preserves_source_data_and_is_read_only():
     assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source_sha_before
 
 
+def test_project_theme_to_catalog_rejects_unaccounted_source_theme_node():
+    catalog = load_industry_catalog()
+    link = catalog["theme_links"][0]
+    link["node_links"] = [
+        node_link
+        for node_link in link["node_links"]
+        if node_link["theme_node_id"] != "grid_connection"
+    ]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_COVERAGE_INCOMPLETE"
+    assert str(exc_info.value) == (
+        "theme catalog node coverage incomplete: grid_connection"
+    )
+
+
+def test_project_theme_to_catalog_allows_explicitly_unmapped_source_theme_node():
+    catalog = load_industry_catalog()
+    link = catalog["theme_links"][0]
+    link["node_links"] = [
+        node_link
+        for node_link in link["node_links"]
+        if node_link["theme_node_id"] != "grid_connection"
+    ]
+    link["unmapped_theme_node_ids"].append("grid_connection")
+
+    projection = project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert "grid_connection" not in {
+        item["theme_node"]["node_id"] for item in projection["node_projections"]
+    }
+    assert projection["unmapped_theme_node_ids"] == [
+        "ai_server_integration",
+        "sic_gan_power_semiconductor",
+        "grid_connection",
+    ]
+
+
+def test_project_theme_to_catalog_reports_missing_source_nodes_in_sorted_order(
+    monkeypatch,
+):
+    from stock_research import theme_decomposition
+
+    catalog = load_industry_catalog()
+    link = catalog["theme_links"][0]
+    link["node_links"] = [
+        {
+            "theme_node_id": "present_node",
+            "catalog_node_id": "ai_power_grid_connection_role",
+        }
+    ]
+    link["unmapped_theme_node_ids"] = []
+    monkeypatch.setattr(
+        theme_decomposition,
+        "load_theme",
+        lambda *_args, **_kwargs: {
+            "theme": {
+                "theme_id": "ai_power_value_capture_v1",
+                "status": "reviewed",
+            },
+            "nodes": [
+                {"node_id": "zeta_node"},
+                {"node_id": "present_node"},
+                {"node_id": "alpha_node"},
+            ],
+        },
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_COVERAGE_INCOMPLETE"
+    assert str(exc_info.value) == (
+        "theme catalog node coverage incomplete: alpha_node, zeta_node"
+    )
+
+
 def test_project_theme_to_catalog_projects_humanoid_draft_theme():
     projection = project_theme_to_catalog("humanoid_robotics_head_to_toe_v1")
 

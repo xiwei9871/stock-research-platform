@@ -372,6 +372,19 @@ def project_theme_to_catalog(
                 f"invalid unmapped theme node: {source_node_id}"
             )
 
+    accounted_theme_node_ids = {
+        node_link["theme_node_id"] for node_link in theme_link["node_links"]
+    } | set(unmapped_theme_node_ids)
+    missing_theme_node_ids = sorted(
+        set(theme_nodes_by_id) - accounted_theme_node_ids
+    )
+    if missing_theme_node_ids:
+        raise IndustryCatalogValidationError(
+            "theme catalog node coverage incomplete: "
+            + ", ".join(missing_theme_node_ids),
+            code="THEME_CATALOG_NODE_COVERAGE_INCOMPLETE",
+        )
+
     return copy.deepcopy(
         {
             "theme_id": theme_id,
