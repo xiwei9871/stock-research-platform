@@ -11,6 +11,52 @@ from stock_research.technology_industry_catalog import (
     load_industry_catalog,
     project_theme_to_catalog,
 )
+
+
+def test_projection_validates_cross_chain_link_before_theme_loading(tmp_path: Path):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            catalog=catalog,
+            theme_artifact_dir=tmp_path / "missing_theme_artifacts",
+        )
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_projection_validates_missing_chain_before_theme_loading(tmp_path: Path):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["chain_id"] = "missing_chain"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            catalog=catalog,
+            theme_artifact_dir=tmp_path / "missing_theme_artifacts",
+        )
+
+    assert exc_info.value.code == "THEME_LINK_CHAIN_NOT_FOUND"
+
+
+def test_project_theme_to_catalog_normalizes_invalid_json_theme_artifact(
+    tmp_path: Path,
+):
+    artifact_dir = tmp_path / "theme_artifacts"
+    artifact_dir.mkdir()
+    (artifact_dir / "invalid.json").write_text("{", encoding="utf-8")
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+
+
 def test_theme_links_reject_cross_chain_catalog_targets(tmp_path: Path):
     source_dir = (
         Path(__file__).resolve().parents[1]

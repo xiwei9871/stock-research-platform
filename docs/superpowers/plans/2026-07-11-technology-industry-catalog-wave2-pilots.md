@@ -339,7 +339,7 @@ def project_theme_to_catalog(
     ...
 ```
 
-Load through `theme_decomposition.load_theme`, preserve theme and node review states, and return a new dictionary. Raise `THEME_CATALOG_LINK_NOT_FOUND` or `THEME_CATALOG_NODE_LINK_INVALID`.
+Load through `theme_decomposition.load_theme`, preserve theme and node review states, and return a new dictionary. Raise `THEME_CATALOG_LINK_NOT_FOUND`, `THEME_CATALOG_NODE_LINK_INVALID`, `THEME_LINK_INVALID` for malformed local links, or `THEME_ARTIFACT_INVALID` for theme dependency loading or shape failures.
 
 - [ ] **Step 5: Run regression tests and commit**
 

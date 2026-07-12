@@ -253,14 +253,14 @@ def project_theme_to_catalog(
             code="THEME_CATALOG_LINK_NOT_FOUND",
         )
 
-    _validate_projection_theme_link(theme_link, theme_id)
-    chain_id = theme_link["chain_id"]
-    catalog_chains = resolved_catalog.get("chains")
-    if not isinstance(catalog_chains, list):
-        raise _theme_link_invalid("catalog.chains must be a list")
-    catalog_nodes = resolved_catalog.get("nodes")
-    if not isinstance(catalog_nodes, list):
-        raise _theme_catalog_node_link_error("catalog.nodes must be a list")
+    chains_by_id, nodes_by_id = _projection_catalog_indexes(resolved_catalog)
+    chain_id = _validate_projection_theme_link(
+        theme_link,
+        theme_id,
+        chains_by_id,
+        nodes_by_id,
+    )
+    catalog_chain = chains_by_id[chain_id]
 
     from stock_research.theme_decomposition import (
         ThemeDecompositionValidationError,
@@ -269,90 +269,41 @@ def project_theme_to_catalog(
 
     try:
         source_theme = load_theme(theme_id, artifact_dir=theme_artifact_dir)
-    except ThemeDecompositionValidationError as exc:
+    except (
+        ThemeDecompositionValidationError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        OSError,
+    ) as exc:
         raise IndustryCatalogValidationError(
             f"theme artifact invalid: {exc}",
             code="THEME_ARTIFACT_INVALID",
         ) from exc
     theme, theme_nodes = _validate_theme_detail(source_theme, theme_id)
-    catalog_chain = next(
-        (
-            chain
-            for chain in catalog_chains
-            if isinstance(chain, dict) and chain.get("chain_id") == chain_id
-        ),
-        None,
-    )
-    if catalog_chain is None:
-        raise IndustryCatalogValidationError(
-            f"theme link chain not found: {chain_id}",
-            code="THEME_LINK_CHAIN_NOT_FOUND",
-        )
 
     theme_nodes_by_id = {
         node["node_id"]: node
         for node in theme_nodes
     }
-    catalog_nodes_by_id = {
-        node["node_id"]
-        : node
-        for node in catalog_nodes
-        if isinstance(node, dict) and isinstance(node.get("node_id"), str)
-    }
     node_projections = []
-    linked_theme_node_ids: set[str] = set()
-    node_links = theme_link.get("node_links")
-    if not isinstance(node_links, list):
-        raise _theme_catalog_node_link_error("node_links must be a list")
-    for index, node_link in enumerate(node_links):
-        link_path = f"theme_links[{theme_id}].node_links[{index}]"
-        _validate_projection_node_link(node_link, link_path)
-        source_node_id = _require_reference_string(
-            node_link["theme_node_id"],
-            f"{link_path}.theme_node_id",
-            code="THEME_CATALOG_NODE_LINK_INVALID",
-        )
-        catalog_node_id = _require_reference_string(
-            node_link["catalog_node_id"],
-            f"{link_path}.catalog_node_id",
-            code="THEME_CATALOG_NODE_LINK_INVALID",
-        )
+    for node_link in theme_link["node_links"]:
+        source_node_id = node_link["theme_node_id"]
+        catalog_node_id = node_link["catalog_node_id"]
         theme_node = theme_nodes_by_id.get(source_node_id)
-        catalog_node = catalog_nodes_by_id.get(catalog_node_id)
-        if (
-            source_node_id in linked_theme_node_ids
-            or theme_node is None
-            or catalog_node is None
-            or catalog_node.get("level") not in NODE_LEVELS
-            or catalog_node.get("chain_id") != chain_id
-        ):
+        if theme_node is None:
             raise _theme_catalog_node_link_error(
                 f"invalid node link: {source_node_id} -> {catalog_node_id}"
             )
-        linked_theme_node_ids.add(source_node_id)
         node_projections.append(
-            {"theme_node": theme_node, "catalog_node": catalog_node}
+            {"theme_node": theme_node, "catalog_node": nodes_by_id[catalog_node_id]}
         )
 
-    unmapped_theme_node_ids = theme_link.get("unmapped_theme_node_ids")
-    if not isinstance(unmapped_theme_node_ids, list):
-        raise _theme_catalog_node_link_error("unmapped_theme_node_ids must be a list")
-    seen_unmapped_theme_node_ids: set[str] = set()
-    for index, source_node_id in enumerate(unmapped_theme_node_ids):
-        source_node_id = _require_reference_string(
-            source_node_id,
-            f"theme_links[{theme_id}].unmapped_theme_node_ids[{index}]",
-            code="THEME_CATALOG_NODE_LINK_INVALID",
-        )
-        if (
-            source_node_id in seen_unmapped_theme_node_ids
-            or source_node_id in linked_theme_node_ids
-            or source_node_id not in theme_nodes_by_id
-        ):
+    unmapped_theme_node_ids = theme_link["unmapped_theme_node_ids"]
+    for source_node_id in unmapped_theme_node_ids:
+        if source_node_id not in theme_nodes_by_id:
             raise _theme_catalog_node_link_error(
                 f"invalid unmapped theme node: {source_node_id}"
             )
-        seen_unmapped_theme_node_ids.add(source_node_id)
 
     return copy.deepcopy(
         {
@@ -388,7 +339,34 @@ def configure_industry_catalog_parser(
     return parser
 
 
-def _validate_projection_theme_link(theme_link: Any, theme_id: str) -> None:
+def _projection_catalog_indexes(
+    catalog: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    catalog_chains = catalog.get("chains")
+    if not isinstance(catalog_chains, list):
+        raise _theme_link_invalid("catalog.chains must be a list")
+    catalog_nodes = catalog.get("nodes")
+    if not isinstance(catalog_nodes, list):
+        raise _theme_catalog_node_link_error("catalog.nodes must be a list")
+    chains_by_id = {
+        chain["chain_id"]: chain
+        for chain in catalog_chains
+        if isinstance(chain, dict) and isinstance(chain.get("chain_id"), str)
+    }
+    nodes_by_id = {
+        node["node_id"]: node
+        for node in catalog_nodes
+        if isinstance(node, dict) and isinstance(node.get("node_id"), str)
+    }
+    return chains_by_id, nodes_by_id
+
+
+def _validate_projection_theme_link(
+    theme_link: Any,
+    theme_id: str,
+    chains_by_id: dict[str, dict[str, Any]],
+    nodes_by_id: dict[str, dict[str, Any]],
+) -> str:
     if not isinstance(theme_link, dict):
         raise _theme_link_invalid("selected theme link must be an object")
     for field in sorted(THEME_LINK_FIELDS):
@@ -403,19 +381,12 @@ def _validate_projection_theme_link(theme_link: Any, theme_id: str) -> None:
         raise _theme_link_invalid(
             f"selected theme link.theme_id does not match: {linked_theme_id}"
         )
-    _require_reference_string(
-        theme_link["chain_id"],
-        "selected theme link.chain_id",
-        code="THEME_LINK_INVALID",
+    return _validate_theme_link_contents(
+        theme_link,
+        chains_by_id,
+        nodes_by_id,
+        "selected theme link",
     )
-
-
-def _validate_projection_node_link(node_link: Any, path: str) -> None:
-    if not isinstance(node_link, dict):
-        raise _theme_catalog_node_link_error(f"{path} must be an object")
-    for field in sorted(NODE_LINK_FIELDS):
-        if field not in node_link:
-            raise _theme_catalog_node_link_error(f"{path}.{field} is required")
 
 
 def _validate_theme_detail(
@@ -917,28 +888,43 @@ def _validate_theme_links(
     )
     for index, theme_link in enumerate(theme_links):
         path = f"theme_links[{index}]"
-        chain_id = _require_reference_string(
-            theme_link["chain_id"],
-            f"{path}.chain_id",
+        _validate_theme_link_contents(
+            theme_link,
+            chains_by_id,
+            nodes_by_id,
+            path,
+        )
+
+
+def _validate_theme_link_contents(
+    theme_link: dict[str, Any],
+    chains_by_id: dict[str, dict[str, Any]],
+    nodes_by_id: dict[str, dict[str, Any]],
+    path: str,
+) -> str:
+    chain_id = _require_reference_string(
+        theme_link["chain_id"],
+        f"{path}.chain_id",
+        code="THEME_LINK_CHAIN_NOT_FOUND",
+    )
+    if chain_id not in chains_by_id:
+        raise IndustryCatalogValidationError(
+            f"{path}.chain_id references missing chain: {chain_id}",
             code="THEME_LINK_CHAIN_NOT_FOUND",
         )
-        if chain_id not in chains_by_id:
-            raise IndustryCatalogValidationError(
-                f"{path}.chain_id references missing chain: {chain_id}",
-                code="THEME_LINK_CHAIN_NOT_FOUND",
-            )
 
-        linked_theme_node_ids = _validate_node_links(
-            theme_link["node_links"],
-            nodes_by_id,
-            chain_id,
-            f"{path}.node_links",
-        )
-        _validate_unmapped_theme_node_ids(
-            theme_link["unmapped_theme_node_ids"],
-            linked_theme_node_ids,
-            f"{path}.unmapped_theme_node_ids",
-        )
+    linked_theme_node_ids = _validate_node_links(
+        theme_link["node_links"],
+        nodes_by_id,
+        chain_id,
+        f"{path}.node_links",
+    )
+    _validate_unmapped_theme_node_ids(
+        theme_link["unmapped_theme_node_ids"],
+        linked_theme_node_ids,
+        f"{path}.unmapped_theme_node_ids",
+    )
+    return chain_id
 
 
 def _validate_node_links(
