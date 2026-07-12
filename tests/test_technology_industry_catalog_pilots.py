@@ -1740,6 +1740,20 @@ def test_ai_power_approved_chain_metadata_and_battery_order_are_exact():
     assert chains[BATTERY_CHAIN_ID]["order"] == 7
 
 
+def test_power_generation_exclusion_preserves_fuel_cell_and_storage_owners():
+    catalog = load_industry_catalog()
+    chain = next(
+        row
+        for row in catalog["chains"]
+        if row["chain_id"] == "power_generation_energy_equipment"
+    )
+
+    assert chain["exclusions"][1] == (
+        "Fuel-cell and stationary energy-storage technologies remain owned by "
+        "hydrogen_fuel_cells and new_energy_storage respectively."
+    )
+
+
 def test_ai_data_center_power_compositions_match_roles_without_company_mappings():
     catalog = load_industry_catalog()
     compositions = [
