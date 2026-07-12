@@ -428,9 +428,14 @@ def test_summarize_catalog_counts_one_l3_and_one_l4_in_default_task2_fixture(
         "edge_count": 0,
         "theme_composition_count": 0,
         "chains_by_kind": {"canonical_industry_chain": 1},
+        "chains_by_decomposition_method": {"manufacturing_process": 1},
         "chains_by_status": {"draft": 1},
         "chains_by_sector": {"semiconductor_electronics": 1},
         "nodes_by_status": {"draft": 2},
+        "detailed_chain_count": 1,
+        "skeleton_chain_count": 0,
+        "structural_completeness_percent": 100.0,
+        "unexpanded_chain_ids": [],
     }
 
 
