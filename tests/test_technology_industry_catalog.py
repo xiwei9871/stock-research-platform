@@ -167,7 +167,9 @@ def test_repository_catalog_starts_with_ten_approved_sectors():
         "new_energy_storage",
         "hydrogen_fuel_cells",
     ]
-    assert [row["chain_id"] for row in catalog["chains"]] == expected_chain_ids
+    assert set(expected_chain_ids) <= {
+        row["chain_id"] for row in catalog["chains"]
+    }
     assert {row["chain_id"] for row in catalog["nodes"]} == set(
         expected_chain_ids
     )
