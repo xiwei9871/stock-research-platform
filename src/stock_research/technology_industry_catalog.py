@@ -253,6 +253,45 @@ def get_industry_chain(catalog: dict[str, Any], chain_id: str) -> dict[str, Any]
     }
 
 
+def find_industry_chain(catalog: dict[str, Any], query: object) -> dict[str, Any]:
+    if not isinstance(query, str):
+        raise IndustryCatalogValidationError(
+            f"chain not found: {query}",
+            code="CHAIN_NOT_FOUND",
+        )
+    normalized_query = query.strip().casefold()
+    if not normalized_query:
+        raise IndustryCatalogValidationError(
+            f"chain not found: {query}",
+            code="CHAIN_NOT_FOUND",
+        )
+
+    chains = catalog["chains"]
+    for chain in chains:
+        if chain["chain_id"].strip().casefold() == normalized_query:
+            return chain
+    for chain in chains:
+        if chain["chain_name"].strip().casefold() == normalized_query:
+            return chain
+
+    alias_matches = [
+        chain
+        for chain in chains
+        if any(alias.strip().casefold() == normalized_query for alias in chain["aliases"])
+    ]
+    if len(alias_matches) == 1:
+        return alias_matches[0]
+    if len(alias_matches) > 1:
+        raise IndustryCatalogValidationError(
+            f"ambiguous chain alias: {query}",
+            code="AMBIGUOUS_CHAIN_ALIAS",
+        )
+    raise IndustryCatalogValidationError(
+        f"chain not found: {query}",
+        code="CHAIN_NOT_FOUND",
+    )
+
+
 def project_theme_to_catalog(
     theme_id: str,
     *,
