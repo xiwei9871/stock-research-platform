@@ -881,6 +881,11 @@ def _validate_theme_compositions(
                 f"{path}.role_node_id references missing node: {role_node_id}",
                 code="ORPHAN_COMPOSITION_ROLE",
             )
+        if role.get("chain_id") != chain_id:
+            raise IndustryCatalogValidationError(
+                f"{path}.chain_id must match {role_node_id}.chain_id",
+                code="COMPOSITION_REFERENCE_MISMATCH",
+            )
         if (
             chain["chain_kind"] != "application_theme_chain"
             or role.get("node_kind") != "application_role"
@@ -888,11 +893,6 @@ def _validate_theme_compositions(
             raise IndustryCatalogValidationError(
                 f"{path}.role_node_id must reference an application role",
                 code="INVALID_COMPOSITION_ROLE",
-            )
-        if role.get("chain_id") != chain_id:
-            raise IndustryCatalogValidationError(
-                f"{path}.chain_id must match {role_node_id}.chain_id",
-                code="COMPOSITION_REFERENCE_MISMATCH",
             )
         _validate_relationship_type(composition["relationship_type"], path)
         _validate_canonical_node_refs(
