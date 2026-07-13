@@ -298,6 +298,40 @@ describe('IndustryCatalogWorkspace', () => {
     expect(onNavigate).toHaveBeenCalledWith('/theme-research/catalog');
   });
 
+  it('exposes explicit mapped pairs and unmapped theme node IDs in a compact disclosure', async () => {
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai_data_center_power" onNavigate={vi.fn()} />);
+
+    await screen.findByRole('heading', { name: 'AI 数据中心供电' });
+    const summary = screen.getByLabelText('查看 ai_power_value_capture_v1 节点映射详情');
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(summary).toHaveTextContent('已映射 1');
+    expect(summary).toHaveTextContent('未映射 1');
+
+    fireEvent.click(summary);
+    const disclosure = summary.closest('details');
+    expect(disclosure).not.toBeNull();
+    expect(within(disclosure as HTMLDetailsElement).getByRole('listitem', { name: 'theme_switchgear 映射到 switchgear' })).toBeInTheDocument();
+    const unmappedNodes = within(disclosure as HTMLDetailsElement).getByRole('list', { name: '未映射主题节点' });
+    expect(within(unmappedNodes).getByText('theme_backup_generator')).toBeInTheDocument();
+  });
+
+  it('states clearly when a linked theme has no unmapped nodes', async () => {
+    apiMocks.fetchTechnologyIndustryChain.mockResolvedValueOnce({
+      ...aiPowerDetail,
+      theme_links: [{
+        ...aiPowerDetail.theme_links[0],
+        unmapped_theme_node_ids: []
+      }]
+    });
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai_data_center_power" onNavigate={vi.fn()} />);
+
+    await screen.findByRole('heading', { name: 'AI 数据中心供电' });
+    const summary = screen.getByLabelText('查看 ai_power_value_capture_v1 节点映射详情');
+    expect(summary).toHaveTextContent('未映射 0');
+    fireEvent.click(summary);
+    expect(within(summary.closest('details') as HTMLDetailsElement).getByText('无未映射节点')).toBeInTheDocument();
+  });
+
   it('shows the explicit empty node message for an unexpanded chain', async () => {
     render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/grid_storage" onNavigate={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: '电网储能' })).toBeInTheDocument();

@@ -394,7 +394,7 @@ Initial presentation should be table-first, showing reviewed, draft, research-le
 
 Implementation result:
 
-- the existing Dashboard now has an independent `主题研究` navigation entry beside, rather than inside, `卡脖子复盘`;
+- the existing Dashboard now has a combined `主题研究与产业目录` navigation entry and route-backed workspace, while `卡脖子复盘` remains a separate primary navigation entry and stock-centered review workspace;
 - `/theme-research` provides a cross-theme table and theme detail uses route-backed overview, nodes, sources, and companies tabs;
 - six GET-only APIs join validated P1-P6 packages without network, artifact, DB, admission, signal, or review-decision writes;
 - nodes, source reliability, claim evidence state, company priorities, crosswalk coverage gaps, and existing review context remain distinguishable;

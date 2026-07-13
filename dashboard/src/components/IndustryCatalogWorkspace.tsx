@@ -365,8 +365,42 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
                 <tr key={link.theme_id}>
                   <td><strong>{link.theme_id}</strong></td>
                   <td>
-                    <span>已映射 {link.node_links.length}</span>{' '}
-                    <span>未映射 {link.unmapped_theme_node_ids.length}</span>
+                    <details className="industry-catalog-theme-link-details">
+                      <summary aria-label={`查看 ${link.theme_id} 节点映射详情`}>
+                        <span>已映射 {link.node_links.length}</span>
+                        <span>未映射 {link.unmapped_theme_node_ids.length}</span>
+                      </summary>
+                      <div className="industry-catalog-theme-link-content">
+                        <div className="industry-catalog-theme-link-group">
+                          <p>已映射主题节点</p>
+                          {link.node_links.length ? (
+                            <ul aria-label="已映射主题节点">
+                              {link.node_links.map((nodeLink) => (
+                                <li
+                                  key={`${nodeLink.theme_node_id}:${nodeLink.catalog_node_id}`}
+                                  aria-label={`${nodeLink.theme_node_id} 映射到 ${nodeLink.catalog_node_id}`}
+                                >
+                                  <code>{nodeLink.theme_node_id}</code>
+                                  <span aria-hidden="true">→</span>
+                                  <span className="sr-only">映射到</span>
+                                  <code>{nodeLink.catalog_node_id}</code>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : <span className="industry-catalog-theme-link-empty">无已映射节点</span>}
+                        </div>
+                        <div className="industry-catalog-theme-link-group">
+                          <p>未映射主题节点</p>
+                          {link.unmapped_theme_node_ids.length ? (
+                            <ul aria-label="未映射主题节点">
+                              {link.unmapped_theme_node_ids.map((themeNodeId) => (
+                                <li key={themeNodeId}><code>{themeNodeId}</code></li>
+                              ))}
+                            </ul>
+                          ) : <span className="industry-catalog-theme-link-empty">无未映射节点</span>}
+                        </div>
+                      </div>
+                    </details>
                   </td>
                   <td>
                     <button className="icon-text-button" type="button" aria-label={`打开关联主题 ${link.theme_id}`} onClick={() => onNavigate(`/theme-research/${encodeURIComponent(link.theme_id)}`)}>

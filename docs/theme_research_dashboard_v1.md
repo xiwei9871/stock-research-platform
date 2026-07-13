@@ -200,10 +200,12 @@ Browser acceptance:
 
 ```bash
 rtk pnpm --dir dashboard exec playwright test \
-  tests/theme-research-full-flow.spec.ts --project=chromium
+  tests/theme-research-full-flow.spec.ts \
+  tests/theme-research-industry-catalog-full-flow.spec.ts \
+  --project=chromium
 ```
 
-The existing Theme Research Playwright flow covers desktop and mobile layouts, route-backed tabs, evidence and coverage-gap states, horizontal page-overflow checks, company stock handoff, and browser-back restoration. Catalog-specific real-app acceptance is tracked separately from this styling and documentation task.
+The Theme Research and Industry Catalog Playwright flows cover desktop and mobile layouts, combined workspace navigation, route-backed views and tabs, catalog detail and theme-link states, evidence and coverage-gap states, horizontal page-overflow checks, company stock handoff, and browser-back restoration.
 
 ## Next Phase
 
