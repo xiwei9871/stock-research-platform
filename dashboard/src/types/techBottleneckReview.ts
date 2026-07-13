@@ -42,6 +42,14 @@ export type TechBottleneckReviewStock = {
   concept_tags?: string[] | string;
   evidence_strength?: string;
   bottleneck_relevance?: string;
+  quality_reassessment_tier?: string;
+  overall_quality_score?: number | string | null;
+  evidence_chain_score?: number | string | null;
+  business_alignment_score?: number | string | null;
+  financial_quality_score?: number | string | null;
+  risk_penalty?: number | string | null;
+  recommended_review_action?: string;
+  quality_reassessment_reason?: string;
   bottleneck_confidence_score?: number | string | null;
   evidence_quality_score?: number | string | null;
   bottleneckConfidenceScore?: number | null;
@@ -173,7 +181,7 @@ export type TechBottleneckReviewStockParams = {
   industry?: string;
   concept_tag?: string;
   evidence_strength?: string;
-  bottleneck_relevance?: string;
+  quality_reassessment_tier?: string;
   concept_pollution_risk?: string;
   route_around_or_substitution_risk?: string;
   value_capture_risk?: string;

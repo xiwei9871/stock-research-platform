@@ -138,9 +138,10 @@ def test_decision_summary_and_stocks_overlay_manual_decisions(monkeypatch, tmp_p
     detail = client.get("/api/research/tech-bottleneck/review-universe/stocks/000777").json()
     decisions_response = client.get("/api/research/tech-bottleneck/review-universe/decisions?stock_code=000777")
 
-    assert summary["total_review_universe_count"] == 378
+    expected_total = len(decisions.review_universe_stock_codes())
+    assert summary["total_review_universe_count"] == expected_total
     assert summary["reviewed_count"] == 1
-    assert summary["pending_count"] == 377
+    assert summary["pending_count"] == expected_total - 1
     assert summary["reject_count"] == 1
     assert summary["used_for_signal_count"] == 0
     assert summary["used_for_admission_count"] == 0

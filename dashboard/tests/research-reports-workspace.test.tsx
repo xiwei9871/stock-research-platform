@@ -50,6 +50,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   apiMocks.fetchResearchReportSummary.mockResolvedValue({
     total_reports: 57418,
+    readable_report_count: 1634,
+    pdf_report_count: 1634,
+    web_index_report_count: 55784,
     covered_stocks: 3367,
     latest_publish_date: '2026-06-03',
     latest_feature_date: '2026-06-02',
@@ -104,10 +107,52 @@ describe('ResearchReportsWorkspace', () => {
     render(<ResearchReportsWorkspace />);
     const results = screen.getByLabelText('Research report results');
 
-    expect(await screen.findByText('57,418')).toBeInTheDocument();
+    expect(await screen.findByText('可读研报')).toBeInTheDocument();
+    expect(await screen.findByText('1,634')).toBeInTheDocument();
+    expect(screen.getByText('网页索引')).toBeInTheDocument();
+    expect(screen.getByText('55,784')).toBeInTheDocument();
     expect(await within(results).findByRole('button', { name: 'Open report 贵州茅台深度报告' })).toBeInTheDocument();
     expect(within(results).getByText('华泰证券')).toBeInTheDocument();
     expect(within(results).getByText('买入')).toBeInTheDocument();
+    expect(within(results).getByText('摘要：company view')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Research report detail')).not.toBeInTheDocument();
+  });
+
+  it('renders Chinese filter labels for report search', async () => {
+    render(<ResearchReportsWorkspace />);
+
+    expect(await screen.findByLabelText('股票/标题关键词')).toBeInTheDocument();
+    expect(screen.getByLabelText('券商')).toBeInTheDocument();
+    expect(screen.getByLabelText('评级')).toBeInTheDocument();
+    expect(screen.getByLabelText('来源')).toBeInTheDocument();
+    expect(screen.getByLabelText('开始日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('结束日期')).toBeInTheDocument();
+    expect(screen.getByLabelText('仅看有目标价')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '搜索研报' })).toBeInTheDocument();
+  });
+
+  it('falls back to a readable title-derived summary when report summary fields are empty', async () => {
+    apiMocks.fetchResearchReports.mockResolvedValueOnce({
+      items: [
+        makeReport({
+          report_title:
+            '深度报告-2026-07-09-华创证券-联讯仪器（688808）_深度研究报告_AI光模块测试卖铲人_国产高端测试仪器稀缺龙头_37页_4mb.pdf',
+          raw_summary: '',
+          company_view: '',
+          industry_view: '',
+          risk_summary: ''
+        })
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      warnings: []
+    });
+
+    render(<ResearchReportsWorkspace />);
+
+    expect(await screen.findByText('摘要：AI光模块测试卖铲人；国产高端测试仪器稀缺龙头')).toBeInTheDocument();
+    expect(screen.queryByText('摘要：暂无摘要，点击标题阅读全文。')).not.toBeInTheDocument();
   });
 
   it('defaults the report end date to today', async () => {
@@ -143,14 +188,14 @@ describe('ResearchReportsWorkspace', () => {
     render(<ResearchReportsWorkspace />);
 
     await screen.findByText('贵州茅台深度报告');
-    fireEvent.change(screen.getByLabelText('research report query'), { target: { value: '茅台' } });
-    fireEvent.change(screen.getByLabelText('research report broker'), { target: { value: '华泰' } });
-    fireEvent.change(screen.getByLabelText('research report rating'), { target: { value: '买入' } });
-    fireEvent.change(screen.getByLabelText('research report source'), { target: { value: 'cfi_ybyl' } });
-    fireEvent.change(screen.getByLabelText('research report start date'), { target: { value: '2026-04-01' } });
-    fireEvent.change(screen.getByLabelText('research report end date'), { target: { value: '2026-06-01' } });
-    fireEvent.click(screen.getByLabelText('research report has target price'));
-    fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
+    fireEvent.change(screen.getByLabelText('股票/标题关键词'), { target: { value: '茅台' } });
+    fireEvent.change(screen.getByLabelText('券商'), { target: { value: '华泰' } });
+    fireEvent.change(screen.getByLabelText('评级'), { target: { value: '买入' } });
+    fireEvent.change(screen.getByLabelText('来源'), { target: { value: 'cfi_ybyl' } });
+    fireEvent.change(screen.getByLabelText('开始日期'), { target: { value: '2026-04-01' } });
+    fireEvent.change(screen.getByLabelText('结束日期'), { target: { value: '2026-06-01' } });
+    fireEvent.click(screen.getByLabelText('仅看有目标价'));
+    fireEvent.click(screen.getByRole('button', { name: '搜索研报' }));
 
     await waitFor(() => {
       expect(apiMocks.fetchResearchReports).toHaveBeenLastCalledWith(
@@ -173,7 +218,7 @@ describe('ResearchReportsWorkspace', () => {
     render(<ResearchReportsWorkspace />);
 
     await screen.findByText('贵州茅台深度报告');
-    fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索研报' }));
 
     await waitFor(() => {
       const lastCall = apiMocks.fetchResearchReports.mock.calls.at(-1);
@@ -381,6 +426,7 @@ describe('ResearchReportsWorkspace', () => {
 
     render(<ResearchReportsWorkspace initialQuery="茅台" initialEventKey="r-new:CN:SH:600519" />);
 
+    expect(await screen.findByLabelText('Research report full-screen reader')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '贵州茅台旧报告' })).not.toBeInTheDocument();
   });
@@ -415,12 +461,12 @@ describe('ResearchReportsWorkspace', () => {
       />
     );
 
+    expect(await screen.findByLabelText('Research report full-screen reader')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
-    expect(screen.getByText('新报告视角')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '贵州茅台旧报告' })).not.toBeInTheDocument();
   });
 
-  it('preserves a manual selection across reloads after initial deep-link selection', async () => {
+  it('keeps report summaries inline after returning from a deep-linked reader and reloading', async () => {
     const oldReport = makeReport({
       event_key: 'r-old:CN:SH:600519',
       report_id: 'r-old',
@@ -452,16 +498,19 @@ describe('ResearchReportsWorkspace', () => {
 
     render(<ResearchReportsWorkspace initialQuery="茅台" initialEventKey="r-new:CN:SH:600519" />);
 
+    expect(await screen.findByLabelText('Research report full-screen reader')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: '贵州茅台深度跟踪' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回研报列表' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open report 贵州茅台旧报告' }));
     expect(screen.getByRole('heading', { name: '贵州茅台旧报告' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '返回研报列表' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Search Reports' }));
+    fireEvent.click(screen.getByRole('button', { name: '搜索研报' }));
 
-    expect(await screen.findByRole('heading', { name: '贵州茅台旧报告' })).toBeInTheDocument();
-    expect(screen.getByText('旧报告视角')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '贵州茅台深度跟踪' })).not.toBeInTheDocument();
+    expect(await screen.findByText('摘要：旧报告视角')).toBeInTheDocument();
+    expect(screen.getByText('摘要：新报告视角')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Research report detail')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Research report full-screen reader')).not.toBeInTheDocument();
   });
 
   it('shows an empty state', async () => {
