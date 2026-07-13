@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardAuthRoot } from '../src/components/DashboardAuthRoot';
 
 const apiMocks = vi.hoisted(() => ({
+  DASHBOARD_AUTH_EXPIRED_EVENT: 'dashboard-auth-expired',
   fetchCurrentUser: vi.fn(),
   loginDashboardUser: vi.fn(),
   logoutDashboardUser: vi.fn()
@@ -43,5 +44,19 @@ describe('DashboardAuthRoot', () => {
 
     expect(await screen.findByText('Official Dashboard admin')).toBeVisible();
     expect(apiMocks.loginDashboardUser).toHaveBeenCalledWith({ username: 'admin', password: 'secret' });
+  });
+
+  it('returns to login when the active session expires after the dashboard has rendered', async () => {
+    apiMocks.fetchCurrentUser.mockResolvedValueOnce({
+      user: { user_id: 'user:1', username: 'admin', display_name: 'Admin', role: 'admin', is_active: true }
+    });
+
+    render(<DashboardAuthRoot />);
+
+    expect(await screen.findByText('Official Dashboard admin')).toBeVisible();
+
+    window.dispatchEvent(new CustomEvent('dashboard-auth-expired'));
+
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeVisible();
   });
 });
