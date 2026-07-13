@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createTechBottleneckReviewUniverseDecision,
   fetchTechBottleneckReviewUniverseEvidence,
@@ -108,7 +108,7 @@ function readableFilterOptions(rows: TechBottleneckReviewStock[]): TechBottlenec
     industry: uniqueSorted(rows.map((row) => row.industry || '')),
     concept_tag: uniqueSorted(rows.flatMap(conceptTags)),
     evidence_strength: uniqueSorted(rows.map((row) => row.evidence_strength || '')),
-    bottleneck_relevance: uniqueSorted(rows.map((row) => row.bottleneck_relevance || '')),
+    quality_reassessment_tier: uniqueSorted(rows.map((row) => row.quality_reassessment_tier || '')),
     concept_pollution_risk: uniqueSorted(rows.map((row) => row.concept_pollution_risk || '')),
     route_around_or_substitution_risk: uniqueSorted(rows.map((row) => row.route_around_or_substitution_risk || '')),
     value_capture_risk: uniqueSorted(rows.map((row) => row.value_capture_risk || '')),
@@ -130,7 +130,7 @@ function matchesFilter(row: TechBottleneckReviewStock, filters: TechBottleneckRe
     (!filters.industry || row.industry === filters.industry) &&
     (!filters.concept_tag || conceptTags(row).includes(filters.concept_tag)) &&
     (!filters.evidence_strength || row.evidence_strength === filters.evidence_strength) &&
-    (!filters.bottleneck_relevance || row.bottleneck_relevance === filters.bottleneck_relevance) &&
+    (!filters.quality_reassessment_tier || row.quality_reassessment_tier === filters.quality_reassessment_tier) &&
     (!filters.concept_pollution_risk || row.concept_pollution_risk === filters.concept_pollution_risk) &&
     (!filters.route_around_or_substitution_risk ||
       row.route_around_or_substitution_risk === filters.route_around_or_substitution_risk) &&
@@ -179,6 +179,7 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
   const [decisionHistory, setDecisionHistory] = useState<TechBottleneckReviewDecisionRecord[]>([]);
   const [decisionMessage, setDecisionMessage] = useState('');
   const [error, setError] = useState('');
+  const evidencePanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +210,9 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
   function openEvidence(stockCode: string) {
     const row = enrichedRows.find((candidate) => candidate.stock_code === stockCode) ?? null;
     setSelectedStock(row);
+    window.setTimeout(() => {
+      evidencePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
     Promise.all([
       fetchTechBottleneckReviewUniverseEvidence(stockCode),
       fetchTechBottleneckReviewUniverseSources(stockCode),
@@ -304,17 +308,18 @@ export function TechBottleneckReviewPage({ onOpenStock }: Props) {
       <TechBottleneckReviewTable
         rows={filteredRows}
         total={rows.length}
-        onOpenEvidence={openEvidence}
         onOpenStock={(stock) => onOpenStock?.(stock)}
       />
-      <TechBottleneckEvidencePanel
-        stock={selectedStock}
-        evidence={evidence}
-        sources={sources}
-        onRecordManualDecision={recordManualDecision}
-        decisionMessage={decisionMessage}
-        decisionHistory={decisionHistory}
-      />
+      <div ref={evidencePanelRef}>
+        <TechBottleneckEvidencePanel
+          stock={selectedStock}
+          evidence={evidence}
+          sources={sources}
+          onRecordManualDecision={recordManualDecision}
+          decisionMessage={decisionMessage}
+          decisionHistory={decisionHistory}
+        />
+      </div>
     </section>
   );
 }
