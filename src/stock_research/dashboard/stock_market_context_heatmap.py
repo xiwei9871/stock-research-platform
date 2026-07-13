@@ -20,7 +20,7 @@ def build_stock_market_context_heatmap(
     if not rows:
         return _missing_payload(asset_id, trade_date, ["peer heatmap rows are unavailable"])
 
-    normalized_rows = [_normalize_row(row) for row in rows]
+    normalized_rows = _dedupe_rows_by_asset_id([_normalize_row(row) for row in rows])
     selected = _find_selected(normalized_rows, asset_id)
     selected_id = str(selected["asset_id"]) if selected else _canonical_input(asset_id)
     industry = _industry_from_rows(normalized_rows)
@@ -76,6 +76,34 @@ def load_peer_heatmap_rows(
             ORDER BY membership.start_date DESC
             LIMIT 1
         )
+        , peer_membership AS (
+            SELECT DISTINCT ON (membership.asset_id)
+                membership.asset_id
+            FROM selected_industry
+            JOIN core.industry_membership membership
+              ON membership.industry_code = selected_industry.industry_code
+             AND membership.industry_system = selected_industry.industry_system
+             AND membership.level = 1
+             AND membership.start_date <= %s
+             AND (membership.end_date IS NULL OR %s < membership.end_date)
+            ORDER BY membership.asset_id, membership.start_date DESC
+        )
+        , latest_bars AS (
+            SELECT DISTINCT ON (bars.asset_id)
+                bars.trade_date,
+                bars.asset_id,
+                bars.close,
+                bars.pct_chg,
+                bars.amount,
+                bars.source,
+                bars.updated_at
+            FROM peer_membership
+            JOIN market_daily_bar bars
+              ON bars.asset_id = peer_membership.asset_id
+             AND bars.trade_date = %s
+             AND bars.adjust_type = 'qfq'
+            ORDER BY bars.asset_id, bars.updated_at DESC NULLS LAST, bars.source DESC
+        )
         SELECT
             bars.trade_date,
             bars.asset_id,
@@ -86,20 +114,12 @@ def load_peer_heatmap_rows(
             selected_industry.industry_system AS industry_system,
             bars.close,
             bars.pct_chg,
-            bars.amount,
+            bars.amount * 1000 AS amount,
             bars.source,
             bars.updated_at
         FROM selected_industry
-        JOIN core.industry_membership membership
-          ON membership.industry_code = selected_industry.industry_code
-         AND membership.industry_system = selected_industry.industry_system
-         AND membership.level = 1
-         AND membership.start_date <= %s
-         AND (membership.end_date IS NULL OR %s < membership.end_date)
-        JOIN market_daily_bar bars
-          ON bars.asset_id = membership.asset_id
-         AND bars.trade_date = %s
-         AND bars.adjust_type = 'qfq'
+        JOIN latest_bars bars
+          ON TRUE
         LEFT JOIN asset_master asset
           ON asset.asset_id = bars.asset_id
         LEFT JOIN core.asset_master core_asset
@@ -158,6 +178,15 @@ def _find_selected(rows: list[dict[str, Any]], asset_id: str) -> dict[str, Any] 
     if input_code:
         return next((row for row in rows if _six_digit_code(row["asset_id"]) == input_code), None)
     return None
+
+
+def _dedupe_rows_by_asset_id(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    unique_rows: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        asset_id = row["asset_id"]
+        if asset_id and asset_id not in unique_rows:
+            unique_rows[asset_id] = row
+    return list(unique_rows.values())
 
 
 def _industry_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any] | None:

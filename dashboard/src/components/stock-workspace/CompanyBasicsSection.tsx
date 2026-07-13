@@ -23,6 +23,17 @@ function formatOverviewStatus(status: string | null | undefined) {
   return status;
 }
 
+function normalizeSummary(value: string | null | undefined) {
+  return value?.replace(/\s+/g, ' ').trim() ?? '';
+}
+
+function isReadableCompanySummary(value: string) {
+  if (!value) return false;
+  if (value.length > 120) return false;
+  if (/报告全文|年度报告|半年度报告|产计划并组织生产|公司主要围绕/.test(value)) return false;
+  return true;
+}
+
 export function CompanyBasicsSection({
   asset,
   companyProfile,
@@ -30,6 +41,10 @@ export function CompanyBasicsSection({
 }: CompanyBasicsSectionProps) {
   const conceptTags = companyOverview?.concept_tags ?? [];
   const primaryProducts = companyOverview?.primary_products ?? [];
+  const businessSummary = normalizeSummary(companyOverview?.business_summary);
+  const profileSummary = normalizeSummary(companyOverview?.profile_summary);
+  const overviewLines = [businessSummary, profileSummary]
+    .filter((line, index, array) => Boolean(line) && array.indexOf(line) === index && isReadableCompanySummary(line));
 
   return (
     <section className="workspace-band stock-company-basics" role="region" aria-label="公司基础信息">
@@ -81,10 +96,7 @@ export function CompanyBasicsSection({
             {conceptTags.length > 0 ? conceptTags.map((tag) => <span key={tag}>{tag}</span>) : <span>暂无概念标签</span>}
           </div>
           <div className="stock-background-copy">
-            <p>{companyOverview?.business_summary ?? companyOverview?.profile_summary ?? '暂无公司业务摘要。'}</p>
-            {companyOverview?.profile_summary && companyOverview.profile_summary !== companyOverview.business_summary ? (
-              <p>{companyOverview.profile_summary}</p>
-            ) : null}
+            {overviewLines.length > 0 ? overviewLines.map((line) => <p key={line}>{line}</p>) : <p>暂无公司业务摘要。</p>}
           </div>
           <div className="stock-company-product-list">
             <span>核心产品</span>

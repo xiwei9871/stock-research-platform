@@ -8,6 +8,7 @@ import {
   reviewConclusionText,
   type StockEntryContext
 } from '../src/components/StockWorkspace';
+import { reviewUniverseTechBottleneckEntryContext } from './stock-workspace-tech-bottleneck-fixtures';
 import type {
   AssetNewsResponse,
   AssetProfile,
@@ -460,8 +461,26 @@ describe('StockWorkspace', () => {
     };
 
     expect(reviewConclusionText(metrics, entryContext, null)).toBe(
-      '卡脖子 thesis 仍可跟踪，但明日优先验证缺失证据。'
+      '卡脖子主线仍可跟踪，但明日优先验证缺失证据。'
     );
+  });
+
+  it('does not infer a missing-proof conclusion from a raw report excerpt', () => {
+    const metrics = {
+      dayReturn: 0.01,
+      fiveDayReturn: 0.02,
+      twentyDayReturn: 0.04,
+      amountRatio: 1.1,
+      highDrawdown: -0.04,
+      state: '启动'
+    };
+    const entryContext: StockEntryContext = {
+      sourceWorkspace: 'techBottleneck',
+      evidenceGapNote:
+        '深圳市德赛电池科技股份有限公司 2025 年半年度报告全文 9 产计划并组织生产。储能电芯产品为标准化产品，公司综合评估客户需求与产能利用情况，制定生产计划并组织生产。'
+    };
+
+    expect(reviewConclusionText(metrics, entryContext, null)).toBe('暂无单边结论，明日结合价格行为与证据变化继续复盘。');
   });
 
   it('uses the concrete tech bottleneck next action in the operator conclusion when available', () => {
@@ -482,6 +501,24 @@ describe('StockWorkspace', () => {
     expect(reviewConclusionText(metrics, entryContext, null)).toBe(
       '明日先核查客户认证和订单进入财报情况，再决定是否继续跟踪。'
     );
+  });
+
+  it('normalizes english tech bottleneck next action in the operator conclusion', () => {
+    const metrics = {
+      dayReturn: 0.01,
+      fiveDayReturn: 0.02,
+      twentyDayReturn: 0.04,
+      amountRatio: 1.1,
+      highDrawdown: -0.04,
+      state: '启动'
+    };
+    const entryContext: StockEntryContext = {
+      sourceWorkspace: 'techBottleneck',
+      nextAction: 'manual review of upgraded primary-source evidence before any future core-pool action',
+      evidenceGapNote: 'primary source fields require follow-up'
+    };
+
+    expect(reviewConclusionText(metrics, entryContext, null)).toBe('明日先人工复核确认，再决定是否继续跟踪。');
   });
 
   it('renders a stock-page quote dossier without fabricating unavailable valuation fields', async () => {
@@ -553,6 +590,22 @@ describe('StockWorkspace', () => {
     expect(within(quote).getByText('2.35%')).toBeInTheDocument();
     expect(within(quote).getByText('量能/20日均额')).toBeInTheDocument();
     expect(within(quote).getByText('1.23x')).toBeInTheDocument();
+    expect(within(quote).getByText('总市值')).toBeInTheDocument();
+    expect(within(quote).getByText('1979.40亿')).toBeInTheDocument();
+    expect(within(quote).getByText('流通市值')).toBeInTheDocument();
+    expect(within(quote).getByText('1979.37亿')).toBeInTheDocument();
+    expect(within(quote).getByText('PE')).toBeInTheDocument();
+    expect(within(quote).getByText('3.41')).toBeInTheDocument();
+    expect(within(quote).getByText('PB')).toBeInTheDocument();
+    expect(within(quote).getByText('0.43')).toBeInTheDocument();
+    expect(within(companyBasics).queryByText('总市值')).not.toBeInTheDocument();
+    expect(within(companyBasics).queryByText('流通市值')).not.toBeInTheDocument();
+    expect(within(companyBasics).queryByText('PE')).not.toBeInTheDocument();
+    expect(within(companyBasics).queryByText('PB')).not.toBeInTheDocument();
+    expect(within(businessQuality).queryByText('总市值')).not.toBeInTheDocument();
+    expect(within(businessQuality).queryByText('流通市值')).not.toBeInTheDocument();
+    expect(within(businessQuality).queryByText('PE')).not.toBeInTheDocument();
+    expect(within(businessQuality).queryByText('PB')).not.toBeInTheDocument();
 
     expect(within(companyBasics).getByText('公司档案')).toBeInTheDocument();
     expect(within(companyBasics).getByText('主板')).toBeInTheDocument();
@@ -566,6 +619,151 @@ describe('StockWorkspace', () => {
     expect(within(businessQuality).getByText('TTM营收')).toBeInTheDocument();
     expect(within(businessQuality).getAllByText('-').length).toBeGreaterThan(0);
     expect(within(businessQuality).queryByText('missing')).not.toBeInTheDocument();
+  });
+
+  it('keeps valuation fields in the quote block as dashes when valuation data is unavailable', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        quote_snapshot: {
+          trade_date: '2026-06-08',
+          open: 10.6,
+          high: 11.2,
+          low: 10.4,
+          close: 11,
+          preclose: 10.6,
+          volume: 1300,
+          amount: 14300,
+          turnover_rate: 2.35,
+          pct_chg: 3.77,
+          amount_ratio_20d: 1.23,
+          data_status: 'available',
+          missing_fields: []
+        },
+        valuation_snapshot: {
+          total_market_cap: null,
+          float_market_cap: null,
+          pe_ttm: null,
+          pb: null,
+          volume_ratio: null,
+          data_status: 'unavailable',
+          missing_fields: ['total_market_cap', 'float_market_cap', 'pe_ttm', 'pb']
+        }
+      } as Partial<AssetProfile>)
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const quote = await screen.findByRole('region', { name: '今日价格行为' });
+    const quoteText = within(quote).getByText('总市值').closest('div');
+    const floatMarketCapText = within(quote).getByText('流通市值').closest('div');
+    const peText = within(quote).getByText('PE').closest('div');
+    const pbText = within(quote).getByText('PB').closest('div');
+
+    expect(quoteText).toHaveTextContent('总市值-');
+    expect(floatMarketCapText).toHaveTextContent('流通市值-');
+    expect(peText).toHaveTextContent('PE-');
+    expect(pbText).toHaveTextContent('PB-');
+  });
+
+  it('uses a trailing 20-bar amount ratio when quote snapshot is unavailable', async () => {
+    const bars = Array.from({ length: 25 }, (_, index) => {
+      const isLastBar = index === 24;
+      const amount = index < 5 ? 1000 : isLastBar ? 200 : 100;
+      const close = 10 + index * 0.1;
+      return {
+        time: `2026-06-${String(index + 1).padStart(2, '0')}`,
+        open: close - 0.1,
+        high: close + 0.2,
+        low: close - 0.2,
+        close,
+        volume: 1000 + index * 10,
+        amount
+      };
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        quote_snapshot: null,
+        bars
+      } as Partial<AssetProfile>)
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const quote = await screen.findByRole('region', { name: '今日价格行为' });
+    const amountRatio = within(quote).getByText('量能/20日均额').closest('div');
+
+    expect(amountRatio).toHaveTextContent('量能/20日均额1.90x');
+    expect(within(quote).getByText('昨收')).toBeInTheDocument();
+  });
+
+  it('keeps zero-turnover fallback ratio on the trailing 20-bar path without falling back to valuation volume ratio', async () => {
+    const bars = Array.from({ length: 20 }, (_, index) => {
+      const close = 10 + index * 0.1;
+      return {
+        time: `2026-07-${String(index + 1).padStart(2, '0')}`,
+        open: close - 0.1,
+        high: close + 0.2,
+        low: close - 0.2,
+        close,
+        volume: 1000 + index * 10,
+        amount: index === 19 ? 0 : 100
+      };
+    });
+
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        quote_snapshot: null,
+        bars,
+        valuation_snapshot: {
+          total_market_cap: 1000000000,
+          float_market_cap: 900000000,
+          pe_ttm: 10,
+          pb: 1.2,
+          volume_ratio: 9.99,
+          data_status: 'available',
+          missing_fields: []
+        }
+      } as Partial<AssetProfile>)
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const quote = await screen.findByRole('region', { name: '今日价格行为' });
+    const amountRatio = within(quote).getByText('量能/20日均额').closest('div');
+
+    expect(amountRatio).toHaveTextContent('量能/20日均额0.00x');
+    expect(amountRatio).not.toHaveTextContent('9.99x');
+  });
+
+  it('does not apply up-or-down styling to a flat quote change', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        quote_snapshot: {
+          trade_date: '2026-06-08',
+          open: 10.6,
+          high: 11.2,
+          low: 10.4,
+          close: 11,
+          preclose: 11,
+          volume: 1300,
+          amount: 14300,
+          turnover_rate: 2.35,
+          pct_chg: 0,
+          amount_ratio_20d: 1.23,
+          data_status: 'available',
+          missing_fields: []
+        }
+      } as Partial<AssetProfile>)
+    );
+
+    render(<StockWorkspace initialAssetId="000001.SZ" />);
+
+    const quote = await screen.findByRole('region', { name: '今日价格行为' });
+    const flatChange = within(quote).getByText('0.00%');
+
+    expect(flatChange).not.toHaveClass('market-up');
+    expect(flatChange).not.toHaveClass('market-down');
   });
 
   it('renders unknown company status and Chinese fallback copy when profile fields are missing', async () => {
@@ -649,6 +847,7 @@ describe('StockWorkspace', () => {
     const evidence = await screen.findByRole('region', { name: '支撑证据' });
 
     expect(summary).toBeInTheDocument();
+    expect(summary).toHaveClass('stock-review-conclusion');
     expect(within(summary).getByText('明日处理建议')).toBeVisible();
     expect(within(summary).getByText('一句话结论')).toBeVisible();
     expect(within(summary).getByText('结论置信度')).toBeVisible();
@@ -668,15 +867,17 @@ describe('StockWorkspace', () => {
     const businessQuality = await screen.findByRole('region', { name: '主营构成与经营质量' });
 
     expect(within(behavior).getByText('今日价格行为')).toBeVisible();
+    expect(behavior).toHaveClass('stock-price-behavior');
+    expect(behavior.querySelector('.stock-quote-metrics')).toBeInTheDocument();
     expect(within(evidence).getByText('相关新闻')).toBeVisible();
-    expect(within(evidence).getByText('证据摘要')).toBeVisible();
+    expect(within(evidence).getByText('策略证据摘要')).toBeVisible();
     expect(within(companyBasics).getByText('公司档案')).toBeVisible();
     expect(within(companyBasics).getByText('业务概览')).toBeVisible();
     expect(within(businessQuality).getByText('主营构成')).toBeVisible();
     expect(within(businessQuality).getByText('经营质量')).toBeVisible();
   });
 
-  it('renders company basics and business quality before price behavior', async () => {
+  it('renders price behavior before company basics and business quality in the A layout', async () => {
     apiMocks.fetchAssetProfile.mockResolvedValueOnce(
       makeProfile({
         company_overview: {
@@ -724,14 +925,15 @@ describe('StockWorkspace', () => {
     const businessQuality = await screen.findByRole('region', { name: '主营构成与经营质量' });
     const behavior = await screen.findByRole('region', { name: '今日价格行为' });
 
-    expect(companyBasics.compareDocumentPosition(behavior) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(businessQuality.compareDocumentPosition(behavior) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(behavior.compareDocumentPosition(companyBasics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(behavior.compareDocumentPosition(businessQuality) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     expect(within(companyBasics).getByText('消费电子')).toBeVisible();
     expect(within(companyBasics).getByText('AI 终端')).toBeVisible();
     expect(within(companyBasics).getByText('果链')).toBeVisible();
 
     expect(within(businessQuality).getByText('精密结构件')).toBeVisible();
+    expect(businessQuality.querySelector('.stock-composition-item')).toBeInTheDocument();
     expect(within(businessQuality).getByText('占比 62.00%')).toBeVisible();
     expect(within(businessQuality).getByText('328.00亿')).toBeVisible();
     expect(within(businessQuality).getByText('17.00%')).toBeVisible();
@@ -1021,11 +1223,21 @@ describe('StockWorkspace', () => {
 
     render(<StockWorkspace initialAssetId="002885.SZ" entryContext={entryContext} />);
 
-    expect(await screen.findByText('来源工作台：Tech Bottleneck Candidate Review')).toBeInTheDocument();
-    const thesisPanel = await screen.findByRole('region', { name: '科技卡脖子 thesis 复盘' });
+    const thesisPanel = await screen.findByRole('region', { name: '科技卡脖子复盘摘要' });
     expect(within(thesisPanel).queryByText('候选名称')).not.toBeInTheDocument();
     expect(within(thesisPanel).queryByText('来源')).not.toBeInTheDocument();
     expect(within(thesisPanel).queryByText('原 Tier')).not.toBeInTheDocument();
+    expect(
+      within(thesisPanel).queryByText('research-only · manual review only · no production signal/admission')
+    ).not.toBeInTheDocument();
+    expect(within(thesisPanel).queryByText('pending')).not.toBeInTheDocument();
+    expect(within(thesisPanel).queryByText('not_reviewed')).not.toBeInTheDocument();
+    expect(within(thesisPanel).getByRole('heading', { name: '科技卡脖子复盘摘要' })).toBeInTheDocument();
+    expect(within(thesisPanel).getByText('核心判断')).toBeInTheDocument();
+    expect(within(thesisPanel).getByText('瓶颈置信分')).toBeInTheDocument();
+    expect(within(thesisPanel).getByText('证据质量分')).toBeInTheDocument();
+    expect(within(thesisPanel).getByText('证据强度')).toBeInTheDocument();
+    expect(within(thesisPanel).getAllByRole('article')).toHaveLength(7);
     expect(within(thesisPanel).getByText('中等')).toBeInTheDocument();
     expect(within(thesisPanel).getByText('核心瓶颈')).toBeInTheDocument();
     expect(within(thesisPanel).getByText('57.25')).toBeInTheDocument();
@@ -1033,32 +1245,15 @@ describe('StockWorkspace', () => {
     expect(within(thesisPanel).getByText('建议动作')).toBeInTheDocument();
     expect(within(thesisPanel).getByText('一手来源仍待补齐')).toBeInTheDocument();
     expect(within(thesisPanel).getByText('核查客户认证和订单进入财报情况')).toBeInTheDocument();
+    expect(within(thesisPanel).getByText('研究优先级')).toBeInTheDocument();
     expect(within(thesisPanel).queryByText('人工审批分类')).not.toBeInTheDocument();
     expect(within(thesisPanel).queryByText('证据/业务类别')).not.toBeInTheDocument();
     expect(within(thesisPanel).queryByText('review_decision')).not.toBeInTheDocument();
-    expect(within(thesisPanel).getByRole('link', { name: '打开 primary source' })).toHaveAttribute(
-      'href',
-      'https://example.com/announcement'
-    );
     expect(within(thesisPanel).getByText('78')).toBeInTheDocument();
     expect(within(thesisPanel).getByText('58')).toBeInTheDocument();
-    expect(within(thesisPanel).getByText('primary source fields require follow-up')).toBeInTheDocument();
-    expect(within(thesisPanel).getByRole('link', { name: '打开HTML报告' })).toHaveAttribute(
-      'href',
-      '/outputs/research/tech_bottleneck_candidate_reports_enriched_v1/reports/002885_京泉华/report.html'
-    );
-    expect(within(thesisPanel).getByRole('link', { name: '打开PDF报告' })).toHaveAttribute(
-      'href',
-      '/outputs/research/tech_bottleneck_candidate_reports_enriched_v1/reports/002885_京泉华/report.pdf'
-    );
-    expect(within(thesisPanel).getByRole('link', { name: '查看证据矩阵' })).toHaveAttribute(
-      'href',
-      '/outputs/research/tech_bottleneck_candidate_reports_enriched_v1/evidence/002885/evidence_matrix.csv'
-    );
-    expect(within(thesisPanel).getByRole('link', { name: '查看引用与数据源' })).toHaveAttribute(
-      'href',
-      '/outputs/research/tech_bottleneck_candidate_reports_enriched_v1/evidence/002885/sources.jsonl'
-    );
+    expect(within(thesisPanel).queryByText('primary source fields require follow-up')).not.toBeInTheDocument();
+    expect(screen.getByText('来源工作台：科技卡脖子复盘')).toBeInTheDocument();
+    expect(screen.getByText('科技卡脖子来源 tech_bottleneck_candidate_universe_workbench_patch_v1')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '技术瓶颈候选上下文' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '科技卡脖子报告面板' })).not.toBeInTheDocument();
   });
@@ -1086,18 +1281,27 @@ describe('StockWorkspace', () => {
 
     render(<StockWorkspace initialAssetId="002371.SZ" entryContext={entryContext} />);
 
-    const thesis = await screen.findByRole('region', { name: '科技卡脖子 thesis 复盘' });
+    const thesis = await screen.findByRole('region', { name: '科技卡脖子复盘摘要' });
+    expect(within(thesis).queryByText('research-only · manual review only · no production signal/admission')).not.toBeInTheDocument();
+    expect(within(thesis).queryByText('pending')).not.toBeInTheDocument();
+    expect(within(thesis).queryByText('not_reviewed')).not.toBeInTheDocument();
+    expect(within(thesis).getByRole('heading', { name: '科技卡脖子复盘摘要' })).toBeVisible();
+    expect(within(thesis).getByText('核心判断')).toBeVisible();
+    expect(within(thesis).getByText('瓶颈置信分')).toBeVisible();
+    expect(within(thesis).getByText('证据质量分')).toBeVisible();
+    expect(within(thesis).getByText('证据强度')).toBeVisible();
+    expect(within(thesis).getAllByRole('article')).toHaveLength(7);
     expect(within(thesis).getByText('待一手来源')).toBeVisible();
     expect(within(thesis).getByText('可能核心待证据')).toBeVisible();
     expect(within(thesis).getByText('当前缺口')).toBeVisible();
     expect(within(thesis).getByText('建议动作')).toBeVisible();
+    expect(within(thesis).getByText('研究优先级')).toBeVisible();
     expect(within(thesis).getByText('一手来源仍待补齐')).toBeVisible();
     expect(within(thesis).getByText('先补证，再做人工复核')).toBeVisible();
-    expect(within(thesis).getByText('manual review and evidence backfill')).toBeVisible();
-    expect(within(thesis).getByText('核心设备链条相关，但一手来源待补齐。')).toBeVisible();
     expect(within(thesis).getByText('69')).toBeVisible();
     expect(within(thesis).getByText('33')).toBeVisible();
-    expect(within(thesis).getByText('primary source fields require follow-up')).toBeVisible();
+    expect(within(thesis).queryByText('manual review and evidence backfill')).not.toBeInTheDocument();
+    expect(within(thesis).queryByText('primary source fields require follow-up')).not.toBeInTheDocument();
     expect(within(thesis).queryByText('候选名称')).not.toBeInTheDocument();
     expect(within(thesis).queryByText('来源')).not.toBeInTheDocument();
     expect(within(thesis).queryByText('原 Tier')).not.toBeInTheDocument();
@@ -1106,30 +1310,161 @@ describe('StockWorkspace', () => {
   });
 
   it('uses compact thesis fields for review-universe style entries', async () => {
-    const entryContext: StockEntryContext = {
-      sourceWorkspace: 'techBottleneck',
-      stockName: '德赛电池',
-      reviewStatus: '待复盘',
-      sourceGroup: 'seed_tier_b_reconciliation_evidence',
-      previousTier: 'Tier B',
-      evidenceStrength: '充分',
-      bottleneckRelevance: '核心瓶颈',
-      nextAction: 'manual review and evidence backfill',
-      bottleneckConfidenceScore: 88,
-      evidenceQualityScore: 62,
-      evidenceGapNote: '需继续回填页级证据映射。'
-    };
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        asset_id: '000049.SZ',
+        canonical_asset_id: '000049.SZ',
+        asset: {
+          asset_id: '000049.SZ',
+          symbol: '000049',
+          name: '德赛电池',
+          exchange: 'SZ',
+          board: null,
+          is_active: true
+        },
+        signals: [],
+        decisions: [],
+        outcomes: [],
+        factor_values: []
+      })
+    );
 
-    render(<StockWorkspace initialAssetId="000049.SZ" entryContext={entryContext} />);
+    render(<StockWorkspace initialAssetId="000049.SZ" entryContext={reviewUniverseTechBottleneckEntryContext} />);
 
-    const thesis = await screen.findByRole('region', { name: '科技卡脖子 thesis 复盘' });
+    const thesis = await screen.findByRole('region', { name: '科技卡脖子复盘摘要' });
+    expect(within(thesis).queryByText('research-only · manual review only · no production signal/admission')).not.toBeInTheDocument();
+    expect(within(thesis).queryByText('pending')).not.toBeInTheDocument();
+    expect(within(thesis).queryByText('not_reviewed')).not.toBeInTheDocument();
+    expect(within(thesis).getByRole('heading', { name: '科技卡脖子复盘摘要' })).toBeVisible();
+    expect(within(thesis).getByText('核心判断')).toBeVisible();
+    expect(within(thesis).getByText('瓶颈置信分')).toBeVisible();
+    expect(within(thesis).getByText('证据质量分')).toBeVisible();
+    expect(within(thesis).getByText('证据强度')).toBeVisible();
     expect(within(thesis).getByText('核心瓶颈')).toBeVisible();
     expect(within(thesis).getByText('充分')).toBeVisible();
     expect(within(thesis).getByText('88')).toBeVisible();
     expect(within(thesis).getByText('62')).toBeVisible();
+    expect(within(thesis).getByText('研究优先级')).toBeVisible();
+    expect(within(thesis).queryByText('客户验证证据待补齐')).not.toBeInTheDocument();
+    expect(within(thesis).getAllByText('-').length).toBeGreaterThan(0);
+    expect(within(thesis).getByText('人工复核确认')).toBeVisible();
+    expect(
+      within(thesis).queryByText('evidence=48; page_citations=18; sources=3; domain=strong; role=moderate; bottleneck=strong')
+    ).not.toBeInTheDocument();
+    expect(
+      within(thesis).queryByText(/深圳市德赛电池科技股份有限公司 2025 年半年度报告全文/)
+    ).not.toBeInTheDocument();
+    expect(
+      within(thesis).queryByText('manual review of upgraded primary-source evidence before any future core-pool action')
+    ).not.toBeInTheDocument();
     expect(within(thesis).queryByText('候选名称')).not.toBeInTheDocument();
     expect(within(thesis).queryByText('来源')).not.toBeInTheDocument();
     expect(within(thesis).queryByText('原 Tier')).not.toBeInTheDocument();
+    expect(screen.queryByText('来源工作台：科技卡脖子复盘')).not.toBeInTheDocument();
+    expect(screen.queryByText('科技卡脖子来源 tech_bottleneck_review_universe_frontend_dataset_v1')).not.toBeInTheDocument();
+  });
+
+  it('separates tech-bottleneck evidence strength from generic digest coverage in review-universe mode', async () => {
+    apiMocks.fetchAssetProfile.mockResolvedValueOnce(
+      makeProfile({
+        asset_id: '000049.SZ',
+        canonical_asset_id: '000049.SZ',
+        asset: {
+          asset_id: '000049.SZ',
+          symbol: '000049',
+          name: '德赛电池',
+          exchange: 'SZ',
+          board: null,
+          is_active: true
+        },
+        signals: [],
+        decisions: [],
+        outcomes: [],
+        factor_values: []
+      })
+    );
+    apiMocks.fetchEvidenceDigest.mockResolvedValueOnce(
+      makeEvidenceDigest({
+        asset_id: '000049.SZ',
+        canonical_asset_id: '000049.SZ',
+        trade_date: '2026-06-18',
+        title: 'Thin evidence: 德赛电池',
+        bucket: 'thin',
+        facts: [{ kind: 'news', key: 'news-1', label: 'no matching public news items' }],
+        risk_flags: [],
+        source_refs: {
+          workspace: 'stock',
+          asset_id: '000049.SZ'
+        },
+        next_actions: []
+      })
+    );
+    apiMocks.fetchStockMarketContextHeatmap.mockResolvedValueOnce(
+      makeStockMarketContextHeatmapPayload({
+        asset_id: '000049.SZ',
+        canonical_asset_id: '000049.SZ',
+        industry: { industry_id: 'battery', industry_name: '电池', industry_system: 'csrc' },
+        selected: {
+          asset_id: '000049.SZ',
+          symbol: '000049',
+          name: '德赛电池',
+          price: 24.04,
+          change_pct: 0.0029,
+          amount: 167000000,
+          amount_rank: 12,
+          change_rank: 16,
+          amount_percentile: 0.7,
+          change_percentile: 0.6
+        },
+        peers: [
+          {
+            asset_id: '000049.SZ',
+            symbol: '000049',
+            name: '德赛电池',
+            price: 24.04,
+            change_pct: 0.0029,
+            amount: 167000000,
+            value: 167000000,
+            is_selected: true
+          },
+          {
+            asset_id: '600487.SH',
+            symbol: '600487',
+            name: '亨通光电',
+            price: 18.88,
+            change_pct: 0.0403,
+            amount: 190000000,
+            value: 190000000,
+            is_selected: false
+          }
+        ],
+        data_status: 'completed',
+        summary: {
+          peer_count: 2,
+          up_count: 2,
+          flat_count: 0,
+          down_count: 0,
+          total_amount: 357000000,
+          selected_in_peer_set: true
+        }
+      })
+    );
+
+    render(<StockWorkspace initialAssetId="000049.SZ" entryContext={reviewUniverseTechBottleneckEntryContext} />);
+
+    const digestPanel = await screen.findByRole('region', { name: '策略证据摘要' });
+    expect(await within(digestPanel).findByText('新闻/研报覆盖偏弱')).toBeInTheDocument();
+    expect(
+      await within(digestPanel).findByText('这里只看新闻、研报与通用市场摘要，不等同于上方科技卡脖子复盘摘要口径。')
+    ).toBeInTheDocument();
+    expect(within(digestPanel).getByText('德赛电池 通用新闻/研报摘要')).toBeInTheDocument();
+    expect(within(digestPanel).queryByText('证据较薄')).not.toBeInTheDocument();
+
+    const marketPanel = await screen.findByRole('region', { name: 'Market Monitor State' });
+    const marketEvidenceRow = within(marketPanel).getByText('市场证据').closest('div');
+    expect(marketEvidenceRow).toHaveTextContent('市场证据已接入');
+    expect(marketPanel).toHaveClass('stock-market-environment-panel');
+    expect(screen.queryByRole('region', { name: 'Strategy Signal' })).not.toBeInTheDocument();
   });
 
   it('uses decision-first reading order and removes legacy rail shortcuts in tech bottleneck mode', async () => {
@@ -1156,14 +1491,14 @@ describe('StockWorkspace', () => {
     const { container } = render(<StockWorkspace initialAssetId="002371.SZ" entryContext={entryContext} />);
 
     const conclusion = await screen.findByRole('region', { name: '明日处理结论' });
-    const thesis = await screen.findByRole('region', { name: '科技卡脖子 thesis 复盘' });
+    const thesis = await screen.findByRole('region', { name: '科技卡脖子复盘摘要' });
     const companyBasics = await screen.findByRole('region', { name: '公司基础信息' });
     const evidence = await screen.findByRole('region', { name: '支撑证据' });
     const decisionRail = await screen.findByRole('region', { name: '复盘决策栏' });
 
     const pageText = container.textContent ?? '';
-    expect(pageText.indexOf('明日处理结论')).toBeLessThan(pageText.indexOf('科技卡脖子 thesis 复盘'));
-    expect(pageText.indexOf('科技卡脖子 thesis 复盘')).toBeLessThan(pageText.indexOf('公司基础信息'));
+    expect(pageText.indexOf('明日处理结论')).toBeLessThan(pageText.indexOf('科技卡脖子复盘摘要'));
+    expect(pageText.indexOf('科技卡脖子复盘摘要')).toBeLessThan(pageText.indexOf('公司基础信息'));
     expect(conclusion.compareDocumentPosition(thesis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(thesis.compareDocumentPosition(companyBasics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(evidence.compareDocumentPosition(decisionRail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1343,7 +1678,7 @@ describe('StockWorkspace', () => {
       '今日价格行为',
       '支撑证据',
       '复盘决策栏',
-      '证据摘要',
+      '策略证据摘要',
       'Market Monitor State',
       'Strategy Signal',
       'Research Coverage',
@@ -1401,7 +1736,7 @@ describe('StockWorkspace', () => {
       await screen.findByText('个股复盘工作台：集中查看走势、策略证据、新闻研报和人工复盘记录。')
     ).toBeInTheDocument();
     expect(await screen.findByText('证据较薄')).toBeInTheDocument();
-    const digestPanel = screen.getByRole('region', { name: '证据摘要' });
+    const digestPanel = screen.getByRole('region', { name: '策略证据摘要' });
     expect(
       within(digestPanel).getByText('未找到复盘快照关联，本次决策仍会保存，但无法追溯到原始复盘队列快照。')
     ).toBeInTheDocument();
@@ -1415,7 +1750,7 @@ describe('StockWorkspace', () => {
     expect(within(digestPanel).queryByText('No review_item_snapshot lookup keys available')).not.toBeInTheDocument();
   });
 
-  it('renders 证据摘要 without source-backed next action buttons', async () => {
+  it('renders 策略证据摘要 without source-backed next action buttons', async () => {
     const handleOpenNews = vi.fn();
     const handleOpenResearchReports = vi.fn();
     const handleOpenMarketMonitor = vi.fn();
@@ -1429,8 +1764,9 @@ describe('StockWorkspace', () => {
       />
     );
 
-    const digestPanel = await screen.findByRole('region', { name: '证据摘要' });
-    expect(within(digestPanel).getByRole('heading', { name: '证据摘要' })).toBeInTheDocument();
+    const digestPanel = await screen.findByRole('region', { name: '策略证据摘要' });
+    expect(within(digestPanel).getByRole('heading', { name: '策略证据摘要' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '证据摘要' })).not.toBeInTheDocument();
     expect(await within(digestPanel).findByText('平安银行 evidence digest')).toBeInTheDocument();
     expect(within(digestPanel).getByText('Score 62')).toBeInTheDocument();
     expect(within(digestPanel).getByText('Recent company news is available')).toBeInTheDocument();
@@ -1446,13 +1782,13 @@ describe('StockWorkspace', () => {
     expect(handleOpenMarketMonitor).not.toHaveBeenCalled();
   });
 
-  it('keeps 证据摘要 in loading state before the digest request settles', async () => {
+  it('keeps 策略证据摘要 in loading state before the digest request settles', async () => {
     const pendingDigest = deferred<EvidenceDigestResponse>();
     apiMocks.fetchEvidenceDigest.mockReturnValueOnce(pendingDigest.promise);
 
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
-    const digestPanel = await screen.findByRole('region', { name: '证据摘要' });
+    const digestPanel = await screen.findByRole('region', { name: '策略证据摘要' });
     expect(within(digestPanel).getByText('正在加载证据摘要...')).toBeInTheDocument();
     expect(within(digestPanel).queryByText('暂无证据摘要。')).not.toBeInTheDocument();
   });
@@ -1463,7 +1799,7 @@ describe('StockWorkspace', () => {
     render(<StockWorkspace initialAssetId="000001.SZ" />);
 
     expect(await screen.findByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
-    const digestPanel = await screen.findByRole('region', { name: '证据摘要' });
+    const digestPanel = await screen.findByRole('region', { name: '策略证据摘要' });
     expect(within(digestPanel).getByText('digest failed')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /平安银行/ })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '今日价格行为' })).toBeInTheDocument();
@@ -1891,7 +2227,7 @@ describe('StockWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: '加载回放' }));
 
     expect(await screen.findByRole('heading', { name: /浦发银行/ })).toBeInTheDocument();
-    expect(staleReportVisibleWhenSecondFetchStarted).toBe(false);
+    expect(Boolean(staleReportVisibleWhenSecondFetchStarted)).toBe(false);
     expect(screen.queryByText('平安银行深度报告')).not.toBeInTheDocument();
     expect(screen.queryByText('90d reports 4')).not.toBeInTheDocument();
     await waitFor(() =>
