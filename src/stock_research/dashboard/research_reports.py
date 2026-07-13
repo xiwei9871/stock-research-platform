@@ -29,7 +29,21 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
                 COUNT(DISTINCT e.ts_code) AS covered_stocks,
                 MAX(s.publish_date) AS latest_publish_date,
                 (SELECT MAX(trade_date) FROM research.stock_report_feature_daily) AS latest_feature_date,
-                COUNT(DISTINCT s.source_name) AS source_count
+                COUNT(DISTINCT s.source_name) AS source_count,
+                COUNT(DISTINCT s.report_id) FILTER (
+                    WHERE s.source_url LIKE 'file://%%'
+                       OR s.metadata ? 'local_pdf_path'
+                       OR s.metadata ? 'pdf_path'
+                       OR s.metadata ? 'yanbaoke'
+                ) AS readable_report_count,
+                COUNT(DISTINCT s.report_id) FILTER (
+                    WHERE NOT (
+                        s.source_url LIKE 'file://%%'
+                        OR s.metadata ? 'local_pdf_path'
+                        OR s.metadata ? 'pdf_path'
+                        OR s.metadata ? 'yanbaoke'
+                    )
+                ) AS web_index_report_count
             FROM research.stock_report_source s
             JOIN research.stock_report_event e USING (report_id)
             """,
@@ -74,6 +88,9 @@ def load_research_report_summary(service: str = SETTINGS.research_service) -> di
         "latest_publish_date": _date_to_string(summary.get("latest_publish_date")),
         "latest_feature_date": _date_to_string(summary.get("latest_feature_date")),
         "source_count": int(summary.get("source_count") or 0),
+        "readable_report_count": int(summary.get("readable_report_count") or 0),
+        "pdf_report_count": int(summary.get("readable_report_count") or 0),
+        "web_index_report_count": int(summary.get("web_index_report_count") or 0),
         "source_counts": [_count_row(row, "source_name") for row in source_counts],
         "rating_counts": [_count_row(row, "rating") for row in rating_counts],
         "broker_counts": [_count_row(row, "broker") for row in broker_counts],
