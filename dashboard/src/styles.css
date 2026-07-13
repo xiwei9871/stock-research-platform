@@ -6148,7 +6148,8 @@ table.data-table td {
   cursor: pointer;
 }
 
-.theme-research-tabs button[aria-selected='true'] {
+.theme-research-tabs button[aria-selected='true'],
+.theme-research-tabs button[aria-current='page'] {
   border-bottom-color: #1d4ed8;
   color: #123a72;
   font-weight: 700;

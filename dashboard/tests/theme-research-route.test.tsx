@@ -98,12 +98,14 @@ describe('Theme research AppShell routing', () => {
     expect(window.location.pathname).toBe('/theme-research');
     expect(screen.getByRole('heading', { name: 'Theme Research Mock' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '主题研究' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '产业目录' })).not.toHaveAttribute('aria-current');
 
     fireEvent.click(screen.getByRole('button', { name: '产业目录' }));
 
     expect(window.location.pathname).toBe('/theme-research/catalog');
     expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '产业目录' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '主题研究' })).not.toHaveAttribute('aria-current');
   });
 
   it('restores and updates catalog detail routes without handing catalog to theme research', () => {
