@@ -84,23 +84,26 @@ describe('Theme research AppShell routing', () => {
     expect(window.location.pathname).toBe('/theme-research');
   });
 
-  it('restores the catalog index directly and switches top-level tabs by browser path', () => {
+  it('restores the catalog index directly and switches top-level views by browser path', () => {
     window.history.replaceState({}, '', '/theme-research/catalog');
     render(<AppShell />);
 
-    expect(screen.getByRole('tab', { name: '产业目录' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: '产业目录' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '主题研究' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
     expect(screen.getByText('/theme-research/catalog')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: '主题研究' }));
+    fireEvent.click(screen.getByRole('button', { name: '主题研究' }));
 
     expect(window.location.pathname).toBe('/theme-research');
     expect(screen.getByRole('heading', { name: 'Theme Research Mock' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '主题研究' })).toHaveAttribute('aria-current', 'page');
 
-    fireEvent.click(screen.getByRole('tab', { name: '产业目录' }));
+    fireEvent.click(screen.getByRole('button', { name: '产业目录' }));
 
     expect(window.location.pathname).toBe('/theme-research/catalog');
     expect(screen.getByRole('heading', { name: 'Industry Catalog Mock' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '产业目录' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('restores and updates catalog detail routes without handing catalog to theme research', () => {

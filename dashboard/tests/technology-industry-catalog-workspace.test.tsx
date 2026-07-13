@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IndustryCatalogWorkspace } from '../src/components/IndustryCatalogWorkspace';
+import { ThemeResearchAndIndustryCatalogWorkspace } from '../src/components/ThemeResearchAndIndustryCatalogWorkspace';
 import type {
   TechnologyIndustryCatalogIndex,
   TechnologyIndustryChainDetail
@@ -128,6 +130,17 @@ const skeletonDetail = {
   theme_links: []
 } satisfies TechnologyIndustryChainDetail;
 
+function CatalogNavigationHarness() {
+  const [pathname, setPathname] = useState('/theme-research/catalog');
+  return (
+    <ThemeResearchAndIndustryCatalogWorkspace
+      pathname={pathname}
+      onNavigate={setPathname}
+      onOpenStock={vi.fn()}
+    />
+  );
+}
+
 describe('IndustryCatalogWorkspace', () => {
   beforeEach(() => {
     apiMocks.fetchTechnologyIndustryCatalog.mockReset().mockResolvedValue(catalogPayload);
@@ -163,6 +176,14 @@ describe('IndustryCatalogWorkspace', () => {
     expect(aiChainRow).not.toBeNull();
     expect(within(aiChainRow as HTMLTableRowElement).getByText('应用主题链')).toBeInTheDocument();
     expect(within(aiChainRow as HTMLTableRowElement).getByText('基础设施流')).toBeInTheDocument();
+  });
+
+  it('treats a trailing slash catalog path as the index', async () => {
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/" onNavigate={vi.fn()} />);
+
+    expect(await screen.findByRole('heading', { name: '科技产业目录' })).toBeInTheDocument();
+    expect(apiMocks.fetchTechnologyIndustryCatalog).toHaveBeenCalledTimes(1);
+    expect(apiMocks.fetchTechnologyIndustryChain).not.toHaveBeenCalled();
   });
 
   it('searches names, aliases and descriptions and supports an empty filter state', async () => {
@@ -210,6 +231,24 @@ describe('IndustryCatalogWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ }));
     expect(onNavigate).toHaveBeenCalledWith('/theme-research/catalog/ai_data_center_power');
+  });
+
+  it('preserves index search and sector filters after opening a chain and returning', async () => {
+    render(<CatalogNavigationHarness />);
+    await screen.findByRole('heading', { name: '科技产业目录' });
+
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索产业目录' }), { target: { value: '供电' } });
+    fireEvent.change(screen.getByRole('combobox', { name: '产业板块筛选' }), { target: { value: 'energy' } });
+    fireEvent.click(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ }));
+
+    expect(await screen.findByRole('heading', { name: 'AI 数据中心供电' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回产业目录' }));
+
+    expect(await screen.findByRole('heading', { name: '科技产业目录' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '搜索产业目录' })).toHaveValue('供电');
+    expect(screen.getByRole('combobox', { name: '产业板块筛选' })).toHaveValue('energy');
+    expect(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /打开人形机器人产业链/ })).not.toBeInTheDocument();
   });
 
   it('decodes the exact detail route and renders scope, grouped nodes, edges and linked themes', async () => {
@@ -274,10 +313,9 @@ describe('IndustryCatalogWorkspace', () => {
     expect(await screen.findByRole('heading', { name: 'AI 数据中心供电' })).toBeInTheDocument();
   });
 
-  it('decodes encoded chain IDs before loading detail', async () => {
-    apiMocks.fetchTechnologyIndustryChain.mockResolvedValue(aiPowerDetail);
+  it('rejects encoded chain IDs that decode to multiple path segments', async () => {
     render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai%20power%2Fprimary" onNavigate={vi.fn()} />);
-    await screen.findByRole('heading', { name: 'AI 数据中心供电' });
-    expect(apiMocks.fetchTechnologyIndustryChain).toHaveBeenCalledWith('ai power/primary');
+    expect(await screen.findByRole('heading', { name: '产业链不存在' })).toBeInTheDocument();
+    expect(apiMocks.fetchTechnologyIndustryChain).not.toHaveBeenCalled();
   });
 });

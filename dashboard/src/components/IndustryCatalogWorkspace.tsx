@@ -42,7 +42,8 @@ function detailChainId(pathname: string) {
   const match = pathname.match(/^\/theme-research\/catalog\/([^/]+)$/);
   if (!match) return null;
   try {
-    return decodeURIComponent(match[1]);
+    const decoded = decodeURIComponent(match[1]);
+    return decoded.includes('/') ? null : decoded;
   } catch {
     return null;
   }
@@ -82,7 +83,7 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
 }
 
 export function IndustryCatalogWorkspace({ pathname, onNavigate }: IndustryCatalogWorkspaceProps) {
-  const isIndex = pathname === '/theme-research/catalog';
+  const isIndex = pathname === '/theme-research/catalog' || pathname === '/theme-research/catalog/';
   const chainId = isIndex ? null : detailChainId(pathname);
   const [catalog, setCatalog] = useState<TechnologyIndustryCatalogIndex | null>(null);
   const [detail, setDetail] = useState<TechnologyIndustryChainDetail | null>(null);
