@@ -11,6 +11,10 @@ LOCK_FILE="$ROOT/.locks/eod_auto_repair.lock"
 FLOCK_FILE="$ROOT/.locks/eod_auto_repair.flock"
 ACTION_TIMEOUT_SECONDS="${EOD_AUTO_REPAIR_ACTION_TIMEOUT_SECONDS:-43200}"
 DASHBOARD_CACHE_CLEAR_URL="${DASHBOARD_CACHE_CLEAR_URL:-http://127.0.0.1:8765/api/dashboard/cache/clear}"
+DASHBOARD_AUTH_LOGIN_URL="${DASHBOARD_AUTH_LOGIN_URL:-http://127.0.0.1:8765/api/auth/login}"
+DASHBOARD_AUTH_USERNAME="${DASHBOARD_AUTH_USERNAME:-}"
+DASHBOARD_AUTH_PASSWORD="${DASHBOARD_AUTH_PASSWORD:-}"
+DASHBOARD_WRITE_TOKEN="${DASHBOARD_WRITE_TOKEN:-${STOCK_RESEARCH_DASHBOARD_WRITE_TOKEN:-}}"
 CACHE_STATUS="pending"
 
 source "$ROOT/scripts/stock_cron_guard.sh"
@@ -66,13 +70,31 @@ clear_dashboard_cache() {
     echo "eod_auto_repair|dashboard_cache_clear|skipped|curl_missing|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
     return 0
   fi
-  if curl -fsS -m 5 -X POST "$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG" 2>&1; then
+  local cookie_jar
+  local curl_args
+  cookie_jar="$(mktemp "${TMPDIR:-/tmp}/stock-research-dashboard-cache.XXXXXX")"
+  curl_args=(-fsS -m 5)
+  if [[ -n "${DASHBOARD_AUTH_USERNAME:-}" && -n "${DASHBOARD_AUTH_PASSWORD:-}" ]]; then
+    local login_payload
+    login_payload="$(printf '{"username":"%s","password":"%s"}' "$DASHBOARD_AUTH_USERNAME" "$DASHBOARD_AUTH_PASSWORD")"
+    if curl -fsS -m 5 -c "$cookie_jar" -H "Content-Type: application/json" -X POST "$DASHBOARD_AUTH_LOGIN_URL" --data "$login_payload" >>"$DETAIL_LOG" 2>&1; then
+      curl_args+=(-b "$cookie_jar")
+      echo "eod_auto_repair|dashboard_cache_clear|auth_login|success|url|$DASHBOARD_AUTH_LOGIN_URL" >>"$DETAIL_LOG"
+    else
+      echo "eod_auto_repair|dashboard_cache_clear|auth_login|failed|url|$DASHBOARD_AUTH_LOGIN_URL" >>"$DETAIL_LOG"
+    fi
+  fi
+  if [[ -n "${DASHBOARD_WRITE_TOKEN:-}" ]]; then
+    curl_args+=(-H "X-Dashboard-Write-Token: $DASHBOARD_WRITE_TOKEN")
+  fi
+  if curl "${curl_args[@]}" -X POST "$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG" 2>&1; then
     CACHE_STATUS="success"
     echo "eod_auto_repair|dashboard_cache_clear|success|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
   else
     CACHE_STATUS="failed"
     echo "eod_auto_repair|dashboard_cache_clear|failed|url|$DASHBOARD_CACHE_CLEAR_URL" >>"$DETAIL_LOG"
   fi
+  rm -f "$cookie_jar"
 }
 
 print_summary() {

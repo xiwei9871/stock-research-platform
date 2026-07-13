@@ -65,28 +65,40 @@ def repair_minute5_raw_bars(
     quality_refresher: Callable[[str, date], dict[str, Any]],
     timeout_seconds: int = 30,
     symbol_sleep_seconds: float = 0.0,
+    progress: Callable[[dict[str, Any]], None] | None = None,
+    quality_refresh_interval: int = 50,
 ) -> RepairActionResult:
     target_date = date.fromisoformat(trade_date)
     missing_symbols = list(missing_symbols_loader(trade_date))
-    if not missing_symbols:
-        return RepairActionResult(
-            name="repair_minute5_raw_bars",
-            status=RepairStatus.FAILED,
-            message="minute5 raw repair had no missing symbols to attempt",
-            metrics={
-                "attempted": 0,
-                "success": 0,
-                "failed": 0,
-                "rows": 0,
-                "qfq_rows": 0,
-                "remaining_missing": 0,
-                "remaining_abnormal": 0,
-            },
+    total = len(missing_symbols)
+
+    def emit(event: str, completed: int, *, rows: int = 0, success: int = 0, failed: int = 0) -> None:
+        if progress is None:
+            return
+        progress(
+            {
+                "event": event,
+                "completed": completed,
+                "total": total,
+                "rows": rows,
+                "success": success,
+                "failed": failed,
+            }
         )
 
-    all_rows: list[dict[str, Any]] = []
+    def refresh_quality_checkpoint(completed: int) -> None:
+        if quality_refresh_interval <= 0 or completed % quality_refresh_interval != 0:
+            return
+        try:
+            quality_refresher(service, target_date)
+        except Exception:
+            return
+
+    emit("minute5_raw_repair_started", 0)
+    rows_upserted = 0
     failed = 0
-    for ts_code in missing_symbols:
+    success = 0
+    for index, ts_code in enumerate(missing_symbols, start=1):
         try:
             rows = raw_fetcher(
                 ts_code,
@@ -96,26 +108,76 @@ def repair_minute5_raw_bars(
             )
         except Exception:  # noqa: BLE001 - repair action reports aggregate failures.
             failed += 1
+            emit(
+                "minute5_raw_repair_progress",
+                index,
+                rows=rows_upserted,
+                success=success,
+                failed=failed,
+            )
+            refresh_quality_checkpoint(index)
             continue
         raw_rows = [row for row in rows if row.get("adjust_type") == "raw"]
         if raw_rows:
-            all_rows.extend(raw_rows)
+            rows_upserted += int(upserter(service, raw_rows) or 0)
+            success += 1
         else:
             failed += 1
         if symbol_sleep_seconds > 0:
             time.sleep(symbol_sleep_seconds)
+        emit(
+            "minute5_raw_repair_progress",
+            index,
+            rows=rows_upserted,
+            success=success,
+            failed=failed,
+        )
+        refresh_quality_checkpoint(index)
 
-    rows_upserted = upserter(service, all_rows)
-    qfq_result = qfq_deriver(service, target_date) if rows_upserted else {"inserted_rows": 0}
+    qfq_result = qfq_deriver(service, target_date)
     quality = quality_refresher(service, target_date)
-    remaining_missing = len(quality.get("missing_symbols") or [])
-    remaining_abnormal = len(quality.get("abnormal_symbols") or [])
-    success = max(0, len(missing_symbols) - failed)
-    status = RepairStatus.SUCCESS if rows_upserted and remaining_missing == 0 and remaining_abnormal == 0 else RepairStatus.FAILED
+    raw_quality = quality.get("raw") if isinstance(quality.get("raw"), dict) else quality
+    qfq_quality = quality.get("qfq") if isinstance(quality.get("qfq"), dict) else quality
+    remaining_missing = len(raw_quality.get("missing_symbols") or [])
+    remaining_abnormal = len(raw_quality.get("abnormal_symbols") or [])
+    qfq_remaining_missing = len(qfq_quality.get("missing_symbols") or [])
+    qfq_remaining_abnormal = len(qfq_quality.get("abnormal_symbols") or [])
+
+    def quality_ready(value: dict[str, Any]) -> bool:
+        quality_status = str(value.get("status") or "")
+        if quality_status:
+            return quality_status == "pass"
+        expected_count = int(value.get("expected_count") or 0)
+        actual_count = int(value.get("actual_count") or 0)
+        return expected_count > 0 and actual_count > 0
+
+    status = (
+        RepairStatus.SUCCESS
+        if quality_ready(raw_quality)
+        and quality_ready(qfq_quality)
+        and remaining_missing == 0
+        and remaining_abnormal == 0
+        and qfq_remaining_missing == 0
+        and qfq_remaining_abnormal == 0
+        else RepairStatus.FAILED
+    )
+    emit(
+        "minute5_raw_repair_completed",
+        total,
+        rows=rows_upserted,
+        success=success,
+        failed=failed,
+    )
     return RepairActionResult(
         name="repair_minute5_raw_bars",
         status=status,
-        message="minute5 raw bars repaired" if status == RepairStatus.SUCCESS else "minute5 raw repair incomplete",
+        message=(
+            "minute5 raw bars repaired"
+            if status == RepairStatus.SUCCESS
+            else "minute5 raw repair had no missing symbols to attempt"
+            if not missing_symbols
+            else "minute5 raw repair incomplete"
+        ),
         metrics={
             "attempted": len(missing_symbols),
             "success": success,

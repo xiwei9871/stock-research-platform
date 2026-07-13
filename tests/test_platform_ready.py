@@ -112,6 +112,41 @@ def test_platform_ready_check_passes_when_data_and_frontend_inputs_exist(
     ]
 
 
+def test_check_minute5_requires_raw_and_qfq_quality(monkeypatch):
+    monkeypatch.setattr(
+        platform_ready,
+        "_fetch_check_rows",
+        lambda *_args, **_kwargs: [
+            {
+                "dataset_name": "minute5_bar",
+                "status": "pass",
+                "expected_count": 5191,
+                "actual_count": 5191,
+                "missing_count": 0,
+                "abnormal_count": 0,
+            },
+            {
+                "dataset_name": "minute5_qfq_bar",
+                "status": "fail",
+                "expected_count": 5191,
+                "actual_count": 5190,
+                "missing_count": 1,
+                "abnormal_count": 0,
+            },
+        ],
+    )
+
+    result = platform_ready._check_minute5(
+        "test",
+        "2026-07-10",
+        1,
+        max_gap_ratio=0.0,
+    )
+
+    assert result["status"] == "fail"
+    assert "minute5_qfq_bar" in result["detail"]
+
+
 def test_platform_ready_check_fails_when_market_monitor_sources_are_missing(
     monkeypatch, tmp_path: Path
 ):
@@ -261,15 +296,24 @@ def test_render_ready_message_is_mobile_sized():
             "status": "not_ready",
             "checks": [
                 {"name": "daily_bar", "status": "pass", "detail": "actual=15564 expected=15627 missing=63"},
+                {
+                    "name": "minute5",
+                    "status": "fail",
+                    "detail": "status=warning actual=418 expected=5191 missing=4773 abnormal=0 gap_ratio=0.9195 max_gap_ratio=0.0100",
+                },
                 {"name": "watchlist_default", "status": "fail", "detail": "rows=0 required>=1"},
             ],
         }
     )
 
-    assert "平台数据状态：not_ready" in message
-    assert "daily_bar: pass" in message
-    assert "watchlist_default: fail" in message
-    assert len(message) < 1800
+    assert "平台状态：not_ready" in message
+    assert "交易日：2026-06-18" in message
+    assert "5mins：418/5191，缺口4773，异常0" in message
+    assert "待处理：2项" in message
+    assert "watchlist_default：rows=0 required>=1" in message
+    assert "daily_bar" not in message
+    assert "gap_ratio" not in message
+    assert len(message) < 800
 
 
 def test_platform_ready_check_fails_when_strategy_daily_eod_is_missing(monkeypatch, tmp_path: Path):
