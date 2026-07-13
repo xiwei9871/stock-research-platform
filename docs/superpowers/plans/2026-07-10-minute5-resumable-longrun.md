@@ -4,6 +4,8 @@
 
 **Goal:** Turn the daily BaoStock 5-minute ingest into a current-day, single-session, database-resumable long-running job with compact OpenClaw heartbeats, truthful interruption state, paired raw/qfq quality gates, and verified six-hour Cron safety limits.
 
+**Status:** Implemented and operationally verified on 2026-07-10. The real full-market run completed with 5,190/5,190 raw and qfq assets, and the subsequent resume run made zero remote requests.
+
 **Architecture:** The Python stage owns a synchronous BaoStock session and checkpoints each successful symbol immediately. Every attempt derives its pending set and final quality from PostgreSQL, while the shell wrapper independently emits compact heartbeats so OpenClaw can supervise the long run without receiving the full log. Downstream readiness requires paired persisted raw/qfq quality and treats older source-attempt failures as superseded only after both quality rows pass.
 
 **Tech Stack:** Python 3.14, pytest, PostgreSQL/psycopg, Bash, BaoStock, OpenClaw command Cron.
@@ -16,6 +18,7 @@
 - Modify `src/stock_research/daily_close_pipeline.py`: current-day fetch, session ownership, persisted resume, raw/qfq quality, stale-attempt cleanup, interruption handling, and paired-quality readiness.
 - Modify `scripts/run_daily_close_pipeline_cron.sh`: child-process supervision and compact heartbeat output.
 - Modify `src/stock_research/eod_auto_repair.py`: rederive qfq and persist both raw/qfq quality rows during repair.
+- Modify `src/stock_research/eod_auto_repair_checks.py`: require paired raw/qfq quality in the minute5 repair gate.
 - Modify `src/stock_research/platform_ready.py`: require paired raw/qfq quality for minute readiness.
 - Modify `tests/test_minute_data.py`: session cleanup and synchronous retry behavior.
 - Modify `tests/test_daily_close_pipeline.py`: current-day request, resume, session lifecycle, qfq quality, interruption state, and finalize behavior.
@@ -697,6 +700,7 @@ git commit -m "fix: emit heartbeats for long minute close jobs"
 
 **Files:**
 - Modify: `src/stock_research/eod_auto_repair.py:840-910`
+- Modify: `src/stock_research/eod_auto_repair_checks.py:115-143`
 - Modify: `src/stock_research/platform_ready.py:35-60`
 - Modify: `src/stock_research/daily_close_pipeline.py:2180-2285`
 - Test: `tests/test_eod_auto_repair.py`

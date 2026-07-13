@@ -145,6 +145,50 @@ exit 0
     assert "daily_close_pipeline|business_failed|stage=minute5|trade_date=2026-06-22" not in result.stderr
 
 
+def test_daily_close_minute5_wrapper_emits_compact_heartbeat(tmp_path: Path) -> None:
+    fake_python = tmp_path / "python.sh"
+    fake_python.write_text(
+        """#!/usr/bin/env bash
+if [[ "$*" == *"stock_research.stock_cron_guard"* ]]; then
+  exit 0
+fi
+if [[ "$*" == *"--stage minute5"* ]]; then
+  echo 'progress|minute5_bar|event|minute5_progress|completed|50|total|100'
+  sleep 2
+  echo '{"stage":"minute5","status":"success","rows":4800,"quality":{"expected_count":100,"actual_count":100,"missing_count":0}}'
+fi
+exit 0
+""",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    log_dir = tmp_path / "logs"
+    env = os.environ.copy()
+    env.update(
+        {
+            "PYTHON_BIN": str(fake_python),
+            "TRADE_DATE": "2026-07-10",
+            "DAILY_CLOSE_CRON_LOG_DIR": str(log_dir),
+            "DAILY_CLOSE_HEARTBEAT_SECONDS": "1",
+        }
+    )
+
+    result = subprocess.run(
+        ["scripts/run_daily_close_pipeline_cron.sh", "minute5"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0
+    assert "daily_close_pipeline|started|stage=minute5" in result.stdout
+    assert "daily_close_pipeline|heartbeat|stage=minute5" in result.stdout
+    assert "completed|50|total|100" in result.stdout
+    detail_log = next(log_dir.glob("daily_close_pipeline_minute5_*.log"))
+    assert '"status":"success"' in detail_log.read_text(encoding="utf-8")
+
+
 def test_open_auction_spot_snapshot_script_clears_proxy_env(tmp_path: Path) -> None:
     fake_python = tmp_path / "python.sh"
     calls_file = tmp_path / "calls.txt"

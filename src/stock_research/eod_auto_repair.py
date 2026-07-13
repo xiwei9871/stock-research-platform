@@ -879,9 +879,31 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
 
         def quality_refresher(service: str, target_date: date) -> dict[str, object]:
             expected_ts_codes = load_minute5_expected_ts_codes(service, target_date)
-            quality = inspect_minute5_quality_from_db(service, expected_ts_codes, target_date)
-            upsert_quality(service=service, trade_date=target_date, dataset_name="minute5_bar", **quality)
-            return quality
+            raw_quality = inspect_minute5_quality_from_db(
+                service,
+                expected_ts_codes,
+                target_date,
+                adjust_type="raw",
+            )
+            qfq_quality = inspect_minute5_quality_from_db(
+                service,
+                expected_ts_codes,
+                target_date,
+                adjust_type="qfq",
+            )
+            upsert_quality(
+                service=service,
+                trade_date=target_date,
+                dataset_name="minute5_bar",
+                **raw_quality,
+            )
+            upsert_quality(
+                service=service,
+                trade_date=target_date,
+                dataset_name="minute5_qfq_bar",
+                **qfq_quality,
+            )
+            return {"raw": raw_quality, "qfq": qfq_quality}
 
         return repair_minute5_raw_bars(
             trade_date,
@@ -893,6 +915,11 @@ def build_default_action_registry(*, output_root: str | Path = "outputs") -> dic
             quality_refresher=quality_refresher,
             timeout_seconds=config.request_timeout_seconds,
             symbol_sleep_seconds=config.minute5_symbol_sleep_seconds,
+            progress=_make_action_progress(
+                output_dir,
+                trade_date=trade_date,
+                component="minute5_bars",
+            ),
         )
 
     def technical_features_action(trade_date: str, output_dir: str | Path) -> RepairActionResult:

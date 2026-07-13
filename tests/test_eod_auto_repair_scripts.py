@@ -122,6 +122,27 @@ def test_eod_auto_repair_cron_uses_flock_when_available(tmp_path):
     assert "eod_auto_repair|" not in result.stdout
 
 
+def test_eod_auto_repair_cron_cache_clear_can_use_dashboard_auth(tmp_path):
+    root, env = _make_cron_harness(
+        tmp_path,
+        extra_env={
+            "DASHBOARD_AUTH_USERNAME": "admin",
+            "DASHBOARD_AUTH_PASSWORD": "1234",
+            "DASHBOARD_WRITE_TOKEN": "secret-token",
+        },
+    )
+
+    result = _run_cron(env, "2026-07-02")
+
+    assert result.returncode == 0
+    curl_log = (root / "curl.log").read_text()
+    assert "/api/auth/login" in curl_log
+    assert '{"username":"admin","password":"1234"}' in curl_log
+    assert "-b " in curl_log
+    assert "X-Dashboard-Write-Token: secret-token" in curl_log
+    assert "-X POST http://127.0.0.1:8765/api/dashboard/cache/clear" in curl_log
+
+
 def test_eod_auto_repair_cron_logs_flock_lock_mode_when_already_locked(tmp_path):
     root, env = _make_cron_harness(
         tmp_path,

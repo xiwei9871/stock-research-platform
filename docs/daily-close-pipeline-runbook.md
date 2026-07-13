@@ -1,6 +1,8 @@
 # Daily Close Pipeline Runbook
 
-This pipeline updates A-share data after market close without BaoStock.
+This pipeline updates A-share data after market close. Daily bars use Tushare;
+current-day raw 5-minute bars use one serial BaoStock session and qfq 5-minute
+bars are derived locally from persisted raw bars and daily adjustment factors.
 
 ## Environment
 
@@ -11,16 +13,16 @@ export TUSHARE_TOKEN=...
 export DB_SERVICE=stock_research
 export PIPELINE_TIMEZONE=Asia/Shanghai
 export DAILY_START_TIME=17:00
-export MINUTE5_START_TIME=17:30
+export MINUTE5_START_TIME=17:00
 export DEPS_START_TIME=19:00
 export FINALIZE_TIME=19:50
 export MAX_WORKERS_DAILY=8
-export MAX_WORKERS_MINUTE5=8
 export REQUEST_TIMEOUT_SECONDS=20
 export MAX_RETRIES=3
 export DAILY_ADJUST_TYPES=raw,qfq,hfq
-export MINUTE5_LOOKBACK_DAYS=5
+export MINUTE5_SYMBOL_SLEEP_SECONDS=0.75
 export MINUTE5_MIN_COVERAGE_RATIO=0.98
+export DAILY_CLOSE_HEARTBEAT_SECONDS=300
 export PIPELINE_FORCE_NON_TRADING_DAY=false
 ```
 
@@ -57,9 +59,23 @@ Install a crontab similar to:
 
 ```cron
 0 17 * * 1-5 cd /Users/xiwei/stock_research && .venv/bin/python -m scripts.daily_pipeline --stage daily
-30 17 * * 1-5 cd /Users/xiwei/stock_research && .venv/bin/python -m scripts.daily_pipeline --stage minute5
+0 17 * * 1-5 cd /Users/xiwei/stock_research && scripts/run_daily_close_pipeline_cron.sh minute5
 0 19 * * 1-5 cd /Users/xiwei/stock_research && .venv/bin/python -m scripts.daily_pipeline --stage deps
 50 19 * * 1-5 cd /Users/xiwei/stock_research && .venv/bin/python -m scripts.daily_pipeline --stage health
+```
+
+The daily minute5 job requests only the target trading date. On restart it reads
+persisted raw quality and fetches only missing or abnormal symbols. The wrapper
+emits a compact heartbeat every five minutes while retaining full output in
+`logs/cron/`; this keeps OpenClaw's no-output watchdog active without treating a
+normal multi-hour BaoStock run as stalled.
+
+OpenClaw command-job settings for the production minute5 task are:
+
+```text
+heartbeat interval: 300 seconds
+no-output timeout: 1200 seconds
+total timeout: 21600 seconds
 ```
 
 Holiday/non-trading-day filtering uses `market.trading_calendar` as the formal
@@ -77,6 +93,12 @@ initial operations.
 .venv/bin/python -m scripts.daily_pipeline --date 20260605 --stage minute5
 .venv/bin/python -m scripts.daily_pipeline --date 20260605 --stage retry_failed
 .venv/bin/python -m scripts.daily_pipeline --date 20260605 --stage status
+```
+
+For an operational run with heartbeat and compact summary, prefer:
+
+```bash
+TRADE_DATE=2026-06-05 scripts/run_daily_close_pipeline_cron.sh minute5
 ```
 
 Use `--force` to manually backfill a date that the calendar marks as closed:

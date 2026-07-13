@@ -287,6 +287,48 @@ def test_query_baostock_minute_rows_applies_socket_timeout(monkeypatch):
     assert observed["timeouts"] == [7, None]
 
 
+def test_query_baostock_minute_rows_keeps_socket_timeout_during_iteration(monkeypatch):
+    current_timeout = {"value": None}
+
+    class Result:
+        error_code = "0"
+        error_msg = "success"
+        fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
+
+        def __init__(self):
+            self.rows = [list(raw_minute_row().values())]
+            self.index = -1
+
+        def next(self):
+            assert current_timeout["value"] == 7
+            self.index += 1
+            return self.index < len(self.rows)
+
+        def get_row_data(self):
+            return self.rows[self.index]
+
+    monkeypatch.setattr(minute_data.socket, "getdefaulttimeout", lambda: None)
+    monkeypatch.setattr(
+        minute_data.socket,
+        "setdefaulttimeout",
+        lambda value: current_timeout.__setitem__("value", value),
+    )
+    monkeypatch.setattr(
+        minute_data.bs,
+        "query_history_k_data_plus",
+        lambda *args, **kwargs: Result(),
+    )
+
+    minute_data.query_baostock_minute_rows(
+        "sh.600000",
+        dt.date(2024, 1, 2),
+        dt.date(2024, 1, 2),
+        freq="5min",
+        adjust_type="qfq",
+        timeout_seconds=7,
+    )
+
+
 def test_query_baostock_minute_rows_retries_network_errors(monkeypatch):
     class Result:
         fields = ["date", "time", "code", "open", "high", "low", "close", "volume", "amount"]
