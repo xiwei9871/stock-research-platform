@@ -1,0 +1,2258 @@
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+from stock_research.technology_industry_catalog import (
+    COMPOSITION_FIELDS,
+    IndustryCatalogValidationError,
+    NODE_FIELDS,
+    load_industry_catalog,
+    project_theme_to_catalog,
+)
+
+
+def test_projection_validates_cross_chain_link_before_theme_loading(tmp_path: Path):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            catalog=catalog,
+            theme_artifact_dir=tmp_path / "missing_theme_artifacts",
+        )
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_projection_validates_missing_chain_before_theme_loading(tmp_path: Path):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["chain_id"] = "missing_chain"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            catalog=catalog,
+            theme_artifact_dir=tmp_path / "missing_theme_artifacts",
+        )
+
+    assert exc_info.value.code == "THEME_LINK_CHAIN_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    "node_link",
+    [
+        {"theme_node_id": "grid_connection"},
+        ["grid_connection", "ai_power_grid_connection_role"],
+    ],
+)
+def test_projection_normalizes_malformed_nested_node_links(node_link: object):
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"] = [node_link]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    [
+        {"artifact_version": "theme_decomposition_v1_5"},
+        {"artifact_version": "theme_decomposition_v1_5", "theme": None},
+        {
+            "artifact_version": "theme_decomposition_v1_5",
+            "theme": {
+                "theme_id": "ai_power_value_capture_v1",
+                "theme_name": "Test theme",
+                "theme_type": "ai_power",
+                "summary": "Test theme artifact.",
+                "status": "reviewed",
+                "created_from": "manual",
+                "last_updated": "2026-07-12",
+            },
+            "nodes": "invalid",
+        },
+    ],
+)
+def test_project_theme_to_catalog_normalizes_malformed_theme_artifact_shapes(
+    tmp_path: Path,
+    artifact: dict[str, object],
+):
+    artifact_dir = tmp_path / "theme_artifacts"
+    artifact_dir.mkdir()
+    (artifact_dir / "theme.json").write_text(
+        json.dumps(artifact),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+
+
+def test_project_theme_to_catalog_normalizes_invalid_json_theme_artifact(
+    tmp_path: Path,
+):
+    artifact_dir = tmp_path / "theme_artifacts"
+    artifact_dir.mkdir()
+    (artifact_dir / "invalid.json").write_text("{", encoding="utf-8")
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+
+
+def test_theme_links_reject_cross_chain_catalog_targets(tmp_path: Path):
+    source_dir = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+    )
+    artifact_dir = tmp_path / "technology_industry_catalog"
+    shutil.copytree(source_dir, artifact_dir)
+    link_path = artifact_dir / "theme_links.json"
+    payload = json.loads(link_path.read_text(encoding="utf-8"))
+    payload["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+    link_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        load_industry_catalog(artifact_dir)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_ai_power_composition_chain_mismatch_precedes_chain_kind_validation(
+    tmp_path: Path,
+):
+    source_dir = (
+        Path(__file__).resolve().parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+    )
+    artifact_dir = tmp_path / "technology_industry_catalog"
+    shutil.copytree(source_dir, artifact_dir)
+    composition_path = (
+        artifact_dir
+        / "theme_compositions"
+        / "ai_data_center_power_v1.json"
+    )
+    payload = json.loads(composition_path.read_text(encoding="utf-8"))
+    composition = next(
+        row
+        for row in payload["theme_compositions"]
+        if row["role_node_id"] == "ai_power_battery_backup_role"
+    )
+    composition["chain_id"] = "new_energy_storage"
+    composition_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        load_industry_catalog(artifact_dir)
+
+    assert exc_info.value.code == "COMPOSITION_REFERENCE_MISMATCH"
+
+
+def test_projection_rejects_cross_chain_catalog_targets_defensively():
+    catalog = load_industry_catalog()
+    catalog["theme_links"][0]["node_links"][0]["catalog_node_id"] = "rgb_vision_module"
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_CATALOG_NODE_LINK_INVALID"
+
+
+def test_project_theme_to_catalog_normalizes_theme_artifact_errors(tmp_path: Path):
+    missing_artifact_dir = tmp_path / "missing_theme_artifacts"
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog(
+            "ai_power_value_capture_v1",
+            theme_artifact_dir=missing_artifact_dir,
+        )
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+    assert "artifact_dir not found" in str(exc_info.value)
+
+
+def test_project_theme_to_catalog_rejects_malformed_selected_link():
+    catalog = load_industry_catalog()
+    catalog["theme_links"] = [
+        {
+            "theme_id": "ai_power_value_capture_v1",
+            "node_links": [],
+            "unmapped_theme_node_ids": [],
+        }
+    ]
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1", catalog=catalog)
+
+    assert exc_info.value.code == "THEME_LINK_INVALID"
+
+
+def test_project_theme_to_catalog_rejects_malformed_theme_detail(monkeypatch):
+    from stock_research import theme_decomposition
+
+    monkeypatch.setattr(
+        theme_decomposition,
+        "load_theme",
+        lambda *_args, **_kwargs: {"theme": {}, "nodes": {}},
+    )
+
+    with pytest.raises(IndustryCatalogValidationError) as exc_info:
+        project_theme_to_catalog("ai_power_value_capture_v1")
+
+    assert exc_info.value.code == "THEME_ARTIFACT_INVALID"
+
+
+SECTOR_ID = "semiconductor_electronics"
+CHAIN_ID = "semiconductor_manufacturing_equipment"
+
+EXPECTED_CHILDREN = {
+    "semiconductor_lithography_patterning": [
+        "iline_lithography",
+        "krf_lithography",
+        "arf_dry_lithography",
+        "arf_immersion_lithography",
+        "euv_lithography",
+        "coat_develop_track",
+        "electron_beam_direct_write",
+        "photomask_writer",
+        "photomask_inspection_repair",
+    ],
+    "semiconductor_etch": [
+        "dielectric_etch",
+        "conductor_etch",
+        "silicon_etch",
+        "deep_silicon_etch",
+        "atomic_layer_etch",
+        "wet_etch",
+        "photoresist_strip_residue_removal",
+    ],
+    "semiconductor_deposition_epitaxy": [
+        "pvd_equipment",
+        "cvd_equipment",
+        "pecvd_equipment",
+        "lpcvd_equipment",
+        "atomic_layer_deposition",
+        "electrochemical_deposition",
+        "silicon_epitaxy",
+        "compound_semiconductor_epitaxy",
+    ],
+    "semiconductor_thermal_doping": [
+        "oxidation_furnace",
+        "diffusion_furnace",
+        "rapid_thermal_processing",
+        "laser_annealing",
+        "ion_implantation",
+        "dopant_activation_equipment",
+    ],
+    "semiconductor_clean_wet_process": [
+        "single_wafer_clean",
+        "batch_wet_clean",
+        "supercritical_clean_dry",
+        "wafer_brush_clean",
+        "wet_chemical_processing",
+    ],
+    "semiconductor_cmp_planarization": [
+        "cmp_equipment",
+        "wafer_thinning",
+        "cmp_post_clean",
+        "cmp_endpoint_control",
+    ],
+    "semiconductor_metrology_process_control": [
+        "wafer_defect_inspection",
+        "pattern_defect_inspection",
+        "electron_beam_inspection",
+        "critical_dimension_metrology",
+        "overlay_metrology",
+        "film_material_metrology",
+        "optical_scatterometry",
+        "photomask_inspection",
+        "yield_process_control_software",
+    ],
+    "semiconductor_wafer_handling_automation": [
+        "equipment_front_end_module",
+        "wafer_transfer_robot",
+        "foup_wafer_carrier",
+        "amhs_system",
+        "wafer_tracking_mes_interface",
+        "cleanroom_automation_control",
+    ],
+    "semiconductor_vacuum_gas_fluid_control": [
+        "dry_vacuum_pump",
+        "molecular_high_vacuum_pump",
+        "vacuum_valve",
+        "mass_flow_controller",
+        "specialty_gas_delivery",
+        "ultrapure_chemical_delivery",
+        "rf_power_matching",
+        "plasma_generator",
+    ],
+    "semiconductor_facility_pollution_control": [
+        "exhaust_gas_treatment",
+        "waste_liquid_treatment",
+        "ultrapure_water_system",
+        "cleanroom_system",
+        "temperature_humidity_microenvironment",
+        "process_cooling_system",
+        "facility_monitoring_control",
+    ],
+}
+
+EXPECTED_L4_NODE_TYPES = {
+    "iline_lithography": "equipment",
+    "krf_lithography": "equipment",
+    "arf_dry_lithography": "equipment",
+    "arf_immersion_lithography": "equipment",
+    "euv_lithography": "equipment",
+    "coat_develop_track": "equipment",
+    "electron_beam_direct_write": "equipment",
+    "photomask_writer": "equipment",
+    "photomask_inspection_repair": "equipment",
+    "dielectric_etch": "equipment",
+    "conductor_etch": "equipment",
+    "silicon_etch": "equipment",
+    "deep_silicon_etch": "equipment",
+    "atomic_layer_etch": "equipment",
+    "wet_etch": "equipment",
+    "photoresist_strip_residue_removal": "equipment",
+    "pvd_equipment": "equipment",
+    "cvd_equipment": "equipment",
+    "pecvd_equipment": "equipment",
+    "lpcvd_equipment": "equipment",
+    "atomic_layer_deposition": "equipment",
+    "electrochemical_deposition": "equipment",
+    "silicon_epitaxy": "equipment",
+    "compound_semiconductor_epitaxy": "equipment",
+    "oxidation_furnace": "equipment",
+    "diffusion_furnace": "equipment",
+    "rapid_thermal_processing": "equipment",
+    "laser_annealing": "equipment",
+    "ion_implantation": "equipment",
+    "dopant_activation_equipment": "equipment",
+    "single_wafer_clean": "equipment",
+    "batch_wet_clean": "equipment",
+    "supercritical_clean_dry": "equipment",
+    "wafer_brush_clean": "equipment",
+    "wet_chemical_processing": "equipment",
+    "cmp_equipment": "equipment",
+    "wafer_thinning": "equipment",
+    "cmp_post_clean": "equipment",
+    "cmp_endpoint_control": "equipment_subsystem",
+    "wafer_defect_inspection": "equipment",
+    "pattern_defect_inspection": "equipment",
+    "electron_beam_inspection": "equipment",
+    "critical_dimension_metrology": "equipment",
+    "overlay_metrology": "equipment",
+    "film_material_metrology": "equipment",
+    "optical_scatterometry": "equipment",
+    "photomask_inspection": "equipment",
+    "yield_process_control_software": "process_control_software",
+    "equipment_front_end_module": "equipment_subsystem",
+    "wafer_transfer_robot": "equipment_subsystem",
+    "foup_wafer_carrier": "equipment_subsystem",
+    "amhs_system": "factory_system",
+    "wafer_tracking_mes_interface": "process_control_software",
+    "cleanroom_automation_control": "factory_system",
+    "dry_vacuum_pump": "equipment_subsystem",
+    "molecular_high_vacuum_pump": "equipment_subsystem",
+    "vacuum_valve": "equipment_subsystem",
+    "mass_flow_controller": "equipment_subsystem",
+    "specialty_gas_delivery": "factory_system",
+    "ultrapure_chemical_delivery": "factory_system",
+    "rf_power_matching": "equipment_subsystem",
+    "plasma_generator": "equipment_subsystem",
+    "exhaust_gas_treatment": "factory_system",
+    "waste_liquid_treatment": "factory_system",
+    "ultrapure_water_system": "factory_system",
+    "cleanroom_system": "factory_system",
+    "temperature_humidity_microenvironment": "factory_system",
+    "process_cooling_system": "factory_system",
+    "facility_monitoring_control": "factory_system",
+}
+
+HUMANOID_SECTOR_ID = "high_end_equipment_intelligent_manufacturing"
+HUMANOID_CHAIN_ID = "humanoid_robots_embodied_intelligence"
+BATTERY_SECTOR_ID = "energy_technology_new_power_system"
+BATTERY_CHAIN_ID = "power_batteries_battery_materials"
+BATTERY_L3_ID = "battery_cell_and_management_systems"
+
+HUMANOID_EXPECTED_CHILDREN = {
+    "humanoid_embodied_ai_brain": [
+        "multimodal_perception_model",
+        "vision_language_action_model",
+        "task_understanding_planning",
+        "long_term_memory_world_model",
+        "autonomous_decision_exception_handling",
+        "human_robot_interaction_model",
+        "edge_cloud_inference",
+    ],
+    "humanoid_motion_control_cerebellum": [
+        "whole_body_control",
+        "biped_gait_control",
+        "arm_motion_planning",
+        "dexterous_hand_control",
+        "force_position_hybrid_control",
+        "model_predictive_control",
+        "reinforcement_learning_motion_policy",
+        "realtime_motion_control_system",
+    ],
+    "humanoid_data_training_simulation": [
+        "teleoperation_motion_capture",
+        "embodied_training_dataset",
+        "robot_data_clean_label_replay",
+        "robot_simulation",
+        "digital_twin",
+        "synthetic_robot_data",
+        "sim_to_real",
+        "robot_training_evaluation_toolchain",
+    ],
+    "humanoid_perception": [
+        "rgb_vision_module",
+        "depth_camera",
+        "lidar_sensor",
+        "imu_sensor",
+        "joint_encoder",
+        "joint_torque_sensor",
+        "six_axis_force_sensor",
+        "tactile_sensor",
+        "microphone_array",
+        "robot_state_sensor",
+    ],
+    "humanoid_compute_control_hardware": [
+        "robot_ai_compute_chip",
+        "robot_ai_compute_module",
+        "main_controller",
+        "motion_controller",
+        "realtime_mcu",
+        "motor_driver",
+        "sensor_signal_conditioning",
+        "realtime_communication_bus",
+    ],
+    "humanoid_rotary_actuation": [
+        "rotary_joint_assembly",
+        "frameless_torque_motor",
+        "harmonic_reducer",
+        "rv_reducer",
+        "precision_planetary_reducer",
+        "joint_encoder_module",
+        "joint_brake",
+        "joint_bearing",
+    ],
+    "humanoid_linear_actuation": [
+        "linear_joint_assembly",
+        "planetary_roller_screw",
+        "ball_screw",
+        "trapezoidal_screw",
+        "linear_motor",
+        "screw_support_bearing",
+        "linear_displacement_sensor",
+    ],
+    "humanoid_upper_limb_dexterous_hand": [
+        "shoulder_joint_module",
+        "elbow_joint_module",
+        "wrist_joint_module",
+        "humanoid_robotic_arm",
+        "dexterous_hand_assembly",
+        "finger_micro_actuator",
+        "micro_reducer_transmission",
+        "tendon_flexible_transmission",
+        "fingertip_tactile_force_control",
+    ],
+    "humanoid_lower_limb_locomotion": [
+        "hip_joint_module",
+        "knee_joint_module",
+        "ankle_joint_module",
+        "leg_structure",
+        "foot_buffer_structure",
+        "foot_force_pressure_sensing",
+        "dynamic_balance_safety_mechanism",
+    ],
+    "humanoid_body_structure_lightweighting": [
+        "torso_load_bearing_structure",
+        "lightweight_skeleton",
+        "aluminum_magnesium_structure",
+        "carbon_fiber_structure",
+        "precision_cast_machined_parts",
+        "robot_wiring_harness",
+        "protective_shell_soft_cover",
+        "robot_sealing_protection",
+    ],
+    "humanoid_energy_thermal_management": [
+        "robot_battery_pack",
+        "high_specific_energy_cell",
+        "battery_management_system",
+        "robot_power_management_dcdc",
+        "autonomous_charging",
+        "robot_thermal_management",
+        "robot_power_budget_control",
+        "emergency_power_cutoff",
+    ],
+    "humanoid_manufacturing_test_integration": [
+        "humanoid_robot_complete_unit",
+        "joint_module_assembly",
+        "whole_robot_calibration",
+        "motion_performance_test",
+        "robot_reliability_test",
+        "robot_safety_test",
+        "robot_remote_operations",
+        "industrial_scenario_integration",
+        "service_scenario_integration",
+    ],
+}
+
+HUMANOID_EXPECTED_L4_NODE_TYPES = {
+    "multimodal_perception_model": "ai_model",
+    "vision_language_action_model": "ai_model",
+    "task_understanding_planning": "ai_model",
+    "long_term_memory_world_model": "ai_model",
+    "autonomous_decision_exception_handling": "control_software",
+    "human_robot_interaction_model": "ai_model",
+    "edge_cloud_inference": "inference_system",
+    "whole_body_control": "motion_control_software",
+    "biped_gait_control": "motion_control_software",
+    "arm_motion_planning": "motion_control_software",
+    "dexterous_hand_control": "motion_control_software",
+    "force_position_hybrid_control": "motion_control_software",
+    "model_predictive_control": "motion_control_software",
+    "reinforcement_learning_motion_policy": "motion_control_model",
+    "realtime_motion_control_system": "realtime_control_software",
+    "teleoperation_motion_capture": "data_acquisition_system",
+    "embodied_training_dataset": "dataset",
+    "robot_data_clean_label_replay": "data_toolchain",
+    "robot_simulation": "simulation_software",
+    "digital_twin": "simulation_software",
+    "synthetic_robot_data": "dataset",
+    "sim_to_real": "training_method",
+    "robot_training_evaluation_toolchain": "software_toolchain",
+    "rgb_vision_module": "sensor_module",
+    "depth_camera": "sensor",
+    "lidar_sensor": "sensor",
+    "imu_sensor": "sensor",
+    "joint_encoder": "sensor",
+    "joint_torque_sensor": "sensor",
+    "six_axis_force_sensor": "sensor",
+    "tactile_sensor": "sensor",
+    "microphone_array": "sensor_module",
+    "robot_state_sensor": "sensor",
+    "robot_ai_compute_chip": "compute_component",
+    "robot_ai_compute_module": "compute_module",
+    "main_controller": "controller",
+    "motion_controller": "controller",
+    "realtime_mcu": "control_component",
+    "motor_driver": "power_electronics_component",
+    "sensor_signal_conditioning": "electronic_subsystem",
+    "realtime_communication_bus": "communication_subsystem",
+    "rotary_joint_assembly": "actuation_assembly",
+    "frameless_torque_motor": "actuation_component",
+    "harmonic_reducer": "transmission_component",
+    "rv_reducer": "transmission_component",
+    "precision_planetary_reducer": "transmission_component",
+    "joint_encoder_module": "sensor_module",
+    "joint_brake": "safety_component",
+    "joint_bearing": "mechanical_component",
+    "linear_joint_assembly": "actuation_assembly",
+    "planetary_roller_screw": "transmission_component",
+    "ball_screw": "transmission_component",
+    "trapezoidal_screw": "transmission_component",
+    "linear_motor": "actuation_component",
+    "screw_support_bearing": "mechanical_component",
+    "linear_displacement_sensor": "sensor",
+    "shoulder_joint_module": "body_joint_module",
+    "elbow_joint_module": "body_joint_module",
+    "wrist_joint_module": "body_joint_module",
+    "humanoid_robotic_arm": "limb_assembly",
+    "dexterous_hand_assembly": "end_effector_assembly",
+    "finger_micro_actuator": "actuation_component",
+    "micro_reducer_transmission": "transmission_component",
+    "tendon_flexible_transmission": "transmission_component",
+    "fingertip_tactile_force_control": "sensing_control_subsystem",
+    "hip_joint_module": "body_joint_module",
+    "knee_joint_module": "body_joint_module",
+    "ankle_joint_module": "body_joint_module",
+    "leg_structure": "limb_structure",
+    "foot_buffer_structure": "mechanical_structure",
+    "foot_force_pressure_sensing": "sensor_module",
+    "dynamic_balance_safety_mechanism": "safety_subsystem",
+    "torso_load_bearing_structure": "mechanical_structure",
+    "lightweight_skeleton": "mechanical_structure",
+    "aluminum_magnesium_structure": "structural_component",
+    "carbon_fiber_structure": "structural_component",
+    "precision_cast_machined_parts": "mechanical_component",
+    "robot_wiring_harness": "electrical_component",
+    "protective_shell_soft_cover": "protective_component",
+    "robot_sealing_protection": "protective_subsystem",
+    "robot_battery_pack": "energy_system",
+    "high_specific_energy_cell": "energy_integration_requirement",
+    "battery_management_system": "power_control_requirement",
+    "robot_power_management_dcdc": "power_electronics_subsystem",
+    "autonomous_charging": "charging_system",
+    "robot_thermal_management": "thermal_management_system",
+    "robot_power_budget_control": "power_control_software",
+    "emergency_power_cutoff": "safety_subsystem",
+    "humanoid_robot_complete_unit": "complete_robot",
+    "joint_module_assembly": "manufacturing_process",
+    "whole_robot_calibration": "manufacturing_process",
+    "motion_performance_test": "test_process",
+    "robot_reliability_test": "test_process",
+    "robot_safety_test": "test_process",
+    "robot_remote_operations": "operations_service",
+    "industrial_scenario_integration": "integration_service",
+    "service_scenario_integration": "integration_service",
+}
+
+HUMANOID_EXPECTED_L3_NODE_TYPES = {
+    node_id: (
+        "lifecycle_value_chain_family"
+        if node_id == "humanoid_manufacturing_test_integration"
+        else "system_architecture_family"
+    )
+    for node_id in HUMANOID_EXPECTED_CHILDREN
+}
+
+HUMANOID_EXPECTED_CANONICAL_REFS = {
+    "high_specific_energy_cell": ["battery_high_specific_energy_cell"],
+    "battery_management_system": ["battery_management_system_platform"],
+}
+
+HUMANOID_SENSOR_BOUNDARY_NODE_IDS = {
+    "depth_camera",
+    "lidar_sensor",
+    "imu_sensor",
+    "joint_encoder",
+    "joint_torque_sensor",
+    "six_axis_force_sensor",
+    "tactile_sensor",
+    "joint_encoder_module",
+    "linear_displacement_sensor",
+    "robot_state_sensor",
+}
+
+HUMANOID_MECHANICAL_BOUNDARY_NODE_IDS = {
+    "harmonic_reducer",
+    "rv_reducer",
+    "precision_planetary_reducer",
+    "joint_bearing",
+    "planetary_roller_screw",
+    "ball_screw",
+    "trapezoidal_screw",
+    "screw_support_bearing",
+    "micro_reducer_transmission",
+    "tendon_flexible_transmission",
+}
+
+HUMANOID_EXPECTED_EDGES = {
+    ("rotary_joint_assembly", "frameless_torque_motor"),
+    ("rotary_joint_assembly", "harmonic_reducer"),
+    ("rotary_joint_assembly", "rv_reducer"),
+    ("rotary_joint_assembly", "precision_planetary_reducer"),
+    ("rotary_joint_assembly", "joint_encoder_module"),
+    ("rotary_joint_assembly", "joint_brake"),
+    ("rotary_joint_assembly", "joint_bearing"),
+    ("linear_joint_assembly", "planetary_roller_screw"),
+    ("linear_joint_assembly", "ball_screw"),
+    ("linear_joint_assembly", "trapezoidal_screw"),
+    ("linear_joint_assembly", "linear_motor"),
+    ("linear_joint_assembly", "screw_support_bearing"),
+    ("linear_joint_assembly", "linear_displacement_sensor"),
+    ("shoulder_joint_module", "rotary_joint_assembly"),
+    ("elbow_joint_module", "rotary_joint_assembly"),
+    ("wrist_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "linear_joint_assembly"),
+    ("knee_joint_module", "rotary_joint_assembly"),
+    ("knee_joint_module", "linear_joint_assembly"),
+    ("ankle_joint_module", "rotary_joint_assembly"),
+    ("ankle_joint_module", "linear_joint_assembly"),
+    ("dexterous_hand_assembly", "finger_micro_actuator"),
+    ("dexterous_hand_assembly", "micro_reducer_transmission"),
+    ("dexterous_hand_assembly", "tendon_flexible_transmission"),
+    ("dexterous_hand_assembly", "fingertip_tactile_force_control"),
+    ("robot_battery_pack", "battery_high_specific_energy_cell"),
+    ("robot_battery_pack", "battery_management_system_platform"),
+}
+
+HUMANOID_ALTERNATIVE_ROUTE_EDGES = {
+    ("rotary_joint_assembly", "harmonic_reducer"),
+    ("rotary_joint_assembly", "rv_reducer"),
+    ("rotary_joint_assembly", "precision_planetary_reducer"),
+    ("linear_joint_assembly", "planetary_roller_screw"),
+    ("linear_joint_assembly", "ball_screw"),
+    ("linear_joint_assembly", "trapezoidal_screw"),
+    ("linear_joint_assembly", "linear_motor"),
+    ("hip_joint_module", "rotary_joint_assembly"),
+    ("hip_joint_module", "linear_joint_assembly"),
+    ("knee_joint_module", "rotary_joint_assembly"),
+    ("knee_joint_module", "linear_joint_assembly"),
+    ("ankle_joint_module", "rotary_joint_assembly"),
+    ("ankle_joint_module", "linear_joint_assembly"),
+}
+
+AI_POWER_SECTOR_ID = "energy_technology_new_power_system"
+AI_POWER_CHAIN_ID = "ai_data_center_power"
+AI_POWER_EXPECTED_CHILDREN = {
+    "ai_power_load_capacity_planning": [],
+    "ai_power_energy_supply_resilience": [
+        "ai_power_grid_supply_role",
+        "ai_power_renewable_procurement_role",
+        "ai_power_distributed_energy_role",
+        "ai_power_gas_turbine_role",
+        "ai_power_nuclear_supply_role",
+        "ai_power_microgrid_role",
+    ],
+    "ai_power_grid_access_substation": [
+        "ai_power_grid_connection_role",
+        "ai_power_substation_role",
+        "ai_power_transformer_role",
+        "ai_power_switchgear_role",
+        "ai_power_relay_protection_role",
+        "ai_power_cable_role",
+        "ai_power_busbar_role",
+        "ai_power_power_quality_role",
+    ],
+    "ai_power_backup_power": [
+        "ai_power_diesel_generator_role",
+        "ai_power_gas_backup_role",
+        "ai_power_fuel_cell_backup_role",
+        "ai_power_battery_backup_role",
+        "ai_power_flywheel_role",
+        "ai_power_automatic_transfer_switch_role",
+        "ai_power_black_start_role",
+    ],
+    "ai_power_ups_conversion": [
+        "ai_power_line_frequency_ups_role",
+        "ai_power_high_frequency_ups_role",
+        "ai_power_modular_ups_role",
+        "ai_power_medium_voltage_ups_role",
+        "ai_power_static_transfer_switch_role",
+        "ai_power_rectifier_inverter_role",
+        "ai_power_ups_battery_role",
+    ],
+    "ai_power_hvdc_dc_architecture": [
+        "ai_power_240_400v_hvdc_role",
+        "ai_power_800vdc_role",
+        "ai_power_central_rectifier_role",
+        "ai_power_dc_bus_role",
+        "ai_power_solid_state_transformer_role",
+        "ai_power_dc_breaker_role",
+        "ai_power_dc_protection_role",
+    ],
+    "ai_power_room_rack_distribution": [
+        "ai_power_pdu_role",
+        "ai_power_row_distribution_role",
+        "ai_power_busway_role",
+        "ai_power_intelligent_rack_pdu_role",
+        "ai_power_power_shelf_role",
+        "ai_power_high_current_connector_role",
+        "ai_power_hvdc_connector_role",
+        "ai_power_copper_flexible_connection_role",
+    ],
+    "ai_power_server_board_power": [
+        "ai_power_server_psu_role",
+        "ai_power_ac_dc_module_role",
+        "ai_power_dc_dc_module_role",
+        "ai_power_vrm_role",
+        "ai_power_multiphase_controller_role",
+        "ai_power_mosfet_role",
+        "ai_power_sic_role",
+        "ai_power_gan_role",
+        "ai_power_magnetic_component_role",
+        "ai_power_capacitor_role",
+    ],
+    "ai_power_liquid_cooling_thermal": [
+        "ai_power_cold_plate_role",
+        "ai_power_immersion_cooling_role",
+        "ai_power_spray_cooling_role",
+        "ai_power_cdu_role",
+        "ai_power_chiller_role",
+        "ai_power_liquid_pump_role",
+        "ai_power_heat_exchanger_role",
+        "ai_power_quick_connector_role",
+        "ai_power_liquid_pipe_role",
+        "ai_power_coolant_role",
+        "ai_power_leak_detection_role",
+        "ai_power_waste_heat_recovery_role",
+    ],
+    "ai_power_energy_management_software": [
+        "ai_power_epms_role",
+        "ai_power_bms_role",
+        "ai_power_dcim_role",
+        "ai_power_distribution_monitoring_role",
+        "ai_power_thermal_control_software_role",
+        "ai_power_fault_prediction_role",
+        "ai_power_compute_energy_scheduling_role",
+        "ai_power_carbon_energy_cost_role",
+    ],
+    "ai_power_design_epc_operations": [
+        "ai_power_electrical_design_role",
+        "ai_power_modular_data_center_role",
+        "ai_power_prefabricated_power_module_role",
+        "ai_power_liquid_cooling_integration_role",
+        "ai_power_data_center_epc_role",
+        "ai_power_commissioning_certification_role",
+        "ai_power_facility_operations_role",
+    ],
+}
+
+AI_POWER_L3_DISPLAY_NAMES = {
+    "ai_power_load_capacity_planning": "Load and Capacity Planning",
+    "ai_power_energy_supply_resilience": "Energy Supply and Resilience",
+    "ai_power_grid_access_substation": "Grid Access and Substations",
+    "ai_power_backup_power": "Backup Power",
+    "ai_power_ups_conversion": "UPS and Power Conversion",
+    "ai_power_hvdc_dc_architecture": "HVDC and DC Architecture",
+    "ai_power_room_rack_distribution": "Room and Rack Distribution",
+    "ai_power_server_board_power": "Server and Board-Level Power",
+    "ai_power_liquid_cooling_thermal": "Liquid Cooling and Thermal Management",
+    "ai_power_energy_management_software": "Energy Management Software",
+    "ai_power_design_epc_operations": "Design, EPC, and Operations",
+}
+
+AI_POWER_L3_STAGE_TERMS = {
+    "ai_power_load_capacity_planning": ("rack density", "pue", "wue"),
+    "ai_power_energy_supply_resilience": ("supply portfolio", "firm capacity", "resilience"),
+    "ai_power_grid_access_substation": ("interconnection", "substation", "protection"),
+    "ai_power_backup_power": ("ride-through", "standby", "transfer"),
+    "ai_power_ups_conversion": ("conditioned power", "rectification", "inversion"),
+    "ai_power_hvdc_dc_architecture": ("dc voltage", "rectification", "protection"),
+    "ai_power_room_rack_distribution": ("pdu", "busway", "rack"),
+    "ai_power_server_board_power": ("server psu", "dc-dc", "voltage regulation"),
+    "ai_power_liquid_cooling_thermal": ("cdu", "coolant", "heat rejection"),
+    "ai_power_energy_management_software": ("monitoring", "control", "scheduling"),
+    "ai_power_design_epc_operations": ("design", "commissioning", "operations"),
+}
+
+AI_POWER_SUPPLY_ROLE_BOUNDARIES = {
+    "ai_power_grid_supply_role": (
+        ("utility-delivered service capacity",),
+        ("excludes onsite generation", "procurement instruments"),
+    ),
+    "ai_power_renewable_procurement_role": (
+        ("ppa", "green tariffs", "certificates"),
+        ("excludes physical generation", "microgrid control"),
+    ),
+    "ai_power_distributed_energy_role": (
+        ("onsite/local generation assets",),
+        ("gas-turbine-specific route", "microgrid orchestration"),
+    ),
+    "ai_power_gas_turbine_role": (
+        ("turbine equipment", "fuel", "dispatch"),
+        ("excludes generic distributed resources",),
+    ),
+    "ai_power_nuclear_supply_role": (
+        ("nuclear-backed ppa", "co-location", "supply"),
+        ("excludes generic grid supply",),
+    ),
+    "ai_power_microgrid_role": (
+        ("orchestration", "islanding", "control"),
+        ("excludes ownership of generation assets",),
+    ),
+}
+
+AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS = {
+    "ai_power_grid_supply_role": (
+        "utility-delivered service capacity",
+        "firm grid volume",
+    ),
+    "ai_power_renewable_procurement_role": (
+        "ppa structures",
+        "green tariffs",
+        "certificates",
+    ),
+    "ai_power_distributed_energy_role": (
+        "onsite/local generation assets",
+        "grid-parallel operation",
+    ),
+    "ai_power_gas_turbine_role": (
+        "turbine equipment configuration",
+        "fuel firmness",
+        "dispatch schedule",
+    ),
+    "ai_power_nuclear_supply_role": (
+        "nuclear-backed ppa terms",
+        "nuclear co-location",
+        "dedicated nuclear supply",
+    ),
+    "ai_power_microgrid_role": (
+        "microgrid orchestration",
+        "islanding boundaries",
+        "control logic",
+    ),
+}
+
+AI_POWER_SUPPLY_ROLE_FORBIDDEN_ROUTE_MARKERS = {
+    role_id: tuple(
+        marker
+        for other_role_id, markers in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS.items()
+        if other_role_id != role_id
+        for marker in markers
+    )
+    for role_id in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS
+}
+
+AI_POWER_SUPPORTING_L3_TERMS = {
+    "power_semiconductor_devices": (
+        "mosfet",
+        "silicon carbide",
+        "gallium nitride",
+    ),
+    "power_interconnect_passive_components": (
+        "cables",
+        "busbars",
+        "connectors",
+        "magnetic components",
+        "capacitors",
+    ),
+    "data_center_facility_systems_services": (
+        "coolant distribution",
+        "facility management platform",
+        "commissioning",
+    ),
+    "industrial_energy_facility_software": (
+        "electrical power monitoring",
+        "building management",
+        "compute scheduling",
+    ),
+    "grid_connection_transmission_protection": (
+        "transformers",
+        "relay protection",
+        "dc circuit breakers",
+        "dc protection",
+    ),
+    "generation_supply_resilience_systems": (
+        "contracted supply",
+        "local generation",
+        "diesel",
+        "black-start",
+    ),
+    "power_conversion_distribution_control": (
+        "automatic transfer switches",
+        "server and board",
+        "voltage regulator",
+    ),
+    "stationary_backup_storage_systems": (
+        "stationary batteries",
+        "flywheels",
+        "ups energy storage",
+    ),
+    "stationary_fuel_cell_systems": ("fuel-cell", "stacks", "balance of plant"),
+}
+
+AI_POWER_ROLE_NODE_TYPES = {
+    "ai_power_grid_supply_role": "energy_supply_service_role",
+    "ai_power_renewable_procurement_role": "energy_procurement_service_role",
+    "ai_power_distributed_energy_role": "generation_system_role",
+    "ai_power_gas_turbine_role": "generation_equipment_role",
+    "ai_power_nuclear_supply_role": "energy_supply_service_role",
+    "ai_power_microgrid_role": "generation_system_role",
+    "ai_power_grid_connection_role": "grid_connection_service_role",
+    "ai_power_substation_role": "grid_infrastructure_role",
+    "ai_power_transformer_role": "grid_equipment_role",
+    "ai_power_switchgear_role": "grid_equipment_role",
+    "ai_power_relay_protection_role": "grid_protection_role",
+    "ai_power_cable_role": "power_interconnect_role",
+    "ai_power_busbar_role": "power_interconnect_role",
+    "ai_power_power_quality_role": "power_quality_role",
+    "ai_power_diesel_generator_role": "backup_generation_role",
+    "ai_power_gas_backup_role": "backup_generation_role",
+    "ai_power_fuel_cell_backup_role": "backup_generation_role",
+    "ai_power_battery_backup_role": "energy_storage_role",
+    "ai_power_flywheel_role": "energy_storage_role",
+    "ai_power_automatic_transfer_switch_role": "power_switching_role",
+    "ai_power_black_start_role": "resilience_service_role",
+    "ai_power_line_frequency_ups_role": "ups_equipment_role",
+    "ai_power_high_frequency_ups_role": "ups_equipment_role",
+    "ai_power_modular_ups_role": "ups_equipment_role",
+    "ai_power_medium_voltage_ups_role": "ups_equipment_role",
+    "ai_power_static_transfer_switch_role": "power_switching_role",
+    "ai_power_rectifier_inverter_role": "power_conversion_role",
+    "ai_power_ups_battery_role": "energy_storage_role",
+    "ai_power_240_400v_hvdc_role": "dc_power_architecture_role",
+    "ai_power_800vdc_role": "dc_power_architecture_role",
+    "ai_power_central_rectifier_role": "power_conversion_role",
+    "ai_power_dc_bus_role": "dc_distribution_role",
+    "ai_power_solid_state_transformer_role": "power_conversion_role",
+    "ai_power_dc_breaker_role": "dc_protection_role",
+    "ai_power_dc_protection_role": "dc_protection_role",
+    "ai_power_pdu_role": "power_distribution_role",
+    "ai_power_row_distribution_role": "power_distribution_role",
+    "ai_power_busway_role": "power_interconnect_role",
+    "ai_power_intelligent_rack_pdu_role": "power_distribution_role",
+    "ai_power_power_shelf_role": "power_conversion_role",
+    "ai_power_high_current_connector_role": "power_interconnect_role",
+    "ai_power_hvdc_connector_role": "power_interconnect_role",
+    "ai_power_copper_flexible_connection_role": "power_interconnect_role",
+    "ai_power_server_psu_role": "server_power_role",
+    "ai_power_ac_dc_module_role": "power_conversion_role",
+    "ai_power_dc_dc_module_role": "power_conversion_role",
+    "ai_power_vrm_role": "board_power_role",
+    "ai_power_multiphase_controller_role": "power_control_role",
+    "ai_power_mosfet_role": "power_semiconductor_role",
+    "ai_power_sic_role": "power_semiconductor_role",
+    "ai_power_gan_role": "power_semiconductor_role",
+    "ai_power_magnetic_component_role": "passive_component_role",
+    "ai_power_capacitor_role": "passive_component_role",
+    "ai_power_cold_plate_role": "liquid_cooling_equipment_role",
+    "ai_power_immersion_cooling_role": "liquid_cooling_system_role",
+    "ai_power_spray_cooling_role": "liquid_cooling_system_role",
+    "ai_power_cdu_role": "liquid_cooling_equipment_role",
+    "ai_power_chiller_role": "thermal_equipment_role",
+    "ai_power_liquid_pump_role": "liquid_cooling_component_role",
+    "ai_power_heat_exchanger_role": "thermal_equipment_role",
+    "ai_power_quick_connector_role": "liquid_cooling_component_role",
+    "ai_power_liquid_pipe_role": "liquid_cooling_component_role",
+    "ai_power_coolant_role": "thermal_material_role",
+    "ai_power_leak_detection_role": "thermal_monitoring_role",
+    "ai_power_waste_heat_recovery_role": "thermal_recovery_role",
+    "ai_power_epms_role": "energy_management_software_role",
+    "ai_power_bms_role": "facility_management_software_role",
+    "ai_power_dcim_role": "data_center_management_software_role",
+    "ai_power_distribution_monitoring_role": "energy_management_software_role",
+    "ai_power_thermal_control_software_role": "thermal_control_software_role",
+    "ai_power_fault_prediction_role": "predictive_maintenance_software_role",
+    "ai_power_compute_energy_scheduling_role": "energy_scheduling_software_role",
+    "ai_power_carbon_energy_cost_role": "energy_optimization_software_role",
+    "ai_power_electrical_design_role": "engineering_service_role",
+    "ai_power_modular_data_center_role": "data_center_system_role",
+    "ai_power_prefabricated_power_module_role": "power_system_integration_role",
+    "ai_power_liquid_cooling_integration_role": "thermal_integration_service_role",
+    "ai_power_data_center_epc_role": "epc_service_role",
+    "ai_power_commissioning_certification_role": "commissioning_service_role",
+    "ai_power_facility_operations_role": "operations_service_role",
+}
+
+AI_POWER_CANONICAL_OWNERS = {
+    "ai_power_grid_supply_role": ("bulk_grid_power_supply_service", "power_generation_energy_equipment"),
+    "ai_power_renewable_procurement_role": ("renewable_power_procurement_service", "power_generation_energy_equipment"),
+    "ai_power_distributed_energy_role": ("distributed_energy_generation_system", "power_generation_energy_equipment"),
+    "ai_power_gas_turbine_role": ("gas_turbine_generation_system", "power_generation_energy_equipment"),
+    "ai_power_nuclear_supply_role": ("nuclear_power_supply_service", "power_generation_energy_equipment"),
+    "ai_power_microgrid_role": ("microgrid_generation_system", "power_generation_energy_equipment"),
+    "ai_power_grid_connection_role": ("grid_connection_engineering_service", "new_power_system_smart_grid"),
+    "ai_power_substation_role": ("data_center_substation_system", "new_power_system_smart_grid"),
+    "ai_power_transformer_role": ("power_transformer", "new_power_system_smart_grid"),
+    "ai_power_switchgear_role": ("medium_voltage_switchgear", "new_power_system_smart_grid"),
+    "ai_power_relay_protection_role": ("relay_protection_system", "new_power_system_smart_grid"),
+    "ai_power_cable_role": ("power_cable", "pcb_passives_connectors_interconnect"),
+    "ai_power_busbar_role": ("power_busbar", "pcb_passives_connectors_interconnect"),
+    "ai_power_power_quality_role": ("power_quality_management_system", "new_power_system_smart_grid"),
+    "ai_power_diesel_generator_role": ("diesel_generator_set", "power_generation_energy_equipment"),
+    "ai_power_gas_backup_role": ("gas_fired_backup_generator", "power_generation_energy_equipment"),
+    "ai_power_fuel_cell_backup_role": ("stationary_fuel_cell_backup_system", "hydrogen_fuel_cells"),
+    "ai_power_battery_backup_role": ("stationary_battery_backup_system", "new_energy_storage"),
+    "ai_power_flywheel_role": ("flywheel_backup_energy_system", "new_energy_storage"),
+    "ai_power_automatic_transfer_switch_role": ("automatic_transfer_switch", "power_electronics_power_supply_equipment"),
+    "ai_power_black_start_role": ("black_start_generation_service", "power_generation_energy_equipment"),
+    "ai_power_line_frequency_ups_role": ("line_frequency_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_high_frequency_ups_role": ("high_frequency_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_modular_ups_role": ("modular_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_medium_voltage_ups_role": ("medium_voltage_ups", "power_electronics_power_supply_equipment"),
+    "ai_power_static_transfer_switch_role": ("static_transfer_switch", "power_electronics_power_supply_equipment"),
+    "ai_power_rectifier_inverter_role": ("rectifier_inverter_system", "power_electronics_power_supply_equipment"),
+    "ai_power_ups_battery_role": ("ups_battery_system", "new_energy_storage"),
+    "ai_power_240_400v_hvdc_role": ("240_400v_hvdc_power_system", "power_electronics_power_supply_equipment"),
+    "ai_power_800vdc_role": ("800vdc_power_system", "power_electronics_power_supply_equipment"),
+    "ai_power_central_rectifier_role": ("central_rectifier_system", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_bus_role": ("dc_power_bus_system", "power_electronics_power_supply_equipment"),
+    "ai_power_solid_state_transformer_role": ("solid_state_transformer", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_breaker_role": ("dc_circuit_breaker", "new_power_system_smart_grid"),
+    "ai_power_dc_protection_role": ("dc_protection_system", "new_power_system_smart_grid"),
+    "ai_power_pdu_role": ("data_center_power_distribution_unit", "power_electronics_power_supply_equipment"),
+    "ai_power_row_distribution_role": ("row_level_power_distribution_system", "power_electronics_power_supply_equipment"),
+    "ai_power_busway_role": ("data_center_busway", "pcb_passives_connectors_interconnect"),
+    "ai_power_intelligent_rack_pdu_role": ("intelligent_rack_pdu", "power_electronics_power_supply_equipment"),
+    "ai_power_power_shelf_role": ("server_power_shelf", "power_electronics_power_supply_equipment"),
+    "ai_power_high_current_connector_role": ("high_current_power_connector", "pcb_passives_connectors_interconnect"),
+    "ai_power_hvdc_connector_role": ("hvdc_power_connector", "pcb_passives_connectors_interconnect"),
+    "ai_power_copper_flexible_connection_role": ("copper_flexible_interconnect", "pcb_passives_connectors_interconnect"),
+    "ai_power_server_psu_role": ("server_power_supply_unit", "power_electronics_power_supply_equipment"),
+    "ai_power_ac_dc_module_role": ("ac_dc_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_dc_dc_module_role": ("dc_dc_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_vrm_role": ("voltage_regulator_module", "power_electronics_power_supply_equipment"),
+    "ai_power_multiphase_controller_role": ("multiphase_power_controller", "power_electronics_power_supply_equipment"),
+    "ai_power_mosfet_role": ("power_mosfet_device", "power_semiconductors"),
+    "ai_power_sic_role": ("silicon_carbide_power_device", "power_semiconductors"),
+    "ai_power_gan_role": ("gallium_nitride_power_device", "power_semiconductors"),
+    "ai_power_magnetic_component_role": ("power_magnetic_component", "pcb_passives_connectors_interconnect"),
+    "ai_power_capacitor_role": ("power_capacitor", "pcb_passives_connectors_interconnect"),
+    "ai_power_cold_plate_role": ("data_center_cold_plate", "cloud_data_center_infrastructure"),
+    "ai_power_immersion_cooling_role": ("immersion_cooling_system", "cloud_data_center_infrastructure"),
+    "ai_power_spray_cooling_role": ("spray_cooling_system", "cloud_data_center_infrastructure"),
+    "ai_power_cdu_role": ("coolant_distribution_unit", "cloud_data_center_infrastructure"),
+    "ai_power_chiller_role": ("data_center_chiller", "cloud_data_center_infrastructure"),
+    "ai_power_liquid_pump_role": ("liquid_cooling_pump", "cloud_data_center_infrastructure"),
+    "ai_power_heat_exchanger_role": ("data_center_heat_exchanger", "cloud_data_center_infrastructure"),
+    "ai_power_quick_connector_role": ("liquid_cooling_quick_connector", "cloud_data_center_infrastructure"),
+    "ai_power_liquid_pipe_role": ("liquid_cooling_pipe_system", "cloud_data_center_infrastructure"),
+    "ai_power_coolant_role": ("data_center_coolant", "cloud_data_center_infrastructure"),
+    "ai_power_leak_detection_role": ("liquid_cooling_leak_detection_system", "cloud_data_center_infrastructure"),
+    "ai_power_waste_heat_recovery_role": ("data_center_waste_heat_recovery_system", "cloud_data_center_infrastructure"),
+    "ai_power_epms_role": ("electrical_power_monitoring_software", "industrial_software"),
+    "ai_power_bms_role": ("building_management_software", "industrial_software"),
+    "ai_power_dcim_role": ("data_center_infrastructure_management_platform", "cloud_data_center_infrastructure"),
+    "ai_power_distribution_monitoring_role": ("power_distribution_monitoring_software", "industrial_software"),
+    "ai_power_thermal_control_software_role": ("thermal_control_software", "industrial_software"),
+    "ai_power_fault_prediction_role": ("power_fault_prediction_software", "industrial_software"),
+    "ai_power_compute_energy_scheduling_role": ("compute_energy_scheduling_software", "industrial_software"),
+    "ai_power_carbon_energy_cost_role": ("carbon_energy_cost_optimization_software", "industrial_software"),
+    "ai_power_electrical_design_role": ("data_center_electrical_design_service", "cloud_data_center_infrastructure"),
+    "ai_power_modular_data_center_role": ("modular_data_center_system", "cloud_data_center_infrastructure"),
+    "ai_power_prefabricated_power_module_role": ("prefabricated_power_module", "power_electronics_power_supply_equipment"),
+    "ai_power_liquid_cooling_integration_role": ("liquid_cooling_integration_service", "cloud_data_center_infrastructure"),
+    "ai_power_data_center_epc_role": ("data_center_epc_service", "cloud_data_center_infrastructure"),
+    "ai_power_commissioning_certification_role": ("data_center_commissioning_certification_service", "cloud_data_center_infrastructure"),
+    "ai_power_facility_operations_role": ("data_center_facility_operations_service", "cloud_data_center_infrastructure"),
+}
+
+AI_POWER_SUPPORTING_L3_BY_CHAIN = {
+    "power_semiconductors": "power_semiconductor_devices",
+    "pcb_passives_connectors_interconnect": "power_interconnect_passive_components",
+    "cloud_data_center_infrastructure": "data_center_facility_systems_services",
+    "industrial_software": "industrial_energy_facility_software",
+    "new_power_system_smart_grid": "grid_connection_transmission_protection",
+    "power_generation_energy_equipment": "generation_supply_resilience_systems",
+    "power_electronics_power_supply_equipment": "power_conversion_distribution_control",
+    "new_energy_storage": "stationary_backup_storage_systems",
+    "hydrogen_fuel_cells": "stationary_fuel_cell_systems",
+}
+
+AI_POWER_APPROVED_CHAIN_CONTRACT = {
+    "power_semiconductors": (
+        "semiconductor_electronics",
+        "canonical_industry_chain",
+        "manufacturing_process",
+        "skeleton",
+        5,
+    ),
+    "pcb_passives_connectors_interconnect": (
+        "semiconductor_electronics",
+        "canonical_industry_chain",
+        "manufacturing_process",
+        "skeleton",
+        11,
+    ),
+    "cloud_data_center_infrastructure": (
+        "next_generation_information_technology",
+        "canonical_industry_chain",
+        "infrastructure_flow",
+        "skeleton",
+        3,
+    ),
+    "industrial_software": (
+        "next_generation_information_technology",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        8,
+    ),
+    "new_power_system_smart_grid": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "infrastructure_flow",
+        "skeleton",
+        1,
+    ),
+    "power_generation_energy_equipment": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        2,
+    ),
+    "power_electronics_power_supply_equipment": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "system_architecture",
+        "skeleton",
+        3,
+    ),
+    "ai_data_center_power": (
+        "energy_technology_new_power_system",
+        "application_theme_chain",
+        "infrastructure_flow",
+        "draft",
+        4,
+    ),
+    "new_energy_storage": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "technical_route",
+        "skeleton",
+        8,
+    ),
+    "hydrogen_fuel_cells": (
+        "energy_technology_new_power_system",
+        "canonical_industry_chain",
+        "technical_route",
+        "skeleton",
+        9,
+    ),
+}
+
+
+def test_semiconductor_manufacturing_equipment_chain_metadata():
+    catalog = load_industry_catalog()
+    chain = next(row for row in catalog["chains"] if row["chain_id"] == CHAIN_ID)
+
+    assert chain == {
+        "chain_id": CHAIN_ID,
+        "sector_id": SECTOR_ID,
+        "chain_name": "Semiconductor Manufacturing Equipment",
+        "chain_kind": "canonical_industry_chain",
+        "decomposition_method": "manufacturing_process",
+        "description": (
+            "Equipment and factory systems used to execute, control, and support "
+            "front-end semiconductor wafer manufacturing."
+        ),
+        "scope": (
+            "Covers wafer-fabrication process equipment, inspection and metrology, "
+            "wafer automation, vacuum and process delivery, and fab utility systems."
+        ),
+        "exclusions": [
+            "Semiconductor materials are owned by the semiconductor materials chain.",
+            (
+                "Semiconductor packaging and test equipment are owned by the packaging "
+                "and test chain, except wafer_thinning is temporarily canonical here "
+                "and may be referenced by advanced packaging."
+            ),
+        ],
+        "aliases": [
+            "Semiconductor Equipment",
+            "Wafer Fab Equipment",
+            "半导体制造设备",
+        ],
+        "status": "draft",
+        "order": 8,
+    }
+
+
+def test_semiconductor_manufacturing_equipment_exact_taxonomy_and_contract():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == CHAIN_ID]
+    l3_nodes = [row for row in nodes if row["level"] == "L3"]
+    l4_nodes = [row for row in nodes if row["level"] == "L4"]
+
+    assert len(l3_nodes) == 10
+    assert len(l4_nodes) == 69
+    assert [row["node_id"] for row in l3_nodes] == list(EXPECTED_CHILDREN)
+    assert {
+        parent_id: [
+            row["node_id"]
+            for row in l4_nodes
+            if row["parent_node_id"] == parent_id
+        ]
+        for parent_id in EXPECTED_CHILDREN
+    } == EXPECTED_CHILDREN
+    assert {row["node_id"]: row["node_type"] for row in l4_nodes} == (
+        EXPECTED_L4_NODE_TYPES
+    )
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "canonical"
+        assert node["status"] == "draft"
+        assert node["canonical_node_refs"] == []
+        assert node["node_name"] != node["node_id"]
+        assert node["description"]
+
+    for node in l3_nodes:
+        assert node["parent_node_id"] is None
+        assert node["node_type"] == "manufacturing_process_family"
+        assert node["canonical_key"] == ""
+        assert node["primary_path"] == [SECTOR_ID, CHAIN_ID, node["node_id"]]
+
+    for node in l4_nodes:
+        assert node["canonical_key"] == f"semiconductor_equipment:{node['node_id']}"
+        assert node["primary_path"] == [
+            SECTOR_ID,
+            CHAIN_ID,
+            node["parent_node_id"],
+            node["node_id"],
+        ]
+
+
+def test_semiconductor_manufacturing_equipment_representative_nodes_are_research_usable():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == CHAIN_ID
+    }
+
+    assert nodes["semiconductor_lithography_patterning"]["node_name"] == (
+        "Lithography and Patterning"
+    )
+    assert nodes["euv_lithography"]["node_name"] == "EUV Lithography Equipment"
+    assert nodes["euv_lithography"]["description"] == (
+        "Extreme-ultraviolet exposure systems for advanced-node patterning."
+    )
+    assert nodes["mass_flow_controller"]["node_name"] == "Mass Flow Controllers"
+    assert nodes["photomask_inspection_repair"]["node_name"] == (
+        "Photomask Repair Equipment"
+    )
+    assert nodes["photomask_inspection_repair"]["description"] == (
+        "Repair systems for correcting defects on semiconductor photomasks; "
+        "photomask inspection is owned by photomask_inspection under metrology."
+    )
+    assert nodes["cvd_equipment"]["node_name"] == "General Thermal CVD Equipment"
+    assert nodes["cvd_equipment"]["description"] == (
+        "General thermal CVD systems for routes not represented by PECVD, LPCVD, "
+        "ALD, or other separately enumerated deposition nodes."
+    )
+    assert nodes["wafer_defect_inspection"]["node_name"] == (
+        "Bare-Wafer Defect Inspection Equipment"
+    )
+    assert nodes["wafer_defect_inspection"]["description"] == (
+        "Optical inspection systems for particles and defects on unpatterned or bare "
+        "wafers; patterned-wafer inspection is owned by pattern_defect_inspection."
+    )
+    assert nodes["wafer_thinning"]["description"] == (
+        "Grinding and polishing systems that reduce wafer thickness; temporarily owned "
+        "here as the canonical node and referenced by advanced packaging."
+    )
+    assert nodes["molecular_high_vacuum_pump"]["node_name"] == (
+        "Turbomolecular High-Vacuum Pumps"
+    )
+    assert nodes["molecular_high_vacuum_pump"]["description"] == (
+        "Turbomolecular pumps that generate high and ultra-high vacuum conditions in "
+        "semiconductor process equipment."
+    )
+    assert nodes["yield_process_control_software"]["description"] == (
+        "Software that analyzes fab data to monitor yield and control process excursions."
+    )
+    assert nodes["ultrapure_water_system"]["node_name"] == "Ultrapure Water Systems"
+
+
+def test_power_batteries_battery_materials_skeleton_metadata():
+    catalog = load_industry_catalog()
+    chain = next(
+        row for row in catalog["chains"] if row["chain_id"] == BATTERY_CHAIN_ID
+    )
+
+    assert chain == {
+        "chain_id": BATTERY_CHAIN_ID,
+        "sector_id": BATTERY_SECTOR_ID,
+        "chain_name": "Power Batteries and Battery Materials",
+        "chain_kind": "canonical_industry_chain",
+        "decomposition_method": "manufacturing_process",
+        "description": (
+            "Primary canonical ownership skeleton for power-battery cells, battery "
+            "management platforms, pack and system integration, and battery materials "
+            "across the manufacturing value chain."
+        ),
+        "scope": (
+            "This skeleton establishes canonical ownership for generic high-specific-energy "
+            "power-battery cells and battery management system platforms. Later expansion "
+            "may add cell manufacturing, pack integration, recycling, and battery-material "
+            "process families without changing application-chain ownership."
+        ),
+        "exclusions": [
+            (
+                "Humanoid-specific cell selection, BMS integration, robot battery packs, "
+                "and robot power controls remain owned by "
+                "humanoid_robots_embodied_intelligence."
+            ),
+            (
+                "Stationary energy-storage systems and grid integration remain owned by "
+                "their primary energy-storage and power-system chains."
+            ),
+            (
+                "Vehicle-specific battery installation and vehicle energy management "
+                "remain owned by intelligent-vehicle chains; generic battery products "
+                "remain canonical here."
+            ),
+        ],
+        "aliases": [
+            "Power Battery Industry",
+            "Traction Batteries and Materials",
+            "动力电池与电池材料",
+        ],
+        "status": "skeleton",
+        "order": 7,
+    }
+
+
+def test_power_batteries_battery_materials_skeleton_exact_taxonomy_and_ownership():
+    catalog = load_industry_catalog()
+    original_node_ids = {
+        BATTERY_L3_ID,
+        "battery_high_specific_energy_cell",
+        "battery_management_system_platform",
+    }
+    nodes = [
+        row
+        for row in catalog["nodes"]
+        if row["chain_id"] == BATTERY_CHAIN_ID
+        and row["node_id"] in original_node_ids
+    ]
+
+    assert [row["node_id"] for row in nodes] == [
+        BATTERY_L3_ID,
+        "battery_high_specific_energy_cell",
+        "battery_management_system_platform",
+    ]
+    assert {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == BATTERY_CHAIN_ID
+    } == original_node_ids
+    assert {row["node_id"]: row["node_type"] for row in nodes} == {
+        BATTERY_L3_ID: "battery_system_family",
+        "battery_high_specific_energy_cell": "battery_cell_product",
+        "battery_management_system_platform": "battery_control_platform",
+    }
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "canonical"
+        assert node["status"] == "skeleton"
+        assert node["canonical_node_refs"] == []
+        assert node["description"]
+
+    l3_node = nodes[0]
+    assert l3_node["parent_node_id"] is None
+    assert l3_node["canonical_key"] == ""
+    assert l3_node["primary_path"] == [
+        BATTERY_SECTOR_ID,
+        BATTERY_CHAIN_ID,
+        BATTERY_L3_ID,
+    ]
+
+    for node in nodes[1:]:
+        assert node["parent_node_id"] == BATTERY_L3_ID
+        assert node["level"] == "L4"
+        assert node["canonical_key"] == f"battery_industry:{node['node_id']}"
+        assert node["primary_path"] == [
+            BATTERY_SECTOR_ID,
+            BATTERY_CHAIN_ID,
+            BATTERY_L3_ID,
+            node["node_id"],
+        ]
+
+    assert nodes[1]["node_name"] == "High-Specific-Energy Power Battery Cells"
+    assert nodes[1]["description"] == (
+        "Canonical generic power-battery cell products optimized for high specific energy; "
+        "owns cell technology and manufacturing independently of application-specific "
+        "selection requirements."
+    )
+    assert nodes[2]["node_name"] == "Battery Management System Platforms"
+    assert nodes[2]["description"] == (
+        "Canonical generic battery management hardware and software platforms for state "
+        "estimation, balancing, protection, charging, diagnostics, and system interfaces; "
+        "application-specific integration requirements reference this node."
+    )
+
+
+def test_new_energy_storage_skeleton_owns_stationary_backup_systems():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == "new_energy_storage"
+    }
+
+    assert set(nodes) == {
+        "stationary_backup_storage_systems",
+        "stationary_battery_backup_system",
+        "flywheel_backup_energy_system",
+        "ups_battery_system",
+    }
+    assert nodes["stationary_backup_storage_systems"]["level"] == "L3"
+    assert nodes["stationary_backup_storage_systems"]["primary_path"] == [
+        AI_POWER_SECTOR_ID,
+        "new_energy_storage",
+        "stationary_backup_storage_systems",
+    ]
+    for node_id in (
+        "stationary_battery_backup_system",
+        "flywheel_backup_energy_system",
+        "ups_battery_system",
+    ):
+        node = nodes[node_id]
+        assert node["parent_node_id"] == "stationary_backup_storage_systems"
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            "new_energy_storage",
+            "stationary_backup_storage_systems",
+            node_id,
+        ]
+        assert node["canonical_key"] == f"new_energy_storage:{node_id}"
+
+
+def test_humanoid_robots_embodied_intelligence_chain_metadata():
+    catalog = load_industry_catalog()
+    chain = next(
+        row for row in catalog["chains"] if row["chain_id"] == HUMANOID_CHAIN_ID
+    )
+
+    assert chain == {
+        "chain_id": HUMANOID_CHAIN_ID,
+        "sector_id": HUMANOID_SECTOR_ID,
+        "chain_name": "Humanoid Robots and Embodied Intelligence",
+        "chain_kind": "canonical_industry_chain",
+        "decomposition_method": "system_architecture",
+        "description": (
+            "A primarily system-architecture decomposition of humanoid robots spanning "
+            "embodied intelligence, control, sensing, compute, actuation, body, and energy "
+            "subsystems, with one explicit supplementary lifecycle and value-chain family."
+        ),
+        "scope": (
+            "Covers robot-specific models and software; humanoid-specific requirements, "
+            "qualification, packaging, calibration, selection, joint and module "
+            "integration, and system use of sensing, compute, actuation, body, and energy "
+            "components; complete humanoid robots; and their manufacturing, test, "
+            "operations, and scenario integration. Under the approved mixed-template "
+            "rule, humanoid_manufacturing_test_integration supplements the primary system "
+            "architecture with lifecycle coverage."
+        ),
+        "exclusions": [
+            (
+                "General-purpose AI foundation models remain owned by their primary AI "
+                "chain; this chain covers robot-adapted embodied models and inference."
+            ),
+            (
+                "General semiconductor chips remain owned by semiconductor chains; this "
+                "chain covers robot-selected compute components and integrated modules."
+            ),
+            (
+                "Generic battery cells, battery management systems, and battery materials "
+                "remain owned by power_batteries_battery_materials; this chain covers "
+                "humanoid-specific selection, integration, and control requirements."
+            ),
+            (
+                "Standalone and general-purpose MEMS and intelligent sensing devices, "
+                "sensor dies and components, fabrication, and related evidence and company "
+                "ownership remain with mems_intelligent_sensors; this chain covers "
+                "humanoid-specific requirements, qualification, packaging, calibration, "
+                "selection, module integration, and system use."
+            ),
+            (
+                "Standalone and general-purpose bearings, gears and reducers, screws and "
+                "linear guides, precision transmission components, and related evidence "
+                "and company ownership remain with core_mechanical_components; this chain "
+                "covers humanoid joint and module requirements, qualification, selection, "
+                "packaging, integration, and system use."
+            ),
+            (
+                "General industrial robots, machine tools, and factory automation remain "
+                "owned by their primary equipment chains unless humanoid-specific."
+            ),
+        ],
+        "aliases": [
+            "Humanoid Robotics",
+            "Embodied Intelligence Robots",
+            "人形机器人与具身智能",
+            "人形机器人",
+        ],
+        "status": "draft",
+        "order": 4,
+    }
+
+
+def test_humanoid_component_ownership_boundary_is_reciprocal_and_explicit():
+    catalog = load_industry_catalog()
+    chains = {row["chain_id"]: row for row in catalog["chains"]}
+
+    assert chains["mems_intelligent_sensors"]["scope"] == (
+        "Covers standalone and general-purpose MEMS and intelligent sensing devices, "
+        "sensor dies and components, and fabrication across inertial, pressure, acoustic, "
+        "environmental, optical, force, position, and tactile sensing."
+    )
+    assert (
+        "Humanoid-specific sensor requirements, qualification, packaging, calibration, "
+        "selection, robot-module integration, and system use remain owned by "
+        "humanoid_robots_embodied_intelligence."
+        in chains["mems_intelligent_sensors"]["exclusions"]
+    )
+    assert chains["core_mechanical_components"]["scope"] == (
+        "Covers standalone and general-purpose bearings, gears and reducers, screws and "
+        "linear guides, hydraulic and pneumatic components, seals, and precision "
+        "transmission components and assemblies."
+    )
+    assert (
+        "Humanoid-specific joint and module requirements, qualification, selection, "
+        "packaging, integration, and system use remain owned by "
+        "humanoid_robots_embodied_intelligence."
+        in chains["core_mechanical_components"]["exclusions"]
+    )
+
+
+def test_humanoid_robots_embodied_intelligence_exact_taxonomy_and_contract():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == HUMANOID_CHAIN_ID]
+    l3_nodes = [row for row in nodes if row["level"] == "L3"]
+    l4_nodes = [row for row in nodes if row["level"] == "L4"]
+
+    assert len(l3_nodes) == 12
+    assert len(l4_nodes) == 97
+    assert [row["node_id"] for row in l3_nodes] == list(HUMANOID_EXPECTED_CHILDREN)
+    assert {
+        parent_id: [
+            row["node_id"]
+            for row in l4_nodes
+            if row["parent_node_id"] == parent_id
+        ]
+        for parent_id in HUMANOID_EXPECTED_CHILDREN
+    } == HUMANOID_EXPECTED_CHILDREN
+    assert {row["node_id"]: row["node_type"] for row in l4_nodes} == (
+        HUMANOID_EXPECTED_L4_NODE_TYPES
+    )
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "canonical"
+        assert node["status"] == "draft"
+        assert node["canonical_node_refs"] == HUMANOID_EXPECTED_CANONICAL_REFS.get(
+            node["node_id"], []
+        )
+        assert node["node_name"] != node["node_id"]
+        assert node["description"]
+
+    for node in l3_nodes:
+        assert node["parent_node_id"] is None
+        assert node["node_type"] == HUMANOID_EXPECTED_L3_NODE_TYPES[node["node_id"]]
+        assert node["canonical_key"] == ""
+        assert node["primary_path"] == [
+            HUMANOID_SECTOR_ID,
+            HUMANOID_CHAIN_ID,
+            node["node_id"],
+        ]
+
+    for node in l4_nodes:
+        assert node["canonical_key"] == f"humanoid_robotics:{node['node_id']}"
+        assert node["primary_path"] == [
+            HUMANOID_SECTOR_ID,
+            HUMANOID_CHAIN_ID,
+            node["parent_node_id"],
+            node["node_id"],
+        ]
+
+
+def test_humanoid_robots_embodied_intelligence_exact_uses_edges():
+    catalog = load_industry_catalog()
+    humanoid_node_ids = {
+        row["node_id"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+    edges = [
+        row
+        for row in catalog["edges"]
+        if row["source_node_id"] in humanoid_node_ids
+        or row["target_node_id"] in humanoid_node_ids
+    ]
+
+    edge_tuples = [
+        (row["source_node_id"], row["target_node_id"]) for row in edges
+    ]
+
+    assert len(edges) == 28
+    assert len({row["edge_id"] for row in edges}) == 28
+    assert len(edge_tuples) == len(set(edge_tuples))
+    assert all(
+        source_node_id != target_node_id
+        for source_node_id, target_node_id in edge_tuples
+    )
+    assert set(edge_tuples) == HUMANOID_EXPECTED_EDGES
+    edges_by_tuple = {
+        (row["source_node_id"], row["target_node_id"]): row for row in edges
+    }
+    for edge in edges:
+        assert edge["relationship_type"] == "uses"
+        assert edge["notes"]
+        assert edge["source_ids"] == []
+        edge_tuple = (edge["source_node_id"], edge["target_node_id"])
+        if edge_tuple in HUMANOID_ALTERNATIVE_ROUTE_EDGES:
+            assert "eligible" in edge["notes"].lower()
+            assert "route" in edge["notes"].lower()
+
+    for edge_tuple in (
+        ("robot_battery_pack", "battery_high_specific_energy_cell"),
+        ("robot_battery_pack", "battery_management_system_platform"),
+    ):
+        assert "eligible" in edges_by_tuple[edge_tuple]["notes"].lower()
+        assert "primary canonical" in edges_by_tuple[edge_tuple]["notes"].lower()
+
+
+def test_humanoid_robots_embodied_intelligence_representative_nodes_are_research_usable():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+
+    assert nodes["humanoid_embodied_ai_brain"]["node_name"] == (
+        "Embodied AI Brain"
+    )
+    assert nodes["vision_language_action_model"]["description"] == (
+        "Robot-adapted vision-language-action models that map multimodal observations "
+        "and instructions to executable action representations; general foundation "
+        "models remain owned by the primary AI chain."
+    )
+    assert nodes["robot_ai_compute_chip"]["description"] == (
+        "Processors selected and configured for onboard robot AI workloads; the generic "
+        "chip categories remain owned by semiconductor chains."
+    )
+    assert nodes["rotary_joint_assembly"]["description"] == (
+        "Humanoid rotary-joint module integrating qualified motor, transmission, feedback, "
+        "braking, and bearing components against joint packaging, load, lifetime, thermal, "
+        "and control requirements."
+    )
+    assert nodes["shoulder_joint_module"]["description"] == (
+        "Shoulder-specific kinematic module that integrates shared rotary joint "
+        "assemblies into the humanoid upper limb."
+    )
+    assert nodes["frameless_torque_motor"]["description"] == (
+        "Reusable frameless high-torque motor component for compact robot actuation, "
+        "not duplicated by body location."
+    )
+    assert nodes["high_specific_energy_cell"]["node_name"] == (
+        "Humanoid High-Specific-Energy Cell Selection"
+    )
+    assert nodes["high_specific_energy_cell"]["description"] == (
+        "Humanoid-specific cell selection and integration requirements for runtime, "
+        "mass, packaging, discharge, and safety; generic cell chemistry and manufacturing "
+        "remain owned by power_batteries_battery_materials."
+    )
+    assert nodes["high_specific_energy_cell"]["canonical_key"] == (
+        "humanoid_robotics:high_specific_energy_cell"
+    )
+    assert nodes["high_specific_energy_cell"]["canonical_node_refs"] == [
+        "battery_high_specific_energy_cell"
+    ]
+    assert nodes["battery_management_system"]["node_name"] == (
+        "Humanoid Battery Management Integration and Control"
+    )
+    assert nodes["battery_management_system"]["description"] == (
+        "Humanoid-specific BMS integration, interfaces, limits, state estimation, and "
+        "fault-control requirements; generic BMS products and technology remain owned by "
+        "power_batteries_battery_materials."
+    )
+    assert nodes["battery_management_system"]["canonical_key"] == (
+        "humanoid_robotics:battery_management_system"
+    )
+    assert nodes["battery_management_system"]["canonical_node_refs"] == [
+        "battery_management_system_platform"
+    ]
+    assert nodes["robot_state_sensor"]["node_name"] == (
+        "Humanoid Residual Operating-State Sensing"
+    )
+    assert nodes["robot_state_sensor"]["description"] == (
+        "Humanoid-specific selection and integration requirements for residual "
+        "operating-state sensing such as limits, temperature, current, and discrete health "
+        "signals; excludes every separately enumerated sensor node, while standalone "
+        "sensor devices and fabrication remain owned by mems_intelligent_sensors."
+    )
+    assert nodes["humanoid_manufacturing_test_integration"]["node_type"] == (
+        "lifecycle_value_chain_family"
+    )
+    assert nodes["humanoid_manufacturing_test_integration"]["description"] == (
+        "Supplementary lifecycle and value-chain coverage for complete humanoid products, "
+        "manufacturing, calibration, testing, operations, and scenario integration under "
+        "the approved mixed-template rule."
+    )
+    assert nodes["hip_joint_module"]["description"] == (
+        "Hip-specific kinematic module that can integrate eligible rotary or linear joint "
+        "assembly routes according to the humanoid architecture."
+    )
+
+
+def test_humanoid_component_nodes_defer_standalone_sensor_and_mechanical_ownership():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == HUMANOID_CHAIN_ID
+    }
+
+    assert nodes["humanoid_perception"]["description"] == (
+        "Humanoid-specific sensing requirements, qualification, packaging, calibration, "
+        "selection, module integration, and system use across environment, body-state, "
+        "contact, force, motion, and command sensing; standalone sensor devices and "
+        "fabrication remain owned by mems_intelligent_sensors."
+    )
+    assert nodes["humanoid_rotary_actuation"]["node_name"] == (
+        "Humanoid Rotary Joint Actuation"
+    )
+    assert nodes["humanoid_rotary_actuation"]["description"] == (
+        "Humanoid rotary-joint requirements, qualification, selection, packaging, and "
+        "integration of eligible motor, transmission, sensing, braking, and bearing "
+        "components; standalone mechanical components remain owned by "
+        "core_mechanical_components."
+    )
+    assert nodes["humanoid_linear_actuation"]["node_name"] == (
+        "Humanoid Linear Joint Actuation"
+    )
+    assert nodes["humanoid_linear_actuation"]["description"] == (
+        "Humanoid linear-joint requirements, qualification, selection, packaging, and "
+        "integration of eligible drive, screw, bearing, and displacement-sensing "
+        "components; standalone mechanical components remain owned by "
+        "core_mechanical_components."
+    )
+
+    assert nodes["imu_sensor"]["node_name"] == (
+        "Humanoid IMU Qualification and Integration"
+    )
+    assert nodes["imu_sensor"]["description"] == (
+        "Humanoid-specific selection, packaging, calibration, synchronization, and "
+        "qualification requirements for eligible IMUs used in body-state estimation; "
+        "standalone IMU devices, sensor components, and fabrication remain owned by "
+        "mems_intelligent_sensors."
+    )
+    assert nodes["joint_encoder"]["node_name"] == (
+        "Humanoid Joint-Encoder Selection and Calibration"
+    )
+    assert nodes["six_axis_force_sensor"]["node_name"] == (
+        "Humanoid Six-Axis Force-Torque Sensing Integration"
+    )
+    assert nodes["tactile_sensor"]["node_name"] == (
+        "Humanoid Tactile-Sensing Integration"
+    )
+
+    assert nodes["harmonic_reducer"]["node_name"] == (
+        "Humanoid Harmonic-Reducer Qualification"
+    )
+    assert nodes["harmonic_reducer"]["description"] == (
+        "Humanoid rotary-joint selection and qualification requirements for eligible "
+        "strain-wave reducers, including ratio, backlash, rigidity, life, packaging, and "
+        "thermal compatibility; standalone reducer products and manufacturing remain "
+        "owned by core_mechanical_components."
+    )
+    assert nodes["joint_bearing"]["node_name"] == (
+        "Humanoid Joint-Bearing Qualification"
+    )
+    assert nodes["planetary_roller_screw"]["node_name"] == (
+        "Humanoid Planetary-Roller-Screw Qualification"
+    )
+    assert nodes["screw_support_bearing"]["node_name"] == (
+        "Humanoid Screw-Support-Bearing Qualification"
+    )
+
+    for node_id in HUMANOID_SENSOR_BOUNDARY_NODE_IDS:
+        ownership_text = f"{nodes[node_id]['node_name']} {nodes[node_id]['description']}"
+        assert "reusable" not in ownership_text.lower()
+        assert "mems_intelligent_sensors" in nodes[node_id]["description"]
+
+    for node_id in HUMANOID_MECHANICAL_BOUNDARY_NODE_IDS:
+        ownership_text = f"{nodes[node_id]['node_name']} {nodes[node_id]['description']}"
+        assert "reusable" not in ownership_text.lower()
+        assert "core_mechanical_components" in nodes[node_id]["description"]
+
+
+def test_ai_data_center_power_exact_taxonomy_and_application_role_contract():
+    catalog = load_industry_catalog()
+    nodes = [row for row in catalog["nodes"] if row["chain_id"] == AI_POWER_CHAIN_ID]
+    l3_nodes = [row for row in nodes if row["level"] == "L3"]
+    role_nodes = [row for row in nodes if row["level"] == "L4"]
+
+    assert len(l3_nodes) == 11
+    assert len(role_nodes) == 80
+    assert [row["node_id"] for row in l3_nodes] == list(AI_POWER_EXPECTED_CHILDREN)
+    assert {
+        parent_id: [
+            row["node_id"]
+            for row in role_nodes
+            if row["parent_node_id"] == parent_id
+        ]
+        for parent_id in AI_POWER_EXPECTED_CHILDREN
+    } == AI_POWER_EXPECTED_CHILDREN
+    assert {row["node_id"]: row["node_type"] for row in role_nodes} == (
+        AI_POWER_ROLE_NODE_TYPES
+    )
+
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["node_kind"] == "application_role"
+        assert node["canonical_key"] == ""
+        assert node["status"] == "draft"
+        assert node["node_name"] != node["node_id"]
+        assert "AI data center" in node["description"]
+
+    for node in l3_nodes:
+        assert node["parent_node_id"] is None
+        assert node["node_type"] == "infrastructure_flow_stage"
+        assert node["canonical_node_refs"] == []
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            AI_POWER_CHAIN_ID,
+            node["node_id"],
+        ]
+
+    for node in role_nodes:
+        expected_target, _ = AI_POWER_CANONICAL_OWNERS[node["node_id"]]
+        assert node["canonical_node_refs"] == [expected_target]
+        assert node["primary_path"] == [
+            AI_POWER_SECTOR_ID,
+            AI_POWER_CHAIN_ID,
+            node["parent_node_id"],
+            node["node_id"],
+        ]
+
+
+def test_ai_power_approved_chain_metadata_and_battery_order_are_exact():
+    catalog = load_industry_catalog()
+    chains = {row["chain_id"]: row for row in catalog["chains"]}
+
+    for chain_id, expected in AI_POWER_APPROVED_CHAIN_CONTRACT.items():
+        chain = chains[chain_id]
+        assert (
+            chain["sector_id"],
+            chain["chain_kind"],
+            chain["decomposition_method"],
+            chain["status"],
+            chain["order"],
+        ) == expected
+        assert chain["description"]
+        assert chain["scope"]
+        assert chain["exclusions"]
+        assert chain["aliases"]
+
+    assert chains[BATTERY_CHAIN_ID]["order"] == 7
+
+
+def test_power_generation_exclusion_preserves_fuel_cell_and_storage_owners():
+    catalog = load_industry_catalog()
+    chain = next(
+        row
+        for row in catalog["chains"]
+        if row["chain_id"] == "power_generation_energy_equipment"
+    )
+
+    assert chain["exclusions"][1] == (
+        "Fuel-cell and stationary energy-storage technologies remain owned by "
+        "hydrogen_fuel_cells and new_energy_storage respectively."
+    )
+
+
+def test_ai_data_center_power_compositions_match_roles_without_company_mappings():
+    catalog = load_industry_catalog()
+    compositions = [
+        row
+        for row in catalog["theme_compositions"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    ]
+    roles = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L4"
+    }
+
+    assert len(compositions) == 80
+    assert len({row["composition_id"] for row in compositions}) == 80
+    assert {row["role_node_id"] for row in compositions} == set(roles)
+    for composition in compositions:
+        assert set(composition) == COMPOSITION_FIELDS
+        assert composition["canonical_node_refs"] == roles[
+            composition["role_node_id"]
+        ]["canonical_node_refs"]
+        assert composition["relationship_type"] == "depends_on"
+        assert "company mappings and evidence remain on the canonical target" in (
+            composition["notes"].lower()
+        )
+        assert "company_mappings" not in composition
+
+
+def test_ai_data_center_power_targets_have_exact_canonical_ownership():
+    catalog = load_industry_catalog()
+    nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    chain_kinds = {row["chain_id"]: row["chain_kind"] for row in catalog["chains"]}
+
+    assert set(AI_POWER_CANONICAL_OWNERS) == set(AI_POWER_ROLE_NODE_TYPES)
+    for role_id, (target_id, expected_chain_id) in AI_POWER_CANONICAL_OWNERS.items():
+        role = nodes_by_id[role_id]
+        target = nodes_by_id[target_id]
+        assert role["canonical_node_refs"] == [target_id]
+        assert target["chain_id"] == expected_chain_id
+        assert target["level"] == "L4"
+        assert target["node_kind"] == "canonical"
+        assert target["status"] == "skeleton"
+        assert target["canonical_key"]
+        assert target["canonical_node_refs"] == []
+        assert target["primary_path"] == [
+            target["primary_path"][0],
+            expected_chain_id,
+            target["parent_node_id"],
+            target_id,
+        ]
+        assert chain_kinds[expected_chain_id] == "canonical_industry_chain"
+
+    canonical_keys = [
+        row["canonical_key"]
+        for row in catalog["nodes"]
+        if row["level"] == "L4" and row["canonical_key"]
+    ]
+    assert len(canonical_keys) == len(set(canonical_keys))
+
+
+def test_ai_power_supporting_file_contains_only_required_skeleton_nodes():
+    path = (
+        Path(__file__).parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+        / "nodes"
+        / "ai_power_supporting_canonical_nodes_v1.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    nodes = payload["nodes"]
+    expected_target_ids = {
+        target_id for target_id, _ in AI_POWER_CANONICAL_OWNERS.values()
+    }
+
+    assert len(expected_target_ids) == 80
+    assert len(nodes) == 80 + len(AI_POWER_SUPPORTING_L3_BY_CHAIN)
+    assert {row["node_id"] for row in nodes} == (
+        expected_target_ids | set(AI_POWER_SUPPORTING_L3_BY_CHAIN.values())
+    )
+    for node in nodes:
+        assert set(node) == NODE_FIELDS
+        assert node["status"] == "skeleton"
+        assert node["node_kind"] == "canonical"
+        assert node["canonical_node_refs"] == []
+
+    for chain_id, parent_id in AI_POWER_SUPPORTING_L3_BY_CHAIN.items():
+        chain_nodes = [row for row in nodes if row["chain_id"] == chain_id]
+        assert chain_nodes[0]["node_id"] == parent_id
+        assert chain_nodes[0]["level"] == "L3"
+        assert chain_nodes[0]["parent_node_id"] is None
+        assert chain_nodes[0]["canonical_key"] == ""
+        assert all(
+            row["parent_node_id"] == parent_id
+            for row in chain_nodes[1:]
+        )
+        assert {
+            row["node_id"] for row in chain_nodes[1:]
+        } == {
+            target_id
+            for target_id, owner_chain_id in AI_POWER_CANONICAL_OWNERS.values()
+            if owner_chain_id == chain_id
+        }
+
+
+def test_ai_power_l3_names_and_descriptions_define_distinct_stages():
+    catalog = load_industry_catalog()
+    stages = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L3"
+    }
+
+    assert {node_id: row["node_name"] for node_id, row in stages.items()} == (
+        AI_POWER_L3_DISPLAY_NAMES
+    )
+    for node_id, terms in AI_POWER_L3_STAGE_TERMS.items():
+        description = stages[node_id]["description"].lower()
+        assert all(term in description for term in terms)
+
+
+def test_ai_power_supply_roles_have_mutually_exclusive_boundaries():
+    catalog = load_industry_catalog()
+    nodes = {row["node_id"]: row for row in catalog["nodes"]}
+    positive_markers_by_role = {}
+
+    for node_id, (required_terms, excluded_terms) in AI_POWER_SUPPLY_ROLE_BOUNDARIES.items():
+        description = nodes[node_id]["description"].lower()
+        assert all(term in description for term in required_terms)
+        assert all(term in description for term in excluded_terms)
+
+        positive_scope, exclusion_clause, excluded_scope = description.partition("excludes")
+        assert exclusion_clause == "excludes"
+        assert all(
+            marker in positive_scope
+            for marker in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS[node_id]
+        )
+        for marker in AI_POWER_SUPPLY_ROLE_FORBIDDEN_ROUTE_MARKERS[node_id]:
+            assert marker not in positive_scope
+            if marker in description:
+                assert marker in excluded_scope
+        positive_markers_by_role[node_id] = frozenset(
+            marker
+            for marker in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS[node_id]
+            if marker in positive_scope
+        )
+
+    assert len(set(positive_markers_by_role.values())) == len(positive_markers_by_role)
+    for node_id, markers in positive_markers_by_role.items():
+        for other_role_id, other_markers in AI_POWER_SUPPLY_ROLE_ROUTE_MARKERS.items():
+            if other_role_id != node_id:
+                assert not (markers & set(other_markers))
+
+
+def test_ai_power_supporting_l3_definitions_are_reusable_and_non_ai_specific():
+    path = (
+        Path(__file__).parents[1]
+        / "artifacts"
+        / "technology_industry_catalog"
+        / "v1"
+        / "nodes"
+        / "ai_power_supporting_canonical_nodes_v1.json"
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    l3_descriptions = {
+        row["node_id"]: row["description"].lower()
+        for row in payload["nodes"]
+        if row["level"] == "L3"
+    }
+
+    assert set(l3_descriptions) == set(AI_POWER_SUPPORTING_L3_TERMS)
+    for node_id, terms in AI_POWER_SUPPORTING_L3_TERMS.items():
+        description = l3_descriptions[node_id]
+        assert all(term in description for term in terms)
+        assert not any(
+            term in description
+            for term in ("ai ", "ai-", "ai_", "theme", "application")
+        )
+
+
+def _description_specific_terms(node_id: str) -> list[str]:
+    ignored = {
+        "ai",
+        "power",
+        "role",
+        "system",
+        "service",
+        "data",
+        "center",
+        "equipment",
+        "software",
+    }
+    return [
+        token
+        for token in node_id.lower().replace("_", " ").split()
+        if token not in ignored
+    ]
+
+
+def test_ai_power_descriptions_are_specific_and_not_placeholder_templates():
+    catalog = load_industry_catalog()
+    nodes_by_id = {row["node_id"]: row for row in catalog["nodes"]}
+    roles = [
+        row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID and row["level"] == "L4"
+    ]
+    targets = [
+        nodes_by_id[target_id]
+        for target_id, _ in AI_POWER_CANONICAL_OWNERS.values()
+    ]
+    forbidden_phrases = {
+        "products, systems, software, materials, or services",
+        "defining deployment-specific requirements while canonical ownership remains",
+        "canonical ownership node for",
+    }
+
+    assert len({row["description"] for row in roles}) == 80
+    assert len({row["description"] for row in targets}) == 80
+    for node in roles:
+        description = node["description"].lower()
+        assert len(node["description"]) >= 160
+        assert not any(phrase in description for phrase in forbidden_phrases)
+        terms = _description_specific_terms(node["node_id"])
+        required_matches = min(2, len(terms))
+        assert sum(term in description for term in terms) >= required_matches
+        assert "ai data center" in description
+        assert "covers" in description
+        assert "canonical" in description
+
+    for node in targets:
+        description = node["description"].lower()
+        assert len(node["description"]) >= 120
+        assert not any(phrase in description for phrase in forbidden_phrases)
+        terms = _description_specific_terms(node["node_id"])
+        required_matches = min(2, len(terms))
+        assert sum(term in description for term in terms) >= required_matches
+        if node["chain_id"] != "cloud_data_center_infrastructure":
+            assert "ai data center" not in description
+            assert "ai-theme" not in description
+            assert "application chain" not in description
+
+
+def test_ai_power_load_capacity_planning_is_non_compositional_metrics_stage():
+    catalog = load_industry_catalog()
+    nodes = {
+        row["node_id"]: row
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    }
+    stage = nodes["ai_power_load_capacity_planning"]
+    children = [
+        row for row in nodes.values() if row["parent_node_id"] == stage["node_id"]
+    ]
+    description = stage["description"].lower()
+
+    assert children == []
+    assert "non-compositional metrics and planning stage" in description
+    for metric in ("rack density", "capacity", "redundancy", "pue", "wue"):
+        assert metric in description
+    assert "metrics rather than products" in description
+
+
+def test_ai_power_names_avoid_acronym_and_repetition_artifacts():
+    catalog = load_industry_catalog()
+    names = {
+        row["node_id"]: row["node_name"]
+        for row in catalog["nodes"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    }
+    forbidden_names = {
+        "HVDC DC Architecture",
+        "Modular Data Center for AI Data Centers",
+        "Carbon Energy Cost for AI Data Centers",
+        "240 400 V HVDC for AI Data Centers",
+        "AC DC Power Module for AI Data Centers",
+        "DC DC Power Module for AI Data Centers",
+        "Line Frequency UPS",
+        "High Frequency UPS",
+        "Medium Voltage UPS",
+        "Rectifier Inverter",
+        "Solid State Transformer",
+    }
+
+    assert not (set(names.values()) & forbidden_names)
+    assert names["ai_power_hvdc_dc_architecture"] == "HVDC and DC Architecture"
+    assert names["ai_power_modular_data_center_role"] == (
+        "Modular Data Center Delivery"
+    )
+    assert names["ai_power_carbon_energy_cost_role"] == (
+        "Carbon and Energy Cost Management"
+    )
+    assert names["ai_power_ac_dc_module_role"] == "AC-DC Power Modules"
+    assert names["ai_power_dc_dc_module_role"] == "DC-DC Power Modules"
+
+
+def test_ai_power_composition_notes_are_unique_role_specific_and_reviewable():
+    catalog = load_industry_catalog()
+    compositions = [
+        row
+        for row in catalog["theme_compositions"]
+        if row["chain_id"] == AI_POWER_CHAIN_ID
+    ]
+
+    assert len(compositions) == 80
+    assert len({row["notes"] for row in compositions}) == 80
+    for composition in compositions:
+        assert composition["role_node_id"] in composition["notes"]
+        for target_id in composition["canonical_node_refs"]:
+            assert target_id in composition["notes"]
+        assert "because" in composition["notes"].lower()
+        assert "company mappings and evidence remain on the canonical target" in (
+            composition["notes"].lower()
+        )

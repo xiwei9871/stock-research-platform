@@ -1,0 +1,13 @@
+{
+  "artifact_version": "technology_industry_catalog_v1",
+  "catalog_id": "technology_industry_catalog_cn_v1",
+  "status": "draft",
+  "updated_at": "2026-07-11",
+  "sector_file": "sectors.json",
+  "chain_file": "chains.json",
+  "edge_file": "edges.json",
+  "source_file": "sources.json",
+  "theme_link_file": "theme_links.json",
+  "node_dir": "nodes",
+  "theme_composition_dir": "theme_compositions"
+}
