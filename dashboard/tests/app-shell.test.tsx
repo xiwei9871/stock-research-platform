@@ -1159,6 +1159,9 @@ describe('dashboard app shell', () => {
     apiMocks.fetchSectorDetail.mockResolvedValue(makeSectorDetailResponse());
     apiMocks.fetchResearchReportSummary.mockResolvedValue({
       total_reports: 1,
+      readable_report_count: 1,
+      pdf_report_count: 1,
+      web_index_report_count: 0,
       covered_stocks: 1,
       latest_publish_date: '2026-06-03',
       latest_feature_date: '2026-06-02',
@@ -1415,8 +1418,8 @@ describe('dashboard app shell', () => {
     render(<AppShell currentUser={TEST_ADMIN_USER} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Research Reports workspace' }));
-    expect(await screen.findByRole('heading', { name: 'Research Reports' })).toBeInTheDocument();
-    expect(screen.getByText('Total Reports')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '研报' })).toBeInTheDocument();
+    expect(screen.getByText('可读研报')).toBeInTheDocument();
     expect(await screen.findByText('Ping An Bank Initiation')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Stock Workspace workspace' }));

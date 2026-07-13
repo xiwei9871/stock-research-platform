@@ -53,6 +53,75 @@ function formatPercent(value: number | null | undefined) {
   return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '-';
 }
 
+function formatInlineSummary(report: ResearchReportItem) {
+  const summary =
+    report.company_view?.trim() ||
+    report.raw_summary?.trim() ||
+    report.industry_view?.trim() ||
+    report.risk_summary?.trim() ||
+    deriveSummaryFromReportTitle(report.report_title) ||
+    '';
+  if (!summary) {
+    return '摘要：暂无摘要，点击标题阅读全文。';
+  }
+  const normalized = summary.replace(/\s+/g, ' ');
+  return `摘要：${normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized}`;
+}
+
+function deriveSummaryFromReportTitle(title: string | null | undefined) {
+  const cleanedTitle = String(title || '')
+    .replace(/\.(pdf|PDF)$/u, '')
+    .replace(/[：:]/gu, '_')
+    .trim();
+  if (!cleanedTitle) return '';
+
+  const rawParts = cleanedTitle
+    .split(/[_／/]+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const parts = rawParts.length ? rawParts : [cleanedTitle];
+  const semanticParts = parts
+    .map((part, index) => {
+      const normalized = part.replace(/\s+/g, ' ').trim();
+      if (isReportTitleNoise(normalized)) return '';
+      if (index === 0 && normalized.includes('-')) {
+        return normalized
+          .split('-')
+          .map((segment) => segment.trim())
+          .filter((segment) => segment && !isReportTitleNoise(segment))
+          .at(-1) || '';
+      }
+      return normalized;
+    })
+    .filter((part) => part && !isReportTitleNoise(part));
+
+  return semanticParts.slice(0, 3).join('；');
+}
+
+function isReportTitleNoise(part: string) {
+  const normalized = part.trim();
+  if (!normalized) return true;
+  if (/^\d{4}[-.]?\d{2}[-.]?\d{2}$/u.test(normalized)) return true;
+  if (/^\d{1,4}$/u.test(normalized)) return true;
+  if (/^\d{6,8}$/u.test(normalized)) return true;
+  if (/^\d+(?:\.\d+)?\s*(?:页|mb|MB|Mb)$/u.test(normalized)) return true;
+  if (/^\d{6}\.(?:SH|SZ|BJ)$/u.test(normalized)) return true;
+  if (/^[\u4e00-\u9fa5]{2,8}证券$/u.test(normalized)) return true;
+  if (/^[\u4e00-\u9fa5A-Za-z]+[（(]?\d{6}[）)]?$/u.test(normalized)) return true;
+  return [
+    '深度报告',
+    '深度研究报告',
+    '公司深度报告',
+    '公司研究报告',
+    '首次覆盖',
+    '首次覆盖报告',
+    '公司首次覆盖报告',
+    '跟踪报告',
+    '点评报告',
+    '研究报告'
+  ].includes(normalized);
+}
+
 function buildReportParams(filters: ReportFilters) {
   const params: {
     q?: string;
@@ -104,7 +173,6 @@ export function ResearchReportsWorkspace({
 }: ResearchReportsWorkspaceProps = {}) {
   const [summary, setSummary] = useState<ResearchReportSummary | null>(null);
   const [reportsPayload, setReportsPayload] = useState<ResearchReportResponse | null>(null);
-  const [selectedReport, setSelectedReport] = useState<ResearchReportItem | null>(null);
   const [readerReport, setReaderReport] = useState<ResearchReportItem | null>(null);
   const [isReaderFillScreen, setIsReaderFillScreen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<ResearchReportDocument | null>(null);
@@ -159,7 +227,6 @@ export function ResearchReportsWorkspace({
         }
         setReportsError(err instanceof Error ? err.message : String(err));
         setReportsPayload(null);
-        setSelectedReport(null);
       } finally {
         if (isLatestReportsRequest(requestId)) {
           setIsReportsLoading(false);
@@ -223,10 +290,7 @@ export function ResearchReportsWorkspace({
     const deepLinkToken = `${initialEventKey ?? ''}|${initialReportId ?? ''}`;
     const shouldConsumeDeepLink = deepLinkToken !== '|' && consumedDeepLinkRef.current !== deepLinkToken;
 
-    if (!reports.length) {
-      setSelectedReport(null);
-      return;
-    }
+    if (!reports.length) return;
 
     if (shouldConsumeDeepLink) {
       const eventMatch = initialEventKey
@@ -239,22 +303,12 @@ export function ResearchReportsWorkspace({
 
       if (deepLinkedReport) {
         consumedDeepLinkRef.current = deepLinkToken;
-        setSelectedReport(deepLinkedReport);
+        setReaderReport(deepLinkedReport);
         return;
       }
 
       consumedDeepLinkRef.current = deepLinkToken;
     }
-
-    setSelectedReport((current) => {
-      if (current) {
-        const preserved = reports.find((report) => report.event_key === current.event_key);
-        if (preserved) {
-          return preserved;
-        }
-      }
-      return reports[0] ?? null;
-    });
   }, [reports, initialEventKey, initialReportId]);
 
   useEffect(() => {
@@ -381,67 +435,76 @@ export function ResearchReportsWorkspace({
   return (
     <section className="workspace-stack" aria-label="Research Reports workspace">
       <header className="workspace-header">
-        <h1>Research Reports</h1>
-        <p className="muted">Read-only broker research metadata workspace for report search, coverage, and source review.</p>
+        <h1>研报</h1>
+        <p className="muted">只读研报工作台；可读研报指已绑定本地 PDF、可打开正文的研报。</p>
       </header>
 
       <section className="stock-summary-strip" aria-label="Research report summary">
         <div>
-          <span>Total Reports</span>
-          <strong>{formatCount(summary?.total_reports)}</strong>
+          <span>可读研报</span>
+          <strong>{formatCount(summary?.readable_report_count ?? summary?.pdf_report_count)}</strong>
         </div>
         <div>
-          <span>Covered Stocks</span>
+          <span>覆盖股票</span>
           <strong>{formatCount(summary?.covered_stocks)}</strong>
         </div>
         <div>
-          <span>Latest Publish</span>
+          <span>网页索引</span>
+          <strong>{formatCount(summary?.web_index_report_count)}</strong>
+        </div>
+        <div>
+          <span>最新发布</span>
           <strong>{formatText(summary?.latest_publish_date)}</strong>
         </div>
         <div>
-          <span>Sources</span>
+          <span>来源</span>
           <strong>{formatCount(summary?.source_count)}</strong>
         </div>
         <div>
-          <span>Latest Feature</span>
+          <span>最新特征</span>
           <strong>{formatText(summary?.latest_feature_date)}</strong>
         </div>
       </section>
 
       <form className="compact-toolbar research-report-toolbar" onSubmit={handleSubmit}>
         <label>
-          Query
-          <input aria-label="research report query" value={q} onChange={(event) => setQ(event.target.value)} />
-        </label>
-        <label>
-          Broker
-          <input aria-label="research report broker" value={broker} onChange={(event) => setBroker(event.target.value)} />
-        </label>
-        <label>
-          Rating
-          <input aria-label="research report rating" value={rating} onChange={(event) => setRating(event.target.value)} />
-        </label>
-        <label>
-          Source
+          股票/标题关键词
           <input
-            aria-label="research report source"
+            aria-label="股票/标题关键词"
+            placeholder="股票代码、名称、标题关键词"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+          />
+        </label>
+        <label>
+          券商
+          <input aria-label="券商" value={broker} onChange={(event) => setBroker(event.target.value)} />
+        </label>
+        <label>
+          评级
+          <input aria-label="评级" value={rating} onChange={(event) => setRating(event.target.value)} />
+        </label>
+        <label>
+          来源
+          <input
+            aria-label="来源"
             value={sourceName}
             onChange={(event) => setSourceName(event.target.value)}
           />
         </label>
         <label>
-          Start
+          开始日期
           <input
-            aria-label="research report start date"
+            aria-label="开始日期"
             type="date"
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
           />
         </label>
         <label>
-          End
+          结束日期
           <input
-            aria-label="research report end date"
+            aria-label="结束日期"
             type="date"
             value={endDate}
             onChange={(event) => setEndDate(event.target.value)}
@@ -449,27 +512,27 @@ export function ResearchReportsWorkspace({
         </label>
         <label className="research-report-inline-check">
           <input
-            aria-label="research report has target price"
+            aria-label="仅看有目标价"
             type="checkbox"
             checked={hasTargetPrice}
             onChange={(event) => setHasTargetPrice(event.target.checked)}
           />
-          Has target price
+          仅看有目标价
         </label>
-        <button type="submit">Search Reports</button>
-        {isReportsLoading ? <span className="muted">Loading reports...</span> : null}
+        <button type="submit">搜索研报</button>
+        {isReportsLoading ? <span className="muted">正在加载研报...</span> : null}
       </form>
 
       {summaryError ? <p className="error-text">{summaryError}</p> : null}
       {reportsError ? <p className="error-text">{reportsError}</p> : null}
-      {isSummaryLoading ? <p className="muted">Loading summary...</p> : null}
+      {isSummaryLoading ? <p className="muted">正在加载统计...</p> : null}
 
       <section className="research-report-layout">
         <article className="workspace-band" aria-label="Research report results">
           <div className="section-heading">
-            <h2>Report Results</h2>
+            <h2>研报列表</h2>
             <span className="muted">
-              {formatCount(reportsPayload?.total)} total / showing {reports.length}
+              共 {formatCount(reportsPayload?.total)} 条 / 当前显示 {reports.length}
             </span>
           </div>
           {reports.length > 0 ? (
@@ -477,11 +540,11 @@ export function ResearchReportsWorkspace({
               <table className="compact-table research-report-table">
                 <thead>
                   <tr>
-                    <th>Publish</th>
-                    <th>Report</th>
-                    <th>Broker</th>
-                    <th>Rating</th>
-                    <th>Target</th>
+                    <th>发布日期</th>
+                    <th>研报</th>
+                    <th>券商</th>
+                    <th>评级</th>
+                    <th>目标价</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -492,16 +555,14 @@ export function ResearchReportsWorkspace({
                         <button
                           type="button"
                           aria-label={`Open report ${item.report_title}`}
-                          onClick={() => {
-                            setSelectedReport(item);
-                            setReaderReport(item);
-                          }}
+                          onClick={() => setReaderReport(item)}
                         >
                           {item.report_title}
                         </button>
                         <span>
                           {formatText(item.ts_code)} / {formatText(item.stock_name)}
                         </span>
+                        <span className="research-report-inline-summary">{formatInlineSummary(item)}</span>
                         {getReportAssetId(item) ? (
                           <button
                             type="button"
@@ -513,7 +574,7 @@ export function ResearchReportsWorkspace({
                               onOpenAsset?.(assetId, { ...buildReportStockContext(item), tradeDate: initialTradeDate });
                             }}
                           >
-                            Stock Detail
+                            个股工作台
                           </button>
                         ) : null}
                       </td>
@@ -539,83 +600,6 @@ export function ResearchReportsWorkspace({
           ))}
         </article>
 
-        <aside className="workspace-band research-report-detail" aria-label="Research report detail">
-          {selectedReport ? (
-            <>
-              <div className="section-heading">
-                <h2>{selectedReport.report_title}</h2>
-                <span className="status-chip neutral">{formatText(selectedReport.source_name)}</span>
-              </div>
-              <dl className="research-report-detail-grid">
-                <div>
-                  <dt>Stock</dt>
-                  <dd>
-                    {formatText(selectedReport.stock_name)} {formatText(selectedReport.ts_code)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Broker</dt>
-                  <dd>{formatText(selectedReport.broker)}</dd>
-                </div>
-                <div>
-                  <dt>Analyst</dt>
-                  <dd>{formatText(selectedReport.analyst)}</dd>
-                </div>
-                <div>
-                  <dt>Rating</dt>
-                  <dd>
-                    {formatText(selectedReport.rating)} / {formatText(selectedReport.rating_change)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>
-                    {formatCurrency(selectedReport.target_price)} / {formatPercent(selectedReport.target_upside)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Published</dt>
-                  <dd>{formatText(selectedReport.publish_date)}</dd>
-                </div>
-              </dl>
-              <section>
-                <h3>Company View</h3>
-                <p>{formatText(selectedReport.company_view || selectedReport.raw_summary)}</p>
-              </section>
-              <section>
-                <h3>Industry View</h3>
-                <p>{formatText(selectedReport.industry_view)}</p>
-              </section>
-              <section>
-                <h3>Risk Summary</h3>
-                <p>{formatText(selectedReport.risk_summary)}</p>
-              </section>
-              <div className="research-report-button-row">
-                {selectedReport && getReportAssetId(selectedReport) ? (
-                  <button
-                    type="button"
-                    className="link-chip"
-                    aria-label={`Open Stock Detail for ${selectedReport.stock_name || selectedReport.ts_code}`}
-                    onClick={() => {
-                      const assetId = getReportAssetId(selectedReport);
-                      onOpenAsset?.(assetId, { ...buildReportStockContext(selectedReport), tradeDate: initialTradeDate });
-                    }}
-                  >
-                    Stock Detail
-                  </button>
-                ) : null}
-                {selectedReport.source_url ? (
-                  <a href={selectedReport.source_url} target="_blank" rel="noreferrer">
-                    Open Source
-                  </a>
-                ) : null}
-                <span className="muted">{formatText(selectedReport.copyright_note)}</span>
-              </div>
-            </>
-          ) : (
-            <p className="muted">Select a report to view metadata and notes.</p>
-          )}
-        </aside>
       </section>
     </section>
   );
