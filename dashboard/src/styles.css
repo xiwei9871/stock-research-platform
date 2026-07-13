@@ -6034,21 +6034,21 @@ table.data-table td {
   color: #17202a;
 }
 
-.theme-research-workspace[aria-label='主题研究与产业目录工作台'] {
+.platform-workspace > .theme-research-workspace {
   gap: 12px;
 }
 
-.theme-research-workspace[aria-label='主题研究与产业目录工作台'] > .theme-research-tabs {
+.platform-workspace > .theme-research-workspace > .theme-research-tabs {
   min-height: 38px;
   border-top: 1px solid #cfd8e3;
   background: #f8fafc;
 }
 
-.theme-research-workspace[aria-label='主题研究与产业目录工作台'] > .theme-research-tabs > button {
+.platform-workspace > .theme-research-workspace > .theme-research-tabs > button {
   min-width: 136px;
 }
 
-.theme-research-workspace[aria-label='主题研究与产业目录工作台'] > .theme-research-workspace {
+.platform-workspace > .theme-research-workspace > .theme-research-workspace {
   min-width: 0;
 }
 
@@ -6479,13 +6479,13 @@ table.data-table td {
 }
 
 /* Industry catalog: L1 sector bands with locally scrollable L2/L3/L4 detail. */
-.theme-research-workspace[aria-label='科技产业目录'] > .theme-research-section {
+.industry-catalog-index > .industry-catalog-sector {
   gap: 8px;
   border-top: 1px solid #cfd8e3;
   padding-top: 12px;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-view-header {
+.industry-catalog-index .theme-research-view-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -6493,83 +6493,83 @@ table.data-table td {
   padding-left: 10px;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table {
+.industry-catalog-index .industry-catalog-table {
   min-width: 860px;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table th:first-child,
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table td:first-child {
+.industry-catalog-index .industry-catalog-table th:first-child,
+.industry-catalog-index .industry-catalog-table td:first-child {
   width: 46%;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table th:nth-child(2),
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table td:nth-child(2) {
+.industry-catalog-index .industry-catalog-table th:nth-child(2),
+.industry-catalog-index .industry-catalog-table td:nth-child(2) {
   width: 16%;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table th:nth-child(3),
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table td:nth-child(3) {
+.industry-catalog-index .industry-catalog-table th:nth-child(3),
+.industry-catalog-index .industry-catalog-table td:nth-child(3) {
   width: 16%;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table th:nth-child(4),
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table td:nth-child(4),
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table th:nth-child(5),
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-table td:nth-child(5) {
+.industry-catalog-index .industry-catalog-table th:nth-child(4),
+.industry-catalog-index .industry-catalog-table td:nth-child(4),
+.industry-catalog-index .industry-catalog-table th:nth-child(5),
+.industry-catalog-index .industry-catalog-table td:nth-child(5) {
   width: 11%;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-primary-link {
+.industry-catalog-index .theme-research-primary-link {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16px;
   column-gap: 8px;
   align-items: start;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-primary-link > strong,
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-primary-link > small {
+.industry-catalog-index .theme-research-primary-link > strong,
+.industry-catalog-index .theme-research-primary-link > small {
   grid-column: 1;
   min-width: 0;
 }
 
-.theme-research-workspace[aria-label='科技产业目录'] .theme-research-primary-link > svg {
+.industry-catalog-index .theme-research-primary-link > svg {
   grid-column: 2;
   grid-row: 1 / span 3;
   align-self: center;
   color: #667085;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section {
+.industry-catalog-detail-grid > .theme-research-section {
   gap: 10px;
   border-top: 1px solid #cfd8e3;
   padding-top: 14px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section:first-of-type {
+.industry-catalog-detail-grid > .industry-catalog-definition {
   border-top: 0;
   padding-top: 0;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section:first-of-type .theme-research-table {
+.industry-catalog-detail-grid > .industry-catalog-definition .industry-catalog-table {
   min-width: 620px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section:first-of-type .theme-research-table th {
+.industry-catalog-detail-grid > .industry-catalog-definition .industry-catalog-table th {
   width: 150px;
   color: #475569;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section > .theme-research-section {
+.industry-catalog-node-groups > .industry-catalog-node-group {
   gap: 8px;
   border-left: 3px solid #9aa7b5;
   padding-left: 12px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section > .theme-research-section + .theme-research-section {
+.industry-catalog-node-groups > .industry-catalog-node-group + .industry-catalog-node-group {
   margin-top: 2px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] .theme-research-section > p {
+.industry-catalog-detail-grid .theme-research-section > p {
   max-width: 1040px;
   margin: 0;
   color: #5f6b7a;
@@ -6577,39 +6577,39 @@ table.data-table td {
   overflow-wrap: anywhere;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table {
+.industry-catalog-node-groups .industry-catalog-table {
   min-width: 760px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table th:first-child,
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table td:first-child {
+.industry-catalog-node-groups .industry-catalog-table th:first-child,
+.industry-catalog-node-groups .industry-catalog-table td:first-child {
   width: 24%;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table th:nth-child(2),
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table td:nth-child(2) {
+.industry-catalog-node-groups .industry-catalog-table th:nth-child(2),
+.industry-catalog-node-groups .industry-catalog-table td:nth-child(2) {
   width: 18%;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table th:nth-child(3),
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table td:nth-child(3) {
+.industry-catalog-node-groups .industry-catalog-table th:nth-child(3),
+.industry-catalog-node-groups .industry-catalog-table td:nth-child(3) {
   width: 46%;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table th:nth-child(4),
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='L3和L4节点'] .theme-research-table td:nth-child(4) {
+.industry-catalog-node-groups .industry-catalog-table th:nth-child(4),
+.industry-catalog-node-groups .industry-catalog-table td:nth-child(4) {
   width: 12%;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='产业链边关系'] .theme-research-table {
+.industry-catalog-edges .industry-catalog-table {
   min-width: 760px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='关联主题'] .theme-research-table {
+.industry-catalog-theme-links .industry-catalog-table {
   min-width: 620px;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='关联主题'] .icon-text-button {
+.industry-catalog-theme-links .icon-text-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6625,36 +6625,42 @@ table.data-table td {
   white-space: nowrap;
 }
 
-.theme-research-workspace[aria-label='科技产业链详情'] [aria-label='关联主题'] .icon-text-button svg {
+.industry-catalog-theme-links .icon-text-button svg {
   flex: 0 0 auto;
 }
 
 @media (min-width: 821px) {
-  .theme-research-workspace[aria-label='科技产业链详情'] {
+  .industry-catalog-detail-grid {
     grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
     align-items: start;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-header,
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='产业链边关系'],
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='关联主题'] {
+  .industry-catalog-detail-grid > .theme-research-header,
+  .industry-catalog-detail-grid > .industry-catalog-edges,
+  .industry-catalog-detail-grid > .industry-catalog-theme-links {
     grid-column: 1 / -1;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='产业链定义'] {
+  .industry-catalog-detail-grid > .industry-catalog-definition {
     grid-column: 1;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > [aria-label='L3和L4节点'] {
+  .industry-catalog-detail-grid > .industry-catalog-node-groups {
     grid-column: 2;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section[aria-label='产业链定义'] .theme-research-table {
+  .industry-catalog-detail-grid > .industry-catalog-definition,
+  .industry-catalog-detail-grid > .industry-catalog-node-groups {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .industry-catalog-detail-grid > .industry-catalog-definition .industry-catalog-table {
     min-width: 0;
     table-layout: auto;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section[aria-label='产业链定义'] .theme-research-table th {
+  .industry-catalog-detail-grid > .industry-catalog-definition .industry-catalog-table th {
     width: 96px;
   }
 }
@@ -6674,63 +6680,63 @@ table.data-table td {
 }
 
 @media (max-width: 820px) {
-  .theme-research-workspace[aria-label='主题研究与产业目录工作台'] > .theme-research-tabs {
+  .platform-workspace > .theme-research-workspace > .theme-research-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow-x: visible;
   }
 
-  .theme-research-workspace[aria-label='主题研究与产业目录工作台'] > .theme-research-tabs > button {
+  .platform-workspace > .theme-research-workspace > .theme-research-tabs > button {
     min-width: 0;
     width: 100%;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-header {
+  .industry-catalog-index .theme-research-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-count {
+  .industry-catalog-index .theme-research-count {
     justify-self: start;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-metrics {
+  .industry-catalog-index .theme-research-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-metric:nth-child(2n) {
+  .industry-catalog-index .theme-research-metric:nth-child(2n) {
     border-right: 0;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-metric:nth-child(3) {
+  .industry-catalog-index .theme-research-metric:nth-child(3) {
     border-right: 1px solid #d7dee8;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-metric:nth-child(n + 3) {
+  .industry-catalog-index .theme-research-metric:nth-child(n + 3) {
     border-top: 1px solid #d7dee8;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-metric:last-child:nth-child(odd) {
+  .industry-catalog-index .theme-research-metric:last-child:nth-child(odd) {
     grid-column: 1 / -1;
     border-right: 0;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-toolbar {
+  .industry-catalog-index .theme-research-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-toolbar > label,
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-search,
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-toolbar select {
+  .industry-catalog-index .theme-research-toolbar > label,
+  .industry-catalog-index .theme-research-search,
+  .industry-catalog-index .theme-research-toolbar select {
     width: 100%;
   }
 
-  .theme-research-workspace[aria-label='科技产业目录'] .theme-research-view-header {
+  .industry-catalog-index .theme-research-view-header {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] > .theme-research-section > .theme-research-section {
+  .industry-catalog-node-groups > .industry-catalog-node-group {
     padding-left: 8px;
   }
 }
@@ -6775,11 +6781,11 @@ table.data-table td {
     padding-inline: 11px;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] .theme-research-detail-header {
+  .industry-catalog-detail-grid .theme-research-detail-header {
     row-gap: 8px;
   }
 
-  .theme-research-workspace[aria-label='科技产业链详情'] .theme-research-title-line {
+  .industry-catalog-detail-grid .theme-research-title-line {
     align-items: flex-start;
   }
 }

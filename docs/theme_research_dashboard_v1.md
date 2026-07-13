@@ -3,7 +3,10 @@
 > The combined workspace is part of the canonical Dashboard AppShell served by the existing Vite application at `http://127.0.0.1:5174`. It does not introduce another frontend, AppShell, or port.
 
 Updated: 2026-07-13
-Theme Research phase: 7 - complete
+Dashboard delivery phase: 7 - complete
+Overall Theme Research phases: 9 and 10 - complete
+
+Phase 7 in this document refers to delivery of the original read-only Dashboard surface. The broader Theme Research program has also completed Phase 9 PostgreSQL productionization and Phase 10 workflow integration.
 
 ## Purpose
 
@@ -52,7 +55,7 @@ GET /api/research/theme-decomposition/themes/{theme_id}/claims
 GET /api/research/theme-decomposition/themes/{theme_id}/companies
 ```
 
-These APIs load existing validated P1-P6 packages through `stock_research.dashboard.theme_research`. Production can use the PostgreSQL provider through `THEME_RESEARCH_READ_SOURCE=db`; API contracts and research-only guardrails remain unchanged. The read model does not independently reinterpret score policy, access external networks, or write files and databases.
+These APIs read through `stock_research.dashboard.theme_research`. PostgreSQL is the authoritative production read source, and the Dashboard runs with `THEME_RESEARCH_READ_SOURCE=db`. Artifact mode is reserved for emergency fallback and offline validation; it is not a co-equal production source. API contracts and research-only guardrails remain unchanged, and the read model does not independently reinterpret score policy or access external networks.
 
 Unknown themes return:
 
@@ -125,7 +128,7 @@ used_for_signal = false
 used_for_admission = false
 ```
 
-Phase 7 adds no:
+Dashboard Phase 7 adds no:
 
 - review-decision writes;
 - DB or artifact writes;

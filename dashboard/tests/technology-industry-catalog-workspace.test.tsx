@@ -178,6 +178,29 @@ describe('IndustryCatalogWorkspace', () => {
     expect(within(aiChainRow as HTMLTableRowElement).getByText('基础设施流')).toBeInTheDocument();
   });
 
+  it('renders stable styling hooks without replacing accessible catalog labels', async () => {
+    const indexRender = render(<IndustryCatalogWorkspace pathname="/theme-research/catalog" onNavigate={vi.fn()} />);
+
+    const indexRoot = (await screen.findByRole('heading', { name: '科技产业目录' })).closest('section');
+    expect(indexRoot).toHaveClass('industry-catalog-workspace', 'industry-catalog-index');
+    expect(screen.getByRole('region', { name: '能源科技产业链' })).toHaveClass('industry-catalog-sector');
+    expect(indexRoot?.querySelector('.industry-catalog-table-wrap')).toBeInTheDocument();
+    expect(indexRoot?.querySelector('.industry-catalog-table')).toBeInTheDocument();
+
+    indexRender.unmount();
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai_data_center_power" onNavigate={vi.fn()} />);
+
+    const detailRoot = (await screen.findByRole('heading', { name: 'AI 数据中心供电' })).closest('section');
+    expect(detailRoot).toHaveClass('industry-catalog-workspace', 'industry-catalog-detail-grid');
+    expect(screen.getByLabelText('产业链定义')).toHaveClass('industry-catalog-definition');
+    expect(screen.getByLabelText('L3和L4节点')).toHaveClass('industry-catalog-node-groups');
+    expect(screen.getByRole('region', { name: '供配电系统节点组' })).toHaveClass('industry-catalog-node-group');
+    expect(screen.getByLabelText('产业链边关系')).toHaveClass('industry-catalog-edges');
+    expect(screen.getByLabelText('关联主题')).toHaveClass('industry-catalog-theme-links');
+    expect(detailRoot?.querySelector('.industry-catalog-table-wrap')).toBeInTheDocument();
+    expect(detailRoot?.querySelector('.industry-catalog-table')).toBeInTheDocument();
+  });
+
   it('treats a trailing slash catalog path as the index', async () => {
     render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/" onNavigate={vi.fn()} />);
 

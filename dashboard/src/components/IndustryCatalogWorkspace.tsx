@@ -199,7 +199,7 @@ function CatalogIndex({
   const unexpanded = useMemo(() => new Set(catalog.summary.unexpanded_chain_ids), [catalog.summary.unexpanded_chain_ids]);
 
   return (
-    <section className="theme-research-workspace" aria-label="科技产业目录">
+    <section className="theme-research-workspace industry-catalog-workspace industry-catalog-index" aria-label="科技产业目录">
       <header className="theme-research-header">
         <div>
           <h1>科技产业目录</h1>
@@ -235,13 +235,13 @@ function CatalogIndex({
         </label>
       </div>
       {groupedChains.length ? groupedChains.map(({ sector, chains }) => (
-        <section key={sector.sector_id} className="theme-research-section" role="region" aria-label={`${sector.sector_name}产业链`}>
+        <section key={sector.sector_id} className="theme-research-section industry-catalog-sector" role="region" aria-label={`${sector.sector_name}产业链`}>
           <div className="theme-research-view-header">
             <h2>{sector.sector_name}</h2>
             <span>{chains.length} 条</span>
           </div>
-          <div className="theme-research-table-wrap">
-            <table className="theme-research-table">
+          <div className="theme-research-table-wrap industry-catalog-table-wrap">
+            <table className="theme-research-table industry-catalog-table">
               <thead>
                 <tr><th>产业链</th><th>类型</th><th>拆解方法</th><th>状态</th><th>节点展开</th></tr>
               </thead>
@@ -292,7 +292,7 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
     }, new Map());
 
   return (
-    <section className="theme-research-workspace" aria-label="科技产业链详情">
+    <section className="theme-research-workspace industry-catalog-workspace industry-catalog-detail-grid" aria-label="科技产业链详情">
       <header className="theme-research-header theme-research-detail-header">
         <button className="icon-button" type="button" onClick={() => onNavigate('/theme-research/catalog')} aria-label="返回产业目录">
           <ArrowLeft size={18} aria-hidden="true" />
@@ -302,10 +302,10 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
           <p>{detail.chain.description}</p>
         </div>
       </header>
-      <section className="theme-research-section" aria-label="产业链定义">
+      <section className="theme-research-section industry-catalog-definition" aria-label="产业链定义">
         <h2>链条定义</h2>
-        <div className="theme-research-table-wrap">
-          <table className="theme-research-table">
+        <div className="theme-research-table-wrap industry-catalog-table-wrap">
+          <table className="theme-research-table industry-catalog-table">
             <tbody>
               <tr><th>范围</th><td>{detail.chain.scope || '未标注'}</td></tr>
               <tr><th>排除项</th><td>{detail.chain.exclusions.join('、') || '无'}</td></tr>
@@ -317,18 +317,18 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
           </table>
         </div>
       </section>
-      <section className="theme-research-section" aria-label="L3和L4节点">
+      <section className="theme-research-section industry-catalog-node-groups" aria-label="L3和L4节点">
         <h2>L3/L4 节点</h2>
         {l3Nodes.length ? l3Nodes.map((node) => (
-          <section key={node.node_id} className="theme-research-section" role="region" aria-label={`${node.node_name}节点组`}>
+          <section key={node.node_id} className="theme-research-section industry-catalog-node-group" role="region" aria-label={`${node.node_name}节点组`}>
             <div className="theme-research-view-header">
               <h2>{node.node_name}</h2>
               <Status value={node.status} />
             </div>
             <p>{node.description}</p>
             {(l4ByParent.get(node.node_id) ?? []).length ? (
-              <div className="theme-research-table-wrap">
-                <table className="theme-research-table">
+              <div className="theme-research-table-wrap industry-catalog-table-wrap">
+                <table className="theme-research-table industry-catalog-table">
                   <thead><tr><th>L4 节点</th><th>类型</th><th>描述</th><th>状态</th></tr></thead>
                   <tbody>{(l4ByParent.get(node.node_id) ?? []).map((child) => (
                     <tr key={child.node_id}>
@@ -343,10 +343,10 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
         )) : <div className="theme-research-empty">该产业链尚未展开 L3/L4 节点</div>}
       </section>
       {detail.edges.length ? (
-        <section className="theme-research-section" aria-label="产业链边关系">
+        <section className="theme-research-section industry-catalog-edges" aria-label="产业链边关系">
           <h2>节点关系</h2>
-          <div className="theme-research-table-wrap">
-            <table className="theme-research-table">
+          <div className="theme-research-table-wrap industry-catalog-table-wrap">
+            <table className="theme-research-table industry-catalog-table">
               <thead><tr><th>来源节点</th><th>关系</th><th>目标节点</th><th>说明</th></tr></thead>
               <tbody>{detail.edges.map((edge) => (
                 <tr key={edge.edge_id}><td>{edge.source_node_id}</td><td>{edge.relationship_type}</td><td>{edge.target_node_id}</td><td>{edge.notes || '未标注'}</td></tr>
@@ -356,10 +356,10 @@ function CatalogDetail({ detail, onNavigate }: { detail: TechnologyIndustryChain
         </section>
       ) : null}
       {detail.theme_links.length ? (
-        <section className="theme-research-section" aria-label="关联主题">
+        <section className="theme-research-section industry-catalog-theme-links" aria-label="关联主题">
           <h2>关联主题</h2>
-          <div className="theme-research-table-wrap">
-            <table className="theme-research-table">
+          <div className="theme-research-table-wrap industry-catalog-table-wrap">
+            <table className="theme-research-table industry-catalog-table">
               <thead><tr><th>主题 ID</th><th>节点映射</th><th>操作</th></tr></thead>
               <tbody>{detail.theme_links.map((link) => (
                 <tr key={link.theme_id}>
