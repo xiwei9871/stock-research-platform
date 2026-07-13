@@ -185,7 +185,9 @@ def test_sync_concept_memberships_for_service_clears_proxy_env(monkeypatch) -> N
     monkeypatch.setattr(
         hydration,
         "sync_concept_memberships_from_akshare",
-        lambda conn, trade_date, max_concepts=None: calls.append((conn, trade_date, max_concepts))
+        lambda conn, trade_date, max_concepts=None, offset=0, concept_system="em": calls.append(
+            (conn, trade_date, max_concepts, offset, concept_system)
+        )
         or {"boards": 1, "memberships": 2, "failed_concepts": []},
     )
 
@@ -193,13 +195,15 @@ def test_sync_concept_memberships_for_service_clears_proxy_env(monkeypatch) -> N
         trade_date="2026-07-09",
         service="stock_research_test",
         max_concepts=10,
+        offset=50,
+        concept_system="ths",
     )
 
     assert result == {"boards": 1, "memberships": 2, "failed_concepts": []}
     assert calls == [
         "enter_no_proxy",
         "enter_connect",
-        ("conn", "2026-07-09", 10),
+        ("conn", "2026-07-09", 10, 50, "ths"),
         "exit_connect",
         "exit_no_proxy",
     ]
