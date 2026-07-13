@@ -159,6 +159,10 @@ describe('IndustryCatalogWorkspace', () => {
       expect.stringContaining('AI 数据中心供电'),
       expect.stringContaining('电网储能')
     ]);
+    const aiChainRow = screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ }).closest('tr');
+    expect(aiChainRow).not.toBeNull();
+    expect(within(aiChainRow as HTMLTableRowElement).getByText('应用主题链')).toBeInTheDocument();
+    expect(within(aiChainRow as HTMLTableRowElement).getByText('基础设施流')).toBeInTheDocument();
   });
 
   it('searches names, aliases and descriptions and supports an empty filter state', async () => {
@@ -174,6 +178,10 @@ describe('IndustryCatalogWorkspace', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: '搜索产业目录' }), { target: { value: '新能源与电力系统' } });
     expect(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索产业目录' }), { target: { value: '机架配电和液冷' } });
+    expect(screen.getByRole('button', { name: /打开AI 数据中心供电产业链/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /打开电网储能产业链/ })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('textbox', { name: '搜索产业目录' }), { target: { value: '不存在的产业' } });
     expect(screen.getByText('当前筛选条件下没有产业链。')).toBeInTheDocument();
@@ -213,6 +221,9 @@ describe('IndustryCatalogWorkspace', () => {
     expect(screen.getByText('数据中心供电基础设施。')).toBeInTheDocument();
     expect(screen.getByText('算力芯片')).toBeInTheDocument();
     expect(screen.getByText(/AI Power/)).toBeInTheDocument();
+    const chainDefinition = screen.getByLabelText('产业链定义');
+    expect(within(chainDefinition).getByText('骨架')).toBeInTheDocument();
+    expect(within(chainDefinition).getByText('基础设施流')).toBeInTheDocument();
     const distribution = screen.getByRole('region', { name: '供配电系统节点组' });
     expect(within(distribution).getByText('开关柜')).toBeInTheDocument();
     expect(screen.getByText('稳定供电支持液冷运行。')).toBeInTheDocument();
@@ -247,6 +258,20 @@ describe('IndustryCatalogWorkspace', () => {
 
     await waitFor(() => expect(apiMocks.fetchTechnologyIndustryCatalog).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('heading', { name: '科技产业目录' })).toBeInTheDocument();
+  });
+
+  it('retries a failed detail request and renders the chain after the next request succeeds', async () => {
+    apiMocks.fetchTechnologyIndustryChain
+      .mockRejectedValueOnce(new Error('request_failed_500'))
+      .mockResolvedValueOnce(aiPowerDetail);
+    render(<IndustryCatalogWorkspace pathname="/theme-research/catalog/ai_data_center_power" onNavigate={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '重试' }));
+
+    await waitFor(() => expect(apiMocks.fetchTechnologyIndustryChain).toHaveBeenCalledTimes(2));
+    expect(apiMocks.fetchTechnologyIndustryChain).toHaveBeenNthCalledWith(1, 'ai_data_center_power');
+    expect(apiMocks.fetchTechnologyIndustryChain).toHaveBeenNthCalledWith(2, 'ai_data_center_power');
+    expect(await screen.findByRole('heading', { name: 'AI 数据中心供电' })).toBeInTheDocument();
   });
 
   it('decodes encoded chain IDs before loading detail', async () => {
