@@ -1,9 +1,12 @@
+import { useEffect, useState } from 'react';
 import type { BusinessCompositionSnapshot, FinancialSnapshot } from '../../api/types';
 
 type BusinessQualitySectionProps = {
   businessComposition: BusinessCompositionSnapshot | null | undefined;
   financialSnapshot: FinancialSnapshot | null | undefined;
 };
+
+const DEFAULT_VISIBLE_COMPOSITION_ITEMS = 2;
 
 function formatSnapshotStatus(status: string | null | undefined) {
   if (!status || status === 'missing') return '信息待补充';
@@ -30,11 +33,24 @@ function formatChineseAmount(value: number | null | undefined) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+function sortCompositionItems<T extends { revenue_ratio: number | null; revenue: number | null }>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const ratioDiff = (right.revenue_ratio ?? 0) - (left.revenue_ratio ?? 0);
+    if (ratioDiff !== 0) return ratioDiff;
+    return (right.revenue ?? 0) - (left.revenue ?? 0);
+  });
+}
+
 export function BusinessQualitySection({
   businessComposition,
   financialSnapshot
 }: BusinessQualitySectionProps) {
+  const [expandedCompositionGroups, setExpandedCompositionGroups] = useState<Record<string, boolean>>({});
   const groups = businessComposition?.groups ?? [];
+
+  useEffect(() => {
+    setExpandedCompositionGroups({});
+  }, [businessComposition]);
 
   return (
     <section className="workspace-band stock-business-quality" role="region" aria-label="主营构成与经营质量">
@@ -44,7 +60,7 @@ export function BusinessQualitySection({
           <p className="muted">把收入构成和核心质量指标并排查看，快速判断主营集中度与盈利质量。</p>
         </div>
       </div>
-      <div className="stock-background-grid">
+      <div className="stock-business-quality-grid">
         <article className="stock-mini-panel" role="group" aria-label="主营构成卡片">
           <div className="section-heading compact-heading">
             <h3>主营构成</h3>
@@ -54,11 +70,20 @@ export function BusinessQualitySection({
           </div>
           <div className="stock-composition-groups">
             {groups.length > 0 ? (
-              groups.map((group) => (
-                <div key={group.classify_type} className="stock-composition-group">
-                  <div className="stock-composition-group-label">{group.classify_type}</div>
+              groups.map((group) => {
+                const isExpanded = expandedCompositionGroups[group.classify_type] ?? false;
+                const hasMoreCompositionItems = group.items.length > DEFAULT_VISIBLE_COMPOSITION_ITEMS;
+
+                return (
+                  <div key={group.classify_type} className="stock-composition-group">
+                  <div className="stock-composition-group-label">
+                    <span>{group.classify_type}</span>
+                    <small>{group.items.length} 项</small>
+                  </div>
                   <div className="stock-composition-items">
-                    {group.items.map((item) => (
+                    {sortCompositionItems(group.items)
+                      .slice(0, isExpanded ? group.items.length : DEFAULT_VISIBLE_COMPOSITION_ITEMS)
+                      .map((item) => (
                       <article key={`${group.classify_type}:${item.item_name}`} className="stock-composition-item">
                         <strong>{item.item_name}</strong>
                         <span>营收 {formatChineseAmount(item.revenue)}</span>
@@ -67,8 +92,24 @@ export function BusinessQualitySection({
                       </article>
                     ))}
                   </div>
-                </div>
-              ))
+                  {hasMoreCompositionItems ? (
+                    <button
+                      type="button"
+                      className="inline-button stock-composition-toggle"
+                      aria-expanded={isExpanded}
+                      onClick={() =>
+                        setExpandedCompositionGroups((current) => ({
+                          ...current,
+                          [group.classify_type]: !isExpanded
+                        }))
+                      }
+                    >
+                      {isExpanded ? '收起' : '展开更多'}
+                    </button>
+                  ) : null}
+                  </div>
+                );
+              })
             ) : (
               <p className="muted">暂无主营构成数据。</p>
             )}
@@ -81,7 +122,7 @@ export function BusinessQualitySection({
               {financialSnapshot?.report_period ?? formatSnapshotStatus(financialSnapshot?.data_status)}
             </span>
           </div>
-          <div className="stock-summary-strip compact">
+          <div className="stock-summary-strip compact stock-business-quality-metrics">
             <div>
               <span>TTM营收</span>
               <strong>{formatChineseAmount(financialSnapshot?.revenue_ttm)}</strong>
