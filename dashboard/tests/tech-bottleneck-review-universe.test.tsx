@@ -5,13 +5,15 @@ import { AppShell } from '../src/components/AppShell';
 
 const reviewPayload = vi.hoisted(() => ({
   summary: {
-    frontend_dataset_count: 378,
+    frontend_dataset_count: 461,
+    base_frontend_dataset_count: 378,
+    omission_rescue_review_count: 83,
     v5_hydrated_count: 271,
     v7_proposal_new_count: 78,
     v5_targeted_hydrated_count: 29,
     remaining_evidence_gap_count: 0,
-    evidence_index_row_count: 8583,
-    source_index_row_count: 1071,
+    evidence_index_row_count: 10515,
+    source_index_row_count: 1782,
     used_for_signal_count: 0,
     used_for_admission_count: 0,
     readonly_page: true,
@@ -21,9 +23,9 @@ const reviewPayload = vi.hoisted(() => ({
     acceptance_decision: 'tech_bottleneck_review_universe_frontend_dataset_ready'
   },
   decisionSummary: {
-    total_review_universe_count: 378,
+    total_review_universe_count: 461,
     reviewed_count: 0,
-    pending_count: 378,
+    pending_count: 461,
     keep_count: 0,
     hold_count: 0,
     need_more_evidence_count: 0,
@@ -62,6 +64,7 @@ const reviewPayload = vi.hoisted(() => ({
       concept_tags: ['nuclear_power', 'high_end_equipment'],
       evidence_strength: 'strong',
       bottleneck_relevance: 'core',
+      quality_reassessment_tier: 'tier_1_core_review_priority',
       source_group: 'latent_standard',
       previous_tier: 'latent_manual_review',
       review_status: 'pending_review',
@@ -98,6 +101,7 @@ const reviewPayload = vi.hoisted(() => ({
       concept_tags: ['smart_grid'],
       evidence_strength: 'moderate',
       bottleneck_relevance: 'core_pending',
+      quality_reassessment_tier: 'tier_3_quality_or_value_capture_gap',
       source_group: 'v5_targeted',
       previous_tier: 'quality_pool_v5',
       review_status: 'pending_review',
@@ -134,6 +138,7 @@ const reviewPayload = vi.hoisted(() => ({
       concept_tags: '高端制造装备 / 专用设备宽口径 / concept_only',
       evidence_strength: 'strong',
       bottleneck_relevance: 'core',
+      quality_reassessment_tier: 'tier_2_strong_review_candidate',
       source_group: 'false_negative_rescue_backfilled',
       previous_tier: 'Excluded',
       bottleneck_confidence_score: 73,
@@ -155,7 +160,12 @@ const reviewPayload = vi.hoisted(() => ({
     concept_pollution_risk: ['low', 'not_detected_in_chunk'],
     primary_source_supported: [true],
     frontend_review_status: ['pending_review'],
-    reviewer_decision: ['']
+    reviewer_decision: [''],
+    quality_reassessment_tier: [
+      'tier_1_core_review_priority',
+      'tier_2_strong_review_candidate',
+      'tier_3_quality_or_value_capture_gap'
+    ]
   },
   evidence: [
     {
@@ -291,36 +301,38 @@ describe('Tech bottleneck review universe route', () => {
     window.localStorage.clear();
   });
 
-  it('routes the legacy watchlist-review path to the 378-stock review universe workspace', async () => {
+  it('routes the legacy watchlist-review path to the 461-stock review universe workspace', async () => {
     window.history.pushState({}, '', '/tech-bottleneck/watchlist-review');
 
     render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '科技卡脖子复盘' })).toBeVisible();
-    expect(screen.getByText('复盘全集 378')).toBeVisible();
+    expect(screen.getByText('复盘全集 461')).toBeVisible();
     expect(screen.queryByText('Old watchlist review')).not.toBeInTheDocument();
   });
 
-  it('renders read-only summary, filters, and 378-row universe metrics', async () => {
+  it('renders read-only summary, filters, and 461-row universe metrics', async () => {
     render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '科技卡脖子复盘' })).toBeVisible();
-    expect(screen.getByText('复盘全集 378')).toBeVisible();
-    expect(screen.getByText('v5 已水合 271')).toBeVisible();
-    expect(screen.getByText('v7 提案 78')).toBeVisible();
-    expect(screen.getByText('定向补证 29')).toBeVisible();
-    expect(screen.getByText('证据行 8583')).toBeVisible();
-    expect(screen.getByText('来源行 1071')).toBeVisible();
-    expect(screen.getByText('used_for_signal 0')).toBeVisible();
-    expect(screen.getByText('used_for_admission 0')).toBeVisible();
+    expect(screen.getByText('复盘全集 461')).toBeVisible();
     expect(screen.getByText('已复盘 0')).toBeVisible();
-    expect(screen.getByText('待复盘 378')).toBeVisible();
+    expect(screen.getByText('待复盘 461')).toBeVisible();
+    expect(screen.getByText('剩余缺口 0')).toBeVisible();
+    expect(screen.queryByText('v5 已水合 271')).not.toBeInTheDocument();
+    expect(screen.queryByText('v7 提案 78')).not.toBeInTheDocument();
+    expect(screen.queryByText('定向补证 29')).not.toBeInTheDocument();
+    expect(screen.queryByText('证据行 10515')).not.toBeInTheDocument();
+    expect(screen.queryByText('来源行 1782')).not.toBeInTheDocument();
+    expect(screen.queryByText('used_for_signal 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('used_for_admission 0')).not.toBeInTheDocument();
 
     expect(screen.getByLabelText('股票代码/名称搜索')).toBeVisible();
     expect(screen.getByLabelText('行业')).toBeVisible();
     expect(screen.getByLabelText('概念板块')).toBeVisible();
     expect(screen.getByLabelText('证据强度')).toBeVisible();
-    expect(screen.getByLabelText('瓶颈相关性')).toBeVisible();
+    expect(screen.getByLabelText('质量评级')).toBeVisible();
+    expect(screen.queryByLabelText('瓶颈相关性')).not.toBeInTheDocument();
     expect(screen.getByLabelText('污染风险')).toBeVisible();
     expect(screen.getByLabelText('替代风险')).toBeVisible();
     expect(screen.getByLabelText('价值捕获风险')).toBeVisible();
@@ -332,7 +344,8 @@ describe('Tech bottleneck review universe route', () => {
     expect(within(screen.getByLabelText('概念板块')).getByRole('option', { name: '核电' })).toBeVisible();
     expect(within(screen.getByLabelText('概念板块')).getByRole('option', { name: '高端装备' })).toBeVisible();
     expect(within(screen.getByLabelText('证据强度')).getByRole('option', { name: '强' })).toBeVisible();
-    expect(within(screen.getByLabelText('瓶颈相关性')).getByRole('option', { name: '核心瓶颈' })).toBeVisible();
+    expect(within(screen.getByLabelText('质量评级')).getByRole('option', { name: '一级：核心复盘优先' })).toBeVisible();
+    expect(within(screen.getByLabelText('质量评级')).getByRole('option', { name: '二级：强复盘候选' })).toBeVisible();
     expect(within(screen.getByLabelText('污染风险')).getByRole('option', { name: '低风险' })).toBeVisible();
     expect(within(screen.getByLabelText('替代风险')).getByRole('option', { name: '需要人工复核' })).toBeVisible();
     expect(within(screen.getByLabelText('价值捕获风险')).getByRole('option', { name: '强' })).toBeVisible();
@@ -342,30 +355,35 @@ describe('Tech bottleneck review universe route', () => {
     expect(table.getByText('中核科技')).toBeVisible();
     expect(table.getByText('思源电气')).toBeVisible();
     expect(table.getByText('创元科技')).toBeVisible();
+    expect(table.getByRole('columnheader', { name: '序号' })).toBeVisible();
     expect(table.getByRole('columnheader', { name: '股票代码' })).toBeVisible();
     expect(table.getByRole('columnheader', { name: '股票名称' })).toBeVisible();
     expect(table.getByRole('columnheader', { name: '瓶颈分' })).toBeVisible();
     expect(table.getByRole('columnheader', { name: '证据分' })).toBeVisible();
+    expect(table.queryByRole('columnheader', { name: '瓶颈相关性' })).not.toBeInTheDocument();
     expect(table.queryByRole('columnheader', { name: '来源' })).not.toBeInTheDocument();
     expect(table.queryByRole('columnheader', { name: '原Tier' })).not.toBeInTheDocument();
+    expect(table.queryByRole('columnheader', { name: '证据' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /查看 .* 证据/ })).not.toBeInTheDocument();
     const columns = screen.getByRole('table', { name: '科技卡脖子复盘股票表' }).querySelectorAll('col');
-    expect(columns).toHaveLength(13);
-    expect(columns[0]).toHaveStyle({ width: '88px' });
-    expect(columns[1]).toHaveStyle({ width: '96px' });
-    expect(columns[3]).toHaveStyle({ width: '260px' });
-    expect(columns[9]).toHaveStyle({ width: '72px' });
-    expect(columns[10]).toHaveStyle({ width: '72px' });
-    expect(screen.getByRole('row', { name: /002028 思源电气/ })).toHaveTextContent('55');
-    expect(screen.getByRole('row', { name: /002028 思源电气/ })).toHaveTextContent('23');
-    expect(screen.getByRole('row', { name: /000551 创元科技/ })).toHaveTextContent('专用设备制造业');
-    expect(screen.getByRole('row', { name: /000551 创元科技/ })).toHaveTextContent('高端制造装备 / 专用设备宽口径 / 概念映射风险');
-    expect(screen.getByRole('row', { name: /000551 创元科技/ })).toHaveTextContent('73');
-    expect(screen.getByRole('row', { name: /000551 创元科技/ })).toHaveTextContent('64');
+    expect(columns).toHaveLength(12);
+    expect(columns[0]).toHaveStyle({ width: '48px' });
+    expect(columns[1]).toHaveStyle({ width: '84px' });
+    expect(columns[2]).toHaveStyle({ width: '104px' });
+    expect(columns[4]).toHaveStyle({ width: '220px' });
+    expect(columns[9]).toHaveStyle({ width: '58px' });
+    expect(columns[10]).toHaveStyle({ width: '66px' });
+    expect(screen.getByRole('row', { name: /2 002028 思源电气/ })).toHaveTextContent('55');
+    expect(screen.getByRole('row', { name: /2 002028 思源电气/ })).toHaveTextContent('23');
+    expect(screen.getByRole('row', { name: /3 000551 创元科技/ })).toHaveTextContent('专用设备制造业');
+    expect(screen.getByRole('row', { name: /3 000551 创元科技/ })).toHaveTextContent('高端制造装备 / 专用设备宽口径 / 概念映射风险');
+    expect(screen.getByRole('row', { name: /3 000551 创元科技/ })).toHaveTextContent('73');
+    expect(screen.getByRole('row', { name: /3 000551 创元科技/ })).toHaveTextContent('64');
     expect(screen.queryByRole('button', { name: '打开 中核科技 个股复盘工作台' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /approve|reject|keep|downgrade|need_more_evidence/i })).not.toBeInTheDocument();
   });
 
-  it('filters rows and opens read-only evidence/source detail', async () => {
+  it('filters rows without adding a conflicting evidence action column', async () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '科技卡脖子复盘' });
 
@@ -373,16 +391,8 @@ describe('Tech bottleneck review universe route', () => {
     const table = within(screen.getByRole('table', { name: '科技卡脖子复盘股票表' }));
     expect(table.getByText('中核科技')).toBeVisible();
     expect(table.queryByText('思源电气')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '查看证据 000777' }));
-    expect(await screen.findByRole('region', { name: '000777 证据和来源详情' })).toHaveTextContent(
-      'Page-level evidence text for 中核科技.'
-    );
-    expect(screen.getByRole('region', { name: '000777 证据和来源详情' })).toHaveTextContent(
-      '关于参加中核集团集体投资者交流会的公告'
-    );
-    expect(screen.getByText('写入状态：只读 / 未配置令牌')).toBeVisible();
-    expect(screen.queryByRole('textbox', { name: /reviewer/i })).not.toBeInTheDocument();
+    expect(table.queryByRole('columnheader', { name: '证据' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /查看 .* 证据/ })).not.toBeInTheDocument();
   });
 
   it('opens the individual stock workspace from the review universe table', async () => {
@@ -394,7 +404,7 @@ describe('Tech bottleneck review universe route', () => {
     expect(table.getByRole('columnheader', { name: '股票名称' })).toBeVisible();
     expect(table.queryByRole('button', { name: '打开 中核科技 个股复盘工作台' })).not.toBeInTheDocument();
 
-    const row = screen.getByRole('row', { name: /000777 中核科技/ });
+    const row = screen.getByRole('row', { name: /1 000777 中核科技/ });
     expect(row).toHaveClass('tech-bottleneck-clickable-row');
     fireEvent.click(row);
 
@@ -406,7 +416,7 @@ describe('Tech bottleneck review universe route', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '科技卡脖子复盘' });
 
-    fireEvent.click(screen.getByRole('row', { name: /002028 思源电气/ }));
+    fireEvent.click(screen.getByRole('row', { name: /2 002028 思源电气/ }));
 
     expect(window.location.pathname).toBe('/tech-bottleneck/stock/002028');
     expect(screen.getByText('bottleneck_confidence_score 55')).toBeVisible();
@@ -446,6 +456,7 @@ describe('Tech bottleneck review universe route', () => {
           concept_tags: '能源与电力电子关键环节 / 电网 / 能源基础设施 / 瓶颈环节 / 潜在标准等价质量层',
           evidence_strength: '充分',
           bottleneck_relevance: '核心瓶颈',
+          quality_reassessment_tier: 'tier_1_core_review_priority',
           source_group: '',
           previous_tier: '',
           bottleneck_confidence_score: 88,
@@ -463,7 +474,7 @@ describe('Tech bottleneck review universe route', () => {
     render(<AppShell />);
     await screen.findByRole('heading', { name: '科技卡脖子复盘' });
 
-    fireEvent.click(screen.getByRole('row', { name: /000049 德赛电池/ }));
+    fireEvent.click(screen.getByRole('row', { name: /1 000049 德赛电池/ }));
 
     expect(window.location.pathname).toBe('/tech-bottleneck/stock/000049');
     expect(screen.getByText('bottleneck_confidence_score 88')).toBeVisible();
@@ -500,6 +511,7 @@ describe('Tech bottleneck review universe route', () => {
       concept_tags: '能源与电力电子关键环节 / 电网 / 能源基础设施 / 瓶颈环节 / 潜在标准等价质量层',
       evidence_strength: '充分',
       bottleneck_relevance: '核心瓶颈',
+      quality_reassessment_tier: 'tier_1_core_review_priority',
       source_group: '',
       previous_tier: '',
       bottleneck_confidence_score: 88,
@@ -522,52 +534,12 @@ describe('Tech bottleneck review universe route', () => {
     expect(screen.getByText('evidence_strength 充分')).toBeVisible();
   });
 
-  it('shows writable status when a dashboard write token is configured', async () => {
+  it('does not expose table evidence buttons even when a dashboard write token is configured', async () => {
     window.localStorage.setItem('dashboardWriteToken', 'secret');
     render(<AppShell />);
     await screen.findByRole('heading', { name: '科技卡脖子复盘' });
 
-    fireEvent.click(screen.getByRole('button', { name: '查看证据 000777' }));
-
-    expect(await screen.findByText('写入状态：可写 / 已配置令牌')).toBeVisible();
-  });
-
-  it('records a manual overlay decision from the detail panel and refreshes read models', async () => {
-    render(<AppShell />);
-    await screen.findByRole('heading', { name: '科技卡脖子复盘' });
-
-    fireEvent.click(screen.getByRole('button', { name: '查看证据 000777' }));
-    const manualDecision = await screen.findByRole('region', { name: '000777 人工复盘决策' });
-    fireEvent.change(within(manualDecision).getByLabelText('复盘备注'), {
-      target: { value: '需要补充收入占比、客户验证和核心环节一手证据。' }
-    });
-    fireEvent.click(within(manualDecision).getByLabelText('已核验证据'));
-    fireEvent.click(within(manualDecision).getByRole('button', { name: '需更多证据' }));
-
-    expect(apiMocks.createTechBottleneckReviewUniverseDecision).toHaveBeenCalledWith({
-      stock_code: '000777',
-      stock_name: '中核科技',
-      reviewer_decision: 'need_more_evidence',
-      reviewer: 'operator',
-      review_comment: '需要补充收入占比、客户验证和核心环节一手证据。',
-      rubric_flags: {
-        hard_tech: true,
-        bottleneck_role: true,
-        business_relevance: 'needs_review',
-        primary_source_evidence: 'checked_in_panel',
-        page_level_evidence: true,
-        value_capture: 'needs_review',
-        route_around_risk: 'needs_review',
-        disconfirmation_risk: 'needs_review'
-      },
-      evidence_checked: true,
-      source_context: {
-        from: 'tech_bottleneck_review_universe_page',
-        page_route: '/research/tech-bottleneck/review-universe'
-      }
-    });
-    expect(await screen.findByText('人工复盘已记录：需更多证据')).toBeVisible();
-    expect(apiMocks.fetchTechBottleneckReviewUniverseStocks).toHaveBeenCalledTimes(2);
-    expect(apiMocks.fetchTechBottleneckReviewUniverseDecisionSummary).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: /查看 .* 证据/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /人工复盘决策/ })).not.toBeInTheDocument();
   });
 });
